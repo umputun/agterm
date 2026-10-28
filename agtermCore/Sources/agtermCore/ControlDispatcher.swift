@@ -19,6 +19,8 @@ public protocol ControlActions {
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
     func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
+    /// createWorkspace with a creation tint; the default keeps tintless hosts working and refuses a tint.
+    func createWorkspace(window: String?, name: String?, collapsed: Bool, tint: SidebarTint?) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
     /// Step the placement store's CURRENT workspace one place through the sidebar's visible order, selecting
     /// the destination's first session when it has one — an EMPTY destination becomes current with the
@@ -44,6 +46,10 @@ public protocol ControlActions {
     /// Sets or clears the session's title-bar context; `context` is already trimmed and validated, and nil
     /// means clear.
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse
+    /// Sets or clears a session's sidebar tint; the dispatcher has parsed the color and parts.
+    func setSessionTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse
+    /// Sets or clears a workspace row's own tint.
+    func setWorkspaceTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) async -> ControlResponse
     /// Write a pane's PERSISTED restore-command override (consumed on the NEXT launch, never this run).
@@ -250,6 +256,8 @@ public struct ControlDispatcher {
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionSeen, .sessionStatus,
                 .sessionRestore:
             return await dispatchSessionCommand(request)
+        case .sessionTint, .workspaceTint:
+            return dispatchTint(request)
         case .sessionRestart:
             return await dispatchSessionRestart(request)
         case .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionScratch, .sessionFocus,
@@ -355,6 +363,11 @@ public struct ControlDispatcher {
             if args?.wait == true, args?.command == nil {
                 return ControlResponse(ok: false, error: "--wait requires --command")
             }
+            let tint: SidebarTint?
+            switch Self.creationTint(args) {
+            case .success(let value): tint = value
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            }
             return actions.createSession(ControlSessionCreateOptions(
                 window: args?.window,
                 cwd: args?.cwd,
@@ -366,7 +379,8 @@ public struct ControlDispatcher {
                 name: args?.name,
                 after: args?.after,
                 before: args?.before,
-                noSelect: args?.noSelect == true
+                noSelect: args?.noSelect == true,
+                tint: tint
             ))
         case .sessionDuplicate:
             // no options: the source session names its own workspace AND its cwd, so a duplicate is fully
@@ -550,33 +564,6 @@ public struct ControlDispatcher {
             command: command, pane: pane, paneID: paneID))
     }
 
-    /// `session.context`: `set` takes `text`, `clear` takes none. An invalid value is REJECTED, never
-    /// normalized, so `clear` stays the only route to nil and a refused call leaves the previous context
-    /// standing. The mode is required rather than inferred from `text`, which is what makes "both" and
-    /// "neither" reachable errors for a raw socket client that never sees the CLI's own exclusivity check.
-    private func dispatchSessionContext(_ request: ControlRequest) -> ControlResponse {
-        let args = request.args
-        let context: String?
-        switch args?.mode ?? "" {
-        case "set":
-            guard let text = args?.text else {
-                return ControlResponse(ok: false, error: "session.context set requires text")
-            }
-            switch Session.validateContext(text) {
-            case .valid(let value): context = value
-            case .invalid(let message): return ControlResponse(ok: false, error: message)
-            }
-        case "clear":
-            guard args?.text == nil else {
-                return ControlResponse(ok: false, error: "session.context clear takes no text")
-            }
-            context = nil
-        default:
-            return ControlResponse(ok: false, error: "invalid context mode: \(args?.mode ?? "") (set|clear)")
-        }
-        return actions.setSessionContext(request.target, window: args?.window, context: context)
-    }
-
     /// Non-nil when `text` carries a NUL: libghostty's key-text field is NUL-terminated and slices at the
     /// first zero, dropping the run's tail while the Return after it still submits the shortened line (#455).
     private func nulRejection(_ text: String) -> ControlResponse? {
@@ -597,8 +584,13 @@ public struct ControlDispatcher {
     private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .workspaceNew:
-            return actions.createWorkspace(window: request.args?.window, name: request.args?.name,
-                                           collapsed: request.args?.collapsed ?? false)
+            switch Self.creationTint(request.args) {
+            case .failure(let rejection):
+                return ControlResponse(ok: false, error: rejection.message)
+            case .success(let tint):
+                return actions.createWorkspace(window: request.args?.window, name: request.args?.name,
+                                               collapsed: request.args?.collapsed ?? false, tint: tint)
+            }
         case .workspaceSelect:
             return actions.selectWorkspace(request.target, window: request.args?.window)
         case .workspaceGo:

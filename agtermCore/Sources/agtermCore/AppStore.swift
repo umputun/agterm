@@ -401,13 +401,15 @@ public final class AppStore {
                                           remoteOverlays: remoteOverlayNodes(of: session),
                                           htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom),
                                           hiddenOverlays: hiddenOverlaysNode(session),
-                                          lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970)
+                                          lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
+                                          tint: session.tint?.color.rawValue, tintOn: session.tint?.parts.map(\.rawValue))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
                                         focused: focusedWorkspaceIDs.contains(workspace.id) ? true : nil,
                                         collapsed: workspace.isExpanded ? nil : true,
-                                        sessions: sessions)
+                                        tint: workspace.tint?.color.rawValue,
+                                        tintOn: workspace.tint?.parts.map(\.rawValue), sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            attentionIncludesActive: attentionIncludesActive,
@@ -454,9 +456,10 @@ public final class AppStore {
     /// targeting: true makes this workspace `currentWorkspaceID` for as long as `freshWorkspaceID` holds it,
     /// false leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
     @discardableResult
-    public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
+    public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true,
+                             tint: SidebarTint? = nil) -> Workspace {
         // the name feeds {AGT_WORKSPACE_NAME}; see TerminalText.
-        let workspace = Workspace(name: TerminalText.sanitized(name), isExpanded: !collapsed)
+        let workspace = Workspace(name: TerminalText.sanitized(name), isExpanded: !collapsed, tint: tint)
         workspaces.append(workspace)
         if revealNewWorkspace {
             revealNewFocusMember(workspace.id)
@@ -493,7 +496,7 @@ public final class AppStore {
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
-                           remoteHost: String? = nil) -> Session? {
+                           remoteHost: String? = nil, tint: SidebarTint? = nil) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // both reach a custom command's expansion — cwd through initialCwd, name through customName — so
         // both are sanitized here. See TerminalText.
@@ -503,6 +506,7 @@ public final class AppStore {
                               remoteHost: remoteHost)
         session.initialCommand = command
         session.commandWait = wait
+        session.tint = tint
         if let index {
             let destination = max(0, min(index, workspaces[wsIndex].sessions.count))
             workspaces[wsIndex].sessions.insert(session, at: destination)

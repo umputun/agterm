@@ -137,6 +137,7 @@ extension WorkspaceSidebar.Coordinator {
             flag.target = self
             flag.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
             menu.addItem(flag)
+            menu.addItem(tintMenuItem(forSessions: sessionTargets))
             if sessionCount == 1 {
                 let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(menuRevealInFinder(_:)), keyEquivalent: "")
                 reveal.target = self
@@ -184,6 +185,7 @@ extension WorkspaceSidebar.Coordinator {
             flagAll.representedObject = node
             flagAll.isEnabled = store.workspaces.first { $0.id == node.id }?.sessions.isEmpty == false
             menu.addItem(flagAll)
+            menu.addItem(tintMenuItem(forWorkspace: node.id))
             menu.addItem(.separator())
             let delete = NSMenuItem(title: "Delete Workspace", action: #selector(menuDeleteWorkspace(_:)), keyEquivalent: "")
             delete.target = self

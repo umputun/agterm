@@ -59,6 +59,7 @@ extension WorkspaceSidebar.Coordinator {
             cell.imageView?.image = store.focusedWorkspaceIDs.contains(node.id) ? focusedWorkspaceIcon : workspaceIcon
             cell.imageView?.toolTip = nil
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
+            cell.tint = workspace?.tint
         case .session:
             field.stringValue = rowLabel(forSession: node.id)
             field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize)
@@ -79,6 +80,7 @@ extension WorkspaceSidebar.Coordinator {
                                                    disconnected: notice != nil)
             cell.imageView?.toolTip = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
+            cell.tint = session?.tint
         }
         // text/icon colors track the terminal theme; a selected row uses the selection foreground.
         // this build-time tint is a first guess — row(forItem:) can miss (-1) while the row map is in

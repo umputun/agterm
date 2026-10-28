@@ -52,7 +52,8 @@ The event kinds and payloads are:
   selected `session new` (after its `session.created`), and the reselection after the active session
   closes. Re-selecting the selected session and raising another window emit nothing.
 - `tree.changed`: an empty payload and the affected window id. Name, membership, and ordering changes
-  are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value,
+  are coalesced for 100 ms per window, as is a `session context` set or clear that changes the value, a
+  `session tint` or `workspace tint` that changes the row's tint,
   and an overlay, page or HUD opening or closing (`session hud update` emits nothing). It says the tree
   moved, never what happened: a page opened and closed inside the 100 ms shows as one event.
   Read `tree --json` for the current snapshot.
@@ -219,7 +220,9 @@ a message for one. A HUD opening or closing emits `tree.changed`; an update emit
 either style handed over for a remote session), with `pane` omitted for session-wide placement, `remote: true` on an origin while the Mac presenting the session draws it, and
 `replica: true` on that Mac for the copy it draws; omitted when the session ask slot is empty), `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `context` (what the session is about — the `session context` value, or on an attached row without
-one the origin's mirrored context; omitted when neither is set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
+one the origin's mirrored context; omitted when neither is set), `tint`/`tintOn` (the sidebar row's tint color
+and the parts it colors, e.g. `["icon"]` or `["icon","name"]`, the read side of `session tint`; both omitted when
+untinted), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
 as `status`, so it is never reported without a `status`), `statusBlink` (`true` when the status glyph is
@@ -296,7 +299,8 @@ the flat layout and, under the tree layout, the workspaces holding a flagged ses
 says, `tree` mode with the filter OFF renders the whole tree regardless of membership, and only `tree`
 mode with the filter ON narrows visibility to the members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
-when expanded, so an all-expanded tree carries no `collapsed` keys).
+when expanded, so an all-expanded tree carries no `collapsed` keys), and `tint`/`tintOn` (the workspace row's own
+tint, the read side of `workspace tint`; both omitted when untinted).
 
 The tree object itself carries these top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
@@ -348,14 +352,16 @@ buys nothing. A caller with no tree uses `version`.
 
 ## workspace
 
-- `workspace new [name] [--collapsed] [--window W]` — create a workspace; returns its id. Name defaults
+- `workspace new [name] [--collapsed] [--tint COLOR [--tint-on PARTS]] [--window W]` — create a workspace; returns its id. Name defaults
   to an auto-generated one. `--collapsed` creates it CLOSED in the sidebar tree so a script can build a
   workspace and fill it with `session new --no-select` without it ever opening (a fresh workspace is
   expanded by default), and for the same reason a `--collapsed` create is kept OUT of the workspace focus
   set — it never widens a marked working set. A PLAIN `workspace new` while the filter is applied JOINS
   the marked set instead, so a foreground create is visible rather than hidden behind the filter (the
   same auto-reveal the GUI's New Workspace button has). Read the state back from the tree workspace
-  node's `collapsed` flag, and the membership from its `focused` flag.
+  node's `collapsed` flag, and the membership from its `focused` flag. `--tint`/`--tint-on` create it with a
+  row tint, as `workspace tint` sets one; `--tint-on` without `--tint` is refused, and an invalid value
+  creates nothing.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
@@ -426,6 +432,10 @@ buys nothing. A caller with no tree uses `version`.
   All Sessions. `toggle` (default) unflags only when every session is flagged and otherwise flags them all,
   so it is not a per-session invert. `on`/`off` are idempotent; an empty workspace changes nothing; returns the workspace
   id. Read back from each session's `flagged`. Unflagging can move the selection like `session flag off`.
+- `workspace tint <COLOR|clear> [--on PARTS] [--target W] [--window W]` - tint the workspace's OWN sidebar
+  row, with the same colors, `--on` and refusals as `session tint`. It never colors the sessions inside,
+  which keep their own tints. Returns the workspace id. Read back from the workspace node's `tint`/`tintOn`.
+  The GUI twin is the workspace row menu's Tint submenu; the palette has no workspace entry.
 - `workspace collapse [--target] [--window W]` — collapse ONE workspace's subtree in the sidebar tree
   (hide its sessions); returns the workspace id. The per-workspace counterpart of `sidebar collapse`
   (which collapses ALL but the active workspace) — this targets exactly the addressed workspace and does
@@ -438,7 +448,7 @@ buys nothing. A caller with no tree uses `version`.
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select] [--window W]`
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
   (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
@@ -478,7 +488,9 @@ buys nothing. A caller with no tree uses `version`.
   untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
   select-and-focus behavior. Every other addressing/placement option composes with it, and a background
   `--create-workspace` create does not widen the workspace focus set either (the new workspace stays
-  unmarked, so the filtered sidebar view is left put instead of revealing it).
+  unmarked, so the filtered sidebar view is left put instead of revealing it). `--tint COLOR` creates the
+  session with a row tint and `--tint-on` places it as `session tint --on` does (default icon); `--tint-on`
+  without `--tint` is refused, and an invalid value creates nothing.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -766,6 +778,16 @@ error keeps those names for compatibility.
   bar it takes line two in normal mode (replacing the cwd/terminal-title detail) and follows the session and
   window names on line one in compact mode, where a long value tail-truncates before the names do. Settings
   ▸ Interface ▸ Title Bar ▸ "Session context" hides it without clearing it.
+- `session tint <COLOR|clear> [--on PARTS] [--target] [--window W]` - color the session's sidebar row so it
+  stands out at a glance (red for production, green for dev). COLOR is `red|orange|yellow|green|blue|purple|gray`,
+  macOS system colors that follow light and dark. `--on` is `icon`, `name` or `icon,name`; omitted, a recolor keeps
+  the row's placement and an untinted row starts on the icon. `clear` removes the tint and refuses `--on`; the
+  socket form (`mode` `set|clear`, `tint`, `tintOn` array) refuses a clear carrying either. Returns the session
+  id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac: an attached row does
+  not mirror the origin's tint, and its own tint is not persisted, like the row.
+  Read back from the node's `tint`/`tintOn`. GUI twins: the row menu's Tint submenu
+  (a color applies to every selected row, keeping each row's placement; Show On needs every selected row
+  tinted) and the palette's "Tint Session: <Color>" / "Tint Session: None" for the active session.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge without changing
   the selection, focus, or agent status. It is the focus-free counterpart to `notify`: `notify` (and a
   terminal's own OSC 9/777) raise the red badge, and until now the only way to clear it was visiting the

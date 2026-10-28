@@ -291,6 +291,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// lastSelectedAt is `Session.lastSelectedAt` as epoch seconds; omitted when no selection timestamp has
     /// been recorded.
     public let lastSelectedAt: Double?
+    /// The row's tint color (`session.tint`); nil/omitted when untinted.
+    public let tint: String?
+    /// The row parts the tint colors, `icon` and/or `name`; present exactly when `tint` is.
+    public let tintOn: [String]?
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
     public let background: BackgroundWatermark?
@@ -370,7 +374,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
-                hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil) {
+                hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
+                tint: String? = nil, tintOn: [String]? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -407,6 +412,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.statusShape = statusShape
         self.statusChangedAt = statusChangedAt
         self.lastSelectedAt = lastSelectedAt
+        self.tint = tint
+        self.tintOn = tintOn
         self.background = background
         self.paneBackgrounds = paneBackgrounds
         self.unseen = unseen
@@ -596,15 +603,23 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     /// `workspace.collapse`/`workspace.expand` and `workspace.new --collapsed`. Reports the persisted
     /// `!isExpanded`, independent of a transient focus force-reveal.
     public let collapsed: Bool?
+    /// The workspace row's own tint color (`workspace.tint`); nil/omitted when untinted. Never inherited by
+    /// the sessions inside.
+    public let tint: String?
+    /// The workspace row parts the tint colors; present exactly when `tint` is.
+    public let tintOn: [String]?
     public let sessions: [ControlSessionNode]
 
     public init(id: String, name: String, active: Bool, focused: Bool? = nil,
-                collapsed: Bool? = nil, sessions: [ControlSessionNode]) {
+                collapsed: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil,
+                sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
         self.focused = focused
         self.collapsed = collapsed
+        self.tint = tint
+        self.tintOn = tintOn
         self.sessions = sessions
     }
 }

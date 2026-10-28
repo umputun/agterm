@@ -10,19 +10,23 @@ public struct Workspace: Identifiable {
     /// Whether the sidebar row is expanded (its session rows shown). Defaults true so a freshly created
     /// workspace opens; persisted per workspace so the collapse state survives a relaunch.
     public var isExpanded: Bool
+    /// The workspace row's own tint (`workspace.tint`); it never colors the sessions inside.
+    public var tint: SidebarTint?
 
-    public init(name: String, sessions: [Session] = [], isExpanded: Bool = true) {
+    public init(name: String, sessions: [Session] = [], isExpanded: Bool = true, tint: SidebarTint? = nil) {
         id = UUID()
         self.name = name
         self.sessions = sessions
         self.isExpanded = isExpanded
+        self.tint = tint
     }
 
-    public init(id: UUID, name: String, sessions: [Session] = [], isExpanded: Bool = true) {
+    public init(id: UUID, name: String, sessions: [Session] = [], isExpanded: Bool = true, tint: SidebarTint? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.isExpanded = isExpanded
+        self.tint = tint
     }
 
     /// Total unseen-notification count across this workspace's sessions, for the badge on a

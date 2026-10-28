@@ -74,6 +74,8 @@ public final class Session: Identifiable {
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
+    /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
+    public var tint: SidebarTint?
 
     /// Local context, persisted for local sessions; clearing reveals any mirrored context.
     public var context: String?

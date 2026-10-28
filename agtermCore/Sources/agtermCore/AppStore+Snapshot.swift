@@ -55,7 +55,8 @@ extension AppStore {
                         restoreCommand: session.restoreCommand,
                         splitRestoreCommand: session.splitRestoreCommand,
                         context: session.context,
-                        lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970)
+                        lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
+                        tint: session.tint)
     }
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
@@ -64,7 +65,7 @@ extension AppStore {
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
         WorkspaceSnapshot(id: workspace.id, name: workspace.name,
                           sessions: workspace.sessions.filter(\.isPersistable).map(sessionSnapshot),
-                          collapsed: workspace.isExpanded ? nil : true)
+                          collapsed: workspace.isExpanded ? nil : true, tint: workspace.tint)
     }
 
     /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only path
@@ -92,6 +93,7 @@ extension AppStore {
         session.splitRatio = snapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
         session.flagged = snapshot.flagged ?? false
         session.context = snapshot.context
+        session.tint = snapshot.tint
         session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
@@ -119,7 +121,7 @@ extension AppStore {
 
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
         Workspace(id: snapshot.id, name: snapshot.name, sessions: snapshot.sessions.map { session(from: $0) },
-                  isExpanded: !(snapshot.collapsed ?? false))
+                  isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells spawn lazily on first
@@ -149,7 +151,8 @@ extension AppStore {
             }
             // absent/nil collapsed → expanded (back-compat with snapshots written before the field existed).
             restored.append(Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
-                                      isExpanded: !(workspaceSnapshot.collapsed ?? false)))
+                                      isExpanded: !(workspaceSnapshot.collapsed ?? false),
+                                      tint: workspaceSnapshot.tint))
         }
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag and `sidebar.width` clamp to the same bounds.

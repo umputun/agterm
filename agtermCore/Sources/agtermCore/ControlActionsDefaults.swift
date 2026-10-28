@@ -191,6 +191,23 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
     }
 
+    func setSessionTint(_: String?, window _: String?, update _: ControlTintUpdate) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.tint"))
+    }
+
+    func setWorkspaceTint(_: String?, window _: String?, update _: ControlTintUpdate) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.tint"))
+    }
+
+    /// A host that predates tints creates an untinted workspace through its own form and refuses a tint,
+    /// so the request never answers ok over a tint it dropped.
+    func createWorkspace(window: String?, name: String?, collapsed: Bool, tint: SidebarTint?) -> ControlResponse {
+        guard tint == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.new --tint"))
+        }
+        return createWorkspace(window: window, name: name, collapsed: collapsed)
+    }
+
     func windowGo(direction _: WorkspaceNavigation) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.go"))
     }

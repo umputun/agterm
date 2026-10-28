@@ -22,10 +22,12 @@ public enum Command: String, Codable, Sendable {
     case workspaceCollapse = "workspace.collapse"
     case workspaceExpand = "workspace.expand"
     case workspaceFlag = "workspace.flag"
+    case workspaceTint = "workspace.tint"
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
     case sessionContext = "session.context"
+    case sessionTint = "session.tint"
     case sessionSeen = "session.seen"
     case sessionRestore = "session.restore"
     case sessionRestart = "session.restart"
@@ -155,6 +157,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// fill it with `session.new --no-select` without it opening. Omitted/`false` = expanded; read back as
     /// the `tree` workspace node's `collapsed`.
     public var collapsed: Bool?
+    /// The tint color for `session.tint`/`workspace.tint` mode `set`, and the creation tint on `session.new`
+    /// and `workspace.new`; one of `TintColor`.
+    public var tint: String?
+    /// The row parts the tint colors (`icon`, `name`); omitted on a set keeps the stored parts, else icon.
+    public var tintOn: [String]?
     /// For `window.new`: create the window already MINIMIZED to the Dock (the CLI's `--minimized`), so a
     /// script can build project windows without each flashing on screen and stealing focus; omitted/`false`
     /// presents it. Read back as the `window.list` node's `minimized`. The new window also hands frontmost
@@ -452,7 +459,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
                 persistent: Bool? = nil, browse: Bool? = nil, cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
-                checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil) {
+                checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
+                tint: String? = nil, tintOn: [String]? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -460,6 +468,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
         self.collapsed = collapsed
+        self.tint = tint
+        self.tintOn = tintOn
         self.minimized = minimized
         self.force = force
         self.host = host

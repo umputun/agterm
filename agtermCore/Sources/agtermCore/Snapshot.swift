@@ -114,16 +114,20 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     /// The INVERSE of `isExpanded`, so missing → expanded (the default) and only a collapsed workspace
     /// writes it — an all-expanded tree serializes byte-identically to a legacy snapshot.
     public var collapsed: Bool?
+    /// The workspace row's tint; nil = none, and absent from the file so an untinted tree stays unchanged.
+    public var tint: SidebarTint?
 
-    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil) {
+    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil,
+                tint: SidebarTint? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.collapsed = collapsed
+        self.tint = tint
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, sessions, collapsed
+        case id, name, sessions, collapsed, tint
     }
 
     /// Custom decode so `collapsed` is LOSSY, matching the other two snapshot types: the synthesized
@@ -135,6 +139,7 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
         name = try c.decode(String.self, forKey: .name)
         sessions = try c.decode([SessionSnapshot].self, forKey: .sessions)
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
+        tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
     }
 }
 
@@ -167,6 +172,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// What the session is FOR (`session.context`), shown in the title bar; nil = none set. Survives a
     /// relaunch by design — it states durable purpose, so nothing expires it but an explicit clear.
     public var context: String?
+    /// The sidebar row's tint (`session.tint`); nil = none.
+    public var tint: SidebarTint?
     /// The main pane's foreground command (full argv) as of the last clean quit or the last
     /// `restore.capture`, re-run on restore in `rerun` launch mode. nil at a shell prompt, or in another
     /// mode, which gates every capture site.
@@ -207,7 +214,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
-                context: String? = nil, lastSelectedAt: Double? = nil) {
+                context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil) {
         self.id = id
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
@@ -232,6 +239,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.splitRestoreCommand = splitRestoreCommand
         self.context = context
         self.lastSelectedAt = lastSelectedAt
+        self.tint = tint
     }
 
     enum CodingKeys: String, CodingKey {
@@ -239,7 +247,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
-        case restoreCommand, splitRestoreCommand, context, lastSelectedAt
+        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -274,6 +282,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
         lastSelectedAt = (try? c.decodeIfPresent(Double.self, forKey: .lastSelectedAt)) ?? nil
+        tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil

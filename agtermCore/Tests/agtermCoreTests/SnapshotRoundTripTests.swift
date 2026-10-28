@@ -308,6 +308,28 @@ struct SnapshotRoundTripTests {
         #expect(unknownSession.splitAxis == nil)
     }
 
+    @Test func anUnknownTintColorDropsOnlyTheTint() throws {
+        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"teal","on":["name"]}}"#
+        let decodedSession = try JSONDecoder().decode(SessionSnapshot.self, from: Data(session.utf8))
+        #expect(decodedSession.tint == nil)
+        #expect(decodedSession.flagged == true)
+
+        let workspace = #"{"id":"00000000-0000-0000-0000-000000000004","name":"w","sessions":[],"collapsed":true,"tint":"red"}"#
+        let decodedWorkspace = try JSONDecoder().decode(WorkspaceSnapshot.self, from: Data(workspace.utf8))
+        #expect(decodedWorkspace.tint == nil)
+        #expect(decodedWorkspace.collapsed == true)
+    }
+
+    @Test func anUntintedTreeWritesNoTintKey() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+
+        let json = try String(decoding: JSONEncoder().encode(store.snapshot()), as: UTF8.self)
+
+        #expect(!json.contains("\"tint\""))
+    }
+
     @Test func hiddenSplitKeepsIdentityAndAxisButDefaultsFocusToPrimary() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

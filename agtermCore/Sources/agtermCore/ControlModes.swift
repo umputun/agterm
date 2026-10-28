@@ -158,10 +158,12 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let before: String?
     /// Create in the background (`--no-select`): skip select+focus, leaving the current selection untouched.
     public let noSelect: Bool
+    /// The new session's sidebar tint, parsed by the dispatcher before anything is created; nil = none.
+    public let tint: SidebarTint?
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
                 createWorkspace: Bool?, command: String?, wait: Bool? = nil, name: String?,
-                after: String? = nil, before: String? = nil, noSelect: Bool = false) {
+                after: String? = nil, before: String? = nil, noSelect: Bool = false, tint: SidebarTint? = nil) {
         self.window = window
         self.cwd = cwd
         self.workspace = workspace
@@ -173,6 +175,7 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.after = after
         self.before = before
         self.noSelect = noSelect
+        self.tint = tint
     }
 }
 
@@ -253,5 +256,22 @@ public struct ControlSessionRestoreUpdate: Equatable, Sendable {
         self.pin = pin
         self.pane = pane
         self.paneID = paneID
+    }
+}
+
+/// ControlTintUpdate is a parsed `session.tint`/`workspace.tint` request: a color with optional parts, or a
+/// clear.
+public enum ControlTintUpdate: Equatable, Sendable {
+    case set(TintColor, parts: Set<TintPart>?)
+    case clear
+
+    /// resolved is the tint this update leaves on a row that has `current`: a set without parts keeps the
+    /// row's own parts, starting at the icon.
+    public func resolved(over current: SidebarTint?) -> SidebarTint? {
+        switch self {
+        case .clear: nil
+        case let .set(color, parts?): SidebarTint(color: color, parts: parts)
+        case let .set(color, nil): SidebarTint.recolor(current, to: color)
+        }
     }
 }

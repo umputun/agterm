@@ -202,8 +202,25 @@ extension AppActions {
                 })
             }
         }
+        items.append(contentsOf: tintItems())
         items.append(contentsOf: customCommandItems(badge: "custom"))
         return items
+    }
+
+    /// tintItems are "Tint Session: <color>" plus None for the active session, each keeping the session's
+    /// placement; the menu's batch form and `session.tint` share the store seam.
+    private func tintItems() -> [PaletteItem] {
+        guard let store, let sessionID = store.selectedSessionID else { return [] }
+        let choices: [TintColor?] = TintColor.allCases + [nil]
+        return choices.map { color in
+            PaletteItem(id: "tint-\(color?.rawValue ?? "none")",
+                        title: "Tint Session: \(color?.rawValue.capitalized ?? "None")",
+                        isEnabled: { [weak self] in self?.uiActionsEnabled ?? false },
+                        run: { [weak self, weak store] in
+                            guard self?.uiActionsEnabled == true else { return }
+                            store?.setTintColor(color, forSessions: [sessionID])
+                        })
+        }
     }
 
     /// The user-defined keymap commands as palette items with their bound chord. `badge` tags each entry.

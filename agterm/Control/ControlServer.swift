@@ -611,7 +611,7 @@ final class ControlServer {
                 .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionRestart, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom,
                 .surfaceCursor,
-                .sessionStatus, .sessionFlag, .sessionContext, .sessionSeen, .sessionRestore, .notify,
+                .sessionStatus, .sessionFlag, .sessionContext, .sessionTint, .workspaceTint, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .keymapRun, .hooksReload, .hooksList, .browserClear,
                 .browserLinks,
                 .configReload, .themeSet, .themeList,
@@ -921,7 +921,8 @@ final class ControlServer {
         let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
                                              command: options.command, name: options.name,
-                                             wait: options.wait ?? false, at: index, select: !options.noSelect) else {
+                                             wait: options.wait ?? false, at: index, select: !options.noSelect,
+                                             tint: options.tint) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if !options.noSelect, store === library.activeStore { actions.focusActiveSession() }

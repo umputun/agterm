@@ -556,4 +556,95 @@ struct ControlDispatcherSessionMetadataTests {
         #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)
     }
+
+    @Test func sessionTintSetRoutesColorAndParsedParts() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bare = await dispatcher.dispatch(ControlRequest(cmd: .sessionTint, target: "s",
+                                                            args: ControlArgs(mode: "set", window: "w", tint: "Red")))
+        let placed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTint, args: ControlArgs(mode: "set", tint: "blue", tintOn: ["name", "icon"])))
+        let cleared = await dispatcher.dispatch(ControlRequest(cmd: .sessionTint, args: ControlArgs(mode: "clear")))
+
+        #expect(bare == ControlResponse(ok: true) && placed == ControlResponse(ok: true) && cleared == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionTint(target: "s", window: "w", .set(.red, parts: nil)),
+            .sessionTint(target: nil, window: nil, .set(.blue, parts: [.icon, .name])),
+            .sessionTint(target: nil, window: nil, .clear),
+        ])
+    }
+
+    @Test func workspaceTintRoutesToTheWorkspaceAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceTint, target: "ws", args: ControlArgs(mode: "set", tint: "gray", tintOn: ["name"])))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.workspaceTint(target: "ws", window: nil, .set(.gray, parts: [.name]))])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(mode: "set"), "session.tint set requires a color"),
+        (ControlArgs(mode: "set", tint: "teal"), "invalid tint: teal (red|orange|yellow|green|blue|purple|gray)"),
+        (ControlArgs(mode: "set", tint: "red", tintOn: ["strip"]), "invalid tint placement: strip (icon,name)"),
+        (ControlArgs(mode: "set", tint: "red", tintOn: []), "invalid tint placement:  (icon,name)"),
+        (ControlArgs(mode: "clear", tint: "red"), "session.tint clear takes no color or placement"),
+        (ControlArgs(mode: "clear", tintOn: ["icon"]), "session.tint clear takes no color or placement"),
+        (ControlArgs(tint: "red"), "invalid tint mode:  (set|clear)"),
+    ])
+    func sessionTintRefusesContradictoryOrUnknownInput(_ tc: (ControlArgs, String)) async {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionTint, args: tc.0))
+
+        #expect(response == ControlResponse(ok: false, error: tc.1))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionNewCarriesItsCreationTint() async {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(
+            cmd: .sessionNew, args: ControlArgs(tint: "red", tintOn: ["name"])))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.sessionNew(ControlSessionCreateOptions(
+            window: nil, cwd: nil, workspace: nil, workspaceName: nil, createWorkspace: nil, command: nil, name: nil,
+            tint: SidebarTint(color: .red, parts: [.name])))])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(tintOn: ["icon"]), "--tint-on requires --tint"),
+        (ControlArgs(tint: "teal"), "invalid tint: teal (red|orange|yellow|green|blue|purple|gray)"),
+        (ControlArgs(tint: "red", tintOn: ["both"]), "invalid tint placement: both (icon,name)"),
+    ])
+    func creationRefusesABadTintBeforeCreatingAnything(_ tc: (ControlArgs, String)) async {
+        let (args, error) = tc
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var named = args
+        named.workspaceName = "new"
+        named.createWorkspace = true
+
+        let session = await dispatcher.dispatch(ControlRequest(cmd: .sessionNew, args: named))
+        let workspace = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: args))
+
+        #expect(session == ControlResponse(ok: false, error: error))
+        #expect(workspace == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    // a host predating tints must refuse the tint, never create an untinted workspace and answer ok.
+    @Test func workspaceNewThroughTheDefaultOverloadRefusesATint() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "w")))
+        let tinted = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "t", tint: "red")))
+
+        #expect(plain == ControlResponse(ok: true))
+        #expect(tinted == ControlResponse(ok: false, error: "workspace.new --tint is not supported on this platform"))
+        #expect(actions.calls == [.workspaceNew(window: nil, "w", collapsed: false)])
+    }
 }

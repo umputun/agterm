@@ -516,6 +516,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (the local context, or on an attached row without
                 one the origin's mirrored context; omitted when neither is set),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> (the sidebar row's tint color and the parts it colors, such as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["icon"]</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["icon","name"]</span>; both omitted when untinted),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>,
@@ -585,10 +588,13 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible &amp;&amp; ((sidebarMode == "tree" &amp;&amp; (!workspaceFilter || focused)) || (sidebarMode == "flagged" &amp;&amp; sidebarFlaggedLayout == "tree" &amp;&amp; one of its sessions is flagged))</span>
                 — no workspace row at all with the sidebar hidden or under the flat flagged list; in the ordinary tree, the
                 whole tree while the filter is off and only the members while it is on; in the flagged tree, the workspaces
-                holding a flagged session, whatever the filter says), and
+                holding a flagged session, whatever the filter says),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> (the workspace row's own tint, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint</span>; both omitted when untinted).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Top level:</strong>
@@ -677,7 +683,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.selected</span> (a window's selection moved to this session, with the one that lost it as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">previous</span>; no session when the selection was cleared, and nothing for a window merely coming forward),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span> (a 100 ms coalesced signal that a
-                window's names, membership, or ordering moved, a session's context changed, or an overlay, page or HUD
+                window's names, membership, or ordering moved, a session's context or a row's tint changed, or an overlay, page or HUD
                 opened or closed — read
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span> for the new
                 snapshot), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane.split</span> /
@@ -750,7 +756,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl workspace new [name] [--collapsed] [--window W]
+                agtermctl workspace new [name] [--collapsed] [--tint COLOR [--tint-on PARTS]] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -760,7 +766,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --no-select</span> without it
                 opening — and for the same reason a collapsed create stays OUT of the workspace focus set. A plain
                 create instead joins the marked set while the filter is applied, so a foreground workspace is never
-                hidden behind it. <strong style="color: #bfbab0">Returns</strong>
+                hidden behind it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint</span> creates it with a row tint, placed by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint-on</span> as in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint --on</span>; an invalid
+                value creates nothing. <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>
             </div>
@@ -927,6 +935,21 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace tint &lt;COLOR|clear&gt; [--on PARTS] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.tint</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Tint the workspace's own sidebar row, the control twin of the workspace row menu's Tint submenu. It takes
+                the same colors and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--on</span> as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session tint</span>, and colors only the workspace row: the sessions inside
+                keep their own tints. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>. Read back via the workspace node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> fields.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl workspace collapse [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.collapse</div>
@@ -984,7 +1007,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session new [--cwd DIR] [--workspace W | --workspace-name NAME [--create-workspace]] [--command CMD] [--wait]
-                [--name NAME] [--after SID | --before SID] [--no-select] [--window W]
+                [--name NAME] [--after SID | --before SID] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -998,6 +1021,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span> is also passed, which
                 reuses or creates it idempotently.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--name</span> seeds the sidebar label.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint</span> creates it with a row tint, placed by
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint-on</span> as in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session tint --on</span>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint-on</span> without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--tint</span> is refused, and an
+                invalid value creates nothing.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>
@@ -1667,6 +1694,33 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> here removes only the local value. The mirrored
                 value is never saved and goes when the stream drops, and the event follows what is shown, so setting the text
                 already on screen emits nothing.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session tint &lt;COLOR|clear&gt; [--on PARTS] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.tint</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Color a session's sidebar row so it stands out at a glance, for example red for production and green for
+                development. COLOR is one of <span style="font-family: &quot;JetBrains Mono&quot;, monospace">red</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">orange</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">yellow</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">green</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blue</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">purple</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">gray</span>, the macOS system colors, so they
+                follow light and dark mode. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--on</span> picks what the color shows on:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">icon</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">icon,name</span>. Without it a recolor keeps the row's placement and an untinted row starts on
+                the icon. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clear</span> removes the tint and refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--on</span>.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>. Read back via the node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> fields.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The tint survives quit and relaunch. A duplicated session starts untinted. It is local to this Mac: a session
+                attached from another Mac does not mirror the origin's tint, and its own tint goes with the row at relaunch.
+                The GUI twins are the
+                sidebar row menu's Tint submenu, which also acts on a multi-row selection, and the command palette's
+                "Tint Session" entries for the active session.
               </p>
             </div>
 

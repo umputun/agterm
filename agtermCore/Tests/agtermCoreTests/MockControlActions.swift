@@ -34,6 +34,8 @@ final class MockControlActions: ControlActions {
         case sessionFlag(target: String?, window: String?, String?)
         case flaggedMove(target: String?, window: String?, anchor: String, FlaggedOrderPlacement)
         case sessionContext(target: String?, window: String?, context: String?)
+        case sessionTint(target: String?, window: String?, ControlTintUpdate)
+        case workspaceTint(target: String?, window: String?, ControlTintUpdate)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
@@ -343,6 +345,16 @@ final class MockControlActions: ControlActions {
     func moveFlaggedSession(_ target: String?, window: String?, anchor: String,
                             placement: FlaggedOrderPlacement) -> ControlResponse {
         calls.append(.flaggedMove(target: target, window: window, anchor: anchor, placement))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
+        calls.append(.sessionTint(target: target, window: window, update))
+        return ControlResponse(ok: true)
+    }
+
+    func setWorkspaceTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
+        calls.append(.workspaceTint(target: target, window: window, update))
         return ControlResponse(ok: true)
     }
 

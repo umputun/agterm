@@ -29,6 +29,11 @@ final class SidebarCellView: NSTableCellView {
     var addButtonWidthConstraint: NSLayoutConstraint?
 
     private static let addButtonWidth: CGFloat = 16
+
+    /// The row's tint, applied by `setColors` so a selection change keeps it; nil restores the theme colors.
+    var tint: SidebarTint? {
+        didSet { imageView?.setAccessibilityValue(tint.map { "\($0.color.rawValue) tint" }) }
+    }
     private var hoverTrackingArea: NSTrackingArea?
 
     /// Reveals or collapses the inline "+": the Finder/Xcode hover convention, so an idle row shows no button
@@ -90,9 +95,10 @@ final class SidebarCellView: NSTableCellView {
         let color = selected
             ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
             : (app.terminalForegroundColor ?? .labelColor)
-        textField?.textColor = color
+        let tintColor = tint.map { NSColor.tint($0.color) }
+        textField?.textColor = tint?.shows(.name) == true ? tintColor : color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
-        imageView?.contentTintColor = color.withAlphaComponent(iconAlpha)
+        imageView?.contentTintColor = tint?.shows(.icon) == true ? tintColor : color.withAlphaComponent(iconAlpha)
         addButton?.contentTintColor = color.withAlphaComponent(iconAlpha)
     }
 }

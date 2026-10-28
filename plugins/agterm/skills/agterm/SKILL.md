@@ -2,7 +2,7 @@
 name: agterm
 description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
-  create, rename, close, reopen, select or
+  create, rename, close, reopen, select, tint,
   reorder sessions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
   read exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD/caption/notification; show a picker, question or input dialog; show images inline; type
@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -448,6 +448,10 @@ omitted when expanded).
   origin's mirrored context; `--clear` removes that override and reveals the origin's latest value.
   The mirrored value is never persisted. Read the shown value from the tree node's `context` field;
   setting the text already shown emits no `tree.changed` event.
+- `session tint <red|orange|yellow|green|blue|purple|gray|clear> [--on icon|name|icon,name]` and `workspace tint`
+  (same arguments) - color a sidebar row so it stands out, e.g. red for production; a workspace tint colors only
+  its own row. `session new`/`workspace new` take `--tint`/`--tint-on`. Read back as the tree node's `tint`/`tintOn`;
+  details in reference.md.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge WITHOUT changing the
   selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
   no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an

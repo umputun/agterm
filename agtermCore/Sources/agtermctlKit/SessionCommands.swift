@@ -18,7 +18,7 @@ struct Session: ParsableCommand {
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
-                      Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self,
+                      Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self, Tint.self,
                       Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self]
     )
 
@@ -34,6 +34,7 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
         @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
+        @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
@@ -57,10 +58,10 @@ struct Session: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionNew, args: options.withWindow(
+            ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before)))
+                            command: command, wait: wait ? true : nil, after: after, before: before))))
         }
     }
 

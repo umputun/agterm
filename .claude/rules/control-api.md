@@ -166,11 +166,11 @@ renumbering. Do not reintroduce a count anywhere.
 
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
-  `.expand`
+  `.expand`, `.tint`
 - `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
-  `.flag`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
+  `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
   `.overlay.show`, `.overlay.toggle`, `.hud.open`, `.hud.update`,
@@ -1120,6 +1120,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `AppStore.applyWorkspaceFlag`, the row menu's Flag All Sessions seam. `toggle` keys on
   `allSessionsFlagged`, the batch rule above, not a per-session invert. Read each session's `flagged`.
 - `session.seen` clears unseen without selection/focus/status or persistence. Read nonzero `unseen`.
+- `session.tint` and `workspace.tint` take mode `set` (a `TintColor`, optional `tintOn` parts) or `clear`, which
+  refuses a color or parts. `ControlDispatcher+SessionMetadata` parses both and the creation `tint`/`tintOn` on
+  `session.new`/`workspace.new` before any action runs, so a bad value creates nothing. A set without parts keeps
+  the row's own, else icon; `SidebarTint.recolor`/`place` own that rule for the CLI, the row menu and the palette.
+  A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac.
+  `ControlActions` keeps the three-argument `createWorkspace`; the tint overload's default refuses a tint.
+  Read `tint`/`tintOn` on session and workspace nodes, omitted when untinted.
 - `session.context set TEXT|clear` sets what a session is FOR, shown in the title bar. Read `context`.
   `set` requires `text`, `clear` forbids it, and the mode is required, so a raw client sending both or
   neither is refused. The server trims outer spaces and rejects a blank result, over 256 UTF-8 bytes, or

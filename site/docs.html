@@ -900,7 +900,7 @@
                 <strong style="color: #e6e1d7">Duplicate Session</strong> from a single session's context menu for a fresh shell in the
                 same workspace, right after it, in its current directory — only the directory carries over. Shift-click and ⌘-click
                 select multiple sessions for batch flag, close, move, and drag. Right-clicking inside the selection keeps the whole
-                batch, so <strong style="color: #e6e1d7">Flag</strong>, <strong style="color: #e6e1d7">Close</strong>, and
+                batch, so <strong style="color: #e6e1d7">Flag</strong>, <strong style="color: #e6e1d7">Tint</strong>, <strong style="color: #e6e1d7">Close</strong>, and
                 <strong style="color: #e6e1d7">Move to</strong> act on all of it; right-clicking a row outside narrows the menu to
                 that row. Dragged sessions keep running, shell and scrollback
                 intact.
@@ -3573,6 +3573,43 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Hide it without clearing it under <strong style="color: #e6e1d7">Settings ▸ Interface</strong>. It reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">context</span> field.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A <strong style="color: #e6e1d7">row tint</strong> tells sessions apart at a glance, red for production and green for
+              development, say. Pick one from <strong style="color: #e6e1d7">Tint</strong> in a session or workspace row menu: None or one of
+              seven colors (red, orange, yellow, green, blue, purple, gray), which follow light and dark mode, then
+              <strong style="color: #e6e1d7">Show On</strong> Icon, Name, or Icon and Name. On a multi-row selection Show On is available
+              only when every selected row is tinted. The command palette offers "Tint Session: Red" through "Tint
+              Session: None" for the active session. A workspace tint colors only the workspace row, never the
+              sessions in it.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl session tint red --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl
+              session tint green --on icon,name --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span
+              ><br />agtermctl workspace tint red<br />agtermctl session tint clear --target
+              <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A tint on a local session or workspace survives quit and relaunch, and a duplicated session starts
+              without one. It stays on this Mac: a session attached from another Mac does not show the origin's tint,
+              and a tint set on that row goes away with it.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace new --tint</span> create a
+              row already tinted. The tint reads back on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tintOn</span>. On an older agterm, an emoji and a
+              PROD or DEV word in the session or workspace name gives a visible marker, at the cost of pinning the
+              name: the row no longer shows the live terminal title.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               To wire it up automatically, <strong style="color: #e6e1d7">Help ▸ Install Agent Status Hooks…</strong> installs a
