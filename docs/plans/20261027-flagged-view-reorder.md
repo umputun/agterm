@@ -189,16 +189,16 @@
 - Modify: `agtermCore/Sources/agtermCore/SidebarDrop.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SidebarDropTests.swift`
 
-- [ ] add the flat/plain resolver: visible slot or on-row drop in saved order to a block move, nil-item gaps
+- [x] add the flat/plain resolver: visible slot or on-row drop in saved order to a block move, nil-item gaps
       included, no-op detection in saved order
-- [ ] add the flagged-tree translation: visible slot, on-session-row and on-workspace-row drops to full
+- [x] add the flagged-tree translation: visible slot, on-session-row and on-workspace-row drops to full
       pre-removal destination for `resolveSessions`, with the anchor rules and the ownership-plus-group-order
       no-op
-- [ ] write table tests for the flat resolver: up, down, top, bottom, on a row, multi-row block, no-op, empty
-- [ ] write table tests for the tree translation: hidden siblings before and after the anchor, end-of-group gap,
+- [x] write table tests for the flat resolver: up, down, top, bottom, on a row, multi-row block, no-op, empty
+- [x] write table tests for the tree translation: hidden siblings before and after the anchor, end-of-group gap,
       on a session row, on a workspace row, cross-workspace move, the owner-change case that keeps flat order,
       no-ops
-- [ ] run `swift test --filter SidebarDropTests` - must pass before task 4
+- [x] run `swift test --filter SidebarDropTests` - must pass before task 4
 
 ### Task 4: Sidebar drag, rendering and navigation
 
