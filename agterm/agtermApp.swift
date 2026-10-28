@@ -107,11 +107,13 @@ struct agtermApp: App {
         // restoredRuntime's first GhosttyApp.shared touch loads this file once, so it must be current first;
         // the seeded default theme lives only in memory, never in settings.json.
         let settingsStore = SettingsStore(directory: stateDirectory)
-        _ = SettingsModel.writeGhosttyConfig(settingsStore.load())
+        let launchSettings = settingsStore.load()
+        _ = SettingsModel.writeGhosttyConfig(launchSettings)
         // the pacer exists before the library so the model can discard the key of a pane it removes before
         // that pane's window ever mounts; the registry that routes grants comes after
         let pacer = SpawnPacer()
-        let restored = agtermApp.restoredRuntime(stateDirectory: stateDirectory, pacer: pacer)
+        let restored = agtermApp.restoredRuntime(stateDirectory: stateDirectory, pacer: pacer,
+                                                 flaggedLayout: launchSettings.effectiveFlaggedViewLayout)
         spawnRegistry = SpawnRegistry(pacer: pacer)
         let library = restored.library
         zmxForegroundResolver = restored.foregroundResolver
@@ -374,9 +376,11 @@ struct agtermApp: App {
 
     /// Builds the window library and zmx foreground resolver for the state directory. Bootstrap
     /// migrates/recovers persisted windows and inventories claimed pane identities before surfaces mount.
-    private static func restoredRuntime(stateDirectory: URL, pacer: SpawnPacer) -> RestoredRuntime {
+    private static func restoredRuntime(stateDirectory: URL, pacer: SpawnPacer,
+                                        flaggedLayout: FlaggedViewLayout) -> RestoredRuntime {
         guard !isHostedUnitTest else {
-            return RestoredRuntime(library: WindowLibrary(directory: stateDirectory),
+            return RestoredRuntime(library: WindowLibrary(directory: stateDirectory, paneFinalizer: nil,
+                                                          flaggedLayout: flaggedLayout),
                                    foregroundResolver: nil, zmxClient: nil, spawnContext: LaunchSpawnContext())
         }
         let ghostty = GhosttyApp.shared
@@ -397,7 +401,8 @@ struct agtermApp: App {
             launchInventorySink: { context.launchInventory = $0 },
             launchPaneDrop: { identities in
                 for identity in identities { pacer.discard(identity) }
-            })
+            },
+            flaggedLayout: flaggedLayout)
         // the reap waits for the library so a confirmed Live sessions reset can narrow its marker against the
         // current claims first; both finish before any window mounts
         let outdatedBefore = ZmxBuildRecord.launchCutoff(bundledID: Self.bundledZmxBuildID(), directory: stateDirectory)

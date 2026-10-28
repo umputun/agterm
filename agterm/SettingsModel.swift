@@ -811,8 +811,10 @@ final class SettingsModel {
         GhosttyApp.shared.setHiddenInterfaceElements(settings.resolvedHiddenInterfaceElements)
     }
 
+    // the one setter of both copies: GhosttyApp's drives rendering, the library's drives navigation
     private func applyFlaggedViewLayout() {
         GhosttyApp.shared.setFlaggedViewLayout(settings.effectiveFlaggedViewLayout)
+        library.setFlaggedLayout(settings.effectiveFlaggedViewLayout)
     }
 
     private func applyHtmlOverlayZoom() {

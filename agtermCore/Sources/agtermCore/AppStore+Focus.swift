@@ -197,7 +197,8 @@ extension AppStore {
     /// never leaking across the filter. Backs `navigateSession` (and via it `session.go`, attention-nav), the
     /// Ctrl-Tab MRU candidates and the ⌃P session palette (`AppActions.paletteSessions`) — all one filter.
     public var navigableSessions: [Session] {
-        sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
+        guard sidebarMode == .flagged else { return visibleWorkspaces.flatMap(\.sessions) }
+        return flaggedLayout == .tree ? flaggedSessions : orderedFlaggedSessions
     }
 
     /// Moves the selection back inside the visible set whenever the active session is outside it — a narrowing

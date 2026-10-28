@@ -588,7 +588,7 @@ public final class AppStore {
         WatermarkStorage.removeAllRenderedText(sessionID: sessionID) // drop any rendered .text PNG; the session is gone
         sessionRecency.remove(sessionID)
         if wasActive {
-            selectedSessionID = closeReselectionTarget(after: location)
+            selectedSessionID = closeReselectionTarget(after: location, removing: sessionID)
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the marked set
             recordRecency()

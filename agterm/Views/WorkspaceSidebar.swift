@@ -108,6 +108,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.sidebarSelectionIDs
         // sidebarMode flips the whole data source (tree ↔ flagged view), so a mode change must rebuild.
         _ = store.sidebarMode
+        _ = store.flaggedOrder // the flat and plain rows follow it; a control move changes nothing else read here
         // the marked set restricts the tree to its members while the filter is on; BOTH fields are read so
         // a membership change or a filter flip takes the rebuild branch.
         _ = store.focusedWorkspaceIDs
@@ -425,7 +426,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// `visibleWorkspaces`, so marking a workspace or flipping the focus filter counts as a shape change too.
         private func currentShape() -> [TreeShape] {
             guard rendersWorkspaceRows else {
-                return [TreeShape(workspaceID: Self.flaggedShapeID, sessionIDs: store.flaggedSessions.map(\.id))]
+                return [TreeShape(workspaceID: Self.flaggedShapeID, sessionIDs: store.orderedFlaggedSessions.map(\.id))]
             }
             return workspaceProjection.map { TreeShape(workspaceID: $0.workspace.id, sessionIDs: $0.sessions.map(\.id)) }
         }
@@ -514,7 +515,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // flat flagged list: non-expandable session rows; no workspace nodes, so they leave the cache.
             if !rendersWorkspaceRows {
                 var seen = Set<UUID>()
-                roots = store.flaggedSessions.map { session in
+                roots = store.orderedFlaggedSessions.map { session in
                     seen.insert(session.id)
                     return node(for: session.id, kind: .session)
                 }

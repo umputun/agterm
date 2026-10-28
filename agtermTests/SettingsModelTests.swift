@@ -81,6 +81,17 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(SettingsStore(directory: stateDir).load().flaggedViewLayout, "tree")
     }
 
+    func testSetFlaggedViewLayoutReachesTheLibraryAndEveryOpenStore() throws {
+        let first = try XCTUnwrap(library.windows.first.flatMap { library.store(for: $0.id) })
+        let second = try XCTUnwrap(library.store(for: library.newWindow(name: "second").id))
+
+        model.setFlaggedViewLayout(.plain)
+
+        XCTAssertEqual(library.flaggedLayout, .plain)
+        XCTAssertEqual(first.flaggedLayout, .plain)
+        XCTAssertEqual(second.flaggedLayout, .plain)
+    }
+
     func testSetFlaggedViewLayoutBackToFlatClearsTheStoredField() {
         model.setFlaggedViewLayout(.tree)
 

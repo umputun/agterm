@@ -395,4 +395,34 @@ struct AppStoreCloseReselectionTests {
         store.closeSession(last)
         #expect(store.selectedSessionID == nil)
     }
+
+    @Test(arguments: [(FlaggedViewLayout.flat, 0), (.plain, 0), (.tree, 2)])
+    func closeInTheFlaggedViewWithNoRecencyPicksTheNeighbourInTheOrderShown(layout: FlaggedViewLayout, want: Int) {
+        let ids = (0..<4).map { _ in UUID() }
+        let sessions = ids.enumerated().map { SessionSnapshot(id: $1, customName: nil, cwd: "/\($0)", flagged: true) }
+        let store = makeStore()
+        store.flaggedLayout = layout
+        store.restore(from: Snapshot(selectedSessionID: ids[1],
+                                     workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: sessions)],
+                                     sidebarMode: .flagged, flaggedOrder: [ids[2], ids[1], ids[0], ids[3]]))
+        #expect(store.sessionRecency.items == [ids[1]])
+
+        store.closeSession(ids[1])
+
+        #expect(store.selectedSessionID == ids[want])
+    }
+
+    @Test func softCloseInTheFlatFlaggedViewPicksTheSavedOrderNeighbour() throws {
+        let ids = (0..<3).map { _ in UUID() }
+        let sessions = ids.enumerated().map { SessionSnapshot(id: $1, customName: nil, cwd: "/\($0)", flagged: true) }
+        let store = makeStore()
+        defer { store.finalizeAllPendingCloses() }
+        store.restore(from: Snapshot(selectedSessionID: ids[0],
+                                     workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: sessions)],
+                                     sidebarMode: .flagged, flaggedOrder: [ids[1], ids[0], ids[2]]))
+
+        #expect(store.softCloseSession(ids[0], grace: 60))
+
+        #expect(store.selectedSessionID == ids[2])
+    }
 }

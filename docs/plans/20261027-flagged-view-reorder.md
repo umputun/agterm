@@ -210,23 +210,23 @@
   `agtermTests/SidebarFlaggedLayoutTests.swift`, `agtermTests/SidebarWorkspaceFlagTests.swift`,
   `agtermTests/AppActionsPaletteTests.swift`, `agtermUITests/ReorderUITests.swift`
 
-- [ ] allow session drags in flagged mode; keep workspace rows non-draggable under the flagged tree
-- [ ] route flat/plain drops to the saved-order move and flagged-tree drops through the translation into
+- [x] allow session drags in flagged mode; keep workspace rows non-draggable under the flagged tree
+- [x] route flat/plain drops to the saved-order move and flagged-tree drops through the translation into
       `moveSessions`; highlight in visible space
-- [ ] read the saved order in `updateNSView`; render flat and plain from the ordered projection
+- [x] read the saved order in `updateNSView`; render flat and plain from the ordered projection
       (`currentShape`, flat roots) and switch `navigableSessions` to it in the same step
-- [ ] close reselection under flat and plain walks the saved order: deletion paths prune after the reselection
+- [x] close reselection under flat and plain walks the saved order: deletion paths prune after the reselection
       block, so the raw list still holds the removed id's position when `nearestInScopeTarget` runs
-- [ ] switch spring expansion to `rendersWorkspaceRows`
-- [ ] pass the loaded layout through both `restoredRuntime` library constructions; make
+- [x] switch spring expansion to `rendersWorkspaceRows`
+- [x] pass the loaded layout through both `restoredRuntime` library constructions; make
       `SettingsModel.applyFlaggedViewLayout` the only setter of both layout copies, and convert the touched tests
       that call `GhosttyApp.shared.setFlaggedViewLayout` directly
-- [ ] write tests: navigation per layout (flat order vs tree order), close reselection without MRU in a saved
+- [x] write tests: navigation per layout (flat order vs tree order), close reselection without MRU in a saved
       order that differs from tree order, two open windows switching layouts, closed-window reopen, a library
       initialized with a saved non-default layout, a custom flat order, a hidden selection and no eligible MRU
-- [ ] write UI tests: a flat between-row drop across workspaces; a collapsed flagged-tree target with hidden
+- [x] write UI tests: a flat between-row drop across workspaces; a collapsed flagged-tree target with hidden
       siblings, asserting visible order, ownership, selection and an unchanged saved flat order
-- [ ] run the added and changed methods with `-only-testing` and `swift test --filter` - must pass before task 5
+- [x] run the added and changed methods with `-only-testing` and `swift test --filter` - must pass before task 5
 
 ### Task 5: Control API and CLI
 

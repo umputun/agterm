@@ -9,8 +9,7 @@ extension WorkspaceSidebar.Coordinator {
     // MARK: - Drag and drop
 
     func outlineView(_ outlineView: NSOutlineView, pasteboardWriterForItem item: Any) -> NSPasteboardWriting? {
-        // the flagged view is a derived projection in any layout, not a reorderable tree — no drag source there.
-        guard store.sidebarMode == .tree, let node = item as? SidebarNode else { return nil }
+        guard let node = item as? SidebarNode else { return nil }
         let pbItem = NSPasteboardItem()
         switch node.kind {
         case .session:
@@ -21,6 +20,8 @@ extension WorkspaceSidebar.Coordinator {
                 : [node.id]
             pbItem.setString(draggedIDs.map(\.uuidString).joined(separator: "\n"), forType: sessionPasteboardType)
         case .workspace:
+            // the flagged tree omits workspaces with nothing flagged, so a workspace drop there has no slot to aim at
+            guard store.sidebarMode == .tree else { return nil }
             pbItem.setString(node.id.uuidString, forType: workspacePasteboardType)
         }
         return pbItem
@@ -37,12 +38,20 @@ extension WorkspaceSidebar.Coordinator {
             outlineView.setDropItem(nil, dropChildIndex: move.dropChildIndex)
             return .move
         }
+        if !draggedSessionIDs(from: info).isEmpty, showsFlatFlaggedList {
+            cancelSpringLoadedExpansion()
+            return resolveFlaggedReorder(from: info, item: item, childIndex: index) == nil ? [] : .move
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
                 cancelSpringLoadedExpansion()
                 return []
             }
-            outlineView.setDropItem(workspaceNode(forID: move.workspace), dropChildIndex: move.dropChildIndex)
+            if let onRow = move.onFlaggedTreeRow {
+                outlineView.setDropItem(onRow, dropChildIndex: SidebarDrop.onItemIndex)
+            } else {
+                outlineView.setDropItem(workspaceNode(forID: move.workspace), dropChildIndex: move.dropChildIndex)
+            }
             scheduleSpringLoadedExpansion(of: move.workspace, in: outlineView)
             return .move
         }
@@ -69,6 +78,11 @@ extension WorkspaceSidebar.Coordinator {
             store.moveWorkspace(move.workspaceID, at: move.destination)
             dropSucceeded = true
             return true
+        }
+        if !draggedSessionIDs(from: info).isEmpty, showsFlatFlaggedList {
+            guard let move = resolveFlaggedReorder(from: info, item: item, childIndex: index) else { return false }
+            dropSucceeded = store.moveFlagged(move.ids, to: move.placement, of: move.anchor)
+            return dropSucceeded
         }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
@@ -109,12 +123,16 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     /// The resolved session drop. `dropChildIndex` is the PRE-removal slot to highlight; `destination`
-    /// is the POST-removal index `moveSessions` expects.
+    /// is the POST-removal index `moveSessions` expects. `onFlaggedTreeRow` keeps a flagged-tree drop ON a
+    /// session row targeted at that row: `acceptDrop` receives whatever `validateDrop` set, and retargeting
+    /// it to the parent's gap below the row would read back as before the next VISIBLE row, past any hidden
+    /// sibling in between.
     private struct SessionMove {
         let sessionIDs: [UUID]
         let workspace: UUID
         let dropChildIndex: Int
         let destination: Int
+        var onFlaggedTreeRow: SidebarNode?
     }
 
     /// Resolves a proposed session drop into the move it would perform, nil when the drop is invalid or a
@@ -124,12 +142,20 @@ extension WorkspaceSidebar.Coordinator {
     private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
         let sessionIDs = draggedSessionIDs(from: info)
         guard !sessionIDs.isEmpty, let node = item as? SidebarNode else { return nil }
+        let flaggedTree = store.sidebarMode == .flagged
 
         let target: SidebarDrop.SessionDropTarget
+        var childIndex = index
+        var highlight: Int?
         switch node.kind {
         case .workspace:
             let count = store.workspaces.first(where: { $0.id == node.id })?.sessions.count ?? 0
             target = .workspaceRow(id: node.id, sessionCount: count)
+            if flaggedTree {
+                childIndex = SidebarDrop.flaggedTreeChildIndex(visibleIndices: flaggedIndices(inWorkspace: node.id),
+                                                               slot: index)
+                highlight = index
+            }
         case .session:
             guard let drop = store.sessionLocation(ofSession: node.id) else { return nil }
             target = .sessionRow(workspace: drop.workspace, sessionIndex: drop.index, sessionCount: drop.count)
@@ -140,10 +166,35 @@ extension WorkspaceSidebar.Coordinator {
             return SidebarDrop.SessionSource(workspace: source.workspace, index: source.index)
         }
         guard sources.count == sessionIDs.count,
-              let move = SidebarDrop.resolveSessions(sources: sources, target: target, childIndex: index)
+              let move = SidebarDrop.resolveSessions(sources: sources, target: target, childIndex: childIndex)
         else { return nil }
+        if flaggedTree, !flaggedTreeView().changesView(moving: sessionIDs, to: move) { return nil }
         return SessionMove(sessionIDs: sessionIDs, workspace: move.workspace,
-                           dropChildIndex: move.dropChildIndex, destination: move.destination)
+                           dropChildIndex: highlight ?? move.dropChildIndex, destination: move.destination,
+                           onFlaggedTreeRow: flaggedTree && node.kind == .session ? node : nil)
+    }
+
+    // a flat or plain list's rows are sessions only, so a gap drop arrives with no item
+    private func resolveFlaggedReorder(from info: NSDraggingInfo, item: Any?,
+                                       childIndex index: Int) -> SidebarDrop.FlaggedReorder? {
+        let sessionIDs = draggedSessionIDs(from: info)
+        guard !sessionIDs.isEmpty else { return nil }
+        return SidebarDrop.resolveFlaggedReorder(order: store.orderedFlaggedSessions.map(\.id), dragged: sessionIDs,
+                                                 onRow: (item as? SidebarNode)?.id, childIndex: index)
+    }
+
+    private var showsFlatFlaggedList: Bool {
+        store.sidebarMode == .flagged && !rendersWorkspaceRows
+    }
+
+    private func flaggedIndices(inWorkspace id: UUID) -> [Int] {
+        let sessions = store.workspaces.first { $0.id == id }?.sessions ?? []
+        return sessions.indices.filter { sessions[$0].flagged }
+    }
+
+    private func flaggedTreeView() -> SidebarDrop.FlaggedTree {
+        SidebarDrop.FlaggedTree(workspaces: store.workspaces.map { ($0.id, $0.sessions.map(\.id)) },
+                                flagged: Set(store.flaggedSessions.map(\.id)))
     }
 
     /// Resolves a Finder drop to existing directory URLs and a destination workspace: a workspace row adds
@@ -198,7 +249,7 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     private func scheduleSpringLoadedExpansion(of workspaceID: UUID, in outlineView: NSOutlineView) {
-        guard store.sidebarMode == .tree, let node = workspaceNode(forID: workspaceID) else {
+        guard rendersWorkspaceRows, let node = workspaceNode(forID: workspaceID) else {
             cancelSpringLoadedExpansion()
             return
         }
