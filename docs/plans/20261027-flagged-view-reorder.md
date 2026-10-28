@@ -249,20 +249,20 @@
 - [x] run the added and changed suites and methods - must pass before task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify flat and plain reorder across workspaces, tree-layout moves, navigation per layout, arrivals and
+- [x] verify flat and plain reorder across workspaces, tree-layout moves, navigation per layout, arrivals and
       lifecycle, control move and read-back
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint`
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint`
 - [ ] build and launch an isolated Debug instance and drag in all three layouts
 
 ### Task 7: [Final] Update documentation
-- [ ] `site/docs.html` flagged view section; `site/commands.html` for `session flag move` and `flaggedOrder`
-- [ ] `plugins/agterm/skills/agterm/` reference and SKILL.md pointer
-- [ ] `.claude/rules/sidebar.md`: drag in the flagged view, the saved order and two orders by layout, the
+- [x] `site/docs.html` flagged view section; `site/commands.html` for `session flag move` and `flaggedOrder`
+- [x] `plugins/agterm/skills/agterm/` reference and SKILL.md pointer
+- [x] `.claude/rules/sidebar.md`: drag in the flagged view, the saved order and two orders by layout, the
       observation sentence, and the layout-ownership note at :98-99 (the store now mirrors the layout;
       `rendersWorkspaceRows(flaggedLayout:)` keeps its signature)
-- [ ] `.claude/rules/menu-actions.md` close reselection order; `.claude/rules/control-api.md`
+- [x] `.claude/rules/menu-actions.md` close reselection order; `.claude/rules/control-api.md`
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

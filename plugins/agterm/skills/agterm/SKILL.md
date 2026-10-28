@@ -121,7 +121,8 @@ navigation walks every open window; `session go` stays in its window), `sidebarV
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
 (`tree` or `flagged` — the read side of `sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide —
 the read side of `browser links`), `sidebarFlaggedLayout` (`flat`, `plain` or `tree`, app-wide —
-the read side of `sidebar flagged-layout`), `sidebarWidth` (the sidebar divider position in
+the read side of `sidebar flagged-layout`), `flaggedOrder` (the window's flagged session ids in the flat list's
+saved order — the read side of `session flag move`, omitted when nothing is flagged), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
 reports the same value), `zoomedSurface`, the four `dashboard*` fields, `pickPending`, `askPending` (GUI asks only), and `app` (the
@@ -438,7 +439,7 @@ omitted when expanded).
   status is one of the values, returning at once when it already is. Exit 0 and print the status on a match,
   2 when the session closes, 124 on timeout, 1 on failure. Use it to wait for a worker started with
   `session new --command`; in a reused session wait for `active` first. Details in reference.md.
-- `session flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all; `workspace flag` covers one whole workspace).
+- `session flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all; `workspace flag` covers one whole workspace). `session flag move --before|--after <sid>` reorders a flagged session within the flat list's saved order.
 - `session context <TEXT|--clear> [--target] [--window W]` — set what the session is ABOUT, shown in the
   title bar: a PR number, an issue, the task in hand. Use it when you
   start work a session's name cannot describe. Exactly one of TEXT or `--clear`; a blank TEXT is an error,

@@ -200,8 +200,9 @@ paths:
 - This preserves the current workspace when possible, remains inside flagged/focused views while they
   contain survivors, and lets `disableFocusIfSelectionOutsideSet` reveal a whole-tree fallback while
   preserving membership.
-- If MRU is empty, narrowed modes use `nearestInScopeTarget` over flattened sidebar order; unfiltered tree
-  uses the sole `reselectionTarget` caller. Do not choose the first flagged row because it destroys locality.
+- If MRU is empty, narrowed modes use `nearestInScopeTarget` over flattened sidebar order; the flat and plain
+  flagged lists first walk the saved `flaggedOrder` from the closed id's slot (`nearestInSavedFlaggedOrder`),
+  so every caller passes the closed id; unfiltered tree uses the sole `reselectionTarget` caller. Do not choose the first flagged row because it destroys locality.
   Closing the last flagged session widens to the whole tree rather than leaving no terminal.
 - Workspace removal uses `workspaceRemovalTarget`: most recent visible, then first visible, then positional.
   Preserve `softCloseSessions.removedBeforeActive` for fallback index adjustment. The named

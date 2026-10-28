@@ -609,6 +609,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar flagged-layout</span>; app-wide, so every window reports the
                 same value, under the ordinary tree too),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flaggedOrder</span> (the window's flagged session ids in
+                the flat list's saved order, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session flag move</span>; omitted when
+                nothing is flagged),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarWidth</span> (the sidebar divider position in points, the read side
                 of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar width</span>, reported here and not on
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>),
@@ -1609,7 +1613,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session flag [on|off|toggle|clear] [--target T] [--window W]
+                agtermctl session flag [on|off|toggle|clear|move] [--before S | --after S] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.flag</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1617,9 +1621,14 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span>
                 act on the target and are idempotent;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clear</span> ignores the target and unflags every
-                session in the window. Unknown mode errors. Pair with
+                session in the window. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">move</span> places the
+                flagged target right before or after another flagged session of the same window in the order the flat
+                flagged list shows, with exactly one of <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>
+                or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span>, which no other mode takes.
+                Unknown mode errors. Pair with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar mode flagged</span>. Read back via the node's
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> field.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> field, and the order via the tree's
+                top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flaggedOrder</span>, omitted when nothing is flagged.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> CAN move the selection: unflagging the

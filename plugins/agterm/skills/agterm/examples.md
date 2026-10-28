@@ -524,6 +524,7 @@ agtermctl sidebar mode flagged                            # show only the flagge
 agtermctl sidebar flagged-layout tree                     # nest them under workspace rows, in every window
 agtermctl sidebar flagged-layout plain                    # or one flat list of session names, no workspace suffix
 agtermctl session go --to next                            # in flagged mode, nav steps the flagged set only
+agtermctl session flag move --target c3d4 --before a1b2   # flat/plain order: put c3d4 right above a1b2
 agtermctl sidebar mode tree                               # back to the full tree
 agtermctl session flag clear                              # unflag everything in the window
 ```

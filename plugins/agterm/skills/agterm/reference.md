@@ -311,7 +311,8 @@ visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, t
 `sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide, the read side of `browser links`),
 `sidebarFlaggedLayout` (`flat`, `plain` or `tree` — how the flagged view is arranged, the read side
 of `sidebar flagged-layout`; app-wide, so every window reports the same value, under the ordinary tree
-too), `sidebarWidth` (the sidebar divider position in points, the read side of
+too), `flaggedOrder` (the window's flagged session ids in the flat list's saved order, the read side of
+`session flag move`; omitted when nothing is flagged), `sidebarWidth` (the sidebar divider position in points, the read side of
 `sidebar width`, reported here and nowhere else), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
 the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
 `workspace filter`, so a script can record the filter state, restore it, or make the toggle idempotent),
@@ -742,11 +743,15 @@ error keeps those names for compatibility.
   including an app that quits or relaunches mid-wait. `--target` resolves like other session commands across
   every open window and is pinned to that id for the whole wait. CLI only: it uses `events.read`,
   `window.list` and `tree`, and there is no `session.wait` socket command.
-- `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
+- `session flag [on|off|toggle|clear|move] [--before S | --after S] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
+  `move` places the flagged target right before or after another flagged session of the same window in the
+  flat list's saved order, with exactly one of `--before`/`--after` (no other mode takes them); new flags join
+  the end of that order, and the workspace-tree layout ignores it.
   Pair with `sidebar mode flagged` to see just the flagged sessions, arranged by
-  `sidebar flagged-layout` (a flat `session : workspace` list by default). Unknown mode errors. The tree's `flagged` flag tracks membership.
+  `sidebar flagged-layout` (a flat `session : workspace` list by default). Unknown mode errors. The tree's `flagged` flag tracks membership,
+  and the top-level `flaggedOrder` the saved order.
 - `session context <TEXT|--clear> [--target] [--window W]` — set or clear what the session is ABOUT, shown
   in the title bar — a PR number, an issue, the task in hand. It is set from OUTSIDE the session, so a
   hook or an orchestrator can say what a session it just created is for. Exactly one of TEXT or `--clear`, enforced at parse time and again server-side: a blank

@@ -1113,7 +1113,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   read-back field: it reports only the resolved `statusPane`.
 - Auto-reset clears both session entered and session left. Status renders on selected sessions too.
 - `session.flag on|off|toggle|clear` is idempotent; clear ignores target and clears the store.
-  Read `flagged`.
+  Read `flagged`. `move` takes exactly one of `--before`/`--after`, checked in `ControlDispatcher+SessionFlag`,
+  and any other mode refuses them; the app resolves the anchor in the target's store only, requires both
+  flagged, and answers ok for an unchanged order. Read top-level `flaggedOrder`.
 - `workspace.flag on|off|toggle` sets every session of the target workspace to one value through
   `AppStore.applyWorkspaceFlag`, the row menu's Flag All Sessions seam. `toggle` keys on
   `allSessionsFlagged`, the batch rule above, not a per-session invert. Read each session's `flagged`.
