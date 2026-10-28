@@ -7,9 +7,10 @@ extension AppStore {
     /// so both the flagged list and the focus filter apply) — an unscoped survivor could yank the user into
     /// another workspace, and a pick the sidebar isn't rendering would strand the selection. Exhausting a
     /// scope widens through three levels: that workspace's visible sessions, everything visible, the whole
-    /// tree. Only a widened scope with no recency falls to a positional walk, and while any narrowing is
-    /// applied that is the flattened in-scope walk over the widened scope, not `reselectionTarget` —
-    /// `narrowed` keys on the MODE, so it stays true after the widening.
+    /// tree. With no recency in scope a positional walk picks. While any narrowing is applied it is
+    /// `removedID`'s neighbour in the saved flagged order under the flat and plain layouts, else the flattened
+    /// in-scope walk over the widened scope, never `reselectionTarget`. `narrowed` keys on the MODE, so it
+    /// stays true after the widening.
     /// A pick outside the marked set meets each caller's `disableFocusIfSelectionOutsideSet`. The scope is
     /// built from the TREE, so a session already removed cannot come back even while it survives in
     /// `sessionRecency` (the soft-close paths keep it there for undo).

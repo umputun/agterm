@@ -567,7 +567,7 @@ public final class AppStore {
     }
 
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
-    /// surviving session in scope (`closeReselectionTarget(after:)`), falling back to the positional neighbor.
+    /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor.
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID

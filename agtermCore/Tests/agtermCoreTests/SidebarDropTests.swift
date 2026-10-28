@@ -347,6 +347,24 @@ struct SidebarDropTests {
             childIndex: slot) == nil)
     }
 
+    @Test(arguments: [
+        (moving: [3, 1], placement: FlaggedOrderPlacement.before, anchor: 0, want: [1, 3, 0, 2] as [Int]?),
+        (moving: [0], placement: .after, anchor: 3, want: [1, 2, 3, 0]),
+        (moving: [1], placement: .before, anchor: 2, want: nil),
+        (moving: [1], placement: .after, anchor: 0, want: nil),
+        (moving: [1], placement: .before, anchor: 1, want: nil),
+    ])
+    func reorderedFlaggedMovesTheBlockInListOrder(moving: [Int], placement: FlaggedOrderPlacement, anchor: Int,
+                                                  want: [Int]?) {
+        #expect(SidebarDrop.reorderedFlagged(Self.flat, moving: Set(moving.map { Self.flat[$0] }),
+                                             placement: placement, anchor: Self.flat[anchor])
+            == want.map { $0.map { Self.flat[$0] } })
+    }
+
+    @Test func reorderedFlaggedWithAnAnchorOutsideTheListIsNil() {
+        #expect(SidebarDrop.reorderedFlagged(Self.flat, moving: [Self.flat[0]], placement: .before, anchor: UUID()) == nil)
+    }
+
     @Test func flatDropOfRowsOutsideTheListIsANoOp() {
         #expect(SidebarDrop.resolveFlaggedReorder(order: Self.flat, dragged: [UUID()], onRow: nil, childIndex: 0) == nil)
         #expect(SidebarDrop.resolveFlaggedReorder(order: [], dragged: [Self.flat[0]], onRow: nil, childIndex: 0) == nil)

@@ -30,12 +30,9 @@ extension AppStore {
     public func moveFlagged(_ ids: [UUID], to placement: FlaggedOrderPlacement, of anchor: UUID) -> Bool {
         let live = orderedFlaggedSessions.map(\.id)
         let moving = Set(ids)
-        guard !moving.isEmpty, !moving.contains(anchor), moving.isSubset(of: live) else { return false }
-        var reordered = live.filter { !moving.contains($0) }
-        guard let anchorIndex = reordered.firstIndex(of: anchor) else { return false }
-        reordered.insert(contentsOf: live.filter { moving.contains($0) },
-                         at: placement == .before ? anchorIndex : anchorIndex + 1)
-        guard reordered != live else { return false }
+        guard !moving.isEmpty, !moving.contains(anchor), moving.isSubset(of: live),
+              let reordered = SidebarDrop.reorderedFlagged(live, moving: moving, placement: placement, anchor: anchor)
+        else { return false }
         flaggedOrder = writingLiveOrder(reordered)
         scheduleTreeChanged()
         save()

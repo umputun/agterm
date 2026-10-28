@@ -185,8 +185,7 @@ extension AppStore {
     }
 
     /// Whether the sidebar has workspace rows: always in the ordinary tree, and in flagged mode only under
-    /// the tree layout. The layout is app-wide state the store does not hold, so the caller passes it in.
-    /// The precondition of every expand/collapse path.
+    /// the tree layout. The precondition of every expand/collapse path.
     public func rendersWorkspaceRows(flaggedLayout: FlaggedViewLayout) -> Bool {
         sidebarMode == .tree || flaggedLayout == .tree
     }

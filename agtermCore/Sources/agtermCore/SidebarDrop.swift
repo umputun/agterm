@@ -208,11 +208,18 @@ public enum SidebarDrop {
                 return nil
             }
         }
+        guard reorderedFlagged(order, moving: moving, placement: placement, anchor: anchor) != nil else { return nil }
+        return FlaggedReorder(ids: block, placement: placement, anchor: anchor)
+    }
+
+    // shared with AppStore.moveFlagged so a drop the sidebar accepts is the move the store applies
+    static func reorderedFlagged(_ order: [UUID], moving: Set<UUID>, placement: FlaggedOrderPlacement,
+                                 anchor: UUID) -> [UUID]? {
         var reordered = order.filter { !moving.contains($0) }
         guard let anchorIndex = reordered.firstIndex(of: anchor) else { return nil }
-        reordered.insert(contentsOf: block, at: placement == .before ? anchorIndex : anchorIndex + 1)
-        guard reordered != order else { return nil }
-        return FlaggedReorder(ids: block, placement: placement, anchor: anchor)
+        reordered.insert(contentsOf: order.filter { moving.contains($0) },
+                         at: placement == .before ? anchorIndex : anchorIndex + 1)
+        return reordered == order ? nil : reordered
     }
 
     /// flaggedTreeChildIndex maps a gap among a flagged-tree workspace's visible rows to the full workspace's
