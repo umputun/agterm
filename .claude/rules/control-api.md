@@ -1125,7 +1125,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `session.new`/`workspace.new` before any action runs, so a bad value creates nothing. A set without parts keeps
   the row's own, else icon; `SidebarTint.recolor`/`place` own that rule for the CLI, the row menu and the palette.
   A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac.
-  `ControlActions` keeps the three-argument `createWorkspace`; the tint overload's default refuses a tint.
+  `ControlActions` keeps the tintless `createSession` and `createWorkspace`; each tint overload's default refuses a tint.
   Read `tint`/`tintOn` on session and workspace nodes, omitted when untinted.
 - `session.context set TEXT|clear` sets what a session is FOR, shown in the title bar. Read `context`.
   `set` requires `text`, `clear` forbids it, and the mode is required, so a raw client sending both or
