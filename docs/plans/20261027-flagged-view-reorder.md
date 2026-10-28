@@ -163,26 +163,25 @@
   `SnapshotRoundTripTests.swift`, `AppStorePendingCloseTests.swift`, `RecentClosedTests.swift`,
   new `WindowLibraryFlaggedLayoutTests.swift`, since `WindowLibraryTests.swift` is at 1963 of 2000 lines)
 
-- [ ] add the observable list, maintained by every flag mutator and Clear Flagged
-- [ ] append at every other arrival: Recent Closed session reopen, workspace reopen and merge, pending-close
+- [x] add the observable list, maintained by every flag mutator and Clear Flagged
+- [x] append at every other arrival: Recent Closed session reopen, workspace reopen and merge, pending-close
       undo of an id the list no longer holds; keep parked pending-close ids on move and prune them at
       finalization; prune on hard close and workspace delete, after capturing reselection neighbours
-- [ ] add the move operation (block of ids before or after an anchor, both flagged, same store) and the ordered
+- [x] add the move operation (block of ids before or after an anchor, both flagged, same store) and the ordered
       projection with its legacy fallback; emit `scheduleTreeChanged()` on a real move only
-- [ ] persist the projection in `Snapshot`, seed legacy snapshots in tree order
-- [ ] capture flagged-order neighbours before removal for close reselection under flat and plain
-- [ ] add the layout mirror on `AppStore` and `WindowLibrary` (init parameter assigned before `bootstrap()`,
+- [x] persist the projection in `Snapshot`, seed legacy snapshots in tree order
+- [x] add the layout mirror on `AppStore` and `WindowLibrary` (init parameter assigned before `bootstrap()`,
       flat default in the convenience init, copied onto each store at creation before restore, propagation in
       the extension); `navigableSessions` stays tree-ordered until Task 4
-- [ ] write tests: append, Flag All keeping positions, idempotent flag-on, unflag/clear pruning, move (before,
+- [x] write tests: append, Flag All keeping positions, idempotent flag-on, unflag/clear pruning, move (before,
       after, block, no-op, parked ids kept, unknown or unflagged ids rejected), tree event on move and none on a
       no-op, round trip, legacy seed
-- [ ] write tests: arrivals keep append order (reopen B then A placed earlier in the tree gives [C,B,A]; flag D
+- [x] write tests: arrivals keep append order (reopen B then A placed earlier in the tree gives [C,B,A]; flag D
       after reopening B gives [C,B,D]), workspace reopen, hard close of B in [A,B,C] then reopen gives
       [A,C,B], workspace delete then reopen appends its flagged sessions, undo after an intervening reorder,
       undo after Clear Flagged, Recent Closed reopen into another window, mirror seeded before restore and
       propagated to two open stores
-- [ ] run the new and changed suites with `swift test --filter` - must pass before task 3
+- [x] run the new and changed suites with `swift test --filter` - must pass before task 3
 
 ### Task 3: Drop arithmetic for both flagged layouts
 
@@ -216,6 +215,8 @@
       `moveSessions`; highlight in visible space
 - [ ] read the saved order in `updateNSView`; render flat and plain from the ordered projection
       (`currentShape`, flat roots) and switch `navigableSessions` to it in the same step
+- [ ] close reselection under flat and plain walks the saved order: deletion paths prune after the reselection
+      block, so the raw list still holds the removed id's position when `nearestInScopeTarget` runs
 - [ ] switch spring expansion to `rendersWorkspaceRows`
 - [ ] pass the loaded layout through both `restoredRuntime` library constructions; make
       `SettingsModel.applyFlaggedViewLayout` the only setter of both layout copies, and convert the touched tests

@@ -10,6 +10,7 @@ extension AppStore {
     public func setFlag(_ on: Bool, forSession id: UUID) {
         guard let session = session(withID: id), session.flagged != on else { return }
         session.flagged = on
+        if on { appendFlaggedArrivals() } else { dropFromFlaggedOrder([id]) }
         pruneSidebarSelection()
         reselectIfSelectionHidden()
         save()
@@ -42,6 +43,7 @@ extension AppStore {
             }
         }
         if changed {
+            if on { appendFlaggedArrivals() } else { dropFromFlaggedOrder(targetIDs) }
             pruneSidebarSelection()
             reselectIfSelectionHidden() // the batch can unflag the active session too
             save()
@@ -93,6 +95,8 @@ extension AppStore {
     /// `session.flag clear` control mode. No `reselectIfSelectionHidden`, unlike the `setFlag` mutators:
     /// clearing EVERY flag leaves the list empty, so there is nowhere to move — a partial clear would need it.
     public func clearFlags() {
+        // parked pending-close ids go too, so an undo after the clear appends
+        if !flaggedOrder.isEmpty { flaggedOrder = [] }
         var changed = false
         for workspace in workspaces {
             for session in workspace.sessions where session.flagged {

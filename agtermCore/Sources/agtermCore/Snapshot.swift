@@ -27,11 +27,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// Most-recently-selected session ids, front = current, so the Ctrl-Tab switcher's order survives a
     /// relaunch. Restore drops ids no longer in the tree; nil = selection only.
     public var sessionRecency: [UUID]?
+    /// flaggedOrder is the flagged working set's saved order (`AppStore.flaggedOrder`); nil restores in tree
+    /// order.
+    public var flaggedOrder: [UUID]?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
                 workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
                 sidebarMode: SidebarMode? = nil, focusedWorkspaceIDs: [UUID]? = nil, focusEnabled: Bool? = nil,
-                sessionRecency: [UUID]? = nil) {
+                sessionRecency: [UUID]? = nil, flaggedOrder: [UUID]? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
@@ -41,11 +44,12 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.focusedWorkspaceIDs = focusedWorkspaceIDs
         self.focusEnabled = focusEnabled
         self.sessionRecency = sessionRecency
+        self.flaggedOrder = flaggedOrder
     }
 
     enum CodingKeys: String, CodingKey {
         case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
-        case focusedWorkspaceIDs, focusEnabled, sessionRecency
+        case focusedWorkspaceIDs, focusEnabled, sessionRecency, flaggedOrder
     }
 
     /// The legacy single-workspace focus key from before the focus SET existed. Its own key type with no
@@ -98,6 +102,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             focusEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .focusEnabled)) ?? nil
         }
         sessionRecency = (try? c.decodeIfPresent([UUID].self, forKey: .sessionRecency)) ?? nil
+        flaggedOrder = (try? c.decodeIfPresent([UUID].self, forKey: .flaggedOrder)) ?? nil
     }
 }
 

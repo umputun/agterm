@@ -33,6 +33,7 @@ extension AppStore {
             let insertAt = max(0, min(recent.sessionIndex, workspaces[index].sessions.count))
             workspaces[index].sessions.insert(session, at: insertAt)
             emitSessionCreated(session, workspace: workspaces[index].id)
+            appendFlaggedArrivals()
             selectedSessionID = session.id
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID)
@@ -56,6 +57,7 @@ extension AppStore {
             // workspace back without reshuffling current workspaces.
             workspaces.append(workspace)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
+            appendFlaggedArrivals()
             if workspace.sessions.isEmpty { scheduleTreeChanged() }
             // re-mark BEFORE the reselect below, so a restored member is inside the set when
             // `disableFocusIfSelectionOutsideSet` runs; the workspace is already in the tree, so the unguarded
@@ -121,6 +123,7 @@ extension AppStore {
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
             for session in missing { emitSessionCreated(session, workspace: workspaces[index].id) }
+            appendFlaggedArrivals()
             if recent.focusMember == true { markFocusMember(workspaces[index].id) } // before the reselect, as above
             let target = recent.selectedSessionID.flatMap { id in
                 workspaces[index].sessions.contains { $0.id == id } ? id : nil

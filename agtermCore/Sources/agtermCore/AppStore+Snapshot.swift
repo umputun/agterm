@@ -17,12 +17,14 @@ extension AppStore {
         let focusIDs = workspaces.map(\.id).filter(focusedWorkspaceIDs.contains)
         let persistable = Set(workspaceSnapshots.flatMap(\.sessions).map(\.id))
         let recency = sessionRecency.items.filter(persistable.contains)
+        let flaggedIDs = orderedFlaggedSessions.map(\.id).filter(persistable.contains)
         return Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
                         workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
                         focusedWorkspaceIDs: focusIDs.isEmpty ? nil : focusIDs,
                         focusEnabled: focusEnabled ? true : nil,
-                        sessionRecency: recency)
+                        sessionRecency: recency,
+                        flaggedOrder: flaggedIDs.isEmpty ? nil : flaggedIDs)
     }
 
     /// The selection to write. A remote session is not in the snapshot, so naming it would restore an empty
@@ -154,6 +156,7 @@ extension AppStore {
         sidebarWidth = AppStore.clampSidebarWidth(snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault)
         sidebarVisible = snapshot.sidebarVisible ?? true
         sidebarMode = snapshot.sidebarMode ?? .tree
+        restoreFlaggedOrder(snapshot.flaggedOrder)
         restoreFocus(from: snapshot)
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil

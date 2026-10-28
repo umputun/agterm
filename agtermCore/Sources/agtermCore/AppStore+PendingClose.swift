@@ -270,6 +270,7 @@ extension AppStore {
             restorePendingWorkspace(close)
             removeRecentClosedItem(closeID)
         }
+        appendFlaggedArrivals() // a parked id still in the saved order returns in place; a cleared one appends
         if pendingCloseSummary?.id == closeID { promotePendingCloseSummary() }
         save()
         return true
@@ -533,6 +534,7 @@ extension AppStore {
             WatermarkStorage.removeAllRenderedText(sessionID: session.id)
             removeFromRecency(session.id)
         }
+        dropFromFlaggedOrder(sessions.map(\.id))
     }
 
 }

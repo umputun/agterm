@@ -85,6 +85,14 @@ public final class AppStore {
     /// in `Snapshot`, flipped via `setSidebarMode(_:)` (bottom bar, View menu, palette, `sidebar.mode`).
     public var sidebarMode: SidebarMode = .tree
 
+    /// flaggedOrder is the flagged working set's saved order, which the flat and plain layouts render;
+    /// `Session.flagged` stays the membership. An id parked in a pending close keeps its slot.
+    public internal(set) var flaggedOrder: [UUID] = []
+
+    /// flaggedLayout mirrors the app-wide flagged layout per store, so navigation follows the order the view
+    /// shows. `WindowLibrary` sets it before restore; not persisted.
+    @ObservationIgnored public internal(set) var flaggedLayout: FlaggedViewLayout = .flat
+
     /// The workspaces marked for the sidebar focus filter — the working set the tree renders when
     /// `focusEnabled` is on (see `visibleWorkspaces`). Per-window state in `Snapshot`; orthogonal to
     /// `sidebarMode` (flagged mode ignores focus). Mutated via `setFocusedWorkspace(_:)`/
@@ -587,6 +595,7 @@ public final class AppStore {
         } else {
             pruneSidebarSelection()
         }
+        dropFromFlaggedOrder([sessionID])
         save()
     }
 
@@ -632,6 +641,7 @@ public final class AppStore {
         } else {
             pruneSidebarSelection()
         }
+        dropFromFlaggedOrder(workspace.sessions.map(\.id))
         save()
     }
 
@@ -889,11 +899,6 @@ public final class AppStore {
             }
         }
         if changed { save() }
-    }
-
-    /// The flagged sessions across all workspaces in tree order — the projection the flagged view renders.
-    public var flaggedSessions: [Session] {
-        workspaces.flatMap(\.sessions).filter(\.flagged)
     }
 
     func log(_ message: @autoclosure () -> String) {
