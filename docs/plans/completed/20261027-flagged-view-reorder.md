@@ -254,7 +254,7 @@
 - [x] run `cd agtermCore && swift test`
 - [x] run `make test-app`
 - [x] run `make lint`
-- [ ] build and launch an isolated Debug instance and drag in all three layouts
+- [x] build and launch an isolated Debug instance and drag in all three layouts
 
 ### Task 7: [Final] Update documentation
 - [x] `site/docs.html` flagged view section; `site/commands.html` for `session flag move` and `flaggedOrder`
@@ -263,7 +263,7 @@
       observation sentence, and the layout-ownership note at :98-99 (the store now mirrors the layout;
       `rendersWorkspaceRows(flaggedLayout:)` keeps its signature)
 - [x] `.claude/rules/menu-actions.md` close reselection order; `.claude/rules/control-api.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Manual verification**:
