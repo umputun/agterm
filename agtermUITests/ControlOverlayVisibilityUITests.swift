@@ -5,7 +5,7 @@ import XCTest
 @MainActor
 final class ControlOverlayVisibilityUITests: ControlAPITestCase {
     override var seededSettings: [String: Any]? {
-        name.contains("TitleBarButton") ? ["shownInterfaceElements": ["overlayToggle"]] : nil
+        name.contains("TitleBarButton") || name.contains("StripHideButton") ? ["shownInterfaceElements": ["overlayToggle"]] : nil
     }
 
     func testAHiddenProgramOverlayGivesTheKeysToThePaneAndShowTakesThemBack() throws {
@@ -201,6 +201,24 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         XCTAssertFalse(app.buttons["htmlOverlay.hide"].isHittable, "the hidden page's strip is gone with it")
     }
 
+    func testThePageStripOffersHideOnlyWhileTheOverlaysButtonIsOn() throws {
+        let id = try activeSessionID()
+        let page = markerDir.appendingPathComponent("gated.html")
+        try "<!doctype html><html><body><p>gated page</p></body></html>".write(to: page, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(page.path)"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "page open should succeed: \(open)")
+        XCTAssertTrue(app.buttons["htmlOverlay.close"].waitForExistence(timeout: 10), "the page shows its strip")
+        XCTAssertFalse(app.buttons["htmlOverlay.hide"].exists, "no Hide while the title-bar overlays button is off")
+
+        let toggle = settingsControl(tab: "Interface", control: "settings-interface-overlayToggle")
+        toggle.click()
+        XCTAssertTrue(app.buttons["htmlOverlay.hide"].waitForExistence(timeout: 10), "enabling the button adds Hide to the open page")
+
+        toggle.click()
+        XCTAssertTrue(poll(until: !self.app.buttons["htmlOverlay.hide"].exists, timeout: 10),
+                      "disabling the button removes Hide from the open page")
+    }
+
     private func openProgram(_ id: String, command: String, pane: String? = nil) throws {
         var args: [String: Any] = ["command": command]
         if let pane { args["pane"] = pane }
@@ -208,6 +226,24 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         let open = try sendCommand(String(decoding: json, as: UTF8.self))
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         usleep(800_000)
+    }
+
+    private func settingsControl(tab: String, control: String, timeout: TimeInterval = 12,
+                                 file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = app.descendants(matching: .any).matching(identifier: control).firstMatch
+        let tabButton = app.buttons[tab].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if target.exists, target.isHittable { return target }
+            if tabButton.exists, tabButton.isHittable {
+                tabButton.click()
+            } else {
+                app.typeKey(",", modifierFlags: .command)
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTFail("Settings '\(tab)' control '\(control)' never became hittable", file: file, line: line)
+        return target
     }
 
     private func typeIntoCover(_ line: String, marker: URL) -> Bool {

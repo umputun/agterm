@@ -323,7 +323,7 @@ extension WindowContentView {
                             HtmlOverlayView(store: store, session: session, overlay: page,
                                             backgroundColor: session.overlayBackgroundColor, isActive: live,
                                             visible: live, toolTipsShown: live && !chromeCovered && !session.askCoversAnyPane,
-                                            foreground: chromeText, background: terminalColor)
+                                            hideShown: shows(.overlayToggle), foreground: chromeText, background: terminalColor)
                         } else {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },
@@ -418,7 +418,7 @@ extension WindowContentView {
                                     backgroundColor: session.paneOverlay(pane)?.backgroundColor, isActive: isActive,
                                     visible: deckVisible,
                                     toolTipsShown: deckVisible && !chromeCovered && !session.askCovers(pane),
-                                    foreground: chromeText, background: terminalColor)
+                                    hideShown: shows(.overlayToggle), foreground: chromeText, background: terminalColor)
                         .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
                         .id("\(session.id.uuidString)-html-\(page.id.uuidString)")
                 } else if active {

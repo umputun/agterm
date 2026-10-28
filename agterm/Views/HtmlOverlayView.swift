@@ -16,6 +16,8 @@ struct HtmlOverlayView: View {
     let visible: Bool
     /// toolTipsShown is `visible` minus what covers the strip without hiding the page: a window modal or an ask.
     let toolTipsShown: Bool
+    /// hideShown follows the title-bar overlays button; without it nothing on screen shows how to get a hidden page back.
+    let hideShown: Bool
     let foreground: Color
     let background: Color
 
@@ -65,8 +67,10 @@ struct HtmlOverlayView: View {
                     EmptyView()
                 }
             }
-            button("minus", "Hide", "htmlOverlay.hide", enabled: true) {
-                store.hideHtmlOverlay(overlay.id)
+            if hideShown {
+                button("minus", "Hide", "htmlOverlay.hide", enabled: true) {
+                    store.hideHtmlOverlay(overlay.id)
+                }
             }
             button("xmark", "Close", "htmlOverlay.close", enabled: true) {
                 store.closeHtmlOverlay(overlay.id)
