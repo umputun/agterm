@@ -39,11 +39,14 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
     /// The `pane.focused` pane's surface token, the value `tree` reports as `surfaces[].paneID`; nil while
     /// that pane's surface does not exist yet.
     public var paneID: String?
+    /// The `session.created` companion's parent id; nil for a top-level session.
+    public var parent: String?
 
     public init(name: String? = nil, status: String? = nil, pane: String? = nil,
                 blink: Bool? = nil, color: String? = nil, shape: String? = nil,
                 previous: String? = nil, title: String? = nil, body: String? = nil,
-                host: String? = nil, paneID: String? = nil) {
+                host: String? = nil, paneID: String? = nil, parent: String? = nil) {
+        self.parent = parent
         self.name = name
         self.status = status
         self.pane = pane

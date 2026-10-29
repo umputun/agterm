@@ -61,6 +61,21 @@ final class ZmxLiveUITests: ControlAPITestCase {
         XCTAssertNotNil(try sessionNodeIfPresent(id: holdingID), "--wait should hold the exited command's output")
     }
 
+    func testALiveParentWhoseShellExitsRespawnsAndTakesInput() throws {
+        let parent = try activeSessionID()
+        let created = try sendCommand(#"{"cmd":"session.companion.new","target":"\#(parent)","args":{"noSelect":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "\(created)")
+        let marker = stateDir.appendingPathComponent("live-respawn.marker")
+
+        XCTAssertEqual(try sendCommand(typeRequest(text: "exit\n", target: parent, select: false))["ok"] as? Bool, true)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+
+        XCTAssertNotNil(try sessionNodeIfPresent(id: parent), "a Live parent with companions survives its shell's exit")
+        XCTAssertEqual(try typeUntilMarker("echo alive > \(marker.path)", target: parent, file: marker, select: false), "alive")
+        XCTAssertTrue(poll(until: self.isBacked(parent, expectedPanes: ["left"]), timeout: 20),
+                      "the respawned Live pane is daemon-backed again")
+    }
+
     func testRestartReplacesTheShellEndsItsProgramAndKeepsThePane() throws {
         let sessionID = try activeSessionID()
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20))

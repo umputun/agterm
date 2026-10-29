@@ -45,6 +45,14 @@ extension WindowLibrary {
         return RecentClosedReopen(window: windowID, complete: !recentClosedItems.contains { $0.id == itemID })
     }
 
+    /// recentClosedItemLacksParent says `itemID` is a lone companion whose parent is neither open nor held by
+    /// another entry, the one reopen that cannot proceed.
+    public func recentClosedItemLacksParent(_ itemID: UUID) -> Bool {
+        guard let parentID = recentClosedItems.first(where: { $0.id == itemID })?.session?.snapshot.parentID,
+              openStores().allSatisfy({ $0.session(withID: parentID) == nil }) else { return false }
+        return !recentClosedItems.contains { $0.holdsTopLevelSession(parentID) }
+    }
+
     /// `reopenRecentClosedReportingWindow` over the newest entry.
     public func reopenLatestRecentClosedReportingWindow(into targetStore: AppStore? = nil) -> UUID? {
         refreshRecentClosedItems()

@@ -291,6 +291,42 @@ struct AppStoreTreeProjectionTests {
         #expect(set.contains("\"context\":\"PR #517\""))
     }
 
+    @Test func aCompanionReportsItsParentAndAFoldedParentReportsCollapsed() throws {
+        let g = try CompanionGroup()
+        g.store.setSessionExpanded(g.parent.id, expanded: false)
+
+        let nodes = try #require(g.store.controlTree().workspaces.first { $0.id == g.work.id.uuidString }?.sessions)
+        let byID = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+
+        #expect(nodes.map(\.id) == g.order.map(\.uuidString))
+        #expect(byID[g.first.id.uuidString]?.parent == g.parent.id.uuidString)
+        #expect(byID[g.parent.id.uuidString]?.parent == nil)
+        #expect(byID[g.parent.id.uuidString]?.collapsed == true)
+        #expect(byID[g.first.id.uuidString]?.collapsed == nil)
+    }
+
+    @Test func aFoldedParentWhoseLastCompanionClosedNoLongerReportsCollapsed() throws {
+        let g = try CompanionGroup()
+        g.store.setSessionExpanded(g.parent.id, expanded: false)
+        g.store.closeSession(g.first.id)
+        g.store.closeSession(g.second.id)
+
+        let node = try #require(g.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == g.parent.id.uuidString })
+
+        #expect(node.collapsed == nil)
+    }
+
+    @Test func parentAndCollapsedAreOmittedFromJSONForAPlainSession() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a"))
+
+        let json = try String(decoding: JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+
+        #expect(!json.contains("\"parent\""))
+        #expect(!json.contains("\"collapsed\""))
+    }
+
     @Test func controlTreeReportsSidebarVisibility() {
         let store = makeStore()
         #expect(store.controlTree().sidebarVisible == true)

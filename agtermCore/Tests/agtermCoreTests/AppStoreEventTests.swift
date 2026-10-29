@@ -256,6 +256,21 @@ final class AppStoreEventTests {
         #expect(batch.items.allSatisfy { $0.session == session.id.uuidString && $0.payload.name == "api" })
     }
 
+    @Test func aCompanionsCreatedEventNamesItsParent() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let parent = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        let companion = try store.addCompanion(to: parent.id).get()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.sessionCreated], limit: 100
+        )))
+        #expect(batch.items.map(\.session) == [companion.id.uuidString])
+        #expect(batch.items.map(\.payload.parent) == [parent.id.uuidString])
+    }
+
     @Test func anUndoneCompanionCloseReportsTheParentsCurrentWorkspace() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let store = try #require(library.activeStore)

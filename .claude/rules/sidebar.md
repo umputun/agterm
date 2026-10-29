@@ -247,6 +247,9 @@ paths:
 - A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
   slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
+- `session.collapse`/`.expand` mirror the workspace pair: `AppActions.setSessionExpanded` persists, then posts
+  `.agtermSetSessionExpanded`, which updates `expandedParentIDs` even when no nested row is shown and drives a
+  visible row under suppression. It posts on an unchanged value too, since a reveal may have opened the row.
 
 ## Persistence
 

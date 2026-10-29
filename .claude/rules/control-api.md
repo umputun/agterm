@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -368,6 +368,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.duplicate` atomically creates a plain login shell after the source in the same workspace from
   `focusedCwd`. Copy no name, command, pane, status, flag, font, or background state. The new tree node is
   the read-back. Source `tree.cwd` remains primary, so it can differ from the focused cwd copied.
+
+## Companions
+
+- Creation is its own wire command, `session.companion.new`, never a flag on `session.new`: an app predating
+  companions drops an unknown `ControlArgs` key and would run the plain command, while an unknown command
+  fails to decode and mutates nothing. The CLI maps exactly that decode error, the `invalid request:` text
+  naming the command, to `the running app is too old for companions`; every other error passes through.
+- The target is the parent, a companion meaning its parent. The dispatcher refuses workspace and placement
+  fields rather than dropping them, and reuses `creationTint`. The reply carries `result.parent`.
+  A remote parent is refused until remote companions exist.
+- `session.collapse`/`.expand` persist through `AppActions.setSessionExpanded`, then post
+  `.agtermSetSessionExpanded` (see [[sidebar]]). Read back `parent` and `collapsed` on session nodes.
+- `session.close` answers `result.closed` with every id it closed, from the group computed before the close,
+  deduplicated; a parent close also sets `affected`. A companion leaving its group is
+  `ControlServer.companionMoveError`; an ordinary no-op move stays ok.
+- `recent.open` names `parent session is not open or in Recent Closed` only when
+  `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
 
 ## Surface input, output, and search
 

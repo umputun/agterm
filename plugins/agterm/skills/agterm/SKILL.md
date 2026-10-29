@@ -2,8 +2,7 @@
 name: agterm
 description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
-  create, rename, close, reopen, select, tint,
-  reorder sessions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
+  manage sessions, companions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
   read exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
   post a HUD/caption/notification; show a picker, question or input dialog; show images inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
@@ -18,7 +17,7 @@ when_to_use: >
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, make a companion session, keep a related program next to a session, open a sub-session under this one, fold a session's companions, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -215,7 +214,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 examples in **examples.md**; installable community workflows in **cookbook.md**.
 
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
-`foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
+`parent` (a companion's parent id, omitted for a top-level session), `collapsed` (true only for a parent
+whose companions are folded), `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
 is at its shell prompt, or running a setuid/setgid program like `top` or `sudo` whose argv macOS won't
 expose) — i.e. what each pane is currently running — `foregroundShell`/`splitForegroundShell` (the shell
 holding each pane's foreground as a basename, present exactly when that pane's `foreground` is omitted
@@ -299,7 +299,7 @@ that window, omitted when no pick is pending.
 
 **events**: continuously print control events, subscribing from the current tail when no cursor is
 given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
-`--kind` over `status`, `notify`, `session.created`, `session.closed`, `session.selected` (a window's
+`--kind` over `status`, `notify`, `session.created` (carries `parent` for a companion), `session.closed`, `session.selected` (a window's
 selection moved; carries the session that lost it as `previous`), `tree.changed`, `pane.split`,
 `pane.scratch`, `pane.focused` (a session's selection moved between its two split panes; carries the
 pane and its `paneID`), `remote.opened`, `remote.closed` and `app.launched` (once per app run, when hooks and
@@ -364,6 +364,14 @@ omitted when expanded).
   source's focused-pane cwd (equal to the source node's `tree.cwd` unless the source is a split focused
   off its primary pane, where `tree.cwd` reports the primary, or a remote session, where it can read as
   home).
+- `session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select]` - create a
+  companion session: an ordinary session pinned for life to SID, listed right after it in its workspace and
+  indented under it in the sidebar tree (a companion SID means its parent). Use it to keep a related program
+  next to a session: `agtermctl session new --parent active --command 'tail -f build.log' --name logs`
+  (`--wait` keeps its output after it exits). `--cwd` defaults to the parent's focused directory; it refuses
+  `--workspace`/`--workspace-name`/`--create-workspace`/`--after`/`--before`. Closing the parent closes its
+  companions, and one undo restores the group. `session collapse`/`session expand` fold or unfold a parent's
+  companions. Read back as the tree node's `parent` and `collapsed`; details in reference.md.
 - `session close [--target T ...] [--undoable]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo. `--undoable` gives a single target that grace too, as ⌘W does, so undo (⌘Z) or, for a local
   session, `recent open` inside it brings the running shell back; `result.undoable` says whether it applied (false when Settings turns undo off).

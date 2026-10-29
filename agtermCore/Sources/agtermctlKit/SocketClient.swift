@@ -427,7 +427,9 @@ struct SocketClient {
         guard !items.isEmpty else { return RecentClosedTarget.emptyError }
         return items.map { item in
             let subtitle = item.subtitle.map { " (\($0))" } ?? ""
-            return "\(item.id)  \(item.kind)  \(item.title)\(subtitle)"
+            let companions = item.kind == "session" && item.sessionIDs.count > 1
+                ? " +\(item.sessionIDs.count - 1) companion(s)" : ""
+            return "\(item.id)  \(item.kind)  \(item.title)\(subtitle)\(companions)"
         }.joined(separator: "\n")
     }
 

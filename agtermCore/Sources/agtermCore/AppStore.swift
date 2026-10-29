@@ -325,6 +325,7 @@ public final class AppStore {
         // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
         let activeWorkspaceID = currentWorkspaceID
         let nodes = workspaces.map { workspace in
+            let parents = Set(workspace.sessions.compactMap(\.parentID))
             let sessions = workspace.sessions.map { session in
                 // each closure inspects live processes, so call it once and split the answer in two.
                 let mainPane = paneForeground(session)
@@ -402,7 +403,9 @@ public final class AppStore {
                                           htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom),
                                           hiddenOverlays: hiddenOverlaysNode(session),
                                           lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
-                                          tint: session.tint?.color.rawValue, tintOn: session.tint?.parts.map(\.rawValue))
+                                          tint: session.tint?.color.rawValue, tintOn: session.tint?.parts.map(\.rawValue),
+                                          parent: session.parentID?.uuidString,
+                                          collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

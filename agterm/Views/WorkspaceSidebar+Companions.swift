@@ -1,7 +1,25 @@
 import AppKit
 import agtermCore
 
+extension Notification.Name {
+    /// Posted by `AppActions.setSessionExpanded` with the store as object and the parent id and state in userInfo.
+    static let agtermSetSessionExpanded = Notification.Name("agterm.setSessionExpanded")
+}
+
 extension WorkspaceSidebar.Coordinator {
+    static let sessionIDUserInfoKey = "agterm.sessionID"
+
+    @objc func setSessionExpandedNotified(_ notification: Notification) {
+        guard let id = notification.userInfo?[Self.sessionIDUserInfoKey] as? UUID,
+              let expanded = notification.userInfo?[Self.expandedUserInfoKey] as? Bool else { return }
+        if expanded { expandedParentIDs.insert(id) } else { expandedParentIDs.remove(id) }
+        guard let outline = outlineView, let node = nodeCache[id], outline.row(forItem: node) >= 0 else { return }
+        let suppressed = suppressExpansionPersist
+        suppressExpansionPersist = true
+        defer { suppressExpansionPersist = suppressed }
+        if expanded { outline.expandItem(node) } else { outline.collapseItem(node) }
+    }
+
     /// Companions nest under their parent only in the ordinary tree; flagged layouts list them unindented.
     var nestsCompanions: Bool { store.sidebarMode == .tree }
 

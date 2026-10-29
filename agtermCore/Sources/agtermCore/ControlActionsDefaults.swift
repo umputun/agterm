@@ -5,6 +5,14 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
+    func createCompanion(_: String?, options _: CompanionOptions, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.new"))
+    }
+
+    func setSessionExpansion(_: String?, window _: String?, expanded: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message(expanded ? "session.expand" : "session.collapse"))
+    }
+
     func reloadSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?, current _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.reload"))
     }

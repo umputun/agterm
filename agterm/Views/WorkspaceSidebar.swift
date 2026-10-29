@@ -129,7 +129,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Root workspace nodes in store order, rebuilt from the store on each reload from cached instances.
         private var roots: [SidebarNode] = []
         /// Cache of node instances keyed by id, so identity is stable across reloads.
-        private var nodeCache: [UUID: SidebarNode] = [:]
+        var nodeCache: [UUID: SidebarNode] = [:]
         /// Guards `syncSelection` against re-entering the store via the selection-change callback it fires.
         private var applyingSelection = false
         /// Last session id whose row was revealed (expanded owner + scrolled into view). Gates the intrusive
@@ -236,6 +236,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // the per-workspace collapse/expand poke (workspace.collapse/expand) is store-scoped the same way.
             NotificationCenter.default.addObserver(self, selector: #selector(setWorkspaceExpandedNotified(_:)),
                                                    name: .agtermSetWorkspaceExpanded, object: store)
+            NotificationCenter.default.addObserver(self, selector: #selector(setSessionExpandedNotified(_:)),
+                                                   name: .agtermSetSessionExpanded, object: store)
             // a theme change (new terminal foreground) re-tints the visible rows in place.
             NotificationCenter.default.addObserver(self, selector: #selector(appearanceChanged),
                                                    name: .agtermAppearanceChanged, object: nil)

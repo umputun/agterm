@@ -514,6 +514,10 @@
                 while the Mac presenting the session draws it, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">replica</span> is true on that Mac for its copy),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span> (a companion's parent session id, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --parent</span>; omitted for a top-level session),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> only for a parent whose companions are folded, the read
+                side of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>; omitted otherwise),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (the local context, or on an attached row without
                 one the origin's mirrored context; omitted when neither is set),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> and
@@ -579,7 +583,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span> (a flat list, each companion right after
+                its parent),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> (membership in the sidebar
                 focus set — the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace focus</span>, distinct from
@@ -678,7 +683,9 @@
                 <strong style="color: #e6e1d7">Kinds.</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.created</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.created</span> (a companion's also carries
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span>, the parent's id, and its human line reads
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">HH:MM:SS session.created NAME parent=ID</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.closed</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.selected</span> (a window's selection moved to this session, with the one that lost it as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">previous</span>; no session when the selection was cleared, and nothing for a window merely coming forward),
@@ -1036,6 +1043,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>. The headline case:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">session new --after active</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--parent SID</span> creates a companion session instead; see
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --parent</span> below.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> runs a program as the session's
@@ -1107,6 +1116,81 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select]
+                [--tint COLOR [--tint-on PARTS]] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.companion.new</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Create a companion session: an ordinary session pinned for life to the parent
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">SID</span> (id / prefix / <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), placed in the parent's workspace right after
+                the parent and its earlier companions and shown indented under it in the sidebar tree. A companion
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">SID</span> means its parent, so the new session becomes a sibling: a companion of a companion is not
+                possible. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> defaults to the parent's focused directory; the other options work as on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new</span>. The wire target is the parent.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> (the new companion, which the human output prints) and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span> (the parent id).
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Keep a related program next to a session with a command companion:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">session new --parent active --command 'tail -f build.log' --name logs</span>,
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> to keep its output after it exits.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent</span> refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>; a raw socket request carrying them gets
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion takes no workspace or placement: it lands under its parent</span>. A parent attached from
+                another Mac is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions of a remote session are not supported yet</span>. Against an app
+                too old for companions the CLI prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error: the running app is too old for companions</span>, exits 1,
+                and nothing was created.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A companion reorders only among its siblings, by drag or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, and moving
+                the parent carries its companions. Other session commands act on a companion as on any session; closing one closes
+                only it. Closing the parent closes its companions too, and one undo restores the group. If the parent's shell exits
+                while it has companions, a fresh login shell starts in that pane's last directory instead of the session closing (a
+                parent created with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> comes back as a plain shell). The GUI twin is
+                <strong style="color: #bfbab0">New Companion</strong> in the session row's context menu and the Session menu, an
+                action-palette row, and the keyless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">new_companion</span> keymap action. Read back via the
+                session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span> field.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session collapse [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.collapse</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Fold a parent's companions under it in the sidebar tree. Persisted. A session without companions errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session has no companions</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar expand|collapse</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse|expand</span> keep acting on workspaces only.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>, the session id.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Read back via the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> field
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> for a folded parent, omitted otherwise).
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session expand [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.expand</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Unfold a parent's companions, the inverse of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session collapse</span>, with the same error and read-back.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>, the session id.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session close [--target T ...] [--undoable] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.close</div>
@@ -1118,6 +1202,11 @@
                 after ⌘W, and so does Reopen Last Closed Item for a local session. With the flag the reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.undoable</span>: true for an undoable close, false
                 when close grace is disabled and it closed at once; an app predating the flag omits it. The human output appends
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(undoable)</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(not undoable)</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Every ok reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.closed</span>, the ids it closed. Closing a parent
+                closes its companions too and sets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.affected</span> to the group size, so a parent with
+                two companions prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">3 sessions</span>; a plain single close prints as before.
               </p>
             </div>
 
@@ -1168,6 +1257,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span> to move an ordered batch atomically;
                 batch relative reorder via <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> is not supported.
                 Batch output reports the number of sessions actually moved.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Moving a parent carries its companions. A move that would take a companion out of its group errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion moves only among its siblings</span>; an ordinary no-op move still answers ok.
               </p>
             </div>
 
@@ -3729,6 +3822,10 @@
                 without notice. This is the read-back for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent open</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent clear</span>.
                 App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A parent entry's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessionIDs</span> lists the parent then its companions, and its human
+                row ends with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">+N companion(s)</span>.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -3749,6 +3846,11 @@
                 An unknown or closed <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> fails before anything is restored. Errors:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no recently closed items</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no such recent item: ID</span>,
                 and the ambiguous-prefix error.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace holding
+                the parent) first when the parent is not open. When the parent is neither open nor in Recent Closed it errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent session is not open or in Recent Closed</span>.
               </p>
             </div>
 

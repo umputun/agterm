@@ -11,6 +11,10 @@ public protocol ControlActions {
     /// createSession with a creation tint; the default keeps tintless hosts working and refuses a tint.
     func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
+    /// Creates a companion of the target session, or a sibling when the target is itself a companion.
+    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse
+    /// Folds or unfolds a parent's companions in the sidebar tree.
+    func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func selectSession(_ target: String?, window: String?) -> ControlResponse
     func goSession(window: String?, direction: SessionNavigation) -> ControlResponse
     func closeSession(_ target: String?, window: String?) -> ControlResponse
@@ -272,6 +276,8 @@ public struct ControlDispatcher {
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
+        case .sessionCompanionNew, .sessionCollapse, .sessionExpand:
+            return dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .workspaceFlag:

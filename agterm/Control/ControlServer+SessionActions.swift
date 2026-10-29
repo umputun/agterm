@@ -710,7 +710,9 @@ extension ControlServer: ControlActions {
             return resolver.resolveSession(target, window: window) { store, sessionID in
                 resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
                         active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                    store.moveSession(sessionID, toWorkspace: workspaceID)
+                    guard store.moveSession(sessionID, toWorkspace: workspaceID) else {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                     return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
                 }
             }
@@ -728,6 +730,9 @@ extension ControlServer: ControlActions {
                 resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
                         active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                     let affected = store.moveSessions(ids, toWorkspace: workspaceID)
+                    if affected == 0, refusesCompanionMove(ids, in: store) {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                     return ControlResponse(ok: true, result: ControlResult(affected: affected))
                 }
             }
@@ -747,8 +752,9 @@ extension ControlServer: ControlActions {
                 if let resolution = SidebarDrop.resolveRelative(
                     source: (workspace: source.workspace, index: source.index),
                     anchor: (workspace: anchorLoc.workspace, index: anchorLoc.index, count: anchorLoc.count),
-                    placeAfter: after) {
-                    store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination)
+                    placeAfter: after),
+                   !store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination) {
+                    return ControlResponse(ok: false, error: Self.companionMoveError)
                 }
                 return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
             }
@@ -778,6 +784,9 @@ extension ControlServer: ControlActions {
                 ) {
                     affected = store.moveSessions(ids, toWorkspace: resolution.workspace,
                                                   at: resolution.destination)
+                    if affected == 0, refusesCompanionMove(ids, in: store) {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                 } else {
                     affected = 0
                 }

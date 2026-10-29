@@ -137,6 +137,26 @@ final class WindowLibraryRecentClosedTests {
         #expect(store.session(withID: companion.id)?.parentID == parent.id)
     }
 
+    @Test func onlyACompanionWithNoParentAnywhereLacksItsParent() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        _ = store.addWorkspace(name: "keep")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+        #expect(!library.recentClosedItemLacksParent(entry.id), "the parent is open")
+
+        store.removeWorkspace(workspace.id)
+        #expect(!library.recentClosedItemLacksParent(entry.id), "the parent sits in the removed workspace's entry")
+
+        let archive = try #require(library.recentClosedItems.first { $0.kind == .workspace })
+        library.recentClosedStore.remove(archive.id)
+        library.refreshRecentClosedItems()
+        #expect(library.recentClosedItemLacksParent(entry.id))
+    }
+
     @Test func aLoneCompanionWithNoParentAnywhereStaysUnavailable() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)

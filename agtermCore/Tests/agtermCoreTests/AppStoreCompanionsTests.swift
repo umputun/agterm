@@ -21,6 +21,14 @@ struct AppStoreCompanionsTests {
         #expect(store.parent(of: parent) == nil)
     }
 
+    @Test func aCompanionTakesItsCreationTint() throws {
+        let g = try CompanionGroup()
+
+        let tinted = try g.store.addCompanion(to: g.parent.id, options: CompanionOptions(tint: SidebarTint(color: .blue))).get()
+
+        #expect(tinted.tint == SidebarTint(color: .blue))
+    }
+
     @Test func aCompanionOfACompanionBecomesASibling() throws {
         let g = try CompanionGroup()
         let (store, parent, first, second, after) = (g.store, g.parent, g.first, g.second, g.after)

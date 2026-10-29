@@ -45,7 +45,8 @@ The event kinds and payloads are:
   suppression checks, including when desktop banners are disabled.
 - `session.created` / `session.closed`: session `name`, emitted when the session enters or leaves a
   visible window tree. Undo emits a new `session.created`; grace-period finalization does not emit a
-  second close.
+  second close. A companion's `session.created` also carries `parent`, the parent's id; the human line
+  reads `HH:MM:SS session.created NAME parent=ID`.
 - `session.selected`: a window's selection moved. `session` and `name` are the newly selected session,
   both absent when the selection was cleared, and `previous` is the id of the session that lost it,
   absent when there was none. It fires for every cause: a click, navigation, `session select`, a
@@ -242,6 +243,9 @@ Ephemeral like `unseen`: never persisted, so it is absent after a restart even f
 seconds on the same clock; persisted, omitted when no selection has been recorded, which includes a
 session restored from a build that did not record it, so absence is not proof of never being used.
 Read it with `active`: an active session is selected right now),
+`parent` (a companion's parent session id, the read side of `session new --parent`; omitted for a
+top-level session), `collapsed` (true only for a parent whose companions are folded, the read side of
+`session collapse`/`expand`; omitted otherwise),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
@@ -288,7 +292,7 @@ leaving zoom brings the overlay back. Caveat: `active`/`visible`
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
 FLOATING overlay even though it is visually on screen; address by `id`/`kind`, and read the zoom state
 from the top-level `zoomedSurface`. Workspace nodes carry
-`id`, `name`, `active`, `sessions`, `focused` (whether this workspace is a MEMBER of the sidebar's focus
+`id`, `name`, `active`, `sessions` (a flat list, each companion right after its parent), `focused` (whether this workspace is a MEMBER of the sidebar's focus
 set — the read side of `workspace focus`, distinct from `active` the SELECTED workspace; omitted on
 non-members, and absent entirely when nothing is marked. Membership is reported INDEPENDENTLY of whether
 the filter is applied, so a marked-but-not-filtering set reads back too; a workspace ROW RENDERS in the
@@ -490,7 +494,37 @@ buys nothing. A caller with no tree uses `version`.
   `--create-workspace` create does not widen the workspace focus set either (the new workspace stays
   unmarked, so the filtered sidebar view is left put instead of revealing it). `--tint COLOR` creates the
   session with a row tint and `--tint-on` places it as `session tint --on` does (default icon); `--tint-on`
-  without `--tint` is refused, and an invalid value creates nothing.
+  without `--tint` is refused, and an invalid value creates nothing. `--parent SID` creates a companion
+  session instead; see the next entry.
+- `session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]`
+  Create a companion session: an ordinary session pinned for life to the parent SID (id / unique prefix /
+  `active`). A companion SID means its parent, so a companion of a companion is never created: the new one
+  becomes a sibling under the same parent. It lands in the parent's workspace right after the parent and
+  its earlier companions, indented under the parent in the sidebar tree. `--cwd` defaults to the parent's
+  focused-pane directory; the other options work as on `session new`. `--parent` refuses `--workspace`,
+  `--workspace-name`, `--create-workspace`, `--after` and `--before`; a raw socket request carrying them
+  gets `a companion takes no workspace or placement: it lands under its parent`. Wire command
+  `session.companion.new` with the parent as target. Returns `result.id` (the new companion; the human
+  output prints it) and `result.parent` (the parent id). Errors: `companions of a remote session are not
+  supported yet` for a parent attached from another Mac; against an app too old for companions the CLI
+  prints `error: the running app is too old for companions`, exits 1, and nothing was created.
+  Use a command companion to keep a related program next to a session:
+  `agtermctl session new --parent active --command 'tail -f build.log' --name logs`, adding `--wait` to keep
+  its output after it exits.
+  A companion reorders only among its siblings (drag or `session move`), and moving the parent carries its
+  companions. Other session commands (status, notify, type, split, rename, flag, close) act on a companion
+  as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
+  (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
+  login shell starts in that pane's last directory instead of the session closing (a parent created with
+  `--command` comes back as a plain shell); a parent without companions closes on exit as before. The GUI
+  twin is New Companion in the session row's context menu and the Session menu, an action-palette row, and
+  the keyless `new_companion` keymap action. Read back from the tree session node's `parent` field.
+- `session collapse [--target] [--window W]` - fold a parent's companions in the sidebar tree; returns the
+  session id. Persisted. A session without companions errors `session has no companions`. Read back from the
+  tree session node's `collapsed` flag. Wire command `session.collapse`. `sidebar expand|collapse` and
+  `workspace collapse|expand` keep acting on workspaces only.
+- `session expand [--target] [--window W]` - unfold a parent's companions; the inverse of
+  `session collapse`, with the same return, error and read-back. Wire command `session.expand`.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -519,7 +553,9 @@ buys nothing. A caller with no tree uses `version`.
   `result.undoable`: true for an undoable close, false when Settings turned undo off and it closed at once. An
   app predating the flag ignores it and closes a single target at once, so for a single target an ok reply
   without `undoable` means the shell is already gone. The human output appends `(undoable)` or `(not undoable)` to `ok`
-  or the session count.
+  or the session count. Every ok reply carries `result.closed`, the ids it closed. Closing a parent closes its
+  companions too and sets `result.affected` to the group size, so a parent with two companions prints
+  `3 sessions`; a plain single close prints as before.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
@@ -542,7 +578,9 @@ buys nothing. A caller with no tree uses `version`.
   Repeat `--target` for a batch move with the workspace and after/before placement forms; the sessions
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
-  counting only sessions whose position/workspace changed.
+  counting only sessions whose position/workspace changed. Moving a parent carries its companions; a move
+  that would take a companion out of its group errors `a companion moves only among its siblings`, while an
+  ordinary no-op move still answers ok.
 
 Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
 `split`/`right`/`bottom` for the split pane. Commands supporting scratch also accept `scratch`.
@@ -2190,7 +2228,8 @@ the oldest dropped silently.
 `agtermctl recent list` — returns `result.recent[]`: `id`, `kind` (`session` | `workspace`), `title`,
 `subtitle`, `closedAt` (Unix seconds), `workspaceID` (the parent workspace of a session entry, the
 workspace itself otherwise) and `sessionIDs`, the sessions a reopen brings back. Human output prints one
-row per entry with the full id. This is the read-back for `open` and `clear`.
+row per entry with the full id. This is the read-back for `open` and `clear`. A parent entry's
+`sessionIDs` lists the parent then its companions, and its human row ends with `+N companion(s)`.
 
 `agtermctl recent open [ID] [--window W]` — reopen the entry with that id or unique prefix, or the newest
 with no id. The session returns under its original id. It goes to `--window` or the frontmost window,
@@ -2198,6 +2237,9 @@ unless another window already holds its session or workspace; the window is not 
 `result.recentOpen`: `item` (the entry, as `list` shows it), `window` (where it went) and `complete`,
 false when the entry is still in the list afterwards. An unknown or closed `--window` fails before
 anything is restored. Errors: `no recently closed items`, `no such recent item: ID`, ambiguous prefix.
+A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace
+holding the parent) first when the parent is not open; when the parent is neither open nor in Recent
+Closed it errors `parent session is not open or in Recent Closed`.
 
 `agtermctl recent clear` — empty the list; ok only when the list is empty afterwards.
 

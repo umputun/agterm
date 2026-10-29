@@ -394,6 +394,42 @@ struct SocketClientTests {
         #expect(printed == Data("9f3c\n".utf8))
     }
 
+    @Test func anAppTooOldForCompanionsIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.companion.new"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Session.New.parse(["--parent", "p1", "--socket", server.path])
+        let printed = try captureStdout { #expect(throws: ExitCode.failure) { try command.run() } }
+
+        #expect(printed.isEmpty)
+        #expect(server.received?.cmd == .sessionCompanionNew)
+        #expect(tooOldForCompanions(ControlResponse(ok: false, error: decodeError), command: .sessionCompanionNew))
+    }
+
+    @Test func anAppTooOldForCompanionsKeepsTheRawReplyUnderJSON() throws {
+        let response = ControlResponse(ok: false, error: "invalid request: Cannot initialize Command from invalid String value session.companion.new")
+        let server = StubServer(response: response)
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Session.New.parse(["--parent", "p1", "--json", "--socket", server.path])
+        let printed = try captureStdout { #expect(throws: ExitCode.failure) { try command.run() } }
+
+        let decoded = try JSONDecoder().decode(ControlResponse.self, from: printed)
+        #expect(decoded == response)
+    }
+
+    @Test func aGenuineCompanionErrorPassesThrough() {
+        let refusals = ["no session matching p1", "companions of a remote session are not supported yet",
+                        "invalid request: Cannot initialize Command from invalid String value session.nope"]
+        for error in refusals {
+            #expect(!tooOldForCompanions(ControlResponse(ok: false, error: error), command: .sessionCompanionNew), "\(error)")
+        }
+        #expect(!tooOldForCompanions(ControlResponse(ok: true), command: .sessionCompanionNew))
+    }
+
     @Test func runQuietsIdForNonCreateCommand() throws {
         let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "9f3c")))
         try server.start()
@@ -826,6 +862,23 @@ struct SocketClientTests {
 
     @Test func formatResponseBareOk() {
         #expect(SocketClient.formatResponse(ControlResponse(ok: true)) == "ok")
+    }
+
+    @Test func formatRecentCountsAParentEntrysCompanions() {
+        let items = [
+            ControlRecentItem(id: "R1", kind: "session", title: "api", subtitle: "work", closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["P", "C1", "C2"]),
+            ControlRecentItem(id: "R2", kind: "session", title: "db", subtitle: nil, closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["S"]),
+            ControlRecentItem(id: "R3", kind: "workspace", title: "work", subtitle: "2 sessions", closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["A", "B"]),
+        ]
+
+        #expect(SocketClient.formatRecent(items) == """
+        R1  session  api (work) +2 companion(s)
+        R2  session  db
+        R3  workspace  work (2 sessions)
+        """)
     }
 
     @Test func formatResponseEchoesIdWhenRequested() {

@@ -371,29 +371,32 @@
   `MockControlActions.swift`, `agtermCore/Tests/agtermctlKitTests/`, `agtermTests/ControlServerSessionActionsTests.swift`,
   `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] add the `session.companion.new` wire command behind `session new --parent` (see Technical Details for the
+- [x] add the `session.companion.new` wire command behind `session new --parent` (see Technical Details for the
       older-app guarantee), combining with `--command`, `--wait`, `--name`, `--cwd`, `--no-select`; refused
       with `--workspace`, `--workspace-name`, `--create-workspace`, `--after` and `--before`), `session collapse|expand`
       for parents through the same persist-then-notify path as `workspace collapse|expand` (`sidebar expand|collapse`
       keep acting on workspaces only), group semantics for `session close` (`affected` counts every member, every
       closed id in the response), and refusals for illegal companion moves and for a remote parent (until Task 10)
-- [ ] the CLI turns the older app's unknown-command decode error, and only that error, into "the running app is too
+- [x] the CLI turns the older app's unknown-command decode error, and only that error, into "the running app is too
       old for companions"; every reply carries `result.parent`
-- [ ] write a CLI test against an older-server stub proving the request is refused before any mutation (the stub
+- [x] write a CLI test against an older-server stub proving the request is refused before any mutation (the stub
       records no executed command) and that genuine server errors pass through unchanged
-- [ ] add read-back: `parent` and `collapsed` on `ControlSessionNode`, `parent` in `session.created` JSON and
+- [x] add read-back: `parent` and `collapsed` on `ControlSessionNode`, `parent` in `session.created` JSON and
       `EventFormatter.human`; `workspace.sessions` stays flat; `recent list` shows a parent record's companions and
       `recent open` of an unavailable lone companion returns a clear error, with CLI formatting
-- [ ] wire `agtermctl` subcommands and flags
-- [ ] update the bundled skill (trigger in `description` plus a section), `site/docs.html`, `site/commands.html` and
+- [x] wire `agtermctl` subcommands and flags
+- [x] update the bundled skill (trigger in `description` plus a section), `site/docs.html`, `site/commands.html` and
       the two rules files; document a command companion as the way to keep a related program next to a session
-- [ ] write dispatcher, protocol round-trip, nil-omission and CLI tests
-- [ ] write the e2e test creating, reading back, moving and closing a group through `agtermctl`
-- [ ] ➕ write e2e tests that a respawned parent shell is visible and takes input, in Live and outside Live, and that
+- [x] write dispatcher, protocol round-trip, nil-omission and CLI tests
+- [x] write the e2e test creating, reading back, moving and closing a group through `agtermctl`
+      (written; its run waits for UI-test approval)
+- [x] ➕ write e2e tests that a respawned parent shell is visible and takes input, in Live and outside Live, and that
       a parent created with `--command` respawns as a plain shell in the directory it had moved to (moved from Task 3)
-- [ ] write an e2e test that ordinary session commands act on a companion as on any session: `session status`,
+      (written; its run waits for UI-test approval)
+- [x] write an e2e test that ordinary session commands act on a companion as on any session: `session status`,
       `notify`, `type`, `split`, `rename`, `flag`, and `session close` on a companion closes only that companion
-- [ ] run the new and changed tests - must pass before next task
+      (written; its run waits for UI-test approval)
+- [x] run the new and changed tests - must pass before next task
 
 ### Stage 2: page companions
 

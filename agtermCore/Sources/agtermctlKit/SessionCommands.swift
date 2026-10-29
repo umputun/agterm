@@ -19,7 +19,8 @@ struct Session: ParsableCommand {
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
                       Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self, Tint.self,
-                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self]
+                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self,
+                      Collapse.self, Expand.self]
     )
 
     struct New: RequestCommand {
@@ -34,11 +35,15 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
         @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
+        @Option(name: .long, help: "Create a companion of this session (id/prefix/active), placed under it in the sidebar; a companion target means its parent.") var parent: String?
         @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
+            if parent != nil, workspace != nil || workspaceName != nil || createWorkspace || after != nil || before != nil {
+                throw ValidationError("--parent takes no --workspace, --workspace-name, --create-workspace, --after or --before")
+            }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -57,8 +62,18 @@ struct Session: ParsableCommand {
             }
         }
 
+        func run() throws {
+            guard parent != nil else { return try defaultRun() }
+            try runCompanionRequest(makeRequest(), options: options, echoID: true)
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
+            if let parent {
+                return ControlRequest(cmd: .sessionCompanionNew, target: parent, args: options.withWindow(tint.apply(to:
+                    ControlArgs(name: name, cwd: cwd, noSelect: noSelect ? true : nil, command: command,
+                                wait: wait ? true : nil))))
+            }
+            return ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
                             command: command, wait: wait ? true : nil, after: after, before: before))))

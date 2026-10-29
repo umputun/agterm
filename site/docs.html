@@ -905,6 +905,31 @@
                 that row. Dragged sessions keep running, shell and scrollback
                 intact.
               </li>
+              <li id="companions" style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
+                ><strong style="color: #e6e1d7">Companions</strong> keep related shells or programs next to a session: a log tail, a
+                watcher, a second shell for the same task. A companion is an ordinary session pinned to its parent, listed right
+                after it and indented under it in the tree; the parent's disclosure triangle folds them away, and a folded parent
+                shows a small marker when a hidden companion is blocked, completed, or has unread notifications.
+                <strong style="color: #e6e1d7">New Companion</strong> in the session row's context menu, the Session menu, or the
+                action palette opens a login shell in the parent's current directory; bind it with the
+                <code style="color: #e6e1d7">new_companion</code> action in <code style="color: #e6e1d7">keymap.conf</code>.
+                Companions reorder only among themselves, and moving the parent carries them. Closing a companion closes only it;
+                closing the parent closes the group, and one Reopen Closed Item brings it all back. While a parent has companions,
+                its shell exiting starts a fresh shell in the same directory instead of closing the session. Flat lists such as
+                the ⌃P palette, the Ctrl-Tab switcher and the Dock menu label a companion <code style="color: #e6e1d7">parent › child</code>; the tree, rename
+                and Copy Name keep the bare name. From a script:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session new --parent active --command 'tail -f build.log' --name logs</span>,
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> to keep the output after it exits.
+              </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
                   style="
@@ -2413,7 +2438,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               ><br />agtermctl session new --cwd ~/src/agterm --no-select
               <span style="color: #6b727a">&nbsp;&nbsp;# create in the background without switching to it</span
               ><br />agtermctl session duplicate --target <span style="color: #f2b45c">9f3c</span>
-              <span style="color: #6b727a">&nbsp;&nbsp;# a fresh shell in that session's workspace and cwd, right after it</span><br />agtermctl session move --after
+              <span style="color: #6b727a">&nbsp;&nbsp;# a fresh shell in that session's workspace and cwd, right after it</span><br />agtermctl session new --parent active
+              --command <span style="color: #f2b45c">'tail -f build.log'</span> --name logs
+              <span style="color: #6b727a">&nbsp;&nbsp;# a companion session under the current one; session collapse folds it</span><br />agtermctl session move --after
               <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
               ><br />agtermctl session move <span style="color: #f2b45c">"$ws"</span> --target 9f3c --target abcd
               <span style="color: #6b727a">&nbsp;&nbsp;# move a batch as one ordered block</span

@@ -7,8 +7,11 @@ public struct CompanionOptions: Equatable, Sendable {
     public var name: String?
     public var wait: Bool
     public var select: Bool
+    public var tint: SidebarTint?
 
-    public init(cwd: String? = nil, command: String? = nil, name: String? = nil, wait: Bool = false, select: Bool = true) {
+    public init(cwd: String? = nil, command: String? = nil, name: String? = nil, wait: Bool = false, select: Bool = true,
+                tint: SidebarTint? = nil) {
+        self.tint = tint
         self.cwd = cwd
         self.command = command
         self.name = name
@@ -54,7 +57,8 @@ extension AppStore {
             reported: parent.focusedCwd, homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path)
         let end = Self.groupEnd(from: location.sessionIndex, in: workspace.sessions)
         guard let companion = addSession(toWorkspace: workspace.id, cwd: cwd, command: options.command, name: options.name,
-                                         wait: options.wait, at: end, select: options.select, parentID: parent.id) else {
+                                         wait: options.wait, at: end, select: options.select, tint: options.tint,
+                                         parentID: parent.id) else {
             return .failure(.noSuchSession)
         }
         return .success(companion)

@@ -262,6 +262,9 @@ struct EventCommandsTests {
         #expect(human[0] == "00:00:00 status api blocked pane=right blink")
         #expect(human[1] == "00:00:00 notify api Done: ok")
         #expect(human[2] == "00:00:00 session.created new")
+        #expect(EventFormatter.human(ControlEvent(seq: 99, ts: 0, kind: .sessionCreated,
+                                                  payload: ControlEventPayload(name: "logs", parent: "P1")),
+                                     timeZone: TimeZone(secondsFromGMT: 0)!) == "00:00:00 session.created logs parent=P1")
         #expect(human[3] == "00:00:00 session.closed old")
         #expect(human[4] == "00:00:00 tree.changed win")
         #expect(human[5] == "00:00:00 status api active color=#ff8800 shape=triangle")

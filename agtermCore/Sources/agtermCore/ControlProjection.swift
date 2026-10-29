@@ -295,6 +295,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let tint: String?
     /// The row parts the tint colors, `icon` and/or `name`; present exactly when `tint` is.
     public let tintOn: [String]?
+    /// The parent's id for a companion; omitted for a top-level session.
+    public let parent: String?
+    /// True for a parent whose companions are folded; omitted otherwise.
+    public let collapsed: Bool?
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
     public let background: BackgroundWatermark?
@@ -375,7 +379,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
-                tint: String? = nil, tintOn: [String]? = nil) {
+                tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil) {
+        self.parent = parent
+        self.collapsed = collapsed
         self.id = id
         self.name = name
         self.cwd = cwd

@@ -21,7 +21,7 @@ extension AppStore {
 
     func emitSessionCreated(_ session: Session, workspace: UUID) {
         emitControlEvent(.sessionCreated, workspace: workspace, session: session.id,
-                         payload: ControlEventPayload(name: session.displayName))
+                         payload: ControlEventPayload(name: session.displayName, parent: session.parentID?.uuidString))
         emitRemoteVisibility(.remoteOpened, session: session, workspace: workspace)
         scheduleTreeChanged()
     }

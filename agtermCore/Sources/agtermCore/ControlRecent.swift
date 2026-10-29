@@ -2,7 +2,8 @@ import Foundation
 
 /// One Recent Closed entry as `recent.list` reports it: a summary, never the snapshot it restores from.
 /// `workspaceID` is the parent workspace for a session entry and the workspace itself for a workspace
-/// entry; `sessionIDs` are the sessions a reopen brings back. `closedAt` is Unix seconds.
+/// entry; `sessionIDs` are the sessions a reopen brings back, a parent's companions after it. `closedAt` is
+/// Unix seconds.
 public struct ControlRecentItem: Codable, Sendable, Equatable {
     public let id: String
     public let kind: String
@@ -29,7 +30,7 @@ public struct ControlRecentItem: Codable, Sendable, Equatable {
         switch item.kind {
         case .session:
             workspaceID = item.session?.workspaceID
-            sessionIDs = item.session.map { [$0.snapshot.id] } ?? []
+            sessionIDs = item.session.map { [$0.snapshot.id] + ($0.companions ?? []).map(\.id) } ?? []
         case .workspace:
             workspaceID = item.workspace?.snapshot.id
             sessionIDs = item.workspace?.snapshot.sessions.map(\.id) ?? []

@@ -30,6 +30,15 @@ struct ControlRecentTests {
             workspaceID: workspaceID.uuidString, sessionIDs: [first.id.uuidString]))
     }
 
+    @Test func aParentEntryListsItsCompanionsAfterIt() {
+        let item = RecentClosedItem(
+            id: UUID(), kind: .session, title: "a", subtitle: "project", closedAt: Date(timeIntervalSince1970: 0),
+            session: RecentClosedSession(workspaceID: workspaceID, workspaceName: "project", workspaceIndex: 0,
+                                         sessionIndex: 0, snapshot: first, companions: [second]))
+
+        #expect(ControlRecentItem(item).sessionIDs == [first.id.uuidString, second.id.uuidString])
+    }
+
     @Test func aWorkspaceEntryProjectsItselfAndEverySnapshotSession() {
         let item = workspaceItem()
 
