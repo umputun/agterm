@@ -70,10 +70,10 @@ extension Session {
 
     /// hideableOverlaySlots lists the slots `pane` scopes that hold a program or page, nil standing for the
     /// session-wide slot; every slot of the session for a nil `pane`. A HUD, an ask and an origin-only
-    /// remote reservation hold nothing that can be hidden.
+    /// remote reservation hold nothing that can be hidden, and neither does a page companion, whose page is the row.
     public func hideableOverlaySlots(_ pane: OverlayPane?) -> [OverlayPane?] {
         if let pane { return paneOverlay(pane) == nil ? [] : [pane] }
-        return (coverOverlayActive ? [nil] : []) + OverlayPane.allCases.filter { paneOverlay($0) != nil }
+        return (coverOverlayActive && content == .terminal ? [nil] : []) + OverlayPane.allCases.filter { paneOverlay($0) != nil }
     }
 
     /// anyOverlayShown says a slot `pane` scopes holds a program or page that is not hidden: what a toggle hides.

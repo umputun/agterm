@@ -14,7 +14,7 @@ extension AppStore {
         var members: [DashboardMember] = []
         var seen = Set<DashboardMember>()
         for target in targets {
-            guard let session = session(withID: target.session) else { continue }
+            guard let session = session(withID: target.session), session.content == .terminal else { continue }
             var cells = [DashboardMember(session: target.session, surface: target.pane ?? .primary)]
             if target.pane == nil, session.hasSplit {
                 cells.append(DashboardMember(session: target.session, surface: .split))

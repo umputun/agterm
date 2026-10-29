@@ -18,6 +18,8 @@ struct HtmlOverlayView: View {
     let toolTipsShown: Bool
     /// hideShown follows the title-bar overlays button; without it nothing on screen shows how to get a hidden page back.
     let hideShown: Bool
+    /// onClose replaces the strip's close for a page companion, whose close is the session's own.
+    var onClose: (() -> Void)?
     let foreground: Color
     let background: Color
 
@@ -73,7 +75,7 @@ struct HtmlOverlayView: View {
                 }
             }
             button("xmark", "Close", "htmlOverlay.close", enabled: true) {
-                store.closeHtmlOverlay(overlay.id)
+                if let onClose { onClose() } else { store.closeHtmlOverlay(overlay.id) }
             }
         }
         .font(.system(size: 12))

@@ -59,15 +59,19 @@ public final class Session: Identifiable {
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
     public let remoteHost: String?
 
+    /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.
+    public let content: SessionContent
+
     /// Whether this session may be written to disk at all. Every persistence producer gates on it: the
-    /// launch snapshot, the Recent Closed session record, and a closed workspace's record.
-    public var isPersistable: Bool { remoteHost == nil }
+    /// launch snapshot, the Recent Closed session record, and a closed workspace's record. A page lives
+    /// only as long as the app that shows it.
+    public var isPersistable: Bool { remoteHost == nil && content == .terminal }
 
     /// The pane identities this instance's zmx owns — none for a remote session, whose panes run ssh.
     /// Every reader of local daemon ownership goes through this, or a remote pane reports as a claimed
     /// local daemon that does not exist. Structural `paneIdentity` stays valid either way.
     public var locallyManagedPaneIdentities: [UUID] {
-        guard remoteHost == nil else { return [] }
+        guard remoteHost == nil, content == .terminal else { return [] }
         return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
     }
 
@@ -325,7 +329,7 @@ public final class Session: Identifiable {
     /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
     @discardableResult
     public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil) -> Bool {
-        guard askPending == nil else { return false }
+        guard askPending == nil, content == .terminal else { return false }
         askPaneIdentity = paneIdentity
         askRemoteOwner = remoteOwner
         askPending = ask
@@ -526,7 +530,8 @@ public final class Session: Identifiable {
 
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil,
                 paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil,
-                remoteHost: String? = nil) {
+                remoteHost: String? = nil, content: SessionContent = .terminal) {
+        self.content = content
         self.id = id
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
@@ -544,6 +549,7 @@ public final class Session: Identifiable {
     /// `b`); an empty path → `~`, the home shorthand, since no sensible component exists.
     public var displayName: String {
         if let trimmed = customName?.trimmedOrNil { return trimmed }
+        if content == .page, let identity = htmlOverlay?.identity.trimmedOrNil { return identity }
         if let title = focusedOscTitle?.trimmedOrNil { return title }
         let path = focusedCwd
         if path.isEmpty { return "~" }
@@ -674,7 +680,7 @@ public final class Session: Identifiable {
     /// since surfaces defer creation until they get a nonzero backing size. Not `deckHostsSurface`, which
     /// also yields a placeholder while zoom or the dashboard owns the slot.
     public func rendersPane(_ pane: OverlayPane) -> Bool {
-        isSplit || pane == focusedPane
+        content == .terminal && (isSplit || pane == focusedPane)
     }
 
     /// The panes the detail pane lays out RIGHT NOW, ordered left then right. Derived from the observed

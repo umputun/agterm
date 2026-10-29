@@ -210,6 +210,20 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                                        childIndex: outline.dropChildIndex)
     }
 
+    func testAPageCompanionRowShowsThePageIconFilledWhenFlagged() throws {
+        let group = try seed()
+        let page = try group.store.addPageCompanion(to: group.parent.id,
+                                                    overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                                    select: false).get()
+        buildSidebar(for: group.store)
+        XCTAssertTrue(try cell(page.id).imageView?.image === coordinator.pageSessionIcon)
+
+        group.store.setFlag(true, forSession: page.id)
+        coordinator.reconcile()
+
+        XCTAssertTrue(try cell(page.id).imageView?.image === coordinator.flaggedPageSessionIcon)
+    }
+
     private func seed() throws -> CompanionRows {
         let store = try XCTUnwrap(library.activeStore)
         let work = store.addWorkspace(name: "work")

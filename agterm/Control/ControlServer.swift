@@ -599,6 +599,7 @@ final class ControlServer {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
         defer { refreshWindowCache() }
+        if let refusal = pageCompanionRefusal(request) { return refusal }
         if let response = await ControlDispatcher(actions: self).dispatch(request) {
             return response
         }

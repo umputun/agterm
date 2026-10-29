@@ -250,7 +250,8 @@ extension WindowContentView {
         // revision, so its id needs the token to change when the occupants exchange.
         let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
         ZStack {
-            if deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
+            // a page companion has no terminal: its full page panel paints over this empty slot
+            if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
                 TerminalView(session: session, surfaceKeyPath: slot,
                              makeSurface: pane == .left ? makeSurface : makeSplitSurface,
                              isActive: gates.focusable && focused && !gates.overlaid && !covered,
@@ -323,7 +324,9 @@ extension WindowContentView {
                             HtmlOverlayView(store: store, session: session, overlay: page,
                                             backgroundColor: session.overlayBackgroundColor, isActive: live,
                                             visible: live, toolTipsShown: live && !chromeCovered && !session.askCoversAnyPane,
-                                            hideShown: shows(.overlayToggle), foreground: chromeText, background: terminalColor)
+                                            hideShown: shows(.overlayToggle) && session.content == .terminal,
+                                            onClose: session.content == .page ? { actions.closeSession(session.id, in: store) } : nil,
+                                            foreground: chromeText, background: terminalColor)
                         } else {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },

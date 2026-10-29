@@ -20,6 +20,12 @@ public struct CompanionOptions: Equatable, Sendable {
     }
 }
 
+/// SessionContent is what a session shows: a terminal, or an HTML page with no shell under it (a page companion).
+public enum SessionContent: Equatable, Sendable {
+    case terminal
+    case page
+}
+
 /// PrimaryPaneExit is what a primary pane's exit did to its session.
 public enum PrimaryPaneExit: Equatable, Sendable {
     case closed
@@ -30,6 +36,7 @@ public enum PrimaryPaneExit: Equatable, Sendable {
 public enum CompanionRefusal: Error, Equatable, Sendable {
     case noSuchSession
     case remoteParent
+    case pageNotOpened(HtmlOverlayOpenFailure)
 }
 
 extension AppStore {
@@ -48,20 +55,48 @@ extension AppStore {
     /// addCompanion creates a companion after the parent's last one; a companion target means its parent.
     @discardableResult
     public func addCompanion(to targetID: UUID, options: CompanionOptions = CompanionOptions()) -> Result<Session, CompanionRefusal> {
+        companionSlot(for: targetID, cwd: options.cwd).flatMap { slot in
+            addSession(toWorkspace: slot.workspace, cwd: slot.cwd, command: options.command, name: options.name,
+                       wait: options.wait, at: slot.index, select: options.select, tint: options.tint,
+                       parentID: slot.parent).map(Result.success) ?? .failure(.noSuchSession)
+        }
+    }
+
+    /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
+    /// slot refuses removes the row again.
+    @discardableResult
+    public func addPageCompanion(to targetID: UUID, overlay: HtmlOverlay, name: String? = nil,
+                                 select: Bool = true) -> Result<Session, CompanionRefusal> {
+        companionSlot(for: targetID, cwd: nil).flatMap { slot in
+            guard let page = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, name: name, at: slot.index,
+                                        select: select, parentID: slot.parent, content: .page) else {
+                return .failure(.noSuchSession)
+            }
+            if let failure = openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil) {
+                closeSession(page.id)
+                return .failure(.pageNotOpened(failure))
+            }
+            return .success(page)
+        }
+    }
+
+    private struct CompanionSlot {
+        let workspace: UUID
+        let index: Int
+        let parent: UUID
+        let cwd: String
+    }
+
+    private func companionSlot(for targetID: UUID, cwd: String?) -> Result<CompanionSlot, CompanionRefusal> {
         guard let target = session(withID: targetID) else { return .failure(.noSuchSession) }
         let parent = parent(of: target) ?? target
         guard let location = location(ofSession: parent.id) else { return .failure(.noSuchSession) }
         guard parent.remoteHost == nil else { return .failure(.remoteParent) }
         let workspace = workspaces[location.workspaceIndex]
-        let cwd = options.cwd ?? parent.localWorkingDirectory(
+        let cwd = cwd ?? parent.localWorkingDirectory(
             reported: parent.focusedCwd, homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path)
-        let end = Self.groupEnd(from: location.sessionIndex, in: workspace.sessions)
-        guard let companion = addSession(toWorkspace: workspace.id, cwd: cwd, command: options.command, name: options.name,
-                                         wait: options.wait, at: end, select: options.select, tint: options.tint,
-                                         parentID: parent.id) else {
-            return .failure(.noSuchSession)
-        }
-        return .success(companion)
+        return .success(CompanionSlot(workspace: workspace.id, index: Self.groupEnd(from: location.sessionIndex, in: workspace.sessions),
+                                      parent: parent.id, cwd: cwd))
     }
 
     /// setSessionExpanded folds or unfolds a parent's companions and saves; false for a session without any.

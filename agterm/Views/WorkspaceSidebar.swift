@@ -840,6 +840,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
         lazy var flaggedSplitSessionIcon = Self.rowIcon("rectangle.split.2x1.fill")
         lazy var flaggedHorizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2.fill")
+        lazy var pageSessionIcon = Self.rowIcon("list.bullet.rectangle")
+        lazy var flaggedPageSessionIcon = Self.rowIcon("list.bullet.rectangle.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
         lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")

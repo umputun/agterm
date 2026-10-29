@@ -21,6 +21,76 @@ struct AppStoreCompanionsTests {
         #expect(store.parent(of: parent) == nil)
     }
 
+    @Test func aPageCompanionShowsItsPageFullSizeUnderTheParent() throws {
+        let g = try CompanionGroup()
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/a/page.html", grantRoot: nil))
+
+        let page = try g.store.addPageCompanion(to: g.first.id, overlay: overlay, name: "docs").get()
+
+        #expect(page.content == .page)
+        #expect(page.parentID == g.parent.id)
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, page.id, g.after.id])
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(page.overlaySizePercent == nil)
+        #expect(page.locallyManagedPaneIdentities.isEmpty)
+        #expect(page.hideableOverlaySlots(nil).isEmpty)
+    }
+
+    @Test func aPageCompanionIsNamedForItsPageAndReportsItsParentsCwd() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/a/report.html", grantRoot: nil))).get()
+
+        #expect(page.displayName == "report.html")
+        g.store.renameSession(page.id, to: "notes")
+        #expect(page.displayName == "notes")
+        let node = g.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == page.id.uuidString }
+        #expect(node?.cwd == g.parent.effectiveCwd)
+    }
+
+    @Test func aPageCompanionRefusesEverythingThatWouldCoverFloatOrHideItsPage() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(!g.store.openOverlay(page.id, command: "top"))
+        #expect(g.store.openPaneOverlay(page.id, pane: .left, command: "top") != nil)
+        #expect(!g.store.resizeOverlay(page.id, sizePercent: 50))
+        #expect(g.store.applyOverlayVisibility(page.id, pane: nil, mode: .hide) != nil)
+        #expect(g.store.applyOverlayVisibility(page.id, pane: nil, mode: .show) == nil)
+        #expect(!page.overlayHidden(nil))
+        #expect(page.htmlOverlay != nil)
+    }
+
+    @Test func aPageCompanionIsNeverPersistedOrArchived() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
+        let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(!store.snapshot().workspaces.flatMap(\.sessions).contains { $0.id == page.id })
+        store.closeSession(parent.id)
+        #expect(recent.load().first?.session?.companions == nil || recent.load().first?.session?.companions?.isEmpty == true)
+    }
+
+    @Test func closingThePageClosesItsCompanion() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(g.store.closeOverlay(page.id))
+
+        #expect(g.store.session(withID: page.id) == nil)
+        #expect(g.store.session(withID: g.parent.id) != nil)
+    }
+
+    @Test func aPageCompanionHasNoDashboardCell() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        let cells = g.store.dashboardPaneCells(for: [ResolvedDashboardTarget(session: page.id, pane: nil),
+                                                     ResolvedDashboardTarget(session: g.parent.id, pane: nil)])
+
+        #expect(cells.map(\.session) == [g.parent.id])
+    }
+
     @Test func aCompanionTakesItsCreationTint() throws {
         let g = try CompanionGroup()
 

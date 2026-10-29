@@ -4,12 +4,40 @@ import Foundation
 extension ControlServer {
     static let companionMoveError = "a companion moves only among its siblings"
 
+    // a page companion's page is the row: these act on a terminal, or would cover or float the page
+    private static let pageRefusedCommands: Set<Command> = [
+        .sessionType, .sessionText, .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionBackground,
+        .sessionLead, .sessionSwap, .sessionFocus, .sessionResize, .sessionSplit, .sessionSplitClose, .sessionScratch,
+        .sessionRestart, .sessionRestore, .sessionOverlayOpen, .sessionHudOpen,
+    ]
+
+    /// pageCompanionRefusal answers a request a page companion cannot take, before any command runs, so a
+    /// socket client and a page's bridge meet one refusal.
+    func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {
+        let floats = request.cmd == .sessionOverlayResize && request.args?.full != true
+        let terminalAsk = request.cmd == .askOpen && request.args?.style != "gui"
+        // `active` for these means the window's zoom target, never the selection, and a hide is idempotent
+        let namedSurface = (request.cmd == .surfaceCursor || (request.cmd == .surfaceZoom && request.args?.mode != "hide"))
+            && request.target.map { $0 != "active" } == true
+        guard Self.pageRefusedCommands.contains(request.cmd) || floats || terminalAsk || namedSurface else { return nil }
+        let target = request.target.map(Self.sessionPart(ofSurface:))
+        guard case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: request.args?.window),
+              store.session(withID: id)?.content == .page else { return nil }
+        return ControlResponse(ok: false, error: "\(request.cmd.rawValue): not available on a page companion")
+    }
+
+    // a `surface:<session>:<slot>` address names its session in the middle
+    private static func sessionPart(ofSurface target: String) -> String {
+        let parts = target.split(separator: ":", omittingEmptySubsequences: false)
+        return parts.count == 3 && parts[0] == "surface" ? String(parts[1]) : target
+    }
+
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             switch store.addCompanion(to: id, options: options) {
             case .failure(.remoteParent):
                 return ControlResponse(ok: false, error: "companions of a remote session are not supported yet")
-            case .failure(.noSuchSession):
+            case .failure(.noSuchSession), .failure(.pageNotOpened):
                 return ControlResponse(ok: false, error: "could not create companion")
             case .success(let companion):
                 if options.select, store === library.activeStore { actions.focusActiveSession() }

@@ -163,6 +163,41 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertEqual(reply.error, ControlServer.companionWithoutParentError)
     }
 
+    func testAPageCompanionRefusesTerminalCommandsAndKeepsOrdinaryOnes() throws {
+        let (store, parent) = try addSession()
+        let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        let id = page.id.uuidString
+
+        for request in [ControlRequest(cmd: .sessionType, target: id, args: ControlArgs(text: "ls")),
+                        ControlRequest(cmd: .sessionSplit, target: id), ControlRequest(cmd: .sessionHudOpen, target: id),
+                        ControlRequest(cmd: .surfaceZoom, target: "surface:\(id):left"),
+                        ControlRequest(cmd: .surfaceCursor, target: id),
+                        ControlRequest(cmd: .sessionOverlayResize, target: id, args: ControlArgs(sizePercent: 50)),
+                        ControlRequest(cmd: .askOpen, target: id)] {
+            XCTAssertEqual(server.pageCompanionRefusal(request)?.error, "\(request.cmd.rawValue): not available on a page companion")
+        }
+        for request in [ControlRequest(cmd: .sessionRename, target: id), ControlRequest(cmd: .sessionClose, target: id),
+                        ControlRequest(cmd: .sessionType, target: parent.id.uuidString),
+                        ControlRequest(cmd: .sessionOverlayResize, target: id, args: ControlArgs(full: true)),
+                        ControlRequest(cmd: .askOpen, target: id, args: ControlArgs(style: "gui")),
+                        ControlRequest(cmd: .surfaceZoom, target: "surface:\(id):left", args: ControlArgs(mode: "hide"))] {
+            XCTAssertNil(server.pageCompanionRefusal(request), "\(request.cmd.rawValue)")
+        }
+    }
+
+    // a selected page refused the zoom exit and cursor read of another session's zoomed terminal
+    func testWithAPageSelectedActiveZoomAndCursorStillReachTheZoomTarget() throws {
+        let (store, parent) = try addSession()
+        let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        store.selectSession(page.id)
+
+        for mode in ["hide", "toggle", "show"] {
+            XCTAssertNil(server.pageCompanionRefusal(ControlRequest(cmd: .surfaceZoom, args: ControlArgs(mode: mode))), mode)
+        }
+        XCTAssertNil(server.pageCompanionRefusal(ControlRequest(cmd: .surfaceCursor, target: "active")))
+        XCTAssertNil(server.pageCompanionRefusal(ControlRequest(cmd: .surfaceZoom, target: "surface:\(parent.id.uuidString):left")))
+    }
+
     private func addSession() throws -> (AppStore, Session) {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

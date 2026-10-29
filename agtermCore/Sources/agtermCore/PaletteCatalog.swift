@@ -51,6 +51,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let activeSessionHasOverlay: Bool
     /// activeSessionIsRemote says the active row mirrors a session another Mac owns.
     public let activeSessionIsRemote: Bool
+    /// activeSessionIsPage says the active session is a page companion, which has no terminal.
+    public let activeSessionIsPage: Bool
 
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
@@ -79,7 +81,9 @@ public struct PaletteContext: Sendable, Equatable {
                 dashboardOpen: Bool = false,
                 pickerActive: Bool = false,
                 activeSessionHasOverlay: Bool = false,
-                activeSessionIsRemote: Bool = false) {
+                activeSessionIsRemote: Bool = false,
+                activeSessionIsPage: Bool = false) {
+        self.activeSessionIsPage = activeSessionIsPage
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -132,6 +136,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     /// diverge. Relevance, then the modal cover, then the presence terms.
     public func isEnabled(in context: PaletteContext) -> Bool {
         guard isVisible(in: context), !isCoveredByModal(context) else { return false }
+        if context.activeSessionIsPage, Self.terminalOnly.contains(self) { return false }
         switch self {
         case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
              .toggleHorizontalSplit, .toggleScratch,
@@ -161,6 +166,12 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return true
         }
     }
+
+    // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
+    private static let terminalOnly: Set<PaletteCommand> = [
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .find,
+        .focusLeftPane, .focusRightPane,
+    ]
 
     /// Whether a cover blocks the command. Most menu items mirror the whole cover; the font sizes, both
     /// reloads, terminal zoom and Close Session carry no modal term at all, and Dashboard carries every

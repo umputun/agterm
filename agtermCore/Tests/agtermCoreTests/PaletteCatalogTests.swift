@@ -257,6 +257,15 @@ struct PaletteCatalogTests {
         }
     }
 
+    @Test func aPageCompanionDisablesTerminalOnlyCommands() {
+        let page = PaletteContext(activeSessionHasSplit: true, hasActiveSession: true, activeSessionIsPage: true)
+        #expect(!PaletteCommand.toggleSplit.isEnabled(in: page))
+        #expect(!PaletteCommand.find.isEnabled(in: page))
+        #expect(!PaletteCommand.toggleScratch.isEnabled(in: page))
+        #expect(PaletteCommand.renameSession.isEnabled(in: page))
+        #expect(PaletteCommand.closeSession.isEnabled(in: page))
+    }
+
     @Test func aRemoteActiveSessionTakesNoCompanion() {
         #expect(PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))

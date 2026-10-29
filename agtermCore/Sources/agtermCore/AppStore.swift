@@ -351,7 +351,8 @@ public final class AppStore {
                                               paneID: token?.isEmpty == false ? token : nil)
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
-                                          cwd: session.effectiveCwd, title: session.oscTitle,
+                                          cwd: (session.content == .page ? parent(of: session) : nil)?.effectiveCwd
+                                              ?? session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
                                           split: session.isSplit, hasSplit: session.hasSplit ? true : nil,
                                           backedByZmx: session.allPanesBackedByZmx,
@@ -499,14 +500,15 @@ public final class AppStore {
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
-                           remoteHost: String? = nil, tint: SidebarTint? = nil, parentID: UUID? = nil) -> Session? {
+                           remoteHost: String? = nil, tint: SidebarTint? = nil, parentID: UUID? = nil,
+                           content: SessionContent = .terminal) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // both reach a custom command's expansion — cwd through initialCwd, name through customName — so
         // both are sanitized here. See TerminalText.
         // `remoteHost` arrives here rather than being assigned after, because this call saves.
         let session = Session(initialCwd: TerminalText.sanitized(cwd),
                               customName: name.map(TerminalText.sanitized)?.trimmedOrNil,
-                              remoteHost: remoteHost)
+                              remoteHost: remoteHost, content: content)
         session.initialCommand = command
         session.commandWait = wait
         session.tint = tint

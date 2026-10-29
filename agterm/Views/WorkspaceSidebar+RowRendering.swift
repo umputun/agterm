@@ -77,9 +77,10 @@ extension WorkspaceSidebar.Coordinator {
             let showSplitIcon = session?.hasSplit == true
             let flagged = store.sidebarMode == .tree && session?.flagged == true
             let notice = session.flatMap(presentationNotice(for:))
-            cell.imageView?.image = iconForSession(split: showSplitIcon, axis: session?.splitAxis ?? .leftRight,
-                                                   flagged: flagged, remote: session?.remoteHost != nil,
-                                                   disconnected: notice != nil)
+            cell.imageView?.image = session?.content == .page
+                ? (flagged ? flaggedPageSessionIcon : pageSessionIcon)
+                : iconForSession(split: showSplitIcon, axis: session?.splitAxis ?? .leftRight, flagged: flagged,
+                                 remote: session?.remoteHost != nil, disconnected: notice != nil)
             cell.imageView?.toolTip = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
             cell.tint = session?.tint

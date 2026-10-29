@@ -117,7 +117,7 @@
   since it stays workspace -> flagged sessions) shows `parent › child`. The parent's status glyph stays its own; a
   folded parent shows a separate marker for companions needing attention. Flagged views keep exact flagged membership.
   Terminal companions keep the ordinary terminal/split icons.
-- Page companions (stage 2) host one HTML page (`doc.richtext`) with no shell under it; closing the page or the page's
+- Page companions (stage 2) host one HTML page (`list.bullet.rectangle`) with no shell under it; closing the page or the page's
   own `session.overlay.close` ends the row. They are ephemeral across relaunch and refuse hide.
 - Duplicate as Companion (stage 3) copies the split layout and starts another copy of each pane's freshly observed
   foreground program in that pane's process cwd, through the restart replay seam and the restore denylist. Plain
@@ -413,24 +413,26 @@
   `AppStoreOverlayVisibilityTests.swift`, `PersistenceTests.swift`, `AppStore+DashboardTests.swift`,
   `PaletteCatalogTests.swift`, `agtermTests/AppActionsOverlayTests.swift`
 
-- [ ] add `SessionContent` (`.terminal`, `.page`) fixed at creation; a page companion spawns no shell, claims no pane
+- [x] add `SessionContent` (`.terminal`, `.page`) fixed at creation; a page companion spawns no shell, claims no pane
       or daemon identity, and renders its page in place of a terminal in the detail deck
-- [ ] closing the page or the page's `session.overlay.close` requests removal of the companion before overlay
+- [x] closing the page or the page's `session.overlay.close` requests removal of the companion before overlay
       teardown; manual close keeps the soft-close grace
-- [ ] the deck never builds a terminal surface for a page companion (`TerminalView` builds one for any empty slot today)
-- [ ] refuse hide/toggle for this kind (show is a no-op) and skip it in global hide; at the store/action seam, so
+- [x] the deck never builds a terminal surface for a page companion (`TerminalView` builds one for any empty slot today)
+- [x] refuse hide/toggle for this kind (show is a no-op) and skip it in global hide; at the store/action seam, so
       existing control callers are refused too, refuse every command that would cover or replace the page
       (`session.overlay.open` of a program or another page, `hud.open`, `ask.open`) and every terminal-only command
       (`session.type`, `.text`, `.copy`, `.paste`, `.selectall`, `.search`, `.background`, `.lead`, `.swap`, `.focus`,
       `.resize`, `.split`, `.split.close`, `.scratch`, `.restart`, `.restore`, `surface.zoom`); reflect it in
       `PaletteCommand.isEnabled(in:)` for the menu and palette
-- [ ] keep page companions out of dashboard membership; `ControlSessionNode.cwd` reports the parent's cwd
-- [ ] refuse resizing a page companion to a floating size and placing its page in a pane
-- [ ] exclude page companions from snapshots and persistent Recent Closed
-- [ ] row icon `doc.richtext`, filled when flagged in tree mode
-- [ ] write tests for creation, lifetime paths, refused actions and persistence exclusion
-- [ ] write hosted tests for deck rendering and the row icon
-- [ ] run the new and changed tests - must pass before next task
+- [x] keep page companions out of dashboard membership; `ControlSessionNode.cwd` reports the parent's cwd
+- [x] refuse resizing a page companion to a floating size and placing its page in a pane
+- [x] exclude page companions from snapshots and persistent Recent Closed
+- [x] row icon `list.bullet.rectangle`, filled when flagged in tree mode
+- [x] write tests for creation, lifetime paths, refused actions and persistence exclusion
+- [x] write hosted tests for deck rendering and the row icon
+      (row icon hosted; the deck gate is one `content == .terminal` term in `deckPane` with no hosted seam,
+      left to the Task 8 e2e page test, which must assert the main terminal stays unrealized)
+- [x] run the new and changed tests - must pass before next task
 
 ### Task 8: Control API, CLI, skill and docs for page companions
 

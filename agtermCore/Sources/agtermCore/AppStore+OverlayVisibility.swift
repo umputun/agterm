@@ -32,6 +32,8 @@ extension AppStore {
     @discardableResult
     public func applyOverlayVisibility(_ sessionID: UUID, pane: OverlayPane?,
                                        mode: OverlayVisibilityMode) -> OverlayVisibilityFailure? {
+        // a page companion's page is never hidden, so showing it is already done
+        if mode == .show, pane == nil, session(withID: sessionID)?.content == .page { return nil }
         switch mode {
         case .hide: return setOverlaysHidden(sessionID, pane: pane, hidden: true)
         case .show: return setOverlaysHidden(sessionID, pane: pane, hidden: false)

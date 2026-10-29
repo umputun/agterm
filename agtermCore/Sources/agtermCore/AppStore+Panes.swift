@@ -412,6 +412,8 @@ extension AppStore {
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?,
                                                  points: OverlayPointSize = OverlayPointSize()) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
+        // a page companion's page is the row, so it stays full size
+        guard session.content == .terminal || sizePercent == nil else { return false }
         guard let spec = session.hudSpec, session.hudActive else {
             session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
             session.overlayPoints = sizePercent == nil ? OverlayPointSize() : points
@@ -457,6 +459,11 @@ extension AppStore {
     /// never kept alive. Used on explicit close and when the program exits. No-op (false) with no overlay.
     @discardableResult public func closeOverlay(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
+        // a page companion is its page: every way the page closes ends the row, which releases the page once
+        if session.content == .page, session.htmlOverlay != nil {
+            closeSession(sessionID)
+            return true
+        }
         let replica = session.overlayReplica
         session.overlayReplica = nil
         session.overlayActive = false
