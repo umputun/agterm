@@ -521,7 +521,8 @@ buys nothing. A caller with no tree uses `version`.
   as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
   (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
   login shell starts in that pane's last directory instead of the session closing (a parent created with
-  `--command` comes back as a plain shell); a parent without companions closes on exit as before. A row attached
+  `--command` comes back as a plain shell); a shell that exits within 2 seconds of such a restart closes the group
+  instead, so a broken shell cannot restart forever. A parent without companions closes on exit as before. A row attached
   from another Mac whose parent respawned there attaches to the new shell instead of stopping at its exit line. The GUI
   twin is New Companion in the session row's context menu and the Session menu, an action-palette row, and
   the keyless `new_companion` keymap action. Read back from the tree session node's `parent` field.

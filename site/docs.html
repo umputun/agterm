@@ -930,7 +930,8 @@
                 here through its own channel, and it stays there when you close it here.
                 Companions reorder only among themselves, and moving the parent carries them. Closing a companion closes only it;
                 closing the parent closes the group, and one Reopen Closed Item brings it all back. While a parent has companions,
-                its shell exiting starts a fresh shell in the same directory instead of closing the session, and a Mac viewing that
+                its shell exiting starts a fresh shell in the same directory instead of closing the session (one that exits again
+                within 2 seconds closes the group), and a Mac viewing that
                 session attaches to the new shell. Flat lists such as
                 the ⌃P palette, the Ctrl-Tab switcher and the Dock menu label a companion <code style="color: #e6e1d7">parent › child</code>; the tree, rename
                 and Copy Name keep the bare name. From a script:

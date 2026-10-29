@@ -141,14 +141,20 @@ extension AppStore {
         }
     }
 
+    /// respawnMinimumUptime is how long a respawned shell must run before its exit respawns it again: one exiting
+    /// sooner (a broken shell or profile, a failing Live attach) would otherwise respawn forever.
+    static let respawnMinimumUptime: TimeInterval = 2
+
     // a remote row is respawned by its owner on the other Mac, never here
-    func respawnsOnLastPaneExit(_ session: Session) -> Bool {
-        session.remoteHost == nil && !companions(of: session.id).isEmpty
+    func respawnsOnLastPaneExit(_ session: Session, now: Date) -> Bool {
+        guard session.remoteHost == nil, !companions(of: session.id).isEmpty else { return false }
+        return session.lastRespawnAt.map { now.timeIntervalSince($0) >= Self.respawnMinimumUptime } ?? true
     }
 
     // the launch payload is cleared so an exited `--command` parent never reruns it; the observed respawn
     // count is what makes the deck mount a host for the new shell
-    func respawnPrimaryPane(_ session: Session) {
+    func respawnPrimaryPane(_ session: Session, now: Date) {
+        session.lastRespawnAt = now
         if session.hudPaneIdentity == session.paneIdentity { closeHud(session.id) }
         if session.askPaneIdentity == session.paneIdentity { session.cancelPendingAsk() }
         let exited = [session.surface, session.splitSurface].compactMap { $0 }

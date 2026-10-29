@@ -390,6 +390,68 @@ struct AppStoreCompanionsTests {
         #expect(parent.primaryRespawns == 1)
     }
 
+    // a shell exiting as soon as it started respawned forever, saving the store on every turn
+    @Test func aParentWhoseRespawnedShellExitsAtOnceClosesWithItsGroup() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        parent.surface = SpySurface()
+        #expect(store.closePrimaryPane(parent.id, now: start) == .respawned)
+        parent.surface = SpySurface()
+        #expect(store.closePrimaryPane(parent.id, now: start.addingTimeInterval(1)) == .closed)
+
+        #expect(store.session(withID: parent.id) == nil)
+        #expect(store.session(withID: companion.id) == nil)
+    }
+
+    @Test func aRespawnedShellThatRanAWhileRespawnsAgain() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        _ = try store.addCompanion(to: parent.id).get()
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        parent.surface = SpySurface()
+        #expect(store.closePrimaryPane(parent.id, now: start) == .respawned)
+        parent.surface = SpySurface()
+        #expect(store.closePrimaryPane(parent.id, now: start.addingTimeInterval(60)) == .respawned)
+        #expect(parent.primaryRespawns == 2)
+    }
+
+    @Test func aRespawnedShellExitingAtOnceThroughItsSplitSlotClosesTheGroup() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        _ = try store.addCompanion(to: parent.id).get()
+        let start = Date(timeIntervalSince1970: 1_000)
+
+        parent.surface = SpySurface()
+        #expect(store.closePrimaryPane(parent.id, now: start) == .respawned)
+        store.closeSplitPane(parent.id, now: start.addingTimeInterval(1))
+
+        #expect(store.session(withID: parent.id) == nil)
+    }
+
+    // a parked parent made final alone left its parked companions undoable, and undo detached them
+    @Test func finalizingAParkedParentEndsTheUndoOfItsParkedCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        let other = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/other"))
+        #expect(store.softCloseSessions([parent.id, companion.id, other.id], grace: 60))
+
+        #expect(store.finalizePendingClose(ofSession: parent.id))
+
+        #expect(store.pendingCloseSession(withID: companion.id) == nil)
+        #expect(store.undoPendingClose())
+        #expect(store.session(withID: companion.id) == nil)
+        #expect(store.session(withID: other.id) != nil)
+    }
+
     @Test func aPrimaryExitPromotesALiveSplitBeforeAnyRespawn() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

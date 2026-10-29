@@ -1184,7 +1184,7 @@
                 the parent carries its companions. Other session commands act on a companion as on any session; closing one closes
                 only it. Closing the parent closes its companions too, and one undo restores the group. If the parent's shell exits
                 while it has companions, a fresh login shell starts in that pane's last directory instead of the session closing (a
-                parent created with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> comes back as a plain shell). The GUI twin is
+                parent created with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> comes back as a plain shell). A shell that exits within 2 seconds of such a restart closes the group instead, so a broken shell cannot restart forever. The GUI twin is
                 <strong style="color: #bfbab0">New Companion</strong> in the session row's context menu and the Session menu, an
                 action-palette row, and the keyless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">new_companion</span> keymap action. Read back via the
                 session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span> field.

@@ -306,10 +306,16 @@ extension AppStore {
         }
     }
 
-    /// finalizePendingClose makes ONE soft-closed session's close final and leaves the rest of its record,
-    /// and every other record, inside their undo window. False when the session is not pending.
+    /// finalizePendingClose makes ONE soft-closed session's close final, with its own parked companions, and leaves
+    /// the rest of its record, and every other record, inside their undo window. False when the session is not pending.
     @discardableResult
     public func finalizePendingClose(ofSession sessionID: UUID) -> Bool {
+        guard finalizePendingMember(sessionID) else { return false }
+        finalizeParkedCompanions(of: [sessionID])
+        return true
+    }
+
+    private func finalizePendingMember(_ sessionID: UUID) -> Bool {
         for (id, record) in pendingCloseRecords {
             switch record {
             case .sessions(let close):

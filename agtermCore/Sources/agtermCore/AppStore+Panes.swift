@@ -264,11 +264,11 @@ extension AppStore {
     /// displacing it. Called by the primary surface's `onExit`.
     /// A local parent with companions respawns when its last pane exits.
     @discardableResult
-    public func closePrimaryPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil) -> PrimaryPaneExit {
+    public func closePrimaryPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) -> PrimaryPaneExit {
         guard let session = session(withID: sessionID) else { return .closed }
         guard let survivor = session.splitSurface else {
-            if respawnsOnLastPaneExit(session) {
-                respawnPrimaryPane(session)
+            if respawnsOnLastPaneExit(session, now: now) {
+                respawnPrimaryPane(session, now: now)
                 return .respawned
             }
             closeSession(sessionID, alreadyFinalized: alreadyFinalized)
@@ -356,11 +356,11 @@ extension AppStore {
     /// exit routes here — and closing rather than collapsing a gone split is what avoids a zombie session.
     /// The `surface == nil` half of the guard is defensive: `closePrimaryPane` always promotes the survivor
     /// INTO `surface`. Called by the split surface's `onExit`.
-    public func closeSplitPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+    public func closeSplitPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) {
         guard let session = session(withID: sessionID) else { return }
         guard session.surface != nil, session.splitSurface != nil else {
-            if respawnsOnLastPaneExit(session) {
-                respawnPrimaryPane(session)
+            if respawnsOnLastPaneExit(session, now: now) {
+                respawnPrimaryPane(session, now: now)
                 return
             }
             closeSession(sessionID, alreadyFinalized: alreadyFinalized)

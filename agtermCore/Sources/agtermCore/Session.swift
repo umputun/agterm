@@ -97,6 +97,7 @@ public final class Session: Identifiable {
     @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0
     // observed, unlike the revision above: a respawn leaves the slot empty and nothing else remounts its host
     public internal(set) var primaryRespawns = 0
+    @ObservationIgnored var lastRespawnAt: Date?
 
     /// The app-side surface (a `GhosttySurfaceView`), created lazily on first display and owned here so it
     /// survives sidebar/detail view churn.
