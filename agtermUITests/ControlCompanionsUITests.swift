@@ -41,7 +41,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let companion = try cliOutput(["session", "new", "--parent", parent, "--no-select"])
         let marker = stateDir.appendingPathComponent("companion.marker")
 
-        XCTAssertEqual(try typeUntilMarker("echo typed > \(marker.path)", target: companion, file: marker, select: false), "typed")
+        XCTAssertEqual(try typeUntilMarker("echo typed > '\(marker.path)'\n", target: companion, file: marker, select: false), "typed")
         for request in [
             #"{"cmd":"session.status","target":"\#(companion)","args":{"status":"blocked"}}"#,
             #"{"cmd":"notify","target":"\#(companion)","args":{"body":"done"}}"#,
@@ -72,7 +72,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(2))
 
         XCTAssertNotNil(try sessionNodeIfPresent(id: parent), "a parent with companions survives its shell's exit")
-        XCTAssertEqual(try typeUntilMarker("echo alive > \(marker.path)", target: parent, file: marker, select: false), "alive")
+        XCTAssertEqual(try typeUntilMarker("echo alive > '\(marker.path)'\n", target: parent, file: marker, select: false), "alive")
     }
 
     func testACommandParentRespawnsAsAPlainShellInTheDirectoryItMovedTo() throws {
@@ -82,7 +82,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let moved = stateDir.appendingPathComponent("moved", isDirectory: true)
         try FileManager.default.createDirectory(at: moved, withIntermediateDirectories: true)
         let ready = stateDir.appendingPathComponent("ready.marker")
-        XCTAssertNotNil(try typeUntilMarker("cd \(moved.path) && pwd > \(ready.path)", target: parent, file: ready, select: false))
+        XCTAssertNotNil(try typeUntilMarker("cd '\(moved.path)' && pwd > '\(ready.path)'\n", target: parent, file: ready, select: false))
 
         XCTAssertEqual(try sendCommand(typeRequest(text: "exit\n", target: parent, select: false))["ok"] as? Bool, true)
         RunLoop.current.run(until: Date().addingTimeInterval(2))
@@ -90,7 +90,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let node = try XCTUnwrap(try sessionNodeIfPresent(id: parent))
         XCTAssertNil(node["foreground"], "the respawned pane runs a plain shell, not the creation command")
         let marker = stateDir.appendingPathComponent("cwd.marker")
-        let cwd = try XCTUnwrap(try typeUntilMarker("pwd > \(marker.path)", target: parent, file: marker, select: false))
+        let cwd = try XCTUnwrap(try typeUntilMarker("pwd > '\(marker.path)'\n", target: parent, file: marker, select: false))
         XCTAssertTrue(cwd.hasSuffix("/moved"), "the plain shell starts where the command's shell had moved: \(cwd)")
     }
 
@@ -99,7 +99,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let work = stateDir.appendingPathComponent("work", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         let ready = stateDir.appendingPathComponent("ready.marker")
-        XCTAssertNotNil(try typeUntilMarker("cd \(work.path) && pwd > \(ready.path)", target: parent, file: ready, select: false))
+        XCTAssertNotNil(try typeUntilMarker("cd '\(work.path)' && pwd > '\(ready.path)'\n", target: parent, file: ready, select: false))
         let split = try sendCommand(#"{"cmd":"session.split","target":"\#(parent)","args":{"mode":"on","axis":"horizontal"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "\(split)")
         XCTAssertTrue(try pollSplit(parent, timeout: 5))

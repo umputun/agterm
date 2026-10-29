@@ -71,7 +71,7 @@ final class ZmxLiveUITests: ControlAPITestCase {
         RunLoop.current.run(until: Date().addingTimeInterval(3))
 
         XCTAssertNotNil(try sessionNodeIfPresent(id: parent), "a Live parent with companions survives its shell's exit")
-        XCTAssertEqual(try typeUntilMarker("echo alive > \(marker.path)", target: parent, file: marker, select: false), "alive")
+        XCTAssertEqual(try typeUntilMarker("echo alive > '\(marker.path)'\n", target: parent, file: marker, select: false), "alive")
         XCTAssertTrue(poll(until: self.isBacked(parent, expectedPanes: ["left"]), timeout: 20),
                       "the respawned Live pane is daemon-backed again")
     }

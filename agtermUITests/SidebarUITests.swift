@@ -379,7 +379,7 @@ final class SidebarUITests: XCTestCase {
     }
 
     func testCompanionsNestFoldAndReorderAmongSiblings() throws {
-        let parent = sessionRow()
+        let parent = app.staticTexts.matching(identifier: "session-row").element(boundBy: 0)
         XCTAssertTrue(parent.waitForExistence(timeout: 20))
         for count in [2, 3] {
             parent.rightClick()

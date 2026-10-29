@@ -42,6 +42,7 @@ final class RecentSessionsButtonUITests: ControlAPITestCase {
     }
 
     func testPopoversNameACompanionAfterItsParent() throws {
+        try relaunch(withSettings: #"{"attentionButtonEnabled":true}"#)
         let parent = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(parent)","args":{"name":"api"}}"#)["ok"] as? Bool, true)
         let row = app.staticTexts["session-row"].firstMatch
