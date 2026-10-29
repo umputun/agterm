@@ -417,8 +417,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   stores each program as `initialCommand`/`splitInitialCommand`, so it runs as a `--command` pane does, ungated by
   restore mode. Outside Live the command runs on the GUI PATH, so a program not started by absolute path is copied by
   the path it was started from: the first entry of its own PATH (read from the same `KERN_PROCARGS2` blob as its
-  argv) or its directory that resolves to the `proc_pidpath` image, launched unresolved, since the image alone turns
-  `vimdiff` into plain vim. None resolving refuses the pane; the restart checks see that path and the image. An argument with a backslash is refused: libghostty's split and fish's Live
+  argv) resolving to the `proc_pidpath` image, else its first executable entry (a version manager's shim re-execs
+  under the bare name), or its directory, launched unresolved, since the image alone turns `vimdiff` into plain vim.
+  Nothing executable there refuses the pane; the restart checks see that path and the image. An argument with a backslash is refused: libghostty's split and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the

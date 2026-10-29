@@ -52,15 +52,25 @@ struct DuplicateReplayTests {
             == .success(.program(argv: ["/work/venv/bin/python", "x"], workingDirectory: "/work")))
         #expect(plan(.program(["../bin/tool"]), executable: "/bin/tool", files: ["/bin/tool": "/bin/tool"])
             == .success(.program(argv: ["/bin/tool"], workingDirectory: "/work")))
-        #expect(plan(.program(["./tool"]), executable: "/opt/x/tool", files: ["/work/tool": "/work/tool", "/opt/x/tool": "/opt/x/tool"])
-            == refusal(.notLocated))
+        #expect(plan(.program(["./missing"]), files: [Self.htop: Self.htop]) == refusal(.notLocated))
         #expect(plan(.program(["./tool"]), cwd: nil) == refusal(.replay(.noDirectory)))
     }
 
-    @Test(arguments: [nil, "", "bin:/nowhere", "/usr/local/bin"])
+    // a version manager's shim re-execs the real binary under its bare name, so no PATH entry resolves to the image
+    @Test func withNoEntryResolvingToTheImageTheShellsOwnPickIsCopied() {
+        let ruby = "/Users/u/.rbenv/versions/3.3.0/bin/ruby"
+        let shim = "/Users/u/.rbenv/shims/ruby"
+        #expect(plan(.program(["ruby", "app.rb"]), executable: ruby, searchPath: "/Users/u/.rbenv/shims:/usr/bin",
+                     files: [shim: shim, "/usr/bin/ruby": "/usr/bin/ruby", ruby: ruby])
+            == .success(.program(argv: [shim, "app.rb"], workingDirectory: "/work")))
+        #expect(plan(.program(["./tool"]), executable: "/opt/x/tool", files: ["/work/tool": "/work/tool", "/opt/x/tool": "/opt/x/tool"])
+            == .success(.program(argv: ["/work/tool"], workingDirectory: "/work")))
+    }
+
+    @Test(arguments: [nil, "", "bin:/nowhere"])
     func aProgramNotFoundWhereItWasStartedIsRefusedRatherThanCopiedAsTheImage(searchPath: String?) {
-        #expect(plan(.program(["htop"]), searchPath: searchPath, files: ["bin/htop": Self.htop, "/usr/local/bin/htop": "/usr/local/bin/htop",
-                                                                         Self.htop: Self.htop]) == refusal(.notLocated))
+        #expect(plan(.program(["htop"]), searchPath: searchPath, files: ["bin/htop": Self.htop, Self.htop: Self.htop])
+            == refusal(.notLocated))
     }
 
     @Test func aBareProgramWithoutAnExecutablePathIsRefused() {

@@ -347,6 +347,25 @@ struct AppStoreCompanionsTests {
         #expect(mate.parentID == other.id && store.session(withID: mate.id) != nil)
     }
 
+    // a hard workspace delete left the parked companion of a parent it removed undoable, to come back top-level
+    @Test func aHardWorkspaceDeleteEndsTheUndoOfItsParentsParkedCompanions() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let kept = store.addWorkspace(name: "kept")
+        let parent = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/parent"))
+        let other = try #require(store.addSession(toWorkspace: kept.id, cwd: "/other"))
+        let parked = try store.addCompanion(to: parent.id).get()
+        let mate = try store.addCompanion(to: other.id).get()
+        #expect(store.softCloseSessions([parked.id, mate.id], grace: 60))
+
+        store.removeWorkspace(doomed.id)
+
+        #expect(store.pendingCloseSession(withID: parked.id) == nil)
+        #expect(store.undoPendingClose())
+        #expect(store.session(withID: parked.id) == nil)
+        #expect(mate.parentID == other.id && store.session(withID: mate.id) != nil)
+    }
+
     @Test func aParentsLastPaneExitStartsAFreshShellInItsLastCwd() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

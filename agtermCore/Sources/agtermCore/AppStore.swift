@@ -587,10 +587,7 @@ public final class AppStore {
             closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
         closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: companions)
-        // a companion still in its undo window would come back with no parent to sit under
-        for parked in pendingCloseSessionIDs(parentedBy: sessionID) {
-            finalizePendingClose(ofSession: parked)
-        }
+        finalizeParkedCompanions(of: [sessionID])
     }
 
     private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [Session] = []) {
@@ -662,6 +659,7 @@ public final class AppStore {
         dropFocusMember(workspaceID) // a marked root is gone; the filter goes with the last member
         workspaces.remove(at: index)
         forgetFreshWorkspace(workspaceID)
+        finalizeParkedCompanions(of: workspace.sessions.map(\.id))
         if removingActive {
             selectedSessionID = workspaceRemovalTarget(at: index)
             replaceSidebarSelection(with: selectedSessionID)

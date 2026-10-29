@@ -540,7 +540,7 @@ buys nothing. A caller with no tree uses `version`.
   closes when it exits. Every pane is checked before anything is created; a refused pane is named
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
   foreground or working directory, unreplayable arguments or one containing a backslash, a program started by a
-  name that its own PATH or directory no longer resolves to the running program, a pane under a visible
+  name that its own PATH or directory no longer holds, a pane under a visible
   program overlay. A page companion is refused. On a session attached from another Mac, that Mac duplicates its
   own session under its own policy, and the copy attaches here as for `session new --parent`.
   `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
