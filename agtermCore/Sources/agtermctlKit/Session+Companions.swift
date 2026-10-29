@@ -2,18 +2,11 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// tooOldForCompanions names the reply an app predating companions gives: it cannot decode the command, so it
-/// refused the request before doing anything. Every other error is the server's own and passes through.
-func tooOldForCompanions(_ response: ControlResponse, command: Command) -> Bool {
-    guard !response.ok, let error = response.error else { return false }
-    return error.hasPrefix("invalid request:") && error.contains(command.rawValue)
-}
-
 /// companionSend wraps a sender so a companion request an old app refused reads as that, under `--json` the raw reply.
 func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, json: Bool) -> (ControlRequest) throws -> SocketReply {
     { request in
         let reply = try send(request)
-        if !json, tooOldForCompanions(reply.response, command: request.cmd) {
+        if !json, reply.response.refusesUnknown(request.cmd) {
             FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
             throw ExitCode.failure
         }
@@ -23,7 +16,7 @@ func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, jso
 
 func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool) throws {
     let reply = try SocketClient(path: options.socketPath()).send(request)
-    if !options.json, tooOldForCompanions(reply.response, command: request.cmd) {
+    if !options.json, reply.response.refusesUnknown(request.cmd) {
         FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
         throw ExitCode.failure
     }

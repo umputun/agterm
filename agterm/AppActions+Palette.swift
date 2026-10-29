@@ -46,7 +46,6 @@ extension AppActions {
             dashboardOpen: frontmostDashboard?.isOpen == true,
             pickerActive: pickActive(for: library.activeWindowID),
             activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false,
-            activeSessionIsRemote: activeStore?.activeSession?.remoteHost != nil,
             activeSessionIsPage: activeStore?.activeSession?.content == .page
         )
     }

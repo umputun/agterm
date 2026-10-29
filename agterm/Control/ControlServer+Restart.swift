@@ -186,7 +186,7 @@ extension ControlServer {
 
     /// shell returns the leader pid `zmx list` reports for `daemon` once it differs from `otherThan`, nil
     /// when none shows up in time.
-    private func shell(daemon: String, otherThan: pid_t?, client: ZmxClient, within wait: Duration) async -> pid_t? {
+    func shell(daemon: String, otherThan: pid_t?, client: ZmxClient, within wait: Duration) async -> pid_t? {
         let deadline = ContinuousClock.now + wait
         while ContinuousClock.now < deadline {
             if let pid = client.sessionRecords(timeout: 1)?.first(where: { $0.name == daemon })?.leaderPID,

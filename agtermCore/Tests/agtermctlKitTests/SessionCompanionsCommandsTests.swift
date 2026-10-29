@@ -29,6 +29,8 @@ struct SessionCompanionsCommandsTests {
         let expected = ControlRequest(cmd: .sessionCompanionDuplicate, target: "p1", args: ControlArgs(window: "win"))
         #expect(try request(["session", "duplicate", "--companion", "--target", "p1", "--window", "win"]) == expected)
         #expect(try request(["session", "duplicate", "--target", "p1"]).cmd == .sessionDuplicate)
+        #expect(try request(["session", "duplicate", "--companion", "--no-select"]).args?.noSelect == true)
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "duplicate", "--no-select"]) }
     }
 
     @Test func sessionCollapseAndExpandTargetAParent() throws {

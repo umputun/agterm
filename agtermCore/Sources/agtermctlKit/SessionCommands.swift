@@ -87,9 +87,15 @@ struct Session: ParsableCommand {
             abstract: "Duplicate a session: a fresh shell in its directory, placed right after it.")
         @Flag(name: .long, help: "Create a companion copying the session's split layout and starting another copy of each pane's program.")
         var companion = false
+        @Flag(name: .long, help: "With --companion: create it without selecting or focusing it.")
+        var noSelect = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
+
+        func validate() throws {
+            if noSelect, !companion { throw ValidationError("--no-select needs --companion") }
+        }
 
         func run() throws {
             guard companion else { return try defaultRun() }
@@ -98,7 +104,7 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
-                           args: options.withWindow())
+                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil))
         }
     }
 

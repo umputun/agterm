@@ -1135,9 +1135,9 @@
                 A pane that cannot be copied refuses the whole duplicate and is named, for example
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left pane: vim is on the restore denylist; nothing was created</span>: a program on the restore denylist,
                 an unreadable foreground or working directory, arguments that cannot be replayed or contain a backslash, a pane
-                under a visible program overlay. A remote
-                source is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions of a remote session are not supported yet</span>, and a page companion
-                has no terminal to copy. A pipeline or shell job is copied as its foreground process only. Name, status, flag,
+                under a visible program overlay. A page companion has no terminal to copy. On a session attached from another
+                Mac, that Mac duplicates its own session under its own policy and the copy attaches here, as for
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --parent</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-select</span> creates it without selecting it. A pipeline or shell job is copied as its foreground process only. Name, status, flag,
                 overlays, scratch and background are not copied. The GUI twin is <strong style="color: #bfbab0">Duplicate as
                 Companion</strong> in the session row's context menu and the Session menu, an action-palette row, and the keyless
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">duplicate_companion</span> keymap action. Read back via the new node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span>,
@@ -1172,10 +1172,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent</span> refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--create-workspace</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>; a raw socket request carrying them gets
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion takes no workspace or placement: it lands under its parent</span>. A parent attached from
-                another Mac is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions of a remote session are not supported yet</span>. Against an app
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">a companion takes no workspace or placement: it lands under its parent</span>. Against an app
                 too old for companions the CLI prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error: the running app is too old for companions</span>, exits 1,
-                and nothing was created.
+                and nothing was created. On a parent attached from another Mac, that Mac's agterm creates the companion under
+                its own session and it attaches here under the row once its panes run; closing it here only detaches it. A
+                companion created there but not attached is named in the error, still running, for
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach HOST ID</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A companion reorders only among its siblings, by drag or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session move</span>, and moving

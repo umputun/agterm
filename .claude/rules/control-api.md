@@ -377,7 +377,20 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   naming the command, to `the running app is too old for companions`; every other error passes through.
 - The target is the parent, a companion meaning its parent. The dispatcher refuses workspace and placement
   fields rather than dropping them, and reuses `creationTint`. The reply carries `result.parent`.
-  A remote parent is refused until remote companions exist.
+  A remote parent's companion is created by its origin: `ControlServer.createRemoteCompanion` runs the origin's
+  `agtermctl` through `RemoteSession.controlCommand`, whose outer quoting every login shell reads alike, polls the
+  origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
+  Creation is never retried or done locally; a created but unattached companion is named in the error. The three
+  companion commands are in `waitsOnNetwork`, local ones included.
+- A Live parent respawned on its origin carries its viewers across. `handlePaneExit` reads the daemon's cached leader
+  before `closePrimaryPane` respawns, `ControlServer.ownerRespawned` waits for a different live leader under the same
+  name, then counts the respawn in `respawnGenerations` and publishes `pane.respawn`; the snapshot carries every count
+  with `originEpoch`, absent from an older origin. `RemoteRespawnBook` joins counts and held exits per LOCAL pane: a
+  snapshot seeds a baseline only once, a held exit reattaches through `PaneLead.reconnect` once the count passed it.
+  Every remote attach, a network reconnect or takeover included, starts an attempt in `replacePane` pinned to the latest
+  count, and only its role report moves the baseline, to that count. Three attaches ending before a report leave the exit
+  prompt; the remote tick prunes entries no open or soft-closed row owns. Never prune on the row-hidden callback: a
+  soft close emits it before registering its pending record, and the prune would drop state Undo restores.
 - `session.collapse`/`.expand` persist through `AppActions.setSessionExpanded`, then post
   `.agtermSetSessionExpanded` (see [[sidebar]]). Read back `parent` and `collapsed` on session nodes.
 - `session.close` answers `result.closed` with every id it closed, from the group computed before the close,

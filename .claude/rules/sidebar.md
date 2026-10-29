@@ -77,7 +77,7 @@ paths:
   workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
   untouched rather than clearing it. No control form — see `control-api.md`.
 - Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, and Reveal in Finder appear only
-  for one target. Both companion items are omitted on a remote row, Duplicate as Companion on a page row too. Duplicate inserts a fresh
+  for one target. Duplicate as Companion is omitted on a page row. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's

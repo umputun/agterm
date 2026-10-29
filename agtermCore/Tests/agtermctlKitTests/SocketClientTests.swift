@@ -406,7 +406,6 @@ struct SocketClientTests {
 
         #expect(printed.isEmpty)
         #expect(server.received?.cmd == .sessionCompanionNew)
-        #expect(tooOldForCompanions(ControlResponse(ok: false, error: decodeError), command: .sessionCompanionNew))
     }
 
     @Test func anAppTooOldForCompanionsKeepsTheRawReplyUnderJSON() throws {
@@ -420,15 +419,6 @@ struct SocketClientTests {
 
         let decoded = try JSONDecoder().decode(ControlResponse.self, from: printed)
         #expect(decoded == response)
-    }
-
-    @Test func aGenuineCompanionErrorPassesThrough() {
-        let refusals = ["no session matching p1", "companions of a remote session are not supported yet",
-                        "invalid request: Cannot initialize Command from invalid String value session.nope"]
-        for error in refusals {
-            #expect(!tooOldForCompanions(ControlResponse(ok: false, error: error), command: .sessionCompanionNew), "\(error)")
-        }
-        #expect(!tooOldForCompanions(ControlResponse(ok: true), command: .sessionCompanionNew))
     }
 
     @Test func runQuietsIdForNonCreateCommand() throws {

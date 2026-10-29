@@ -294,6 +294,11 @@ struct agtermApp: App {
                         PaneLead.reconnect = { old, cover in
                             Self.reattachPane(old, claim: false, cover: cover, services: paneServices)
                         }
+                        PaneLead.heldExit = { [weak server = controlServer] view in server?.remotePaneHeld(view) }
+                        PaneLead.ownerRespawn = { [weak server = controlServer] session, daemon in
+                            let prior = server?.priorLeader(daemon: daemon)
+                            return { server?.ownerRespawned(session: session, daemon: daemon, prior: prior) }
+                        }
                         PaneLead.waitToReconnect = { [weak server = controlServer, library] view, cover in
                             guard let session = view.session, let store = library.store(holdingSession: session.id) else { return }
                             Self.remotePaneStopped(view, store: store, sessionID: session.id, library: library)
@@ -538,6 +543,7 @@ struct agtermApp: App {
                 RemoteReconnectBook.shared.cancel(pane: pane)
             }
             Self.remotePaneStopped(view, store: store, sessionID: sessionID, library: services.library)
+            PaneLead.heldExit?(view)
         }
     }
 
@@ -583,6 +589,7 @@ struct agtermApp: App {
         Self.wirePane(view, session: session, store: store, services: services)
         view.dashboardFontOverride = old.dashboardFontOverride
         ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: cover)
+        if session.remoteHost != nil { RemoteRespawnBook.shared.attachStarted(pane: identity, session: session.id) }
         // the old client's exit must not close the pane the new one now owns
         _ = old.claimProcessExit()
         let hadFocus = old.window?.firstResponder === old
@@ -616,9 +623,13 @@ struct agtermApp: App {
         if view.isSplitPane {
             store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {
+            // the daemon's leader is read before the respawn replaces it, so its successor can be told apart
+            let publishRespawn = view.backedByZmx ? view.zmxSessionName.flatMap { PaneLead.ownerRespawn?(sessionID, $0) } : nil
             // makeSplitSurface omits onFontSizeChange, but a promoted survivor is the sole pane and must persist
             // its own cmd +/-. a respawned parent gets a fresh primary surface, which wires its own.
-            if store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized) == .promoted,
+            let outcome = store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized)
+            if outcome == .respawned { publishRespawn?() }
+            if outcome == .promoted,
                let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
                 promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
                 // the same "session survived ⇒ its split was promoted" test, for a dashboard holding this

@@ -34,18 +34,26 @@ extension ControlServer {
         return parts.count == 3 && parts[0] == "surface" ? String(parts[1]) : target
     }
 
-    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
-            switch store.addCompanion(to: id, options: options) {
-            case .failure(.remoteParent):
-                return ControlResponse(ok: false, error: "companions of a remote session are not supported yet")
-            case .failure(.noSuchSession), .failure(.pageNotOpened):
-                return ControlResponse(ok: false, error: "could not create companion")
-            case .success(let companion):
-                if options.select, store === library.activeStore { actions.focusActiveSession() }
-                return ControlResponse(ok: true, result: ControlResult(id: companion.id.uuidString,
-                                                                       parent: companion.parentID?.uuidString))
-            }
+    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        if store.session(withID: id)?.remoteHost != nil {
+            return await createRemoteCompanion(.terminal(options), of: id, in: store, select: options.select)
+        }
+        return createLocalCompanion(id, in: store, options: options)
+    }
+
+    private func createLocalCompanion(_ id: UUID, in store: AppStore, options: CompanionOptions) -> ControlResponse {
+        switch store.addCompanion(to: id, options: options) {
+        case .failure:
+            return ControlResponse(ok: false, error: "could not create companion")
+        case .success(let companion):
+            if options.select, store === library.activeStore { actions.focusActiveSession() }
+            return ControlResponse(ok: true, result: ControlResult(id: companion.id.uuidString,
+                                                                   parent: companion.parentID?.uuidString))
         }
     }
 
@@ -61,7 +69,7 @@ extension ControlServer {
         return ids.filter { store.session(withID: $0)?.parentID.map(named.contains) != true }
     }
 
-    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let page = options.page else { return ControlResponse(ok: false, error: "a page companion needs --html or --url") }
             if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
@@ -85,14 +93,20 @@ extension ControlServer {
         }
     }
 
-    func duplicateAsCompanion(_ target: String?, window: String?) -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
-            switch duplicateCompanion(of: id, in: store, select: true) {
-            case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
-            case .success(let copy):
-                if store === library.activeStore { actions.focusActiveSession() }
-                return ControlResponse(ok: true, result: ControlResult(id: copy.id.uuidString, parent: copy.parentID?.uuidString))
-            }
+    func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        if store.session(withID: id)?.remoteHost != nil {
+            return await createRemoteCompanion(.duplicate, of: id, in: store, select: select)
+        }
+        switch duplicateCompanion(of: id, in: store, select: select) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let copy):
+            if select, store === library.activeStore { actions.focusActiveSession() }
+            return ControlResponse(ok: true, result: ControlResult(id: copy.id.uuidString, parent: copy.parentID?.uuidString))
         }
     }
 

@@ -267,15 +267,14 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.closeSession.isEnabled(in: page))
     }
 
-    @Test func aRemoteActiveSessionTakesNoCompanion() {
+    @Test func newCompanionNeedsAnActiveSession() {
         #expect(PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
-        #expect(!PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(!PaletteCommand.newCompanion.isEnabled(in: PaletteContext()))
         #expect(PaletteCommand.newCompanion.builtinAction == .newCompanion)
     }
 
-    @Test func duplicateAsCompanionNeedsALocalTerminal() {
+    @Test func duplicateAsCompanionNeedsATerminal() {
         #expect(PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
-        #expect(!PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
         #expect(!PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
         #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
     }

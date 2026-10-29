@@ -109,6 +109,10 @@ extension ControlServer {
     /// own windows and answers with a single document. Nothing is composed across two remote calls, so
     /// there is no framing and no window where the far side's topology can move between reads.
     func remoteTree(host: String?) async -> ControlResponse {
+        await remoteTree(host: host, deadline: Self.remoteTreeDeadline)
+    }
+
+    func remoteTree(host: String?, deadline: TimeInterval) async -> ControlResponse {
         guard let host else { return localAttachableSessions() }
         let argv: [String]
         do {
@@ -118,7 +122,7 @@ extension ControlServer {
             // carrying control characters, which agtermctl would print to a terminal after JSON decoding
             return ControlResponse(ok: false, error: "invalid host")
         }
-        let result = await remoteRunner.run(argv, deadline: Self.remoteTreeDeadline)
+        let result = await remoteRunner.run(argv, deadline: deadline)
         guard result.status == 0 else {
             // stdout first: the remote's agtermctl prints a not-ok response there and exits nonzero, so
             // its own sentence never reaches stderr. ssh's own failures do. An ok-looking payload from a
@@ -191,6 +195,29 @@ extension ControlServer {
         guard let remote = tree.sessions.first(where: { $0.id == session }) else {
             return ControlResponse(ok: false, error: "no attachable session \(session) on \(host)")
         }
+        let store: AppStore
+        switch resolveOpenWindow(window) {
+        case .failure(let response): return response
+        case .success(let (_, resolved)): store = resolved
+        }
+        guard let workspace = store.currentWorkspaceID else {
+            return ControlResponse(ok: false, error: "no window to attach into")
+        }
+        return attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+    }
+
+    /// RemotePlacement is where an attached row goes: a workspace, or under `parent`, a remote row of the same host.
+    struct RemotePlacement {
+        let store: AppStore
+        let workspace: UUID
+        var parent: UUID?
+        var select = true
+    }
+
+    /// attach creates the local row for `remote`, one session of `tree`, and binds its panes. Everything that can
+    /// fail is checked before the model is touched.
+    func attach(_ remote: ControlRemoteSession, from tree: ControlRemoteTree, host: String,
+                placement: RemotePlacement) -> ControlResponse {
         // by role, never by position: a payload with two lefts or no left must fail rather than quietly
         // become one pane, or the wrong one
         let byRole = Dictionary(remote.panes.map { (ZmxPaneRole(controlName: $0.pane), $0.daemon) },
@@ -213,20 +240,14 @@ extension ControlServer {
         } catch {
             return ControlResponse(ok: false, error: "\(host) reported a session agterm cannot address")
         }
-        let store: AppStore
-        switch resolveOpenWindow(window) {
-        case .failure(let response): return response
-        case .success(let (_, resolved)): store = resolved
-        }
-        guard let workspace = store.currentWorkspaceID else {
-            return ControlResponse(ok: false, error: "no window to attach into")
-        }
+        let store = placement.store
         // the LOCAL working directory, not the remote one: libghostty chdirs the ssh process here, and a
         // path that exists on the far side may not exist on this Mac. The attached shell reports its real
         // cwd through the terminal stream anyway.
-        guard let created = store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(),
+        guard let created = store.addSession(toWorkspace: placement.workspace, cwd: NSHomeDirectory(),
                                              command: primary, name: remote.name, wait: true,
-                                             remoteHost: host) else {
+                                             select: placement.select, remoteHost: host,
+                                             parentID: placement.parent) else {
             return ControlResponse(ok: false, error: "could not create the session")
         }
         if let split {
@@ -249,8 +270,8 @@ extension ControlServer {
         startRemotePresentation(for: created)
         // a FIXED target, never `focusActiveSession`: it follows `splitFocused`, which the new split's deck
         // re-render can clear from under it through `onFocusChange`.
-        actions.focusSplitPane(created, wantSplit: created.splitFocused)
-        return ControlResponse(ok: true, result: ControlResult(id: created.id.uuidString))
+        if placement.select { actions.focusSplitPane(created, wantSplit: created.splitFocused) }
+        return ControlResponse(ok: true, result: ControlResult(id: created.id.uuidString, parent: placement.parent?.uuidString))
     }
 
     /// Kill the daemons the inventory shows as unclaimed and detached.

@@ -5,7 +5,7 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
-    func duplicateAsCompanion(_: String?, window _: String?) -> ControlResponse {
+    func duplicateAsCompanion(_: String?, window _: String?, select _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.duplicate"))
     }
 

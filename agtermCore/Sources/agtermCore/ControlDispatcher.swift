@@ -12,11 +12,11 @@ public protocol ControlActions {
     func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
     /// Creates a companion of the target session, or a sibling when the target is itself a companion.
-    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse
+    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse
     /// Creates a page companion of the target session showing `options.page` full size.
-    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
     /// Creates a companion copying the target's layout and running another copy of each pane's program.
-    func duplicateAsCompanion(_ target: String?, window: String?) -> ControlResponse
+    func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.
     func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func selectSession(_ target: String?, window: String?) -> ControlResponse
@@ -281,7 +281,7 @@ public struct ControlDispatcher {
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
         case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCollapse, .sessionExpand:
-            return dispatchCompanionCommand(request)
+            return await dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .workspaceFlag:

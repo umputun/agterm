@@ -49,8 +49,6 @@ public struct PaletteContext: Sendable, Equatable {
     public let pickerActive: Bool
     /// activeSessionHasOverlay says the active session holds a program or page that can be hidden or shown.
     public let activeSessionHasOverlay: Bool
-    /// activeSessionIsRemote says the active row mirrors a session another Mac owns.
-    public let activeSessionIsRemote: Bool
     /// activeSessionIsPage says the active session is a page companion, which has no terminal.
     public let activeSessionIsPage: Bool
 
@@ -81,7 +79,6 @@ public struct PaletteContext: Sendable, Equatable {
                 dashboardOpen: Bool = false,
                 pickerActive: Bool = false,
                 activeSessionHasOverlay: Bool = false,
-                activeSessionIsRemote: Bool = false,
                 activeSessionIsPage: Bool = false) {
         self.activeSessionIsPage = activeSessionIsPage
         self.canRemoveWorkspace = canRemoveWorkspace
@@ -108,7 +105,6 @@ public struct PaletteContext: Sendable, Equatable {
         self.dashboardOpen = dashboardOpen
         self.pickerActive = pickerActive
         self.activeSessionHasOverlay = activeSessionHasOverlay
-        self.activeSessionIsRemote = activeSessionIsRemote
     }
 }
 
@@ -145,7 +141,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .previousAttentionSession, .nextAttentionSession:
             return context.hasActiveSession || context.attentionNavigationAcrossWindows
         case .newCompanion, .duplicateCompanion:
-            return context.hasActiveSession && !context.activeSessionIsRemote
+            return context.hasActiveSession
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:

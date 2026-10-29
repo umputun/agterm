@@ -507,9 +507,12 @@ buys nothing. A caller with no tree uses `version`.
   `--workspace-name`, `--create-workspace`, `--after` and `--before`; a raw socket request carrying them
   gets `a companion takes no workspace or placement: it lands under its parent`. Wire command
   `session.companion.new` with the parent as target. Returns `result.id` (the new companion; the human
-  output prints it) and `result.parent` (the parent id). Errors: `companions of a remote session are not
-  supported yet` for a parent attached from another Mac; against an app too old for companions the CLI
+  output prints it) and `result.parent` (the parent id). Against an app too old for companions the CLI
   prints `error: the running app is too old for companions`, exits 1, and nothing was created.
+  On a parent attached from another Mac, that Mac's agterm creates the companion under its own session, and
+  it is attached here under the row once its panes run; closing it here only detaches it. Errors: `the agterm
+  on HOST is too old for companions`, the origin's own refusal, or `created companion ID on HOST but could not
+  attach it: REASON`, which leaves it running there for `agtermctl zmx attach HOST ID`.
   Use a command companion to keep a related program next to a session:
   `agtermctl session new --parent active --command 'tail -f build.log' --name logs`, adding `--wait` to keep
   its output after it exits.
@@ -518,7 +521,8 @@ buys nothing. A caller with no tree uses `version`.
   as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
   (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
   login shell starts in that pane's last directory instead of the session closing (a parent created with
-  `--command` comes back as a plain shell); a parent without companions closes on exit as before. The GUI
+  `--command` comes back as a plain shell); a parent without companions closes on exit as before. A row attached
+  from another Mac whose parent respawned there attaches to the new shell instead of stopping at its exit line. The GUI
   twin is New Companion in the session row's context menu and the Session menu, an action-palette row, and
   the keyless `new_companion` keymap action. Read back from the tree session node's `parent` field.
   A page companion shows an HTML page instead of a terminal and never starts a shell; it is created with
@@ -536,8 +540,9 @@ buys nothing. A caller with no tree uses `version`.
   closes when it exits. Every pane is checked before anything is created; a refused pane is named
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
   foreground or working directory, unreplayable arguments or one containing a backslash, a pane under a visible
-  program overlay. A remote source and a
-  page companion are refused. A pipeline or shell job is copied as its foreground process only; name, status,
+  program overlay. A page companion is refused. On a session attached from another Mac, that Mac duplicates its
+  own session under its own policy, and the copy attaches here as for `session new --parent`.
+  `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
   flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
   `result.id` and `result.parent`. GUI twin: Duplicate as Companion in the row context menu and the Session
   menu, a palette row, and the keyless `duplicate_companion` action.

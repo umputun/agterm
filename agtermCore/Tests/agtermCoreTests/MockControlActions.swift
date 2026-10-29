@@ -33,7 +33,7 @@ final class MockControlActions: ControlActions {
         case sessionExpansion(target: String?, window: String?, expanded: Bool)
         case companionNew(target: String?, options: CompanionOptions, window: String?)
         case companionPage(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
-        case companionDuplicate(target: String?, window: String?)
+        case companionDuplicate(target: String?, window: String?, select: Bool)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
         case flaggedMove(target: String?, window: String?, anchor: String, FlaggedOrderPlacement)
@@ -331,8 +331,8 @@ final class MockControlActions: ControlActions {
         return nextWorkspaceFilterResponse
     }
 
-    func duplicateAsCompanion(_ target: String?, window: String?) -> ControlResponse {
-        calls.append(.companionDuplicate(target: target, window: window))
+    func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) -> ControlResponse {
+        calls.append(.companionDuplicate(target: target, window: window, select: select))
         return ControlResponse(ok: true)
     }
 

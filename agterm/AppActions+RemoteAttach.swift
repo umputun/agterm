@@ -11,6 +11,8 @@ protocol RemoteAttaching: AnyObject {
     func closeHud(_ target: String?, window: String?) -> ControlResponse
     /// hudGeneration identifies the HUD now showing over `session`, nil when it shows none.
     func hudGeneration(session: String) -> Int?
+    func createRemoteCompanion(_ request: RemoteCompanionRequest, of rowID: UUID, in store: AppStore, select: Bool,
+                               progress: (String) -> Void) async -> ControlResponse
 }
 
 extension ControlServer: RemoteAttaching {
@@ -94,21 +96,23 @@ extension AppActions {
 /// RemoteAttachHud is the HUD an attach posts over the session it started from. A window with no session
 /// has nowhere to put one, so a failure there falls back to the notification banner.
 @MainActor
-private final class RemoteAttachHud {
+final class RemoteAttachHud {
     private let attacher: any RemoteAttaching
     private let session: String?
     private let window: String
+    private let action: String
     /// owned is the HUD this attach opened; one another caller posted meanwhile is not its to close.
     private var owned: Int?
 
-    init(attacher: any RemoteAttaching, session: String?, window: String) {
+    init(attacher: any RemoteAttaching, session: String?, window: String, action: String = "Attach Remote") {
         self.attacher = attacher
         self.session = session
         self.window = window
+        self.action = action
     }
 
     func progress(_ text: String) {
-        open(HudSpec(message: Self.message(text), spinner: .bar, hideAfter: AppActions.remoteAttachProgressSeconds))
+        open(HudSpec(message: message(text), spinner: .bar, hideAfter: AppActions.remoteAttachProgressSeconds))
     }
 
     func close() {
@@ -118,9 +122,9 @@ private final class RemoteAttachHud {
     }
 
     func fail(_ text: String) {
-        if open(HudSpec(message: Self.message(text), hideAfter: AppActions.remoteAttachErrorSeconds)) { return }
+        if open(HudSpec(message: message(text), hideAfter: AppActions.remoteAttachErrorSeconds)) { return }
         close()
-        NotificationManager.shared.notifyCommandFailure(name: "Attach Remote", detail: text)
+        NotificationManager.shared.notifyCommandFailure(name: action, detail: text)
     }
 
     @discardableResult
@@ -131,7 +135,7 @@ private final class RemoteAttachHud {
     }
 
     /// a direct `openHud` skips the dispatcher's validation, so remote text is cleaned and capped here.
-    private static func message(_ text: String) -> String {
-        CommandFailure.message(name: "Attach Remote", reason: text)
+    private func message(_ text: String) -> String {
+        CommandFailure.message(name: action, reason: text)
     }
 }

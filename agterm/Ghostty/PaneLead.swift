@@ -19,6 +19,10 @@ enum PaneLead {
     /// Attaches a parked pane again without the claim, covered until its first report when `cover`. False
     /// when nothing was attached.
     static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool) -> Bool)?
+    /// heldExit hands a remote pane's clean exit to the respawn join. Installed by the app.
+    static var heldExit: ((_ view: GhosttySurfaceView) -> Void)?
+    /// ownerRespawn reads a daemon's leader before a parent respawns, then returns what publishes the respawn.
+    static var ownerRespawn: ((_ session: UUID, _ daemon: String) -> () -> Void)?
 
     /// The key that took a pane over, swallowed until it is released so neither its repeats nor its
     /// release reach the program through the new surface.
@@ -29,6 +33,7 @@ enum PaneLead {
     static func report(_ notice: ZmxLeadNotice, from view: GhosttySurfaceView) {
         guard !view.isDestroyed, let pane = UUID(uuidString: view.paneToken),
               let role = ZmxLeadBook.shared.apply(notice, pane: pane) else { return }
+        RemoteRespawnBook.shared.acknowledged(pane: pane)
         roleChanged?(view)
         // without the claim, so this attach leads only if nobody claimed the session in the meantime
         if role == .unowned { reattach?(view, false) }

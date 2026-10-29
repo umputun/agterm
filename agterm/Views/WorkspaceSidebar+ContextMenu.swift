@@ -110,7 +110,7 @@ extension WorkspaceSidebar.Coordinator {
                 duplicate.representedObject = node
                 menu.addItem(duplicate)
             }
-            if sessionCount == 1, store.session(withID: node.id)?.remoteHost == nil {
+            if sessionCount == 1 {
                 let companion = NSMenuItem(title: "New Companion", action: #selector(menuNewCompanion(_:)), keyEquivalent: "")
                 companion.target = self
                 companion.representedObject = node

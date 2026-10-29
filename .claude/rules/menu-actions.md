@@ -61,10 +61,10 @@ paths:
   itself after `remoteAttachErrorSeconds`; a window with no session falls back to `notifyCommandFailure`.
 
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
-  menu, with a palette row. `PaletteContext.activeSessionIsRemote` disables it, since only the owning Mac
-  adds companions to a remote parent.
+  menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,
+  showing the two ssh waits in the Attach Remote HUD.
 - Duplicate as Companion (`duplicate_companion`, keyless) follows it in both menus, with a palette row; it is in
-  `terminalOnly` and shares New Companion's remote gate. `AppActions` reaches the planner through
+  `terminalOnly` and takes the same remote route. `AppActions` reaches the local planner through
   `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
   planner; a refusal shows through `notifyCommandFailure`.
 

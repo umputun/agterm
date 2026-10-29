@@ -1,12 +1,13 @@
 extension ControlDispatcher {
-    func dispatchCompanionCommand(_ request: ControlRequest) -> ControlResponse {
+    func dispatchCompanionCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
         case .sessionCompanionNew:
-            return dispatchCompanionNew(request)
+            return await dispatchCompanionNew(request)
         case .sessionCompanionPage:
-            return dispatchCompanionPage(request)
+            return await dispatchCompanionPage(request)
         case .sessionCompanionDuplicate:
-            return actions.duplicateAsCompanion(request.target, window: request.args?.window)
+            return await actions.duplicateAsCompanion(request.target, window: request.args?.window,
+                                                      select: request.args?.noSelect != true)
         case .sessionCollapse:
             return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: false)
         case .sessionExpand:
@@ -17,7 +18,7 @@ extension ControlDispatcher {
     }
 
     // a page companion's page is the row, so it is always full size and session-wide
-    private func dispatchCompanionPage(_ request: ControlRequest) -> ControlResponse {
+    private func dispatchCompanionPage(_ request: ControlRequest) async -> ControlResponse {
         let args = request.args
         let page: HtmlSource
         switch Self.overlayContent(command: args?.command ?? "", args: args) {
@@ -31,7 +32,7 @@ extension ControlDispatcher {
         if let color = args?.color, !WatermarkConfig.isValidColorHex(color) {
             return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
         }
-        return actions.createPageCompanion(request.target, window: args?.window, options: ControlSessionOverlayOpenOptions(
+        return await actions.createPageCompanion(request.target, window: args?.window, options: ControlSessionOverlayOpenOptions(
             command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: args?.color,
             follow: args?.follow ?? false, pane: nil, page: page, navigation: args?.navigation ?? false,
             javascript: args?.javascript ?? false, chromeless: args?.chromeless ?? false,
@@ -39,7 +40,7 @@ extension ControlDispatcher {
     }
 
     // a companion lands under its parent, so a raw client's workspace or placement field is refused, not dropped
-    private func dispatchCompanionNew(_ request: ControlRequest) -> ControlResponse {
+    private func dispatchCompanionNew(_ request: ControlRequest) async -> ControlResponse {
         let args = request.args
         if args?.workspace != nil || args?.workspaceName != nil || args?.createWorkspace == true
             || args?.after != nil || args?.before != nil {
@@ -55,6 +56,6 @@ extension ControlDispatcher {
         }
         let options = CompanionOptions(cwd: args?.cwd, command: args?.command, name: args?.name,
                                        wait: args?.wait == true, select: args?.noSelect != true, tint: tint)
-        return actions.createCompanion(request.target, options: options, window: args?.window)
+        return await actions.createCompanion(request.target, options: options, window: args?.window)
     }
 }

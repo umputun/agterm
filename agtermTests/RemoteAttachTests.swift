@@ -339,6 +339,11 @@ private final class FakeAttacher: RemoteAttaching {
         return attachResponse
     }
 
+    func createRemoteCompanion(_: RemoteCompanionRequest, of _: UUID, in _: AppStore, select _: Bool,
+                               progress _: (String) -> Void) async -> ControlResponse {
+        ControlResponse(ok: false, error: "not scripted")
+    }
+
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
         huds.append(.opened(session: target, window: window, spec: spec))
         opens += 1

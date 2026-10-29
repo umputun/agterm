@@ -37,11 +37,11 @@ final class ControlServerCompanionsTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testACompanionIsCreatedUnderItsParentWithItsTintAndAnswersWithTheParent() throws {
+    func testACompanionIsCreatedUnderItsParentWithItsTintAndAnswersWithTheParent() async throws {
         let (store, parent) = try addSession()
         let options = CompanionOptions(cwd: "/tmp", name: "logs", select: false, tint: SidebarTint(color: .red))
 
-        let reply = server.createCompanion(parent.id.uuidString, options: options, window: nil)
+        let reply = await server.createCompanion(parent.id.uuidString, options: options, window: nil)
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
         let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
@@ -52,14 +52,16 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNotEqual(store.selectedSessionID, companion.id)
     }
 
-    func testARemoteParentIsRefused() throws {
+    func testARemoteRowWithNoOriginBindingCreatesNothing() async throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
         let remote = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), remoteHost: "far"))
 
-        let reply = server.createCompanion(remote.id.uuidString, options: CompanionOptions(), window: nil)
+        let reply = await server.createCompanion(remote.id.uuidString, options: CompanionOptions(), window: nil)
+        let copy = await server.duplicateAsCompanion(remote.id.uuidString, window: nil, select: true)
 
-        XCTAssertEqual(reply.error, "companions of a remote session are not supported yet")
+        XCTAssertEqual(reply.error, "the remote session is not attached")
+        XCTAssertEqual(copy.error, "the remote session is not attached")
         XCTAssertTrue(store.companions(of: remote.id).isEmpty)
     }
 
@@ -198,12 +200,12 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNil(server.pageCompanionRefusal(ControlRequest(cmd: .surfaceZoom, target: "surface:\(parent.id.uuidString):left")))
     }
 
-    func testAPageCompanionIsCreatedWithoutTouchingTheParentsOverlaySlot() throws {
+    func testAPageCompanionIsCreatedWithoutTouchingTheParentsOverlaySlot() async throws {
         let (store, parent) = try addSession()
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: "#112233",
                                                        follow: false, pane: nil, page: .file(path: "/tmp/p.html", grantRoot: nil))
 
-        let reply = server.createPageCompanion(parent.id.uuidString, window: nil, options: options)
+        let reply = await server.createPageCompanion(parent.id.uuidString, window: nil, options: options)
 
         XCTAssertTrue(reply.ok, reply.error ?? "")
         XCTAssertEqual(reply.result?.parent, parent.id.uuidString)
@@ -216,38 +218,36 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNotEqual(store.selectedSessionID, page.id)
     }
 
-    func testDuplicateAsCompanionRefusesARemotePageOrUnrealizedSourceAndCreatesNothing() throws {
+    func testDuplicateAsCompanionRefusesAPageOrUnrealizedSourceAndCreatesNothing() async throws {
         let (store, parent) = try addSession()
-        let owner = try XCTUnwrap(store.currentWorkspaceID)
-        let remote = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), remoteHost: "far"))
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
         let before = store.workspaces.flatMap(\.sessions).map(\.id)
 
-        let cases = [(remote.id, "companions of a remote session are not supported yet"),
-                     (page.id, "a page companion has no terminal to duplicate"),
+        let cases = [(page.id, "a page companion has no terminal to duplicate"),
                      (parent.id, "left pane is not realized; nothing was created")]
         for (id, error) in cases {
-            XCTAssertEqual(server.duplicateAsCompanion(id.uuidString, window: nil).error, error)
+            let reply = await server.duplicateAsCompanion(id.uuidString, window: nil, select: true)
+            XCTAssertEqual(reply.error, error)
         }
         XCTAssertEqual(store.workspaces.flatMap(\.sessions).map(\.id), before)
     }
 
-    func testDuplicateAsCompanionRefusesAPaneUnderAVisibleProgramOverlayAndCreatesNothing() throws {
+    func testDuplicateAsCompanionRefusesAPaneUnderAVisibleProgramOverlayAndCreatesNothing() async throws {
         let (store, covered) = try addSession()
         let (_, paneCovered) = try addSession()
         XCTAssertTrue(store.openOverlay(covered.id, command: "top"))
         XCTAssertNil(store.openPaneOverlay(paneCovered.id, pane: .left, command: "top"))
         let before = store.workspaces.flatMap(\.sessions).map(\.id)
 
-        XCTAssertEqual(server.duplicateAsCompanion(covered.id.uuidString, window: nil).error,
-                       "a program overlay covers the session; nothing was created")
-        XCTAssertEqual(server.duplicateAsCompanion(paneCovered.id.uuidString, window: nil).error,
-                       "left pane is covered by a program overlay; nothing was created")
+        let sessionWide = await server.duplicateAsCompanion(covered.id.uuidString, window: nil, select: true)
+        let paneLocal = await server.duplicateAsCompanion(paneCovered.id.uuidString, window: nil, select: true)
+        XCTAssertEqual(sessionWide.error, "a program overlay covers the session; nothing was created")
+        XCTAssertEqual(paneLocal.error, "left pane is covered by a program overlay; nothing was created")
         XCTAssertEqual(store.workspaces.flatMap(\.sessions).map(\.id), before)
 
         XCTAssertNil(store.setOverlaysHidden(covered.id, pane: nil, hidden: true))
-        XCTAssertEqual(server.duplicateAsCompanion(covered.id.uuidString, window: nil).error,
-                       "left pane is not realized; nothing was created", "a hidden overlay does not block the copy")
+        let uncovered = await server.duplicateAsCompanion(covered.id.uuidString, window: nil, select: true)
+        XCTAssertEqual(uncovered.error, "left pane is not realized; nothing was created", "a hidden overlay does not block the copy")
     }
 
     private func addSession() throws -> (AppStore, Session) {

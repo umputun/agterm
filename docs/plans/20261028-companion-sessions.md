@@ -522,31 +522,34 @@
   `agtermTests/ControlServerTests.swift`, `agtermTests/ControlServerRemoteReconnectTests.swift`,
   `agtermTests/RemoteLayoutCloseTests.swift`
 
-- [ ] make companion creation an async control action and add the three `session.companion.*` commands to
+- [x] make companion creation an async control action and add the three `session.companion.*` commands to
       `waitsOnNetwork` (see Technical Details), so ssh never blocks the accept thread or deadlocks a same-Mac origin
       on its own socket; the GUI path calls `AppActions` directly
-- [ ] New Companion (with or without a command) and Duplicate as Companion on a remote row check the origin's
-      companion capability, then run the origin's `agtermctl` over ssh with `--no-select` to create the companion
-      under the origin session, wait a bounded time for the origin tree to report it attachable (every pane's daemon
-      present) without re-running creation, then attach it as a companion of the viewer's remote row
-- [ ] the attach HUD reports creating on HOST, then attaching, and clears only its own HUD on success, failure or
+- [x] New Companion (with or without a command) and Duplicate as Companion on a remote row run the origin's
+      `agtermctl` over ssh with `--no-select` (`RemoteSession.controlCommand`, quoted for any login shell) to create
+      the companion under the origin session; an origin that cannot decode the command answers "too old for
+      companions". The viewer first checks the origin still offers the session, then polls the origin tree for up to 20 s until it reports the id
+      attachable (every pane's daemon present), without re-running creation, then attaches it under the viewer's row
+- [x] the attach HUD reports creating on HOST, then attaching, and clears only its own HUD on success, failure or
       cancel; a non-overlay error route when the parent's slot is occupied
-- [ ] failure handling: created-but-unattached (attach failure or readiness timeout) reports the id and leaves it
+- [x] failure handling: created-but-unattached (attach failure or readiness timeout) reports the id and leaves it
       attachable; an origin without the capability creates nothing; no automatic retry of creation, no local fallback
-- [ ] closing a remote companion on the viewer detaches only; the origin's companion keeps running
-- [ ] owner-respawn handoff (see Technical Details): the origin publishes a respawn generation once the replacement
-      leader is ready; any viewer binding to that pane consumes it with a bounded attach-only retry, matched with
-      its held exit in either order; a clean exit with no generation keeps today's behavior
-- [ ] write a test of a normal origin parent shell exit with ssh healthy and a deliberately delayed replacement: the
-      viewer keeps the parent row and companions, a different origin process now serves the same pane id, input
-      typed through the viewer row reaches it, and no local shell is created on the viewer; repeat with the
-      viewer's companion rows detached first, and with the generation arriving before and after the held exit
-- [ ] lift the Task 2/6/9 remote refusals
-- [ ] write tests with a fake `RemoteCommandRunner` for success, delayed pane realization, origin refusal, older
+- [x] closing a remote companion on the viewer detaches only; the origin's companion keeps running
+- [x] owner-respawn handoff (see Technical Details): the origin publishes a respawn generation, with an origin epoch,
+      once a different live leader runs under the daemon name; each LOCAL viewer pane consumes it with a bounded
+      attach-only retry (three attaches), matched with its held exit in either order and without expiry, and only
+      once the new attachment reports its role; a reconnect snapshot recovers a missed frame; a clean exit with no
+      generation keeps today's behavior
+- [x] write tests of the respawn join and its wiring: generation before and after the held exit, a missed frame
+      recovered by a reconnect snapshot, an origin restart, two local views of one daemon, an attach that ends before
+      reporting, the origin publishing only after a different live leader, and a snapshot seed against a frame; the
+      two-Mac run (input typed through the viewer row reaching the respawned shell) is under Post-Completion
+- [x] lift the Task 2/6/9 remote refusals (the store keeps refusing a LOCAL companion under a remote row)
+- [x] write tests with a fake `RemoteCommandRunner` for success, delayed pane realization, origin refusal, older
       origin, attach failure after creation, and timeout
-- [ ] write a control server test that a companion request runs off the accept thread and that a `tree` issued after
+- [x] write a control server test that a companion request runs off the accept thread and that a `tree` issued after
       its response sees the result
-- [ ] run the new and changed tests - must pass before next task
+- [x] run the new and changed tests - must pass before next task
 
 ### Task 11: Origin-owned remote page companions
 
@@ -599,6 +602,8 @@
 - page companions: open, close from the page
 - Duplicate as Companion of a split running a program in each pane
 - remote companions between two Macs: terminal and page, detach on the viewer, confirm both remain on the origin
+- respawn across Macs: exit a Live parent with companions on the origin while a viewer shows it, with the viewer's
+  companion rows attached and detached; the viewer row reattaches to the new shell and typed input reaches it
 
 **External system updates**:
 - `agterm-linux` fork consumes `agtermCore`; the new `Session` and snapshot fields and control payloads are additive
