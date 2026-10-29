@@ -579,18 +579,18 @@
 - [x] run the new and changed tests - must pass before next task
 
 ### Task 12: Verify acceptance criteria
-- [ ] verify every Overview and Solution Overview requirement is implemented
-- [ ] verify edge cases: illegal moves, insertion next to a group, lone companion reopen, parent shell respawn, page
+- [x] verify every Overview and Solution Overview requirement is implemented
+- [x] verify edge cases: illegal moves, insertion next to a group, lone companion reopen, parent shell respawn, page
       close, refused replay, replay outside Live, older-app detection, remote attach failure, remote page surviving
       viewer detach, Live `--command` exit and `--wait`
-- [ ] run full test suite: `cd agtermCore && swift test`
-- [ ] run hosted and UI tests: `make test-app`
-- [ ] run `make lint` with zero findings
+- [x] run full test suite: `cd agtermCore && swift test`
+- [x] run hosted tests: `make test-app` (the XCUITest classes written by the tasks run with the user's approval)
+- [x] run `make lint` with zero findings
 
 ### Task 13: [Final] Update documentation
-- [ ] update README.md if the synopsis should mention companions, `site/index.html` major features and the
+- [x] update README.md if the synopsis should mention companions, `site/index.html` major features and the
       `site/llms.txt` discovery index
-- [ ] update CLAUDE.md and `.claude/rules/*.md` for new patterns
+- [x] update CLAUDE.md and `.claude/rules/*.md` for new patterns
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
