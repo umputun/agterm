@@ -575,6 +575,15 @@ public final class AppStore {
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
     /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor.
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+        // a parent closes with its companions; one Recent Closed entry carries the whole group
+        let companions = companions(of: sessionID)
+        for companion in companions.reversed() {
+            closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
+        }
+        closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: companions)
+    }
+
+    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [Session] = []) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
@@ -583,8 +592,11 @@ public final class AppStore {
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
-        recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
-                                  workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex)
+        if recordsRecent {
+            recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
+                                      workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
+                                      companions: companions)
+        }
         finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()

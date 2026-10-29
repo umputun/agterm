@@ -204,9 +204,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitRestoreCommand: String?
     /// `Session.lastSelectedAt` as epoch seconds; nil when no selection timestamp has been recorded.
     public var lastSelectedAt: Double?
-    /// The parent session's id for a companion; nil for a top-level session.
+    /// parentID is the parent's id for a companion.
     public var parentID: UUID?
-    /// Whether a parent row is folded; written only when true, so an unfolded tree matches a legacy snapshot.
+    /// collapsed is written only when true, so an unfolded tree matches a legacy snapshot.
     public var collapsed: Bool?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,

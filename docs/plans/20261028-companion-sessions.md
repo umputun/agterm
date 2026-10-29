@@ -265,24 +265,26 @@
   `AppStoreCloseReselectionTests.swift`, `AppStorePaneTests.swift`, `WindowLibraryRecentClosedTests.swift`,
   `agtermTests/LaunchSeedTests.swift`
 
-- [ ] closing a parent (hard or soft, single or batch, workspace removal included) closes its companions as one
+- [x] closing a parent (hard or soft, single or batch, workspace removal included) closes its companions as one
       group with one pending undo that restores ids, order and parent links; `session.closed` fires once per member
-- [ ] a parent's last pane exiting naturally while it has companions starts a fresh login shell instead of closing,
+- [x] a parent's last pane exiting naturally while it has companions starts a fresh login shell instead of closing,
       as Technical Details describe: owner-only, pane identity reused, replacement leader confirmed in Live mode,
       launch payload cleared, last cwd seeded, observed host invalidation to remount (the viewer handoff is Task 10;
       remote parents cannot have companions before it); a primary exit with a live split still promotes the split first;
       `handlePaneExit` tells a respawn from a promotion by an explicit store result, not by surface presence; a
-      parent without companions closes as today
-- [ ] write hosted tests that the respawned shell is visible and takes input, in Live and outside Live, and that a
-      parent created with `--command` respawns as a plain shell in the directory it had moved to
-- [ ] Recent Closed keeps `kind: session` and gains optional companion snapshots on a parent's record (no new kind,
+      parent without companions closes as today (the replacement-leader confirmation lands with the Task 10
+      handoff, its only consumer)
+- [x] write hosted tests that the respawned shell is visible and takes input, in Live and outside Live, and that a
+      parent created with `--command` respawns as a plain shell in the directory it had moved to (store state is
+      tested here; the real-shell check needs `session new --parent` and moved to Task 6's e2e tests)
+- [x] Recent Closed keeps `kind: session` and gains optional companion snapshots on a parent's record (no new kind,
       so an older build still loads the file); reopening a lone companion attaches it under its live parent,
       restores the archived parent group first when the parent is closed, and is unavailable when neither exists
-- [ ] name the companions in the GUI close confirmation when it is enabled
-- [ ] write tests for group close, undo, reselection after group close, per-member `session.closed`, and parent exit:
+- [x] name the companions in the GUI close confirmation when it is enabled
+- [x] write tests for group close, undo, reselection after group close, per-member `session.closed`, and parent exit:
       primary exit with a live split, split exit, last-pane exit with and without companions
-- [ ] write tests for Recent Closed group records and the three lone-companion reopen cases
-- [ ] run the new and changed test suites with `swift test --filter` and `-only-testing:` - must pass before next task
+- [x] write tests for Recent Closed group records and the three lone-companion reopen cases
+- [x] run the new and changed test suites with `swift test --filter` and `-only-testing:` - must pass before next task
 
 ### Task 4: Sidebar third level
 
@@ -383,6 +385,8 @@
       the two rules files; document a command companion as the way to keep a related program next to a session
 - [ ] write dispatcher, protocol round-trip, nil-omission and CLI tests
 - [ ] write the e2e test creating, reading back, moving and closing a group through `agtermctl`
+- [ ] ➕ write e2e tests that a respawned parent shell is visible and takes input, in Live and outside Live, and that
+      a parent created with `--command` respawns as a plain shell in the directory it had moved to (moved from Task 3)
 - [ ] write an e2e test that ordinary session commands act on a companion as on any session: `session status`,
       `notify`, `type`, `split`, `rename`, `flag`, and `session close` on a companion closes only that companion
 - [ ] run the new and changed tests - must pass before next task

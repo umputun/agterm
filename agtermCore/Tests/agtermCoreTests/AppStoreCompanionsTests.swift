@@ -104,6 +104,120 @@ struct AppStoreCompanionsTests {
         #expect(g.order == [g.parent.id, g.first.id, g.second.id, third.id, g.after.id])
     }
 
+    @Test func closingAParentClosesItsCompanionsAndRecordsOneGroupEntry() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
+        let other = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/other"))
+        let first = try store.addCompanion(to: parent.id).get()
+        let second = try store.addCompanion(to: parent.id).get()
+        store.selectSession(second.id)
+
+        store.closeSession(parent.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [other.id])
+        #expect(store.selectedSessionID == other.id)
+        let items = recent.load()
+        #expect(items.count == 1)
+        #expect(items.first?.session?.snapshot.id == parent.id)
+        #expect(items.first?.session?.companions?.map(\.id) == [first.id, second.id])
+    }
+
+    @Test func closingACompanionClosesOnlyIt() throws {
+        let g = try CompanionGroup()
+
+        g.store.closeSession(g.first.id)
+
+        #expect(g.order == [g.parent.id, g.second.id, g.after.id])
+    }
+
+    @Test func softClosingAParentIsOneUndoForTheWholeGroup() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let first = try store.addCompanion(to: parent.id).get()
+        let second = try store.addCompanion(to: parent.id).get()
+
+        #expect(store.softCloseSession(parent.id, grace: 60))
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+        #expect(recent.load().count == 1)
+        #expect(recent.load().first?.session?.companions?.map(\.id) == [first.id, second.id])
+
+        #expect(store.undoPendingClose())
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        #expect(first.parentID == parent.id)
+        #expect(second.parentID == parent.id)
+        #expect(recent.load().isEmpty)
+    }
+
+    @Test func anUndoneCompanionCloseFollowsAParentThatMovedAway() throws {
+        let store = makeStore()
+        let home = store.addWorkspace(name: "home")
+        let away = store.addWorkspace(name: "away")
+        let parent = try #require(store.addSession(toWorkspace: home.id, cwd: "/parent"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        #expect(store.softCloseSession(companion.id, grace: 60))
+        #expect(store.moveSession(parent.id, toWorkspace: away.id))
+
+        #expect(store.undoPendingClose())
+
+        #expect(companion.parentID == parent.id)
+        #expect(store.workspaces.first { $0.id == away.id }?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(store.workspaces.first { $0.id == home.id }?.sessions.isEmpty == true)
+    }
+
+    @Test func aParentsLastPaneExitStartsAFreshShellInItsLastCwd() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start", command: "lazygit", wait: true))
+        _ = try store.addCompanion(to: parent.id).get()
+        let surface = SpySurface()
+        parent.surface = surface
+        parent.currentCwd = "/moved"
+        parent.pendingForegroundCommand = ["htop"]
+        let identity = parent.paneIdentity
+
+        #expect(store.closePrimaryPane(parent.id) == .respawned)
+
+        #expect(store.session(withID: parent.id) != nil)
+        #expect(surface.teardownCount == 1)
+        #expect(parent.surface == nil)
+        #expect(parent.paneIdentity == identity)
+        #expect(parent.initialCwd == "/moved")
+        #expect(parent.initialCommand == nil)
+        #expect(!parent.commandWait)
+        #expect(parent.pendingForegroundCommand == nil)
+        #expect(parent.primaryRespawns == 1)
+    }
+
+    @Test func aPrimaryExitPromotesALiveSplitBeforeAnyRespawn() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        _ = try store.addCompanion(to: parent.id).get()
+        store.toggleSplit(parent.id)
+        parent.surface = SpySurface()
+        parent.splitSurface = SpySurface()
+
+        #expect(store.closePrimaryPane(parent.id) == .promoted)
+        #expect(parent.primaryRespawns == 0)
+
+        #expect(store.closePrimaryPane(parent.id) == .respawned)
+        #expect(store.session(withID: parent.id) != nil)
+        #expect(parent.primaryRespawns == 1)
+    }
+
+    @Test func aSessionWithoutCompanionsStillClosesOnItsLastPaneExit() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        session.surface = SpySurface()
+
+        #expect(store.closePrimaryPane(session.id) == .closed)
+        #expect(store.session(withID: session.id) == nil)
+    }
+
     @Test func regroupingDropsLinksWithoutATopLevelParentAndRebuildsOrder() {
         let parent = Session(initialCwd: "/p")
         let companion = Session(initialCwd: "/c")

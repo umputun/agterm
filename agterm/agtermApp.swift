@@ -615,10 +615,10 @@ struct agtermApp: App {
         if view.isSplitPane {
             store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {
-            store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized)
             // makeSplitSurface omits onFontSizeChange, but a promoted survivor is the sole pane and must persist
-            // its own cmd +/-. no-op when the session closed instead (`surface` nil).
-            if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
+            // its own cmd +/-. a respawned parent gets a fresh primary surface, which wires its own.
+            if store.closePrimaryPane(sessionID, alreadyFinalized: alreadyFinalized) == .promoted,
+               let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
                 promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
                 // the same "session survived ⇒ its split was promoted" test, for a dashboard holding this
                 // session by `<id>:right`. synchronous, so it lands before the reconcile onChange prunes the

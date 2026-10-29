@@ -19,7 +19,8 @@ public final class Session: Identifiable {
     /// Live cwd from the latest OSC 7 / PWD report; the sidebar row refreshes. Persisted by `snapshot()` on
     /// quit + structural mutations only (OSC 7 fires constantly), so a crash loses cwd since the last save.
     public var currentCwd: String?
-    public let initialCwd: String
+    /// initialCwd is where the primary shell starts; a respawned parent restarts from its last cwd.
+    public internal(set) var initialCwd: String
 
     /// Terminal title from the latest OSC 0/1/2 set-title report — shell `PROMPT_COMMAND`, ghostty shell
     /// integration, or a remote host over SSH; the sidebar row refreshes on change. Ephemeral, no save.
@@ -76,10 +77,9 @@ public final class Session: Identifiable {
     public var flagged: Bool = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
-    /// The session this one is a companion of, nil for a top-level session. Set once by the store at
-    /// creation; a companion stays under the same parent for life.
+    /// parentID names the session this one is a companion of; set once at creation, never changed.
     public internal(set) var parentID: UUID?
-    /// Whether a parent row shows its companions in the sidebar; persisted as `SessionSnapshot.collapsed`.
+    /// isExpanded is whether a parent row shows its companions.
     public var isExpanded = true
 
     /// Local context, persisted for local sessions; clearing reveals any mirrored context.
@@ -91,6 +91,8 @@ public final class Session: Identifiable {
     /// Changes only when one live primary-slot surface replaces another; SwiftUI hosts fold it into their
     /// identity, so lazy nil→first creation stays at zero while split-survivor promotion remounts the view.
     @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0
+    // observed, unlike the revision above: a respawn leaves the slot empty and nothing else remounts its host
+    public internal(set) var primaryRespawns = 0
 
     /// The app-side surface (a `GhosttySurfaceView`), created lazily on first display and owned here so it
     /// survives sidebar/detail view churn.

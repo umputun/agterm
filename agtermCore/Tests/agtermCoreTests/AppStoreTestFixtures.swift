@@ -18,7 +18,6 @@ import Foundation
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
 }
 
-/// A parent with two companions and one top-level session after it in "work", plus an empty "personal".
 @MainActor struct CompanionGroup {
     let store: AppStore
     let work: Workspace

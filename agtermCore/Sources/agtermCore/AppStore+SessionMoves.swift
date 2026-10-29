@@ -1,15 +1,10 @@
 import Foundation
 
 extension AppStore {
-    /// Moves a session to another workspace (or reorders within one), keeping the **same** `Session` instance
-    /// so its attached surface and live shell survive. A parent moves with its companions as one block, and a
-    /// companion moves only among its siblings: any other destination is refused and returns false.
-    ///
-    /// `index` is the destination position **after** the moved session alone is removed (clamped); nil
-    /// appends. It is resolved to the session it would land in front of, so a block lands in the same place a
-    /// single session would, and a slot inside another group moves past that group. `selectedSessionID` is
-    /// unaffected. Moving the **active** session out of the marked set suspends the focus filter while KEEPING
-    /// the set; a non-active session leaves the filter intact.
+    /// moveSession moves a session, keeping the same `Session` so its surfaces survive. A parent carries its
+    /// companions; a companion moves only among its siblings and any other destination returns false unchanged.
+    /// `index` counts the target with the moved session alone removed, the slot callers compute for one row;
+    /// a parent's block lands where that single row would. nil appends.
     @discardableResult
     public func moveSession(_ sessionID: UUID, toWorkspace targetID: UUID, at index: Int? = nil) -> Bool {
         guard let source = location(ofSession: sessionID),
@@ -17,8 +12,7 @@ extension AppStore {
         let session = workspaces[source.workspaceIndex].sessions[source.sessionIndex]
         if session.parentID != nil {
             guard targetIndex == source.workspaceIndex else { return false }
-            moveCompanion(at: source, to: index)
-            return true
+            return moveCompanions([sessionID], to: index)
         }
         let block = groupIDs(at: source)
         let anchor = insertionAnchor(movingIDs: [sessionID], blockIDs: Set(block), workspace: targetIndex, index: index)
@@ -26,11 +20,10 @@ extension AppStore {
         return true
     }
 
-    /// Moves selected sessions in their current tree order. Each selected parent carries its companions; a
-    /// companion moves only with its parent, so one selected alone in a batch stays where it is. With
-    /// `index == nil`, a multi-session move appends cross-workspace groups and leaves those already in the
-    /// target in place; a one-session call matches `moveSession`. With an explicit `index` (a drag drop), the
-    /// index is the slot after every selected session is removed. Returns the number of sessions moved.
+    /// moveSessions moves the selection in tree order and returns how many sessions moved. A selected parent
+    /// carries its companions. Siblings selected without their parent reorder among themselves; any other
+    /// companion in a batch stays put. With nil `index`, groups already in the target stay; an explicit
+    /// `index` counts the target with every selected session removed.
     @discardableResult
     public func moveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) -> Int {
         guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return 0 }
@@ -39,6 +32,9 @@ extension AppStore {
             return moveSession(id, toWorkspace: targetID, at: index) ? 1 + companions(of: id).count : 0
         }
         var parents = selected.filter { session(withID: $0)?.parentID == nil }
+        if parents.isEmpty, workspace(forSession: selected.first ?? UUID())?.id == targetID {
+            return moveCompanions(selected, to: index) ? selected.count : 0
+        }
         if index == nil {
             parents = parents.filter { workspace(forSession: $0)?.id != targetID }
         }
@@ -49,9 +45,8 @@ extension AppStore {
         return block.count
     }
 
-    /// Reorders a session one step (`up`/`down`/`top`/`bottom`) among the sessions it can move between: a
-    /// companion among its siblings, any other session among the top-level groups of its workspace, stepping
-    /// over a whole group. No-op (no write) on an unknown id or when already at that end.
+    /// reorderSession steps a session `up`/`down`/`top`/`bottom`: a companion among its siblings, any other
+    /// session among its workspace's top-level groups, stepping over a whole group. No write at an end.
     public func reorderSession(_ id: UUID, _ direction: ReorderDirection) {
         guard let location = location(ofSession: id) else { return }
         let sessions = workspaces[location.workspaceIndex].sessions
@@ -71,15 +66,12 @@ extension AppStore {
         moveSession(id, toWorkspace: workspaceID, at: flat)
     }
 
-    /// The ids of the group at `location`: the session followed by its companions.
     private func groupIDs(at location: (workspaceIndex: Int, sessionIndex: Int)) -> [UUID] {
         let sessions = workspaces[location.workspaceIndex].sessions
         return sessions[location.sessionIndex..<Self.groupEnd(from: location.sessionIndex, in: sessions)].map(\.id)
     }
 
-    /// The session a move lands in front of, nil for the end. `index` counts the target workspace with the
-    /// selected sessions removed; the first session from that slot on that is not part of the moving block is
-    /// the anchor, then a companion anchor moves on to the next top-level session.
+    // the first remaining top-level session from `index` on that is not in the moving block, nil for the end
     private func insertionAnchor(movingIDs: Set<UUID>, blockIDs: Set<UUID>, workspace targetIndex: Int, index: Int?) -> UUID? {
         guard let index else { return nil }
         let remaining = workspaces[targetIndex].sessions.filter { !movingIDs.contains($0.id) }
@@ -87,8 +79,6 @@ extension AppStore {
         return remaining[start...].first { !blockIDs.contains($0.id) && $0.parentID == nil }?.id
     }
 
-    /// Removes the `block` sessions wherever they are and inserts them, in order, in front of `anchor` in the
-    /// target workspace (at its end for nil). Saves and announces a tree change only when the order moved.
     private func relocate(_ block: [UUID], toWorkspace targetIndex: Int, before anchor: UUID?) {
         let before = workspaces.map { $0.sessions.map(\.id) }
         var moving: [Session] = []
@@ -105,19 +95,25 @@ extension AppStore {
         save()
     }
 
-    /// Moves the companion at `source` to `index` among its siblings (post-removal, clamped into the group).
-    private func moveCompanion(at source: (workspaceIndex: Int, sessionIndex: Int), to index: Int?) {
-        let before = workspaces[source.workspaceIndex].sessions.map(\.id)
-        let companion = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
-        let sessions = workspaces[source.workspaceIndex].sessions
-        guard let parent = sessions.firstIndex(where: { $0.id == companion.parentID }) else {
-            workspaces[source.workspaceIndex].sessions.insert(companion, at: source.sessionIndex)
-            return
-        }
-        let end = Self.groupEnd(from: parent, in: sessions)
-        workspaces[source.workspaceIndex].sessions.insert(companion, at: min(max(index ?? end, parent + 1), end))
+    // `index` counts the workspace with the moving siblings removed and must fall inside their group: from
+    // right after the parent to its end. nil appends to the group. false, with nothing changed, otherwise.
+    private func moveCompanions(_ ids: [UUID], to index: Int?) -> Bool {
+        guard let first = ids.first.flatMap(location(ofSession:)),
+              let parentID = workspaces[first.workspaceIndex].sessions[first.sessionIndex].parentID else { return false }
+        let workspaceIndex = first.workspaceIndex
+        let moving = Set(ids)
+        let sessions = workspaces[workspaceIndex].sessions
+        guard ids.allSatisfy({ id in sessions.contains { $0.id == id && $0.parentID == parentID } }) else { return false }
+        let remaining = sessions.filter { !moving.contains($0.id) }
+        guard let parent = remaining.firstIndex(where: { $0.id == parentID }) else { return false }
+        let end = Self.groupEnd(from: parent, in: remaining)
+        let destination = index ?? end
+        guard destination > parent, destination <= end else { return false }
+        let block = sessions.filter { moving.contains($0.id) }
+        workspaces[workspaceIndex].sessions = Array(remaining[..<destination]) + block + Array(remaining[destination...])
         pruneSidebarSelection()
-        if before != workspaces[source.workspaceIndex].sessions.map(\.id) { scheduleTreeChanged() }
+        if sessions.map(\.id) != workspaces[workspaceIndex].sessions.map(\.id) { scheduleTreeChanged() }
         save()
+        return true
     }
 }

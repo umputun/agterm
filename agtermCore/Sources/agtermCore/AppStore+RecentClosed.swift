@@ -22,7 +22,11 @@ extension AppStore {
             // the id occupied means that lookup missed. Refuse rather than build the second object.
             guard !occupiedElsewhere.contains(recent.snapshot.id) else { return .failed }
             let index: Int
-            if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
+            if let parentID = recent.snapshot.parentID {
+                // a lone companion goes under its parent wherever the parent lives now, never on its own
+                guard let parent = location(ofSession: parentID) else { return .failed }
+                index = parent.workspaceIndex
+            } else if let existing = workspaces.firstIndex(where: { $0.id == recent.workspaceID }) {
                 index = existing
             } else {
                 let insertAt = max(0, min(recent.workspaceIndex, workspaces.count))
@@ -33,6 +37,13 @@ extension AppStore {
             let insertAt = insertionIndex(for: session, near: recent.sessionIndex, in: workspaces[index].sessions)
             workspaces[index].sessions.insert(session, at: insertAt)
             emitSessionCreated(session, workspace: workspaces[index].id)
+            for snapshot in recent.companions ?? [] where self.session(withID: snapshot.id) == nil && !occupiedElsewhere.contains(snapshot.id) {
+                let companion = self.session(from: snapshot)
+                let sessions = workspaces[index].sessions
+                guard let parent = sessions.firstIndex(where: { $0.id == session.id }) else { break }
+                workspaces[index].sessions.insert(companion, at: Self.groupEnd(from: parent, in: sessions))
+                emitSessionCreated(companion, workspace: workspaces[index].id)
+            }
             appendFlaggedArrivals()
             selectedSessionID = session.id
             replaceSidebarSelection(with: selectedSessionID)
@@ -192,8 +203,10 @@ extension AppStore {
                                    workspaceName: String,
                                    workspaceIndex: Int,
                                    sessionIndex: Int,
-                                   id: UUID = UUID()) -> UUID? {
+                                   id: UUID = UUID(),
+                                   companions: [Session] = []) -> UUID? {
         guard let recentClosedStore, session.isPersistable else { return nil }
+        let companionSnapshots = companions.filter(\.isPersistable).map(sessionSnapshot)
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .session,
@@ -203,7 +216,8 @@ extension AppStore {
                                          workspaceName: workspaceName,
                                          workspaceIndex: workspaceIndex,
                                          sessionIndex: sessionIndex,
-                                         snapshot: sessionSnapshot(session))
+                                         snapshot: sessionSnapshot(session),
+                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots)
         ))
         recentClosedDidChange?()
         return id

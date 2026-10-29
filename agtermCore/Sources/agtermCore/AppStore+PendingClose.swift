@@ -89,6 +89,8 @@ extension AppStore {
     /// If the grace expires, `finalizePendingClose` performs the same teardown as `closeSession`.
     @discardableResult
     public func softCloseSession(_ sessionID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
+        let companions = companions(of: sessionID)
+        if !companions.isEmpty { return softCloseSessions([sessionID] + companions.map(\.id), grace: grace) }
         guard let location = location(ofSession: sessionID) else { return false }
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
@@ -137,7 +139,7 @@ extension AppStore {
     /// until the one shared grace timer finalizes, and a single undo restores every session in the group.
     @discardableResult
     public func softCloseSessions(_ sessionIDs: [UUID], grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
-        let targetIDs = Set(sessionIDs)
+        let targetIDs = Set(sessionIDs + sessionIDs.flatMap { companions(of: $0).map(\.id) })
         guard targetIDs.count > 1 else {
             guard let id = sessionIDs.first else { return false }
             return softCloseSession(id, grace: grace)
@@ -172,10 +174,17 @@ extension AppStore {
             _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
         }
         dropLaunchPanes(closes.map(\.session))
+        let closingIDs = Set(closes.map(\.session.id))
         for close in closes {
+            // a companion closing with its parent rides in the parent's entry rather than its own
+            if let parentID = close.session.parentID, closingIDs.contains(parentID) {
+                emitSessionClosed(close.session, workspace: close.workspaceID)
+                continue
+            }
+            let companions = closes.map(\.session).filter { $0.parentID == close.session.id }
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
-                                      id: close.recentID)
+                                      id: close.recentID, companions: companions)
             emitSessionClosed(close.session, workspace: close.workspaceID)
         }
         if removingActive {
@@ -450,9 +459,13 @@ extension AppStore {
         return Workspace(id: id, name: name)
     }
 
-    private func restorePendingSession(_ close: PendingSessionClose) {
+    // a companion whose parent moved since the close follows the parent, or regrouping would detach it
+    @discardableResult
+    private func restorePendingSession(_ close: PendingSessionClose) -> UUID {
         let workspaceIndex: Int
-        if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
+        if let parent = close.session.parentID.flatMap(location(ofSession:)) {
+            workspaceIndex = parent.workspaceIndex
+        } else if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
             workspaceIndex = existing
         } else {
             let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
@@ -467,15 +480,15 @@ extension AppStore {
         // slot that target was sparing comes back marked open with no surface and no program. Reconcile the
         // SAME object being reinserted; a snapshot rebuild (`session(from:)`) carries no pane overlays.
         close.session.dropUnrealizedPaneOverlays()
-        emitSessionCreated(close.session, workspace: close.workspaceID)
+        let workspaceID = workspaces[workspaceIndex].id
+        emitSessionCreated(close.session, workspace: workspaceID)
+        return workspaceID
     }
 
     private func restorePendingSessions(_ close: PendingSessionsClose, selecting requestedSessionID: UUID?) {
-        for session in close.sessions {
-            restorePendingSession(session)
-        }
+        let destinations = Set(close.sessions.map { restorePendingSession($0) })
         // a companion can come back before its parent does, so its group is rebuilt once all are in
-        for workspaceID in Set(close.sessions.map(\.workspaceID)) {
+        for workspaceID in destinations {
             guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { continue }
             workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }

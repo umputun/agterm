@@ -451,7 +451,7 @@ struct WindowContentView: View {
     func primarySurfaceID(_ session: Session) -> String {
         // the revision is not observed, and a fresh attach bumps it with nothing else changing
         _ = ZmxLeadBook.shared.attachments
-        return "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
+        return "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)-\(session.primaryRespawns)"
     }
 
     /// Opacity of the mute wash, shared by the inactive split pane and the backdrop behind a floating panel

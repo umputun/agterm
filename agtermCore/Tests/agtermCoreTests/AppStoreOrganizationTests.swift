@@ -860,13 +860,34 @@ struct AppStoreOrganizationTests {
         let g = try CompanionGroup()
         let (store, work, personal, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
 
-        #expect(store.moveSession(second.id, toWorkspace: work.id, at: 0))
+        #expect(store.moveSession(second.id, toWorkspace: work.id, at: 1))
         #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, second.id, first.id, after.id])
         #expect(store.moveSession(second.id, toWorkspace: work.id))
         #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        #expect(!store.moveSession(second.id, toWorkspace: work.id, at: 0))
+        #expect(!store.moveSession(second.id, toWorkspace: work.id, at: 3))
         #expect(!store.moveSession(first.id, toWorkspace: personal.id))
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
         #expect(store.workspaces[1].sessions.isEmpty)
         #expect(first.parentID == parent.id)
+    }
+
+    @Test func selectedSiblingsReorderAmongThemselvesWithoutTheirParent() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.parent.id).get()
+
+        #expect(g.store.moveSessions([g.first.id, g.second.id], toWorkspace: g.work.id, at: 2) == 2)
+        #expect(g.order == [g.parent.id, third.id, g.first.id, g.second.id, g.after.id])
+        #expect(g.store.moveSessions([g.first.id, g.second.id], toWorkspace: g.work.id, at: 0) == 0)
+        #expect(g.order == [g.parent.id, third.id, g.first.id, g.second.id, g.after.id])
+    }
+
+    @Test func aSingleCompanionMoveCountsOnlyItself() throws {
+        let g = try CompanionGroup()
+
+        #expect(g.store.companions(of: g.first.id).isEmpty)
+        #expect(g.store.moveSessions([g.second.id], toWorkspace: g.work.id, at: 1) == 1)
+        #expect(g.order == [g.parent.id, g.second.id, g.first.id, g.after.id])
     }
 
     @Test func aBatchCarriesCompanionsOnceAndLeavesALoneCompanion() throws {
