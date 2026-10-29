@@ -58,6 +58,16 @@ struct ControlDispatcherCompanionsTests {
         #expect(decoded.cmd == .sessionCompanionDuplicate)
     }
 
+    @Test func companionPageAttachRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .sessionCompanionPageAttach, target: "pg", args: ControlArgs(window: "win")))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionPageAttach(target: "pg", window: "win")])
+    }
+
     @Test func sessionCollapseAndExpandRouteExpandedFlag() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

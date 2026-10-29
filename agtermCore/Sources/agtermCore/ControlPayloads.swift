@@ -134,11 +134,17 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     public let status: String?
     public let statusColor: String?
     public let statusShape: String?
+    /// parent is the far side's parent session of a companion, omitted for a top-level session.
+    public let parent: String?
+    /// content is `page` for a page companion, which has no panes and attaches only under its parent's row.
+    public let content: String?
 
     public init(id: String, name: String, windowID: String, windowName: String, workspaceID: String,
                 workspaceName: String, context: String? = nil, cwd: String, splitAxis: String?,
                 panes: [ControlRemotePane], status: String? = nil, statusColor: String? = nil,
-                statusShape: String? = nil) {
+                statusShape: String? = nil, parent: String? = nil, content: String? = nil) {
+        self.parent = parent
+        self.content = content
         self.id = id
         self.name = name
         self.windowID = windowID

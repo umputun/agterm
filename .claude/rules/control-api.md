@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.page.attach`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -382,6 +382,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
   Creation is never retried or done locally; a created but unattached companion is named in the error. The three
   companion commands are in `waitsOnNetwork`, local ones included.
+- A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view: a
+  per-claim token in `companionPageTokens`, claimed through `claimPageServe` into a `PageServeStream` in companion mode,
+  keyed by claim in `companionPageStreams`. A claim, an expired token, an unanswered reply or EOF ends only that view,
+  never `endRemotePage`; `HtmlOverlayReleases.onServedRelease` at the page's final release ends every view, so a
+  soft-closed page keeps serving through undo. URL pages get the same channel for lifetime only (no bridge), and a
+  loopback URL is refused at both ends. `zmx tree` lists a page companion with no panes when its parent is listed; the
+  Attach Remote picker hides those rows, and `zmx attach` places one only under the single row bound to its parent.
+  The viewer row binds the origin page session so New Companion on it makes a sibling there. `HtmlReplicaLink`
+  keeps the page's own reload and navigation on the viewer's copy; every other bridge request goes to the origin.
+  A channel ending while the viewer row is soft-closed finalizes that row alone (`finalizePendingClose(ofSession:)`),
+  so Undo never restores a view of a page that ended.
 - A Live parent respawned on its origin carries its viewers across. `handlePaneExit` reads the daemon's cached leader
   before `closePrimaryPane` respawns, `ControlServer.ownerRespawned` waits for a different live leader under the same
   name, then counts the respawn in `respawnGenerations` and publishes `pane.respawn`; the snapshot carries every count

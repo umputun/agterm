@@ -30,6 +30,18 @@ struct AppStoreReplicaPageTests {
                          pane: pane, sizePercent: size, follow: follow)
     }
 
+    // closing a viewer's page companion closed its row, whose release closed its page, which closed the row again
+    @Test func aReplicaPageCompanionClosesOnceWithItsPage() throws {
+        let (store, parent) = try attached(split: false)
+        let row = try store.addReplicaPageCompanion(to: parent.id, page: page(), select: false).get()
+        #expect(row.parentID == parent.id && row.content == .page && row.remoteHost == "buildbox")
+
+        #expect(store.closeOverlay(row.id))
+
+        #expect(store.session(withID: row.id) == nil)
+        #expect(store.session(withID: parent.id) != nil)
+    }
+
     @Test func aFilePageIsShownSessionWideUnderItsOwnId() throws {
         let (store, session) = try attached()
 

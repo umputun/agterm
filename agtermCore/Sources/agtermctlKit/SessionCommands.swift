@@ -565,7 +565,7 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
             subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Resize.self, Reload.self, Navigate.self,
-                          Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self]
+                          Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self, PageAttach.self]
         )
 
         static let widthHelp: ArgumentHelp = "Panel content width in points, in place of --size-percent's width (at most 80% of the session)."

@@ -47,6 +47,16 @@ public final class HtmlPageOutcomes {
         _ = finish(id, ControlHtmlPageOutcome(pageID: id.uuidString, outcome: .dismissed))
     }
 
+    /// settle answers pending page `id` the way another Mac answered the page it shows: submitted with that value,
+    /// otherwise dismissed.
+    public func settle(_ id: UUID, like outcome: ControlHtmlPageOutcome?) {
+        if outcome?.outcome == .submitted, let value = outcome?.value {
+            submit(id, value: value)
+        } else {
+            dismiss(id)
+        }
+    }
+
     public func outcome(for id: UUID) -> ControlHtmlPageOutcome? {
         if pending.contains(id) { return ControlHtmlPageOutcome(pageID: id.uuidString, outcome: .pending) }
         return finished.last { $0.id == id }?.outcome

@@ -299,11 +299,14 @@ public final class HtmlOverlayReleases {
     /// onReplicaRelease is told a page shown for another Mac left its slot, with its local and origin ids, so
     /// that Mac can free the page whatever closed it here.
     public var onReplicaRelease: ((_ local: UUID, _ origin: UUID) -> Void)?
+    /// onServedRelease is told any page left its slot, so the channels serving it to other Macs can end.
+    public var onServedRelease: ((UUID) -> Void)?
 
     func release(_ overlay: HtmlOverlay?) {
         guard let overlay else { return }
         HtmlPageOutcomes.shared.dismiss(overlay.id)
         onRelease?(overlay.id)
+        onServedRelease?(overlay.id)
         if let origin = overlay.replicaOf { onReplicaRelease?(overlay.id, origin) }
     }
 }

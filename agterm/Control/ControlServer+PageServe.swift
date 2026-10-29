@@ -39,6 +39,8 @@ final class PageServeStream {
     }
 
     let page: UUID
+    /// companion is set for one attachment of a page companion, whose channel ends nothing but itself.
+    let companion: CompanionPageServing?
     let resourceSlots = PageServeAdmission(limit: ControlServer.pageServeResourceLimit)
     let bridgeSlots = PageServeAdmission(limit: ControlServer.pageServeBridgeLimit)
     private let source: HtmlSource
@@ -51,8 +53,10 @@ final class PageServeStream {
     private let transfers = OSAllocatedUnfairLock(initialState: Transfers())
     private var ending = false
 
-    init(page: UUID, source: HtmlSource, owner: ControlStreamOwner, server: ControlServer) {
+    init(page: UUID, source: HtmlSource, owner: ControlStreamOwner, server: ControlServer,
+         companion: CompanionPageServing? = nil) {
         self.page = page
+        self.companion = companion
         self.source = source
         self.owner = owner
         self.server = server
@@ -102,6 +106,10 @@ final class PageServeStream {
     }
 
     func closed() {
+        if let companion {
+            server?.companionPageStreams[companion.claim] = nil
+            return
+        }
         if server?.pageServeStreams[page] === self { server?.pageServeStreams[page] = nil }
         guard !ending else { return }
         server?.endRemotePage(page)
@@ -115,7 +123,7 @@ final class PageServeStream {
         guard !ending else { return }
         pageLogger.error("ending a page whose channel sent \(reason, privacy: .public)")
         ending = true
-        server?.endRemotePage(page)
+        if companion == nil { server?.endRemotePage(page) }
         shutdown()
     }
 
@@ -179,7 +187,10 @@ final class PageServeStream {
     /// answer resolves the page where it sits now and dispatches in the same main-actor turn, so a request
     /// queued before its page closed or moved never runs against the old place.
     private func answer(id: Int, request: String) async -> PageServeFrame {
-        guard let server, let place = server.remotePagePlace(page) else { return .failure(id: id, error: "page closed") }
+        if companion != nil, case .url = source { return .failure(id: id, error: "a URL page has no bridge") }
+        guard let server, let place = companion.map(server.companionPagePlace) ?? server.remotePagePlace(page) else {
+            return .failure(id: id, error: "page closed")
+        }
         let origin = HtmlBridgePage(window: place.window?.uuidString, session: place.session, pane: place.pane)
         let built: ControlRequest
         switch HtmlBridge.request(from: Data(request.utf8), page: origin) {
@@ -223,6 +234,7 @@ extension ControlServer {
     /// claimPageServe answers `session.overlay.page.serve`: an ok answer is the token's one admitted claim, and the connection
     /// is then adopted as that page's channel.
     func claimPageServe(_ token: String) -> ControlResponse {
+        if let companion = claimCompanionPage(token) { return companion }
         for store in openStores {
             guard let claim = store.claimRemotePage(token: token) else { continue }
             pendingPageClaims[claim.overlay.id] = claim.overlay.source
@@ -233,6 +245,9 @@ extension ControlServer {
 
     /// adoptPageServeStream takes over the connection of a page whose claim was just answered ok.
     func adoptPageServeStream(descriptor: Int32, page: UUID) {
+        if let serving = pendingCompanionClaims.removeValue(forKey: page) {
+            return adoptCompanionPageStream(descriptor: descriptor, serving: serving)
+        }
         let owner = ControlStreamOwner(descriptor: descriptor, limits: Self.pageServeLimits)
         // a page that ended between its claim and this adoption gets no channel
         guard let source = pendingPageClaims.removeValue(forKey: page), remotePagePlace(page) != nil else {
@@ -252,6 +267,8 @@ extension ControlServer {
 
     /// pageClaimUnanswered ends a page whose claim reply never reached the helper, which leaves nobody to load it.
     func pageClaimUnanswered(_ page: UUID) {
+        // a page companion's attachment that never connected leaves the page and its other viewers alone
+        if pendingCompanionClaims.removeValue(forKey: page) != nil { return }
         pendingPageClaims[page] = nil
         endRemotePage(page)
     }

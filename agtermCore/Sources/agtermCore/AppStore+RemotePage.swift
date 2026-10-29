@@ -193,7 +193,8 @@ extension AppStore {
         session.remoteOverlays.slots.compactMap { slot in slot.page.map { (slot.pane, $0) } }
     }
 
-    private static func presentationSource(_ source: HtmlSource) -> PresentationPageSource? {
+    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica.
+    public static func presentationSource(_ source: HtmlSource) -> PresentationPageSource? {
         switch source {
         case .file(let path, let grantRoot): return .file(path: path, grantRoot: grantRoot)
         case .url(let url): return .url(url.absoluteString)

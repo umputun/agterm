@@ -165,6 +165,142 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(runner.invocations.count, 3, "the origin is never asked to end anything")
     }
 
+    func testAPageCompanionOfARemoteRowIsCreatedThereAndShownHereThroughItsOwnChannel() async throws {
+        let runner = ScriptedRunner([origin, reply(id: created), pageAttach(created)])
+        let (server, store, row) = try makeServer(runner)
+        let launcher = FakePageLauncher()
+        server.pageLauncher = launcher
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .file(path: "/srv/report.html", grantRoot: "/srv"), javascript: true)
+
+        let reply = await server.createPageCompanion(row.id.uuidString, window: nil, options: options)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let page = try XCTUnwrap(store.companions(of: row.id).first)
+        XCTAssertEqual(page.content, .page)
+        XCTAssertEqual(page.remoteHost, "buildbox")
+        XCTAssertEqual(page.htmlOverlay?.replicaOf, UUID(uuidString: pageID))
+        XCTAssertEqual(page.remotePresentation?.binding.remoteSessionID, created, "New Companion on the row makes a sibling there")
+        let create = try XCTUnwrap(runner.invocations[1].last)
+        for word in ["overlay", "open", "--companion", "--html", "/srv/report.html", "--cwd", "/srv", "--js"] {
+            XCTAssertTrue(create.contains(word), word)
+        }
+        XCTAssertTrue(try XCTUnwrap(runner.invocations[2].last).contains("page-attach"))
+        let serve = try XCTUnwrap(launcher.launches.last?.last)
+        XCTAssertTrue(serve.contains("page-serve") && serve.contains("tok-1"), "the channel claims the attachment's own token")
+        let local = try XCTUnwrap(reply.result?.pageID.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(local, page.htmlOverlay?.id, "a --block caller polls the view's own page")
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: local)?.outcome, .pending)
+    }
+
+    // a --block caller on a remote page companion had no outcome to read once the page ended there
+    func testThePagesOutcomeThereBecomesTheViewsOutcomeWhenThatMacEndsIt() async throws {
+        let submitted = RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"pageOutcome":{"pageID":"\#(pageID)","#
+                                            + #""outcome":"submitted","value":"yes"}}}"#, stderr: "")
+        let runner = ScriptedRunner([origin, reply(id: created), pageAttach(created), submitted])
+        let (server, store, row) = try makeServer(runner)
+        let launcher = FakePageLauncher()
+        server.pageLauncher = launcher
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .file(path: "/srv/report.html", grantRoot: "/srv"))
+        let reply = await server.createPageCompanion(row.id.uuidString, window: nil, options: options)
+        let local = try XCTUnwrap(reply.result?.pageID.flatMap(UUID.init(uuidString:)))
+
+        launcher.helpers.last?.exit()
+        let deadline = Date().addingTimeInterval(5)
+        while !store.companions(of: row.id).isEmpty, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+
+        XCTAssertTrue(store.companions(of: row.id).isEmpty, "the page ending there closes the view")
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: local), ControlHtmlPageOutcome(pageID: local.uuidString, outcome: .submitted, value: "yes"))
+        XCTAssertTrue(try XCTUnwrap(runner.invocations.last?.last).contains("result"))
+    }
+
+    // a page parked by a soft close kept its row when its page ended there, so Undo brought back a dead page
+    func testAPageEndingThereWhileParkedNeverComesBackOnUndo() async throws {
+        for closesParent in [false, true] {
+            let submitted = RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"pageOutcome":{"pageID":"\#(pageID)","#
+                                                + #""outcome":"submitted","value":"yes"}}}"#, stderr: "")
+            let runner = ScriptedRunner([origin, reply(id: created), pageAttach(created), submitted])
+            let (server, store, row) = try makeServer(runner)
+            let launcher = FakePageLauncher()
+            server.pageLauncher = launcher
+            let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                           page: .file(path: "/srv/report.html", grantRoot: "/srv"))
+            let reply = await server.createPageCompanion(row.id.uuidString, window: nil, options: options)
+            let page = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+            XCTAssertTrue(store.softCloseSession(closesParent ? row.id : page, grace: 600))
+
+            launcher.helpers.last?.exit()
+            let deadline = Date().addingTimeInterval(5)
+            while store.pendingCloseSession(withID: page) != nil, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+
+            XCTAssertNil(store.pendingCloseSession(withID: page), "closesParent \(closesParent)")
+            XCTAssertEqual(store.undoPendingClose(), closesParent, "the parent alone is still undoable")
+            XCTAssertNil(store.session(withID: page))
+            XCTAssertNotNil(store.session(withID: row.id))
+        }
+    }
+
+    func testAPersistentPageNeedsThisMacsBrowserStoreBeforeAnythingIsCreated() async throws {
+        let runner = ScriptedRunner([])
+        let (server, store, row) = try makeServer(runner)
+        let registry = HtmlOverlayRegistry.shared
+        let before = registry.profile
+        defer { registry.profile = before }
+        let broken = stateDir.appendingPathComponent("broken", isDirectory: true)
+        try FileManager.default.createDirectory(at: broken, withIntermediateDirectories: true)
+        try Data("not a uuid".utf8).write(to: broken.appendingPathComponent("browser-profile"))
+        registry.profile = BrowserProfile(directory: broken)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .url(try XCTUnwrap(URL(string: "https://example.com/"))), persistent: true)
+
+        let reply = await server.createPageCompanion(row.id.uuidString, window: nil, options: options)
+
+        XCTAssertTrue(reply.error?.hasPrefix("session.companion.page:") == true, reply.error ?? "")
+        XCTAssertTrue(runner.invocations.isEmpty)
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+    }
+
+    func testALoopbackPageIsRefusedBeforeTheOriginIsAsked() async throws {
+        let runner = ScriptedRunner([])
+        let (server, store, row) = try makeServer(runner)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .url(try XCTUnwrap(URL(string: "http://localhost:3000/"))))
+
+        let reply = await server.createPageCompanion(row.id.uuidString, window: nil, options: options)
+
+        XCTAssertEqual(reply.error, "a loopback page cannot be a companion of a remote session")
+        XCTAssertTrue(runner.invocations.isEmpty)
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+    }
+
+    func testAListedPageRowAttachesOnlyUnderTheOneRowShowingItsParent() async throws {
+        let endpoint = #"{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"}"#
+        let pageRow = #"{"id":"\#(created)","name":"report","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/srv","panes":[],"parent":"origin-1","content":"page"}"#
+        let listing = tree(sessions: session("origin-1") + "," + pageRow)
+        let runner = ScriptedRunner([listing, pageAttach(created), listing])
+        let (server, store, row) = try makeServer(runner)
+        server.pageLauncher = FakePageLauncher()
+        let decoded = try JSONDecoder().decode(ControlZmxEndpoint.self, from: Data(endpoint.utf8))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [:], presentationVersion: nil,
+                                       origin: RemoteBinding.Origin(host: "buildbox", endpoint: decoded, sessionName: "c")),
+                         forSession: row.id)
+
+        let attached = await server.attachRemoteSession(host: "buildbox", session: created, window: nil)
+
+        XCTAssertTrue(attached.ok, attached.error ?? "")
+        XCTAssertEqual(store.companions(of: row.id).first?.content, .page)
+
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let other = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [:], presentationVersion: nil,
+                                       origin: RemoteBinding.Origin(host: "buildbox", endpoint: decoded, sessionName: "c")),
+                         forSession: other.id)
+        let ambiguous = await server.attachRemoteSession(host: "buildbox", session: created, window: nil)
+        XCTAssertEqual(ambiguous.error, "more than one row here shows the page's parent")
+    }
+
     func testAGuiNewCompanionOnARemoteRowCreatesItThroughTheOrigin() async throws {
         let runner = ScriptedRunner([origin, reply(id: created), tree(sessions: session(created))])
         let (server, store, row) = try makeServer(runner)
@@ -194,6 +330,14 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
     }
 
     private var origin: RemoteCommandResult { tree(sessions: session("origin-1")) }
+    private let pageID = "5A1E7C2B-3D4F-4E5A-8B6C-7D8E9F0A1B2C"
+
+    private func pageAttach(_ id: String) -> RemoteCommandResult {
+        RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(id)","parent":"origin-1","companionPage":{"#
+            + #""page":"\#(pageID)","token":"tok-1","source":{"file":{"path":"/srv/report.html","grantRoot":"/srv"}},"#
+            + #""identity":"report.html","chromeless":false,"javascript":true,"navigation":false,"browse":false,"#
+            + #""persistent":false,"follow":false}}}"#, stderr: "")
+    }
 
     private func reply(id: String) -> RemoteCommandResult {
         RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(id)","parent":"origin-1"}}"#, stderr: "")

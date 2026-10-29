@@ -563,19 +563,20 @@
   `RemotePageResourcesTests.swift`, `agtermTests/ControlServerRemotePageTests.swift`,
   `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] the origin creates the page companion through `overlay open --html --companion`; the origin's remote tree
-      reports page companions, which own no daemon, so discovery does not require one for them
-- [ ] the page's identity, source, grant and outcome stay owned by the origin; the viewer presents it as a companion
+- [x] the origin creates the page companion through `overlay open --html --companion`; the origin's remote tree
+      reports page companions, which own no daemon, with no panes and their parent, when the parent is listed
+- [x] the page's identity, source, grant and outcome stay owned by the origin; the viewer presents it as a companion
       row of its remote parent by reusing remote page resource serving and bridge dispatch with a fresh serving token
-      per attach, never the remote overlay reservation lifecycle
-- [ ] viewer close or disconnect releases only that viewer's channel and web view, never `endRemotePage` or a dismiss;
+      per attach (`session.companion.page.attach`), never the remote overlay reservation lifecycle; the page's own
+      reload and navigation act on the viewer's copy, and the viewer row mirrors no status, notify or context
+- [x] viewer close or disconnect releases only that viewer's channel and web view, never `endRemotePage` or a dismiss;
       the page stays available on the origin and can be attached again; closing the page on the origin removes every
       viewer row; a reattach loads a new document, it does not resume the previous viewer's page state
-- [ ] ordinary remote overlay and page cancellation semantics stay unchanged
-- [ ] lift the Task 8 remote refusal
-- [ ] write tests proving the same page stays available on the origin after viewer detach and disconnect, can be
+- [x] ordinary remote overlay and page cancellation semantics stay unchanged
+- [x] lift the Task 8 remote refusal
+- [x] write tests proving the same page stays available on the origin after viewer detach and disconnect, can be
       reattached, and is removed from viewers when closed on the origin
-- [ ] run the new and changed tests - must pass before next task
+- [x] run the new and changed tests - must pass before next task
 
 ### Task 12: Verify acceptance criteria
 - [ ] verify every Overview and Solution Overview requirement is implemented

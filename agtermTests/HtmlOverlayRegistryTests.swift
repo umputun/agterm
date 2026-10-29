@@ -1760,4 +1760,14 @@ final class HtmlOverlayRegistryTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
     }
+
+    func testOnlyAReloadOrNavigationWithNoTargetIsThePagesOwn() {
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload"]))
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.navigate", "args": ["to": "back"]]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "target": "other"]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "args": ["window": "w1"]]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.navigate", "args": ["targets": ["a"], "to": "back"]]))
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "target": NSNull()]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.rename", "args": ["name": "x"]]))
+    }
 }

@@ -33,6 +33,11 @@ struct SessionCompanionsCommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "duplicate", "--no-select"]) }
     }
 
+    @Test func overlayPageAttachSendsTheAttachCommandForTheTarget() throws {
+        let expected = ControlRequest(cmd: .sessionCompanionPageAttach, target: "pg", args: ControlArgs(window: "win"))
+        #expect(try request(["session", "overlay", "page-attach", "--target", "pg", "--window", "win"]) == expected)
+    }
+
     @Test func sessionCollapseAndExpandTargetAParent() throws {
         #expect(try request(["session", "collapse"]) == ControlRequest(cmd: .sessionCollapse, target: "active"))
         let expected = ControlRequest(cmd: .sessionExpand, target: "9f3c", args: ControlArgs(window: "win"))

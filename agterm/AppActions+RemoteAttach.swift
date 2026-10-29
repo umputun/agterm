@@ -56,7 +56,8 @@ extension AppActions {
         Task {
             hud.progress("listing sessions on \(destination)…")
             let listing = await remoteAttacher.remoteTree(host: destination)
-            guard listing.ok, let sessions = listing.result?.remote?.sessions else {
+            // a page companion attaches only under its parent's row, which the picker has no place for
+            guard listing.ok, let sessions = listing.result?.remote?.sessions.filter({ $0.content == nil }) else {
                 hud.fail("\(destination): \(listing.error ?? "no answer")")
                 return
             }

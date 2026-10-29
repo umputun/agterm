@@ -2151,9 +2151,12 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companion</span> requires <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--url</span> and refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--width</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--height</span>; an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> companion takes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span>, which waits on the page's
-                outcome as for any page. A parent attached from another Mac is refused with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions of a remote session are not supported yet</span>. Against an app too old for companions the CLI
-                prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error: the running app is too old for companions</span> and nothing is created.
+                outcome as for any page. Against an app too old for companions the CLI prints
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">error: the running app is too old for companions</span> and nothing is created. On a parent attached from
+                another Mac, that Mac opens the page as its own companion (an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span> path is a path there) and it
+                is shown here under the row through its own channel: closing it here ends only this view, closing it there
+                closes every view, its own reload and navigation act on this view, and the row mirrors no status. A loopback
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--url</span> is refused.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The page and the row end together: when the page closes itself (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">window.close()</span>, a submit) or
@@ -4124,6 +4127,19 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.page.serve</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 The plumbing behind an HTML page shown on another Mac, run by that Mac over <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ssh -T</span> on the origin and not meant to be typed. It claims the page with its single-use <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TOKEN</span> on the local socket and then copies the page's channel both ways untouched: the origin serves the page file, and with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> files inside that folder, and runs the page's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">data-agterm</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agterm.request</span> commands on the origin, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay submit</span> answers the caller there. A token can be claimed once, within 30 seconds; a refused claim exits 1 with the reason on stderr. A page refuses it.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay page-attach [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.companion.page.attach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                The plumbing behind a page companion shown on another Mac, run by that Mac over ssh and not meant to be typed. It
+                hands out one view of the target page companion: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.companionPage</span> carries the page and a
+                single-use token for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">page-serve</span>, claimable once within 30 seconds, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span>
+                names its parent. Each view has its own channel; a view ending ends nothing here, and closing the page here ends
+                every view. A session that is not a page companion and a loopback URL page are refused. A page refuses it.
               </p>
             </div>
           </section>

@@ -184,6 +184,12 @@ final class ControlServer {
     var liveReset: LiveResetCoordinator?
     /// The scheduler's rows for `hooks.list`, wired by `agtermApp` once the controller exists.
     var hookStatus: () -> [ControlHookEntry] = { [] }
+    /// companionPageTokens are page-companion attachments handed to another Mac and not claimed yet, by token.
+    var companionPageTokens: [String: CompanionPageToken] = [:]
+    /// pendingCompanionClaims are claimed attachments whose channel is not adopted yet, by claim id.
+    var pendingCompanionClaims: [UUID: CompanionPageServing] = [:]
+    /// companionPageStreams are the live channels of page-companion attachments, by claim id.
+    var companionPageStreams: [UUID: PageServeStream] = [:]
     /// originEpoch names this app run in respawn counts, so a viewer never reads a restarted counter as older.
     let originEpoch = UUID().uuidString
     /// respawnGenerations counts each session's pane respawns by daemon name, for the presentation snapshot.
@@ -618,6 +624,7 @@ final class ControlServer {
                 .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand, .workspaceFlag,
                 .sessionCollapse, .sessionExpand, .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate,
+                .sessionCompanionPageAttach,
                 .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionRestart, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom,
                 .surfaceCursor,

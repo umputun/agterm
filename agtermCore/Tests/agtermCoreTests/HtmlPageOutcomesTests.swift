@@ -37,6 +37,17 @@ struct HtmlPageOutcomesTests {
         #expect(!session.overlayActive)
     }
 
+    @Test func settleCopiesAnotherMacsSubmissionAndDismissesOtherwise() throws {
+        let answered = try open()
+        outcomes.settle(answered, like: ControlHtmlPageOutcome(pageID: "origin", outcome: .submitted, value: "yes"))
+        #expect(outcomes.outcome(for: answered) == ControlHtmlPageOutcome(pageID: answered.uuidString, outcome: .submitted, value: "yes"))
+
+        store.closeOverlay(session.id)
+        let unknown = try open()
+        outcomes.settle(unknown, like: nil)
+        #expect(state(unknown) == .dismissed)
+    }
+
     @Test func anEmptyOrMultilineValueIsARealAnswer() throws {
         let first = try open()
         #expect(store.submitHtmlOverlay(session.id, pane: nil, value: "") == nil)

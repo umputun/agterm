@@ -8,6 +8,8 @@ extension ControlDispatcher {
         case .sessionCompanionDuplicate:
             return await actions.duplicateAsCompanion(request.target, window: request.args?.window,
                                                       select: request.args?.noSelect != true)
+        case .sessionCompanionPageAttach:
+            return actions.attachCompanionPage(request.target, window: request.args?.window)
         case .sessionCollapse:
             return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: false)
         case .sessionExpand:

@@ -1040,7 +1040,7 @@ error keeps those names for compatibility.
   batch is used as given, and `zmx.attach`, `dashboard` and `recent open` keep their ids and still land in
   the page's window. A page's `reload` defaults to `--current`. `sidebar` and `sidebar.mode` act on the
   frontmost window. Refused from a page: `zmx.present`, `zmx.reset`, `session.overlay.job.run`,
-  `session.overlay.page.serve`, and any
+  `session.overlay.page.serve`, `session.companion.page.attach`, and any
   request from a frame. Escape outside text you put in a page: it can run commands.
 - `session overlay open --url URL [--navigation | --chromeless] [--js] [--persistent] [--browse] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a web page by URL in the overlay slot, typically a dev server you are running
@@ -1087,9 +1087,14 @@ error keeps those names for compatibility.
   takes `--block`, which waits on the page's outcome as for any page. Wire
   command `session.companion.page`, target the parent (a companion target means its parent); the parent's
   own overlay slot is never touched. Returns `result.id` (the new companion; the human output prints it),
-  `result.parent`, and `result.pageID` for `session overlay result --page`. Errors as on
-  `session new --parent`: `companions of a remote session are not supported yet`, and against an app too
-  old for companions `error: the running app is too old for companions`, with nothing created.
+  `result.parent`, and `result.pageID` for `session overlay result --page`. Against an app too old for
+  companions the CLI prints `error: the running app is too old for companions`, with nothing created.
+  On a parent attached from another Mac, that Mac opens the page as its own companion (a `--html` path is a
+  path there) and it is shown here under the row, through its own channel; closing it here ends only this
+  view, and closing it there closes every view. Each view has its own browser state, and the page's own
+  reload and navigation act on that view; its other commands run on the other Mac. The row mirrors no
+  status, notification or context. A loopback `--url` is refused, since it names a server on the other Mac.
+  `zmx attach HOST ID` shows a page companion again under the one row here attached to its parent.
   The page and the row end together: when the page closes itself (`window.close()`, a submit) or
   `session overlay close` runs on it, the row closes at once. The strip's close button and ⌘W close it like
   any session, with the close confirmation setting and the grace-period undo. A page companion is never

@@ -70,7 +70,18 @@ extension ControlServer {
     }
 
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
+        if case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: window),
+           store.session(withID: id)?.remoteHost != nil {
+            // the page would load the origin's loopback here, where nothing answers for it
+            if case .url(let url) = options.page, HtmlSource.isLoopback(url.absoluteString) {
+                return ControlResponse(ok: false, error: "a loopback page cannot be a companion of a remote session")
+            }
+            if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
+                return ControlResponse(ok: false, error: "session.companion.page: \(failure)")
+            }
+            return await createRemoteCompanion(.page(options), of: id, in: store, select: options.follow)
+        }
+        return resolver.resolveSession(target, window: window) { store, id in
             guard let page = options.page else { return ControlResponse(ok: false, error: "a page companion needs --html or --url") }
             if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
                 return ControlResponse(ok: false, error: "session.companion.page: \(failure)")

@@ -17,6 +17,8 @@ public protocol ControlActions {
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
     /// Creates a companion copying the target's layout and running another copy of each pane's program.
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
+    /// Hands out one attachment of the target page companion to another Mac.
+    func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.
     func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func selectSession(_ target: String?, window: String?) -> ControlResponse
@@ -280,7 +282,7 @@ public struct ControlDispatcher {
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
-        case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCollapse, .sessionExpand:
+        case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
             return await dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,

@@ -183,6 +183,9 @@ final class HtmlReplicaRevision {
 /// HtmlReplicaLink is how a file page shown for another Mac reaches that Mac: `fetch` its files, for the load
 /// `HtmlReplicaRevision` names, and `bridge` its requests, answered with the reply JSON text that Mac sent.
 struct HtmlReplicaLink {
+    /// ownPageCommandsLocal keeps a page's reload and navigation of itself on this Mac: a page companion's viewers each
+    /// show their own copy, so those act on the copy that asked.
+    var ownPageCommandsLocal = false
     let fetch: @MainActor @Sendable (_ path: String, _ revision: HtmlReplicaRevision) async throws -> HtmlPageResource
     let bridge: @MainActor @Sendable (_ request: Data) async throws -> String
 }
@@ -344,7 +347,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             return reply(nil, "invalid request")
         }
         // a page shown for another Mac acts there, so its request goes as sent and that Mac fills the defaults
-        if let bridge = replica?.bridge {
+        if let replica, !(replica.ownPageCommandsLocal && Self.addressesOwnPage(body)) {
+            let bridge = replica.bridge
             Task {
                 do {
                     let (value, error) = HtmlOverlayBridge.reply(raw: try await bridge(data))
@@ -367,6 +371,16 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             let (value, error) = HtmlOverlayBridge.reply(await dispatch(request))
             reply(value, error)
         }
+    }
+
+    /// addressesOwnPage is a reload or navigation that names no target, batch or window, which the page means for
+    /// itself; an explicit null counts as absent, as the bridge reads it.
+    static func addressesOwnPage(_ body: Any) -> Bool {
+        guard let request = body as? [String: Any], let command = request["cmd"] as? String,
+              ["session.overlay.reload", "session.overlay.navigate"].contains(command) else { return false }
+        let args = request["args"] as? [String: Any]
+        let named = [request["target"], args?["targets"], args?["window"]].contains { $0 != nil && !($0 is NSNull) }
+        return !named
     }
 
     private var themed: Bool { Self.themed(overlay.source, linked: replica != nil) }

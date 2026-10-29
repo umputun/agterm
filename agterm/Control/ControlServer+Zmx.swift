@@ -200,6 +200,7 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let (_, resolved)): store = resolved
         }
+        if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store) }
         guard let workspace = store.currentWorkspaceID else {
             return ControlResponse(ok: false, error: "no window to attach into")
         }

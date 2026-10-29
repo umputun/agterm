@@ -44,7 +44,8 @@ public struct HtmlBridgeError: Error, Equatable, Sendable {
 /// window or batch resolves exactly as it would over the socket.
 public enum HtmlBridge {
     // each needs more than one request and reply: a stream handed over, or work done after the reply
-    private static let refused: Set<Command> = [.zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe, .zmxReset]
+    private static let refused: Set<Command> = [.zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe, .zmxReset,
+                                                .sessionCompanionPageAttach]
     // commands that address no session, or address it some other way than by `target`
     private static let notSessionTargeted: Set<Command> = [.sessionNew, .sessionGo, .sessionOverlayJobRun,
                                                                   .sessionOverlayPageServe]

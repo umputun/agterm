@@ -35,7 +35,7 @@ extension ControlServer {
         let channel = argv.map { _ in RemotePageChannel() }
         replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
-                                            replica: channel.map(Self.link))
+                                            replica: channel.map { Self.link($0) })
         if let channel, let argv {
             channel.onClose = { [weak store] in store?.closeHtmlOverlay(local) }
             channel.start(argv, launcher: pageLauncher)
@@ -99,8 +99,9 @@ extension ControlServer {
         }
     }
 
-    private static func link(_ channel: RemotePageChannel) -> HtmlReplicaLink {
+    static func link(_ channel: RemotePageChannel, ownPageCommandsLocal: Bool = false) -> HtmlReplicaLink {
         HtmlReplicaLink(
+            ownPageCommandsLocal: ownPageCommandsLocal,
             fetch: { [weak channel] path, revision in
                 guard let channel else { throw RemotePageChannel.Failure.closed }
                 let asked = revision.value
