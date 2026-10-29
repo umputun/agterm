@@ -591,7 +591,7 @@
 - [x] update README.md if the synopsis should mention companions, `site/index.html` major features and the
       `site/llms.txt` discovery index
 - [x] update CLAUDE.md and `.claude/rules/*.md` for new patterns
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
