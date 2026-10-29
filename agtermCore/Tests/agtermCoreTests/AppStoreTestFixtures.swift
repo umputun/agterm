@@ -18,6 +18,35 @@ import Foundation
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
 }
 
+/// A parent with two companions and one top-level session after it in "work", plus an empty "personal".
+@MainActor struct CompanionGroup {
+    let store: AppStore
+    let work: Workspace
+    let personal: Workspace
+    let parent: Session
+    let first: Session
+    let second: Session
+    let after: Session
+
+    init() throws {
+        store = makeStore()
+        work = store.addWorkspace(name: "work")
+        personal = store.addWorkspace(name: "personal")
+        guard let parent = store.addSession(toWorkspace: work.id, cwd: "/parent"),
+              let after = store.addSession(toWorkspace: work.id, cwd: "/after") else { throw CompanionGroupFailure.setup }
+        self.parent = parent
+        self.after = after
+        first = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/first")).get()
+        second = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/second")).get()
+    }
+
+    var order: [UUID] { store.workspaces[0].sessions.map(\.id) }
+}
+
+enum CompanionGroupFailure: Error {
+    case setup
+}
+
 final class SpySurface: PaneRoleMutableSurface {
     var teardownCount = 0
     var promotedCount = 0

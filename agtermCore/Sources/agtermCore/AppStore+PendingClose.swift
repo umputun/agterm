@@ -459,7 +459,7 @@ extension AppStore {
             workspaces.insert(rebuiltWorkspaceShell(id: close.workspaceID, name: close.workspaceName), at: insertAt)
             workspaceIndex = insertAt
         }
-        let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
+        let insertAt = insertionIndex(for: close.session, near: close.sessionIndex, in: workspaces[workspaceIndex].sessions)
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
         // the deck's `dropUnrealizedPaneOverlays` watchers are unmounted while the session sits outside the
         // tree, and `.onChange` does not fire on the remount, so the last host of a pane overlay can go away
@@ -473,6 +473,11 @@ extension AppStore {
     private func restorePendingSessions(_ close: PendingSessionsClose, selecting requestedSessionID: UUID?) {
         for session in close.sessions {
             restorePendingSession(session)
+        }
+        // a companion can come back before its parent does, so its group is rebuilt once all are in
+        for workspaceID in Set(close.sessions.map(\.workspaceID)) {
+            guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { continue }
+            workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }
         let target = requestedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
             ?? close.selectedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }

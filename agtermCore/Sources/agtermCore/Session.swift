@@ -76,6 +76,11 @@ public final class Session: Identifiable {
     public var flagged: Bool = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
+    /// The session this one is a companion of, nil for a top-level session. Set once by the store at
+    /// creation; a companion stays under the same parent for life.
+    public internal(set) var parentID: UUID?
+    /// Whether a parent row shows its companions in the sidebar; persisted as `SessionSnapshot.collapsed`.
+    public var isExpanded = true
 
     /// Local context, persisted for local sessions; clearing reveals any mirrored context.
     public var context: String?

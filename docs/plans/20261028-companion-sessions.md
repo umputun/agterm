@@ -165,8 +165,8 @@
   never reruns its command. The store bumps an observed host invalidation so the deck remounts the primary host,
   since `surface` and `primarySurfaceHostRevision` are observation-ignored and a nil surface alone remounts nothing.
 - `SessionSnapshot.parentID: UUID?` optional, encoded only when set. Restore validates: a parent id naming no
-  restored session in the same workspace, or naming a companion, is dropped with an `os.Logger` warning, the only
-  case a companion becomes top level (corrupt or hand-edited state).
+  restored session in the same workspace, or naming a companion, is dropped (agtermCore has no logger and must
+  build for the Linux fork), the only case a companion becomes top level (corrupt or hand-edited state).
 - `Session.isExpanded` for parents, persisted as `SessionSnapshot.collapsed` written only when true, matching
   `WorkspaceSnapshot.collapsed`.
 - Content kind (stage 2): `Session.content: SessionContent` with `.terminal` (default) and `.page(HtmlOverlay
@@ -237,21 +237,21 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`, `AppStoreOrganizationTests.swift`,
   `SnapshotRoundTripTests.swift`, `AppStoreRestoreTests.swift`, `ReorderTests.swift`
 
-- [ ] add `parentID` and `isExpanded` to `Session` and a store entry point that creates a companion right after
+- [x] add `parentID` and `isExpanded` to `Session` and a store entry point that creates a companion right after
       the parent's last companion, resolving a companion target to its parent; refuse a remote parent until Task 10
-- [ ] enforce the invariants in the store: one level, same workspace, contiguous group, sibling-only reorder
-- [ ] route every move entry point (`moveSession`, `moveSessions`, placement, reorder) through group-aware logic:
+- [x] enforce the invariants in the store: one level, same workspace, contiguous group, sibling-only reorder
+- [x] route every move entry point (`moveSession`, `moveSessions`, placement, reorder) through group-aware logic:
       a parent carries its companions, a companion is refused outside its sibling range, multi-selection holding a
       parent and its companions is deduplicated
-- [ ] normalize every index-based insertion so it lands outside any group (see Technical Details: `addSession(at:)`,
+- [x] normalize every index-based insertion so it lands outside any group (see Technical Details: `addSession(at:)`,
       `--after/--before`, after-current placement, plain Duplicate, undo and reopen of a top-level session)
-- [ ] persist `parentID` and parent `collapsed` as optional snapshot fields; on restore drop invalid links and
+- [x] persist `parentID` and parent `collapsed` as optional snapshot fields; on restore drop invalid links and
       regroup a hand-edited order so each companion sits right after its parent
-- [ ] write tests for creation, invariants, group moves, refusals and dedup
-- [ ] write tests for each insertion path landing after a group, and a top-level `reorderSession .down` stepping
+- [x] write tests for creation, invariants, group moves, refusals and dedup
+- [x] write tests for each insertion path landing after a group, and a top-level `reorderSession .down` stepping
       past a whole group
-- [ ] write tests for snapshot round trip, legacy decode, and restore of invalid links
-- [ ] run the new and changed test suites with `swift test --filter` - must pass before next task
+- [x] write tests for snapshot round trip, legacy decode, and restore of invalid links
+- [x] run the new and changed test suites with `swift test --filter` - must pass before next task
 
 ### Task 3: Group close, parent shell respawn, undo and Reopen Recent
 

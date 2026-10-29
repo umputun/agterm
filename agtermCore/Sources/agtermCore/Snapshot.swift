@@ -204,6 +204,10 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var splitRestoreCommand: String?
     /// `Session.lastSelectedAt` as epoch seconds; nil when no selection timestamp has been recorded.
     public var lastSelectedAt: Double?
+    /// The parent session's id for a companion; nil for a top-level session.
+    public var parentID: UUID?
+    /// Whether a parent row is folded; written only when true, so an unfolded tree matches a legacy snapshot.
+    public var collapsed: Bool?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,
                 customName: String?, cwd: String, isSplit: Bool? = nil, hasSplit: Bool? = nil,
@@ -214,8 +218,11 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
-                context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil) {
+                context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil,
+                parentID: UUID? = nil, collapsed: Bool? = nil) {
         self.id = id
+        self.parentID = parentID
+        self.collapsed = collapsed
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
         self.customName = customName
@@ -247,7 +254,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
-        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint
+        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -283,6 +290,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
         lastSelectedAt = (try? c.decodeIfPresent(Double.self, forKey: .lastSelectedAt)) ?? nil
         tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
+        parentID = (try? c.decodeIfPresent(UUID.self, forKey: .parentID)) ?? nil
+        collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil

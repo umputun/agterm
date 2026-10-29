@@ -56,7 +56,8 @@ extension AppStore {
                         splitRestoreCommand: session.splitRestoreCommand,
                         context: session.context,
                         lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
-                        tint: session.tint)
+                        tint: session.tint, parentID: session.parentID,
+                        collapsed: session.isExpanded ? nil : true)
     }
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
@@ -94,6 +95,8 @@ extension AppStore {
         session.flagged = snapshot.flagged ?? false
         session.context = snapshot.context
         session.tint = snapshot.tint
+        session.parentID = snapshot.parentID
+        session.isExpanded = !(snapshot.collapsed ?? false)
         session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false
@@ -120,7 +123,8 @@ extension AppStore {
     }
 
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
-        Workspace(id: snapshot.id, name: snapshot.name, sessions: snapshot.sessions.map { session(from: $0) },
+        Workspace(id: snapshot.id, name: snapshot.name,
+                  sessions: Self.regroupedCompanions(snapshot.sessions.map { session(from: $0) }),
                   isExpanded: !(snapshot.collapsed ?? false), tint: snapshot.tint)
     }
 
@@ -153,6 +157,9 @@ extension AppStore {
             restored.append(Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
                                       isExpanded: !(workspaceSnapshot.collapsed ?? false),
                                       tint: workspaceSnapshot.tint))
+        }
+        for index in workspaces.indices {
+            workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag and `sidebar.width` clamp to the same bounds.

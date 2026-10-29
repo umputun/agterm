@@ -30,7 +30,7 @@ extension AppStore {
                 index = insertAt
             }
             let session = session(from: recent.snapshot)
-            let insertAt = max(0, min(recent.sessionIndex, workspaces[index].sessions.count))
+            let insertAt = insertionIndex(for: session, near: recent.sessionIndex, in: workspaces[index].sessions)
             workspaces[index].sessions.insert(session, at: insertAt)
             emitSessionCreated(session, workspace: workspaces[index].id)
             appendFlaggedArrivals()

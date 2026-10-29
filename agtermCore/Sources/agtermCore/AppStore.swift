@@ -496,7 +496,7 @@ public final class AppStore {
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
-                           remoteHost: String? = nil, tint: SidebarTint? = nil) -> Session? {
+                           remoteHost: String? = nil, tint: SidebarTint? = nil, parentID: UUID? = nil) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // both reach a custom command's expansion — cwd through initialCwd, name through customName — so
         // both are sanitized here. See TerminalText.
@@ -507,8 +507,10 @@ public final class AppStore {
         session.initialCommand = command
         session.commandWait = wait
         session.tint = tint
-        if let index {
-            let destination = max(0, min(index, workspaces[wsIndex].sessions.count))
+        session.parentID = parentID
+        let parentIndex = parentID.flatMap { id in workspaces[wsIndex].sessions.firstIndex { $0.id == id } }
+        if let index = index ?? parentIndex.map({ Self.groupEnd(from: $0, in: workspaces[wsIndex].sessions) }) {
+            let destination = insertionIndex(for: session, near: index, in: workspaces[wsIndex].sessions)
             workspaces[wsIndex].sessions.insert(session, at: destination)
         } else {
             workspaces[wsIndex].sessions.append(session)
@@ -648,70 +650,6 @@ public final class AppStore {
         }
         dropFromFlaggedOrder(workspace.sessions.map(\.id))
         save()
-    }
-
-    /// Moves a session to another workspace (or reorders within one), keeping the **same** `Session` instance
-    /// so its attached surface and live shell survive. `index` is the destination position **after** the
-    /// move's removal (clamped); nil appends. `selectedSessionID` is unaffected — the id is stable. No-ops on
-    /// an unknown session or target workspace, and a same-workspace move to the current slot leaves order
-    /// unchanged. Moving the **active** session out of the marked set suspends the focus filter while KEEPING
-    /// the set (the auto-reveal contract: the active session must stay inside the visible set); a non-active
-    /// session leaves the filter intact.
-    public func moveSession(_ sessionID: UUID, toWorkspace targetID: UUID, at index: Int? = nil) {
-        guard let source = location(ofSession: sessionID) else { return }
-        guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return }
-        let before = workspaces.map { $0.sessions.map(\.id) }
-
-        let session = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
-        let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count, workspaces[targetIndex].sessions.count))
-        workspaces[targetIndex].sessions.insert(session, at: destination)
-        if sessionID == selectedSessionID { disableFocusIfSelectionOutsideSet(sessionID) }
-        pruneSidebarSelection()
-        if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
-        save()
-    }
-
-    /// Moves selected sessions in their current tree order. With `index == nil`, a multi-session move appends
-    /// cross-workspace sessions and leaves those already in the target in place; a one-session call matches
-    /// `moveSession` and appends even within that workspace. With an explicit `index` (a drag drop), every
-    /// dragged session is removed first, then the block inserted at that post-removal index. Returns the count.
-    @discardableResult
-    public func moveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) -> Int {
-        guard workspaces.contains(where: { $0.id == targetID }) else { return 0 }
-        let before = workspaces.map { $0.sessions.map(\.id) }
-        var movingIDs = orderedSessionIDs(matching: Set(sessionIDs))
-        // a one-element batch stays wire-equivalent to `moveSession`, so only multi-selection filters
-        if index == nil, movingIDs.count > 1 {
-            movingIDs = movingIDs.filter { workspace(forSession: $0)?.id != targetID }
-        }
-        guard !movingIDs.isEmpty else { return 0 }
-
-        var moving: [Session] = []
-        for id in movingIDs {
-            guard let location = location(ofSession: id) else { continue }
-            moving.append(workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex))
-        }
-        guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }), !moving.isEmpty else {
-            pruneSidebarSelection()
-            return 0
-        }
-        let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count,
-                                     workspaces[targetIndex].sessions.count))
-        workspaces[targetIndex].sessions.insert(contentsOf: moving, at: destination)
-        if let selectedSessionID, movingIDs.contains(selectedSessionID) { disableFocusIfSelectionOutsideSet(selectedSessionID) }
-        pruneSidebarSelection()
-        if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
-        save()
-        return moving.count
-    }
-
-    /// Reorders a session one step within its own workspace (`up`/`down`/`top`/`bottom`) via `moveSession`.
-    /// No-op (no write) on an unknown id or when the move would leave order unchanged (already at that end).
-    public func reorderSession(_ id: UUID, _ direction: ReorderDirection) {
-        guard let loc = location(ofSession: id) else { return }
-        let count = workspaces[loc.workspaceIndex].sessions.count
-        guard let dest = direction.destinationIndex(from: loc.sessionIndex, count: count) else { return }
-        moveSession(id, toWorkspace: workspaces[loc.workspaceIndex].id, at: dest)
     }
 
     /// Moves a workspace to `index` among its siblings, mirroring `moveSession`'s remove/clamp/insert/save
@@ -933,7 +871,7 @@ public final class AppStore {
         return nil
     }
 
-    private func orderedSessionIDs(matching ids: Set<UUID>) -> [UUID] {
+    func orderedSessionIDs(matching ids: Set<UUID>) -> [UUID] {
         workspaces.flatMap(\.sessions).map(\.id).filter { ids.contains($0) }
     }
 

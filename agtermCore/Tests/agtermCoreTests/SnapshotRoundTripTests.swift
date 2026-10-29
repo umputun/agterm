@@ -407,6 +407,53 @@ struct SnapshotRoundTripTests {
         #expect(snap.lastSelectedAt == nil)
     }
 
+    @Test func companionLinksAndParentFoldRoundTripThroughSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: ws.id, cwd: "/parent"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        parent.isExpanded = false
+
+        let snapshot = store.snapshot()
+        let restored = makeStore()
+        restored.restore(from: snapshot)
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [parent.id, companion.id])
+        #expect(sessions[1].parentID == parent.id)
+        #expect(!sessions[0].isExpanded)
+        #expect(sessions[1].isExpanded)
+        #expect(snapshot.workspaces[0].sessions[1].collapsed == nil)
+    }
+
+    @Test func snapshotWithoutCompanionFieldsDecodesATopLevelExpandedSession() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","parentID":42,"customName":"keep"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.parentID == nil)
+        #expect(snap.collapsed == nil)
+        #expect(snap.customName == "keep")
+    }
+
+    @Test func restoreDropsAnInvalidCompanionLinkAndRegroupsAHandEditedOrder() {
+        let parent = UUID()
+        let companion = UUID()
+        let orphan = UUID()
+        let other = UUID()
+        let snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: companion, customName: nil, cwd: "/c", parentID: parent),
+            SessionSnapshot(id: other, customName: nil, cwd: "/o"),
+            SessionSnapshot(id: parent, customName: nil, cwd: "/p"),
+            SessionSnapshot(id: orphan, customName: nil, cwd: "/x", parentID: UUID()),
+        ])])
+        let store = makeStore()
+
+        store.restore(from: snapshot)
+
+        let sessions = store.workspaces[0].sessions
+        #expect(sessions.map(\.id) == [other, parent, companion, orphan])
+        #expect(sessions.map(\.parentID) == [nil, nil, parent, nil])
+    }
+
     @Test func snapshotWithoutContextDecodesNil() throws {
         let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
