@@ -52,6 +52,10 @@ extension WindowLibrary {
         return nil
     }
 
+    public func attentionLabel(_ entry: AttentionEntry) -> String {
+        stores[entry.window.id]?.listLabel(for: entry.session) ?? entry.session.displayName
+    }
+
     /// The row subtitle every attention surface shares: "`workspace` · detail" as the per-window lists
     /// read, led by the window name once more than one window is open, since only then does a row need
     /// to say where it lives.

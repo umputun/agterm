@@ -254,7 +254,7 @@ extension AppActions {
     /// leads with the owning workspace, telling same-named sessions apart and searchable, then `subtitleDetail`.
     func paletteSessions() -> [PaletteItem] {
         guard let store else { return [] }
-        return store.navigableSessions.map { paletteItem(for: $0, in: store) }
+        return store.listOrdered(store.navigableSessions).map { paletteItem(for: $0, in: store) }
     }
 
     /// Every open window's non-idle sessions as palette items (`.attention` mode), in the library's order so
@@ -265,7 +265,7 @@ extension AppActions {
         library.attentionAcrossWindows.map { entry in
             let windowID = entry.window.id
             let sessionID = entry.session.id
-            return PaletteItem(id: sessionID.uuidString, title: entry.session.displayName,
+            return PaletteItem(id: sessionID.uuidString, title: library.attentionLabel(entry),
                                subtitle: library.attentionSubtitle(entry),
                                indicator: { [weak session = entry.session] in session?.agentIndicator ?? AgentIndicator() },
                                isEnabled: { [weak self] in
@@ -277,13 +277,13 @@ extension AppActions {
         }
     }
 
-    /// Maps one session to a palette row — title `displayName`, subtitle "`workspace` · `subtitleDetail`", run
+    /// Maps one session to a palette row — title `listLabel`, subtitle "`workspace` · `subtitleDetail`", run
     /// selects it.
     private func paletteItem(for session: Session, in store: AppStore) -> PaletteItem {
         let id = session.id
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
+        return PaletteItem(id: id.uuidString, title: store.listLabel(for: session), subtitle: subtitle,
                            indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
                            run: { [weak self] in
             guard self?.uiActionsEnabled == true else { return }
@@ -355,7 +355,7 @@ extension AppActions {
         return store.workspaces.flatMap { workspace in
             workspace.sessions.map { session in
                 let id = session.id
-                return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: workspace.name,
+                return PaletteItem(id: id.uuidString, title: store.listLabel(for: session), subtitle: workspace.name,
                                    indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
                                    isEnabled: { [weak self, weak store] in
                                        self?.uiActionsEnabled == true && store?.session(withID: id) != nil

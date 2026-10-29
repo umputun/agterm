@@ -341,16 +341,18 @@
   `agtermTests/SidebarFlaggedLayoutTests.swift`, `agtermTests/DashboardViewTests.swift`,
   `agtermUITests/SessionSwitcherUITests.swift`, `agtermUITests/RecentSessionsButtonUITests.swift`
 
-- [ ] add `AppStore.listLabel(for:)` and use it in ⌃P, ⌃Tab, attention palette, clock and bell popovers, Dock menu,
+- [x] add `AppStore.listLabel(for:)` and use it in ⌃P, ⌃Tab, attention palette, clock and bell popovers, Dock menu,
       dashboard tiles and all three flagged layouts; the ordinary tree sidebar, rename and Copy Name stay bare
-- [ ] keep ⌃P's empty query grouped: `paletteSessions` emits groups in A-Z parent order with each parent followed
+- [x] keep ⌃P's empty query grouped: `paletteSessions` emits groups in A-Z parent order with each parent followed
       by its companions, and `Palette.updateFiltered` keeps the supplied order for an empty sessions query only;
       non-empty queries stay fuzzy-ranked; MRU and attention orderings are unchanged
-- [ ] write tests for the label formatter (top level, companion, parent renamed)
-- [ ] write hosted tests for palette rows, rendered empty-query order with two identically named parents, Dock
+- [x] write tests for the label formatter (top level, companion, parent renamed)
+- [x] write hosted tests for palette rows, rendered empty-query order with two identically named parents, Dock
       entries, flagged layout labels and dashboard tiles
-- [ ] write tests for the label in ⌃Tab, the attention palette and the clock and bell popovers
-- [ ] run the new and changed tests - must pass before next task
+- [x] write tests for the label in ⌃Tab, the attention palette and the clock and bell popovers
+      (attention palette hosted; popovers in a UI test whose run waits for approval; ⌃Tab has no observable
+      seam, since XCUITest releases Control at once, and rests on `listLabel`'s tests)
+- [x] run the new and changed tests - must pass before next task
 
 ### Task 6: Control API, CLI, skill and docs for terminal companions
 

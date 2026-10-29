@@ -258,9 +258,13 @@ paths:
   and Enter target cannot diverge; sort by score then title. Built-in palettes match label plus subtitle;
   caller-supplied pickers match the label only, so subtitle consequence text cannot filter a safe row out
   and leave a destructive one preselected. Ctrl-P opens sessions; Ctrl-Shift-P opens actions.
-- An empty query skips ranking in three cases: attention mode, the two membership editors, and a
+- An empty query skips ranking in four cases: attention mode, ⌃P sessions, the two membership editors, and a
   caller-supplied picker. All keep their source order, because every row scores 0 and the tie-break would
-  re-sort A→Z and replace the row Return runs. Every other palette lists everything A→Z.
+  re-sort A→Z and replace the row Return runs. ⌃P's source order is `AppStore.listOrdered`: A→Z by label,
+  each parent followed by its companions. Every other palette lists everything A→Z.
+- Flat session lists title a companion `parent › child` through `AppStore.listLabel(for:)`: ⌃P, ⌃Tab, the
+  attention palette, both titlebar popovers, the Dock menu, dashboard captions, the flagged editor and every
+  flagged layout. The sidebar tree, rename and Copy Name keep the bare `displayName`.
 - Edit Flagged Sessions (`.flaggedEditor`) lists every session of the frontmost window in tree order, focus-hidden
   ones included; Edit Focused Workspaces (`.focusEditor`) lists every workspace. Both are `keepsOpenOnRun`:
   Return or a click toggles the row through `setFlag`/`setFocusMembership` and the palette stays open on the same

@@ -257,9 +257,8 @@ extension WorkspaceSidebar.Coordinator {
         return btn
     }
 
-    /// The row's label: the session `displayName` in tree mode, or `session : workspace` (the session
-    /// name then its owning workspace name) in the `flat` flagged layout, so a flagged row from a different
-    /// workspace stays distinguishable. The cell path (`cellForRow`) only has the node id, so it resolves
+    /// The row's label: the session `displayName` in tree mode, its `listLabel` in the flagged layouts, and
+    /// `label : workspace` in the `flat` one, so a flagged row from a different workspace stays distinguishable. The cell path (`cellForRow`) only has the node id, so it resolves
     /// the session by id (and the workspace only in flagged mode, where the name is shown — tree mode
     /// skips that O(n) scan); the reconcile path passes the already-loaded session + name (see
     /// `rowLabel(for:workspaceName:)`) to stay off the O(n) lookups.

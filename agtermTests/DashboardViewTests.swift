@@ -79,6 +79,22 @@ final class DashboardViewTests: XCTestCase {
         XCTAssertTrue((session.surface as? GhosttySurfaceView)?.requestSpawnPermit() ?? false)
     }
 
+    func testACompanionCaptionNamesItsParent() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp", name: "api"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "logs")).get()
+        let dashboard = DashboardView(
+            controller: DashboardController(), store: store,
+            makeSurface: { _ in GhosttySurfaceView(workingDirectory: "/tmp") },
+            makeSplitSurface: { _ in GhosttySurfaceView(workingDirectory: "/tmp") },
+            highlightColor: .white, captionBackground: .black, pillColor: .gray, pillTextColor: .white,
+            focusAllowed: false, showsTopHairline: false, onClick: { _ in }, onSelect: { _ in }, onClose: {})
+
+        XCTAssertEqual(dashboard.captionText(for: DashboardMember(session: companion.id, surface: .primary), session: companion),
+                       "api › logs")
+        XCTAssertEqual(dashboard.captionText(for: DashboardMember(session: parent.id, surface: .primary), session: parent), "api")
+    }
+
     /// Mounts the real view: its `onChange(initial:)` is the only production call, so this is what goes red
     /// when that modifier is dropped. The window is 2 points wide so every cell lays out at zero size and
     /// the one grant fired here parks on the size guard instead of spawning a shell in the test host.

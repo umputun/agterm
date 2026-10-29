@@ -154,6 +154,22 @@ final class SidebarFlaggedLayoutTests: XCTestCase {
         XCTAssertEqual(sidebar.rows, ["s:a1", "s:c1"])
     }
 
+    func testEveryFlaggedLayoutNamesACompanionAfterItsParentAndTheTreeDoesNot() throws {
+        let store = try seededStore()
+        let a1 = try XCTUnwrap(store.workspaces.first?.sessions.first)
+        let log = try store.addCompanion(to: a1.id, options: CompanionOptions(name: "log", select: false)).get()
+        store.setFlag(true, forSession: log.id)
+        let sidebar = mount(store)
+        XCTAssertTrue(sidebar.rows.contains("s:log"), "\(sidebar.rows)")
+
+        store.setSidebarMode(.flagged)
+        for (layout, row) in [(FlaggedViewLayout.plain, "s:a1 › log"), (.flat, "s:a1 › log : Alpha"), (.tree, "s:a1 › log")] {
+            model.setFlaggedViewLayout(layout)
+            sidebar.update()
+            XCTAssertTrue(sidebar.rows.contains(row), "\(layout): \(sidebar.rows)")
+        }
+    }
+
     func testSwitchBetweenTheFlatFormsRelabelsAMountedSidebar() throws {
         let store = try seededStore()
         store.setSidebarMode(.flagged)

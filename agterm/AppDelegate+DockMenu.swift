@@ -149,8 +149,8 @@ extension AppDelegate {
             for session in sessions {
                 let sessionID = session.id
                 let workspaceName = store.workspace(forSession: sessionID)?.name
-                let title = workspaceName.flatMap { $0.isEmpty ? nil : "\(session.displayName) — \($0)" }
-                    ?? session.displayName
+                let label = store.listLabel(for: session)
+                let title = workspaceName.flatMap { $0.isEmpty ? nil : "\(label) — \($0)" } ?? label
                 addDockMenuItem(title, enabled: enabled, to: submenu) { [weak self, weak store] in
                     guard let store else { return }
                     self?.activate(sessionID, in: store)

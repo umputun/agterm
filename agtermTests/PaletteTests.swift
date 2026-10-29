@@ -38,6 +38,15 @@ final class PaletteTests: XCTestCase {
         }
     }
 
+    func testEmptyQueriesKeepTheFeedOrderExceptForActionsThemesAndCustomCommands() {
+        for mode in [PaletteMode.sessions, .attention, .flaggedEditor, .focusEditor] {
+            XCTAssertTrue(mode.keepsSourceOrder, "\(mode)")
+        }
+        for mode in [PaletteMode.actions, .themes, .customCommands] {
+            XCTAssertFalse(mode.keepsSourceOrder, "\(mode)")
+        }
+    }
+
     func testOtherKeysDoNotMove() {
         XCTAssertNil(step(0, "a", ascii: true))
         XCTAssertNil(step(0, "ф", ascii: false))

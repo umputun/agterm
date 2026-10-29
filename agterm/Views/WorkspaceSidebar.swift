@@ -851,10 +851,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             return image
         }
 
-        /// The row label from an already-resolved session + its owning workspace name, with no store lookup.
+        /// The row label from an already-resolved session and its owning workspace name.
         func rowLabel(for session: Session, workspaceName: String) -> String {
-            guard flaggedLayout == .flat else { return session.displayName }
-            return "\(session.displayName) : \(workspaceName)"
+            guard let flaggedLayout else { return session.displayName }
+            let label = store.listLabel(for: session)
+            return flaggedLayout == .flat ? "\(label) : \(workspaceName)" : label
         }
 
         func workspaceNode(forID id: UUID) -> SidebarNode? {

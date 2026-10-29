@@ -26,6 +26,19 @@ final class WindowLibraryAttentionTests {
         library.attentionStep(from: source, forward: forward, eligible: eligible)?.sessionID
     }
 
+    @Test func anAttentionCompanionIsLabelledAfterItsParent() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let parent = try addSession(to: store, status: .idle)
+        store.renameSession(parent.id, to: "api")
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "logs")).get()
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: companion.id)
+
+        let entry = try #require(library.attentionAcrossWindows.first { $0.session.id == companion.id })
+
+        #expect(library.attentionLabel(entry) == "api › logs")
+    }
+
     @Test func stepsThroughWindowsInLibraryOrderThenSidebarOrder() throws {
         let library = WindowLibrary(directory: directory)
         let first = try #require(library.activeWindowID)

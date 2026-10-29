@@ -74,7 +74,7 @@ extension WindowContentView {
     @ViewBuilder private func recentSessionRow(_ id: UUID) -> some View {
         if let session = store.session(withID: id) {
             SessionPopoverRow(
-                title: session.displayName,
+                title: store.listLabel(for: session),
                 subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
                 remote: session.remoteHost != nil,
                 status: session.agentIndicator.status,
@@ -157,7 +157,7 @@ extension WindowContentView {
             VStack(spacing: 2) {
                 ForEach(library.attentionAcrossWindows) { entry in
                     SessionPopoverRow(
-                        title: entry.session.displayName,
+                        title: library.attentionLabel(entry),
                         subtitle: library.attentionSubtitle(entry),
                         remote: entry.session.remoteHost != nil,
                         status: entry.session.agentIndicator.status,
