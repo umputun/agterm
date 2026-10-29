@@ -252,6 +252,23 @@ public enum CommandRestore {
     /// the NUL-terminated executable path, zero or more NUL padding bytes, then `argc` NUL-terminated
     /// argument strings (env follows, ignored). Returns nil on a truncated or implausible blob.
     public static func parseProcArgs(_ data: Data) -> [String]? {
+        procArgsFields(data)?.argv
+    }
+
+    /// parseProcEnvironment reads the environment strings that follow argv in a `KERN_PROCARGS2` blob, up to the
+    /// first empty string, which separates them from the kernel's own `key=value` strings. Nil when argv is unreadable.
+    public static func parseProcEnvironment(_ data: Data) -> [String: String]? {
+        guard let fields = procArgsFields(data) else { return nil }
+        var environment: [String: String] = [:]
+        for entry in fields.rest.prefix(while: { !$0.isEmpty }) {
+            guard let equals = entry.firstIndex(of: "="), equals != entry.startIndex else { continue }
+            let key = String(entry[..<equals])
+            if environment[key] == nil { environment[key] = String(entry[entry.index(after: equals)...]) }
+        }
+        return environment
+    }
+
+    private static func procArgsFields(_ data: Data) -> (argv: [String], rest: [String])? {
         let bytes = [UInt8](data)
         guard bytes.count > 4 else { return nil }
         let argc = bytes.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
@@ -263,14 +280,14 @@ public enum CommandRestore {
         // ...then the NUL padding between exec path and argv[0].
         while i < bytes.count, bytes[i] == 0 { i += 1 }
 
-        var args: [String] = []
-        args.reserveCapacity(Int(argc))
-        while args.count < Int(argc), i < bytes.count {
+        var strings: [String] = []
+        while i < bytes.count {
             let start = i
             while i < bytes.count, bytes[i] != 0 { i += 1 }
-            args.append(String(decoding: bytes[start..<i], as: UTF8.self))
+            strings.append(String(decoding: bytes[start..<i], as: UTF8.self))
             if i < bytes.count { i += 1 } // step over the terminating NUL
         }
-        return args.count == Int(argc) ? args : nil
+        guard strings.count >= Int(argc) else { return nil }
+        return (Array(strings.prefix(Int(argc))), Array(strings.dropFirst(Int(argc))))
     }
 }

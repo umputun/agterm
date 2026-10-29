@@ -4042,7 +4042,7 @@
                 List the sessions that can be attached to. With a host it runs over ssh against a machine also running agterm and reports what it offers across <em>every</em> open window; with no host it reports this app's own in the same shape, which is the form the remote call runs on the far side. Feed the result to a picker and hand what the user chooses to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Only a session whose every pane has a live daemon is listed; one whose daemon has gone is omitted rather than offered, because attaching to a name that no longer exists would create a fresh shell wearing it. The remote must be new enough to report where its zmx and its daemons live, or the command says so and lists nothing.
+                Only a session whose every pane has a live daemon is listed; one whose daemon has gone is omitted rather than offered, because attaching to a name that no longer exists would create a fresh shell wearing it. A page companion has no daemon: it is listed with no panes when its parent is listed, and attaches only under a row already attached from that parent. The remote must be new enough to report where its zmx and its daemons live, or the command says so and lists nothing.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The connection is non-interactive: ssh runs with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">BatchMode</span>, so key-based auth must already work for the host and a password or host-key prompt is a failure rather than a question. The far side also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> installed by the cask or the Help action, since a machine merely running agterm has no CLI an ssh command can find.
@@ -4064,7 +4064,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> (only when its owner set one),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> (only when it has a split),
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (as the far side's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports them, omitted when idle), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (as the far side's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> reports them, omitted when idle),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span> (on a companion),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">content</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">page</span> on a page companion), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">panes</span>
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane, daemon, foreground}</span>, the last being the argv that pane is running, omitted when the remote reports none).
               </p>

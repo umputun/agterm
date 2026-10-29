@@ -12,6 +12,17 @@ struct RemoteTreeTests {
 
     // MARK: - building the candidate list
 
+    @Test(arguments: [
+        (RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--parent'"), true),
+        (RemoteCommandResult(status: 64, stdout: " \n", stderr: ""), true),
+        (RemoteCommandResult(status: 64, stdout: #"{"ok":false,"error":"x"}"#, stderr: ""), false),
+        (RemoteCommandResult(status: 1, stdout: "", stderr: "Error: Unknown option '--parent'"), false),
+        (RemoteCommandResult(status: 255, stdout: "", stderr: "ssh: connect to host"), false),
+    ])
+    func onlyAUsageExitWithNothingOnStdoutIsAnArgumentRefusal(result: RemoteCommandResult, refused: Bool) {
+        #expect(result.refusedArguments == refused)
+    }
+
     @Test func aPlainSessionResolvesToOneLeftDaemon() throws {
         let windows = [window(name: "main", workspace: "work",
                               sessions: [node(id: "s1", name: "build", cwd: "/repo")])]

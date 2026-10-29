@@ -443,6 +443,16 @@ extension AppStore {
         return held
     }
 
+    /// Ids of `parentID`'s companions a pending close still holds.
+    func pendingCloseSessionIDs(parentedBy parentID: UUID) -> [UUID] {
+        pendingCloseRecords.values.flatMap { record -> [Session] in
+            switch record {
+            case .sessions(let close): close.sessions.map(\.session)
+            case .workspace(let close): close.workspace.sessions
+            }
+        }.filter { $0.parentID == parentID }.map(\.id)
+    }
+
     /// A workspace to stand in for one a restore needs but the tree no longer holds. Prefer the newest
     /// description: a pending close of that same workspace carries its live name and expansion state, and
     /// once those finalize an Open Recent snapshot still does. `name` is the caller's older copy, a last resort.

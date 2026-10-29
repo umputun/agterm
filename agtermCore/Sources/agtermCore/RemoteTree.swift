@@ -12,6 +12,12 @@ public struct RemoteCommandResult: Sendable, Equatable {
         self.stdout = stdout
         self.stderr = stderr
     }
+
+    /// refusedArguments is the far `agtermctl` rejecting its own command line before sending anything: ArgumentParser's
+    /// usage exit, 64, with nothing on stdout, which is what a CLI older than an option or subcommand answers.
+    public var refusedArguments: Bool {
+        status == 64 && stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 /// Runs an ssh invocation somewhere that is not the main actor. The app supplies a `Process`-backed

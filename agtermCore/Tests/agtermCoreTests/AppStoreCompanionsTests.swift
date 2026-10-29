@@ -329,6 +329,24 @@ struct AppStoreCompanionsTests {
         #expect(store.workspaces.first { $0.id == home.id }?.sessions.isEmpty == true)
     }
 
+    // a companion parked by a soft close came back top-level after its parent closed for good
+    @Test func aParentsHardCloseEndsTheUndoOfItsParkedCompanions() throws {
+        let store = makeStore()
+        let home = store.addWorkspace(name: "home")
+        let parent = try #require(store.addSession(toWorkspace: home.id, cwd: "/parent"))
+        let other = try #require(store.addSession(toWorkspace: home.id, cwd: "/other"))
+        let parked = try store.addCompanion(to: parent.id).get()
+        let mate = try store.addCompanion(to: other.id).get()
+        #expect(store.softCloseSessions([parked.id, mate.id], grace: 60))
+
+        store.closeSession(parent.id)
+
+        #expect(store.pendingCloseSession(withID: parked.id) == nil)
+        #expect(store.undoPendingClose())
+        #expect(store.session(withID: parked.id) == nil)
+        #expect(mate.parentID == other.id && store.session(withID: mate.id) != nil)
+    }
+
     @Test func aParentsLastPaneExitStartsAFreshShellInItsLastCwd() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

@@ -587,6 +587,10 @@ public final class AppStore {
             closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
         closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: companions)
+        // a companion still in its undo window would come back with no parent to sit under
+        for parked in pendingCloseSessionIDs(parentedBy: sessionID) {
+            finalizePendingClose(ofSession: parked)
+        }
     }
 
     private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [Session] = []) {

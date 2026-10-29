@@ -88,6 +88,9 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "the session on \(host) is not attachable now; nothing was created")
         }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        if result.refusedArguments {
+            return ControlResponse(ok: false, error: "the agterm on \(host) is too old for companions")
+        }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return ControlResponse(ok: false, error: "\(host) gave no answer\(stderr.isEmpty ? "" : " (\(stderr))"); "
@@ -154,6 +157,9 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid host")
         }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
+        if result.refusedArguments {
+            return ControlResponse(ok: false, error: "the agterm on \(host) is too old for page companions")
+        }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
             return ControlResponse(ok: false, error: stderr.isEmpty ? "\(host) gave no answer" : stderr)

@@ -11,13 +11,16 @@ public enum RestartReplay {
         public let workingDirectory: String?
         /// executablePath is the process image's absolute path, nil when unreadable.
         public let executablePath: String?
+        /// searchPath is the process's own PATH, nil when its environment is unreadable or has none.
+        public let searchPath: String?
 
         public init(foreground: CommandRestore.PaneForeground?, isDaemonLeader: Bool, workingDirectory: String?,
-                    executablePath: String? = nil) {
+                    executablePath: String? = nil, searchPath: String? = nil) {
             self.foreground = foreground
             self.isDaemonLeader = isDaemonLeader
             self.workingDirectory = workingDirectory
             self.executablePath = executablePath
+            self.searchPath = searchPath
         }
     }
 

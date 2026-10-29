@@ -76,6 +76,24 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertTrue(store.companions(of: row.id).isEmpty)
     }
 
+    // an older CLI refuses the new flag before sending anything, which read as an unknown outcome
+    func testAnOlderOriginCLIRefusingTheArgumentsIsTooOldNotUnknown() async throws {
+        let usage = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--parent'\nUsage: agtermctl session new")
+        let runner = ScriptedRunner([origin, usage])
+        let (server, store, row) = try makeServer(runner)
+
+        let reply = await server.createCompanion(row.id.uuidString, options: CompanionOptions(), window: nil)
+
+        XCTAssertEqual(reply.error, "the agterm on buildbox is too old for companions")
+        XCTAssertTrue(store.companions(of: row.id).isEmpty)
+
+        let pageUsage = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unexpected argument 'page-attach'")
+        let pages = ScriptedRunner([pageUsage])
+        let (pageServer, _, _) = try makeServer(pages, store: store, row: row)
+        let page = await pageServer.attachRemotePage(created, host: "buildbox", parent: row.id, select: false)
+        XCTAssertEqual(page.error, "the agterm on buildbox is too old for page companions")
+    }
+
     func testACompanionThatNeverBecomesAttachableWithinTheBudgetIsNamedAndNotCreatedAgain() async throws {
         let runner = ScriptedRunner([origin, reply(id: created)] + Array(repeating: tree(sessions: ""), count: 50))
         let (server, store, row) = try makeServer(runner)

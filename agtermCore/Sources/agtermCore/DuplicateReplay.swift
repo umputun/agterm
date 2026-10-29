@@ -1,3 +1,5 @@
+import Foundation
+
 /// DuplicateReplay decides what one pane of Duplicate as Companion starts: another copy of the program holding
 /// the source pane, in that program's directory, or a plain shell where a shell holds it.
 /// A pipeline or shell job is copied as its observed foreground process only; nothing checks the job's shape.
@@ -30,6 +32,8 @@ public enum DuplicateReplay {
             /// Live, which read a backslash inside single quotes differently.
             case backslash
             case noExecutable
+            /// notLocated: no path the program could have been started from resolves to the running image.
+            case notLocated
         }
 
         public let pane: String
@@ -45,6 +49,7 @@ public enum DuplicateReplay {
             case .replay(let refusal): refusal.reason
             case .backslash: "the foreground program's arguments contain a backslash, which cannot be copied"
             case .noExecutable: "the foreground program's executable path cannot be read"
+            case .notLocated: "the path the foreground program was started from cannot be found"
             }
             return "\(pane) pane: \(text); nothing was created"
         }
@@ -52,22 +57,41 @@ public enum DuplicateReplay {
 
     /// resolve plans `pane` from one observation. A recognized shell holding the pane gives a plain shell in its
     /// directory, `fallbackDirectory` when that cannot be read; every refusal of the restart replay, a daemon-leader
-    /// shell included, refuses the copy. A bare argv[0] becomes the observed executable path, because outside
-    /// Live the creation command runs on the app's PATH, not the source shell's.
+    /// shell included, refuses the copy. A program not started by absolute path is copied by the path it was started
+    /// from, because outside Live the creation command runs on the app's PATH, not the source shell's: for a bare
+    /// name the first entry of the source's own PATH holding it, for a relative one its directory, accepted only when
+    /// it resolves to the running image and launched unresolved, so `vimdiff` stays `vimdiff`. One that cannot be
+    /// located is refused rather than copied as the image. The checks see both the path and the image.
     public static func resolve(_ observation: RestartReplay.Observation, pane: String, fallbackDirectory: String,
-                               shell: String?, denylist: Set<String>) -> Result<Plan, Refusal> {
+                               shell: String?, denylist: Set<String>,
+                               resolvedFile: (String) -> String? = canonicalExecutable) -> Result<Plan, Refusal> {
         if observation.foreground?.shellName != nil {
             return .success(.shell(workingDirectory: observation.workingDirectory ?? fallbackDirectory))
         }
-        var resolved = observation
-        if var argv = observation.foreground?.command, let program = argv.first, !program.hasPrefix("/") {
+        var candidates = [observation]
+        if let argv = observation.foreground?.command, let program = argv.first, !program.hasPrefix("/") {
             guard let executable = observation.executablePath else { return .failure(Refusal(pane: pane, reason: .noExecutable)) }
-            argv[0] = executable
-            resolved = RestartReplay.Observation(foreground: .program(argv), isDaemonLeader: observation.isDaemonLeader,
-                                                 workingDirectory: observation.workingDirectory,
-                                                 executablePath: observation.executablePath)
+            guard !program.contains("/") || observation.workingDirectory != nil else {
+                return .failure(Refusal(pane: pane, reason: .replay(.noDirectory)))
+            }
+            let image = resolvedFile(executable) ?? executable
+            guard let started = startingPaths(of: program, in: observation).first(where: { resolvedFile($0) == image }) else {
+                return .failure(Refusal(pane: pane, reason: .notLocated))
+            }
+            candidates = [started, executable].map { observation.running(argv, as: $0) }
         }
-        switch RestartReplay.resolve(resolved, shell: shell, denylist: denylist) {
+        let outcomes = candidates.map { program($0, pane: pane, shell: shell, denylist: denylist) }
+        return outcomes.first { if case .failure = $0 { true } else { false } } ?? outcomes[0]
+    }
+
+    /// canonicalExecutable is `path` with every symlink resolved when it names an executable file, nil otherwise.
+    public static func canonicalExecutable(_ path: String) -> String? {
+        FileManager.default.isExecutableFile(atPath: path) ? URL(fileURLWithPath: path).resolvingSymlinksInPath().path : nil
+    }
+
+    private static func program(_ observation: RestartReplay.Observation, pane: String, shell: String?,
+                                denylist: Set<String>) -> Result<Plan, Refusal> {
+        switch RestartReplay.resolve(observation, shell: shell, denylist: denylist) {
         case .failure(let reason):
             return .failure(Refusal(pane: pane, reason: .replay(reason)))
         case .success(let launch):
@@ -76,5 +100,22 @@ public enum DuplicateReplay {
             }
             return .success(.program(argv: launch.argv, workingDirectory: launch.workingDirectory))
         }
+    }
+
+    // absolute PATH entries only: a relative entry meant whatever directory the shell sat in at that lookup
+    private static func startingPaths(of program: String, in observation: RestartReplay.Observation) -> [String] {
+        if program.contains("/") {
+            guard let directory = observation.workingDirectory else { return [] }
+            return [URL(fileURLWithPath: program, relativeTo: URL(fileURLWithPath: directory, isDirectory: true)).standardized.path]
+        }
+        return (observation.searchPath ?? "").split(separator: ":").filter { $0.hasPrefix("/") }
+            .map { $0.hasSuffix("/") ? "\($0)\(program)" : "\($0)/\(program)" }
+    }
+}
+
+private extension RestartReplay.Observation {
+    func running(_ argv: [String], as program: String) -> Self {
+        Self(foreground: .program([program] + argv.dropFirst()), isDaemonLeader: isDaemonLeader,
+             workingDirectory: workingDirectory, executablePath: executablePath, searchPath: searchPath)
     }
 }

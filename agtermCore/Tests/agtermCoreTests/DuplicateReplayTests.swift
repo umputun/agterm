@@ -2,12 +2,16 @@ import Testing
 @testable import agtermCore
 
 struct DuplicateReplayTests {
+    private static let htop = "/opt/homebrew/bin/htop"
+
     private func plan(_ foreground: CommandRestore.PaneForeground?, leader: Bool = false, cwd: String? = "/work",
-                      executable: String? = "/opt/homebrew/bin/htop",
+                      executable: String? = htop, searchPath: String? = "/opt/homebrew/bin",
+                      files: [String: String] = [htop: htop],
                       denylist: Set<String> = []) -> Result<DuplicateReplay.Plan, DuplicateReplay.Refusal> {
         let observation = RestartReplay.Observation(foreground: foreground, isDaemonLeader: leader, workingDirectory: cwd,
-                                                    executablePath: executable)
-        return DuplicateReplay.resolve(observation, pane: "left", fallbackDirectory: "/fallback", shell: "zsh", denylist: denylist)
+                                                    executablePath: executable, searchPath: searchPath)
+        return DuplicateReplay.resolve(observation, pane: "left", fallbackDirectory: "/fallback", shell: "zsh", denylist: denylist,
+                                       resolvedFile: { files[$0] })
     }
 
     private func refusal(_ reason: DuplicateReplay.Refusal.Reason) -> Result<DuplicateReplay.Plan, DuplicateReplay.Refusal> {
@@ -19,10 +23,44 @@ struct DuplicateReplayTests {
         #expect(plan(.foregroundShell("zsh"), cwd: nil) == .success(.shell(workingDirectory: "/fallback")))
     }
 
-    @Test func aRunningProgramStartsAgainFromItsExecutableInItsDirectory() {
-        #expect(plan(.program(["htop", "-d", "5"])) == .success(.program(argv: ["/opt/homebrew/bin/htop", "-d", "5"], workingDirectory: "/work")))
-        #expect(plan(.program(["/usr/bin/top", "-o", "cpu"]), executable: nil)
+    @Test func aRunningProgramStartsAgainFromWhereItWasFoundInItsDirectory() {
+        #expect(plan(.program(["htop", "-d", "5"])) == .success(.program(argv: [Self.htop, "-d", "5"], workingDirectory: "/work")))
+        #expect(plan(.program(["/usr/bin/top", "-o", "cpu"]), executable: nil, searchPath: nil)
             == .success(.program(argv: ["/usr/bin/top", "-o", "cpu"], workingDirectory: "/work")))
+    }
+
+    // the resolved image lost the invoked name, so vimdiff ran as plain vim and a venv python as the base interpreter
+    @Test func aSymlinkedNameIsCopiedByThePathItWasStartedFrom() {
+        let vimdiff = plan(.program(["vimdiff", "a", "b"]), executable: "/usr/bin/vim", searchPath: "/opt/homebrew/bin:/usr/bin",
+                           files: ["/usr/bin/vimdiff": "/usr/bin/vim", "/usr/bin/vim": "/usr/bin/vim"])
+        #expect(vimdiff == .success(.program(argv: ["/usr/bin/vimdiff", "a", "b"], workingDirectory: "/work")))
+        let python = "/usr/local/bin/python3.12"
+        let venv = plan(.program(["python", "app.py"]), executable: python, searchPath: "/work/.venv/bin:/usr/local/bin",
+                        files: ["/work/.venv/bin/python": python, "/usr/local/bin/python": python, python: python])
+        #expect(venv == .success(.program(argv: ["/work/.venv/bin/python", "app.py"], workingDirectory: "/work")))
+    }
+
+    @Test func aPathEntryHoldingAnotherProgramOfThatNameIsPassedOver() {
+        let other = "/usr/local/bin/htop"
+        #expect(plan(.program(["htop"]), searchPath: "/usr/local/bin:/opt/homebrew/bin", files: [other: other, Self.htop: Self.htop])
+            == .success(.program(argv: [Self.htop], workingDirectory: "/work")))
+    }
+
+    @Test func aRelativePathIsCopiedFromTheProgramsDirectory() {
+        let python = "/usr/local/bin/python3.12"
+        #expect(plan(.program(["./venv/bin/python", "x"]), executable: python, files: ["/work/venv/bin/python": python, python: python])
+            == .success(.program(argv: ["/work/venv/bin/python", "x"], workingDirectory: "/work")))
+        #expect(plan(.program(["../bin/tool"]), executable: "/bin/tool", files: ["/bin/tool": "/bin/tool"])
+            == .success(.program(argv: ["/bin/tool"], workingDirectory: "/work")))
+        #expect(plan(.program(["./tool"]), executable: "/opt/x/tool", files: ["/work/tool": "/work/tool", "/opt/x/tool": "/opt/x/tool"])
+            == refusal(.notLocated))
+        #expect(plan(.program(["./tool"]), cwd: nil) == refusal(.replay(.noDirectory)))
+    }
+
+    @Test(arguments: [nil, "", "bin:/nowhere", "/usr/local/bin"])
+    func aProgramNotFoundWhereItWasStartedIsRefusedRatherThanCopiedAsTheImage(searchPath: String?) {
+        #expect(plan(.program(["htop"]), searchPath: searchPath, files: ["bin/htop": Self.htop, "/usr/local/bin/htop": "/usr/local/bin/htop",
+                                                                         Self.htop: Self.htop]) == refusal(.notLocated))
     }
 
     @Test func aBareProgramWithoutAnExecutablePathIsRefused() {
@@ -35,12 +73,19 @@ struct DuplicateReplayTests {
 
     @Test(arguments: [["grep", "a\\.b"], ["printf", "x\\"]])
     func anArgumentWithABackslashIsRefused(argv: [String]) {
-        #expect(plan(.program(argv)) == refusal(.backslash))
+        let path = "/usr/bin/\(argv[0])"
+        #expect(plan(.program(argv), executable: path, searchPath: "/usr/bin", files: [path: path]) == refusal(.backslash))
     }
 
-    @Test func theResolvedExecutableIsWhatTheChecksSee() {
-        #expect(plan(.program(["htop"]), executable: "/odd\\dir/htop") == refusal(.backslash))
-        #expect(plan(.program(["vi"]), executable: "/usr/bin/vim", denylist: ["vim"]) == refusal(.replay(.denylisted("vim"))))
+    @Test func theChecksSeeBothThePathAndTheImage() {
+        #expect(plan(.program(["htop"]), executable: "/odd\\dir/htop", searchPath: "/odd\\dir",
+                     files: ["/odd\\dir/htop": "/odd\\dir/htop"]) == refusal(.backslash))
+        #expect(plan(.program(["vi"]), executable: "/usr/bin/vim", searchPath: "/usr/bin",
+                     files: ["/usr/bin/vi": "/usr/bin/vim", "/usr/bin/vim": "/usr/bin/vim"], denylist: ["vim"])
+            == refusal(.replay(.denylisted("vim"))))
+        #expect(plan(.program(["vimdiff"]), executable: "/usr/bin/vim", searchPath: "/usr/bin",
+                     files: ["/usr/bin/vimdiff": "/usr/bin/vim", "/usr/bin/vim": "/usr/bin/vim"], denylist: ["vimdiff"])
+            == refusal(.replay(.denylisted("vimdiff"))))
     }
 
     @Test(arguments: [
@@ -56,6 +101,8 @@ struct DuplicateReplayTests {
     }
 
     @Test func aProgramWithoutADirectoryIsRefused() {
-        #expect(plan(.program(["make"]), cwd: nil) == refusal(.replay(.noDirectory)))
+        let make = "/usr/bin/make"
+        #expect(plan(.program(["make"]), cwd: nil, executable: make, searchPath: "/usr/bin", files: [make: make])
+            == refusal(.replay(.noDirectory)))
     }
 }

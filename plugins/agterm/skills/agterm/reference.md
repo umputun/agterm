@@ -539,7 +539,8 @@ buys nothing. A caller with no tree uses `version`.
   directory. Each program becomes the pane's creation command, as `session new --command` sets one, so the pane
   closes when it exits. Every pane is checked before anything is created; a refused pane is named
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
-  foreground or working directory, unreplayable arguments or one containing a backslash, a pane under a visible
+  foreground or working directory, unreplayable arguments or one containing a backslash, a program started by a
+  name that its own PATH or directory no longer resolves to the running program, a pane under a visible
   program overlay. A page companion is refused. On a session attached from another Mac, that Mac duplicates its
   own session under its own policy, and the copy attaches here as for `session new --parent`.
   `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
@@ -2118,14 +2119,16 @@ far side, so it is also how to see what another machine would answer without ssh
 and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID`/`workspaceName` (show the
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
 `context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
-as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), and `panes`
+as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), `parent` on a
+companion, `content: "page"` on a page companion, and `panes`
 (`{pane, daemon, foreground}`, the last being the argv that pane is running and omitted when none is
 reported). `host` is the ssh destination the REQUESTING app was given, stamped on after decoding: the far
 side has no idea which name reached it.
 
 Only a session whose every pane still has a live daemon is listed: attaching to a name that no longer
 exists would CREATE a daemon and hand back a fresh shell wearing it, so an incomplete one is omitted
-rather than offered half. An empty list is a successful answer and does NOT diagnose the restore mode —
+rather than offered half. A page companion has no daemon and is listed with empty `panes` when its parent is
+listed; it attaches only under a row already attached from its parent. An empty list is a successful answer and does NOT diagnose the restore mode —
 `zmx list` does that. The far side must be running in `live` mode, which is what puts a daemon behind each
 pane, and be new enough to answer `zmx tree` at all; an older one is refused by name rather than
 half-attached. It also needs `agtermctl` installed by the cask or the Help action: a machine merely

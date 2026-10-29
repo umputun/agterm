@@ -415,8 +415,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
   stores each program as `initialCommand`/`splitInitialCommand`, so it runs as a `--command` pane does, ungated by
-  restore mode. A bare argv[0] becomes the `proc_pidpath` executable before the restart checks run, because outside
-  Live the command runs on the GUI PATH. An argument with a backslash is refused: libghostty's split and fish's Live
+  restore mode. Outside Live the command runs on the GUI PATH, so a program not started by absolute path is copied by
+  the path it was started from: the first entry of its own PATH (read from the same `KERN_PROCARGS2` blob as its
+  argv) or its directory that resolves to the `proc_pidpath` image, launched unresolved, since the image alone turns
+  `vimdiff` into plain vim. None resolving refuses the pane; the restart checks see that path and the image. An argument with a backslash is refused: libghostty's split and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
