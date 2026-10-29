@@ -56,17 +56,16 @@ final class SessionHostFishSeamTests: XCTestCase {
         }
     }
 
-    func testDurableCreationCommandLandsOnIntegratedFish() throws {
+    func testDurableCreationCommandRunsUnderFishAndEndsThePane() throws {
         let fish = try FishInstallation.resolve()
         try forEachAttachVariant(fish) { fixture, supervised in
             let log = fixture.directory.appendingPathComponent("durable-argv")
             let probe = try fixture.payloadProbe(named: "durable", log: log, exitCode: 0)
             let command = [probe.path, "durable value"]
             let configuration = try fixture.configuration(supervised: supervised)
-            let attachment = try fixture.attach(configuration, session: fixture.session(.durable, command: command))
-            let record = try fixture.acknowledge(attachment, token: UUID().uuidString)
-            fixture.assertFinalPrompt(record)
-            XCTAssertEqual(try fixture.argv(in: log), command)
+            _ = try fixture.attach(configuration, session: fixture.session(.durable, command: command))
+            try fixture.waitForArgv(command, in: log)
+            try fixture.waitForNoDaemon(configuration)
         }
     }
 
@@ -170,15 +169,21 @@ final class SessionHostFishSeamTests: XCTestCase {
         try requireOrSkip(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
         let fixture = try Fixture(fish: fish)
         fixtures.append(fixture)
+        let holds = kind == .durable
         let firstLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-first")
         let firstProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-first", log: firstLog,
-                                                  exitCode: kind == .failing ? 3 : 0)
+                                                  exitCode: kind == .failing ? 3 : 0, holds: holds)
         let firstCommand = [firstProbe.path, "first"]
         let configuration = try fixture.configuration(supervised: supervised)
         let first = try fixture.attach(configuration, session: fixture.session(kind.creation, command: firstCommand))
-        let firstRecord = try fixture.acknowledge(first, token: UUID().uuidString)
-        fixture.assertFinalPrompt(firstRecord)
-        XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
+        var firstRecord: PromptRecord?
+        if holds {
+            try fixture.waitForArgv(firstCommand, in: firstLog)
+        } else {
+            firstRecord = try fixture.acknowledge(first, token: UUID().uuidString)
+            fixture.assertFinalPrompt(try XCTUnwrap(firstRecord))
+            XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
+        }
         let firstLeader = try fixture.assertDaemon(configuration, supervised: supervised)
 
         fixture.detach(first)
@@ -186,12 +191,18 @@ final class SessionHostFishSeamTests: XCTestCase {
 
         let secondLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-second")
         let secondProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-second", log: secondLog,
-                                                   exitCode: kind == .failing ? 3 : 0)
+                                                   exitCode: kind == .failing ? 3 : 0, holds: holds)
         let second = try fixture.attach(configuration,
                                         session: fixture.session(kind.creation, command: [secondProbe.path, "second"]))
-        let secondRecord = try fixture.acknowledge(second, token: UUID().uuidString)
-        fixture.assertFinalPrompt(secondRecord)
-        XCTAssertEqual(secondRecord.fishPID, firstRecord.fishPID)
+        if holds {
+            try fixture.waitForOneClient(configuration, leader: firstLeader)
+            RunLoop.main.run(until: Date().addingTimeInterval(1))
+            XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
+        } else {
+            let secondRecord = try fixture.acknowledge(second, token: UUID().uuidString)
+            fixture.assertFinalPrompt(secondRecord)
+            XCTAssertEqual(secondRecord.fishPID, try XCTUnwrap(firstRecord).fishPID)
+        }
         XCTAssertEqual(try fixture.assertDaemon(configuration, supervised: supervised), firstLeader)
         XCTAssertFalse(FileManager.default.fileExists(atPath: secondLog.path))
     }
@@ -392,9 +403,10 @@ final class SessionHostFishSeamTests: XCTestCase {
             return session
         }
 
-        func payloadProbe(named: String, log: URL, exitCode: Int32) throws -> URL {
+        func payloadProbe(named: String, log: URL, exitCode: Int32, holds: Bool = false) throws -> URL {
             let probe = directory.appendingPathComponent("\(named)-probe")
-            let script = "#!/bin/sh\nprintf '%s\\0' \"$0\" \"$@\" >> \"\(log.path)\"\nexit \(exitCode)\n"
+            let hold = holds ? "sleep 600\n" : ""
+            let script = "#!/bin/sh\nprintf '%s\\0' \"$0\" \"$@\" >> \"\(log.path)\"\n\(hold)exit \(exitCode)\n"
             try script.write(to: probe, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: probe.path)
             return probe
@@ -476,6 +488,21 @@ final class SessionHostFishSeamTests: XCTestCase {
                 let records = try ZmxListParser.parse(runZmx(["list"]))
                 return records.first { $0.name == configuration.daemonName }?.clients == 0 && kill(leader, 0) == 0
             }
+        }
+
+        func waitForOneClient(_ configuration: ZmxSupport.Configuration, leader: Int32) throws {
+            try wait {
+                let records = try ZmxListParser.parse(runZmx(["list"]))
+                return records.first { $0.name == configuration.daemonName }?.clients == 1 && kill(leader, 0) == 0
+            }
+        }
+
+        func waitForNoDaemon(_ configuration: ZmxSupport.Configuration) throws {
+            try wait { try !ZmxListParser.parse(runZmx(["list"])).contains { $0.name == configuration.daemonName } }
+        }
+
+        func waitForArgv(_ command: [String], in log: URL) throws {
+            try wait { FileManager.default.fileExists(atPath: log.path) && (try? argv(in: log)) == command }
         }
 
         func killDaemon(_ configuration: ZmxSupport.Configuration, leader: Int32) throws {
