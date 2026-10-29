@@ -61,8 +61,9 @@ public enum DuplicateReplay {
     /// from, because outside Live the creation command runs on the app's PATH, not the source shell's: for a bare
     /// name the first entry of the source's own PATH that resolves to the running image, else the first executable
     /// one, which is the shell's own pick when a version manager's shim re-exec'd; for a relative name its directory.
-    /// It launches unresolved, so `vimdiff` stays `vimdiff`. One that cannot be located is refused rather than
-    /// copied as the image. The checks see both the path and the image.
+    /// It launches unresolved, so `vimdiff` stays `vimdiff`. With no PATH to read, as for a platform binary, the
+    /// system directories are searched and the image is the fallback; otherwise one that cannot be located is
+    /// refused rather than copied as the image. The checks see both the path and the image.
     public static func resolve(_ observation: RestartReplay.Observation, pane: String, fallbackDirectory: String,
                                shell: String?, denylist: Set<String>,
                                resolvedFile: (String) -> String? = canonicalExecutable) -> Result<Plan, Refusal> {
@@ -77,7 +78,10 @@ public enum DuplicateReplay {
             }
             let image = resolvedFile(executable) ?? executable
             let found = startingPaths(of: program, in: observation).compactMap { path in resolvedFile(path).map { (path, $0) } }
-            guard let started = (found.first { $0.1 == image } ?? found.first)?.0 else {
+            // macOS withholds a platform binary's environment, and those live in the system directories
+            let unreadable = observation.searchPath == nil && !program.contains("/")
+            let fallback = unreadable ? executable : (found.first?.0)
+            guard let started = found.first(where: { $0.1 == image })?.0 ?? fallback else {
                 return .failure(Refusal(pane: pane, reason: .notLocated))
             }
             candidates = [started, executable].map { observation.running(argv, as: $0) }
@@ -85,6 +89,8 @@ public enum DuplicateReplay {
         let outcomes = candidates.map { program($0, pane: pane, shell: shell, denylist: denylist) }
         return outcomes.first { if case .failure = $0 { true } else { false } } ?? outcomes[0]
     }
+
+    static let systemSearchPath = "/usr/bin:/bin:/usr/sbin:/sbin"
 
     /// canonicalExecutable is `path` with every symlink resolved when it names an executable file, nil otherwise.
     public static func canonicalExecutable(_ path: String) -> String? {
@@ -110,7 +116,7 @@ public enum DuplicateReplay {
             guard let directory = observation.workingDirectory else { return [] }
             return [URL(fileURLWithPath: program, relativeTo: URL(fileURLWithPath: directory, isDirectory: true)).standardized.path]
         }
-        return (observation.searchPath ?? "").split(separator: ":").filter { $0.hasPrefix("/") }
+        return (observation.searchPath ?? systemSearchPath).split(separator: ":").filter { $0.hasPrefix("/") }
             .map { $0.hasSuffix("/") ? "\($0)\(program)" : "\($0)/\(program)" }
     }
 }

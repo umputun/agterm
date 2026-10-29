@@ -67,7 +67,17 @@ struct DuplicateReplayTests {
             == .success(.program(argv: ["/work/tool"], workingDirectory: "/work")))
     }
 
-    @Test(arguments: [nil, "", "bin:/nowhere"])
+    // macOS withholds a platform binary's environment, so every bare /usr/bin program read no PATH and was refused
+    @Test func withNoReadablePathTheSystemDirectoriesAreSearchedThenTheImageIsCopied() {
+        #expect(plan(.program(["tee", "out.txt"]), executable: "/usr/bin/tee", searchPath: nil, files: ["/usr/bin/tee": "/usr/bin/tee"])
+            == .success(.program(argv: ["/usr/bin/tee", "out.txt"], workingDirectory: "/work")))
+        #expect(plan(.program(["vimdiff", "a"]), executable: "/usr/bin/vim", searchPath: nil,
+                     files: ["/usr/bin/vimdiff": "/usr/bin/vim", "/usr/bin/vim": "/usr/bin/vim"])
+            == .success(.program(argv: ["/usr/bin/vimdiff", "a"], workingDirectory: "/work")))
+        #expect(plan(.program(["htop"]), searchPath: nil) == .success(.program(argv: [Self.htop], workingDirectory: "/work")))
+    }
+
+    @Test(arguments: ["", "bin:/nowhere"])
     func aProgramNotFoundWhereItWasStartedIsRefusedRatherThanCopiedAsTheImage(searchPath: String?) {
         #expect(plan(.program(["htop"]), searchPath: searchPath, files: ["bin/htop": Self.htop, Self.htop: Self.htop])
             == refusal(.notLocated))

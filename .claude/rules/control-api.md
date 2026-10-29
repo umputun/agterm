@@ -419,7 +419,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the path it was started from: the first entry of its own PATH (read from the same `KERN_PROCARGS2` blob as its
   argv) resolving to the `proc_pidpath` image, else its first executable entry (a version manager's shim re-execs
   under the bare name), or its directory, launched unresolved, since the image alone turns `vimdiff` into plain vim.
-  Nothing executable there refuses the pane; the restart checks see that path and the image. An argument with a backslash is refused: libghostty's split and fish's Live
+  macOS withholds a platform binary's environment, so with no PATH read the system directories are searched and
+  the image is the fallback. Otherwise nothing executable refuses the pane; the restart checks see the path and image. An argument with a backslash is refused: libghostty's split and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
