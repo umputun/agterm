@@ -118,6 +118,30 @@ final class LaunchSeedTests: XCTestCase {
         }
     }
 
+    func testWrappedPaneCommandEndsThePaneAndCarriesItsWait() {
+        let session = Session(initialCwd: "/tmp")
+        session.initialCommand = "lazygit"
+        session.commandWait = true
+        session.splitInitialCommand = "htop"
+
+        let primary = wrappedProvider(session: session, pane: .left).resolve(.left)
+        XCTAssertEqual(primary.command, ZmxSupport.attachCommand(configuration, replaying: nil, paneCommand: "lazygit", denylist: []))
+        XCTAssertTrue(primary.waitAfterCommand)
+
+        let split = wrappedProvider(session: session, pane: .right).resolve(.right)
+        XCTAssertEqual(split.command, ZmxSupport.attachCommand(configuration, replaying: nil, paneCommand: "htop", denylist: []))
+        XCTAssertFalse(split.waitAfterCommand)
+    }
+
+    func testWrappedSplitCarriesItsOwnWait() {
+        let session = Session(initialCwd: "/tmp")
+        session.splitInitialCommand = "htop"
+        session.splitCommandWait = true
+
+        XCTAssertTrue(wrappedProvider(session: session, pane: .right).resolve(.right).waitAfterCommand)
+        XCTAssertFalse(wrappedProvider(session: session, pane: .left).resolve(.left).waitAfterCommand)
+    }
+
     func testWrappedPacesAnEligibleCaptureAndARestoredDurableCommand() {
         let captured = restoredSession()
         captured.pendingForegroundCommand = ["npm", "run", "dev"]

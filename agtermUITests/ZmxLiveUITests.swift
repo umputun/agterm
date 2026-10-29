@@ -43,6 +43,24 @@ final class ZmxLiveUITests: ControlAPITestCase {
                        "the create-only payload must run exactly once")
     }
 
+    func testACommandSessionClosesWhenItsCommandExitsAndHoldsWithWait() throws {
+        _ = try activeSessionID()
+        let closing = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": "sleep 1"],
+        ]), as: UTF8.self))
+        let closingID = try XCTUnwrap((closing["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: (try? self.sessionNodeIfPresent(id: closingID)) == nil, timeout: 20),
+                      "a Live --command session should close when its command exits, as it does outside Live")
+
+        let holding = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": "echo held-output; sleep 1", "wait": true],
+        ]), as: UTF8.self))
+        let holdingID = try XCTUnwrap((holding["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: self.paneText(holdingID).contains("held-output"), timeout: 20))
+        RunLoop.current.run(until: Date().addingTimeInterval(4))
+        XCTAssertNotNil(try sessionNodeIfPresent(id: holdingID), "--wait should hold the exited command's output")
+    }
+
     func testRestartReplacesTheShellEndsItsProgramAndKeepsThePane() throws {
         let sessionID = try activeSessionID()
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20))
@@ -123,6 +141,11 @@ final class ZmxLiveUITests: ControlAPITestCase {
         let receipt = try XCTUnwrap(result["restart"] as? [String: Any])
         XCTAssertEqual(receipt["paneID"] as? String, paneID)
         return (try XCTUnwrap(receipt["oldPid"] as? Int), try XCTUnwrap(receipt["newPid"] as? Int))
+    }
+
+    private func paneText(_ sessionID: String) -> String {
+        let response = try? sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"pane":"left"}}"#)
+        return ((response?["result"] as? [String: Any])?["text"] as? String) ?? ""
     }
 
     private func paneID(_ sessionID: String, kind: String) -> String? {

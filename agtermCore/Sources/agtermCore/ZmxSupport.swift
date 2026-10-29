@@ -158,9 +158,14 @@ public enum ZmxSupport {
         return .wrapped(configuration)
     }
 
+    /// attachCommand builds a pane's zmx attach line. A captured `argv` wins over either command. `creationCommand`
+    /// runs and then becomes a login shell (`session restart --command`); `paneCommand` is the pane's own
+    /// creation command and the pane ends with it (`session new --command`).
     public static func attachCommand(_ configuration: Configuration, replaying argv: [String]?,
-                                     creationCommand: String? = nil, denylist: Set<String>) -> String {
-        var arguments = configuration.attachArguments + creationArguments(configuration, replaying: argv, creationCommand: creationCommand, denylist: denylist)
+                                     creationCommand: String? = nil, paneCommand: String? = nil,
+                                     denylist: Set<String>) -> String {
+        let creation = paneCommand.map(Creation.endingPane) ?? creationCommand.map(Creation.returningToShell)
+        var arguments = configuration.attachArguments + creationArguments(configuration, replaying: argv, creation: creation, denylist: denylist)
         if let host = configuration.sessionHostExecutablePath {
             arguments = [host, "client", configuration.daemonName, "--"] + arguments
         }
@@ -179,8 +184,13 @@ public enum ZmxSupport {
         "unset IFS", "XDG_DATA_DIRS=$merged", "export XDG_DATA_DIRS", "exec \"$@\"",
     ].joined(separator: "; ")
 
+    private enum Creation {
+        case returningToShell(String)
+        case endingPane(String)
+    }
+
     private static func creationArguments(_ configuration: Configuration, replaying argv: [String]?,
-                                          creationCommand: String?, denylist: Set<String>) -> [String] {
+                                          creation: Creation?, denylist: Set<String>) -> [String] {
         guard let shell = configuration.environment["SHELL"], let shellKind = shellKind(for: shell) else {
             return []
         }
@@ -197,11 +207,13 @@ public enum ZmxSupport {
                     argv: argv, integrationDirectory: integrationDirectory,
                     inheritedZdotdir: inheritedZdotdir, shell: shell
                 )
-            } else if let creationCommand {
+            } else if case .returningToShell(let line) = creation {
                 script = ZmxReplayScript.render(
-                    commandLine: creationCommand, integrationDirectory: integrationDirectory,
+                    commandLine: line, integrationDirectory: integrationDirectory,
                     inheritedZdotdir: inheritedZdotdir, shell: shell
                 )
+            } else if case .endingPane(let line) = creation {
+                script = ZmxReplayScript.renderEnding(commandLine: line)
             } else {
                 return []
             }
@@ -214,10 +226,10 @@ public enum ZmxSupport {
                     return []
                 }
                 script = ZmxReplayScript.renderFish(argv: argv, integrationRoot: integrationRoot, shell: shell)
-            } else if let creationCommand {
-                script = ZmxReplayScript.renderFish(
-                    commandLine: creationCommand, integrationRoot: integrationRoot, shell: shell
-                )
+            } else if case .returningToShell(let line) = creation {
+                script = ZmxReplayScript.renderFish(commandLine: line, integrationRoot: integrationRoot, shell: shell)
+            } else if case .endingPane(let line) = creation {
+                script = ZmxReplayScript.renderFishEnding(commandLine: line)
             } else {
                 return []
             }

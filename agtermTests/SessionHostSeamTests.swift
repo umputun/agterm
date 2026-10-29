@@ -144,7 +144,8 @@ final class SessionHostSeamTests: XCTestCase {
             """
             try script.write(to: probe, atomically: true, encoding: .utf8)
             let session = Session(initialCwd: physicalDirectory)
-            session.initialCommand = creationPayload ? "source -- " + CommandRestore.shellQuotedLine([probe.path]) : nil
+            // a creation command ends its pane, so the probe's pane stays up until the leader is read and killed below
+            session.initialCommand = creationPayload ? "source -- " + CommandRestore.shellQuotedLine([probe.path]) + "; sleep 60" : nil
             let seed = try XCTUnwrap(ZmxLaunch.surfaceSeed(disposition: .wrapped(configuration), session: session, pane: .left, denylist: []))
             if supervised { XCTAssertTrue(seed.command.contains("'client'")) }
             let surface = GhosttySurfaceView(workingDirectory: physicalDirectory, fontSize: 14, command: seed.command,

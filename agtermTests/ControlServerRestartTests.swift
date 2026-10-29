@@ -165,6 +165,29 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertTrue(command.contains(zshReplay) || command.contains(fishReplay), command)
     }
 
+    func testARestartCommandStillReturnsToTheLoginShell() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let program = try spawn("/bin/sleep", ["300"])
+        defer { program.terminate() }
+        let server = makeServer(daemon: daemon, foreground: program.processIdentifier) { _ in }
+        var launched: PaneReattach?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, launch, _ in
+            launched = launch
+            return nil
+        }
+        defer { PaneLead.replace = replace }
+
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        let command = launched?.command ?? "no launch"
+        XCTAssertTrue(command.contains("echo restarted"), command)
+        XCTAssertTrue(command.contains(" -il"), "a restart command must hand the pane back to a login shell: \(command)")
+    }
+
     func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)

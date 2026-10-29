@@ -26,6 +26,43 @@ struct ZmxSupportTests {
         #expect(ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []) == CommandRestore.shellQuotedLine(prefix))
     }
 
+    @Test func paneCommandEndsThePaneWhileCreationCommandReturnsToTheShell() {
+        let configuration = ZmxSupport.Configuration(executablePath: "/bundle/zmx", environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
+                                                     daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: "/bundle/host")
+        let prefix = ["/bundle/host", "client", "agterm-pane", "--", "/bundle/zmx", "attach", "agterm-pane"]
+        let line = "lazygit --path 'two words'"
+        let ending = ZmxReplayScript.renderEnding(commandLine: line)
+        let returning = ZmxReplayScript.render(commandLine: line, integrationDirectory: "/bundle/zsh", inheritedZdotdir: nil, shell: "/bin/zsh")
+
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, paneCommand: line, denylist: []) ==
+                CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", ending]))
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, creationCommand: line, denylist: []) ==
+                CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", returning]))
+    }
+
+    @Test func capturedReplayWinsOverThePaneCommand() {
+        let configuration = ZmxSupport.Configuration(executablePath: "/bundle/zmx", environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
+                                                     daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: "/bundle/host")
+        let prefix = ["/bundle/host", "client", "agterm-pane", "--", "/bundle/zmx", "attach", "agterm-pane"]
+        let replay = ZmxReplayScript.render(argv: ["htop"], integrationDirectory: "/bundle/zsh", inheritedZdotdir: nil, shell: "/bin/zsh")
+
+        #expect(ZmxSupport.attachCommand(configuration, replaying: ["htop"], paneCommand: "lazygit", denylist: []) ==
+                CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", replay]))
+        #expect(ZmxSupport.attachCommand(configuration, replaying: ["tmux"], paneCommand: "lazygit", denylist: ["tmux"]) ==
+                CommandRestore.shellQuotedLine(prefix))
+    }
+
+    @Test func fishPaneCommandEndsThePane() {
+        let configuration = ZmxSupport.Configuration(executablePath: "/bundle/zmx", environment: [
+            "SHELL": "/opt/homebrew/bin/fish", "GHOSTTY_SHELL_INTEGRATION_XDG_DIR": "/bundle/shell-integration",
+        ], daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: nil)
+        let command = ZmxSupport.attachCommand(configuration, replaying: nil, paneCommand: "lazygit", denylist: [])
+
+        #expect(command.hasSuffix(CommandRestore.shellQuotedLine([
+            "/opt/homebrew/bin/fish", "-lic", ZmxReplayScript.renderFishEnding(commandLine: "lazygit"),
+        ])))
+    }
+
     @Test(arguments: [nil, "relative/helper", "/no/such/session-host"])
     func unavailableHelperKeepsBareAttach(_ helper: String?) throws {
         let resources = try makeResources(withLoader: true)

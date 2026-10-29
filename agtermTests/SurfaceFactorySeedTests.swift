@@ -138,7 +138,7 @@ final class SurfaceFactorySeedTests: XCTestCase {
         ))
 
         XCTAssertEqual(seed.command, ZmxSupport.attachCommand(
-            configuration, replaying: nil, creationCommand: "ssh example", denylist: []
+            configuration, replaying: nil, paneCommand: "ssh example", denylist: []
         ))
         XCTAssertNil(seed.initialInput)
     }
@@ -152,7 +152,7 @@ final class SurfaceFactorySeedTests: XCTestCase {
         ))
 
         XCTAssertEqual(seed.command, ZmxSupport.attachCommand(
-            configuration, replaying: nil, creationCommand: "watch date", denylist: []
+            configuration, replaying: nil, paneCommand: "watch date", denylist: []
         ))
         XCTAssertNil(seed.initialInput)
     }

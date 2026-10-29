@@ -49,8 +49,7 @@ final class ZmxLaunchTests: XCTestCase {
         let session = Session(initialCwd: "/tmp")
         session.initialCommand = "printf 'two words'"
         let seed = try XCTUnwrap(ZmxLaunch.surfaceSeed(disposition: .wrapped(configuration), session: session, pane: .left, denylist: []))
-        let script = ZmxReplayScript.render(commandLine: "printf 'two words'", integrationDirectory: try XCTUnwrap(configuration.environment["ZDOTDIR"]),
-                                           inheritedZdotdir: nil, shell: "/bin/zsh")
+        let script = ZmxReplayScript.renderEnding(commandLine: "printf 'two words'")
         XCTAssertNil(configuration.sessionHostExecutablePath)
         XCTAssertEqual(seed.command, CommandRestore.shellQuotedLine(["/bin/echo", "attach", configuration.daemonName, "/bin/zsh", "-lic", script]))
     }

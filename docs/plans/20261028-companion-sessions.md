@@ -212,18 +212,19 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ZmxReplayScriptTests.swift`, `ZmxSupportTests.swift`,
   `agtermTests/LaunchSeedTests.swift`, `agtermTests/ControlServerRestartTests.swift`, `agtermUITests/ZmxLiveUITests.swift`
 
-- [ ] add a creation-command rendering (zsh and fish) that runs the command and ends with it, with no login-shell
+- [x] add a creation-command rendering (zsh and fish) that runs the command and ends with it, with no login-shell
       continuation, selected by a distinct parameter on `ZmxSupport.attachCommand` that only `ZmxLaunch` passes for
       `initialCommand`/`splitInitialCommand`; captured-argv replay and `session restart --command` keep their
       current scripts
-- [ ] write a restart test pinning that `session restart --command` still returns to the shell, and a test that a
+- [x] write a restart test pinning that `session restart --command` still returns to the shell, and a test that a
       held exit of a local wrapped pane (`onExitHeld`) stays inert in the remote-pane handlers
-- [ ] pass the pane's `commandWait`/`splitCommandWait` through the wrapped `LaunchSeed` so `--wait` holds the final
+- [x] pass the pane's `commandWait`/`splitCommandWait` through the wrapped `LaunchSeed` so `--wait` holds the final
       output in Live mode as it does outside Live
-- [ ] write tests for both script renderings (creation ends with the command, replay still returns to the shell)
-- [ ] write hosted tests for the wrapped seed's wait flag on primary and split
-- [ ] write a Live UI test: a `--command` session closes when its command exits, and holds with `--wait`
-- [ ] run the new and changed tests - must pass before next task
+- [x] write tests for both script renderings (creation ends with the command, replay still returns to the shell)
+- [x] write hosted tests for the wrapped seed's wait flag on primary and split
+- [x] write a Live UI test: a `--command` session closes when its command exits, and holds with `--wait`
+      (written; its run waits for UI-test approval)
+- [x] run the new and changed tests - must pass before next task
 
 ### Stage 1: terminal companions
 
