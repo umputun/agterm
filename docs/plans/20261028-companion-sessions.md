@@ -302,29 +302,31 @@
   `agtermTests/SidebarRowIndentTests.swift`, `agtermTests/SidebarExpansionMirrorTests.swift`,
   `agtermTests/AppActionsPaletteTests.swift`, `agtermUITests/SidebarUITests.swift`
 
-- [ ] build companion nodes under their parent node, make parents expandable, indent companion rows; track parent
+- [x] build companion nodes under their parent node, make parents expandable, indent companion rows; track parent
       expansion alongside `expandedWorkspaceIDs` and persist only genuine user toggles; `TreeShape` and the
       row-content snapshot include the parent -> companion structure and parent expansion; companion rows keep the
-      `session-row` accessibility id with a `companion` accessibility value
-- [ ] reveal a selected companion by expanding workspace and parent; folding a parent never changes the active
+      `session-row` accessibility id with a `companion` accessibility label (the value carries the row name
+      UI tests read)
+- [x] reveal a selected companion by expanding workspace and parent; folding a parent never changes the active
       session; navigation keeps visiting folded companions (collapse is not a navigation filter)
-- [ ] drag rules in `SidebarDrop`: siblings reorder within their parent, a parent drag carries its group, any other
+- [x] drag rules in `SidebarDrop`: siblings reorder within their parent, a parent drag carries its group, any other
       companion drop is refused; the flagged tree stays workspace -> flagged sessions with companion rows unindented
       (a flagged companion of an unflagged parent appears alone, never with its parent pulled in) and applies the
       same drop restriction; the flat/plain flagged layouts keep `moveFlagged` over exact flagged membership
-- [ ] a folded parent shows a separate attention marker for companions that need it, leaving its own status glyph
+- [x] a folded parent shows a separate attention marker for companions that need it, leaving its own status glyph
       and badge untouched; add accessibility label naming the companions
-- [ ] "New Companion" as a top-level item in the session row menu, next to Duplicate Session: a fresh login shell
+- [x] "New Companion" as a top-level item in the session row menu, next to Duplicate Session: a fresh login shell
       in the parent's focused cwd (as Duplicate resolves it), placed after the parent's last companion; on a
       companion row it creates a sibling under the same parent; also a Session menu-bar item beside Duplicate
       Session, an action-palette row and a keyless `new_companion` built-in, all enabled through
       `PaletteCommand.isEnabled(in:)`
-- [ ] write tests for drop resolution cases in `SidebarDropTests`, including a flagged companion whose parent is
+- [x] write tests for drop resolution cases in `SidebarDropTests`, including a flagged companion whose parent is
       not flagged
-- [ ] write hosted tests for outline shape, indent, expansion mirror, reveal and the folded marker
-- [ ] update the built-in count and catalog tests, and the palette dispatch partition test, for `new_companion`
-- [ ] write a UI test creating a companion, folding the parent and reordering siblings
-- [ ] run the new and changed tests with `-only-testing:` - must pass before next task
+- [x] write hosted tests for outline shape, indent, expansion mirror, reveal and the folded marker
+- [x] update the built-in count and catalog tests, and the palette dispatch partition test, for `new_companion`
+- [x] write a UI test creating a companion, folding the parent and reordering siblings
+      (written; its run waits for UI-test approval)
+- [x] run the new and changed tests with `-only-testing:` - must pass before next task
 
 ### Task 5: `parent › child` labels in flat lists
 

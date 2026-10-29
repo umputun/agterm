@@ -378,6 +378,52 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(session.exists, "Control-click must not toggle the workspace's expansion")
     }
 
+    func testCompanionsNestFoldAndReorderAmongSiblings() throws {
+        let parent = sessionRow()
+        XCTAssertTrue(parent.waitForExistence(timeout: 20))
+        for count in [2, 3] {
+            parent.rightClick()
+            presentedMenuItem("New Companion").click()
+            XCTAssertTrue(pollSessionRowCount(count, timeout: 5), "New Companion should add a row under the parent")
+        }
+        let before = try XCTUnwrap(pollSessions { $0.count == 3 && $0.dropFirst().allSatisfy { $0["parentID"] != nil } })
+        let ids = before.compactMap { $0["id"] as? String }
+
+        let triangle = app.disclosureTriangles.element(boundBy: 1)
+        XCTAssertTrue(triangle.waitForHittable(timeout: 5), "a parent with companions should have a disclosure triangle")
+        triangle.click()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 5), "folding the parent should hide its companions")
+        XCTAssertNotNil(pollSessions { $0.first?["collapsed"] as? Bool == true }, "the fold should persist")
+        triangle.click()
+        XCTAssertTrue(pollSessionRowCount(3, timeout: 5))
+
+        let rows = app.staticTexts.matching(identifier: "session-row")
+        let last = rows.element(boundBy: 2)
+        let first = rows.element(boundBy: 1)
+        XCTAssertTrue(last.waitForHittable(timeout: 10))
+        last.click()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        last.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .click(forDuration: 0.7, thenDragTo: first.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)),
+                   withVelocity: 180, thenHoldForDuration: 0.25)
+        XCTAssertNotNil(pollSessions { $0.compactMap { $0["id"] as? String } == [ids[0], ids[2], ids[1]] },
+                        "dragging the last companion above its sibling should reorder inside the group")
+    }
+
+    private func pollSessions(_ predicate: ([[String: Any]]) -> Bool) -> [[String: Any]]? {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if let data = try? Data(contentsOf: stateDir.windowSnapshotFile()),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let sessions = (obj["workspaces"] as? [[String: Any]])?.first?["sessions"] as? [[String: Any]],
+               predicate(sessions) {
+                return sessions
+            }
+            usleep(200_000)
+        }
+        return nil
+    }
+
     func testCloseSession() throws {
         let row = sessionRow()
         XCTAssertTrue(row.waitForExistence(timeout: 20))

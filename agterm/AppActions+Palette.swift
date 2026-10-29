@@ -45,7 +45,8 @@ extension AppActions {
             terminalZoomActive: terminalZoomActive,
             dashboardOpen: frontmostDashboard?.isOpen == true,
             pickerActive: pickActive(for: library.activeWindowID),
-            activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false
+            activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false,
+            activeSessionIsRemote: activeStore?.activeSession?.remoteHost != nil
         )
     }
 
@@ -76,6 +77,7 @@ extension AppActions {
         case .openDirectory: openDirectory()
         case .renameSession: renameActiveSession()
         case .duplicateSession: duplicateActiveSession()
+        case .newCompanion: newCompanionOfActiveSession()
         case .renameWorkspace: renameActiveWorkspace()
         case .closeSession: closeActiveSession()
         case .reopenRecent: openLatestRecentClosed()

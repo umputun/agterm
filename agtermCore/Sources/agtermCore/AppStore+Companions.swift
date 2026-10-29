@@ -60,6 +60,25 @@ extension AppStore {
         return .success(companion)
     }
 
+    /// setSessionExpanded folds or unfolds a parent's companions and saves; false for a session without any.
+    @discardableResult
+    public func setSessionExpanded(_ id: UUID, expanded: Bool) -> Bool {
+        guard let session = session(withID: id), !companions(of: id).isEmpty else { return false }
+        guard session.isExpanded != expanded else { return true }
+        session.isExpanded = expanded
+        scheduleTreeChanged()
+        save()
+        return true
+    }
+
+    /// companionsNeedingAttention lists a parent's companions that are blocked, completed or carry unseen
+    /// notifications, the ones a folded parent row must still surface.
+    public func companionsNeedingAttention(of parentID: UUID) -> [Session] {
+        companions(of: parentID).filter {
+            $0.agentIndicator.status == .blocked || $0.agentIndicator.status == .completed || $0.unseenCount > 0
+        }
+    }
+
     // a remote row is respawned by its owner on the other Mac, never here
     func respawnsOnLastPaneExit(_ session: Session) -> Bool {
         session.remoteHost == nil && !companions(of: session.id).isEmpty

@@ -110,8 +110,15 @@ extension WorkspaceSidebar.Coordinator {
                 duplicate.representedObject = node
                 menu.addItem(duplicate)
             }
+            if sessionCount == 1, store.session(withID: node.id)?.remoteHost == nil {
+                let companion = NSMenuItem(title: "New Companion", action: #selector(menuNewCompanion(_:)), keyEquivalent: "")
+                companion.target = self
+                companion.representedObject = node
+                menu.addItem(companion)
+            }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
+                    && store.canMoveSessions(sessionTargets, toWorkspace: workspace.id)
             }
             if !targets.isEmpty {
                 let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
@@ -266,6 +273,11 @@ extension WorkspaceSidebar.Coordinator {
         guard let node = sender.representedObject as? SidebarNode else { return }
         // this sidebar's window-local store, like Close/Flag — a background window acts on its own row.
         actions.duplicateSession(node.id, in: store)
+    }
+
+    @objc private func menuNewCompanion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        actions.newCompanion(node.id, in: store)
     }
 
     @objc private func menuRevealInFinder(_ sender: NSMenuItem) {

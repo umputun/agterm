@@ -234,6 +234,12 @@ public enum SidebarDrop {
         return visibleIndices[max(0, slot)]
     }
 
+    /// companionChildIndex maps a gap among a parent's nested companion rows to the workspace child index
+    /// `resolveSessions` takes.
+    public static func companionChildIndex(parentIndex: Int, slot: Int) -> Int {
+        parentIndex + 1 + max(0, slot)
+    }
+
     /// FlaggedTree is the workspace tree as the flagged tree layout sees it: every session, and which are
     /// flagged.
     public struct FlaggedTree: Sendable {

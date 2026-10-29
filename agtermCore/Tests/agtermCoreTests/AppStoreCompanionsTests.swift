@@ -151,6 +151,63 @@ struct AppStoreCompanionsTests {
         #expect(recent.load().isEmpty)
     }
 
+    @Test func onlyAParentWithCompanionsFolds() throws {
+        let g = try CompanionGroup()
+
+        #expect(g.store.setSessionExpanded(g.parent.id, expanded: false))
+        #expect(!g.parent.isExpanded)
+        #expect(!g.store.setSessionExpanded(g.after.id, expanded: false))
+        #expect(g.after.isExpanded)
+        #expect(!g.store.setSessionExpanded(g.first.id, expanded: false))
+        #expect(g.first.isExpanded)
+    }
+
+    @Test func blockedCompletedAndUnreadCompanionsNeedAttention() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.parent.id).get()
+        let fourth = try g.store.addCompanion(to: g.parent.id).get()
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: g.first.id)
+        g.store.setAgentIndicator(AgentIndicator(status: .active), forSession: g.second.id)
+        g.store.setAgentIndicator(AgentIndicator(status: .completed), forSession: third.id)
+        fourth.unseenCount = 2
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: g.parent.id)
+
+        #expect(g.store.companionsNeedingAttention(of: g.parent.id).map(\.id) == [g.first.id, third.id, fourth.id])
+        #expect(g.store.companionsNeedingAttention(of: g.after.id).isEmpty)
+    }
+
+    @Test func onlyAMoveInsideItsGroupIsOfferedForACompanion() throws {
+        let g = try CompanionGroup()
+
+        #expect(g.store.canMoveSessions([g.second.id], toWorkspace: g.work.id, at: 1))
+        #expect(g.store.canMoveSessions([g.second.id], toWorkspace: g.work.id))
+        #expect(!g.store.canMoveSessions([g.second.id], toWorkspace: g.work.id, at: 0))
+        #expect(!g.store.canMoveSessions([g.second.id], toWorkspace: g.work.id, at: 3))
+        #expect(!g.store.canMoveSessions([g.second.id], toWorkspace: g.personal.id, at: 0))
+        #expect(g.store.canMoveSessions([g.parent.id], toWorkspace: g.personal.id))
+    }
+
+    @Test func aCompanionBatchedWithASessionAlreadyThereIsNotOfferedThatWorkspace() throws {
+        let g = try CompanionGroup()
+        let resident = try #require(g.store.addSession(toWorkspace: g.personal.id, cwd: "/q"))
+
+        #expect(!g.store.canMoveSessions([g.first.id, resident.id], toWorkspace: g.personal.id))
+        #expect(g.store.moveSessions([g.first.id, resident.id], toWorkspace: g.personal.id) == 0)
+    }
+
+    @Test func aFlaggedCompanionOfAnUnflaggedParentCannotLeaveItsGroupInTheFlaggedTree() throws {
+        let g = try CompanionGroup()
+        g.store.setFlag(true, forSessions: [g.first.id, g.after.id])
+        let resolution = try #require(SidebarDrop.resolveSessions(
+            sources: [SidebarDrop.SessionSource(workspace: g.work.id, index: 1)],
+            target: .workspaceRow(id: g.work.id, sessionCount: 4),
+            childIndex: SidebarDrop.flaggedTreeChildIndex(visibleIndices: [1, 3], slot: 2)))
+
+        #expect(!g.store.canMoveSessions([g.first.id], toWorkspace: g.work.id, at: resolution.destination))
+        #expect(g.store.moveSessions([g.first.id], toWorkspace: g.work.id, at: resolution.destination) == 0)
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, g.after.id])
+    }
+
     @Test func anUndoneCompanionCloseFollowsAParentThatMovedAway() throws {
         let store = makeStore()
         let home = store.addWorkspace(name: "home")

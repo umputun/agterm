@@ -60,6 +60,10 @@ paths:
   script it. A HUD over the starting session shows the two ssh waits and a failure, the latter hiding
   itself after `remoteAttachErrorSeconds`; a window with no session falls back to `notifyCommandFailure`.
 
+- New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
+  menu, with a palette row. `PaletteContext.activeSessionIsRemote` disables it, since only the owning Mac
+  adds companions to a remote parent.
+
 ## Dock menu
 
 - `applicationDockMenu` exposes New Session, New Window, Quick Terminal, Dashboard, captured-window MRU

@@ -20,6 +20,20 @@ final class SidebarCellView: NSTableCellView {
     /// Agent-status glyph fed from the session's `agentIndicator`; hidden on `.idle` (workspace rows always idle).
     let statusIcon = StatusIconView()
 
+    /// companionMarker shows on a folded parent whose hidden companions need attention, beside the parent's own
+    /// status glyph rather than replacing it; session cells only.
+    var companionMarker: NSImageView?
+    var companionMarkerWidthConstraint: NSLayoutConstraint?
+
+    func setCompanionMarker(_ companions: [String]) {
+        guard let companionMarker, let companionMarkerWidthConstraint else { return }
+        companionMarker.isHidden = companions.isEmpty
+        companionMarkerWidthConstraint.constant = companions.isEmpty ? 0 : 14
+        let label = companions.isEmpty ? nil : "companions need attention: " + companions.joined(separator: ", ")
+        companionMarker.setAccessibilityLabel(label)
+        companionMarker.toolTip = label
+    }
+
     /// Inline "+" button between the name and the status icon, workspace cells only (nil for session cells).
     /// Set by the cell builder; `handleSingleClick` reads it to avoid toggling expansion on a click on it.
     var addButton: NSButton?

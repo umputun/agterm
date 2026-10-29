@@ -49,6 +49,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let pickerActive: Bool
     /// activeSessionHasOverlay says the active session holds a program or page that can be hidden or shown.
     public let activeSessionHasOverlay: Bool
+    /// activeSessionIsRemote says the active row mirrors a session another Mac owns.
+    public let activeSessionIsRemote: Bool
 
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
@@ -76,7 +78,8 @@ public struct PaletteContext: Sendable, Equatable {
                 terminalZoomActive: Bool = false,
                 dashboardOpen: Bool = false,
                 pickerActive: Bool = false,
-                activeSessionHasOverlay: Bool = false) {
+                activeSessionHasOverlay: Bool = false,
+                activeSessionIsRemote: Bool = false) {
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -101,13 +104,14 @@ public struct PaletteContext: Sendable, Equatable {
         self.dashboardOpen = dashboardOpen
         self.pickerActive = pickerActive
         self.activeSessionHasOverlay = activeSessionHasOverlay
+        self.activeSessionIsRemote = activeSessionIsRemote
     }
 }
 
 /// Static action-palette rows, in the same order the macOS palette presents them before dynamic rows.
 public enum PaletteCommand: String, CaseIterable, Sendable {
     case newSession, newWorkspace, openDirectory
-    case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
+    case renameSession, duplicateSession, newCompanion, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
     case previousWindow, nextWindow
@@ -135,6 +139,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.hasActiveSession
         case .previousAttentionSession, .nextAttentionSession:
             return context.hasActiveSession || context.attentionNavigationAcrossWindows
+        case .newCompanion:
+            return context.hasActiveSession && !context.activeSessionIsRemote
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
@@ -226,6 +232,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .openDirectory: return "Open Directory…"
         case .renameSession: return "Rename Session"
         case .duplicateSession: return "Duplicate Session"
+        case .newCompanion: return "New Companion"
         case .renameWorkspace: return "Rename Workspace"
         case .closeSession: return "Close Session"
         case .reopenRecent: return "Reopen Last Closed Item"
@@ -290,6 +297,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .openDirectory: return .openDirectory
         case .renameSession: return .renameSession
         case .duplicateSession: return .duplicateSession
+        case .newCompanion: return .newCompanion
         case .renameWorkspace: return .renameWorkspace
         case .closeSession: return .closeSession
         case .reopenRecent: return .reopenRecent

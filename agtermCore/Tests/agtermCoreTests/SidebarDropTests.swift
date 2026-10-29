@@ -382,6 +382,24 @@ struct SidebarDropTests {
         #expect(SidebarDrop.flaggedTreeChildIndex(visibleIndices: visible, slot: slot) == want)
     }
 
+    @Test(arguments: [
+        (parent: 2, slot: 0, want: 3),
+        (parent: 2, slot: 2, want: 5),
+        (parent: 0, slot: -1, want: 1),
+    ])
+    func companionGapMapsPastTheParentRow(parent: Int, slot: Int, want: Int) {
+        #expect(SidebarDrop.companionChildIndex(parentIndex: parent, slot: slot) == want)
+    }
+
+    @Test func aSiblingDraggedAboveItsFirstSiblingResolvesInsideTheGroup() {
+        let resolution = SidebarDrop.resolveSessions(
+            sources: [SidebarDrop.SessionSource(workspace: Self.wsA, index: 2)],
+            target: .workspaceRow(id: Self.wsA, sessionCount: 4),
+            childIndex: SidebarDrop.companionChildIndex(parentIndex: 0, slot: 0))
+        #expect(resolution?.destination == 1)
+        #expect(resolution?.workspace == Self.wsA)
+    }
+
     private static let (a, h, b, c, k) = (ids[0], ids[1], ids[2], ids[3], ids[4])
     private static let tree = SidebarDrop.FlaggedTree(
         workspaces: [(id: wsA, sessions: [a, h, b]), (id: wsB, sessions: [c, k])], flagged: [a, b, c])

@@ -9,6 +9,7 @@ struct PaletteCatalogTests {
             "Open Directory…",
             "Rename Session",
             "Duplicate Session",
+            "New Companion",
             "Rename Workspace",
             "Close Session",
             "Reopen Last Closed Item",
@@ -67,7 +68,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 59)
+        #expect(PaletteCommand.allCases.count == 60)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -231,7 +232,7 @@ struct PaletteCatalogTests {
     }
 
     private static let needSession: Set<PaletteCommand> = [
-        .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
+        .renameSession, .duplicateSession, .newCompanion, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
         .swapPanes, .toggleScratch, .toggleOverlay, .find,
         .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
         .firstSession, .lastSession,
@@ -254,6 +255,12 @@ struct PaletteCatalogTests {
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !Self.needSession.contains(command), "\(command)")
         }
+    }
+
+    @Test func aRemoteActiveSessionTakesNoCompanion() {
+        #expect(PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
+        #expect(!PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(PaletteCommand.newCompanion.builtinAction == .newCompanion)
     }
 
     @Test func flaggedEditorNeedsAnySessionNotAnActiveOne() {

@@ -95,25 +95,48 @@ extension AppStore {
         save()
     }
 
+    /// canMoveSessions answers whether `moveSessions` accepts this destination, without moving; the sidebar
+    /// asks it so a drop indicator or a Move to entry never offers a destination the move refuses.
+    public func canMoveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) -> Bool {
+        guard workspaces.contains(where: { $0.id == targetID }) else { return false }
+        let selected = orderedSessionIDs(matching: Set(sessionIDs))
+        if selected.count == 1, let id = selected.first, session(withID: id)?.parentID == nil { return true }
+        var parents = selected.filter { session(withID: $0)?.parentID == nil }
+        if parents.isEmpty {
+            guard workspace(forSession: selected.first ?? UUID())?.id == targetID else { return false }
+            return companionDestination(selected, index: index) != nil
+        }
+        if index == nil {
+            parents = parents.filter { workspace(forSession: $0)?.id != targetID }
+        }
+        return !parents.isEmpty
+    }
+
     // `index` counts the workspace with the moving siblings removed and must fall inside their group: from
     // right after the parent to its end. nil appends to the group. false, with nothing changed, otherwise.
     private func moveCompanions(_ ids: [UUID], to index: Int?) -> Bool {
-        guard let first = ids.first.flatMap(location(ofSession:)),
-              let parentID = workspaces[first.workspaceIndex].sessions[first.sessionIndex].parentID else { return false }
-        let workspaceIndex = first.workspaceIndex
+        guard let (workspaceIndex, remaining, destination) = companionDestination(ids, index: index) else { return false }
         let moving = Set(ids)
         let sessions = workspaces[workspaceIndex].sessions
-        guard ids.allSatisfy({ id in sessions.contains { $0.id == id && $0.parentID == parentID } }) else { return false }
-        let remaining = sessions.filter { !moving.contains($0.id) }
-        guard let parent = remaining.firstIndex(where: { $0.id == parentID }) else { return false }
-        let end = Self.groupEnd(from: parent, in: remaining)
-        let destination = index ?? end
-        guard destination > parent, destination <= end else { return false }
         let block = sessions.filter { moving.contains($0.id) }
         workspaces[workspaceIndex].sessions = Array(remaining[..<destination]) + block + Array(remaining[destination...])
         pruneSidebarSelection()
         if sessions.map(\.id) != workspaces[workspaceIndex].sessions.map(\.id) { scheduleTreeChanged() }
         save()
         return true
+    }
+
+    private func companionDestination(_ ids: [UUID], index: Int?) -> (workspace: Int, remaining: [Session], destination: Int)? {
+        guard let first = ids.first.flatMap(location(ofSession:)),
+              let parentID = workspaces[first.workspaceIndex].sessions[first.sessionIndex].parentID else { return nil }
+        let sessions = workspaces[first.workspaceIndex].sessions
+        guard ids.allSatisfy({ id in sessions.contains { $0.id == id && $0.parentID == parentID } }) else { return nil }
+        let moving = Set(ids)
+        let remaining = sessions.filter { !moving.contains($0.id) }
+        guard let parent = remaining.firstIndex(where: { $0.id == parentID }) else { return nil }
+        let end = Self.groupEnd(from: parent, in: remaining)
+        let destination = index ?? end
+        guard destination > parent, destination <= end else { return nil }
+        return (first.workspaceIndex, remaining, destination)
     }
 }

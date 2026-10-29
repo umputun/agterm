@@ -31,6 +31,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
         #expect(BuiltinAction.dashboard.rawValue == "dashboard")
         #expect(BuiltinAction.duplicateSession.rawValue == "duplicate_session")
+        #expect(BuiltinAction.newCompanion.rawValue == "new_companion")
+        #expect(BuiltinAction.newCompanion.defaultChord == nil)
         #expect(BuiltinAction.previousWorkspace.rawValue == "previous_workspace")
         #expect(BuiltinAction.nextWorkspace.rawValue == "next_workspace")
         #expect(BuiltinAction.toggleWorkspaceCollapse.rawValue == "toggle_workspace_collapse")
@@ -39,7 +41,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
         #expect(BuiltinAction.editFlaggedSessions.rawValue == "edit_flagged_sessions")
         #expect(BuiltinAction.editFocusedWorkspaces.rawValue == "edit_focused_workspaces")
-        #expect(BuiltinAction.allCases.count == 52)
+        #expect(BuiltinAction.allCases.count == 53)
     }
 
     @Test func rejectsUnknownName() {
@@ -93,6 +95,7 @@ struct BuiltinActionTests {
             .openDirectory: Chord(mods: [.command], key: "o"),
             .renameSession: nil,
             .duplicateSession: nil,
+            .newCompanion: nil,
             .closeSession: Chord(mods: [.command], key: "w"),
             .reopenRecent: Chord(mods: [.command, .shift], key: "t"),
             .undoClose: Chord(mods: [.command], key: "z"),
@@ -189,7 +192,7 @@ struct BuiltinActionTests {
 
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
-            .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
+            .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession, .newCompanion,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces,

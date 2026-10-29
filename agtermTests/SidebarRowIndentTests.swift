@@ -119,6 +119,23 @@ final class SidebarRowIndentTests: XCTestCase {
         try row(ofKind: .workspace)
     }
 
+    func testACompanionRowIndentsOneLevelPastItsParent() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        let companion = try store.addCompanion(to: parent.id).get()
+        try buildSidebar()
+
+        let parentFrame = outline.frameOfCell(atColumn: 0, row: try row(of: parent.id))
+        let companionFrame = outline.frameOfCell(atColumn: 0, row: try row(of: companion.id))
+        XCTAssertEqual(companionFrame.minX - parentFrame.minX, Self.indentationPerLevel)
+        XCTAssertEqual(companionFrame.maxX, parentFrame.maxX)
+    }
+
+    private func row(of id: UUID) throws -> Int {
+        outline.layoutSubtreeIfNeeded()
+        return try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == id })
+    }
+
     private func sessionRow() throws -> Int {
         try row(ofKind: .session)
     }

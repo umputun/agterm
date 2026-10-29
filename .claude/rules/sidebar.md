@@ -76,7 +76,8 @@ paths:
 - Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank
   workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
   untouched rather than clearing it. No control form — see `control-api.md`.
-- Rename, Copy Name, Duplicate Session, and Reveal in Finder appear only for one target. Duplicate inserts a fresh
+- Rename, Copy Name, Duplicate Session, New Companion, and Reveal in Finder appear only for one target.
+  New Companion is omitted on a remote row. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
@@ -233,6 +234,19 @@ paths:
   Both no-op under the flat flagged list. In either tree layout they apply to all workspaces, including
   those the view omits. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
+
+## Companions
+
+- In the ordinary tree a companion row nests under its parent's row (`sessionNodes(for:)`); every flagged layout
+  lists companions unindented. `TreeShape.parentIDs` carries the nesting, so a regroup rebuilds.
+- `expandedParentIDs` tracks open parents the way `expandedWorkspaceIDs` tracks workspaces: only a genuine
+  toggle persists, through `setSessionExpanded`. A selection reveal opens the workspace, then the parent, with
+  persistence suppressed. `applyParentExpansion(under:)` re-applies parents when their workspace opens.
+- A folded parent shows `companion-marker` for the companions `companionsNeedingAttention` returns, beside its
+  own glyph and badge, with their names as the accessibility label. `RowContent.foldedAttention` reloads it.
+- A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
+  slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
+- Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
 
 ## Persistence
 
