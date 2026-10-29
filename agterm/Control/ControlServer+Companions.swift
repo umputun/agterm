@@ -59,6 +59,30 @@ extension ControlServer {
         return ids.filter { store.session(withID: $0)?.parentID.map(named.contains) != true }
     }
 
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard let page = options.page else { return ControlResponse(ok: false, error: "a page companion needs --html or --url") }
+            if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
+                return ControlResponse(ok: false, error: "session.companion.page: \(failure)")
+            }
+            let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
+                                      chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+            switch store.addPageCompanion(to: id, overlay: overlay, select: options.follow,
+                                          backgroundColor: options.backgroundColor) {
+            case .failure(.remoteParent):
+                return ControlResponse(ok: false, error: "companions of a remote session are not supported yet")
+            case .failure:
+                return ControlResponse(ok: false, error: "could not create page companion")
+            case .success(let companion):
+                if options.persistent {
+                    _ = HtmlOverlayRegistry.shared.page(for: overlay, store: store, backgroundColor: options.backgroundColor)
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: companion.id.uuidString, pageID: overlay.id.uuidString,
+                                                                       parent: companion.parentID?.uuidString))
+            }
+        }
+    }
+
     /// The ids a close of `ids` removes, each root followed by its companions; computed before the close
     /// because the companions are gone after it.
     func closingGroup(_ ids: [UUID], in store: AppStore) -> [UUID] {

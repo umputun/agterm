@@ -3,6 +3,8 @@ extension ControlDispatcher {
         switch request.cmd {
         case .sessionCompanionNew:
             return dispatchCompanionNew(request)
+        case .sessionCompanionPage:
+            return dispatchCompanionPage(request)
         case .sessionCollapse:
             return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: false)
         case .sessionExpand:
@@ -10,6 +12,28 @@ extension ControlDispatcher {
         default:
             return ControlResponse(ok: false, error: "unknown command \(request.cmd.rawValue)")
         }
+    }
+
+    // a page companion's page is the row, so it is always full size and session-wide
+    private func dispatchCompanionPage(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        let page: HtmlSource
+        switch Self.overlayContent(command: args?.command ?? "", args: args) {
+        case .rejected(let response): return response
+        case .program: return ControlResponse(ok: false, error: "a page companion needs --html or --url")
+        case .page(let source): page = source
+        }
+        if args?.pane != nil || args?.sizePercent != nil || args?.width != nil || args?.height != nil {
+            return ControlResponse(ok: false, error: "a page companion is full size: it takes no --pane, --size-percent, --width or --height")
+        }
+        if let color = args?.color, !WatermarkConfig.isValidColorHex(color) {
+            return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+        }
+        return actions.createPageCompanion(request.target, window: args?.window, options: ControlSessionOverlayOpenOptions(
+            command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: args?.color,
+            follow: args?.follow ?? false, pane: nil, page: page, navigation: args?.navigation ?? false,
+            javascript: args?.javascript ?? false, chromeless: args?.chromeless ?? false,
+            persistent: args?.persistent ?? false, browse: args?.browse ?? false))
     }
 
     // a companion lands under its parent, so a raw client's workspace or placement field is refused, not dropped

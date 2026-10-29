@@ -30,4 +30,30 @@ struct SessionCompanionsCommandsTests {
         let expected = ControlRequest(cmd: .sessionExpand, target: "9f3c", args: ControlArgs(window: "win"))
         #expect(try request(["session", "expand", "--target", "9f3c", "--window", "win"]) == expected)
     }
+
+    @Test func overlayOpenWithCompanionSendsThePageCompanionCommand() throws {
+        let actual = try request(["session", "overlay", "open", "--html", "/tmp/p.html", "--companion", "--target", "p1"])
+        #expect(actual.cmd == .sessionCompanionPage)
+        #expect(actual.target == "p1")
+        #expect(actual.args?.html == "/tmp/p.html")
+    }
+
+    @Test func anHtmlCompanionMayBlockOnItsPageAndAURLOneMayNot() throws {
+        let blocked = try request(["session", "overlay", "open", "--html", "/tmp/p.html", "--companion", "--block"])
+        #expect(blocked.cmd == .sessionCompanionPage)
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "--url", "http://localhost:1", "--companion", "--block"])
+        }
+    }
+
+    @Test(arguments: [["--pane", "right"], ["--size-percent", "50"]])
+    func overlayOpenWithCompanionRefusesAnythingButFullSize(extra: [String]) {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "--html", "/tmp/p.html", "--companion"] + extra)
+        }
+    }
+
+    @Test func overlayOpenWithCompanionNeedsAPage() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "open", "top", "--companion"]) }
+    }
 }

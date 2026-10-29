@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -385,6 +385,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlServer.companionMoveError`; an ordinary no-op move stays ok.
 - `recent.open` names `parent session is not open or in Recent Closed` only when
   `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
+- A page companion is created by its own wire command, `session.companion.page`, for the same older-app
+  reason as `session.companion.new`; it never touches the parent's own overlay slot.
+- `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
+  It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
+  window's zoom target, and never refuses a zoom hide, which stays idempotent.
+- `AppStore.closeOverlay` on a page session closes the session before slot teardown; the strip X and ⌘W go
+  through `AppActions.closeSession`, so they keep the close confirmation and the grace-period undo.
+- `Session.content` is a `let` set at init, so the first save already excludes the row
+  (`isPersistable`, `locallyManagedPaneIdentities`).
 
 ## Surface input, output, and search
 

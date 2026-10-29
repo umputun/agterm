@@ -5,6 +5,10 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
+    func createPageCompanion(_: String?, window _: String?, options _: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page"))
+    }
+
     func createCompanion(_: String?, options _: CompanionOptions, window _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.new"))
     }

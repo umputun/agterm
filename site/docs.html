@@ -929,6 +929,11 @@
                 and Copy Name keep the bare name. From a script:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session new --parent active --command 'tail -f build.log' --name logs</span>,
                 with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> to keep the output after it exits.
+                A <strong style="color: #e6e1d7">page companion</strong> shows an HTML page or URL instead of a shell, labelled with the file name
+                or origin:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session overlay open --html report.html --companion</span>.
+                It closes when the page closes, and it is not saved across a relaunch; recreate it from an
+                <code style="color: #e6e1d7">app.launched</code> <a href="#hooks" style="color: #6d82f3">hook</a>.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

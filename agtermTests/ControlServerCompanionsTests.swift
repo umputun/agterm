@@ -198,6 +198,24 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNil(server.pageCompanionRefusal(ControlRequest(cmd: .surfaceZoom, target: "surface:\(parent.id.uuidString):left")))
     }
 
+    func testAPageCompanionIsCreatedWithoutTouchingTheParentsOverlaySlot() throws {
+        let (store, parent) = try addSession()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: "#112233",
+                                                       follow: false, pane: nil, page: .file(path: "/tmp/p.html", grantRoot: nil))
+
+        let reply = server.createPageCompanion(parent.id.uuidString, window: nil, options: options)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.parent, parent.id.uuidString)
+        XCTAssertNotNil(reply.result?.pageID)
+        let page = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(page.content, .page)
+        XCTAssertEqual(page.htmlOverlay?.id.uuidString, reply.result?.pageID)
+        XCTAssertEqual(page.overlayBackgroundColor, "#112233")
+        XCTAssertFalse(parent.overlayActive)
+        XCTAssertNotEqual(store.selectedSessionID, page.id)
+    }
+
     private func addSession() throws -> (AppStore, Session) {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

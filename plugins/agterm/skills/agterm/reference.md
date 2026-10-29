@@ -246,6 +246,8 @@ Read it with `active`: an active session is selected right now),
 `parent` (a companion's parent session id, the read side of `session new --parent`; omitted for a
 top-level session), `collapsed` (true only for a parent whose companions are folded, the read side of
 `session collapse`/`expand`; omitted otherwise),
+`content` (`"page"` for a page companion, the read side of `session overlay open --companion`; omitted for a
+terminal session. Such a node has no terminal, so `realized` is false and `cwd` reports the parent's directory),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
@@ -519,6 +521,8 @@ buys nothing. A caller with no tree uses `version`.
   `--command` comes back as a plain shell); a parent without companions closes on exit as before. The GUI
   twin is New Companion in the session row's context menu and the Session menu, an action-palette row, and
   the keyless `new_companion` keymap action. Read back from the tree session node's `parent` field.
+  A page companion shows an HTML page instead of a terminal and never starts a shell; it is created with
+  `session overlay open --html FILE --companion` or `--url URL --companion` (see that entry).
 - `session collapse [--target] [--window W]` - fold a parent's companions in the sidebar tree; returns the
   session id. Persisted. A session without companions errors `session has no companions`. Read back from the
   tree session node's `collapsed` flag. Wire command `session.collapse`. `sidebar expand|collapse` and
@@ -965,7 +969,8 @@ error keeps those names for compatibility.
 - `session overlay open --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — show a local HTML file (an artifact you generated: a report, chart or prototype) in the overlay slot
   instead of running a program. Same placement, sizing, `--follow`, ⌘W and `session overlay close` as a
-  program overlay; a page stays up until it is closed. The panel carries a strip
+  program overlay; a page stays up until it is closed. `--companion` opens the page as a companion session
+  instead of in the overlay slot; see the entry after `--url`. The panel carries a strip
   naming the file shown or the page's origin, then the page title dimmed, with a close button; `--navigation` adds
   back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL, worth it
   when the page links to others. `--chromeless` drops the strip so the page fills its panel (the session or
@@ -1055,6 +1060,32 @@ error keeps those names for compatibility.
   page loads frames from its own origin only. It has no bridge, so it closes with ⌘W,
   `session overlay close`, or, with `--js`, its own `window.close()` where the web view accepts it.
   A loopback port can forward another machine's content, so open only a server you trust.
+- `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
+  - open the page as a page companion of the target instead of in its overlay slot: a companion session
+  (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,
+  labelled with the page's file name or origin (a rename wins), with a page icon. The page flags of the two
+  entries above apply (`--navigation`, `--chromeless`, `--js`, `--persistent`, `--browse`,
+  `--background-color`, `--cwd` for `--html`); `--follow` selects the new row. `--companion` requires
+  `--html` or `--url` and refuses `--pane`, `--size-percent`, `--width` and `--height`; an `--html` companion
+  takes `--block`, which waits on the page's outcome as for any page. Wire
+  command `session.companion.page`, target the parent (a companion target means its parent); the parent's
+  own overlay slot is never touched. Returns `result.id` (the new companion; the human output prints it),
+  `result.parent`, and `result.pageID` for `session overlay result --page`. Errors as on
+  `session new --parent`: `companions of a remote session are not supported yet`, and against an app too
+  old for companions `error: the running app is too old for companions`, with nothing created.
+  The page and the row end together: when the page closes itself (`window.close()`, a submit) or
+  `session overlay close` runs on it, the row closes at once. The strip's close button and ⌘W close it like
+  any session, with the close confirmation setting and the grace-period undo. A page companion is never
+  saved: it is gone after a relaunch and is not in Recent Closed, so recreate it from an `on app.launched`
+  hook (see hooks). `session overlay hide`/`toggle` answer `no overlay`, `show` succeeds and changes nothing,
+  and the strip has no hide button. Terminal commands and anything that would cover, float or replace the
+  page are refused with `<cmd>: not available on a page companion`: `session.type`, `.text`, `.copy`,
+  `.paste`, `.selectall`, `.search`, `.background`, `.lead`, `.swap`, `.focus`, `.resize`, `.split`,
+  `.split.close`, `.scratch`, `.restart`, `.restore`, `session.overlay.open`, `session.hud.open`, a floating
+  `session.overlay.resize`, a terminal-style `ask.open` (the default), and `surface.zoom`/`surface.cursor` aimed at
+  the page explicitly. Close, rename, flag, tint, status, notify, and the page's own reload, navigate,
+  result and submit keep working. The dashboard leaves page companions out. Read back from the tree node's
+  `content`.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
   overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
   page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.

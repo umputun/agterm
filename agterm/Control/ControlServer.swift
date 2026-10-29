@@ -609,7 +609,7 @@ final class ControlServer {
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand, .workspaceFlag,
-                .sessionCollapse, .sessionExpand, .sessionCompanionNew,
+                .sessionCollapse, .sessionExpand, .sessionCompanionNew, .sessionCompanionPage,
                 .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionRestart, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom,
                 .surfaceCursor,

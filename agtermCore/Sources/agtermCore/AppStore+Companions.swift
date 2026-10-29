@@ -65,14 +65,15 @@ extension AppStore {
     /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
     /// slot refuses removes the row again.
     @discardableResult
-    public func addPageCompanion(to targetID: UUID, overlay: HtmlOverlay, name: String? = nil,
-                                 select: Bool = true) -> Result<Session, CompanionRefusal> {
+    public func addPageCompanion(to targetID: UUID, overlay: HtmlOverlay, name: String? = nil, select: Bool = true,
+                                 backgroundColor: String? = nil) -> Result<Session, CompanionRefusal> {
         companionSlot(for: targetID, cwd: nil).flatMap { slot in
             guard let page = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, name: name, at: slot.index,
                                         select: select, parentID: slot.parent, content: .page) else {
                 return .failure(.noSuchSession)
             }
-            if let failure = openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil) {
+            if let failure = openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil,
+                                             backgroundColor: backgroundColor) {
                 closeSession(page.id)
                 return .failure(.pageNotOpened(failure))
             }

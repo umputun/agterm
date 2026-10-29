@@ -316,6 +316,16 @@ struct AppStoreTreeProjectionTests {
         #expect(node.collapsed == nil)
     }
 
+    @Test func aPageCompanionReportsItsContentAndATerminalOmitsIt() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        let nodes = g.store.controlTree().workspaces.flatMap(\.sessions)
+
+        #expect(nodes.first { $0.id == page.id.uuidString }?.content == "page")
+        #expect(nodes.first { $0.id == g.parent.id.uuidString }?.content == nil)
+    }
+
     @Test func parentAndCollapsedAreOmittedFromJSONForAPlainSession() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

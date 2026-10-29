@@ -9,6 +9,18 @@ func tooOldForCompanions(_ response: ControlResponse, command: Command) -> Bool 
     return error.hasPrefix("invalid request:") && error.contains(command.rawValue)
 }
 
+/// companionSend wraps a sender so a companion request an old app refused reads as that, under `--json` the raw reply.
+func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, json: Bool) -> (ControlRequest) throws -> SocketReply {
+    { request in
+        let reply = try send(request)
+        if !json, tooOldForCompanions(reply.response, command: request.cmd) {
+            FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
+            throw ExitCode.failure
+        }
+        return reply
+    }
+}
+
 func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool) throws {
     let reply = try SocketClient(path: options.socketPath()).send(request)
     if !options.json, tooOldForCompanions(reply.response, command: request.cmd) {

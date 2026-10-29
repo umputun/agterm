@@ -94,6 +94,33 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertTrue(cwd.hasSuffix("/moved"), "the plain shell starts where the command's shell had moved: \(cwd)")
     }
 
+    func testAPageCompanionShowsItsPageWithNoTerminalAndClosesWithIt() throws {
+        let parent = try activeSessionID()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-page-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("report.html")
+        try "<p>companion page</p>".write(to: file, atomically: true, encoding: .utf8)
+
+        let page = try cliOutput(["session", "overlay", "open", "--html", file.path, "--companion", "--target", parent, "--follow"])
+
+        XCTAssertTrue(poll(until: (try? self.sessionNode(id: page))?["content"] as? String == "page", timeout: 10))
+        XCTAssertTrue(poll(until: ((try? self.sessionNode(id: page))?["htmlOverlays"] as? [[String: Any]])?
+            .contains { $0["state"] as? String == "loaded" } == true, timeout: 10), "the page should load")
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        let node = try sessionNode(id: page)
+        XCTAssertEqual(node["parent"] as? String, parent)
+        XCTAssertEqual(node["name"] as? String, "report.html")
+        XCTAssertEqual(node["realized"] as? Bool, false, "no terminal is ever created under a page companion")
+        XCTAssertNotEqual(try sessionNode(id: parent)["overlay"] as? Bool, true, "the parent's overlay slot stays free")
+        let typed = try sendCommand(typeRequest(text: "ls\n", target: page, select: false))
+        XCTAssertEqual(typed["error"] as? String, "session.type: not available on a page companion")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(page)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: (try? self.sessionNodeIfPresent(id: page)) == nil, timeout: 10),
+                      "closing the page ends its row")
+    }
+
     private func cliOutput(_ arguments: [String]) throws -> String {
         let process = Process()
         process.executableURL = Bundle.main.bundleURL.deletingLastPathComponent()

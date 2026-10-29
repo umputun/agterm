@@ -444,16 +444,17 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift`, `MockControlActions.swift`,
   `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] the `session.companion.page` wire command behind `session overlay open --html ... --companion` creates a page
+- [x] the `session.companion.page` wire command behind `session overlay open --html ... --companion` creates a page
       companion under the target's parent group and returns its id with `result.parent`; an older app rejects the
       unknown command before touching the parent's overlay slot; never consumes or replaces the parent's overlay
       slot; refuses a remote parent until Task 11
-- [ ] reject `--companion` with a program overlay, `--pane`, a floating size or point dimensions, and `--wait`
-- [ ] read-back of the content kind on `ControlSessionNode`; explicit refusals for hide, floating resize and
+- [x] reject `--companion` with a program overlay, `--pane`, a floating size or point dimensions, and `--wait`
+- [x] read-back of the content kind on `ControlSessionNode`; explicit refusals for hide, floating resize and
       shell-only commands, while close, rename, flag, tint and status keep working on a page companion
-- [ ] document `app.launched` as the place to recreate page companions after relaunch
-- [ ] write dispatcher and CLI tests, and an e2e test opening and closing a page companion
-- [ ] run the new and changed tests - must pass before next task
+- [x] document `app.launched` as the place to recreate page companions after relaunch
+- [x] write dispatcher and CLI tests, and an e2e test opening and closing a page companion
+      (the e2e test, which asserts the page's `realized` stays false, is written; its run waits for UI-test approval)
+- [x] run the new and changed tests - must pass before next task
 
 ### Stage 3: Duplicate as Companion
 

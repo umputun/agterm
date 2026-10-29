@@ -79,4 +79,42 @@ struct ControlDispatcherCompanionsTests {
         #expect(collapse.target == "9f3c")
         #expect(expand.cmd == .sessionExpand)
     }
+
+    @Test func companionPageRoutesAFullSizePage() async {
+        let actions = MockControlActions()
+        let request = ControlRequest(cmd: .sessionCompanionPage, target: "p1", args: ControlArgs(
+            follow: true, window: "win", color: "#112233", html: "/tmp/a/page.html", javascript: true))
+
+        let response = await ControlDispatcher(actions: actions).dispatch(request)
+
+        #expect(response == ControlResponse(ok: true))
+        guard case .companionPage(let target, let window, let options)? = actions.calls.first else {
+            Issue.record("no page companion call: \(actions.calls)")
+            return
+        }
+        #expect(target == "p1")
+        #expect(window == "win")
+        #expect(options.page == .file(path: "/tmp/a/page.html", grantRoot: nil))
+        #expect(options.pane == nil && options.sizePercent == nil && options.follow && options.javascript)
+        #expect(options.backgroundColor == "#112233")
+    }
+
+    @Test(arguments: [
+        ControlArgs(pane: "right", html: "/tmp/p.html"), ControlArgs(sizePercent: 50, html: "/tmp/p.html"),
+        ControlArgs(width: 300, html: "/tmp/p.html"), ControlArgs(command: "top"),
+    ])
+    func companionPageRefusesAProgramOrAnythingButFullSize(args: ControlArgs) async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .sessionCompanionPage, target: "p1", args: args))
+
+        #expect(response?.ok == false)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func companionPageRawStringMapsToItsCommand() throws {
+        let request = try JSONDecoder().decode(ControlRequest.self, from: Data(#"{"cmd":"session.companion.page","target":"p1"}"#.utf8))
+        #expect(request.cmd == .sessionCompanionPage)
+    }
 }

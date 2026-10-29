@@ -32,6 +32,7 @@ public enum Command: String, Codable, Sendable {
     case sessionRestore = "session.restore"
     case sessionCollapse = "session.collapse"
     case sessionCompanionNew = "session.companion.new"
+    case sessionCompanionPage = "session.companion.page"
     case sessionExpand = "session.expand"
     case sessionRestart = "session.restart"
     case sessionBackground = "session.background"

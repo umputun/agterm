@@ -299,6 +299,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let parent: String?
     /// True for a parent whose companions are folded; omitted otherwise.
     public let collapsed: Bool?
+    /// `page` for a page companion, which has no terminal; omitted for a terminal session.
+    public let content: String?
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
     public let background: BackgroundWatermark?
@@ -379,7 +381,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
-                tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil) {
+                tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil,
+                content: String? = nil) {
+        self.content = content
         self.parent = parent
         self.collapsed = collapsed
         self.id = id

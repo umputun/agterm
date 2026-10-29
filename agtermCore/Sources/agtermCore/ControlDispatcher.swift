@@ -13,6 +13,8 @@ public protocol ControlActions {
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
     /// Creates a companion of the target session, or a sibling when the target is itself a companion.
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse
+    /// Creates a page companion of the target session showing `options.page` full size.
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.
     func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func selectSession(_ target: String?, window: String?) -> ControlResponse
@@ -276,7 +278,7 @@ public struct ControlDispatcher {
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
-        case .sessionCompanionNew, .sessionCollapse, .sessionExpand:
+        case .sessionCompanionNew, .sessionCompanionPage, .sessionCollapse, .sessionExpand:
             return dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,

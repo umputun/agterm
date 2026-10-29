@@ -602,6 +602,11 @@ struct Session: ParsableCommand {
             var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
             @Flag(name: .long, help: Open.blockHelp) var block = false
+            @Flag(name: .long, help: """
+                Open the --html/--url page as a page companion under the target session: a sidebar row of its own, \
+                full size, that closes with its page. Refuses --pane, --size-percent, --width and --height.
+                """)
+            var companion = false
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: Overlay.widthHelp) var width: Int?
@@ -619,6 +624,10 @@ struct Session: ParsableCommand {
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
+                if companion, html == nil && url == nil { throw ValidationError("--companion requires --html or --url") }
+                if companion, pane != nil || sizePercent != nil || width != nil || height != nil {
+                    throw ValidationError("--companion is full size: it takes no --pane, --size-percent, --width or --height")
+                }
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
                 if [command, html, url].compactMap({ $0 }).count != 1 {
                     throw ValidationError("provide exactly one of COMMAND, --html or --url")
@@ -653,7 +662,7 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
+                ControlRequest(cmd: companion ? .sessionCompanionPage : .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
@@ -666,8 +675,13 @@ struct Session: ParsableCommand {
             }
 
             func run() throws {
+                if companion, !block { return try runCompanionRequest(makeRequest(), options: options, echoID: true) }
                 guard block else { try defaultRun(); return }
-                if html != nil { return try HtmlPageRunner(json: options.json, send: SocketClient(path: options.socketPath()).send).block(makeRequest()) }
+                if html != nil {
+                    let send = SocketClient(path: options.socketPath()).send
+                    return try HtmlPageRunner(json: options.json, send: companion ? companionSend(send, json: options.json) : send)
+                        .block(makeRequest())
+                }
                 let client = SocketClient(path: options.socketPath())
                 // open via the same `makeRequest()` as the non-block path: in block mode `validate()` guarantees
                 // `!wait`, so its `wait` is nil, and the floating `--size-percent` rides that single source

@@ -32,6 +32,7 @@ final class MockControlActions: ControlActions {
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionExpansion(target: String?, window: String?, expanded: Bool)
         case companionNew(target: String?, options: CompanionOptions, window: String?)
+        case companionPage(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
         case flaggedMove(target: String?, window: String?, anchor: String, FlaggedOrderPlacement)
@@ -327,6 +328,11 @@ final class MockControlActions: ControlActions {
         calls.append(.workspaceFilter(window: window, mode))
         if let store = focusStore { store.applyWorkspaceFilter(mode) }
         return nextWorkspaceFilterResponse
+    }
+
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        calls.append(.companionPage(target: target, window: window, options: options))
+        return ControlResponse(ok: true)
     }
 
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse {

@@ -406,7 +406,8 @@ public final class AppStore {
                                           lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
                                           tint: session.tint?.color.rawValue, tintOn: session.tint?.parts.map(\.rawValue),
                                           parent: session.parentID?.uuidString,
-                                          collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil)
+                                          collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil,
+                                          content: session.content == .page ? "page" : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
