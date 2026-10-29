@@ -110,11 +110,24 @@ public enum DuplicateReplay {
         }
     }
 
+    // preserve invocation symlink names while normalizing relative paths consistently across hosts
+    private static func joined(_ program: String, under directory: String) -> String {
+        var parts: [Substring] = []
+        for part in "\(directory)/\(program)".split(separator: "/") {
+            switch part {
+            case ".": continue
+            case "..": _ = parts.popLast()
+            default: parts.append(part)
+            }
+        }
+        return "/" + parts.joined(separator: "/")
+    }
+
     // absolute PATH entries only: a relative entry meant whatever directory the shell sat in at that lookup
     private static func startingPaths(of program: String, in observation: RestartReplay.Observation) -> [String] {
         if program.contains("/") {
             guard let directory = observation.workingDirectory else { return [] }
-            return [URL(fileURLWithPath: program, relativeTo: URL(fileURLWithPath: directory, isDirectory: true)).standardized.path]
+            return [joined(program, under: directory)]
         }
         return (observation.searchPath ?? systemSearchPath).split(separator: ":").filter { $0.hasPrefix("/") }
             .map { $0.hasSuffix("/") ? "\($0)\(program)" : "\($0)/\(program)" }
