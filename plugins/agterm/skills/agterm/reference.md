@@ -529,6 +529,18 @@ buys nothing. A caller with no tree uses `version`.
   `workspace collapse|expand` keep acting on workspaces only.
 - `session expand [--target] [--window W]` - unfold a parent's companions; the inverse of
   `session collapse`, with the same return, error and read-back. Wire command `session.expand`.
+- `session duplicate --companion [--target] [--window W]` - Duplicate as Companion: create a companion of the
+  target copying its split axis and ratio, and start another copy of each pane's foreground program in that
+  program's working directory; a pane where a shell holds the foreground gets a plain login shell in its
+  directory. Each program becomes the pane's creation command, as `session new --command` sets one, so the pane
+  closes when it exits. Every pane is checked before anything is created; a refused pane is named
+  (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
+  foreground or working directory, unreplayable arguments or one containing a backslash, a pane under a visible
+  program overlay. A remote source and a
+  page companion are refused. A pipeline or shell job is copied as its foreground process only; name, status,
+  flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
+  `result.id` and `result.parent`. GUI twin: Duplicate as Companion in the row context menu and the Session
+  menu, a palette row, and the keyless `duplicate_companion` action.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -1856,7 +1868,7 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
-`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
+`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,

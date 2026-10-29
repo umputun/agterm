@@ -25,6 +25,12 @@ struct SessionCompanionsCommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "new", "--parent", "p1"] + extra) }
     }
 
+    @Test func sessionDuplicateWithCompanionSendsTheDuplicateCompanionCommand() throws {
+        let expected = ControlRequest(cmd: .sessionCompanionDuplicate, target: "p1", args: ControlArgs(window: "win"))
+        #expect(try request(["session", "duplicate", "--companion", "--target", "p1", "--window", "win"]) == expected)
+        #expect(try request(["session", "duplicate", "--target", "p1"]).cmd == .sessionDuplicate)
+    }
+
     @Test func sessionCollapseAndExpandTargetAParent() throws {
         #expect(try request(["session", "collapse"]) == ControlRequest(cmd: .sessionCollapse, target: "active"))
         let expected = ControlRequest(cmd: .sessionExpand, target: "9f3c", args: ControlArgs(window: "win"))

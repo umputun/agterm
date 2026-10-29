@@ -134,6 +134,19 @@ struct ZmxReplayScriptTests {
         #expect(try String(contentsOf: result, encoding: .utf8) == "two words")
     }
 
+    @Test func aDuplicatedProgramsCreationCommandKeepsItsArgvThroughZsh() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "argv")
+        let probe = fixture.appending(path: "record-argv")
+        try makeArgumentProbe(probe)
+        let expected = ["can't", "two words", "", "$HOME", "semi;colon"]
+        let command = try #require(DuplicateReplay.Plan.program(argv: [probe.path, result.path] + expected, workingDirectory: "/").command)
+
+        #expect(try runZsh(script: ZmxReplayScript.renderEnding(commandLine: command)) == 0)
+        #expect(try nullSeparatedValues(at: result) == expected)
+    }
+
     @Test func endingCommandStartsNoShellAfterIt() {
         let script = ZmxReplayScript.renderEnding(commandLine: "lazygit")
         let fishScript = ZmxReplayScript.renderFishEnding(commandLine: "printf '%s' 'two words'")
@@ -227,6 +240,22 @@ struct ZmxReplayScriptTests {
         #expect(environment == [
             "/integration root:/usr/local/share:/usr/share", "/integration root",
         ])
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func aDuplicatedProgramsCreationCommandKeepsItsArgvThroughFish() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "argv")
+        let probe = fixture.appending(path: "record-argv")
+        try makeArgumentProbe(probe)
+        let expected = ["can't", "two words", "", "$HOME", "semi;colon"]
+        let command = try #require(DuplicateReplay.Plan.program(argv: [probe.path, result.path] + expected, workingDirectory: "/").command)
+
+        try runFish(executable: fish, script: ZmxReplayScript.renderFishEnding(commandLine: command), fixture: fixture,
+                    environment: ["RESULT_FILE": result.path])
+        #expect(try nullSeparatedValues(at: result) == expected)
     }
 
     @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))

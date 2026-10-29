@@ -63,6 +63,10 @@ paths:
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. `PaletteContext.activeSessionIsRemote` disables it, since only the owning Mac
   adds companions to a remote parent.
+- Duplicate as Companion (`duplicate_companion`, keyless) follows it in both menus, with a palette row; it is in
+  `terminalOnly` and shares New Companion's remote gate. `AppActions` reaches the planner through
+  `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
+  planner; a refusal shows through `notifyCommandFailure`.
 
 ## Dock menu
 

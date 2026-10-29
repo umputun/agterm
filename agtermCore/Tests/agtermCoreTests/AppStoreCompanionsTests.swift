@@ -91,6 +91,33 @@ struct AppStoreCompanionsTests {
         #expect(cells.map(\.session) == [g.parent.id])
     }
 
+    @Test func duplicateAsCompanionCopiesTheLayoutAndRunsEachProgramAsItsCommand() throws {
+        let g = try CompanionGroup()
+
+        let copy = try g.store.duplicateAsCompanion(
+            of: g.first.id, left: .program(argv: ["htop", "-d", "5"], workingDirectory: "/srv"),
+            right: .shell(workingDirectory: "/var/log"), axis: .topBottom, ratio: 0.3).get()
+
+        #expect(copy.parentID == g.parent.id)
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, copy.id, g.after.id])
+        #expect(copy.initialCwd == "/srv")
+        #expect(copy.initialCommand == "'htop' '-d' '5'")
+        #expect(!copy.commandWait)
+        #expect(copy.isSplit && copy.splitAxis == .topBottom)
+        #expect(copy.splitRatio == 0.3)
+        #expect(copy.initialSplitCwd == "/var/log")
+        #expect(copy.splitInitialCommand == nil)
+    }
+
+    @Test func duplicateAsCompanionOfASinglePaneMakesNoSplit() throws {
+        let g = try CompanionGroup()
+
+        let copy = try g.store.duplicateAsCompanion(of: g.parent.id, left: .shell(workingDirectory: "/srv"), right: nil).get()
+
+        #expect(copy.initialCommand == nil)
+        #expect(!copy.hasSplit)
+    }
+
     @Test func aCompanionTakesItsCreationTint() throws {
         let g = try CompanionGroup()
 

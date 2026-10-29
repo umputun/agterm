@@ -33,6 +33,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.duplicateSession.rawValue == "duplicate_session")
         #expect(BuiltinAction.newCompanion.rawValue == "new_companion")
         #expect(BuiltinAction.newCompanion.defaultChord == nil)
+        #expect(BuiltinAction.duplicateCompanion.rawValue == "duplicate_companion")
         #expect(BuiltinAction.previousWorkspace.rawValue == "previous_workspace")
         #expect(BuiltinAction.nextWorkspace.rawValue == "next_workspace")
         #expect(BuiltinAction.toggleWorkspaceCollapse.rawValue == "toggle_workspace_collapse")
@@ -41,7 +42,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
         #expect(BuiltinAction.editFlaggedSessions.rawValue == "edit_flagged_sessions")
         #expect(BuiltinAction.editFocusedWorkspaces.rawValue == "edit_focused_workspaces")
-        #expect(BuiltinAction.allCases.count == 53)
+        #expect(BuiltinAction.allCases.count == 54)
     }
 
     @Test func rejectsUnknownName() {
@@ -96,6 +97,7 @@ struct BuiltinActionTests {
             .renameSession: nil,
             .duplicateSession: nil,
             .newCompanion: nil,
+            .duplicateCompanion: nil,
             .closeSession: Chord(mods: [.command], key: "w"),
             .reopenRecent: Chord(mods: [.command, .shift], key: "t"),
             .undoClose: Chord(mods: [.command], key: "z"),
@@ -193,6 +195,7 @@ struct BuiltinActionTests {
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession, .newCompanion,
+            .duplicateCompanion,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces,

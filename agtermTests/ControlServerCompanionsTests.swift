@@ -216,6 +216,40 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNotEqual(store.selectedSessionID, page.id)
     }
 
+    func testDuplicateAsCompanionRefusesARemotePageOrUnrealizedSourceAndCreatesNothing() throws {
+        let (store, parent) = try addSession()
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), remoteHost: "far"))
+        let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        let before = store.workspaces.flatMap(\.sessions).map(\.id)
+
+        let cases = [(remote.id, "companions of a remote session are not supported yet"),
+                     (page.id, "a page companion has no terminal to duplicate"),
+                     (parent.id, "left pane is not realized; nothing was created")]
+        for (id, error) in cases {
+            XCTAssertEqual(server.duplicateAsCompanion(id.uuidString, window: nil).error, error)
+        }
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).map(\.id), before)
+    }
+
+    func testDuplicateAsCompanionRefusesAPaneUnderAVisibleProgramOverlayAndCreatesNothing() throws {
+        let (store, covered) = try addSession()
+        let (_, paneCovered) = try addSession()
+        XCTAssertTrue(store.openOverlay(covered.id, command: "top"))
+        XCTAssertNil(store.openPaneOverlay(paneCovered.id, pane: .left, command: "top"))
+        let before = store.workspaces.flatMap(\.sessions).map(\.id)
+
+        XCTAssertEqual(server.duplicateAsCompanion(covered.id.uuidString, window: nil).error,
+                       "a program overlay covers the session; nothing was created")
+        XCTAssertEqual(server.duplicateAsCompanion(paneCovered.id.uuidString, window: nil).error,
+                       "left pane is covered by a program overlay; nothing was created")
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).map(\.id), before)
+
+        XCTAssertNil(store.setOverlaysHidden(covered.id, pane: nil, hidden: true))
+        XCTAssertEqual(server.duplicateAsCompanion(covered.id.uuidString, window: nil).error,
+                       "left pane is not realized; nothing was created", "a hidden overlay does not block the copy")
+    }
+
     private func addSession() throws -> (AppStore, Session) {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

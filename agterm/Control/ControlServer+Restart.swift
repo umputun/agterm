@@ -112,13 +112,9 @@ extension ControlServer {
         // a failed listing drops the cached leaders, so a daemon that is gone cannot answer for the pane
         zmxForegroundResolver?.acceptLeaderSnapshot(client.sessionLeaderPIDs())
         let shell = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
-        let observed = ForegroundProcess.observed(for: view, shellBasename: shell, zmxResolver: zmxForegroundResolver)
-        var isDirectory: ObjCBool = false
-        let directory = observed.flatMap { ForegroundProcess.workingDirectory(of: $0.pid) }
-            .flatMap { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue ? $0 : nil }
-        return RestartReplay.resolve(
-            .init(foreground: observed?.foreground, isDaemonLeader: observed?.pid == leader, workingDirectory: directory),
-            shell: shell, denylist: GhosttyApp.shared.restoreDenylist)
+        let observation = ForegroundProcess.replayObservation(for: view, shellBasename: shell,
+                                                              zmxResolver: zmxForegroundResolver, leader: leader)
+        return RestartReplay.resolve(observation, shell: shell, denylist: GhosttyApp.shared.restoreDenylist)
     }
 
     private func resolveRestartTarget(_ target: String?, window: String?, options: ControlSessionRestartOptions)

@@ -43,6 +43,18 @@ struct ControlDispatcherCompanionsTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func companionDuplicateRoutesTargetAndWindow() async throws {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .sessionCompanionDuplicate, target: "p1", args: ControlArgs(window: "win")))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionDuplicate(target: "p1", window: "win")])
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(#"{"cmd":"session.companion.duplicate"}"#.utf8))
+        #expect(decoded.cmd == .sessionCompanionDuplicate)
+    }
+
     @Test func sessionCollapseAndExpandRouteExpandedFlag() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

@@ -135,6 +135,7 @@ struct agtermApp: App {
                                           zmxOutdatedBefore: restored.zmxOutdatedBefore)
         _controlServer = State(initialValue: controlServer)
         actions.remoteAttacher = controlServer
+        actions.companionDuplicator = controlServer
         LinkOpener.shared.mode = { settingsModel.settings.effectiveLinkOpenMode }
         LinkOpener.shared.overlay = { [weak controlServer] url, session, percent in
             controlServer?.openLinkOverlay(url, session: session, sizePercent: percent) ?? false

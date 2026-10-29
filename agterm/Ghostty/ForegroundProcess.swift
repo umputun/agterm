@@ -75,6 +75,26 @@ enum ForegroundProcess {
         return nil
     }
 
+    /// replayObservation reads a pane's foreground program and the directory it runs in, for a replay of it.
+    /// `leader` is the pane daemon's root pid, nil outside Live.
+    @MainActor
+    static func replayObservation(for view: GhosttySurfaceView, shellBasename: String?, zmxResolver: ZmxForegroundResolver?,
+                                  leader: pid_t?) -> RestartReplay.Observation {
+        let observed = observed(for: view, shellBasename: shellBasename, zmxResolver: zmxResolver)
+        var isDirectory: ObjCBool = false
+        let directory = observed.flatMap { workingDirectory(of: $0.pid) }
+            .flatMap { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue ? $0 : nil }
+        return RestartReplay.Observation(foreground: observed?.foreground,
+                                         isDaemonLeader: leader != nil && observed?.pid == leader, workingDirectory: directory,
+                                         executablePath: observed.flatMap { executablePath(of: $0.pid) })
+    }
+
+    static func executablePath(of pid: pid_t) -> String? {
+        var bytes = [UInt8](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard proc_pidpath(pid, &bytes, UInt32(bytes.count)) > 0 else { return nil }
+        return String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
+    }
+
     /// workingDirectory returns nil when `proc_pidinfo` cannot read the process's cwd, as for one owned
     /// by another user.
     static func workingDirectory(of pid: pid_t) -> String? {

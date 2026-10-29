@@ -9,11 +9,15 @@ public enum RestartReplay {
         public let isDaemonLeader: Bool
         /// workingDirectory is nil when it could not be read or is not a directory.
         public let workingDirectory: String?
+        /// executablePath is the process image's absolute path, nil when unreadable.
+        public let executablePath: String?
 
-        public init(foreground: CommandRestore.PaneForeground?, isDaemonLeader: Bool, workingDirectory: String?) {
+        public init(foreground: CommandRestore.PaneForeground?, isDaemonLeader: Bool, workingDirectory: String?,
+                    executablePath: String? = nil) {
             self.foreground = foreground
             self.isDaemonLeader = isDaemonLeader
             self.workingDirectory = workingDirectory
+            self.executablePath = executablePath
         }
     }
 
@@ -32,8 +36,11 @@ public enum RestartReplay {
         case tooLong
         case noDirectory
 
-        public var message: String {
-            let reason = switch self {
+        public var message: String { reason + "; pass --command to name the line. nothing was changed" }
+
+        /// reason names the refusal alone, for a caller other than restart to word its own advice around.
+        public var reason: String {
+            switch self {
             case .unreadable: "the pane's foreground program cannot be read"
             case .shell(let name): "no replayable foreground program: \(name) holds the pane"
             case .denylisted(let name): "\(name) is on the restore denylist"
@@ -43,7 +50,6 @@ public enum RestartReplay {
                     + "(max \(ControlSessionRestartOptions.maxCommandBytes) bytes)"
             case .noDirectory: "the foreground program's working directory is unavailable"
             }
-            return reason + "; pass --command to name the line. nothing was changed"
         }
     }
 

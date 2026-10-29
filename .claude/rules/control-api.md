@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -387,6 +387,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
 - A page companion is created by its own wire command, `session.companion.page`, for the same older-app
   reason as `session.companion.new`; it never touches the parent's own overlay slot.
+- `session.companion.duplicate` is its own wire command for the same older-app reason.
+  `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
+  `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
+  stores each program as `initialCommand`/`splitInitialCommand`, so it runs as a `--command` pane does, ungated by
+  restore mode. A bare argv[0] becomes the `proc_pidpath` executable before the restart checks run, because outside
+  Live the command runs on the GUI PATH. An argument with a backslash is refused: libghostty's split and fish's Live
+  `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
   window's zoom target, and never refuses a zoom hide, which stays idempotent.

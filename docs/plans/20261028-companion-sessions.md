@@ -461,42 +461,47 @@
 ### Task 9: Layout copy and process replay
 
 **Files:**
-- Modify: `agtermCore/Sources/agtermCore/AppStore+Duplicate.swift`, `RestartReplay.swift`, `ControlProtocol.swift`,
-  `ControlDispatcher.swift` (`session.duplicate` dispatch), `ControlActionsDefaults.swift`, `ControlModes.swift`
-  `BuiltinAction.swift`, `PaletteCatalog.swift`
-- Modify: `agterm/Control/ControlServer+Restart.swift` (shared observation), `agterm/Control/ControlServer+SessionActions.swift`,
-  `agterm/Ghostty/LaunchSeed.swift`, `agterm/Ghostty/ZmxLaunch.swift`, `agterm/Views/WorkspaceSidebar+ContextMenu.swift`,
-  `agterm/AppActions.swift`, `agterm/AppActions+Palette.swift`, `agterm/agtermApp+Menus.swift`
-- Modify: `agtermCore/Sources/agtermctlKit/`, `plugins/agterm/skills/agterm/`, `site/docs.html`, `site/commands.html`,
-  `.claude/rules/sidebar.md`, `.claude/rules/menu-actions.md`, `.claude/rules/keymap.md`
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreDuplicateTests.swift`, `RestartReplayTests.swift`,
-  `BuiltinActionTests.swift`, `PaletteCatalogTests.swift`, `MockControlActions.swift`,
-  `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`, `agtermTests/LaunchSeedTests.swift`,
-  `agtermTests/ControlServerRestartTests.swift`, `agtermTests/AppActionsPaletteTests.swift`,
-  `agtermUITests/ControlAPIUITests.swift`
+- Create: `agtermCore/Sources/agtermCore/DuplicateReplay.swift`, `agtermCore/Tests/agtermCoreTests/DuplicateReplayTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+Companions.swift`, `RestartReplay.swift`, `ControlProtocol.swift`,
+  `ControlDispatcher.swift`, `ControlDispatcher+Companions.swift`, `ControlActionsDefaults.swift`, `BuiltinAction.swift`,
+  `PaletteCatalog.swift`
+- Modify: `agterm/Ghostty/ForegroundProcess.swift` (shared observation), `agterm/Control/ControlServer+Restart.swift`,
+  `agterm/Control/ControlServer+Companions.swift`, `agterm/Control/ControlServer.swift`, `agterm/AppActions.swift`,
+  `agterm/AppActions+Companions.swift`, `agterm/AppActions+Palette.swift`, `agterm/agtermApp.swift`,
+  `agterm/agtermApp+Menus.swift`, `agterm/Views/WorkspaceSidebar+ContextMenu.swift`
+- Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`, `plugins/agterm/skills/agterm/`, `site/docs.html`,
+  `site/commands.html`, `.claude/rules/control-api.md`, `sidebar.md`, `menu-actions.md`, `keymap.md`
+- Modify: `AppStoreCompanionsTests.swift`, `ZmxReplayScriptTests.swift`, `BuiltinActionTests.swift`, `PaletteCatalogTests.swift`,
+  `ControlDispatcherCompanionsTests.swift`, `MockControlActions.swift`, `agtermctlKitTests/SocketClientTests.swift`,
+  `SessionCompanionsCommandsTests.swift`, `agtermTests/ControlServerCompanionsTests.swift`,
+  `agtermUITests/ControlCompanionsUITests.swift`
 
-- [ ] extract the per-pane foreground and process-cwd observation from the restart path into a seam both restart and
-      duplicate use (observation already works outside Live through `view.foregroundPid()`), with refusal text that
-      names the pane instead of restart-only advice; the duplicate uses its own plan type, since
-      `RestartReplay.resolve` refuses an idle shell where the duplicate wants a plain shell
-- [ ] Duplicate as Companion copies split axis and ratio, each pane's cwd, and starts another copy of each pane's
-      observed foreground program in every launch disposition: `.wrapped` through the zmx replay seed, `.ordinary`
-      and `.fallback` (Live requested but unavailable) through a duplication-only pending replay that `LaunchSeed`
-      consumes as `initial_input` without the `wasRestored`/restore-mode gate, while `.fallback` keeps leaving saved
-      launch-restore payloads unconsumed; a plain shell yields a plain shell, an unreadable foreground is an error
-- [ ] preflight the whole layout before creating anything; a refused pane (denylist, unsupported shape, missing cwd)
-      is reported and nothing is created; not gated on the app's restore mode; no overlays, status or flags copied
-- [ ] "Duplicate as Companion" as a top-level row menu item right after New Companion, a Session menu-bar item, a
+- [x] extract the per-pane foreground, process-cwd and executable observation from the restart path into
+      `ForegroundProcess.replayObservation`, used by restart and duplicate; `DuplicateReplay` plans a pane from it with
+      refusal text that names the pane instead of restart-only advice
+- [x] Duplicate as Companion copies split axis and ratio, each pane's cwd, and starts another copy of each pane's
+      observed foreground program as that pane's creation command (`initialCommand`/`splitInitialCommand`, the
+      `session new --command` semantics Eugene chose): it closes the pane on exit, persists, and runs in every launch
+      disposition through the existing creation path, ungated by restore mode. Only a recognized foreground shell
+      yields a plain shell; a daemon-leader shell program, an unreadable foreground and a missing cwd are refused.
+      A bare argv[0] becomes the process's executable path, since outside Live the command runs on the GUI PATH;
+      an argument with a backslash is refused, since libghostty and fish's Live `eval` read it differently.
+      A pipeline or shell job is copied as its foreground process only.
+- [x] preflight the whole layout before creating anything; a refused pane is reported and nothing is created; no
+      overlays, status or flags copied
+- [x] "Duplicate as Companion" as a top-level row menu item right after New Companion, a Session menu-bar item, a
       palette row, a keyless `duplicate_companion` built-in action, and `session duplicate --companion` mapped to the
       `session.companion.duplicate` wire command through the protocol, dispatcher and `ControlActions`, with
       `result.parent` in the reply; plain `session.duplicate` is unchanged; refuse a remote source until Task 10
-- [ ] write tests for the replay plan: idle shell, running program, denylisted, unreadable, split with one refused pane
-- [ ] write launch-seed tests for the replay in each disposition (`.wrapped`, `.ordinary`, `.fallback`), including
-      that `.fallback` still leaves saved launch-restore payloads unconsumed
-- [ ] write protocol, dispatcher and CLI tests for `--companion`, and that plain `session duplicate` is unchanged;
+- [x] write tests for the replay plan: idle shell, running program, executable path, daemon-leader shell, backslash,
+      denylisted, unreadable, missing cwd; store tests for a split copy
+- [x] write zsh and fish round-trip tests for a duplicated program's creation command (apostrophe, spaces, empty
+      argument)
+- [x] write protocol, dispatcher and CLI tests for `--companion`, and that plain `session duplicate` is unchanged;
       update the built-in count and catalog tests for `duplicate_companion`
-- [ ] write hosted and e2e tests for a split duplicate with replay
-- [ ] run the new and changed tests - must pass before next task
+- [x] write hosted refusal tests and an e2e test for a split duplicate with replay (the e2e test runs with the UI
+      suite in Task 11)
+- [x] run the new and changed tests - must pass before next task
 
 ### Stage 4: remote companions
 

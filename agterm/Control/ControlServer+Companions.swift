@@ -1,6 +1,8 @@
 import agtermCore
 import Foundation
 
+extension ControlServer: CompanionDuplicating {}
+
 extension ControlServer {
     static let companionMoveError = "a companion moves only among its siblings"
 
@@ -81,6 +83,60 @@ extension ControlServer {
                                                                        parent: companion.parentID?.uuidString))
             }
         }
+    }
+
+    func duplicateAsCompanion(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            switch duplicateCompanion(of: id, in: store, select: true) {
+            case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+            case .success(let copy):
+                if store === library.activeStore { actions.focusActiveSession() }
+                return ControlResponse(ok: true, result: ControlResult(id: copy.id.uuidString, parent: copy.parentID?.uuidString))
+            }
+        }
+    }
+
+    /// duplicateCompanion plans every pane of the source before creating anything, so one refused pane
+    /// leaves the tree as it was.
+    func duplicateCompanion(of id: UUID, in store: AppStore, select: Bool) -> Result<Session, CompanionDuplicateFailure> {
+        guard let source = store.session(withID: id) else { return .failure(.init(message: "no such session")) }
+        guard source.remoteHost == nil else { return .failure(.init(message: "companions of a remote session are not supported yet")) }
+        guard source.content == .terminal else { return .failure(.init(message: "a page companion has no terminal to duplicate")) }
+        // a visible program over the panes is what the user sees running; copying the covered shell instead is wrong
+        guard !source.programOverlayVisible else {
+            return .failure(.init(message: "a program overlay covers the session; nothing was created"))
+        }
+        let leaders = zmxClient?.sessionLeaderPIDs()
+        if zmxClient != nil { zmxForegroundResolver?.acceptLeaderSnapshot(leaders) }
+        let shell = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
+        func plan(_ surface: TerminalSurface?, pane: CommandContext.Pane) -> Result<DuplicateReplay.Plan, CompanionDuplicateFailure> {
+            if source.paneOverlay(pane == .left ? .left : .right).map({ $0.html == nil && !$0.hidden }) == true {
+                return .failure(.init(message: "\(pane.rawValue) pane is covered by a program overlay; nothing was created"))
+            }
+            guard let view = surface as? GhosttySurfaceView, view.isRealized else {
+                return .failure(.init(message: "\(pane.rawValue) pane is not realized; nothing was created"))
+            }
+            let observation = ForegroundProcess.replayObservation(
+                for: view, shellBasename: shell, zmxResolver: zmxForegroundResolver,
+                leader: view.zmxSessionName.flatMap { leaders?[$0] })
+            return DuplicateReplay.resolve(observation, pane: pane.rawValue, fallbackDirectory: source.cwd(for: pane),
+                                           shell: shell, denylist: GhosttyApp.shared.restoreDenylist).mapError { CompanionDuplicateFailure(message: $0.message) }
+        }
+        let left: DuplicateReplay.Plan
+        switch plan(source.surface, pane: .left) {
+        case .failure(let message): return .failure(message)
+        case .success(let value): left = value
+        }
+        var right: DuplicateReplay.Plan?
+        if source.hasSplit {
+            switch plan(source.splitSurface, pane: .right) {
+            case .failure(let message): return .failure(message)
+            case .success(let value): right = value
+            }
+        }
+        return store.duplicateAsCompanion(of: id, left: left, right: right, axis: source.splitAxis,
+                                          ratio: source.splitRatio, select: select)
+            .mapError { _ in CompanionDuplicateFailure(message: "could not create companion") }
     }
 
     /// The ids a close of `ids` removes, each root followed by its companions; computed before the close

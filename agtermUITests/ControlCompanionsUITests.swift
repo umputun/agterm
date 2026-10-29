@@ -94,6 +94,31 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertTrue(cwd.hasSuffix("/moved"), "the plain shell starts where the command's shell had moved: \(cwd)")
     }
 
+    func testDuplicateAsCompanionCopiesTheSplitAndStartsEachPanesProgramAgain() throws {
+        let parent = try activeSessionID()
+        let work = stateDir.appendingPathComponent("work", isDirectory: true)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        let ready = stateDir.appendingPathComponent("ready.marker")
+        XCTAssertNotNil(try typeUntilMarker("cd \(work.path) && pwd > \(ready.path)", target: parent, file: ready, select: false))
+        let split = try sendCommand(#"{"cmd":"session.split","target":"\#(parent)","args":{"mode":"on","axis":"horizontal"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "\(split)")
+        XCTAssertTrue(try pollSplit(parent, timeout: 5))
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.resize","target":"\#(parent)","args":{"ratio":0.3}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try sendCommand(typeRequest(text: "tee copied.txt\n", target: parent, select: false))["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: ((try? sessionNode(id: parent))?["foreground"] as? [String])?.first == "tee", timeout: 10))
+
+        let copy = try cliOutput(["session", "duplicate", "--companion", "--target", parent])
+
+        let node = try sessionNode(id: copy)
+        XCTAssertEqual(node["parent"] as? String, parent)
+        XCTAssertEqual(node["splitAxis"] as? String, "horizontal")
+        XCTAssertEqual(try XCTUnwrap(node["splitRatio"] as? Double), 0.3, accuracy: 0.01)
+        XCTAssertTrue(poll(until: ((try? sessionNode(id: copy))?["foreground"] as? [String]) == ["/usr/bin/tee", "copied.txt"], timeout: 10))
+        XCTAssertTrue(poll(until: (try? sessionNode(id: copy))?["splitForegroundShell"] != nil, timeout: 10))
+        XCTAssertEqual(try sendCommand(typeRequest(text: "from the copy\n", target: copy, select: false))["ok"] as? Bool, true)
+        XCTAssertEqual(pollMarker(work.appendingPathComponent("copied.txt"), timeout: 10), "from the copy")
+    }
+
     func testAPageCompanionShowsItsPageWithNoTerminalAndClosesWithIt() throws {
         let parent = try activeSessionID()
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-page-\(UUID().uuidString)")

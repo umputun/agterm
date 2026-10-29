@@ -81,6 +81,28 @@ extension AppStore {
         }
     }
 
+    /// duplicateAsCompanion creates a companion copying a layout: `left` as its primary pane and, with `right`, a
+    /// shown split on `axis` at `ratio`. A program plan becomes that pane's creation command, so the copy runs it
+    /// like a `--command` session.
+    @discardableResult
+    public func duplicateAsCompanion(of sourceID: UUID, left: DuplicateReplay.Plan, right: DuplicateReplay.Plan?,
+                                     axis: SplitAxis = .leftRight, ratio: Double? = nil,
+                                     select: Bool = true) -> Result<Session, CompanionRefusal> {
+        companionSlot(for: sourceID, cwd: left.workingDirectory).flatMap { slot in
+            guard let copy = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, command: left.command, at: slot.index,
+                                        select: select, parentID: slot.parent) else {
+                return .failure(.noSuchSession)
+            }
+            if let right {
+                copy.initialSplitCwd = right.workingDirectory
+                copy.splitInitialCommand = right.command
+                setSplitVisibility(copy.id, shown: true, axis: axis)
+                if let ratio { applySplitRatio(ratio, forSession: copy.id) }
+            }
+            return .success(copy)
+        }
+    }
+
     private struct CompanionSlot {
         let workspace: UUID
         let index: Int

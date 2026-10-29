@@ -10,6 +10,7 @@ struct PaletteCatalogTests {
             "Rename Session",
             "Duplicate Session",
             "New Companion",
+            "Duplicate as Companion",
             "Rename Workspace",
             "Close Session",
             "Reopen Last Closed Item",
@@ -68,7 +69,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 60)
+        #expect(PaletteCommand.allCases.count == 61)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -232,7 +233,7 @@ struct PaletteCatalogTests {
     }
 
     private static let needSession: Set<PaletteCommand> = [
-        .renameSession, .duplicateSession, .newCompanion, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
+        .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
         .swapPanes, .toggleScratch, .toggleOverlay, .find,
         .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
         .firstSession, .lastSession,
@@ -270,6 +271,13 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.newCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
         #expect(PaletteCommand.newCompanion.builtinAction == .newCompanion)
+    }
+
+    @Test func duplicateAsCompanionNeedsALocalTerminal() {
+        #expect(PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
+        #expect(!PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(!PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
+        #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
     }
 
     @Test func flaggedEditorNeedsAnySessionNotAnActiveOne() {

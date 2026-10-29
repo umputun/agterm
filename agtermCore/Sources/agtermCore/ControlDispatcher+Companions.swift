@@ -5,6 +5,8 @@ extension ControlDispatcher {
             return dispatchCompanionNew(request)
         case .sessionCompanionPage:
             return dispatchCompanionPage(request)
+        case .sessionCompanionDuplicate:
+            return actions.duplicateAsCompanion(request.target, window: request.args?.window)
         case .sessionCollapse:
             return actions.setSessionExpansion(request.target, window: request.args?.window, expanded: false)
         case .sessionExpand:

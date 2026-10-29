@@ -1092,8 +1092,8 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.duplicate</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Create a fresh session in the same workspace as the target, directly after it, rooted at the target's focused-pane
-                working directory — then select and focus it. There are no other options: the target names both the destination
-                workspace and the directory. Equivalent to
+                working directory — then select and focus it. Apart from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companion</span> (next entry), there are no other
+                options: the target names both the destination workspace and the directory. Equivalent to
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap"
                   >session new --cwd &lt;source cwd&gt; --after &lt;source&gt;</span
                 >
@@ -1114,6 +1114,35 @@
                 focused off its primary pane, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.cwd</span>
                 reports the primary, or a remote session, whose cwd goes through the local rule first — an existing local
                 directory is kept, anything else becomes home — so the duplicate can read as home).
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session duplicate --companion [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.companion.duplicate</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Duplicate as Companion: create a companion of the target that copies its split layout (axis and ratio) and starts
+                another copy of the program running in each pane, in that program's working directory. A pane where a shell holds
+                the foreground gets a plain login shell in its directory. Each copied program becomes that pane's creation command,
+                as with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>: the pane closes when it exits. Every pane is checked before
+                anything is created.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> (the new companion) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A pane that cannot be copied refuses the whole duplicate and is named, for example
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left pane: vim is on the restore denylist; nothing was created</span>: a program on the restore denylist,
+                an unreadable foreground or working directory, arguments that cannot be replayed or contain a backslash, a pane
+                under a visible program overlay. A remote
+                source is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companions of a remote session are not supported yet</span>, and a page companion
+                has no terminal to copy. A pipeline or shell job is copied as its foreground process only. Name, status, flag,
+                overlays, scratch and background are not copied. The GUI twin is <strong style="color: #bfbab0">Duplicate as
+                Companion</strong> in the session row's context menu and the Session menu, an action-palette row, and the keyless
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">duplicate_companion</span> keymap action. Read back via the new node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitAxis</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRatio</span>.
               </p>
             </div>
 

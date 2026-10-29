@@ -115,6 +115,13 @@ extension WorkspaceSidebar.Coordinator {
                 companion.target = self
                 companion.representedObject = node
                 menu.addItem(companion)
+                if store.session(withID: node.id)?.content == .terminal {
+                    let copy = NSMenuItem(title: "Duplicate as Companion", action: #selector(menuDuplicateCompanion(_:)),
+                                          keyEquivalent: "")
+                    copy.target = self
+                    copy.representedObject = node
+                    menu.addItem(copy)
+                }
             }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
@@ -273,6 +280,11 @@ extension WorkspaceSidebar.Coordinator {
         guard let node = sender.representedObject as? SidebarNode else { return }
         // this sidebar's window-local store, like Close/Flag — a background window acts on its own row.
         actions.duplicateSession(node.id, in: store)
+    }
+
+    @objc private func menuDuplicateCompanion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        actions.duplicateAsCompanion(node.id, in: store)
     }
 
     @objc private func menuNewCompanion(_ sender: NSMenuItem) {

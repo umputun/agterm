@@ -115,7 +115,7 @@ public struct PaletteContext: Sendable, Equatable {
 /// Static action-palette rows, in the same order the macOS palette presents them before dynamic rows.
 public enum PaletteCommand: String, CaseIterable, Sendable {
     case newSession, newWorkspace, openDirectory
-    case renameSession, duplicateSession, newCompanion, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
+    case renameSession, duplicateSession, newCompanion, duplicateCompanion, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
     case previousWindow, nextWindow
@@ -144,7 +144,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.hasActiveSession
         case .previousAttentionSession, .nextAttentionSession:
             return context.hasActiveSession || context.attentionNavigationAcrossWindows
-        case .newCompanion:
+        case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession && !context.activeSessionIsRemote
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
@@ -170,7 +170,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [
         .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .find,
-        .focusLeftPane, .focusRightPane,
+        .focusLeftPane, .focusRightPane, .duplicateCompanion,
     ]
 
     /// Whether a cover blocks the command. Most menu items mirror the whole cover; the font sizes, both
@@ -244,6 +244,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .renameSession: return "Rename Session"
         case .duplicateSession: return "Duplicate Session"
         case .newCompanion: return "New Companion"
+        case .duplicateCompanion: return "Duplicate as Companion"
         case .renameWorkspace: return "Rename Workspace"
         case .closeSession: return "Close Session"
         case .reopenRecent: return "Reopen Last Closed Item"
@@ -309,6 +310,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .renameSession: return .renameSession
         case .duplicateSession: return .duplicateSession
         case .newCompanion: return .newCompanion
+        case .duplicateCompanion: return .duplicateCompanion
         case .renameWorkspace: return .renameWorkspace
         case .closeSession: return .closeSession
         case .reopenRecent: return .reopenRecent

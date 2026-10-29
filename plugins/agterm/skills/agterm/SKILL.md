@@ -17,7 +17,7 @@ when_to_use: >
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, make a companion session, keep a related program next to a session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -372,6 +372,8 @@ omitted when expanded).
   `--workspace`/`--workspace-name`/`--create-workspace`/`--after`/`--before`. Closing the parent closes its
   companions, and one undo restores the group. `session collapse`/`session expand` fold or unfold a parent's
   companions. Read back as the tree node's `parent` and `collapsed`; details in reference.md.
+  `session duplicate --companion` copies a session's split layout into a new companion and starts another copy of
+  each pane's program (Duplicate as Companion); nothing is created when a pane's program cannot be copied.
   `session overlay open --html FILE --companion` (or `--url URL --companion`) adds a page companion: a row
   under the target session that shows the page and runs no shell. It closes when the page does and is never
   saved, so an `on app.launched` hook recreates it after a relaunch. Read back as the node's `content: "page"`.

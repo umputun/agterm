@@ -309,6 +309,7 @@ struct SocketClientTests {
             rename_session              -
             duplicate_session           -
             new_companion               -
+            duplicate_companion         -
             close_session               cmd+w
             reopen_recent               cmd+shift+t
             undo_close                  cmd+z

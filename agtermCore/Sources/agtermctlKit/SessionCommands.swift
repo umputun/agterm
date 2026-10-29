@@ -80,17 +80,25 @@ struct Session: ParsableCommand {
         }
     }
 
-    /// No options: the target session names both the destination workspace and the cwd, so a duplicate is
-    /// fully described by `--target` (the GUI half is the sidebar row's "Duplicate").
+    /// The target session names the destination workspace and the cwd, so a plain duplicate is fully described by
+    /// `--target` (the GUI half is the sidebar row's "Duplicate"); `--companion` is "Duplicate as Companion".
     struct Duplicate: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Duplicate a session: a fresh shell in its directory, placed right after it.")
+        @Flag(name: .long, help: "Create a companion copying the session's split layout and starting another copy of each pane's program.")
+        var companion = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
+        func run() throws {
+            guard companion else { return try defaultRun() }
+            try runCompanionRequest(makeRequest(), options: options, echoID: true)
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionDuplicate, target: target.target, args: options.withWindow())
+            ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
+                           args: options.withWindow())
         }
     }
 
