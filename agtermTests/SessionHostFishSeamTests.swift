@@ -274,15 +274,15 @@ final class SessionHostFishSeamTests: XCTestCase {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: path)
             process.arguments = ["--version"]
-            let output = Pipe()
-            process.standardOutput = output
-            process.standardError = output
+            let output = try OutputCapture()
+            defer { output.remove() }
+            process.standardOutput = output.handle
+            process.standardError = output.handle
             try process.run()
             let deadline = Date().addingTimeInterval(3)
             while process.isRunning, Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
             if process.isRunning { kill(process.processIdentifier, SIGKILL); process.waitUntilExit(); throw POSIXError(.ETIMEDOUT) }
-            let version = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let version = try output.text().trimmingCharacters(in: .whitespacesAndNewlines)
             guard process.terminationStatus == 0, !version.isEmpty else { throw POSIXError(.ENOEXEC) }
             NSLog("Resolved fish at %@: %@", path, version)
             return FishInstallation(path: path)
@@ -595,8 +595,9 @@ final class SessionHostFishSeamTests: XCTestCase {
             process.environment = ["ZMX_DIR": ZmxSupport.socketDirectory(forStateDirectory: directory.path),
                                    "ZMX_SESSION": "", "ZMX_SESSION_PREFIX": ""]
             process.currentDirectoryURL = directory
-            let output = Pipe()
-            process.standardOutput = output
+            let output = try OutputCapture()
+            defer { output.remove() }
+            process.standardOutput = output.handle
             process.standardError = FileHandle.nullDevice
             try process.run()
             do {
@@ -605,7 +606,7 @@ final class SessionHostFishSeamTests: XCTestCase {
                 if process.isRunning { kill(process.processIdentifier, SIGKILL); process.waitUntilExit() }
                 throw error
             }
-            return String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            return try output.text()
         }
 
         private func killHostIfOwned(_ pid: Int32) {
@@ -639,6 +640,28 @@ final class SessionHostFishSeamTests: XCTestCase {
                 RunLoop.main.run(until: Date().addingTimeInterval(0.01))
             }
             throw POSIXError(.ETIMEDOUT)
+        }
+    }
+
+    // regular files avoid waiting for EOF from a writer inherited by a pane process
+    private struct OutputCapture {
+        let url: URL
+        let handle: FileHandle
+
+        init() throws {
+            url = FileManager.default.temporaryDirectory.appendingPathComponent("fish-seam-\(UUID().uuidString)")
+            guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw POSIXError(.EIO) }
+            handle = try FileHandle(forWritingTo: url)
+        }
+
+        func text() throws -> String {
+            try handle.close()
+            return String(decoding: try Data(contentsOf: url), as: UTF8.self)
+        }
+
+        func remove() {
+            try? handle.close()
+            try? FileManager.default.removeItem(at: url)
         }
     }
 }
