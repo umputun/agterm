@@ -166,13 +166,13 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermCore/Sources/agtermCore/RemoteTree.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteTreeTests.swift`
 
-- [ ] add `ControlRemoteMember` and optional `companions` on `ControlRemoteSession`
-- [ ] fill it in `RemoteTreeMerger.candidates` for top-level terminal rows from the unfiltered workspace
+- [x] add `ControlRemoteMember` and optional `companions` on `ControlRemoteSession`
+- [x] fill it in `RemoteTreeMerger.candidates` for top-level terminal rows from the unfiltered workspace
   sessions in sidebar order; `[]` for none; nil on companion and page rows
-- [ ] write tests: mixed page/terminal order kept, an unattachable companion still listed, `[]` for no
+- [x] write tests: mixed page/terminal order kept, an unattachable companion still listed, `[]` for no
   companions, companion rows carry none
-- [ ] write tests: decoding a payload without the field reads nil (older origin)
-- [ ] run `swift test --filter RemoteTreeTests` - must pass before task 2
+- [x] write tests: decoding a payload without the field reads nil (older origin)
+- [x] run `swift test --filter RemoteTreeTests` - must pass before task 2
 
 ### Task 2: `zmx.attach.group` wire command, dispatcher and CLI
 

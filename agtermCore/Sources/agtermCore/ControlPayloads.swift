@@ -138,13 +138,19 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     public let parent: String?
     /// content is `page` for a page companion, which has no panes and attaches only under its parent's row.
     public let content: String?
+    /// companions lists every companion of a top-level session in sidebar order, attachable or not, so a
+    /// group attach can keep that order and name a member it could not bring. `[]` means none; nil means
+    /// unknown, which is what a companion row and an older origin carry.
+    public let companions: [ControlRemoteMember]?
 
     public init(id: String, name: String, windowID: String, windowName: String, workspaceID: String,
                 workspaceName: String, context: String? = nil, cwd: String, splitAxis: String?,
                 panes: [ControlRemotePane], status: String? = nil, statusColor: String? = nil,
-                statusShape: String? = nil, parent: String? = nil, content: String? = nil) {
+                statusShape: String? = nil, parent: String? = nil, content: String? = nil,
+                companions: [ControlRemoteMember]? = nil) {
         self.parent = parent
         self.content = content
+        self.companions = companions
         self.id = id
         self.name = name
         self.windowID = windowID
@@ -158,6 +164,16 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
         self.status = status
         self.statusColor = statusColor
         self.statusShape = statusShape
+    }
+}
+
+public struct ControlRemoteMember: Codable, Sendable, Equatable {
+    public let id: String
+    public let name: String
+
+    public init(id: String, name: String) {
+        self.id = id
+        self.name = name
     }
 }
 
