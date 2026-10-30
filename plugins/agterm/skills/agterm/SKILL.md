@@ -4,7 +4,7 @@ description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
   read exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD/caption/notification; send, read and acknowledge messages between panes; show a picker, question or input dialog; show images inline; type
+  post a HUD/caption/notification; message other panes; show a picker, question or input dialog; show images inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
