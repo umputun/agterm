@@ -70,8 +70,16 @@ if [[ ! -f "$STAMP_FILE" || "$(cat "$STAMP_FILE")" != "$GHOSTTY_STAMP" ]]; then
   need_res=true
 fi
 
+# --zmx-only serves CI's Unit tests job, whose session-host fixtures need zmx and nothing from libghostty.
+# It overrides the stale-stamp check above, so a libghostty pin change cannot pull Metal or a ghostty build in.
+case "${1:-}" in
+  "") ;;
+  --zmx-only) need_xc=false; need_res=false ;;
+  *) echo "usage: $0 [--zmx-only]" >&2; exit 2 ;;
+esac
+
 if ! $need_xc && ! $need_res && ! $need_zmx; then
-  echo "GhosttyKit, resources and zmx already present"
+  echo "staged artifacts already current"
   stage_custom_themes
   exit 0
 fi
