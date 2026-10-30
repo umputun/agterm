@@ -29,13 +29,13 @@ struct ImageProbe: Sendable {
         }
     }
 
-    /// load reads the file and probes the bytes it read, so the page's size matches what it embeds.
+    /// load reads the file and probes the bytes it read, so the sniffed type describes the data it returns.
     static func load(path: String) -> Result<(ImageProbe, Data), Failure> {
         read(path: path).flatMap { data in probe(data, path: path).map { ($0, data) } }
     }
 
     /// read returns the whole regular file at `path`, through the one descriptor it checked.
-    static func read(path: String) -> Result<Data, Failure> {
+    private static func read(path: String) -> Result<Data, Failure> {
         let fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
         guard fd >= 0 else { return .failure(.unreadable(path)) }
         defer { close(fd) }

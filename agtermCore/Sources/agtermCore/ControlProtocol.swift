@@ -808,7 +808,7 @@ public enum OverlayHtmlError {
         "session.overlay.open: --image takes no --wait, --cwd, --navigation, --js, --chromeless, --persistent or --browse"
     public static let imageNotAbsolute = "session.overlay.open: --image must be an absolute path"
     public static let imageType = "session.overlay.open: --image must be a png, jpg, jpeg, gif or webp file"
-    public static let imageCompanion = "a page companion needs --html or --url"
+    public static let companionNeedsPage = "a page companion needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

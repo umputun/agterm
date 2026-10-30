@@ -38,7 +38,7 @@ final class ControlAcceptLoop: @unchecked Sendable {
         while write(wakeWrite, &byte, 1) < 0, errno == EINTR {}
     }
 
-    var isStopped: Bool {
+    private var isStopped: Bool {
         lock.lock()
         defer { lock.unlock() }
         return stopped

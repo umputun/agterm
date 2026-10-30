@@ -604,7 +604,7 @@ struct ControlDispatcherOverlayTests {
         let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionCompanionPage, target: "session",
                                                                 args: ControlArgs(image: "/tmp/a.png")))
 
-        #expect(response == ControlResponse(ok: false, error: OverlayHtmlError.imageCompanion))
+        #expect(response == ControlResponse(ok: false, error: OverlayHtmlError.companionNeedsPage))
         #expect(actions.calls.isEmpty)
     }
 
