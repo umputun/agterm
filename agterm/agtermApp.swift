@@ -140,6 +140,10 @@ struct agtermApp: App {
         LinkOpener.shared.overlay = { [weak controlServer] url, session, percent in
             controlServer?.openLinkOverlay(url, session: session, sizePercent: percent) ?? false
         }
+        LinkOpener.shared.image = { [weak controlServer] url, session, done in
+            guard let controlServer else { return done(false) }
+            controlServer.openImageLink(url, session: session, completion: done)
+        }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })
         controlServer.liveReset = liveReset

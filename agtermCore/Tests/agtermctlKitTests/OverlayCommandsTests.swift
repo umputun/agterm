@@ -139,9 +139,33 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--wait"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--block"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "revdiff", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--companion"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--block"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--wait"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--navigation"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--js"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--chromeless"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--persistent"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--browse"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--width", "400"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))
+    }
+
+    @Test func imageOpenSendsTheResolvedPathAndNoPageFlags() throws {
+        let req = try request(["session", "overlay", "open", "--image", "shots/../shots/a.png", "--follow"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.image == URL(fileURLWithPath: cwd).appendingPathComponent("shots/a.png").standardizedFileURL.path)
+        #expect(req.args?.html == nil)
+        #expect(req.args?.cwd == nil)
+        #expect(req.args?.sizePercent == nil)
+        #expect(req.args?.follow == true)
     }
 
     @Test func submitSendsTheValuePaneAndTarget() throws {

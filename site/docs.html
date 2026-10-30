@@ -3278,11 +3278,16 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               address (localhost, a .local name, an IP address), which the overlay could not load.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A ⌘-click on a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link — the kind
+              A ⌘-click on a local path — a plain one printed in the output, such as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/tmp/shot.png</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/notes.md</span>, or a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link, the kind
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ls --hyperlink</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">eza</span>, and many compilers emit —
-              <strong style="color: #e6e1d7">reveals</strong> the file in Finder instead of opening it. A terminal renders untrusted
+              shows a png, jpg, gif or webp picture over its session, sized to the picture up to 80% of the session, and
+              <strong style="color: #e6e1d7">reveals</strong> any other file in Finder instead of opening it. A picture shown
+              from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too. In a session
+              attached from another Mac, a plain path names a file on that Mac, so it is ignored. A terminal renders untrusted
               program output, so a link could point at a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.app</span> or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.command</span>; revealing selects the file

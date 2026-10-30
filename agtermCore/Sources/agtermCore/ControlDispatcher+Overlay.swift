@@ -167,6 +167,10 @@ extension ControlDispatcher {
 
     static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        if let image = args?.image {
+            guard command.isEmpty, args?.html == nil, args?.url == nil else { return reject(OverlayHtmlError.oneSource) }
+            return imageContent(image, args: args)
+        }
         switch (args?.html, args?.url) {
         case (nil, nil):
             if args?.navigation == true { return reject(OverlayHtmlError.navigationWithoutPage) }
@@ -197,6 +201,18 @@ extension ControlDispatcher {
             if args?.chromeless == true, !HtmlSource.isLoopback(text) { return reject(OverlayHtmlError.chromelessRequiresLoopback) }
             return .page(.url(url))
         }
+    }
+
+    private static func imageContent(_ path: String, args: ControlArgs?) -> OverlayContent {
+        let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        let flags = [args?.wait, args?.navigation, args?.javascript, args?.chromeless, args?.persistent, args?.browse]
+        if args?.cwd != nil || flags.contains(true) { return reject(OverlayHtmlError.imageOptions) }
+        guard path.hasPrefix("/") else { return reject(OverlayHtmlError.imageNotAbsolute) }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard LinkPolicy.imageExtensions.contains(url.pathExtension.lowercased()) else {
+            return reject(OverlayHtmlError.imageType)
+        }
+        return .page(.image(path: url.path))
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on

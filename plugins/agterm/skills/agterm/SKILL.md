@@ -492,7 +492,7 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js]) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js] | --image FILE) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay hide|show|toggle [--pane left|right]` ·
@@ -531,9 +531,8 @@ omitted when expanded).
   that session. **Pass `--follow` to select the target after opening** (a no-op if it is already active):
   use `--follow` when you want the user pulled to the overlay, omit it to open quietly on your own or
   another session.
-  `--background-color` gives the overlay pane its own solid color, independent of the session's. An
-  overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
-  `scripts/show-image.sh` (see below).
+  `--background-color` gives the overlay pane its own solid color, independent of the session's.
+  `--image FILE` is how you **display an image inline** (see below).
 - `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud close` — post a small **passive** panel over the session saying what you are doing
@@ -785,7 +784,18 @@ resolves the DEFAULT socket, which may be another app. The same identity is on t
 
 ## Displaying an image inline
 
-This skill bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the
+Show a png, jpg, gif or webp picture with `--image`; the panel takes the picture's shape and size, up to
+80% of the session:
+
+```bash
+agtermctl session overlay open --image /tmp/shot.png --target "$AGTERM_SESSION_ID"
+```
+
+The user can open the same view by ⌘-clicking a picture's path in the terminal, so printing the absolute
+path of an image you produced is often enough. When `--image` is rejected, by an older CLI as an unknown
+option or by an older app, fall back to the script below.
+
+This skill also bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the
 image there via the kitty graphics protocol, which ghostty draws natively — no kitty binary and no
 external image tool, just `base64` + `printf`. Run it with the image path (optional size percent,
 default 60):

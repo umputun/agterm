@@ -26,6 +26,9 @@ final class WindowRegistry {
     /// session and a background window changes only its selection.
     func isKeyWindow(_ id: WindowInfo.ID) -> Bool { windows[id]?.isKeyWindow ?? false }
 
+    /// The pixel density of the screen the window for `id` is on; nil when none is registered.
+    func backingScale(_ id: WindowInfo.ID) -> Double? { windows[id].map { Double($0.backingScaleFactor) } }
+
     func unregister(_ id: WindowInfo.ID) {
         windows[id] = nil
         NotificationCenter.default.post(name: .agtermWindowAttachmentChanged, object: nil)

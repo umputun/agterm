@@ -40,6 +40,14 @@ extension ControlServer: ControlActions {
             if store.session(withID: id)?.overlayHidden(options.pane) == true {
                 return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
             }
+            // the control path is trusted and synchronous: a file on slow storage stalls the app while it is read
+            if let path = options.page?.imagePath {
+                switch ImageProbe.load(path: path) {
+                case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
+                case .success(let (probe, _)):
+                    return openImageOverlay(in: store, sessionID: id, path: path, probe: probe, options: options)
+                }
+            }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }
@@ -74,19 +82,25 @@ extension ControlServer: ControlActions {
     /// A HUD on the session and a zoomed terminal in its window both refuse it up front: the store would
     /// accept the page, closing the HUD for good in one case and showing nothing in the other.
     func openLinkOverlay(_ url: URL, session id: UUID, sizePercent: Int?) -> Bool {
-        guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
-        if let windowID = library.windowID(forSession: id),
-           TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
+        guard canShowLinkOverlay(session: id) else { return false }
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                        backgroundColor: nil, page: .url(url), navigation: true,
                                                        javascript: true, persistent: true, browse: true)
         return openSessionOverlay(id.uuidString, window: nil, options: options).ok
     }
 
+    /// canShowLinkOverlay is the up-front HUD and zoom refusal `openLinkOverlay` describes.
+    func canShowLinkOverlay(session id: UUID) -> Bool {
+        guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
+        if let windowID = library.windowID(forSession: id),
+           TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
+        return true
+    }
+
     // a page the placement rule hands to the presenting Mac is stored, rendered and followed there, so none of
     // the local persistent store check, page build or `--follow` happens here
-    private func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
-                                 options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+    func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
+                         options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         let alreadyOpen = options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
                                   chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)

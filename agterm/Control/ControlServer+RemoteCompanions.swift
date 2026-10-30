@@ -45,7 +45,7 @@ enum RemoteCompanionRequest {
             arguments += ["--html", path]
             if let grantRoot { arguments += ["--cwd", grantRoot] }
         case .url(let url): arguments += ["--url", url.absoluteString]
-        case .replica, nil: break
+        case .replica, .image, nil: break
         }
         let flags: [(Bool, String)] = [(options.navigation, "--navigation"), (options.javascript, "--js"),
                                        (options.chromeless, "--chromeless"), (options.persistent, "--persistent"),
