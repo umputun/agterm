@@ -199,25 +199,25 @@
 - Create: `agtermTests/ControlServerMessagesTests.swift`
 - Create: `agtermUITests/ControlMessageUITests.swift`
 
-- [ ] host-free store tests first: disposal on session close (hard and soft), companions closed with their
+- [x] host-free store tests first: disposal on session close (hard and soft), companions closed with their
       parent, workspace delete (hard and soft), split close, scratch close and `respawnPrimaryPane`;
       `closePrimaryPane` disposes only the departing primary identity while the promoted survivor keeps
       its mail; hiding a split keeps the mailbox; mail sent before a soft close is gone after undo with no
       bus operation between (regression); `pendingMessages` in `controlTree`
-- [ ] hosted `agtermTests` first, against the real adapter rather than `MockControlActions`: broadcast
+- [x] hosted `agtermTests` first, against the real adapter rather than `MockControlActions`: broadcast
       across two windows, `--workspace` narrowing, sender exclusion, anonymous broadcast, remote rows
       excluded; recipient aliases resolving to one pane are delivered once; a scratch pane as recipient and
       as identity; a split hidden since launch is not a live pane; identity mismatch refused on send, read
       and ack; stale or incomplete identity never downgrades to anonymous; `session.restart` and window
       close then reopen dispose the mailbox; the `message` event carries `window` and `workspace`
-- [ ] e2e test first, real socket: pane A sends to pane B, B sees `pendingMessages` in tree, reads, acks,
+- [x] e2e test first, real socket: pane A sends to pane B, B sees `pendingMessages` in tree, reads, acks,
       count drops; a swap keeps the mailbox with its pane id; `read --ack` then an empty read and a
       cleared pending count
-- [ ] `AppStore+Messages.swift` disposal method called from every lifetime site; `ControlServer` uses
+- [x] `AppStore+Messages.swift` disposal method called from every lifetime site; `ControlServer` uses
       `MessageBus.shared` and resolves addresses across all open windows without the frontmost-window
       default; identity agreement enforced server-side for send, read and ack
-- [ ] emit `message` through the recipient store after enqueue; populate `pendingMessages` in `controlTree`
-- [ ] run the new store, hosted and e2e tests (`-only-testing:` for the hosted and UI classes) - must pass
+- [x] emit `message` through the recipient store after enqueue; populate `pendingMessages` in `controlTree`
+- [x] run the new store, hosted and e2e tests (`-only-testing:` for the hosted and UI classes) - must pass
       before task 4
 
 ### Task 4: CLI

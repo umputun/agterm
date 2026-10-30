@@ -60,6 +60,8 @@ extension ControlServer {
         old.claimProcessExit()
         // the dying client reports `unowned`, which would reattach to a daemon that is gone and close the pane
         ZmxLeadBook.shared.forget(pane: resolved.identity)
+        // the new program must not read the old one's mail
+        MessageBus.shared.dispose(pane: resolved.identity)
         // the new shell starts only once the old program is gone, so it cannot meet a held port or lock
         guard await programEnded(program, client: client) else {
             closeEndedPane(old, session: session, identity: resolved.identity)

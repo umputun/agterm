@@ -6,6 +6,13 @@ public struct MessageAddress: Hashable, Sendable {
     public enum Pane: Hashable, Sendable {
         case id(UUID)
         case role(StatusPane)
+
+        public var text: String {
+            switch self {
+            case .id(let id): id.uuidString
+            case .role(let role): role.rawValue
+            }
+        }
     }
 
     public let session: String

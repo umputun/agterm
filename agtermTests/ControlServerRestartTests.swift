@@ -188,6 +188,30 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertTrue(command.contains(" -il"), "a restart command must hand the pane back to a login shell: \(command)")
     }
 
+    func testARestartDropsTheOldProgramsMailBeforeTheNewOneStarts() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let program = try spawn("/bin/sleep", ["300"])
+        defer { program.terminate() }
+        let server = makeServer(daemon: daemon, foreground: program.processIdentifier) { _ in }
+        _ = try MessageBus.shared.send("for the old program", from: nil,
+                                       to: [MessageRecipient(pane: session.paneIdentity, address: "old")], now: 1)
+        defer { MessageBus.shared.dispose(pane: session.paneIdentity) }
+        var pendingAtLaunch: Int?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, _, _ in
+            pendingAtLaunch = MessageBus.shared.pending(for: session.paneIdentity)
+            return nil
+        }
+        defer { PaneLead.replace = replace }
+
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(pendingAtLaunch, 0)
+    }
+
     func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)

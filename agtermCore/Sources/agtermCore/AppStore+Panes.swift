@@ -219,6 +219,7 @@ extension AppStore {
         if let split = session.splitPaneIdentity {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
+            MessageBus.shared.dispose(pane: split)
         }
         let wasShown = session.isSplit
         session.isSplit = false
@@ -283,6 +284,7 @@ extension AppStore {
         session.surface = survivor
         session.splitSurface = nil
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
+        MessageBus.shared.dispose(pane: session.paneIdentity)
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
         dropPaneBackground(.left, of: session)
         (session.paneBackgrounds.left, session.paneBackgrounds.right) = (session.paneBackgrounds.right, nil)
@@ -616,6 +618,7 @@ extension AppStore {
         clearIndicatorOwnedByPane(.scratch, of: session)
         // a respawned scratch runs another program, so a label for the old one must not carry over
         dropPaneBackground(.scratch, of: session)
+        disposeMailbox(token: scratch.paneToken)
         scratch.teardown()
         session.scratchSurface = nil
         session.scratchGeneration += 1
