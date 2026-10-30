@@ -228,14 +228,14 @@
 - Create: `agtermCore/Tests/agtermctlKitTests/MessageCommandsTests.swift`
 - Modify: `agtermUITests/ControlMessageUITests.swift`
 
-- [ ] tests first: identity from env pair, `--as` overrides the pair, incomplete pair errors, no pair and
+- [x] tests first: identity from env pair, `--as` overrides the pair, incomplete pair errors, no pair and
       no `--as` sends anonymously but fails `read`/`ack`, `--ack` fails on missing or mismatched `acked`,
       `--wait` returns on pending and exits 124 on timeout, human and JSON output
-- [ ] `msg send|read|ack` subcommands with the options in Technical Details
-- [ ] `--wait` as a client-side poll with a watchdog timeout
-- [ ] e2e: the bundled `agtermctl msg send` / `msg read` against the running app, with `--as` built from
+- [x] `msg send|read|ack` subcommands with the options in Technical Details
+- [x] `--wait` as a client-side poll with a watchdog timeout
+- [x] e2e: the bundled `agtermctl msg send` / `msg read` against the running app, with `--as` built from
       the tree's `paneID`, following the `openAskCLI` pattern in `ControlAPITestCase.swift`
-- [ ] run the CLI test target and the e2e class - must pass before task 5
+- [x] run the CLI test target and the e2e class - must pass before task 5
 
 ### Task 5: Documentation and skill
 - [ ] `site/commands.html`: the three commands, arguments, read-back fields and the `message` event

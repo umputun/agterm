@@ -44,7 +44,39 @@ final class ControlMessageUITests: ControlAPITestCase {
         XCTAssertNil(pendingMessages(sessionID, paneID: left))
     }
 
+    func testTheBundledCLISendsAndReadsAsAPane() throws {
+        let (sessionID, left, right) = try splitPanes()
+
+        let sent = try runCLI(["msg", "send", "via cli", "--to", "\(sessionID):right", "--as", "\(sessionID):\(left)"])
+        XCTAssertEqual(sent.status, 0, sent.stderr)
+        let id = sent.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(pendingMessages(sessionID, paneID: right), 1)
+
+        let read = try runCLI(["msg", "read", "--ack", "--as", "\(sessionID):\(right)"])
+        XCTAssertEqual(read.status, 0, read.stderr)
+        XCTAssertEqual(read.stdout, "\(id) from \(sessionID):\(left)\nvia cli\n")
+        XCTAssertNil(pendingMessages(sessionID, paneID: right))
+    }
+
     // MARK: - helpers
+
+    /// runCLI runs the bundled agtermctl against this test's socket with no AGTERM_* variables, so the
+    /// runner's own terminal cannot lend it an identity.
+    private func runCLI(_ arguments: [String]) throws -> (status: Int32, stdout: String, stderr: String) {
+        let process = Process()
+        process.executableURL = Bundle.main.bundleURL.deletingLastPathComponent()
+            .appendingPathComponent("agterm.app/Contents/MacOS/agtermctl")
+        process.arguments = arguments + ["--socket", socketPath]
+        process.environment = ProcessInfo.processInfo.environment.filter { !$0.key.hasPrefix("AGTERM_") }
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        try process.run()
+        let stdout = out.fileHandleForReading.readDataToEndOfFile()
+        let stderr = err.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return (process.terminationStatus, String(decoding: stdout, as: UTF8.self), String(decoding: stderr, as: UTF8.self))
+    }
 
     /// splitPanes opens a split and waits until both panes are live: each carries a paneID and takes mail.
     private func splitPanes() throws -> (session: String, left: String, right: String) {
