@@ -31,8 +31,8 @@ paths:
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
 - `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
-  `scripts/build.sh ARCHS=arm64`, the surface teardown script and the entitlement assertions; the
-  argument stops the agtermCore package compiling an x86_64 slice the arm64-only app never links.
+  `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
+  `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
   `hosted` runs Debug `scripts/test-app.sh` and needs nothing from `build`; it builds the bundled helpers
   itself. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not

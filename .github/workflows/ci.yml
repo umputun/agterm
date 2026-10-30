@@ -184,9 +184,8 @@ jobs:
           key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}-${{ hashFiles('scripts/zmx-patches/**/*.patch') }}
       - name: Install xcodegen
         run: brew install xcodegen
-      # the app target is arm64-only; without this the agtermCore package also compiles an unused x86_64 slice
       - name: Build libghostty + app (Release)
-        run: scripts/build.sh ARCHS=arm64
+        run: scripts/build.sh
       - name: Surface teardown under mailbox pressure
         run: python3 scripts/test-surface-teardown.py build/DerivedData/Build/Products/Release/agterm.app --evidence surface-teardown
       - name: Upload surface teardown diagnostics
