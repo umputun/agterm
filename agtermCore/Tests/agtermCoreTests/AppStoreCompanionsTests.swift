@@ -122,6 +122,48 @@ struct AppStoreCompanionsTests {
         #expect(copy.focusedPane == .left)
     }
 
+    // a copied codex kept its parent's session id in argv and sent its replies into the parent's pane
+    @Test func duplicateAsCompanionRebindsTheSourcesIdentitiesInBothPanes() throws {
+        let g = try CompanionGroup()
+        g.store.setSplitVisibility(g.first.id, shown: true)
+        let source = g.first
+        let sourceSplit = try #require(source.splitPaneIdentity)
+        let unrelated = UUID().uuidString
+        let mixed = source.id.uuidString.prefix(8).lowercased() + source.id.uuidString.dropFirst(8)
+
+        let copy = try g.store.duplicateAsCompanion(
+            of: source.id,
+            left: .program(argv: ["codex", "-c", "set.AGTERM_SESSION_ID=\"\(source.id.uuidString)\"",
+                                  "--peer", sourceSplit.uuidString.lowercased(), "--window", unrelated],
+                           workingDirectory: "/srv"),
+            right: .program(argv: ["tool", ZmxSupport.daemonName(for: source.paneIdentity),
+                                   "--pane=\(source.paneIdentity.uuidString)", "--session=\(mixed)"],
+                            workingDirectory: "/var/log")).get()
+        let copySplit = try #require(copy.splitPaneIdentity)
+
+        #expect(copy.initialCommand == CommandRestore.shellQuotedLine(
+            ["codex", "-c", "set.AGTERM_SESSION_ID=\"\(copy.id.uuidString)\"",
+             "--peer", copySplit.uuidString.lowercased(), "--window", unrelated]))
+        #expect(copy.splitInitialCommand == CommandRestore.shellQuotedLine(
+            ["tool", ZmxSupport.daemonName(for: copy.paneIdentity),
+             "--pane=\(copy.paneIdentity.uuidString)", "--session=\(copy.id.uuidString)"]))
+        #expect(copy.initialCwd == "/srv")
+        #expect(copy.initialSplitCwd == "/var/log")
+    }
+
+    @Test func duplicateAsCompanionPersistsTheReboundCommandOfASinglePane() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        let work = store.addWorkspace(name: "work")
+        let source = try #require(store.addSession(toWorkspace: work.id, cwd: "/parent"))
+
+        let copy = try store.duplicateAsCompanion(
+            of: source.id, left: .program(argv: ["codex", "--session", source.id.uuidString], workingDirectory: "/srv"),
+            right: nil).get()
+
+        let saved = persistence.load().workspaces.flatMap(\.sessions).first { $0.id == copy.id }
+        #expect(saved?.initialCommand == CommandRestore.shellQuotedLine(["codex", "--session", copy.id.uuidString]))
+    }
+
     @Test func duplicateAsCompanionOfASinglePaneMakesNoSplit() throws {
         let g = try CompanionGroup()
 

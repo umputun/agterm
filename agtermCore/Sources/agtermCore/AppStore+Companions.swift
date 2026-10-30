@@ -83,25 +83,43 @@ extension AppStore {
 
     /// duplicateAsCompanion creates a companion copying a layout: `left` as its primary pane and, with `right`, a
     /// shown split on `axis` at `ratio`. A program plan becomes that pane's creation command, so the copy runs it
-    /// like a `--command` session.
+    /// like a `--command` session, with the source's session and pane ids in its arguments replaced by the copy's.
     @discardableResult
     public func duplicateAsCompanion(of sourceID: UUID, left: DuplicateReplay.Plan, right: DuplicateReplay.Plan?,
                                      axis: SplitAxis = .leftRight, ratio: Double? = nil,
                                      select: Bool = true) -> Result<Session, CompanionRefusal> {
         companionSlot(for: sourceID, cwd: left.workingDirectory).flatMap { slot in
-            guard let copy = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, command: left.command, at: slot.index,
+            guard let source = session(withID: sourceID),
+                  let copy = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, at: slot.index,
                                         select: select, parentID: slot.parent) else {
                 return .failure(.noSuchSession)
             }
             if let right {
                 copy.initialSplitCwd = right.workingDirectory
-                copy.splitInitialCommand = right.command
                 setSplitVisibility(copy.id, shown: true, axis: axis)
                 copy.splitFocused = false
                 if let ratio { applySplitRatio(ratio, forSession: copy.id) }
             }
+            // the copy's pane ids exist only now; its surfaces spawn later, when the view realizes them
+            let ids = identityRebinding(from: source, to: copy)
+            copy.initialCommand = left.rebinding(ids).command
+            copy.splitInitialCommand = right?.rebinding(ids).command
+            save()
             return .success(copy)
         }
+    }
+
+    /// identityRebinding maps each id of `source` an argument may carry, including a pane's zmx daemon name, to
+    /// the matching id of `copy`.
+    private func identityRebinding(from source: Session, to copy: Session) -> [String: String] {
+        var ids = [source.id.uuidString: copy.id.uuidString]
+        var panes = [(source.paneIdentity, copy.paneIdentity)]
+        if let from = source.splitPaneIdentity, let to = copy.splitPaneIdentity { panes.append((from, to)) }
+        for (from, to) in panes {
+            ids[from.uuidString] = to.uuidString
+            ids[ZmxSupport.daemonName(for: from)] = ZmxSupport.daemonName(for: to)
+        }
+        return ids
     }
 
     private struct CompanionSlot {

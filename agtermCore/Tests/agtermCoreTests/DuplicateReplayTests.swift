@@ -145,4 +145,16 @@ struct DuplicateReplayTests {
         #expect(plan(.program(["make"]), cwd: nil, executable: make, searchPath: "/usr/bin", files: [make: make])
             == refusal(.replay(.noDirectory)))
     }
+
+    @Test func rebindingReplacesEachIdInEveryArgumentAndKeepsLowercaseLowercase() {
+        let ids = ["AAAAAAAA-0000-0000-0000-000000000001": "BBBBBBBB-0000-0000-0000-000000000002"]
+        let source = DuplicateReplay.Plan.program(
+            argv: ["tool", "--id=AAAAAAAA-0000-0000-0000-000000000001", "aaaaaaaa-0000-0000-0000-000000000001",
+                   "aaaaAAAA-0000-0000-0000-000000000001", "CCCCCCCC-0000-0000-0000-000000000003"], workingDirectory: "/work")
+
+        #expect(source.rebinding(ids) == .program(
+            argv: ["tool", "--id=BBBBBBBB-0000-0000-0000-000000000002", "bbbbbbbb-0000-0000-0000-000000000002",
+                   "BBBBBBBB-0000-0000-0000-000000000002", "CCCCCCCC-0000-0000-0000-000000000003"], workingDirectory: "/work"))
+        #expect(DuplicateReplay.Plan.shell(workingDirectory: "/work").rebinding(ids) == .shell(workingDirectory: "/work"))
+    }
 }

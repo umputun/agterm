@@ -415,7 +415,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
   stores each program as `initialCommand`/`splitInitialCommand`, so it runs as a `--command` pane does, ungated by
-  restore mode. Outside Live the command runs on the GUI PATH, so a program not started by absolute path is copied by
+  restore mode. It stores them only after the copy and its split exist, rewriting the source's session id, pane ids
+  and their zmx daemon names to the copy's: an argv carrying its own pane identity, as a codex started with
+  `shell_environment_policy.set.AGTERM_SESSION_ID` does, otherwise addresses the source. Outside Live the command runs on the GUI PATH, so a program not started by absolute path is copied by
   the path it was started from: the first entry of its own PATH (read from the same `KERN_PROCARGS2` blob as its
   argv) resolving to the `proc_pidpath` image, else its first executable entry (a version manager's shim re-execs
   under the bare name), or its directory, launched unresolved, since the image alone turns `vimdiff` into plain vim.
