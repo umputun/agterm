@@ -485,11 +485,16 @@ final class SplitRatioAccessorTests: XCTestCase {
         (split.layer?.sublayers ?? []).filter { $0.backgroundColor == color.cgColor }
     }
 
+    private func moveDivider(to ratio: Double) {
+        session.splitRatio = ratio
+        NotificationCenter.default.post(name: .agtermApplySplitRatio, object: session)
+        split.layoutSubtreeIfNeeded()
+    }
+
     func testCoversTheLeftRightDividerGapWithItsColor() throws {
         probe.dividerColor = .systemRed
-        session.splitRatio = 0.3
         probe.layout()
-        split.layoutSubtreeIfNeeded()
+        moveDivider(to: 0.3)
 
         let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
         XCTAssertEqual(strip.frame, CGRect(x: 120, y: 0, width: split.dividerThickness, height: 200))
@@ -500,9 +505,8 @@ final class SplitRatioAccessorTests: XCTestCase {
         split.isVertical = false
         split.arrangedSubviews[0].addSubview(probe)
         probe.dividerColor = .systemRed
-        session.splitRatio = 0.3
         probe.layout()
-        split.layoutSubtreeIfNeeded()
+        moveDivider(to: 0.3)
 
         let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
         XCTAssertEqual(strip.frame, CGRect(x: 0, y: 60, width: 400, height: split.dividerThickness))
