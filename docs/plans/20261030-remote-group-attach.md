@@ -228,28 +228,28 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermTests/RemotePageFakes.swift` (shared, non-private `ScriptedRunner` with its `beforeCall` hook)
 - Modify: `agtermTests/ControlServerTests.swift` (accept-loop case)
 
-- [ ] move `ScriptedRunner` into `RemotePageFakes.swift` and make `beforeCall` async and awaited before the
+- [x] move `ScriptedRunner` into `RemotePageFakes.swift` and make `beforeCall` async and awaited before the
   scripted reply, so a test's main-actor mutation (move or close the parent) has finished when the page wait
   returns; existing callers' synchronous closures keep working
-- [ ] implement `attachRemoteGroup` per the requester flow: one tree read, refusals before any row, parent
+- [x] implement `attachRemoteGroup` per the requester flow: one tree read, refusals before any row, parent
   then members in order, parent re-resolved before each member and once more after the last, so a parent
   closed during the final page wait reports the closed-parent error; page members through `attachRemotePage`
-- [ ] build the receipt and the partial-failure error text; `ok: false` with `result.id` kept
-- [ ] older-origin fallback from listed rows with `membershipKnown: false`
-- [ ] write tests: full group in mixed order lands under the parent with only the parent selected; known-empty
+- [x] build the receipt and the partial-failure error text; `ok: false` with `result.id` kept
+- [x] older-origin fallback from listed rows with `membershipKnown: false`
+- [x] write tests: full group in mixed order lands under the parent with only the parent selected; known-empty
   group is one row and ok; companion target refused with no row created
-- [ ] write tests: an unavailable member, a failing terminal member and a failing page member each give
+- [x] write tests: an unavailable member, a failing terminal member and a failing page member each give
   ok false with the rest kept and the parent's id in the error; parent closed during a page wait stops the
   loop and reports the closed-parent error, both with a member after the page and with the page last
-- [ ] write tests: one request through `ControlDispatcher(actions: server)` reaches the app's group attach,
+- [x] write tests: one request through `ControlDispatcher(actions: server)` reaches the app's group attach,
   as `ControlServerZmxTests` does for `zmx.attach`
-- [ ] write tests (`ControlServerTests`): a `zmx.attach.group` call held in `BlockingRemoteRunner` does not
+- [x] write tests (`ControlServerTests`): a `zmx.attach.group` call held in `BlockingRemoteRunner` does not
   hold the accept loop, following `testARemoteCallDoesNotHoldTheAcceptLoop`
-- [ ] write tests: the parent moved to another workspace during a suspended page attach, followed by a
+- [x] write tests: the parent moved to another workspace during a suspended page attach, followed by a
   terminal member, leaves both later children with the parent and no row in the old workspace
-- [ ] write tests: exactly one tree read per group attach, counted apart from the page-attach calls
-- [ ] write tests: older origin without `companions` attaches listed children and reports membership unknown
-- [ ] run `-only-testing:agtermTests/ControlServerRemoteGroupTests` - must pass before task 4
+- [x] write tests: exactly one tree read per group attach, counted apart from the page-attach calls
+- [x] write tests: older origin without `companions` attaches listed children and reports membership unknown
+- [x] run `-only-testing:agtermTests/ControlServerRemoteGroupTests` - must pass before task 4
 
 ### Task 4: Single attach of a companion nests under its parent
 
