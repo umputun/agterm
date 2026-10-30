@@ -2,12 +2,14 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// companionSend wraps a sender so a companion request an old app refused reads as that, under `--json` the raw reply.
-func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, json: Bool) -> (ControlRequest) throws -> SocketReply {
+/// companionSend wraps a sender so a request an old app refused as an unknown command reads as `tooOld`,
+/// under `--json` the raw reply.
+func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, json: Bool,
+                   tooOld: String = "the running app is too old for companions") -> (ControlRequest) throws -> SocketReply {
     { request in
         let reply = try send(request)
         if !json, reply.response.refusesUnknown(request.cmd) {
-            FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
+            FileHandle.standardError.write(Data("error: \(tooOld)\n".utf8))
             throw ExitCode.failure
         }
         return reply

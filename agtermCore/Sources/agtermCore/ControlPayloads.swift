@@ -167,6 +167,32 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     }
 }
 
+/// ControlRemoteGroup is `zmx.attach.group`'s receipt. `membershipKnown` is false when the origin did not list
+/// its groups, so a companion it did not list cannot be named as missing.
+public struct ControlRemoteGroup: Codable, Sendable, Equatable {
+    public let membershipKnown: Bool
+    public let companions: [ControlRemoteGroupMember]
+
+    public init(membershipKnown: Bool, companions: [ControlRemoteGroupMember]) {
+        self.membershipKnown = membershipKnown
+        self.companions = companions
+    }
+}
+
+/// ControlRemoteGroupMember is one companion's outcome: `id` is the local row it created, which may have closed
+/// since, and `error` why it was not attached.
+public struct ControlRemoteGroupMember: Codable, Sendable, Equatable {
+    public let origin: String
+    public let id: String?
+    public let error: String?
+
+    public init(origin: String, id: String? = nil, error: String? = nil) {
+        self.origin = origin
+        self.id = id
+        self.error = error
+    }
+}
+
 public struct ControlRemoteMember: Codable, Sendable, Equatable {
     public let id: String
     public let name: String

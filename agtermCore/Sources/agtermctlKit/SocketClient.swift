@@ -352,6 +352,17 @@ struct SocketClient {
         return lines.joined(separator: "\n")
     }
 
+    /// formatRemoteGroup is a successful group attach: the parent's local id, then one `origin -> local` line
+    /// per companion.
+    static func formatRemoteGroup(parent: String?, group: ControlRemoteGroup?) -> String {
+        let members = group?.companions.map { "  \($0.origin) -> \($0.id ?? "-")" } ?? []
+        return ([parent ?? "ok"] + members).joined(separator: "\n")
+    }
+
+    static func remoteGroupNote(host: String) -> String {
+        "note: \(host) does not report group membership; unlisted companions cannot be detected"
+    }
+
     /// A remote host's attachable sessions, one per line, carrying the session id `zmx attach` takes. An
     /// empty answer says so rather than printing nothing, which a caller cannot tell from a failed read.
     static func formatRemoteTree(_ tree: ControlRemoteTree) -> String {

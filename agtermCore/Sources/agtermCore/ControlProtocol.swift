@@ -121,6 +121,9 @@ public enum Command: String, Codable, Sendable {
     case zmxReset = "zmx.reset"
     case zmxTree = "zmx.tree"
     case zmxAttach = "zmx.attach"
+    /// zmxAttachGroup is its own command, not a flag on `zmx.attach`, so an app that predates it fails to
+    /// decode the request and creates nothing instead of attaching one row.
+    case zmxAttachGroup = "zmx.attach.group"
     case zmxPresent = "zmx.present"
     case zmxScreen = "zmx.screen"
     case recentList = "recent.list"
@@ -679,6 +682,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var closed: [String]?
     /// The page a `session.companion.page.attach` handed out, token included.
     public var companionPage: PresentationPage?
+    public var remoteGroup: ControlRemoteGroup?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -695,8 +699,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil,
                 restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil,
                 recent: [ControlRecentItem]? = nil, recentOpen: ControlRecentOpen? = nil, undoable: Bool? = nil,
-                parent: String? = nil, closed: [String]? = nil, companionPage: PresentationPage? = nil) {
+                parent: String? = nil, closed: [String]? = nil, companionPage: PresentationPage? = nil,
+                remoteGroup: ControlRemoteGroup? = nil) {
         self.companionPage = companionPage
+        self.remoteGroup = remoteGroup
         self.parent = parent
         self.closed = closed
         self.undoable = undoable

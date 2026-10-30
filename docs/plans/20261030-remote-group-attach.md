@@ -194,30 +194,30 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermCore/Tests/agtermctlKitTests/ZmxCommandsTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
-- [ ] first, as its own step, move the `ControlActions` protocol unchanged from `ControlDispatcher.swift`
+- [x] first, as its own step, move the `ControlActions` protocol unchanged from `ControlDispatcher.swift`
   (exactly 1000 lines, the strict lint limit) into a new `ControlActions.swift`; a pure move, approved by Eugene
-- [ ] add `Command.zmxAttachGroup`, `ControlActions.attachRemoteGroup` as a real protocol requirement with a
+- [x] add `Command.zmxAttachGroup`, `ControlActions.attachRemoteGroup` as a real protocol requirement with a
   refusing default (`zmx.attach.group is not supported on this platform`), and the `remoteGroup` receipt
   types on `ControlResult`; add the case to every command list that names `.zmxAttach`
-- [ ] dispatch it through the same host/id/window validation as `zmx.attach`, with pinned error texts
-- [ ] CLI `--companions` on `zmx attach` builds the new command; `Attach.run()` sends through the
+- [x] dispatch it through the same host/id/window validation as `zmx.attach`, with pinned error texts
+- [x] CLI `--companions` on `zmx attach` builds the new command; `Attach.run()` sends through the
   reply-returning `companionSend` wrapper, given a configurable too-old message, so it holds the
   `SocketReply` before any formatting or failure exit. Under `--json` it prints the raw line; otherwise it
   prints `formatRemoteGroup`'s lines, then the unknown-membership note to stderr on either outcome from the
   decoded `result.remoteGroup` (`printResponse` never reads `result` on a failure), then exits nonzero on
   `!ok`
-- [ ] write tests: dispatcher validation and routing with pinned errors; the default refusal through a
+- [x] write tests: dispatcher validation and routing with pinned errors; the default refusal through a
   conformer lacking the method, as `anOlderAttachHostRefusesExplicitWindowPlacement` does; receipt round-trip
-- [ ] write tests (`ZmxCommandsTests`): request shape with and without `--companions`; `formatRemoteGroup`
+- [x] write tests (`ZmxCommandsTests`): request shape with and without `--companions`; `formatRemoteGroup`
   for success, partial failure, and the unknown-membership note on both
-- [ ] write tests (`SocketClientTests`, beside the companion too-old cases): too-old mapping sends nothing
+- [x] write tests (`SocketClientTests`, beside the companion too-old cases): too-old mapping sends nothing
   else; raw reply under `--json` with no note; an actual `Attach.run` against a stub server answering a
   partial failure with `membershipKnown: false` prints the note to stderr and exits nonzero
-- [ ] write tests: `HtmlBridge` keeps the group attach's ids and window (beside
+- [x] write tests: `HtmlBridge` keeps the group attach's ids and window (beside
   `attachAndDashboardKeepTheirIdsAndLandInThePagesWindow`)
-- [ ] add `.zmxAttachGroup` to `ControlServer.waitsOnNetwork` here; its accept-loop test lands in Task 3,
+- [x] add `.zmxAttachGroup` to `ControlServer.waitsOnNetwork` here; its accept-loop test lands in Task 3,
   once the app method can reach ssh
-- [ ] build the app target, then run the package filters above - must pass before task 3
+- [x] build the app target, then run the package filters above - must pass before task 3
 
 ### Task 3: Group attach in the app
 

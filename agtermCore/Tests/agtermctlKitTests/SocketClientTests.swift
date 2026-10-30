@@ -421,6 +421,59 @@ struct SocketClientTests {
         #expect(decoded == response)
     }
 
+    @Test func anAppTooOldForGroupAttachIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value zmx.attach.group"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Zmx.Attach.parse(["buildbox", "s1", "--companions", "--socket", server.path])
+        var printed = Data()
+        let errors = try captureStderr {
+            printed = try captureStdout { #expect(throws: ExitCode.failure) { try command.run() } }
+        }
+
+        #expect(printed.isEmpty)
+        #expect(String(decoding: errors, as: UTF8.self) == "error: the running app is too old for group attach\n")
+        #expect(server.received?.cmd == .zmxAttachGroup)
+    }
+
+    @Test func aPartialGroupAttachNamesTheFailureAndTheUnknownMembershipThenFails() throws {
+        let group = ControlRemoteGroup(membershipKnown: false, companions: [ControlRemoteGroupMember(origin: "c1", error: "boom")])
+        let server = StubServer(response: ControlResponse(ok: false, result: ControlResult(id: "P", remoteGroup: group),
+                                                          error: "kept build (P) and 0 companion(s); not attached: logs (boom)"))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Zmx.Attach.parse(["buildbox", "s1", "--companions", "--socket", server.path])
+        var printed = Data()
+        let errors = try captureStderr {
+            printed = try captureStdout { #expect(throws: ExitCode.failure) { try command.run() } }
+        }
+
+        #expect(printed.isEmpty)
+        #expect(String(decoding: errors, as: UTF8.self) == """
+        error: kept build (P) and 0 companion(s); not attached: logs (boom)
+        note: buildbox does not report group membership; unlisted companions cannot be detected
+
+        """)
+    }
+
+    @Test func aGroupAttachUnderJSONPrintsTheRawReplyAndNoNote() throws {
+        let line = " {\"ok\": true, \"result\": {\"id\": \"P\", \"remoteGroup\": {\"membershipKnown\": false, \"companions\": []}, "
+            + "\"futureField\": 1}} "
+        let server = StubServer(line: Data(line.utf8))
+        try server.start()
+        defer { server.stop() }
+
+        let command = try Zmx.Attach.parse(["buildbox", "s1", "--companions", "--json", "--socket", server.path])
+        var printed = Data()
+        let errors = try captureStderr { printed = try captureStdout { try command.run() } }
+
+        #expect(printed == Data((line + "\n").utf8))
+        #expect(errors.isEmpty)
+    }
+
     @Test func runQuietsIdForNonCreateCommand() throws {
         let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "9f3c")))
         try server.start()
@@ -441,6 +494,17 @@ struct SocketClientTests {
         try body()
         fflush(nil)
         dup2(saved, STDOUT_FILENO)
+        try pipe.fileHandleForWriting.close()
+        return pipe.fileHandleForReading.readDataToEndOfFile()
+    }
+
+    private func captureStderr(_ body: () throws -> Void) throws -> Data {
+        let pipe = Pipe()
+        let saved = dup(STDERR_FILENO)
+        defer { close(saved) }
+        dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO)
+        try body()
+        dup2(saved, STDERR_FILENO)
         try pipe.fileHandleForWriting.close()
         return pipe.fileHandleForReading.readDataToEndOfFile()
     }
