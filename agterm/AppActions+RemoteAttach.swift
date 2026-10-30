@@ -7,6 +7,7 @@ import agtermCore
 protocol RemoteAttaching: AnyObject {
     func remoteTree(host: String?) async -> ControlResponse
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse
+    func attachRemoteGroup(host: String, session: String, window: String?) async -> ControlResponse
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse
     func closeHud(_ target: String?, window: String?) -> ControlResponse
     /// hudGeneration identifies the HUD now showing over `session`, nil when it shows none.
@@ -73,13 +74,19 @@ extension AppActions {
                                    prompt: "Attach from \(destination)")
             guard let picked = await controller.pick(pick), picked.result == .picked, let session = picked.id else { return }
             hud.progress("attaching \(picked.label ?? session)…")
-            let attached = await remoteAttacher.attachRemoteSession(host: destination, session: session,
-                                                                    window: windowID.uuidString)
+            // a top-level pick always asks for the group: the attach reads the origin again, so membership comes
+            // from that fresh read rather than the listing the picker showed
+            let topLevel = sessions.first { $0.id == session }?.parent == nil
+            let attached = topLevel
+                ? await remoteAttacher.attachRemoteGroup(host: destination, session: session, window: windowID.uuidString)
+                : await remoteAttacher.attachRemoteSession(host: destination, session: session, window: windowID.uuidString)
             if attached.ok {
                 hud.close()
-            } else {
-                hud.fail(attached.error ?? "attach failed")
+                return
             }
+            // a partial group attach selected its new parent row, so the report goes there
+            if let parent = attached.result?.id { hud.move(to: parent) }
+            hud.fail(attached.error ?? "attach failed")
         }
     }
 
@@ -99,7 +106,7 @@ extension AppActions {
 @MainActor
 final class RemoteAttachHud {
     private let attacher: any RemoteAttaching
-    private let session: String?
+    private var session: String?
     private let window: String
     private let action: String
     /// owned is the HUD this attach opened; one another caller posted meanwhile is not its to close.
@@ -120,6 +127,12 @@ final class RemoteAttachHud {
         guard let session, let owned, attacher.hudGeneration(session: session) == owned else { return }
         _ = attacher.closeHud(session, window: window)
         self.owned = nil
+    }
+
+    /// move closes the panel this attach owns and points later ones at `session`.
+    func move(to session: String) {
+        close()
+        self.session = session
     }
 
     func fail(_ text: String) {

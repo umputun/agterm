@@ -275,16 +275,16 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermTests/RemoteAttachTests.swift`
 - Modify: `agtermTests/AppActionsCompanionsTests.swift` (`HudRecorder` conforms to `RemoteAttaching`)
 
-- [ ] add `attachRemoteGroup` to `RemoteAttaching` and to both test conformers (`FakeAttacher`,
+- [x] add `attachRemoteGroup` to `RemoteAttaching` and to both test conformers (`FakeAttacher`,
   `HudRecorder`); route a picked top-level row through it and a picked companion through
   `attachRemoteSession`
-- [ ] let `RemoteAttachHud` move to the new parent row: close its own progress HUD on the starting row and
+- [x] let `RemoteAttachHud` move to the new parent row: close its own progress HUD on the starting row and
   post a partial report on the parent. A refusal with no `result.id` stays on the starting row; a parent row
   already closed falls back to `fail()`'s notification banner
-- [ ] write tests: picking a parent attaches the group, including a parent whose listing shows `companions: []`;
+- [x] write tests: picking a parent attaches the group, including a parent whose listing shows `companions: []`;
   picking a companion attaches one row; a partial
   failure posts its timed report on the new parent and leaves the starting row without a HUD
-- [ ] run `-only-testing:agtermTests/RemoteAttachTests` - must pass before task 6
+- [x] run `-only-testing:agtermTests/RemoteAttachTests` - must pass before task 6
 
 ### Task 6: Documentation and agent skill
 
