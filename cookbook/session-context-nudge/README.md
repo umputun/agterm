@@ -46,7 +46,7 @@ Register it as a `UserPromptSubmit` hook by adding an entry to `~/.claude/settin
 }
 ```
 
-The hook writes nothing itself. What it prints becomes context on the model's next turn, and the model runs `agtermctl session context` if it decides the line needs replacing. That means the command has to be permitted: if you run Claude Code with an allowlist, add `Bash(agtermctl session context:*)` to it. A denial is worse than no nudge, because the model abandons the write for the rest of the turn.
+The hook changes nothing in agterm itself. What it prints becomes context on the model's next turn, and the model runs `agtermctl session context` if it decides the line needs replacing. That means the command has to be permitted: if you run Claude Code with an allowlist, add `Bash(agtermctl session context:*)` to it. A denial is worse than no nudge, because the model abandons the write for the rest of the turn.
 
 Two settings, both optional:
 
@@ -78,13 +78,15 @@ Four smaller things the script has to get right:
 
 The `agtermctl` it calls is resolved in three steps: `$AGTERMCTL` if you set it, then `$GHOSTTY_BIN_DIR/agtermctl` if that names an executable, then whatever is on `PATH`. The middle step is the one that earns its place: the running app points `GHOSTTY_BIN_DIR` at its own bundle, so it finds the CLI belonging to the app actually serving this session rather than a symlink left by a different install. Other terminals set that variable too, which is why the file has to exist and be executable before it is used.
 
+It also names companions made by the [named-companion](../named-companion/) recipe. A companion created with a blank name carries its parent's name and a marker file, `~/.cache/agterm/companion-names/<session id>`, holding that name. While the session's name still matches the marker, the nudge adds a request to rename the session to a short form of its context, 25 characters at most. Once the name differs, renamed by the model or by hand, the hook deletes the marker and the request stops. That rename is a second command the model runs, so an allowlist needs `Bash(agtermctl session rename:*)` too. Without that recipe no marker exists and this part never fires.
+
 Everything fails open. A missing `agtermctl`, an unreadable tree, a session that has gone, a `jq` that is not installed: each of them exits silently. A quiet turn costs one stale line, and a stale line is cheaper than a wrong one.
 
 ## Limits
 
 It is a nudge, not a guarantee. The model decides whether the line still fits, so a line can stay stale for a turn or several, and a model that is deep in something will sometimes leave it alone when it should not. Nothing here detects that.
 
-It costs a hook run on every prompt you submit — one `agtermctl tree` call and one `jq`. On a machine where `timeout` is available the tree call is bounded at two seconds; macOS ships no `timeout`, so without GNU coreutils on `PATH` a hung CLI would stall the prompt until Claude Code's own hook timeout fires.
+It costs a hook run on every prompt you submit — one `agtermctl tree` call and one `jq`, plus a second `jq` while a companion marker exists. On a machine where `timeout` is available the tree call is bounded at two seconds; macOS ships no `timeout`, so without GNU coreutils on `PATH` a hung CLI would stall the prompt until Claude Code's own hook timeout fires.
 
 The pane check reads `$AGTERM_PANE`, the shell's spawn role rather than its live position. After a pane promotion or an `agtermctl session swap`, an agent that is now in the main pane can still report `right` and will never write the line. Set `CONTEXT_NUDGE_PANE` in that session to correct it.
 
