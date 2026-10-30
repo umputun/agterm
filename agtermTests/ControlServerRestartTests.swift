@@ -280,6 +280,17 @@ final class ControlServerRestartTests: XCTestCase {
         process.standardInput = Pipe()
         process.standardOutput = FileHandle.nullDevice
         try process.run()
+        // /bin/sh re-execs the selected shell after run returns, and an argv read across that exec is unreadable
+        if path == "/bin/sh" {
+            let deadline = Date().addingTimeInterval(5)
+            var image = ForegroundProcess.executablePath(of: process.processIdentifier)
+            while image == nil || image == path, Date() < deadline {
+                usleep(1000)
+                image = ForegroundProcess.executablePath(of: process.processIdentifier)
+            }
+            XCTAssertNotNil(image, "sh image never became readable")
+            XCTAssertNotEqual(image, path, "sh never re-executed")
+        }
         return process
     }
 
