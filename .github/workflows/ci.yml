@@ -48,9 +48,28 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+      - name: Read pinned zmx revision
+        id: revisions
+        shell: bash
+        run: |
+          zmx=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          zmx_target=$(sed -nE 's/^ZMX_TARGET="([^"]+)".*/\1/p' scripts/setup.sh)
+          [ -n "$zmx" ] && [ -n "$zmx_target" ]
+          echo "zmx=$zmx" >> "$GITHUB_OUTPUT"
+          echo "zmx_target=$zmx_target" >> "$GITHUB_OUTPUT"
+      - name: Cache zmx
+        uses: actions/cache@v6
+        with:
+          path: |
+            agterm/Resources/zmx
+            .zmx-build-stamp
+          key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}-${{ hashFiles('scripts/zmx-patches/**/*.patch') }}
+      # the session-host fixtures attach to a real zmx daemon; a cache miss builds it here
+      - name: Stage zmx
+        run: scripts/setup.sh --zmx-only
       - name: Install fish
         run: brew install fish
       - name: Verify fish
@@ -60,6 +79,7 @@ jobs:
         run: ../scripts/watchdog.sh swift test --enable-code-coverage
         env:
           AGTERM_REQUIRE_FISH: "1"
+          AGTERM_REQUIRE_ZMX: "1"
           WATCHDOG_SECONDS: "600"
           DIAG_DIR: ${{ github.workspace }}/test-hang
       - name: upload hang diagnostics
@@ -175,11 +195,6 @@ jobs:
           name: surface-teardown
           path: surface-teardown
           if-no-files-found: ignore
-      # The session-host fixtures attach to a real zmx daemon, so they skip in the Unit tests job,
-      # which stages no artifacts. This job has them.
-      - name: Session host fixtures against the staged zmx
-        working-directory: agtermCore
-        run: swift test --filter SessionHostServerTests
       # Nested helpers are standalone executables. A deep app re-seal with entitlements can stamp the
       # app's TCC grants onto them while leaving the build green (issue #396).
       - name: Verify helper signatures and entitlements
@@ -246,6 +261,44 @@ jobs:
             diff <(echo "$expected") <(echo "$debug") >&2 || true
             exit 1
           fi
+
+  hosted:
+    name: App-hosted tests
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read pinned helper revisions
+        id: revisions
+        shell: bash
+        run: |
+          ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          zmx=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          zmx_target=$(sed -nE 's/^ZMX_TARGET="([^"]+)".*/\1/p' scripts/setup.sh)
+          [ -n "$ghostty" ] && [ -n "$zmx" ] && [ -n "$zmx_target" ]
+          echo "ghostty=$ghostty" >> "$GITHUB_OUTPUT"
+          echo "zmx=$zmx" >> "$GITHUB_OUTPUT"
+          echo "zmx_target=$zmx_target" >> "$GITHUB_OUTPUT"
+      - name: Cache libghostty (GhosttyKit + resources)
+        uses: actions/cache@v6
+        with:
+          path: |
+            GhosttyKit.xcframework
+            agterm/Resources/ghostty
+            agterm/Resources/terminfo
+            .ghostty-build-stamp
+          key: ghosttykit-v2-${{ steps.revisions.outputs.ghostty }}-${{ hashFiles('scripts/ghostty-patches/*.patch') }}
+      - name: Cache zmx
+        uses: actions/cache@v6
+        with:
+          path: |
+            agterm/Resources/zmx
+            .zmx-build-stamp
+          key: zmx-v1-${{ steps.revisions.outputs.zmx }}-${{ steps.revisions.outputs.zmx_target }}-${{ hashFiles('scripts/zmx-patches/**/*.patch') }}
+      - name: Install xcodegen
+        run: brew install xcodegen
       # The zsh plain-login seam needs zsh here; the fish seam switches the runner shell below.
       - name: Give the runner account a zsh login shell
         run: sudo dscl . -create "/Users/$(id -un)" UserShell /bin/zsh

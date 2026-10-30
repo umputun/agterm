@@ -22,6 +22,19 @@ public enum DuplicateReplay {
 
         /// command is the pane's creation command, as `session new --command` takes one; nil for a plain shell.
         public var command: String? { argv.map(CommandRestore.shellQuotedLine) }
+
+        /// rebinding replaces each `ids` key found in the program's arguments with its value, matching case-insensitively
+        /// and keeping a lowercase spelling lowercase.
+        public func rebinding(_ ids: [String: String]) -> Plan {
+            guard case .program(let argv, let directory) = self else { return self }
+            let rebound = argv.map { arg in
+                ids.reduce(arg) { text, id in
+                    text.replacingOccurrences(of: id.key.lowercased(), with: id.value.lowercased())
+                        .replacingOccurrences(of: id.key, with: id.value, options: .caseInsensitive)
+                }
+            }
+            return .program(argv: rebound, workingDirectory: directory)
+        }
     }
 
     /// Refusal is a pane that cannot be copied; the duplicate creates nothing when any pane refuses.

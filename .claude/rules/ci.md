@@ -14,22 +14,30 @@ paths:
   `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, both SwiftLint configs, and `ci.yml`.
   Keep all three plugin paths: `SkillInstallTests` checks the bundled `SKILL.md` command count, every
   manifest path, and agreement among the three versions. A skill/manifest-only release preflight commit
-  must run the four Swift jobs.
+  must run the five Swift jobs.
+- `test`, `build` and `hosted` run in parallel and are each mostly compilation; merging any two puts
+  both compiles on the critical path.
 - `test` runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it.
   It installs fish with Homebrew and sets `AGTERM_REQUIRE_FISH=1`, so a fish test fails rather than skips
   when fish is missing.
+  It restores the zmx cache and runs `scripts/setup.sh --zmx-only`, which builds zmx on a miss without
+  touching libghostty, so `SessionHostServerTests` attach to a real daemon in the same `swift test`.
+  `AGTERM_REQUIRE_ZMX=1` fails `requiredFixturePrerequisitesArePresent` when zmx or the responsibility SPI
+  is missing, since the fixtures themselves skip silently.
   It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
   processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
   A hang otherwise reaches only the job timeout, which records nothing.
   `coverage`, the only Swift-gated Linux job, downloads it for best-effort Coveralls.
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
-- `build` restores separate revision-keyed caches for libghostty and zmx, including each build stamp,
-  installs xcodegen, runs Release `scripts/build.sh`, asserts all helpers have valid signatures and no
-  entitlements, then Debug `scripts/test-app.sh`. A zmx pin change does not rebuild libghostty. Keep both
-  app builds: Release exercises the whole-module optimizer and its SIL-deserializer failure. Debug provides
-  `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not enable testability in the
-  notarized Release app.
-- `build` sets the runner account's login shell to zsh, installs fish, and passes
+- `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
+  build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
+  `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
+  `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
+  `hosted` runs Debug `scripts/test-app.sh` and needs nothing from `build`; it builds the bundled helpers
+  itself. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
+  failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
+  enable testability in the notarized Release app.
+- `hosted` sets the runner account's login shell to zsh, installs fish, and passes
   `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `scripts/test-app.sh`. Its last step switches the login shell to
   fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, with
   `TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL=1`. Keep that order: switching before the hosted tests

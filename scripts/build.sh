@@ -14,7 +14,9 @@ GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 # result reaches the `-n` check.
 VERSION="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//' || true)"
 [ -n "$VERSION" ] || VERSION="0.0.0"
+# ARCHS=arm64: project.yml's ARCHS does not reach the agtermCore package, which otherwise also compiles an
+# x86_64 slice the arm64-only app never links. release.sh passes the same, so CI compiles what ships.
 xcodebuild -project agterm.xcodeproj -scheme agterm -configuration Release \
   -derivedDataPath build/DerivedData \
-  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" GIT_COMMIT="$GIT_COMMIT" build
+  MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" GIT_COMMIT="$GIT_COMMIT" ARCHS=arm64 build
 echo "built: build/DerivedData/Build/Products/Release/agterm.app"

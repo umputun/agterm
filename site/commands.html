@@ -1126,7 +1126,8 @@
                 Duplicate as Companion: create a companion of the target that copies its split layout (axis and ratio) and starts
                 another copy of the program running in each pane, in that program's working directory. A pane where a shell holds
                 the foreground gets a plain login shell in its directory. Each copied program becomes that pane's creation command,
-                as with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>: the pane closes when it exits. Every pane is checked before
+                as with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>: the pane closes when it exits. The target's session and pane ids in a
+                program's arguments become the companion's own. Every pane is checked before
                 anything is created.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> (the new companion) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span>.
