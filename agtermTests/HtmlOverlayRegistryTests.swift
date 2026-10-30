@@ -900,6 +900,32 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(background, "#000000")
     }
 
+    // regression: reload --current reloaded the about:blank document instead of the picture
+    func testAnImagePageShowsThePictureAndReloadsItFromTheFile() async throws {
+        let path = try writePNG("shot.png", width: 30)
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+
+        _ = try writePNG("shot.png", width: 40)
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "40" }
+    }
+
+    func testAnImageReadFinishingAfterCloseIsDropped() async throws {
+        let overlay = HtmlOverlay(source: .image(path: try writePNG("late.png", width: 30)))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+
+        page.close()
+        try await Task.sleep(for: .milliseconds(500))
+
+        XCTAssertNil(page.webView.url)
+        store.closeOverlay(session.id)
+    }
+
     func testAUrlPageKeepsTheBrowserCanvasThroughAThemeChange() async throws {
         let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>app</title><body style=\"color: #333\"><p>app text</p></body>")])
         let page = registry.page(for: try openURL("http://127.0.0.1:\(port)/"), store: store)
@@ -1684,6 +1710,15 @@ final class HtmlOverlayRegistryTests: XCTestCase {
     private func write(_ name: String, _ body: String) throws {
         try "<!doctype html><html><body>\(body)</body></html>"
             .write(to: pages.appendingPathComponent(name), atomically: true, encoding: .utf8)
+    }
+
+    private func writePNG(_ name: String, width: Int) throws -> String {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: 10,
+                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        let url = pages.appendingPathComponent(name)
+        try XCTUnwrap(rep.representation(using: .png, properties: [:])).write(to: url)
+        return url.path
     }
 
     // the drag-destination lookup AppKit runs, private and so reached through its implementation

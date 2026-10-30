@@ -621,7 +621,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// HUD first: its surface sits in the session's overlay slot like a program's.
     var linkClickOrigin: LinkPolicy.ClickOrigin {
         if hudBodyFile != nil { return .hud }
-        if let session { return .pane(session.id) }
+        if let session { return session.remoteHost == nil ? .pane(session.id) : .remotePane(session.id) }
         if let owner = watermarkSession { return .scratch(owner.id) }
         return focusSession == nil ? .quick : .programOverlay
     }

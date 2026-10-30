@@ -695,6 +695,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those
   opens: one closes the HUD for good, the other shows nothing. A HUD, a program overlay and the quick
   terminal never route to the overlay.
+- libghostty also detects plain paths and hands them over as typed: absolute, `~/`, or a relative path it
+  resolved because it exists. `LinkPolicy.isBarePath` takes them literally, never URL-parsed, so `%`, `#`
+  and spaces stay in the name. A local path, bare or `file://`, with an `imageExtensions` extension routes to
+  `ControlServer.openImageLink` (the same HUD and zoom guards) and is revealed when that refuses; any other
+  local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
+  on the far Mac and are ignored, while its scratch stays `.scratch` because that shell is local.
+- An image page (`HtmlSource.image`, `--image`) embeds the file as a data URI in an HTML string, so it gets no
+  file grant, theme or bridge, and `presentationSource` has no remote form for it, which makes a presented
+  session refuse it through `pageBelongsRemote`. `ImageProbe.read` opens the path once and judges that
+  descriptor (`fstat`): a symlink is measured at its target, and a non-regular file, an offloaded iCloud
+  placeholder or one over 64 MB is refused before a byte is read. Only a PNG, JPEG, GIF or WebP signature
+  (`ImagePage.mimeType(sniffing:)`) reaches ImageIO, and a header over `ImagePage.maxPixels` is refused, since
+  a 560 KB PNG measured promising 144 MP. A click and a page build read off the main actor: a click rechecks the
+  HUD, zoom and slot after the read and opens through `openImageOverlay`, never the synchronous probe again,
+  and a page drops a read that a close or newer reload overtook (`imageLoad`). The control path stays
+  synchronous, its caller already holding full control, so a file on slow storage stalls the app there.
+  With no size given the panel is sized once from `ImagePage.points` against the session's
+  `hudPaneFrames.detail` at its window's backing scale; a later window resize does not refit. SVG is excluded
+  because it is a document that can carry script.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any

@@ -143,6 +143,85 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
     }
 
+    // MARK: bare paths and images
+
+    static let home = "/Users/me"
+
+    @Test(arguments: [
+        ("/tmp/shot.png", "/tmp/shot.png"),
+        ("/tmp/shot.PNG", "/tmp/shot.PNG"),
+        ("/tmp/a b.jpg", "/tmp/a b.jpg"),
+        ("/tmp/x.jpeg", "/tmp/x.jpeg"),
+        ("/tmp/x.gif", "/tmp/x.gif"),
+        ("/tmp/x.webp", "/tmp/x.webp"),
+        ("/tmp/100%#?.png", "/tmp/100%#?.png"),
+        ("/tmp/../tmp/x.png", "/tmp/x.png"),
+        ("~/shots/x.png", "/Users/me/shots/x.png"),
+        ("file:///tmp/x.png", "/tmp/x.png"),
+        ("file://localhost/tmp/x.PNG", "/tmp/x.PNG"),
+    ])
+    func localImagePathsShowAsImages(_ raw: String, _ path: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
+            == .image(URL(fileURLWithPath: path, isDirectory: false)))
+    }
+
+    @Test(arguments: [
+        ("/tmp/notes.md", "/tmp/notes.md"),
+        ("/tmp/x.svg", "/tmp/x.svg"),
+        ("/tmp/x.pdf", "/tmp/x.pdf"),
+        ("/usr/bin", "/usr/bin"),
+        ("/tmp/png", "/tmp/png"),
+        ("~/notes.md", "/Users/me/notes.md"),
+    ])
+    func otherBarePathsReveal(_ raw: String, _ path: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
+            == .reveal(URL(fileURLWithPath: path, isDirectory: false)))
+    }
+
+    @Test(arguments: [
+        "//server/share/x.png",
+        "/net/host/x.png",
+        "/tmp/../net/x.png",
+        "/home/someone/x.png",
+        "~",
+        "~user/x.png",
+        "src/x.png",
+        "./x.png",
+        "/tmp/x.png\u{00}/etc/other",
+        "/tmp/x\ny.png",
+    ])
+    func unsafeOrRelativeBarePathsIgnored(_ raw: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home) == .ignore)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func imagesOpenOnTheOwningSessionInEveryMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        let url = URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)
+        for raw in ["/tmp/shot.png", "file:///tmp/shot.png"] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin, localHosts: Self.localHosts, home: Self.home)
+                == .image(url, session: Self.session))
+        }
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
+    func sessionlessOriginsRevealImages(_ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.route(for: "/tmp/shot.png", mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
+            == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
+    }
+
+    // a bare path in a pane attached from another Mac names a file on that Mac
+    @Test func remotePaneIgnoresBarePathsAndRevealsFileLinks() throws {
+        let origin = LinkPolicy.ClickOrigin.remotePane(Self.session)
+        let route = { (raw: String) in
+            LinkPolicy.route(for: raw, mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
+        }
+        #expect(route("/tmp/shot.png") == .ignore)
+        #expect(route("~/notes.md") == .ignore)
+        #expect(route("file:///tmp/shot.png") == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
+        let web = try #require(URL(string: "https://example.com/a"))
+        #expect(route("https://example.com/a") == .overlay(web, session: Self.session, sizePercent: nil))
+    }
+
     // MARK: localHostNames / expandedHostNames (the default-parameter source)
 
     @Test func expandedHostNamesNormalizesAndAddsLocalShortForm() {
@@ -172,7 +251,7 @@ struct LinkPolicyTests {
     // MARK: route (browser / overlay / reveal / ignore)
 
     static let session = UUID()
-    static let origins: [LinkPolicy.ClickOrigin] = [.pane(session), .scratch(session), .hud, .programOverlay, .quick]
+    static let origins: [LinkPolicy.ClickOrigin] = [.pane(session), .remotePane(session), .scratch(session), .hud, .programOverlay, .quick]
 
     @Test(arguments: ["http://example.com/a", "https://example.com/a?q=1"], origins)
     func browserModeSendsWebLinksToTheBrowser(_ raw: String, _ origin: LinkPolicy.ClickOrigin) throws {

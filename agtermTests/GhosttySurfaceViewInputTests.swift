@@ -11,6 +11,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         var opened: [URL] = []
         var revealed: [URL] = []
         var overlaid: [(URL, UUID, Int?)] = []
+        var images: [(URL, UUID)] = []
     }
 
     private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
@@ -21,6 +22,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         LinkOpener.shared.overlay = { url, session, percent in
             followed.overlaid.append((url, session, percent))
             return overlayOpens
+        }
+        LinkOpener.shared.image = { url, session, done in
+            followed.images.append((url, session))
+            done(overlayOpens)
         }
         return followed
     }
@@ -50,6 +55,40 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(hud.linkClickOrigin, .hud)
         XCTAssertEqual(quick.linkClickOrigin, .quick)
         hud.hudBodyFile = nil
+        let remote = bareSurface()
+        let remoteSession = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        remote.session = remoteSession
+        XCTAssertEqual(remote.linkClickOrigin, .remotePane(remoteSession.id))
+    }
+
+    func testAPaneImagePathShowsOverTheSessionAndRevealsWhenItCannot() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let url = URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)
+
+        let shown = recordLinks(mode: .browser, overlayOpens: true)
+        pane.openLink("/tmp/shot.png", wantsBrowser: false)
+        XCTAssertEqual(shown.images.map(\.0), [url])
+        XCTAssertEqual(shown.images.map(\.1), [session.id])
+        XCTAssertTrue(shown.revealed.isEmpty)
+
+        let refused = recordLinks(mode: .overlay, overlayOpens: false)
+        pane.openLink("/tmp/shot.png", wantsBrowser: false)
+        XCTAssertEqual(refused.images.count, 1)
+        XCTAssertEqual(refused.revealed, [url])
+    }
+
+    func testARemotePaneIgnoresABarePath() {
+        let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        let pane = bareSurface()
+        pane.session = session
+
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink("/tmp/shot.png", wantsBrowser: false)
+        pane.openLink("/tmp/notes.md", wantsBrowser: false)
+        XCTAssertTrue(followed.images.isEmpty)
+        XCTAssertTrue(followed.revealed.isEmpty)
     }
 
     func testAPaneLinkGoesToTheOverlayInOverlayModeAndToTheBrowserWhenItCannotOpen() throws {

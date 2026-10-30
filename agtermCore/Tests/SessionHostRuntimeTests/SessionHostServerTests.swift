@@ -15,6 +15,12 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
     && FileManager.default.isExecutableFile(atPath: stagedZmxPath)
 
 @Suite(.serialized) struct SessionHostServerTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AGTERM_REQUIRE_ZMX"] != nil))
+    func requiredFixturePrerequisitesArePresent() {
+        #expect(Responsibility.system.isAvailable, "AGTERM_REQUIRE_ZMX is set but the responsibility SPI is unavailable")
+        #expect(FileManager.default.isExecutableFile(atPath: stagedZmxPath), "AGTERM_REQUIRE_ZMX is set but zmx is not staged at \(stagedZmxPath)")
+    }
+
     @Test func nativeReplyWritesPreservePartialAndTransientRemainders() throws {
         for errors in [[Int32(2), -EINTR, 3], [-EAGAIN], [-EINTR, -EINTR, -EINTR, -EINTR]] {
             let directory = try temporaryDirectory()

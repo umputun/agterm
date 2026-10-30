@@ -65,7 +65,7 @@ struct HtmlOverlayView: View {
                     button("link", "Copy Link", "htmlOverlay.copy", enabled: true) {
                         registry.copyLink(overlay.id)
                     }
-                case .replica:
+                case .replica, .image:
                     EmptyView()
                 }
             }
@@ -134,7 +134,7 @@ struct HtmlOverlayView: View {
 
     private var sourceText: String {
         switch overlay.source {
-        case .file(let path, _), .replica(let path): path
+        case .file(let path, _), .replica(let path), .image(let path): path
         case .url(let url): url.absoluteString
         }
     }

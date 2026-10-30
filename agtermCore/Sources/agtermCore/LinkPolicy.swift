@@ -16,12 +16,18 @@ public enum LinkPolicy {
     /// executable/handler.
     public static let permittedSchemes: Set<String> = ["http", "https", "mailto", "ftp"]
 
-    /// What a link click should do. Carries the target URL for `.open`/`.reveal`.
+    /// What a link click should do. Carries the target URL for `.open`/`.reveal`/`.image`.
     public enum LinkDisposition: Equatable {
         case open(URL)
         case reveal(URL)
+        /// image is a local file with a `imageExtensions` extension, shown as a picture instead of revealed.
+        case image(URL)
         case ignore
     }
+
+    /// The extensions a clicked local path shows as a picture. SVG is left out: it is a document that can
+    /// carry script, not a bitmap.
+    public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp"]
 
     /// Whether a web view of this app can load plain http from `host`. The app allows local networking
     /// only, and App Transport Security reads "local" off the host's SYNTAX, never off where it resolves:
@@ -48,6 +54,8 @@ public enum LinkPolicy {
     /// could open on; a HUD link stays in the browser so the click never replaces the HUD it sits in.
     public enum ClickOrigin: Equatable, Sendable {
         case pane(UUID)
+        /// remotePane is a pane of a session attached from another Mac, whose printed paths name files there.
+        case remotePane(UUID)
         case scratch(UUID)
         case hud
         case programOverlay
@@ -59,6 +67,8 @@ public enum LinkPolicy {
     public enum Route: Equatable, Sendable {
         case browser(URL)
         case overlay(URL, session: UUID, sizePercent: Int?)
+        /// image shows a local picture over `session`, sized from the image; a refused open reveals it instead.
+        case image(URL, session: UUID)
         case reveal(URL)
         case ignore
     }
@@ -130,31 +140,45 @@ public enum LinkPolicy {
         return "/" + out.joined(separator: "/")
     }
 
-    /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a LOCAL `file://` link
-    /// (empty host, or a host in `localHosts`) → `.reveal` of the HOST-STRIPPED, dot-normalized local path,
-    /// so Finder only ever sees a plain `/…` path and never leans on the original authority for host
-    /// handling; a `file://` with a non-local host, an empty/relative path, a UNC-style `//`-path, an
-    /// auto-mount path (`/net`, `/Network`, `/home`, checked AFTER `..` normalization so `/tmp/../net/x`
-    /// can't sneak through), or any other scheme / schemeless / unparseable input → `.ignore`. `localHosts`
-    /// is injected (default: this machine's names) so the decision stays host-free and unit-testable.
-    public static func disposition(for raw: String, localHosts: Set<String> = localHostNames) -> LinkDisposition {
+    /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`
+    /// or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
+    /// unparseable input → `.ignore`. A local path is a LOCAL `file://` link (empty host, or a host in
+    /// `localHosts`), host-stripped so Finder never leans on the original authority, or a bare path
+    /// (`isBarePath`) taken literally with `~/` expanded against `home`. Both are injected so the decision
+    /// stays host-free and unit-testable.
+    public static func disposition(for raw: String, localHosts: Set<String> = localHostNames,
+                                   home: String = NSHomeDirectory()) -> LinkDisposition {
+        if isBarePath(raw) {
+            guard !raw.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return .ignore }
+            return localPath(raw.hasPrefix("~/") ? home + raw.dropFirst() : raw)
+        }
         guard let url = URL(string: raw), let scheme = url.scheme?.lowercased() else { return .ignore }
         if permittedSchemes.contains(scheme) { return .open(url) }
         guard scheme == "file" else { return .ignore }
         let host = normalizedHost(url.host(percentEncoded: false) ?? "")
         guard host.isEmpty || localHosts.contains(host) else { return .ignore }
-        // reject an empty/relative path (empty would make `URL(fileURLWithPath:)` the process CWD) and a
-        // UNC-style `//` path (a remote target hidden where the host check can't see it).
-        let rawPath = url.path(percentEncoded: false)
-        guard rawPath.hasPrefix("/"), !rawPath.hasPrefix("//") else { return .ignore }
-        // reveal a host-stripped local path, collapsing `.`/`..` LEXICALLY so `/tmp/../net/x` can't sneak
-        // past the automount check and the classifier never stats — never risks triggering — the automount
-        // path it is about to deny. It also never resolves symlinks: `/tmp/link -> /net` reveals the link,
-        // not the target. Do NOT swap in `standardizedFileURL`/`resolvingSymlinksInPath()`, which touch the
-        // filesystem.
-        let normalizedPath = Self.lexicallyNormalizedAbsolutePath(rawPath)
-        guard !isAutomountPath(normalizedPath) else { return .ignore }
-        return .reveal(URL(fileURLWithPath: normalizedPath, isDirectory: false))
+        return localPath(url.path(percentEncoded: false))
+    }
+
+    /// isBarePath says whether `raw` is a path libghostty detected in plain output: never URL-parsed, so
+    /// `%`, `#`, `?` and spaces stay part of the name. A relative one arrives resolved when it exists.
+    static func isBarePath(_ raw: String) -> Bool {
+        raw.hasPrefix("/") || raw.hasPrefix("~/")
+    }
+
+    /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.reveal` for
+    /// anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
+    /// resolve against the process directory), a UNC-style `//` path (a remote target the host check cannot
+    /// see), or an auto-mount path. The automount check runs after LEXICAL `..` collapsing, so
+    /// `/tmp/../net/x` cannot sneak through and the classifier never stats the path it is about to deny.
+    /// It never resolves symlinks either: do NOT swap in `standardizedFileURL`/`resolvingSymlinksInPath()`,
+    /// which touch the filesystem.
+    static func localPath(_ path: String) -> LinkDisposition {
+        guard path.hasPrefix("/"), !path.hasPrefix("//") else { return .ignore }
+        let normalized = lexicallyNormalizedAbsolutePath(path)
+        guard !isAutomountPath(normalized) else { return .ignore }
+        let url = URL(fileURLWithPath: normalized, isDirectory: false)
+        return imageExtensions.contains(url.pathExtension.lowercased()) ? .image(url) : .reveal(url)
     }
 
     /// wantsBrowser reports whether a ⌘⇧ link click overrides the overlay setting and goes to the browser.
@@ -163,24 +187,31 @@ public enum LinkPolicy {
                                     mouseCaptured: Bool) -> Bool {
         guard modifiers == [.command, .shift], mode != .browser, !mouseCaptured else { return false }
         switch origin {
-        case .pane, .scratch: return true
+        case .pane, .remotePane, .scratch: return true
         case .hud, .programOverlay, .quick: return false
         }
     }
 
-    /// Maps a raw link to its route: `disposition` decides open, reveal or ignore, then a web link the
-    /// overlay can show (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's
-    /// overlay at the mode's size when `mode` is an overlay one. Whether the overlay is free right now is the
-    /// caller's check.
+    /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
+    /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
+    /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode.
+    /// A remote pane ignores bare paths and reveals `file://` images, since both name files on another Mac.
+    /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
-                             localHosts: Set<String> = localHostNames) -> Route {
-        switch disposition(for: raw, localHosts: localHosts) {
+                             localHosts: Set<String> = localHostNames, home: String = NSHomeDirectory()) -> Route {
+        if case .remotePane = origin, isBarePath(raw) { return .ignore }
+        switch disposition(for: raw, localHosts: localHosts, home: home) {
         case .ignore: return .ignore
         case .reveal(let url): return .reveal(url)
+        case .image(let url):
+            switch origin {
+            case .pane(let session), .scratch(let session): return .image(url, session: session)
+            case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
+            }
         case .open(let url):
             guard mode != .browser, overlayCanShow(url) else { return .browser(url) }
             switch origin {
-            case .pane(let session), .scratch(let session):
+            case .pane(let session), .remotePane(let session), .scratch(let session):
                 return .overlay(url, session: session, sizePercent: mode.overlaySizePercent)
             case .hud, .programOverlay, .quick: return .browser(url)
             }

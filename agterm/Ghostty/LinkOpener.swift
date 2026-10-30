@@ -12,6 +12,9 @@ struct LinkOpener {
     /// overlay opens `url` as a browsing page over the session at the given size percent (nil for full size)
     /// and says whether it did; false sends the link to the browser.
     var overlay: (URL, UUID, Int?) -> Bool = { _, _, _ in false }
+    /// image shows a local picture over the session and reports through its completion whether it did; false
+    /// reveals the file. The report can come later, the file being read off the main actor.
+    var image: (URL, UUID, @escaping @MainActor (Bool) -> Void) -> Void = { _, _, done in done(false) }
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
 
@@ -19,6 +22,9 @@ struct LinkOpener {
         switch LinkPolicy.route(for: raw, mode: wantsBrowser ? .browser : mode(), origin: origin) {
         case .browser(let url): open(url)
         case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
+        case .image(let url, let session):
+            let reveal = reveal
+            image(url, session) { shown in if !shown { reveal(url) } }
         case .reveal(let url): reveal(url)
         case .ignore: return
         }

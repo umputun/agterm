@@ -25,7 +25,7 @@ extension ControlDispatcher {
         let page: HtmlSource
         switch Self.overlayContent(command: args?.command ?? "", args: args) {
         case .rejected(let response): return response
-        case .program: return ControlResponse(ok: false, error: "a page companion needs --html or --url")
+        case .program, .page(.image): return ControlResponse(ok: false, error: OverlayHtmlError.companionNeedsPage)
         case .page(let source): page = source
         }
         if args?.pane != nil || args?.sizePercent != nil || args?.width != nil || args?.height != nil {

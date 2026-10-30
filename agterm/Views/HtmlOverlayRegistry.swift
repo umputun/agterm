@@ -228,6 +228,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
     private var closeRequested = false
+    // an image page reads its file off the main actor; a result is applied only while this still counts the
+    // load that started it, so a close or a newer reload drops a slow read's late result
+    private var imageLoad = 0
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
     private let revision: HtmlReplicaRevision
@@ -270,7 +273,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
         // themed panel behind it while authored backgrounds still paint. A URL page keeps the browser's
         // opaque canvas, since a web app styled against it would lose its background here.
-        if Self.themed(overlay.source, linked: replica != nil) { webView.setValue(false, forKey: "drawsBackground") }
+        if Self.themed(overlay.source, linked: replica != nil) || overlay.source.imagePath != nil {
+            webView.setValue(false, forKey: "drawsBackground")
+        }
         super.init()
         installScripts()
         if themed {
@@ -390,7 +395,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         switch source {
         case .file: return true
         case .replica: return linked
-        case .url: return false
+        case .url, .image: return false
         }
     }
 
@@ -446,6 +451,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func close() {
+        imageLoad += 1
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
         observations.removeAll()
@@ -459,11 +465,13 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
-    // a file page without a grant is loaded from its text: it sits at about:blank and cannot navigate, so
-    // the file it came from is both its current page and what the user is looking at
+    // a file page without a grant and an image page are loaded from text: they sit at about:blank and cannot
+    // navigate, so the file they came from is both the current page and what the user is looking at
     private var textLoaded: Bool {
-        if case .file(_, nil) = overlay.source { return true }
-        return false
+        switch overlay.source {
+        case .file(_, nil), .image: return true
+        default: return false
+        }
     }
 
     private func loadOriginal() {
@@ -485,6 +493,19 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 return fail(OverlayHtmlError.remoteFile)
             }
             webView.load(URLRequest(url: url))
+        case .image(let path):
+            imageLoad += 1
+            let load = imageLoad
+            Task { @MainActor [weak self] in
+                let page = await Task.detached(priority: .userInitiated) {
+                    ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) }
+                }.value
+                guard let self, imageLoad == load else { return }
+                switch page {
+                case .failure(let failure): fail(failure.description)
+                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
+                }
+            }
         }
     }
 
@@ -492,7 +513,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path):
+        case .file(let path, _), .replica(let path), .image(let path):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -550,7 +571,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path): return URL(fileURLWithPath: path)
+        case .file(let path, _), .replica(let path), .image(let path): return URL(fileURLWithPath: path)
         case .url(let url): return url
         }
     }

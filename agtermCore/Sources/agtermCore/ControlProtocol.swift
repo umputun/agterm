@@ -435,6 +435,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var persistent: Bool?
     /// browse lets a `--url` page's main frame leave its first origin for any HTTP(S) site (`--browse`).
     public var browse: Bool?
+    /// image is the absolute path of the picture `session.overlay.open --image` shows instead of running `command`.
+    public var image: String?
     /// value is the answer `session.overlay.submit` hands back from a page, empty being a real answer, or
     /// the initial text of an `ask.open` input field.
     public var value: String?
@@ -476,7 +478,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil,
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
-                persistent: Bool? = nil, browse: Bool? = nil, cancelButton: String? = nil, input: String? = nil,
+                persistent: Bool? = nil, browse: Bool? = nil, image: String? = nil, cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
                 checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, recipients: [String]? = nil,
@@ -569,6 +571,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.chromeless = chromeless
         self.persistent = persistent
         self.browse = browse
+        self.image = image
         self.cancelButton = cancelButton
         self.input = input
         self.placeholder = placeholder
@@ -833,6 +836,13 @@ public enum OverlayHtmlError {
     public static let persistentRequiresURL = "session.overlay.open: --persistent requires --url"
     public static let persistentUnavailable = "persistent browser storage is not available"
     public static let browseRequiresURL = "session.overlay.open: --browse requires --url"
+    public static let oneSource = "session.overlay.open takes one of a command, --html, --url or --image"
+    /// imageOptions: a picture page runs no script, navigates nowhere and reads only its own file.
+    public static let imageOptions =
+        "session.overlay.open: --image takes no --wait, --cwd, --navigation, --js, --chromeless, --persistent or --browse"
+    public static let imageNotAbsolute = "session.overlay.open: --image must be an absolute path"
+    public static let imageType = "session.overlay.open: --image must be a png, jpg, jpeg, gif or webp file"
+    public static let companionNeedsPage = "a page companion needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

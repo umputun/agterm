@@ -11,6 +11,15 @@ public enum HtmlSource: Equatable, Sendable {
     /// replica is a file page another Mac opened, shown here from `agterm-page://<page id>/`: `path` is its
     /// path on that Mac, whose own grant decides what else may be fetched.
     case replica(path: String)
+    /// image is a picture shown on a page of its own, embedded in the page's HTML so the page gets no file
+    /// grant, theme or bridge. It never travels to another Mac.
+    case image(path: String)
+
+    /// imagePath is the picture an `.image` page shows, nil for every other source.
+    public var imagePath: String? {
+        if case .image(let path) = self { return path }
+        return nil
+    }
 
     /// webURL parses `--url`: an absolute http or https URL with a host, nil for anything else.
     public static func webURL(_ text: String) -> URL? {
@@ -157,6 +166,7 @@ extension HtmlOverlay {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .image(let path): return URL(fileURLWithPath: path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -280,6 +290,8 @@ public enum HtmlNavigationPolicy {
             if web { return action.userActivated ? .openExternal : .cancel }
             let own = action.url.host?.lowercased() == overlay.id.uuidString.lowercased()
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
+        case .image:
+            return .cancel
         case .url(let original):
             guard web else { return .cancel }
             if HtmlOrigin(action.url) == HtmlOrigin(original) || overlay.browse { return .allow }
