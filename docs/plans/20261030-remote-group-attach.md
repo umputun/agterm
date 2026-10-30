@@ -296,15 +296,16 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `.claude/rules/control-api.md`
 - Modify: `.claude/rules/menu-actions.md`
 
-- [ ] `site/commands.html`: `zmx attach --companions`, the `remoteGroup` read-back, `companions` on `zmx tree` rows
-- [ ] `site/docs.html`: the remote attach section (group attach, picker behavior, partial failure, snapshot
+- [x] `site/commands.html`: `zmx attach --companions`, the `remoteGroup` read-back, `companions` on `zmx tree` rows
+- [x] `site/docs.html`: the remote attach section (group attach, picker behavior, partial failure, snapshot
   only) and the companions paragraph (a companion attached alone nests under its attached parent)
-- [ ] skill: reference entries for both changes and a SKILL.md pointer for group attach
-- [ ] `control-api.md`: add `zmx.attach.group` to the catalog; update the Remote sessions bullet that says each
+- [x] skill: reference entries for both changes and a SKILL.md pointer for group attach
+- [x] `control-api.md`: add `zmx.attach.group` to the catalog; update the Remote sessions bullet that says each
   attach imports one session; note the separate-command reason beside the Companions precedent; add
   `zmx.attach.group` to the commands that wait on the network; extend the note that only page rows nest on
   `zmx attach` to terminal companions
-- [ ] `menu-actions.md`: `attachRemote()` composes the group attach for a top-level pick
+- [x] `menu-actions.md`: `attachRemote()` composes the group attach for a top-level pick
+- [x] ➕ README.md and site/llms.txt one-line remote summaries mention companions
 
 ### Task 7: Verify acceptance criteria
 

@@ -55,10 +55,12 @@ paths:
   Command-Shift-R, with a palette row. `RemotesWatcher` re-reads on file and directory events
   and banners once when an edit turns a clean file into one with bad lines or an unreadable one,
   because SwiftUI rebuilds `Commands` on its own schedule and a read in the menu body would go stale.
-  `AppActions.attachRemote()` composes the existing `remoteTree`, window picker and `attachRemoteSession`
-  through `RemoteAttaching`, so it adds no control command: `zmx tree` + `pick` + `zmx attach` already
-  script it. A HUD over the starting session shows the two ssh waits and a failure, the latter hiding
-  itself after `remoteAttachErrorSeconds`; a window with no session falls back to `notifyCommandFailure`.
+  `AppActions.attachRemote()` composes the existing `remoteTree`, window picker and `attachRemoteGroup` (a
+  top-level pick) or `attachRemoteSession` (a companion) through `RemoteAttaching`, so it adds no control
+  command: `zmx tree` + `pick` + `zmx attach [--companions]` already script it. A HUD over the starting
+  session shows the ssh waits and a failure, the latter hiding itself after `remoteAttachErrorSeconds`;
+  a partial group attach moves the failure to the new parent row, and a window with no session or a parent
+  row already gone falls back to `notifyCommandFailure`.
 
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,
