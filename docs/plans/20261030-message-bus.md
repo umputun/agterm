@@ -238,10 +238,10 @@
 - [x] run the CLI test target and the e2e class - must pass before task 5
 
 ### Task 5: Documentation and skill
-- [ ] `site/commands.html`: the three commands, arguments, read-back fields and the `message` event
-- [ ] `site/docs.html`: a short section on the bus, its lifetime and delivery guarantee
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` trigger and pointer, `reference.md` entries
-- [ ] `.claude/rules/control-api.md`: catalog entry and the bus's implementation constraints (disposal
+- [x] `site/commands.html`: the three commands, arguments, read-back fields and the `message` event
+- [x] `site/docs.html`: a short section on the bus, its lifetime and delivery guarantee
+- [x] `plugins/agterm/skills/agterm/SKILL.md` trigger and pointer, `reference.md` entries
+- [x] `.claude/rules/control-api.md`: catalog entry and the bus's implementation constraints (disposal
       sites, identity agreement, no role fallback)
 
 ### Task 6: Verify acceptance criteria

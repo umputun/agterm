@@ -4,7 +4,7 @@ description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch terminal; run, hide or show overlays;
   read exit status; create and show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD/caption/notification; show a picker, question or input dialog; show images inline; type
+  post a HUD/caption/notification; send, read and acknowledge messages between panes; show a picker, question or input dialog; show images inline; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows; set font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
@@ -17,7 +17,7 @@ when_to_use: >
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -302,8 +302,8 @@ given. Use `--json` for one bare event object per line; filter with repeatable o
 `--kind` over `status`, `notify`, `session.created` (carries `parent` for a companion), `session.closed`, `session.selected` (a window's
 selection moved; carries the session that lost it as `previous`), `tree.changed`, `pane.split`,
 `pane.scratch`, `pane.focused` (a session's selection moved between its two split panes; carries the
-pane and its `paneID`), `remote.opened`, `remote.closed` and `app.launched` (once per app run, when hooks and
-the socket are ready); resume with paired `--run RUN --after SEQ`; and set
+pane and its `paneID`), `remote.opened`, `remote.closed`, `app.launched` (once per app run, when hooks and
+the socket are ready) and `message` (mail queued for a pane; carries `paneID`, `from` and `messageID`, never the body); resume with paired `--run RUN --after SEQ`; and set
 page size with `--limit 1...1000`. The app retains 4,096 events for one process run. Cursor run changes,
 expiry, and ahead-of-tail errors are fatal and are never silently rebaselined. Once the stream holds a
 cursor, a refused connection is retried with that cursor for about 30 s before the stream exits.
@@ -678,6 +678,14 @@ Visibility/mode act on the frontmost window; `sidebar expand`/`collapse`/`width`
 `--window` selector to target any open window.
 
 **notify** — `notify <body> [--title T]` — post a desktop notification attributed to a session. To signal that you need the user, prefer `session status` (`blocked`/`completed`), a persistent typed attention state rather than a one-shot banner; keep `notify` for a one-off nudge.
+
+**msg** — `msg send TEXT|--stdin --to SESSION:PANE [--to ...]` or `--all [--workspace W]` · `msg read [--ack] [--wait [--timeout N]]` ·
+`msg ack ID...` — per-pane mailboxes for passing a message to another pane's program without typing into its
+terminal. PANE is a pane id (`surfaces[].paneID` in `tree`) or `left`/`right`/`scratch`; `--all` reaches every live pane
+but the sender. Inside a pane the CLI acts as that pane through `AGTERM_SESSION_ID`/`AGTERM_PANE_ID` (`--as SESSION:PANE-ID`
+overrides). `read` prints `ID from SENDER` then the body, oldest first, and removes nothing until `ack`; `read --ack` takes
+the batch in one step. Mail is in memory only and is dropped when the pane closes or restarts. Read back
+`pendingMessages` on the tree surface and the `message` event. See [reference.md](reference.md#msg).
 
 **font** — `font inc|dec|reset [--pane left|right|scratch]` — change a session pane's font size (omitted/`left` = main pane, `right` = the split pane, `scratch` = the scratch terminal). Read the resulting size back from `tree` (`fontSize`/`splitFontSize`/`scratchFontSize` per pane). A pane under an HTML overlay zooms the page instead, read back as `htmlOverlays[].zoom`.
 

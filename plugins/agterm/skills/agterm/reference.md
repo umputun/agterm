@@ -77,6 +77,10 @@ The event kinds and payloads are:
   `hooks.conf` is loaded and the control socket accepts connections, so a hook on it can call
   `agtermctl` at once. The restored windows and sessions are in the tree by then; their terminals may
   not be realized yet. A launch whose socket could not be bound emits none.
+- `message`: a message was queued for a pane. `session` is the recipient's session and the payload
+  carries the recipient's `paneID`, the sender's address as `from` (absent for a sender outside
+  agterm) and `messageID`; never the body. One event per delivered recipient. The human line reads
+  `HH:MM:SS message NAME pane-id=ID from=SENDER id=MESSAGE-ID`, with `from=-` for an anonymous sender.
 
 Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
 `window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
@@ -274,11 +278,12 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
-overlay or a pane whose surface is not created yet. `lead` is `leader`, `follower`
+overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
+pane's [msg](#msg) mailbox and is omitted at zero. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
@@ -1710,6 +1715,47 @@ attention list, the title-bar bell, and attention navigation (`session go --to n
 and the bell span every open window; `session go` attention steps stay within the window, while the GUI keys
 cross windows when Settings ▸ Agent Status ▸ Attention navigation crosses windows is on. Keep `notify` for a
 one-off nudge that needs no follow-up.
+
+## msg
+
+Per-pane mailboxes: a program leaves a message for another pane's program instead of typing into its
+terminal, and the receiver reads it when it chooses. Mailboxes live in the running app's memory; nothing
+is drawn on screen.
+
+- `agtermctl msg send TEXT|--stdin (--to SESSION:PANE ... | --all [--workspace W]) [--as SESSION:PANE-ID]`
+  (`msg.send`). PANE is a pane id (`surfaces[].paneID` from `tree --json`) or `left` (alias `primary`, `top`), `right`
+  (`split`, `bottom`) or `scratch`, resolved once at send time; a bare session is an error. Aliases of one pane are delivered
+  once. `--all` reaches every live pane in every open window except the sender and remote rows;
+  `--workspace` narrows it. A split hidden since launch has no terminal yet and is not a live pane.
+  The reply carries `messageID` (shared by every copy), `delivered` (canonical `SESSION:PANE-ID`
+  addresses) and `rejected` (`{address, reason}`, reason `mailbox full` or `unknown pane`). The CLI
+  prints the id, one stderr line per rejection, and exits 1 when anything was rejected; the delivered
+  copies stay queued.
+- `agtermctl msg read [--ack] [--wait [--timeout N]] [--as SESSION:PANE-ID]` (`msg.read`) returns the
+  oldest messages, up to 32, as `messages` (`{id, from?, to, ts, body}`) plus `remaining`, the pending messages not in this
+  batch, and removes
+  nothing; reading again returns the same prefix. Human output is `ID from SENDER` (or
+  `from outside agterm`) followed by the body; `N more pending` goes to stderr. `--ack` removes the
+  returned batch in the same mailbox operation and answers `acked` with its ids; the CLI prints nothing
+  and fails unless `acked` names exactly the returned messages. This is at most once: a reply lost on
+  the way is not redelivered. `--wait` repeats the same read every 250 ms until a message arrives;
+  `--timeout` exits 124.
+- `agtermctl msg ack ID... [--as SESSION:PANE-ID]` (`msg.ack`) removes ids from the caller's mailbox and
+  answers `acked` with those actually removed; unknown or already removed ids are not an error.
+
+Identity is always `SESSION:PANE-ID`, never a role, so a swap cannot re-point it. The CLI builds it from
+`AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, or takes `--as`. The app refuses an identity whose pane is not
+a live pane of that session. `read` and `ack` require one; `send` without either variable and without
+`--as` is anonymous (`from` absent), and one variable without the other, or an empty one, is an error.
+
+Limits: body 64 KiB UTF-8; a mailbox holds 256 messages and 1 MiB of bodies, and a full one rejects
+that recipient alone.
+
+A mailbox lives while the same program runs in its pane. Closing the pane, its session, workspace or
+window, `session restart` and a respawn of the primary drop it; an undone close comes back with an empty
+mailbox. Hiding a split, a swap and a split promoted after the primary exits keep it. Nothing survives
+quitting the app. Read back `pendingMessages` on the tree surface node and the `message` event; a hook
+on `message` reacts to new mail without polling.
 
 ## font
 
