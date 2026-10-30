@@ -258,15 +258,15 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermTests/ControlServerZmxTests.swift`
 - Modify: `agterm/Control/ControlServer+RemoteCompanions.swift` (`attachRemotePageRow` uses the shared match)
 
-- [ ] extract the parent-row match (top-level row, same host, binding's origin session id and endpoint) from
+- [x] extract the parent-row match (top-level row, same host, binding's origin session id and endpoint) from
   `attachRemotePageRow` into one helper both paths use
-- [ ] in `attachRemoteSession`, place a terminal companion under the single matching parent row in the
+- [x] in `attachRemoteSession`, place a terminal companion under the single matching parent row in the
   chosen window's store, in the parent's own workspace (`store.workspace(forSession:)`), never
   `currentWorkspaceID`; else top level
-- [ ] write tests: nests under a matching parent that sits outside the current workspace, landing in the
+- [x] write tests: nests under a matching parent that sits outside the current workspace, landing in the
   parent's workspace with `result.parent` set; stays top level with no match, with two matches, and for a
   parent attached from another host or endpoint
-- [ ] run `-only-testing:agtermTests/ControlServerZmxTests` - must pass before task 5
+- [x] run `-only-testing:agtermTests/ControlServerZmxTests` - must pass before task 5
 
 ### Task 5: Attach Remote picker attaches the group
 
