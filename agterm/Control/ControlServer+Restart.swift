@@ -60,8 +60,6 @@ extension ControlServer {
         old.claimProcessExit()
         // the dying client reports `unowned`, which would reattach to a daemon that is gone and close the pane
         ZmxLeadBook.shared.forget(pane: resolved.identity)
-        // the new program must not read the old one's mail
-        MessageBus.shared.dispose(pane: resolved.identity)
         // the new shell starts only once the old program is gone, so it cannot meet a held port or lock
         guard await programEnded(program, client: client) else {
             closeEndedPane(old, session: session, identity: resolved.identity)
@@ -76,6 +74,9 @@ extension ControlServer {
                 + "nothing was started")
         }
         store.clearPaneOwnedState(session.id, pane: pane)
+        // after the wait, which lets other requests run: mail sent to the old program meanwhile must not
+        // reach the new one, and nothing between here and the replace suspends
+        MessageBus.shared.dispose(pane: resolved.identity)
         let cwd = session.cwd(for: pane == .right ? .right : .left)
         let launch = PaneReattach(
             // the denylist was applied before the kill: a rejection here would start a plain shell instead

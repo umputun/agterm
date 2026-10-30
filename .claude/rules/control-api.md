@@ -1217,7 +1217,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Disposal is per site, never by pruning panes that look dead, since close-then-undo cannot be told from a
   live pane afterwards. `releaseLeavingSession` covers every session, workspace and window leaving; the
   other sites are `closeSplit`, `closePrimaryPane` (the departing primary only), `closeScratch`,
-  `respawnPrimaryPane` and `session.restart` right after its kill. A new lifetime boundary needs its own call.
+  `respawnPrimaryPane` and `session.restart` once the old program is gone, just before the new surface. The
+  restart's wait for the old program lets other requests run, so an earlier dispose would hand mail sent
+  meanwhile to the new program. A new lifetime boundary needs its own call.
 - The `message` event goes out through the recipient's store, once per delivered recipient, so
   `window`/`workspace` are set; it never carries the body. Read back `pendingMessages` on the tree surface.
 - `read --ack` removes its batch in one synchronous mailbox operation and answers `acked`. The CLI refuses to
