@@ -30,8 +30,8 @@ final class ControlServer {
     /// pure `ControlResolve` matcher with app-side store scoping and the pinned wire-error strings.
     let resolver: ControlTargetResolver
 
-    /// The listening socket fd, or -1 when not listening. `start()` is idempotent on this.
-    private var listenFD: Int32 = -1
+    /// The accept loop that owns the listening socket, nil when not listening. `start()` is idempotent on this.
+    private var listener: ControlAcceptLoop?
 
     /// The held ownership lock fd, or -1 when this process does not own `socketPath`.
     private var lockFD: Int32 = -1
@@ -40,7 +40,7 @@ final class ControlServer {
     private var refused = false
 
     /// The bound socket path, nil when not listening (bind failed or never started).
-    var boundSocketPath: String? { listenFD >= 0 ? socketPath : nil }
+    var boundSocketPath: String? { listener != nil ? socketPath : nil }
 
     /// Suffix marking the stand-in path a refused instance advertises. Nothing ever creates it, so every
     /// connection to it fails.
@@ -289,7 +289,7 @@ final class ControlServer {
     /// Bind and start listening. Idempotent — the scene `.task` re-runs when a window is recreated and a
     /// second `bind` must not be attempted. Any failure logs and returns, leaving the app to launch.
     func start() {
-        guard listenFD < 0 else { return }
+        guard listener == nil else { return }
 
         guard socketPath.utf8.count < 104 else {
             log("control socket path too long (\(socketPath.utf8.count) bytes): \(socketPath)")
@@ -338,8 +338,14 @@ final class ControlServer {
             return
         }
 
-        listenFD = fd
-        acceptLoop(fd: fd)
+        guard let loop = ControlAcceptLoop(listenFD: fd) else {
+            log("control accept loop setup failed: \(String(cString: strerror(errno)))")
+            close(fd)
+            unlink(socketPath)
+            return
+        }
+        listener = loop
+        acceptLoop(loop)
     }
 
     func stop() {
@@ -348,9 +354,9 @@ final class ControlServer {
         defer { releaseOwnership() }
         shutdownPresentationStreams()
         stopRemotePresentations()
-        guard listenFD >= 0 else { return }
-        close(listenFD)
-        listenFD = -1
+        guard let loop = listener else { return }
+        loop.stop()
+        listener = nil
         unlink(socketPath)
     }
 
@@ -413,16 +419,15 @@ final class ControlServer {
 
     /// Run the blocking accept loop on the background queue, each connection handled inline (one request →
     /// one response → close): connections are rare and short, so a per-connection thread is unnecessary.
-    private func acceptLoop(fd: Int32) {
+    private func acceptLoop(_ loop: ControlAcceptLoop) {
         acceptQueue.async {
-            while true {
-                let conn = accept(fd, nil, nil)
-                if conn < 0 {
-                    // a closed listener (stop()) makes accept fail — exit the loop.
-                    if errno == EBADF || errno == EINVAL { return }
-                    continue
-                }
+            while let conn = loop.next() {
                 ControlServer.handleConnection(conn, server: self)
+            }
+            loop.finish()
+            // a loop that ended on an error rather than stop() must not stay advertised as the bound listener
+            Task { @MainActor in
+                if self.listener === loop { self.listener = nil }
             }
         }
     }
