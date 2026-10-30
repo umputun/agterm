@@ -245,16 +245,16 @@
       sites, identity agreement, no role fallback)
 
 ### Task 6: Verify acceptance criteria
-- [ ] every Overview requirement implemented; edge cases from Technical Details covered by tests
-- [ ] `make build`
-- [ ] `cd agtermCore && swift test`
-- [ ] `make test-app`
-- [ ] `make lint`
+- [x] every Overview requirement implemented; edge cases from Technical Details covered by tests
+- [x] `make build`
+- [x] `cd agtermCore && swift test`
+- [x] `make test-app`
+- [x] `make lint`
 
 ### Task 7: [Final] Update documentation
-- [ ] update README.md only if the control-API demo should mention the bus
-- [ ] update CLAUDE.md if new patterns were discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md only if the control-API demo should mention the bus
+- [x] update CLAUDE.md if new patterns were discovered (none; the bus constraints live in `.claude/rules/control-api.md`)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual checks in an isolated Debug instance (`AGTERM_STATE_DIR` under `/tmp`)*

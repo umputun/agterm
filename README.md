@@ -101,6 +101,7 @@ sid=$(agtermctl session new --workspace "$ws" --cwd "$PWD" --no-select)
 agtermctl session split on --axis horizontal --target "$sid" # add a top-and-bottom shell
 agtermctl session type $'pwd\n' --target "$sid"           # drive a session you are not looking at
 agtermctl session text --target "$sid" --lines 10         # read its terminal back
+agtermctl msg send "build done" --to "$sid:bottom"        # leave a message in the bottom shell's mailbox
 agtermctl session status blocked --target "$sid"          # set the sidebar status glyph
 printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"   # open the native picker
 agtermctl ask "Deploy now?" --button yes=Deploy --button no=Not\ yet --default no  # ask a question, get the button
