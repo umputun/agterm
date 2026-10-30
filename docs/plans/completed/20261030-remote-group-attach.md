@@ -318,9 +318,9 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 
 ### Task 8: [Final] Update documentation
 
-- [ ] update README.md only if its remote-attach demo needs the new flag
-- [ ] update CLAUDE.md if new patterns were discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md only if its remote-attach demo needs the new flag (done in Task 6)
+- [x] update CLAUDE.md if new patterns were discovered (none: the contracts live in `.claude/rules/control-api.md`)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
