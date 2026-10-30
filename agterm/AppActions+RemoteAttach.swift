@@ -101,8 +101,7 @@ extension AppActions {
     }
 }
 
-/// RemoteAttachHud is the HUD an attach posts over the session it started from. A window with no session
-/// has nowhere to put one, so a failure there falls back to the notification banner.
+/// RemoteAttachHud owns an attach's progress and error panels, with notification fallback.
 @MainActor
 final class RemoteAttachHud {
     private let attacher: any RemoteAttaching

@@ -186,7 +186,7 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 - Modify: `agtermCore/Sources/agtermCore/HtmlBridge.swift`
 - Modify: `agtermCore/Sources/agtermctlKit/ZmxCommands.swift`
 - Modify: `agtermCore/Sources/agtermctlKit/SocketClient.swift` (pure `formatRemoteGroup` beside `formatRemoteTree`)
-- Modify: `agtermCore/Sources/agtermctlKit/Session+Companions.swift` (`runCompanionRequest` takes the too-old message)
+- Modify: `agtermCore/Sources/agtermctlKit/Session+Companions.swift` (`companionSend` takes the too-old message)
 - Modify: `agterm/Control/ControlServer.swift` (`waitsOnNetwork`, dispatcher-handled list)
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherZmxTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
