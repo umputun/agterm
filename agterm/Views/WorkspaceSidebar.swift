@@ -897,6 +897,16 @@ final class SidebarOutlineView: NSOutlineView {
     // extra repaint that flicks the selection pill on every click. Programmatic selection never bounces.
     override var acceptsFirstResponder: Bool { false }
 
+    // expansion would widen the column per nesting level and push every row's trailing glyph and badge past the
+    // sidebar edge; the column's autoresizing mask already fits it to the sidebar.
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        autoresizesOutlineColumn = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { fatalError("init(coder:) is not supported") }
+
     /// Where a row's content belongs: the level-0 disclosure triangle ends at 14pt, and the cell's own 2pt
     /// icon inset supplies the gap after it.
     private static let contentX: CGFloat = 14

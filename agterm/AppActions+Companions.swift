@@ -44,7 +44,11 @@ extension AppActions {
         guard let companionDuplicator else { return }
         switch companionDuplicator.duplicateCompanion(of: id, in: store, select: true) {
         case .failure(let failure):
-            NotificationManager.shared.notifyCommandFailure(name: "Duplicate as Companion", detail: failure.message)
+            guard let remoteAttacher, let windowID = library.windowID(for: store) else {
+                return NotificationManager.shared.notifyCommandFailure(name: "Duplicate as Companion", detail: failure.message)
+            }
+            RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString,
+                            action: "Duplicate as Companion").fail(failure.message)
         case .success:
             store.noteUserActivity()
             focusActiveSession()

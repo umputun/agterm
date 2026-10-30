@@ -131,6 +131,32 @@ final class SidebarRowIndentTests: XCTestCase {
         XCTAssertEqual(companionFrame.maxX, parentFrame.maxX)
     }
 
+    // a companion nested after the build widened the outline column past the sidebar, clipping every glyph
+    func testACompanionAddedLaterKeepsStatusAndBadgeInsideTheSidebar() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        let workspaceID = try XCTUnwrap(store.currentWorkspaceID)
+        let other = try XCTUnwrap(store.addSession(toWorkspace: workspaceID, cwd: NSTemporaryDirectory(), select: false))
+        try buildSidebar()
+        let companion = try store.addCompanion(to: parent.id).get()
+        for session in [parent, other, companion] {
+            session.agentIndicator = AgentIndicator(status: .blocked)
+            session.unseenCount = 3
+        }
+        coordinator.reconcile()
+
+        let clip = scroll.contentView
+        for session in [parent, other, companion] {
+            let cell = try XCTUnwrap(outline.view(atColumn: 0, row: try row(of: session.id), makeIfNecessary: true) as? SidebarCellView)
+            cell.layoutSubtreeIfNeeded()
+            for view in [cell.statusIcon, cell.badge] as [NSView] {
+                XCTAssertGreaterThan(view.bounds.width, 0, "\(session.displayName): \(type(of: view)) is not shown")
+                XCTAssertLessThanOrEqual(view.convert(view.bounds, to: clip).maxX, clip.bounds.maxX,
+                                         "\(session.displayName): \(type(of: view)) runs past the sidebar edge")
+            }
+        }
+    }
+
     private func row(of id: UUID) throws -> Int {
         outline.layoutSubtreeIfNeeded()
         return try XCTUnwrap((0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? SidebarNode)?.id == id })

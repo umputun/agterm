@@ -66,7 +66,7 @@ paths:
 - Duplicate as Companion (`duplicate_companion`, keyless) follows it in both menus, with a palette row; it is in
   `terminalOnly` and takes the same remote route. `AppActions` reaches the local planner through
   `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
-  planner; a refusal shows through `notifyCommandFailure`.
+  planner; a refusal shows in a timed `RemoteAttachHud` over the session, falling back to `notifyCommandFailure`.
 
 ## Dock menu
 

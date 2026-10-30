@@ -72,7 +72,15 @@ public enum DuplicateReplay {
         }
         var candidates = [observation]
         if let argv = observation.foreground?.command, let program = argv.first, !program.hasPrefix("/") {
-            guard let executable = observation.executablePath else { return .failure(Refusal(pane: pane, reason: .noExecutable)) }
+            guard let executable = observation.executablePath else {
+                // the image is gone, as when an upgrade removed it: start what the pane's own PATH names now
+                guard !program.contains("/"), observation.searchPath != nil,
+                      let started = startingPaths(of: program, in: observation).first(where: { resolvedFile($0) != nil }),
+                      let target = resolvedFile(started)
+                else { return .failure(Refusal(pane: pane, reason: .noExecutable)) }
+                let outcomes = [started, target].map { Self.program(observation.running(argv, as: $0), pane: pane, shell: shell, denylist: denylist) }
+                return outcomes.first { if case .failure = $0 { true } else { false } } ?? outcomes[0]
+            }
             guard !program.contains("/") || observation.workingDirectory != nil else {
                 return .failure(Refusal(pane: pane, reason: .replay(.noDirectory)))
             }

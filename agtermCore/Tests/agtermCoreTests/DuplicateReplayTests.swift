@@ -83,8 +83,28 @@ struct DuplicateReplayTests {
             == refusal(.notLocated))
     }
 
-    @Test func aBareProgramWithoutAnExecutablePathIsRefused() {
-        #expect(plan(.program(["htop"]), executable: nil) == refusal(.noExecutable))
+    // a package upgrade removed a running codex's image, so every copy of its pane was refused
+    @Test func aBareProgramWhoseImageIsGoneStartsWhatItsPathNamesNow() {
+        let codex = "/opt/homebrew/bin/codex"
+        #expect(plan(.program(["codex", "-c", "x"]), executable: nil, searchPath: "/nowhere:relative:/opt/homebrew/bin",
+                     files: [codex: "/opt/homebrew/Caskroom/codex/2/bin/codex"])
+            == .success(.program(argv: [codex, "-c", "x"], workingDirectory: "/work")))
+    }
+
+    @Test(arguments: [("htop", "/nowhere"), ("htop", nil), ("htop", ""), ("./tool", "/opt/homebrew/bin")] as [(String, String?)])
+    func aProgramWhoseImageIsGoneWithNothingOnItsPathIsRefused(program: String, searchPath: String?) {
+        #expect(plan(.program([program]), executable: nil, searchPath: searchPath, files: [Self.htop: Self.htop, "/work/tool": "/work/tool"])
+            == refusal(.noExecutable))
+    }
+
+    @Test func aProgramWhoseImageIsGoneStillPassesTheReplayChecks() {
+        let codex = "/opt/homebrew/bin/codex"
+        let files = [codex: "/opt/homebrew/Caskroom/codex/2/bin/codex"]
+        #expect(plan(.program(["codex"]), cwd: nil, executable: nil, files: files) == refusal(.replay(.noDirectory)))
+        #expect(plan(.program(["codex", "a\\b"]), executable: nil, files: files) == refusal(.backslash))
+        #expect(plan(.program(["codex"]), executable: nil, files: files, denylist: ["codex"]) == refusal(.replay(.denylisted("codex"))))
+        #expect(plan(.program(["vi"]), executable: nil, files: ["/opt/homebrew/bin/vi": "/usr/bin/vim"], denylist: ["vim"])
+            == refusal(.replay(.denylisted("vim"))))
     }
 
     @Test func aDaemonLeaderShellRunningSomethingIsRefused() {
