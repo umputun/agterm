@@ -1,52 +1,76 @@
 diff --git a/src/App.zig b/src/App.zig
 --- a/src/App.zig
 +++ b/src/App.zig
-@@ -50,6 +50,9 @@
+@@ -50,6 +50,12 @@
  /// this is a blocking queue so if it is full you will get errors (or block).
  mailbox: Mailbox.Queue,
-
+ 
 +/// Main-thread messages temporarily held while a surface joins its workers.
 +deferred: std.ArrayList(Message) = .empty,
++
++/// Index of the next unread message in deferred; items before it are consumed copies.
++deferred_head: usize = 0,
 +
  /// The set of font GroupCache instances shared by surfaces with the
  /// same font configuration.
  font_grid_set: font.SharedGridSet,
-@@ -133,6 +136,8 @@
+@@ -133,6 +139,8 @@
      // Clean up all our surfaces
      for (self.surfaces.items) |surface| surface.deinit();
      self.surfaces.deinit(self.alloc);
-+    for (self.deferred.items) |message| discardMessage(message);
++    for (self.deferred.items[self.deferred_head..]) |message| discardMessage(message);
 +    self.deferred.deinit(self.alloc);
-
+ 
      // Clean up our font group cache
      // We should have zero items in the grid set at this point because
-@@ -263,40 +268,49 @@
-
+@@ -263,40 +271,74 @@
+ 
  /// Drain the mailbox.
  fn drainMailbox(self: *App, rt_app: *apprt.App) !void {
-+    while (self.deferred.items.len > 0) {
-+        const message = self.deferred.orderedRemove(0);
-+        if (!try self.processMessage(rt_app, message)) return;
-+    }
-     while (self.mailbox.pop(global.io())) |message| {
+-    while (self.mailbox.pop(global.io())) |message| {
 -        if (comptime std.log.logEnabled(.debug, .app)) {
 -            switch (message) {
 -                // these tend to be way too verbose for normal debugging
 -                .redraw_surface => {},
 -                else => log.debug("mailbox message={t}", .{message}),
 -            }
++    while (self.nextDeferred()) |message| {
++        if (!try self.processMessage(rt_app, message)) {
++            self.compactDeferred();
++            return;
+         }
++    }
++    while (self.mailbox.pop(global.io())) |message| {
 +        if (!try self.processMessage(rt_app, message)) return;
 +    }
 +}
 +
++/// Take the oldest unread deferred message, or reset the list once all are read.
++/// Removing from the front would shift the whole backlog per message, quadratic in
++/// what a teardown collects. The head moves before the caller processes the message:
++/// a close inside processMessage runs TeardownDrain.start, which filters from the head.
++fn nextDeferred(self: *App) ?Message {
++    if (self.deferred_head == self.deferred.items.len) {
++        self.deferred.clearRetainingCapacity();
++        self.deferred_head = 0;
++        return null;
++    }
++    const message = self.deferred.items[self.deferred_head];
++    self.deferred_head += 1;
++    return message;
++}
++
++/// Drop the consumed prefix so an interrupted drain resumes at index 0.
++fn compactDeferred(self: *App) void {
++    const unread = self.deferred.items.len - self.deferred_head;
++    std.mem.copyForwards(Message, self.deferred.items[0..unread], self.deferred.items[self.deferred_head..]);
++    self.deferred.shrinkRetainingCapacity(unread);
++    self.deferred_head = 0;
++}
++
 +fn processMessage(self: *App, rt_app: *apprt.App, message: Message) !bool {
 +    if (comptime std.log.logEnabled(.debug, .app)) {
-+        switch (message) {
-+            // these tend to be way too verbose for normal debugging
-+            .redraw_surface => {},
-+            else => log.debug("mailbox message={t}", .{message}),
-         }
--        switch (message) {
+         switch (message) {
 -            .open_config => |v| try self.performAction(
 -                rt_app,
 -                .{
@@ -54,6 +78,10 @@ diff --git a/src/App.zig b/src/App.zig
 -                        .os_open => .os_open,
 -                        .new_window => .new_window,
 -                    },
++            // these tend to be way too verbose for normal debugging
++            .redraw_surface => {},
++            else => log.debug("mailbox message={t}", .{message}),
++        }
 +    }
 +    switch (message) {
 +        .open_config => |v| try self.performAction(
@@ -79,7 +107,6 @@ diff --git a/src/App.zig b/src/App.zig
 -                return;
              },
 -        }
--    }
 +        ),
 +        .new_window => |msg| try self.newWindow(rt_app, msg),
 +        .close => |surface| self.closeSurface(surface),
@@ -95,15 +122,15 @@ diff --git a/src/App.zig b/src/App.zig
 +            try self.performAction(rt_app, .quit);
 +            return false;
 +        },
-+    }
+     }
 +    return true;
  }
-
+ 
  pub fn closeSurface(self: *App, surface: *Surface) void {
-@@ -624,6 +638,91 @@
+@@ -624,6 +666,91 @@
      }
  };
-
+ 
 +/// Keep the app mailbox moving while the surface stops workers and waits for frames.
 +/// Only this worker accesses deferred between start and finish.
 +pub const TeardownDrain = struct {
@@ -113,17 +140,17 @@ diff --git a/src/App.zig b/src/App.zig
 +    thread: ?std.Thread = null,
 +
 +    pub fn start(self: *TeardownDrain) void {
-+        // A second close can precede the next app tick. Remove stale pointers
-+        // from the first close's deferred messages before an address is reused.
-+        var i: usize = 0;
-+        while (i < self.app.deferred.items.len) {
-+            if (self.keepMessage(self.app.deferred.items[i])) |message| {
-+                self.app.deferred.items[i] = message;
-+                i += 1;
-+            } else {
-+                _ = self.app.deferred.orderedRemove(i);
-+            }
++        // A second close can precede the next app tick, or run inside a drain that has
++        // already consumed part of deferred. Remove stale pointers from the unread
++        // messages before an address is reused, in one pass.
++        const head = self.app.deferred_head;
++        var write = head;
++        for (self.app.deferred.items[head..]) |message| {
++            const kept = self.keepMessage(message) orelse continue;
++            self.app.deferred.items[write] = kept;
++            write += 1;
 +        }
++        self.app.deferred.shrinkRetainingCapacity(write);
 +        self.thread = std.Thread.spawn(.{}, run, .{self}) catch |err| thread: {
 +            log.warn("teardown drain thread spawn failed, may stall err={}", .{err});
 +            break :thread null;
@@ -192,7 +219,7 @@ diff --git a/src/App.zig b/src/App.zig
  // Wasm API.
  pub const Wasm = if (!builtin.target.isWasm()) struct {} else struct {
      const wasm = @import("os/wasm.zig");
-@@ -651,3 +750,157 @@
+@@ -651,3 +778,251 @@
      //     }
      // }
  };
@@ -202,6 +229,7 @@ diff --git a/src/App.zig b/src/App.zig
 +    app.alloc = std.testing.allocator;
 +    app.mailbox = .{};
 +    app.deferred = .empty;
++    app.deferred_head = 0;
 +    return app;
 +}
 +
@@ -350,19 +378,112 @@ diff --git a/src/App.zig b/src/App.zig
 +        try std.testing.expect(message.surface_message.surface == &other);
 +    }
 +}
++
++fn bell(surface: *Surface) Message {
++    return .{ .surface_message = .{ .surface = surface, .message = .ring_bell } };
++}
++
++fn expectDeferredFrom(app: *App, expected: []const *Surface) !void {
++    for (expected) |surface| {
++        const message = app.nextDeferred() orelse return error.TestUnexpectedResult;
++        try std.testing.expect(message.surface_message.surface == surface);
++    }
++    try std.testing.expect(app.nextDeferred() == null);
++    try std.testing.expectEqual(@as(usize, 0), app.deferred.items.len);
++    try std.testing.expectEqual(@as(usize, 0), app.deferred_head);
++}
++
++test "teardown backlog: taking a deferred message leaves the unread backlog in place" {
++    var app = teardownTestApp();
++    defer app.deferred.deinit(app.alloc);
++    var a: Surface = undefined;
++    var b: Surface = undefined;
++    var c: Surface = undefined;
++    try app.deferred.append(app.alloc, bell(&a));
++    try app.deferred.append(app.alloc, bell(&b));
++    try app.deferred.append(app.alloc, bell(&c));
++    const second = &app.deferred.items[1];
++    const first = app.nextDeferred() orelse return error.TestUnexpectedResult;
++    try std.testing.expect(first.surface_message.surface == &a);
++    try std.testing.expectEqual(@as(usize, 3), app.deferred.items.len);
++    try std.testing.expect(&app.deferred.items[1] == second);
++    try std.testing.expect(second.surface_message.surface == &b);
++    try expectDeferredFrom(&app, &.{ &b, &c });
++}
++
++test "teardown backlog: a close inside a drain filters and appends only unread messages" {
++    const io = global.io();
++    var app = teardownTestApp();
++    defer app.deferred.deinit(app.alloc);
++    var rt_storage: u8 align(@alignOf(apprt.Surface)) = 0;
++    var closing: Surface = undefined;
++    closing.rt_surface = @ptrCast(&rt_storage);
++    var a: Surface = undefined;
++    var c: Surface = undefined;
++    var e: Surface = undefined;
++    var f: Surface = undefined;
++    try app.deferred.append(app.alloc, bell(&a));
++    try app.deferred.append(app.alloc, bell(&closing));
++    try app.deferred.append(app.alloc, bell(&c));
++    try app.deferred.append(app.alloc, bell(&closing));
++    try app.deferred.append(app.alloc, bell(&e));
++    const first = app.nextDeferred() orelse return error.TestUnexpectedResult;
++    try std.testing.expect(first.surface_message.surface == &a);
++    _ = app.mailbox.push(io, bell(&closing), .instant);
++    _ = app.mailbox.push(io, bell(&f), .instant);
++    var drain: TeardownDrain = .{ .app = &app, .surface = &closing };
++    drain.start();
++    drain.finish();
++    try std.testing.expectEqual(@as(usize, 1), app.deferred_head);
++    try expectDeferredFrom(&app, &.{ &c, &e, &f });
++}
++
++test "teardown backlog: an interrupted drain keeps the unread suffix in order" {
++    var app = teardownTestApp();
++    defer app.deferred.deinit(app.alloc);
++    var a: Surface = undefined;
++    var b: Surface = undefined;
++    var c: Surface = undefined;
++    var d: Surface = undefined;
++    for ([_]*Surface{ &a, &b, &c, &d }) |surface| try app.deferred.append(app.alloc, bell(surface));
++    _ = app.nextDeferred();
++    _ = app.nextDeferred();
++    app.compactDeferred();
++    try std.testing.expectEqual(@as(usize, 0), app.deferred_head);
++    try std.testing.expectEqual(@as(usize, 2), app.deferred.items.len);
++    try expectDeferredFrom(&app, &.{ &c, &d });
++}
++
++test "teardown backlog: a filter discarding every unread message leaves only the consumed prefix" {
++    var app = teardownTestApp();
++    defer app.deferred.deinit(app.alloc);
++    var rt_storage: u8 align(@alignOf(apprt.Surface)) = 0;
++    var closing: Surface = undefined;
++    closing.rt_surface = @ptrCast(&rt_storage);
++    var a: Surface = undefined;
++    try app.deferred.append(app.alloc, bell(&a));
++    for (0..3) |_| try app.deferred.append(app.alloc, bell(&closing));
++    _ = app.nextDeferred();
++    var drain: TeardownDrain = .{ .app = &app, .surface = &closing };
++    drain.start();
++    drain.finish();
++    try std.testing.expectEqual(@as(usize, 1), app.deferred.items.len);
++    try std.testing.expectEqual(@as(usize, 1), app.deferred_head);
++    try expectDeferredFrom(&app, &.{});
++}
 diff --git a/src/Surface.zig b/src/Surface.zig
 --- a/src/Surface.zig
 +++ b/src/Surface.zig
 @@ -798,6 +798,9 @@
  }
-
+ 
  pub fn deinit(self: *Surface) void {
 +    var drain: App.TeardownDrain = .{ .app = self.app, .surface = self };
 +    drain.start();
 +
      // Stop search thread
      if (self.search) |*s| s.deinit();
-
+ 
 @@ -822,6 +825,7 @@
      // shared values between the two threads.
      self.renderer_thread.deinit();
