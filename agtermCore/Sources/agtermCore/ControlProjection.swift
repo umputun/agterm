@@ -23,13 +23,16 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     public let reconnect: ControlReconnect?
     /// paneID is the token `--pane-id` resolves, omitted for a slot whose surface carries none.
     public let paneID: String?
+    /// pendingMessages counts the pane's unacked bus messages, omitted at zero.
+    public let pendingMessages: Int?
 
     public init(id: String, kind: String, active: Bool, visible: Bool) {
         self.init(id: id, kind: kind, active: active, visible: visible, backedByZmx: nil)
     }
 
     public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?,
-                lead: ZmxLeadRole? = nil, reconnect: ControlReconnect? = nil, paneID: String? = nil) {
+                lead: ZmxLeadRole? = nil, reconnect: ControlReconnect? = nil, paneID: String? = nil,
+                pendingMessages: Int? = nil) {
         self.id = id
         self.kind = kind
         self.active = active
@@ -38,6 +41,7 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
         self.lead = lead
         self.reconnect = reconnect
         self.paneID = paneID
+        self.pendingMessages = pendingMessages
     }
 }
 

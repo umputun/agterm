@@ -167,22 +167,22 @@
 - Create: `agtermCore/Tests/agtermCoreTests/ControlDispatcherMessagesTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/EventCommandsTests.swift`
 
-- [ ] first, before any new code: move one self-contained group of `ControlActions` requirements or
+- [x] first, before any new code: move one self-contained group of `ControlActions` requirements or
       routing out of `ControlDispatcher.swift` into a new `ControlDispatcher+<Area>.swift`, unchanged
       (approved by Eugene); existing tests stay green
-- [ ] tests first in the new `ControlDispatcherMessagesTests.swift`: request/response round trips for the
+- [x] tests first in the new `ControlDispatcherMessagesTests.swift`: request/response round trips for the
       three commands, validation errors (no recipient, recipients with `all`, bare session, role in an
       identity, body over the limit, missing identity for read/ack), per-recipient results, `acked` always
       present, `pendingMessages` omitted at 0, `message` event kind and payload, and a regression that the
       scalar `to` still round-trips for navigation commands
-- [ ] the human formatter line for `message` in the existing `agtermctlKitTests/EventCommandsTests.swift`
+- [x] the human formatter line for `message` in the existing `agtermctlKitTests/EventCommandsTests.swift`
       (293 lines; `EventFormatter` is internal to `agtermctlKit`, which `agtermCoreTests` cannot import)
-- [ ] add `msg.send`, `msg.read`, `msg.ack` commands, the `ControlArgs`/`ControlResult` fields, and the
+- [x] add `msg.send`, `msg.read`, `msg.ack` commands, the `ControlArgs`/`ControlResult` fields, and the
       `message` event kind with `from`/`messageID` payload fields, with its `EventFormatter.human` case
-- [ ] dispatcher validates and shapes responses; `ControlActions` supplies address resolution, the live
+- [x] dispatcher validates and shapes responses; `ControlActions` supplies address resolution, the live
       pane set, identity agreement and event emission, with refusing defaults for outside conformers
-- [ ] `pendingMessages` on the tree surface node
-- [ ] run the new and touched test suites - must pass before task 3
+- [x] `pendingMessages` on the tree surface node
+- [x] run the new and touched test suites - must pass before task 3
 
 ### Task 3: Store disposal, app-side actions and e2e
 

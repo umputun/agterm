@@ -890,4 +890,43 @@ final class MockControlActions: ControlActions {
         calls.append(.restoreCapture)
         return nextRestoreCaptureResponse
     }
+
+    struct Queued: Equatable {
+        let id: String
+        let from: String?
+        let recipients: [MessageRecipient]
+    }
+
+    struct Scope: Equatable {
+        let workspace: String?
+        let window: String?
+    }
+
+    var messagePanes: [MessageAddress: MessageRecipient] = [:]
+    var broadcastPanes: [MessageRecipient] = []
+    var queuedMessages: [Queued] = []
+    var broadcastScopes: [Scope] = []
+    /// messagesUnsupported answers what the `ControlActions` default answers, for a host without the bus.
+    var messagesUnsupported = false
+
+    func resolveMessagePane(_ address: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
+        if messagesUnsupported { return .failure(.unsupported) }
+        guard let recipient = messagePanes[address] else {
+            let pane = switch address.pane {
+            case .id(let id): id.uuidString
+            case .role(let role): role.rawValue
+            }
+            return .failure(MessagePaneError("pane not found: \(address.session):\(pane)"))
+        }
+        return .success(recipient)
+    }
+
+    func messagePanes(workspace: String?, window: String?) -> Result<[MessageRecipient], MessagePaneError> {
+        broadcastScopes.append(Scope(workspace: workspace, window: window))
+        return .success(broadcastPanes)
+    }
+
+    func messageQueued(_ messageID: UUID, from: String?, to recipients: [MessageRecipient]) {
+        queuedMessages.append(Queued(id: messageID.uuidString, from: from, recipients: recipients))
+    }
 }

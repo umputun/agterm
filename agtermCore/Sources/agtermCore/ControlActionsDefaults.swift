@@ -5,6 +5,16 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
+    func resolveMessagePane(_: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
+        .failure(.unsupported)
+    }
+
+    func messagePanes(workspace _: String?, window _: String?) -> Result<[MessageRecipient], MessagePaneError> {
+        .failure(.unsupported)
+    }
+
+    func messageQueued(_: UUID, from _: String?, to _: [MessageRecipient]) {}
+
     func attachCompanionPage(_: String?, window _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page.attach"))
     }

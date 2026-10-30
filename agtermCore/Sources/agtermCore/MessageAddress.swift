@@ -2,8 +2,8 @@ import Foundation
 
 /// MessageAddress is a message bus `SESSION:PANE` address. A recipient may name the pane by role, resolved
 /// once at send time; an identity must name the pane id, since a swap re-points every role.
-public struct MessageAddress: Equatable, Sendable {
-    public enum Pane: Equatable, Sendable {
+public struct MessageAddress: Hashable, Sendable {
+    public enum Pane: Hashable, Sendable {
         case id(UUID)
         case role(StatusPane)
     }
