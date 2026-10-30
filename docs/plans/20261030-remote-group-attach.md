@@ -309,12 +309,12 @@ level, as today. Page rows keep `attachRemotePageRow` and its refusal.
 
 ### Task 7: Verify acceptance criteria
 
-- [ ] verify every Overview item is implemented and the backlog item matches what shipped
-- [ ] run `make build` (Release; `make test-app` builds Debug only)
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint` with zero findings
-- [ ] run `lsappinfo list | grep -A4 agterm.debug` after the hosted run and clear leaked test processes
+- [x] verify every Overview item is implemented and the backlog item matches what shipped
+- [x] run `make build` (Release; `make test-app` builds Debug only)
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint` with zero findings
+- [x] run `lsappinfo list | grep -A4 agterm.debug` after the hosted run and clear leaked test processes
 
 ### Task 8: [Final] Update documentation
 
