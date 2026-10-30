@@ -140,15 +140,15 @@
 - Create: `agtermCore/Tests/agtermCoreTests/MessageBusTests.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/MessageAddressTests.swift`
 
-- [ ] tests first: FIFO order, batch limit and `remaining`, repeat read returns the same prefix, ack
+- [x] tests first: FIFO order, batch limit and `remaining`, repeat read returns the same prefix, ack
       removes and is idempotent, read-and-ack removes exactly the batch, per-recipient rejection on count
       and byte limits, body limit, disposal empties one pane's mailbox only, pending count per pane
-- [ ] parser tests: `SESSION:PANE-ID`, role aliases accepted as recipients and refused as identity, bare
+- [x] parser tests: `SESSION:PANE-ID`, role aliases accepted as recipients and refused as identity, bare
       session, empty parts, malformed ids, mixed-case ids
-- [ ] `MessageBus` with a `shared` instance, the limit constants, `send` (per-recipient result),
+- [x] `MessageBus` with a `shared` instance, the limit constants, `send` (per-recipient result),
       `read(limit:)`, `readAndAck`, `ack(ids:)`, `pending(for:)`, `dispose(pane:)`
-- [ ] `MessageAddress`: role aliases for recipients only, identity form requires a pane id
-- [ ] run `cd agtermCore && swift test --filter 'MessageBusTests|MessageAddressTests'` - must pass before
+- [x] `MessageAddress`: role aliases for recipients only, identity form requires a pane id
+- [x] run `cd agtermCore && swift test --filter 'MessageBusTests|MessageAddressTests'` - must pass before
       task 2
 
 ### Task 2: Protocol, dispatcher and events
