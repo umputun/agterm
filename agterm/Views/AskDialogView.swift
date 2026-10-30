@@ -327,7 +327,8 @@ struct AskDialogView: View {
     private func editor(_ input: AskInputForm, listRows: Int? = nil) -> some View {
         let text = currentDraft.text
         let padding = ask.style == .gui ? 0 : cell * 0.5
-        let lineFieldHeight = input.mode == .line ? lineHeight + (ask.style == .gui ? 8 : 4) : nil
+        let guiLine = ask.style == .gui && input.mode == .line
+        let lineFieldHeight = input.mode == .line ? lineHeight + (ask.style == .gui ? 12 : 4) : nil
         let placeholderColor = ask.style == .gui ? Color.secondary : foreground.opacity(0.45)
         return AskTextEditor(mode: input.mode, text: text, placeholder: input.mode == .line ? input.placeholder : nil,
                              placeholderColor: NSColor(placeholderColor), style: ask.style, font: editorFont,
@@ -336,6 +337,12 @@ struct AskDialogView: View {
                              routesVertical: listRows != nil,
                              onFocus: listRows.map { rows in { updateDraft { $0.moveCursor(by: rows) } } })
             .frame(height: lineFieldHeight)
+            .background {
+                if guiLine { RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.06)) }
+            }
+            .overlay {
+                if guiLine { RoundedRectangle(cornerRadius: 6).strokeBorder(Color.primary.opacity(0.1)).allowsHitTesting(false) }
+            }
             .overlay(alignment: .topLeading) {
                 if input.mode == .multiline, text.isEmpty, let placeholder = input.placeholder, !placeholder.isEmpty {
                     Text(verbatim: placeholder)

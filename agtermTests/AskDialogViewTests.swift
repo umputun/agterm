@@ -742,6 +742,64 @@ final class AskDialogViewTests: XCTestCase {
         XCTAssertNil(pick.pendingAsk)
     }
 
+    // the gui field drew AppKit's square line border, darker than the palette panel around it
+    func testALineFieldDrawsNoAppKitFrameAndOnlyTheGuiOneInsetsItsText() throws {
+        for style in ControlAskStyle.allCases {
+            let fixture = try SessionAskTestFixture()
+            defer { fixture.close() }
+            let pick = PickController()
+            PickRegistry.shared.register(fixture.windowID, controller: pick)
+            let ask = PendingAsk(id: UUID().uuidString, title: "Name", buttons: [ControlAskButton(id: "ok", label: "OK")],
+                                 style: style, form: .input(AskInputForm(mode: .line)))
+            XCTAssertTrue(pick.openAsk(ask))
+            let host = NSHostingView(rootView: AskDialogView(
+                ask: ask, anchorFrame: CGRect(x: 0, y: 0, width: 600, height: 300), font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+                foreground: .white, background: .black, focusAllowed: true, draft: pick.askDraft,
+                updateDraft: { pick.updateAskDraft(id: ask.id, $0) }, onAnswer: { pick.answerAsk(id: ask.id, buttonAt: $0) },
+                onDismiss: { pick.escapeAsk() }
+            ).frame(width: 600, height: 300))
+            fixture.window.contentView = host
+            host.layoutSubtreeIfNeeded()
+
+            let field = try XCTUnwrap(descendant(AskTextField.self, in: host), "\(style)")
+            XCTAssertFalse(field.isBezeled, "\(style)")
+            XCTAssertFalse(field.isBordered, "\(style)")
+            XCTAssertFalse(field.drawsBackground, "\(style)")
+            XCTAssertEqual(field.focusRingType, .none, "\(style)")
+            XCTAssertEqual((field.cell as? AskTextFieldCell)?.textInset, style == .gui ? 6 : 0, "\(style)")
+        }
+    }
+
+    func testAGuiLineFieldEditsInsetAndCenteredInsideItsBox() throws {
+        let fixture = try SessionAskTestFixture()
+        defer { fixture.close() }
+        let pick = PickController()
+        PickRegistry.shared.register(fixture.windowID, controller: pick)
+        let ask = PendingAsk(id: UUID().uuidString, title: "Name", buttons: [ControlAskButton(id: "ok", label: "OK")],
+                             style: .gui, form: .input(AskInputForm(mode: .line, placeholder: "empty: parent's name, renamed later")))
+        XCTAssertTrue(pick.openAsk(ask))
+        let host = NSHostingView(rootView: AskDialogView(
+            ask: ask, anchorFrame: CGRect(x: 0, y: 0, width: 600, height: 300), font: .monospacedSystemFont(ofSize: 13, weight: .regular),
+            foreground: .white, background: .black, focusAllowed: true, draft: pick.askDraft,
+            updateDraft: { pick.updateAskDraft(id: ask.id, $0) }, onAnswer: { pick.answerAsk(id: ask.id, buttonAt: $0) },
+            onDismiss: { pick.escapeAsk() }
+        ).frame(width: 600, height: 300))
+        fixture.window.contentView = host
+        fixture.window.makeKeyAndOrderFront(nil)
+        host.layoutSubtreeIfNeeded()
+
+        let field = try XCTUnwrap(descendant(AskTextField.self, in: host))
+        let placeholder = try XCTUnwrap(field.cell).titleRect(forBounds: field.bounds)
+        XCTAssertEqual(placeholder.minX, 6, accuracy: 0.5)
+        XCTAssertEqual(placeholder.midY, field.bounds.midY, accuracy: 1)
+
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        let frame = editor.convert(editor.bounds, to: field)
+        XCTAssertEqual(frame.minX, 6, accuracy: 0.5)
+        XCTAssertGreaterThan(field.bounds.height, frame.height + 6, "the box leaves room around the text")
+        XCTAssertEqual(frame.midY, field.bounds.midY, accuracy: 1)
+    }
+
     func testAWrappedParagraphGrowsTheMultilineEditor() throws {
         let fixture = try SessionAskTestFixture()
         defer { fixture.close() }
