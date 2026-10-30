@@ -109,6 +109,19 @@ struct AppStoreCompanionsTests {
         #expect(copy.splitInitialCommand == nil)
     }
 
+    // a duplicated split opened like a new split and focused its right pane
+    @Test func duplicateAsCompanionFocusesTheLeftPaneOfTheCopiedSplit() throws {
+        let g = try CompanionGroup()
+        g.store.setSplitVisibility(g.first.id, shown: true)
+        #expect(g.first.focusedPane == .right)
+
+        let copy = try g.store.duplicateAsCompanion(
+            of: g.first.id, left: .shell(workingDirectory: "/srv"), right: .shell(workingDirectory: "/var/log")).get()
+
+        #expect(copy.hasSplit)
+        #expect(copy.focusedPane == .left)
+    }
+
     @Test func duplicateAsCompanionOfASinglePaneMakesNoSplit() throws {
         let g = try CompanionGroup()
 

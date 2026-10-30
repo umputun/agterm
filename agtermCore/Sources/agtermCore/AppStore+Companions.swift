@@ -97,6 +97,7 @@ extension AppStore {
                 copy.initialSplitCwd = right.workingDirectory
                 copy.splitInitialCommand = right.command
                 setSplitVisibility(copy.id, shown: true, axis: axis)
+                copy.splitFocused = false
                 if let ratio { applySplitRatio(ratio, forSession: copy.id) }
             }
             return .success(copy)
