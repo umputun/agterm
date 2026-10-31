@@ -48,6 +48,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [close-tab-when-done](close-tab-when-done/) | arm a tab with a chord and it closes itself when the agent stops replying | 0.22.0, jq, Claude Code |
 | [container-agent-status](container-agent-status/) | a containerized agent reports status onto its sidebar row via a TCP notification to the host | 0.7.1, nc, timeout, Claude Code |
 | [copilot-agent-status](copilot-agent-status/) | Copilot CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Copilot CLI |
+| [end-of-task-offer](end-of-task-offer/) | once the agent clears the title-bar line, offer to clear its conversation or close the session | 0.39.0, jq, session-context-nudge, Claude Code or Codex |
 | [flag-recent-agents](flag-recent-agents/) | one chord lists the sessions whose agents reported a status lately, lets you untick any, and flags the rest | 0.38.0, jq |
 | [html-doc-overlay](html-doc-overlay/) | ask Claude Code for a page about the issue, PR, plan or topic in hand, read it in an overlay, and optionally share it on an expiring link | 0.33.0, jq, python3, Claude Code, cloudflared for sharing |
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code |
