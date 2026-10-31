@@ -2439,7 +2439,7 @@ a terminal surface's.
 `session.overlay: --width/--height must be positive` / `session.overlay.open: --width/--height need --size-percent` /
 `session.overlay.resize: --width/--height need a floating overlay; pass --size-percent too` /
 `a hud measures its own height: --width/--height do not apply` /
-`--width/--height are not supported for an overlay shown on another Mac` /
+`--width/--height are not supported for an overlay this Mac shows for another Mac; resize it on that Mac` /
 `session.hud.open: --size-percent must be 1...100` /
 `hud helper is not bundled in this build` / `could not write the hud message` /
 `invalid position: <value> (top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right|top|bottom)`

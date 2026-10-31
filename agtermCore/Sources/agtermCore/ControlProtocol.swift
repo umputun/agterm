@@ -874,7 +874,7 @@ public enum OverlayPointError {
     /// percent for the other axis to keep.
     public static let notFloating = "session.overlay.resize: --width/--height need a floating overlay; pass --size-percent too"
     public static let hud = "a hud measures its own height: --width/--height do not apply"
-    public static let remote = "--width/--height are not supported for an overlay shown on another Mac"
+    public static let remote = "--width/--height are not supported for an overlay this Mac shows for another Mac; resize it on that Mac"
 }
 
 /// Advisory text `notify` returns in `result.text` when the banner toggle is off. The command still succeeds
