@@ -242,10 +242,25 @@ final class RemoteAttachTests: XCTestCase {
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
         attacher.answerTree(listing([build, logs]))
         await waitUntil("the session picker opens") { controller.pending != nil }
-        controller.resolve(ControlPickResult(result: .picked, id: "c1", label: "logs", index: 1))
+        XCTAssertEqual(controller.pending?.items.map(\.label), ["build", "build › logs"])
+        controller.resolve(ControlPickResult(result: .picked, id: "c1", label: "build › logs", index: 1))
         await waitUntil("the attach is requested") { attacher.attaches.count == 1 }
 
         XCTAssertEqual(attacher.attaches.first, FakeAttacher.Attach(host: "studio", session: "c1", window: windowID.uuidString))
+    }
+
+    func testACompanionWhoseParentIsNotListedKeepsItsBareName() async throws {
+        let logs = ControlRemoteSession(id: "c1", name: "logs", windowID: "w1", windowName: "main", workspaceID: "ws1",
+                                        workspaceName: "work", cwd: "/repo", splitAxis: nil,
+                                        panes: [ControlRemotePane(pane: "left", daemon: "d3")], parent: "gone")
+
+        actions.attachRemote("studio", in: windowID)
+        await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
+        attacher.answerTree(listing([build, logs]))
+        await waitUntil("the session picker opens") { controller.pending != nil }
+
+        XCTAssertEqual(controller.pending?.items.map(\.label), ["build", "logs"])
+        controller.cancel()
     }
 
     func testAPartialGroupAttachReportsOnTheNewParentAndLeavesTheStartingRowClear() async throws {

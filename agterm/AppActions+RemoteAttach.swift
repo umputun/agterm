@@ -70,8 +70,9 @@ extension AppActions {
             // the window may have closed during the ssh wait, and a controller no window renders would
             // never resolve the pick
             guard let controller = PickRegistry.shared.controller(for: windowID) else { return }
-            let pick = PendingPick(id: UUID().uuidString, items: sessions.map(Self.remotePickItem),
-                                   prompt: "Attach from \(destination)")
+            let names = Dictionary(sessions.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            let items = sessions.map { Self.remotePickItem($0, parentName: $0.parent.flatMap { names[$0] }) }
+            let pick = PendingPick(id: UUID().uuidString, items: items, prompt: "Attach from \(destination)")
             guard let picked = await controller.pick(pick), picked.result == .picked, let session = picked.id else { return }
             hud.progress("attaching \(picked.label ?? session)…")
             // a top-level pick always asks for the group: the attach reads the origin again, so membership comes
@@ -90,11 +91,13 @@ extension AppActions {
         }
     }
 
-    static func remotePickItem(_ session: ControlRemoteSession) -> ControlPickItem {
+    /// remotePickItem labels a companion `parent › name` as `AppStore.listLabel` does, or by its bare name when its
+    /// parent is not in the listing.
+    static func remotePickItem(_ session: ControlRemoteSession, parentName: String?) -> ControlPickItem {
         let programs = session.panes.compactMap { $0.foreground?.first.map { ($0 as NSString).lastPathComponent } }
         let parts = ["\(session.windowName)/\(session.workspaceName)", session.context ?? "", session.cwd,
                      programs.joined(separator: " | ")]
-        return ControlPickItem(id: session.id, label: session.name,
+        return ControlPickItem(id: session.id, label: parentName.map { "\($0) › \(session.name)" } ?? session.name,
                                subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "),
                                status: session.status, statusColor: session.statusColor,
                                statusShape: session.statusShape)

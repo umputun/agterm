@@ -270,7 +270,8 @@ paths:
   each parent followed by its companions. Every other palette lists everything A→Z.
 - Flat session lists title a companion `parent › child` through `AppStore.listLabel(for:)`: ⌃P, ⌃Tab, the
   attention palette, both titlebar popovers, the Dock menu, dashboard captions, the flagged editor and every
-  flagged layout. The sidebar tree, rename and Copy Name keep the bare `displayName`.
+  flagged layout. The sidebar tree, rename and Copy Name keep the bare `displayName`. The Attach Remote picker
+  builds the same label from its listing (`remotePickItem`), with the bare name when the parent is not listed.
 - Edit Flagged Sessions (`.flaggedEditor`) lists every session of the frontmost window in tree order, focus-hidden
   ones included; Edit Focused Workspaces (`.focusEditor`) lists every workspace. Both are `keepsOpenOnRun`:
   Return or a click toggles the row through `setFlag`/`setFocusMembership` and the palette stays open on the same
