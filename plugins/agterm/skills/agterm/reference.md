@@ -979,8 +979,10 @@ error keeps those names for compatibility.
   point-sized outer axis is capped at 80% of the session; a percent axis keeps 1–100. With `--size-percent` the panel
   re-sizes from that percent with exactly the point axes given; alone they change only their axes of a
   panel that is already floating (`... need a floating overlay; pass --size-percent too` on a full one);
-  `--size-percent` alone or `--full` drops them. Refused on a HUD (`a hud measures its own height`), for
-  an overlay shown on another Mac, and for one this Mac shows for another Mac. Read back `overlayWidth`/`overlayHeight`. Units are native points on
+  `--size-percent` alone or `--full` drops them. Refused on a HUD (`a hud measures its own height`) and for
+  an overlay this Mac shows for another Mac, which that Mac sizes. An overlay shown on another Mac takes them
+  there, fitted to that Mac's session; one running an agterm too old for point sizes shows the percent alone.
+  Read back `overlayWidth`/`overlayHeight`, on the Mac that shows the panel. Units are native points on
   every transport: a page converts its CSS pixels with its `htmlOverlays[].zoom`. The overlay program keeps running across the
   resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open, and
   `the viewer showing this overlay is gone` for an overlay shown on another Mac whose stream has dropped. Returns the
@@ -2483,7 +2485,7 @@ a terminal surface's.
 `session.overlay: --width/--height must be positive` / `session.overlay.open: --width/--height need --size-percent` /
 `session.overlay.resize: --width/--height need a floating overlay; pass --size-percent too` /
 `a hud measures its own height: --width/--height do not apply` /
-`--width/--height are not supported for an overlay shown on another Mac` /
+`--width/--height are not supported for an overlay this Mac shows for another Mac; resize it on that Mac` /
 `session.hud.open: --size-percent must be 1...100` /
 `hud helper is not bundled in this build` / `could not write the hud message` /
 `invalid position: <value> (top-left|top-center|top-right|center-left|center|center-right|bottom-left|bottom-center|bottom-right|top|bottom)`

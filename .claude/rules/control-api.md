@@ -588,8 +588,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `overlayWidth`/`overlayHeight` read back through it from `hudPaneFrames.detail`, so the two cannot disagree.
   Only point axes take the 80% cap, applied after a page's strip is added; a percent axis keeps 1...100.
   Units are native points on every transport, the page bridge included; a page scales by its own zoom.
-  Refused on a HUD and for a slot shown on, or replicated from, another Mac: the presentation wire carries
-  only a percent, so the refusal comes before a reservation or a send.
+  Refused on a HUD and on a slot this Mac shows for another Mac, which the origin sizes. A slot handed to the
+  presenting Mac carries its points in the request and resize frames only to a presenter listing
+  `overlay.points`, an older one getting the percent alone; the presenter caps them against its own detail
+  bounds. `resizeRemoteOverlay(_:sizePercent:points:)` resolves a resize against `RemoteOverlaySlot` the way
+  `resizeOverlayInPoints` does locally and sends the whole result, because the presenter replaces its size.
+  The origin's tree reports `remoteOverlays[].sizePercent` only: the panel's points are known on the presenter.
 - `overlay.copy`/`overlay.text` read the COVERING surface, which `session.copy`/`session.text` cannot reach
   (#434) — those address the pane the overlay hides, so a selection made in the overlay reads as
   `no selection` and `--pane right` returns the shell underneath. Both take the overlay family's own

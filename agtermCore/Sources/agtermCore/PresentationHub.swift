@@ -44,8 +44,8 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind, askOtherKind]
-        + pageKinds
+    public static let supportedKinds = ["status", "hud", "notify", "context", "layout", "sound", askFormKind, askOtherKind,
+                                        overlayPointsKind] + pageKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -55,6 +55,8 @@ public final class PresentationHub {
     /// askOtherKind is the capability of drawing a choice list's free-form row; a presenter with only
     /// `ask.form` would drop the row, so such an ask needs both.
     public static let askOtherKind = "ask.other"
+    /// overlayPointsKind advertises point sizing without adding a frame kind.
+    public static let overlayPointsKind = "overlay.points"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date

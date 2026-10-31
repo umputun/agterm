@@ -225,30 +225,44 @@ public struct PresentationOverlay: Codable, Equatable, Sendable {
     /// The origin's pane the overlay covers, nil for the session-wide slot.
     public var pane: PresentationPane?
     public var sizePercent: Int?
+    /// width and height are the `--width`/`--height` point overrides, sent only to a presenter listing
+    /// `PresentationHub.overlayPointsKind`.
+    public var width: Int?
+    public var height: Int?
     public var backgroundColor: String?
     public var follow: Bool
     public var wait: Bool
 
-    public init(job: String, pane: PresentationPane?, sizePercent: Int?, backgroundColor: String?, follow: Bool,
-                wait: Bool) {
+    public init(job: String, pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
+                backgroundColor: String?, follow: Bool, wait: Bool) {
         self.job = job
         self.pane = pane
         self.sizePercent = sizePercent
+        width = points.width
+        height = points.height
         self.backgroundColor = backgroundColor
         self.follow = follow
         self.wait = wait
     }
+
+    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
 }
 
 /// PresentationOverlayChange names one remote overlay job, with a size for a resize.
 public struct PresentationOverlayChange: Codable, Equatable, Sendable {
     public var job: String
     public var sizePercent: Int?
+    public var width: Int?
+    public var height: Int?
 
-    public init(job: String, sizePercent: Int? = nil) {
+    public init(job: String, sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize()) {
         self.job = job
         self.sizePercent = sizePercent
+        width = points.width
+        height = points.height
     }
+
+    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
 }
 
 /// PresentationPageSource is a handed-over page's full source on the origin: a file the viewer fetches over the
@@ -275,11 +289,14 @@ public struct PresentationPage: Codable, Equatable, Sendable {
     /// pane is the origin's pane the page covers, nil for the session-wide slot.
     public var pane: PresentationPane?
     public var sizePercent: Int?
+    public var width: Int?
+    public var height: Int?
     public var follow: Bool
 
     public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
                 javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
-                pane: PresentationPane?, sizePercent: Int?, follow: Bool) {
+                pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
+                follow: Bool) {
         self.page = page
         self.token = token
         self.source = source
@@ -292,8 +309,12 @@ public struct PresentationPage: Codable, Equatable, Sendable {
         self.backgroundColor = backgroundColor
         self.pane = pane
         self.sizePercent = sizePercent
+        width = points.width
+        height = points.height
         self.follow = follow
     }
+
+    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
 }
 
 /// PresentationPageChange names one handed-over page by the origin's id, with a reason when the presenter
@@ -320,13 +341,20 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
     public var seq: Int
     public var action: PresentationPageAction
     public var sizePercent: Int?
+    public var width: Int?
+    public var height: Int?
 
-    public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil) {
+    public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil,
+                points: OverlayPointSize = OverlayPointSize()) {
         self.page = page
         self.seq = seq
         self.action = action
         self.sizePercent = sizePercent
+        width = points.width
+        height = points.height
     }
+
+    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
 }
 
 /// PresentationPageState is what a handed-over page shows on the presenter. `address` is the origin's logical

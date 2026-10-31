@@ -10,9 +10,27 @@ public enum RemoteOverlayOpen: Equatable, Sendable {
     case paneMissing
     /// The launch context is larger than the helper reads in one frame.
     case tooLarge
-    /// pointsUnsupported: the open carries point sizes, which the presenting Mac does not take.
+    /// pointsUnsupported is never returned; it stays for agterm-linux, whose switches still name it.
     case pointsUnsupported
     case opened(job: String)
+}
+
+/// RemoteOverlayResize is the result of a remote resize request.
+public enum RemoteOverlayResize: Equatable, Sendable {
+    case sent
+    /// viewerGone: the stream the slot was handed to is gone, even if another is up.
+    case viewerGone
+    /// notFloating: points alone need a floating overlay whose percent the other axis keeps.
+    case notFloating
+
+    /// error is what a refused resize answers with, nil once it was sent.
+    public var error: String? {
+        switch self {
+        case .sent: nil
+        case .viewerGone: OverlayResultError.viewerGone
+        case .notFloating: OverlayPointError.notFloating
+        }
+    }
 }
 
 // MARK: - Overlays handed to the viewer presenting a session, on the origin
@@ -30,7 +48,6 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
-        guard options.points.isEmpty else { return .pointsUnsupported }
         guard let frame = try? OverlayJobFrame.context(context).line(),
               frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one
@@ -38,12 +55,14 @@ extension AppStore {
         let owner = hub.presenterGeneration(session: sessionID)
         let job = jobs.register(session: sessionID, pane: pane, owner: owner, context: context)
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
-        session.remoteOverlays.reserve(RemoteOverlaySlot(job: job, pane: pane, owner: owner, sizePercent: size,
-                                                              wait: options.wait))
+        var slot = RemoteOverlaySlot(job: job, pane: pane, owner: owner, sizePercent: size, wait: options.wait)
+        if size != nil { slot.points = options.points }
+        session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
         scheduleTreeChanged()
         hub.sendToPresenter(.overlayRequest(PresentationOverlay(
-            job: job, pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, backgroundColor: options.backgroundColor,
+            job: job, pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
+            points: presentablePoints(slot.points, session: sessionID), backgroundColor: options.backgroundColor,
             follow: options.follow, wait: options.wait)), session: sessionID)
         return .opened(job: job)
     }
@@ -96,14 +115,43 @@ extension AppStore {
     /// Asks the presenter to resize a session-wide remote overlay and records the requested size. Nil when no
     /// viewer holds the slot, false when the stream the job was handed to is gone, even if another is up.
     public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool? {
+        switch resizeRemoteOverlay(sessionID, sizePercent: sizePercent, points: OverlayPointSize()) {
+        case nil: nil
+        case .sent: true
+        case .viewerGone, .notFloating: false
+        }
+    }
+
+    /// resizeRemoteOverlay sends the resolved size because the presenter replaces its state; nil means no remote slot.
+    public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?, points: OverlayPointSize) -> RemoteOverlayResize? {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(nil) else { return nil }
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
-              hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
-        let size = sizePercent.map { min(100, max(1, $0)) }
-        session.remoteOverlays.resize(job: slot.job, sizePercent: size)
-        if slot.page != nil { return sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size) }
-        return hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size)),
-                                   session: sessionID)
+              hub.presenterGeneration(session: sessionID) == slot.owner else { return .viewerGone }
+        let size: Int?
+        let merged: OverlayPointSize
+        if let sizePercent {
+            size = min(100, max(1, sizePercent))
+            merged = points
+        } else if points.isEmpty {
+            size = nil
+            merged = OverlayPointSize()
+        } else {
+            guard let current = slot.sizePercent else { return .notFloating }
+            size = current
+            merged = slot.points.merging(points)
+        }
+        session.remoteOverlays.resize(job: slot.job, sizePercent: size, points: merged)
+        let sent = presentablePoints(merged, session: sessionID)
+        let delivered = slot.page != nil
+            ? sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size, points: sent)
+            : hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size, points: sent)),
+                                  session: sessionID)
+        return delivered ? .sent : .viewerGone
+    }
+
+    func presentablePoints(_ points: OverlayPointSize, session sessionID: UUID) -> OverlayPointSize {
+        presentationHub?.presenterSupports(PresentationHub.overlayPointsKind, session: sessionID) == true
+            ? points : OverlayPointSize()
     }
 
     /// The viewer presenting `sessionID` is gone, and every overlay it held goes with it for good: a later

@@ -77,6 +77,7 @@ extension AppStore {
             pane = role
         } else {
             guard openOverlay(id, command: command, wait: overlay.wait, sizePercent: overlay.sizePercent,
+                              points: overlay.points,
                               backgroundColor: overlay.backgroundColor) else { return false }
         }
         session.setOverlayReplica(OverlayReplica(job: overlay.job), pane: pane)
@@ -97,7 +98,7 @@ extension AppStore {
 
     public func resizeReplicaOverlay(_ change: PresentationOverlayChange, forSession id: UUID) {
         guard session(withID: id)?.overlayReplica?.job == change.job else { return }
-        resizeOverlay(id, sizePercent: change.sizePercent)
+        resizeOverlay(id, sizePercent: change.sizePercent, points: change.points)
     }
 
     /// A replica's job ssh ended and `--wait` holds its surface. Cut off from its stream, nothing could close

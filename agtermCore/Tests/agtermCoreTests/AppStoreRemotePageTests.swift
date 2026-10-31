@@ -91,18 +91,33 @@ struct AppStoreRemotePageTests {
         #expect(open(session, file(), pane: .left) == .opened)
     }
 
-    @Test func pointSizesAreRefusedOnlyWhenThePageWouldGoToThePresenter() throws {
+    @Test(arguments: [true, false])
+    func pointSizesReachOnlyAPresenterThatTakesThem(supported: Bool) throws {
+        let (session, _) = try origin(kinds: supported ? PresentationHub.supportedKinds : PresentationHub.pageKinds)
+        let points = OverlayPointSize(height: 240)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 60,
+                                                       backgroundColor: nil, points: points)
+
+        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .opened)
+
+        let request = try #require(presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.first)
+        #expect(request.sizePercent == 60)
+        #expect(request.points == (supported ? points : OverlayPointSize()))
+        #expect(session.remoteOverlays.slot(nil)?.points == points)
+    }
+
+    @Test func aPointResizeReachesThePresenterMergedWithTheSlot() throws {
         let (session, _) = try origin()
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 60,
-                                                       backgroundColor: nil, points: OverlayPointSize(height: 240))
-        let sent = presenter.frames.count
+                                                       backgroundColor: nil, points: OverlayPointSize(width: 900))
+        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .opened)
 
-        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .pointsUnsupported)
-        #expect(session.remoteOverlays.slots.isEmpty)
-        #expect(presenter.frames.count == sent)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(height: 300)) == .sent)
 
-        setLead(.leader, pane: session.paneIdentity)
-        #expect(store.openRemotePage(session.id, overlay: file(), options: options, now: Self.start) == .local)
+        let command = try #require(presenter.commands.last)
+        #expect(command.action == .resize)
+        #expect(command.sizePercent == 60)
+        #expect(command.points == OverlayPointSize(width: 900, height: 300))
     }
 
     @Test func aLoopbackUrlIsRefusedOnlyWhenThePageWouldGoToThePresenter() throws {

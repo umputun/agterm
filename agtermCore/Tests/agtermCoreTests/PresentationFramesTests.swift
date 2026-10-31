@@ -80,7 +80,41 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 43, body: .pageState(PresentationPageState(
             page: "p1", title: "Review", address: "/Users/u/docs/b.html", load: .loaded, error: nil, canGoBack: true,
             canGoForward: false, hidden: true, appliedSeq: 8))),
+        PresentationFrame(gen: 1, rev: 44, body: .overlayRequest(PresentationOverlay(
+            job: "j2", pane: nil, sizePercent: 60, points: OverlayPointSize(width: 640, height: 240), backgroundColor: nil,
+            follow: false, wait: false))),
+        PresentationFrame(gen: 1, rev: 45, body: .overlayResize(PresentationOverlayChange(
+            job: "j2", sizePercent: 60, points: OverlayPointSize(height: 300)))),
+        PresentationFrame(gen: 1, rev: 46, body: .pageRequest(PresentationPage(
+            page: "p4", token: "t4", source: .url("https://example.com/"), identity: "https://example.com",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 70, points: OverlayPointSize(width: 900), follow: false))),
+        PresentationFrame(gen: 1, rev: 47, body: .pageCommand(PresentationPageCommand(
+            page: "p4", seq: 9, action: .resize, sizePercent: 70, points: OverlayPointSize(width: 800, height: 400)))),
     ]
+
+    @Test(arguments: [
+        #"{"kind":"overlay.request","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":60,"follow":false,"wait":false}}"#,
+        #"{"kind":"overlay.resize","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":40}}"#,
+        #"{"kind":"page.request","gen":1,"rev":1,"page":{"page":"p1","token":"t1","source":{"url":{"_0":"https://example.com/"}},"#
+            + #""identity":"https://example.com","chromeless":false,"javascript":false,"navigation":false,"browse":false,"#
+            + #""persistent":false,"sizePercent":70,"follow":false}}"#,
+        #"{"kind":"page.command","gen":1,"rev":1,"page":{"page":"p1","seq":2,"action":"resize","sizePercent":50}}"#,
+    ])
+    func aSizedFrameFromAnOriginWithoutPointSizesDecodesWithNone(_ text: String) throws {
+        let points: OverlayPointSize
+        switch try PresentationCodec.decode(Data(text.utf8)).body {
+        case .overlayRequest(let overlay): points = overlay.points
+        case .overlayResize(let change): points = change.points
+        case .pageRequest(let page): points = page.points
+        case .pageCommand(let command): points = command.points
+        default: throw DecodedOtherKind()
+        }
+
+        #expect(points.isEmpty)
+    }
+
+    private struct DecodedOtherKind: Error {}
 
     @Test func aChoiceRequestFromAnOriginWithoutTheOtherRowDecodesWithNone() throws {
         let choices = try JSONDecoder().decode(AskChoiceForm.self, from: Data(#"{"choices":[{"id":"a","label":"A"}],"multiple":false,"checked":[]}"#.utf8))
