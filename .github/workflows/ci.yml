@@ -311,20 +311,20 @@ jobs:
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
         run: scripts/test-app.sh
-      # temporary, never merged: repeats the fish seam class until it fails, for its diagnostics report
-      - name: Fish seam repetition
-        if: always()
+      # temporary, never merged: repeats the hosted suite to capture a fish seam failure with its diagnostics report
+      - name: Hosted suite repetition
+        if: success()
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
         run: |
-          xcodebuild test \
-            -project agterm.xcodeproj \
-            -scheme agtermTests \
-            -destination 'platform=macOS' \
-            -derivedDataPath build/DerivedData \
-            -only-testing:agtermTests/SessionHostFishSeamTests \
-            -test-iterations 30 \
-            -run-tests-until-failure
+          for pass in 1 2 3 4 5 6; do
+            echo "=== hosted suite pass $pass ==="
+            xcodebuild test \
+              -project agterm.xcodeproj \
+              -scheme agtermTests \
+              -destination 'platform=macOS' \
+              -derivedDataPath build/DerivedData
+          done
       - name: Plain fish login shell seam
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL: "1"
