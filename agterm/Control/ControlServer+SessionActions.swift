@@ -242,6 +242,9 @@ extension ControlServer: ControlActions {
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
                               points: OverlayPointSize) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if let remote = store.resizeRemoteOverlay(id, sizePercent: sizePercent, points: points) {
+                return ControlResponse(ok: remote == .sent, result: remote == .sent ? ControlResult(id: id.uuidString) : nil, error: remote.error)
+            }
             if let failure = store.resizeOverlayInPoints(id, sizePercent: sizePercent, points: points) {
                 return ControlResponse(ok: false, error: failure.message)
             }

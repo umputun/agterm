@@ -20,7 +20,7 @@ extension AppStore {
         let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
                                   chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
                                   replicaOf: origin)
-        if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent,
+        if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent, points: page.points,
                                          backgroundColor: page.backgroundColor) {
             return failure.message(pane: pane)
         }
@@ -87,9 +87,10 @@ extension AppStore {
     }
 
     /// resizeReplicaPage applies the origin's size to a session-wide page; a pane page is always full-pane.
-    public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?) {
+    public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?,
+                                  points: OverlayPointSize = OverlayPointSize()) {
         guard let slot = replicaPage(origin, forSession: id), slot.pane == nil else { return }
-        resizeOverlay(id, sizePercent: sizePercent)
+        resizeOverlay(id, sizePercent: sizePercent, points: points)
     }
 
     /// replicaPageState is what the page `localID` shows now, as the origin reads it back, nil once it is gone.

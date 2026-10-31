@@ -24,10 +24,10 @@ struct AppStoreReplicaPageTests {
 
     private func page(_ source: PresentationPageSource = .file(path: "/docs/index.html", grantRoot: "/docs"),
                       id: UUID = AppStoreReplicaPageTests.origin, pane: PresentationPane? = nil, size: Int? = nil,
-                      follow: Bool = false) -> PresentationPage {
+                      points: OverlayPointSize = OverlayPointSize(), follow: Bool = false) -> PresentationPage {
         PresentationPage(page: id.uuidString, token: "tok", source: source, identity: "index.html", chromeless: false,
                          javascript: true, navigation: true, browse: false, persistent: false, backgroundColor: "#102030",
-                         pane: pane, sizePercent: size, follow: follow)
+                         pane: pane, sizePercent: size, points: points, follow: follow)
     }
 
     // closing a viewer's page companion closed its row, whose release closed its page, which closed the row again
@@ -280,5 +280,17 @@ struct AppStoreReplicaPageTests {
         store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 80)
 
         #expect(session.overlaySizePercent == 80)
+    }
+
+    @Test func aHandedOverPageTakesTheOriginsPointSizesAndItsResizes() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 60, points: OverlayPointSize(height: 240)), forSession: session.id) == nil)
+        #expect(session.overlayPoints == OverlayPointSize(height: 240))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 60,
+                                points: OverlayPointSize(width: 900, height: 300))
+
+        #expect(session.overlaySizePercent == 60)
+        #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
     }
 }

@@ -636,9 +636,10 @@ struct RemotePresentationStateTests {
 
     static let runJob = "ssh -tt buildbox run-job j1"
 
-    private func overlay(pane: PresentationPane? = nil, size: Int? = nil, wait: Bool = false,
-                         follow: Bool = false) -> PresentationOverlay {
-        PresentationOverlay(job: "j1", pane: pane, sizePercent: size, backgroundColor: "#102030", follow: follow, wait: wait)
+    private func overlay(pane: PresentationPane? = nil, size: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
+                         wait: Bool = false, follow: Bool = false) -> PresentationOverlay {
+        PresentationOverlay(job: "j1", pane: pane, sizePercent: size, points: points, backgroundColor: "#102030", follow: follow,
+                            wait: wait)
     }
 
     private final class Closed { var jobs: [String] = [] }
@@ -654,6 +655,29 @@ struct RemotePresentationStateTests {
 
         #expect(store.resizeOverlayInPoints(session.id, sizePercent: nil, points: OverlayPointSize(height: 240)) == .remote)
 
+        #expect(session.overlayPoints.isEmpty)
+    }
+
+    @Test func aHandedOverOverlayTakesTheOriginsPointSizes() throws {
+        let (store, session) = try attached()
+
+        #expect(show(overlay(size: 60, points: OverlayPointSize(width: 640, height: 240)), in: store, session))
+
+        #expect(session.overlaySizePercent == 60)
+        #expect(session.overlayPoints == OverlayPointSize(width: 640, height: 240))
+    }
+
+    @Test func theOriginsResizeReplacesTheHandedOverOverlaysSize() throws {
+        let (store, session) = try attached()
+        #expect(show(overlay(size: 60, points: OverlayPointSize(width: 640)), in: store, session))
+
+        store.resizeReplicaOverlay(PresentationOverlayChange(job: "j1", sizePercent: 60,
+                                                             points: OverlayPointSize(width: 640, height: 300)),
+                                   forSession: session.id)
+        #expect(session.overlayPoints == OverlayPointSize(width: 640, height: 300))
+
+        store.resizeReplicaOverlay(PresentationOverlayChange(job: "j1", sizePercent: 40), forSession: session.id)
+        #expect(session.overlaySizePercent == 40)
         #expect(session.overlayPoints.isEmpty)
     }
 

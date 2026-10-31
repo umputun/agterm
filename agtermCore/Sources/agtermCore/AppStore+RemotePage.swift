@@ -14,7 +14,7 @@ public enum RemotePageOpen: Equatable, Sendable {
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
-    /// pointsUnsupported: the open carries point sizes, which the presenting Mac does not take.
+    /// pointsUnsupported is never returned; it stays for agterm-linux, whose switches still name it.
     case pointsUnsupported
     case opened
 }
@@ -60,24 +60,26 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
-        guard options.points.isEmpty else { return .pointsUnsupported }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
+        let points = size == nil ? OverlayPointSize() : options.points
         let request = PresentationPage(
             page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
             chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
             browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
-            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, follow: options.follow)
+            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
+            points: presentablePoints(points, session: sessionID), follow: options.follow)
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
         if pane == nil, session.hudActive { closeHud(sessionID) }
         let page = RemotePage(overlay: overlay, token: token, claimDeadline: now.addingTimeInterval(Self.pageClaimWindow))
-        session.remoteOverlays.reserve(RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane,
-                                                         owner: hub.presenterGeneration(session: sessionID),
-                                                         sizePercent: size, page: page))
+        var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: hub.presenterGeneration(session: sessionID),
+                                     sizePercent: size, page: page)
+        slot.points = points
+        session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
         HtmlPageOutcomes.shared.register(overlay.id)
         scheduleTreeChanged()
@@ -130,7 +132,7 @@ extension AppStore {
     /// sits there or the stream it was handed to is gone.
     @discardableResult
     public func sendRemotePageCommand(_ sessionID: UUID, pane: OverlayPane?, action: PresentationPageAction,
-                                      sizePercent: Int? = nil) -> Bool {
+                                      sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize()) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil,
               let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
         var seq = 0
@@ -142,7 +144,8 @@ extension AppStore {
             }
         }
         return hub.sendToPresenter(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
-                                                                        sizePercent: sizePercent)), session: sessionID)
+                                                                        sizePercent: sizePercent, points: points)),
+                                   session: sessionID)
     }
 
     /// navigateRemotePage runs a toolbar navigation on the page in `pane`'s slot when the presenting Mac shows it.

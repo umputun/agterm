@@ -10,6 +10,8 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let owner: Int
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
+    /// points retains requested overrides even when an older presenter ignores them.
+    public var points = OverlayPointSize()
     /// Whether the viewer's surface stays up after the program ends (`--wait`), which keeps the slot held
     /// until that surface is closed.
     public var wait = false
@@ -124,9 +126,10 @@ public struct RemoteOverlays: Equatable, Sendable {
         }
     }
 
-    mutating func resize(job: String, sizePercent: Int?) {
+    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize()) {
         guard let index = slots.firstIndex(where: { $0.job == job }) else { return }
         slots[index].sizePercent = sizePercent
+        slots[index].points = points
     }
 
     mutating func remove(job: String) { slots.removeAll { $0.job == job } }
