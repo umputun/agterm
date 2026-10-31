@@ -7,6 +7,7 @@ import agtermCore
 protocol RemoteAttaching: AnyObject {
     func remoteTree(host: String?) async -> ControlResponse
     func attachRemoteSession(host: String, session: String, window: String?) async -> ControlResponse
+    func attachRemoteGroup(host: String, session: String, window: String?) async -> ControlResponse
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse
     func closeHud(_ target: String?, window: String?) -> ControlResponse
     /// hudGeneration identifies the HUD now showing over `session`, nil when it shows none.
@@ -69,37 +70,45 @@ extension AppActions {
             // the window may have closed during the ssh wait, and a controller no window renders would
             // never resolve the pick
             guard let controller = PickRegistry.shared.controller(for: windowID) else { return }
-            let pick = PendingPick(id: UUID().uuidString, items: sessions.map(Self.remotePickItem),
-                                   prompt: "Attach from \(destination)")
+            let names = Dictionary(sessions.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            let items = sessions.map { Self.remotePickItem($0, parentName: $0.parent.flatMap { names[$0] }) }
+            let pick = PendingPick(id: UUID().uuidString, items: items, prompt: "Attach from \(destination)")
             guard let picked = await controller.pick(pick), picked.result == .picked, let session = picked.id else { return }
             hud.progress("attaching \(picked.label ?? session)…")
-            let attached = await remoteAttacher.attachRemoteSession(host: destination, session: session,
-                                                                    window: windowID.uuidString)
+            // a top-level pick always asks for the group: the attach reads the origin again, so membership comes
+            // from that fresh read rather than the listing the picker showed
+            let topLevel = sessions.first { $0.id == session }?.parent == nil
+            let attached = topLevel
+                ? await remoteAttacher.attachRemoteGroup(host: destination, session: session, window: windowID.uuidString)
+                : await remoteAttacher.attachRemoteSession(host: destination, session: session, window: windowID.uuidString)
             if attached.ok {
                 hud.close()
-            } else {
-                hud.fail(attached.error ?? "attach failed")
+                return
             }
+            // a partial group attach selected its new parent row, so the report goes there
+            if let parent = attached.result?.id { hud.move(to: parent) }
+            hud.fail(attached.error ?? "attach failed")
         }
     }
 
-    static func remotePickItem(_ session: ControlRemoteSession) -> ControlPickItem {
+    /// remotePickItem labels a companion `parent › name` as `AppStore.listLabel` does, or by its bare name when its
+    /// parent is not in the listing.
+    static func remotePickItem(_ session: ControlRemoteSession, parentName: String?) -> ControlPickItem {
         let programs = session.panes.compactMap { $0.foreground?.first.map { ($0 as NSString).lastPathComponent } }
         let parts = ["\(session.windowName)/\(session.workspaceName)", session.context ?? "", session.cwd,
                      programs.joined(separator: " | ")]
-        return ControlPickItem(id: session.id, label: session.name,
+        return ControlPickItem(id: session.id, label: parentName.map { "\($0) › \(session.name)" } ?? session.name,
                                subtitle: parts.filter { !$0.isEmpty }.joined(separator: "  ·  "),
                                status: session.status, statusColor: session.statusColor,
                                statusShape: session.statusShape)
     }
 }
 
-/// RemoteAttachHud is the HUD an attach posts over the session it started from. A window with no session
-/// has nowhere to put one, so a failure there falls back to the notification banner.
+/// RemoteAttachHud owns an attach's progress and error panels, with notification fallback.
 @MainActor
 final class RemoteAttachHud {
     private let attacher: any RemoteAttaching
-    private let session: String?
+    private var session: String?
     private let window: String
     private let action: String
     /// owned is the HUD this attach opened; one another caller posted meanwhile is not its to close.
@@ -120,6 +129,12 @@ final class RemoteAttachHud {
         guard let session, let owned, attacher.hudGeneration(session: session) == owned else { return }
         _ = attacher.closeHud(session, window: window)
         self.owned = nil
+    }
+
+    /// move closes the panel this attach owns and points later ones at `session`.
+    func move(to session: String) {
+        close()
+        self.session = session
     }
 
     func fail(_ text: String) {

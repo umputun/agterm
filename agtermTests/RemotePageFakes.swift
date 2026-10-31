@@ -183,3 +183,26 @@ final class FakePageLauncher: RemotePageLauncher {
         for origin in origins { origin.close() }
     }
 }
+
+/// ScriptedRunner answers each ssh call with the next scripted result, so one remote flow's several calls are covered.
+final class ScriptedRunner: RemoteCommandRunner, @unchecked Sendable {
+    private let lock = NSLock()
+    private var results: [RemoteCommandResult]
+    private var recorded: [[String]] = []
+    var beforeCall: (@Sendable (Int) async -> Void)?
+
+    var invocations: [[String]] { lock.withLock { recorded } }
+
+    init(_ results: [RemoteCommandResult]) {
+        self.results = results
+    }
+
+    func run(_ argv: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
+        await beforeCall?(invocations.count)
+        await Task.yield()
+        return lock.withLock {
+            recorded.append(argv)
+            return results.isEmpty ? RemoteCommandResult(status: 255, stdout: "", stderr: "unscripted call") : results.removeFirst()
+        }
+    }
+}

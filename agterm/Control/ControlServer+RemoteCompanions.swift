@@ -225,13 +225,19 @@ extension ControlServer {
         HtmlPageOutcomes.shared.settle(local, like: reply?.result?.pageOutcome)
     }
 
-    /// attachRemotePageRow attaches a page companion `zmx tree` listed under the one row here showing its parent.
-    func attachRemotePageRow(_ remote: ControlRemoteSession, tree: ControlRemoteTree, host: String,
-                             in store: AppStore) async -> ControlResponse {
-        let rows = store.workspaces.flatMap(\.sessions).filter { row in
+    /// attachedParentRows are the top-level rows in `store` showing the origin parent of companion `remote`.
+    func attachedParentRows(of remote: ControlRemoteSession, tree: ControlRemoteTree, host: String,
+                            in store: AppStore) -> [Session] {
+        store.workspaces.flatMap(\.sessions).filter { row in
             guard row.parentID == nil, row.remoteHost == host, let binding = row.remotePresentation?.binding else { return false }
             return binding.remoteSessionID == remote.parent && binding.origin?.endpoint == tree.endpoint
         }
+    }
+
+    /// attachRemotePageRow attaches a page companion `zmx tree` listed under the one row here showing its parent.
+    func attachRemotePageRow(_ remote: ControlRemoteSession, tree: ControlRemoteTree, host: String,
+                             in store: AppStore) async -> ControlResponse {
+        let rows = attachedParentRows(of: remote, tree: tree, host: host, in: store)
         guard rows.count == 1, let parent = rows.first else {
             return ControlResponse(ok: false, error: rows.isEmpty
                 ? "attach the page's parent session from \(host) first"

@@ -2178,7 +2178,8 @@ and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
 `context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
 as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), `parent` on a
-companion, `content: "page"` on a page companion, and `panes`
+companion, `content: "page"` on a page companion, `companions` on a top-level session (every companion in
+sidebar order as `{id, name}`, attachable or not; `[]` for none, absent from an older origin), and `panes`
 (`{pane, daemon, foreground}`, the last being the argv that pane is running and omitted when none is
 reported). `host` is the ssh destination the REQUESTING app was given, stamped on after decoding: the far
 side has no idea which name reached it.
@@ -2199,20 +2200,31 @@ after discovery. An invalid or closed destination fails without creating a sessi
 window leaves the frontmost window unchanged. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
 new local session's `id`; read `remoteHost` on its tree node. The remote is resolved AGAIN before anything
-is created, so a session that has gone since the listing fails and creates nothing. Everything reported
-here is a failure found before that point — a connection that starts and later drops is an ordinary pane
-exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself, with ssh's last
+is created, so a session that has gone since the listing fails and creates nothing. A connection that
+starts and later drops is an ordinary pane exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself, with ssh's last
 failed-probe message along the pane's bottom edge and on the pane's `reconnect` in `tree`; any other exit prints
 one line naming the host, the session, the pane and the exit status and holds on Ghostty's press-any-key prompt.
 agterm adds ssh keepalive (`ServerAliveInterval 5`, `ServerAliveCountMax 2`) to the pane's ssh unless the
 user's config sets a nonzero interval, so a dead link is noticed within about fifteen seconds. When the
 pane's ssh joins an existing `ControlMaster` connection, that master's settings decide instead.
 
+A terminal companion attached on its own opens under the one row in the destination window attached from
+its parent, in that row's workspace (`result.parent` names it); with no such row, or more than one, it opens on its own.
+`agtermctl zmx attach HOST SESSION --companions` (`zmx.attach.group`) attaches a top-level session and then
+each of its companions under it from one read, in the origin's companion order when reported and in the
+order of its listed rows from an older origin; a companion's id is refused. The
+reply's `id` is the parent here and `remoteGroup` carries `membershipKnown` plus one `{origin, id?, error?}`
+per member, `id` recording that the row was created, not that it still exists. Any member unavailable or failing makes the command fail with the attached rows kept and the
+error naming the parent and what is missing; `membershipKnown: false` means the origin does not report
+`companions`, so one it did not list cannot be named. An app too old for the command creates nothing.
+Companions created on the origin later are not followed.
+
 File ▸ Attach Remote… is the same flow in the GUI and has no command of its own: it offers the machines in
 `<config dir>/remotes.conf` (one `destination [label]` per line, `#` comments), asks which in the picker
-when there are several, then lists that machine's sessions and attaches the picked one. It is the
+when there are several, then lists that machine's sessions and attaches the picked one, with its
+companions when it is a top-level session. It is the
 `attach_remote` keymap action, on Cmd-Shift-R unless `keymap.conf` maps another chord. A script composes
-`zmx tree`, `pick` and `zmx attach` instead.
+`zmx tree`, `pick` and `zmx attach --companions` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
 agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this

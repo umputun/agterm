@@ -124,6 +124,9 @@ public enum Command: String, Codable, Sendable {
     case zmxReset = "zmx.reset"
     case zmxTree = "zmx.tree"
     case zmxAttach = "zmx.attach"
+    /// zmxAttachGroup is its own command, not a flag on `zmx.attach`, so an app that predates it fails to
+    /// decode the request and creates nothing instead of attaching one row.
+    case zmxAttachGroup = "zmx.attach.group"
     case zmxPresent = "zmx.present"
     case zmxScreen = "zmx.screen"
     case recentList = "recent.list"
@@ -705,6 +708,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var remaining: Int?
     /// acked names the messages removed, present on every `msg.ack` and `msg.read --ack` reply, empty included.
     public var acked: [String]?
+    public var remoteGroup: ControlRemoteGroup?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -723,7 +727,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 recent: [ControlRecentItem]? = nil, recentOpen: ControlRecentOpen? = nil, undoable: Bool? = nil,
                 parent: String? = nil, closed: [String]? = nil, companionPage: PresentationPage? = nil,
                 messageID: String? = nil, delivered: [String]? = nil, rejected: [MessageRejection]? = nil,
-                messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil) {
+                messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil,
+                remoteGroup: ControlRemoteGroup? = nil) {
         self.messageID = messageID
         self.delivered = delivered
         self.rejected = rejected
@@ -731,6 +736,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.remaining = remaining
         self.acked = acked
         self.companionPage = companionPage
+        self.remoteGroup = remoteGroup
         self.parent = parent
         self.closed = closed
         self.undoable = undoable

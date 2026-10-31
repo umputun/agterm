@@ -370,6 +370,37 @@ final class ControlServerTests: XCTestCase {
         wait(for: [remoteFinished], timeout: 10)
     }
 
+    func testAGroupAttachDoesNotHoldTheAcceptLoop() {
+        let runner = BlockingRemoteRunner()
+        let path = socketPath!
+        let server = makeServer(remoteRunner: runner)
+        server.start()
+        XCTAssertNotNil(server.boundSocketPath)
+
+        let sshInFlight = expectation(description: "the group attach's discovery ssh has started")
+        runner.onEntered = { sshInFlight.fulfill() }
+        let remoteFinished = expectation(description: "the group attach returns once released")
+        Thread {
+            _ = Self.roundTrip(#"{"cmd":"zmx.attach.group","target":"P","args":{"host":"buildbox"}}"#, at: path)
+            remoteFinished.fulfill()
+        }.start()
+
+        wait(for: [sshInFlight], timeout: 5)
+
+        let probeAnswered = expectation(description: "a second client is served during the ssh")
+        var probe: String?
+        Thread {
+            probe = Self.roundTrip(#"{"cmd":"window.list"}"#, at: path)
+            probeAnswered.fulfill()
+        }.start()
+
+        wait(for: [probeAnswered], timeout: 5)
+        XCTAssertNotNil(probe, "a second connection must be answered while the group attach is still waiting")
+
+        runner.release.signal()
+        wait(for: [remoteFinished], timeout: 10)
+    }
+
     func testACompanionRequestLeavesTheAcceptLoopAndATreeAfterItsReplySeesTheCompanion() throws {
         let runner = BlockingRemoteRunner()
         let path = socketPath!

@@ -97,13 +97,42 @@ struct Zmx: ParsableCommand {
         var session: String
         @Option(help: "Local open window id, unique prefix, or active (default: frontmost after discovery).")
         var window: String?
+        @Flag(help: "Also attach every companion of the session, under it; the session must not itself be a companion.")
+        var companions = false
         @OptionGroup var options: BasicOptions
 
         /// It creates a local session, so it echoes that session's id like every other create command.
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .zmxAttach, target: session, args: ControlArgs(host: host, window: window))
+            ControlRequest(cmd: companions ? .zmxAttachGroup : .zmxAttach, target: session,
+                           args: ControlArgs(host: host, window: window))
+        }
+
+        func run() throws {
+            guard companions else { return try defaultRun() }
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for group attach")
+            let reply = try send(try makeRequest())
+            if options.json {
+                print(reply.line)
+            } else {
+                printGroup(reply.response)
+            }
+            if !reply.response.ok { throw ExitCode.failure }
+        }
+
+        // the note goes out on failure too: a partial attach from an origin that lists no membership can
+        // have missed companions it never named
+        private func printGroup(_ response: ControlResponse) {
+            if response.ok {
+                print(SocketClient.formatRemoteGroup(parent: response.result?.id, group: response.result?.remoteGroup))
+            } else {
+                FileHandle.standardError.write(Data((SocketClient.formatResponse(response) + "\n").utf8))
+            }
+            if response.result?.remoteGroup?.membershipKnown == false {
+                FileHandle.standardError.write(Data((SocketClient.remoteGroupNote(host: host) + "\n").utf8))
+            }
         }
     }
 

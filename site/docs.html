@@ -927,13 +927,14 @@
                 when a pane's program cannot be copied, nothing is created and a panel over the session names the pane.
                 On a session attached from another Mac, both ask that Mac to create the companion under its own session and attach
                 it here; closing it here only detaches it. A page companion opened on such a session is that Mac's page, shown
-                here through its own channel, and it stays there when you close it here.
+                here through its own channel, and it stays there when you close it here. For attaching a session together with its
+                companions, see <a href="#remote-sessions" style="color: #6d82f3">Remote sessions</a>.
                 Companions reorder only among themselves, and moving the parent carries them. Closing a companion closes only it;
                 closing the parent closes the group, and one Reopen Closed Item brings it all back. While a parent has companions,
                 its shell exiting starts a fresh shell in the same directory instead of closing the session (one that exits again
                 within 2 seconds closes the group), and a Mac viewing that
                 session attaches to the new shell. Flat lists such as
-                the ⌃P palette, the Ctrl-Tab switcher and the Dock menu label a companion <code style="color: #e6e1d7">parent › child</code>; the tree, rename
+                the ⌃P palette, the Ctrl-Tab switcher, the Dock menu and the Attach Remote picker label a companion <code style="color: #e6e1d7">parent › child</code>; the tree, rename
                 and Copy Name keep the bare name. From a script:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session new --parent active --command 'tail -f build.log' --name logs</span>,
                 with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> to keep the output after it exits.
@@ -3023,6 +3024,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span>.
               The title bar shows a cloud and the remote host, which you can hide with the Remote host toggle in Settings ▸ Interface.
               The Ctrl-Tab switcher and the title-bar recent and attention lists mark the row with the same cloud and name the host.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx attach --companions</span> brings the session together with its companions, each under it.
+              If one cannot be attached, the rest stay and the command fails naming what is missing. A terminal companion attached on its own
+              joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               File ▸ Attach Remote… does the same from the menu. It offers the Macs named in
@@ -3032,8 +3036,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               It is the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">attach_remote</span>
               action, on ⌘⇧R unless you map another chord.
               With more than one Mac listed it asks which in the picker, then shows that Mac's sessions and attaches the one
-              you choose in the current window. A panel over the session reports the connection while it is being made, and a
-              failure stays up for five seconds. The item is greyed out while the file is missing or lists nothing. A line that cannot be used, or a file that
+              you choose in the current window, with its companions when you pick a top-level session. A panel over the session reports the connection while it is being made, and a
+              failure stays up for five seconds, over the new session when part of a group could not be attached. The item is greyed out while the file is missing or lists nothing. A line that cannot be used, or a file that
               cannot be read, is reported by a notification.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">

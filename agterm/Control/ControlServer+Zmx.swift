@@ -201,6 +201,12 @@ extension ControlServer {
         case .success(let (_, resolved)): store = resolved
         }
         if remote.content == "page" { return await attachRemotePageRow(remote, tree: tree, host: host, in: store) }
+        // a companion joins its parent's group when exactly one row here shows that parent, else it stands alone
+        let parents = remote.parent == nil ? [] : attachedParentRows(of: remote, tree: tree, host: host, in: store)
+        if parents.count == 1, let parent = parents.first, let workspace = store.workspace(forSession: parent.id)?.id {
+            return attach(remote, from: tree, host: host,
+                          placement: RemotePlacement(store: store, workspace: workspace, parent: parent.id))
+        }
         guard let workspace = store.currentWorkspaceID else {
             return ControlResponse(ok: false, error: "no window to attach into")
         }
