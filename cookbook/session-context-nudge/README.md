@@ -92,4 +92,4 @@ The pane check reads `$AGTERM_PANE`, the shell's spawn role rather than its live
 
 The headless-run guard depends on `CLAUDE_CODE_ENTRYPOINT`. A Claude Code old enough not to set it makes the hook treat every headless run as the pane's agent, and a `claude -p` you spawn from a session will then overwrite that session's line with its own task.
 
-This is a Claude Code recipe. Codex has no prompt-submit hook to hang it on, so a codex pane keeps whatever line was last set.
+The setup above covers Claude Code. The same script also runs unchanged as a codex `UserPromptSubmit` hook, since codex adds a prompt hook's output to the model's context too; [end-of-task-offer](../end-of-task-offer/) shows the codex config. Without it, a codex pane keeps whatever line was last set.
