@@ -160,7 +160,7 @@ final class SessionHostFishSeamTests: XCTestCase {
         for supervised in [false, true] {
             let fixture = try Fixture(fish: fish)
             fixtures.append(fixture)
-            try body(fixture, supervised)
+            try fixture.reportingFailure(supervised: supervised) { try body(fixture, supervised) }
         }
     }
 
@@ -169,42 +169,44 @@ final class SessionHostFishSeamTests: XCTestCase {
         try requireOrSkip(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
         let fixture = try Fixture(fish: fish)
         fixtures.append(fixture)
-        let holds = kind == .durable
-        let firstLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-first")
-        let firstProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-first", log: firstLog,
-                                                  exitCode: kind == .failing ? 3 : 0, holds: holds)
-        let firstCommand = [firstProbe.path, "first"]
-        let configuration = try fixture.configuration(supervised: supervised)
-        let first = try fixture.attach(configuration, session: fixture.session(kind.creation, command: firstCommand))
-        var firstRecord: PromptRecord?
-        if holds {
-            try fixture.waitForArgv(firstCommand, in: firstLog)
-        } else {
-            firstRecord = try fixture.acknowledge(first, token: UUID().uuidString)
-            fixture.assertFinalPrompt(try XCTUnwrap(firstRecord))
-            XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
-        }
-        let firstLeader = try fixture.assertDaemon(configuration, supervised: supervised)
+        try fixture.reportingFailure(supervised: supervised) {
+            let holds = kind == .durable
+            let firstLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-first")
+            let firstProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-first", log: firstLog,
+                                                      exitCode: kind == .failing ? 3 : 0, holds: holds)
+            let firstCommand = [firstProbe.path, "first"]
+            let configuration = try fixture.configuration(supervised: supervised)
+            let first = try fixture.attach(configuration, session: fixture.session(kind.creation, command: firstCommand))
+            var firstRecord: PromptRecord?
+            if holds {
+                try fixture.waitForArgv(firstCommand, in: firstLog)
+            } else {
+                firstRecord = try fixture.acknowledge(first, token: UUID().uuidString)
+                fixture.assertFinalPrompt(try XCTUnwrap(firstRecord))
+                XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
+            }
+            let firstLeader = try fixture.assertDaemon(configuration, supervised: supervised)
 
-        fixture.detach(first)
-        try fixture.waitForZeroClients(configuration, leader: firstLeader)
+            fixture.detach(first)
+            try fixture.waitForZeroClients(configuration, leader: firstLeader)
 
-        let secondLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-second")
-        let secondProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-second", log: secondLog,
-                                                   exitCode: kind == .failing ? 3 : 0, holds: holds)
-        let second = try fixture.attach(configuration,
-                                        session: fixture.session(kind.creation, command: [secondProbe.path, "second"]))
-        if holds {
-            try fixture.waitForOneClient(configuration, leader: firstLeader)
-            RunLoop.main.run(until: Date().addingTimeInterval(1))
-            XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
-        } else {
-            let secondRecord = try fixture.acknowledge(second, token: UUID().uuidString)
-            fixture.assertFinalPrompt(secondRecord)
-            XCTAssertEqual(secondRecord.fishPID, try XCTUnwrap(firstRecord).fishPID)
+            let secondLog = fixture.directory.appendingPathComponent("\(kind.rawValue)-second")
+            let secondProbe = try fixture.payloadProbe(named: "\(kind.rawValue)-second", log: secondLog,
+                                                       exitCode: kind == .failing ? 3 : 0, holds: holds)
+            let second = try fixture.attach(configuration,
+                                            session: fixture.session(kind.creation, command: [secondProbe.path, "second"]))
+            if holds {
+                try fixture.waitForOneClient(configuration, leader: firstLeader)
+                RunLoop.main.run(until: Date().addingTimeInterval(1))
+                XCTAssertEqual(try fixture.argv(in: firstLog), firstCommand)
+            } else {
+                let secondRecord = try fixture.acknowledge(second, token: UUID().uuidString)
+                fixture.assertFinalPrompt(secondRecord)
+                XCTAssertEqual(secondRecord.fishPID, try XCTUnwrap(firstRecord).fishPID)
+            }
+            XCTAssertEqual(try fixture.assertDaemon(configuration, supervised: supervised), firstLeader)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: secondLog.path))
         }
-        XCTAssertEqual(try fixture.assertDaemon(configuration, supervised: supervised), firstLeader)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: secondLog.path))
     }
 
     private func requireOrSkip(_ condition: Bool, _ message: String) throws {
@@ -321,6 +323,8 @@ final class SessionHostFishSeamTests: XCTestCase {
         var surfaces: [GhosttySurfaceView] = []
         var windows: [NSWindow] = []
         var hostPID: Int32?
+        private(set) var phase = "setup"
+        private var seeds: [String] = []
 
         init(fish: FishInstallation) throws {
             self.fish = fish
@@ -430,6 +434,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             surface.createSurface()
             XCTAssertNotNil(surface.surface)
             surfaces.append(surface)
+            seeds.append(seed.command)
             windows.append(window)
             return Attachment(surface: surface, window: window)
         }
@@ -459,7 +464,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             let command = ["/usr/bin/tee", output.path]
             let configuration = try configuration(supervised: supervised)
             let attachment = try attach(configuration, session: session(creation, command: command))
-            try wait { FileManager.default.fileExists(atPath: output.path) }
+            try wait("foreground payload output") { FileManager.default.fileExists(atPath: output.path) }
             let leader = try assertDaemon(configuration, supervised: supervised)
             let resolver = ZmxForegroundResolver(leaderProvider: { _ in [configuration.daemonName: leader] })
             resolver.refreshIfNeeded()
@@ -484,31 +489,31 @@ final class SessionHostFishSeamTests: XCTestCase {
         }
 
         func waitForZeroClients(_ configuration: ZmxSupport.Configuration, leader: Int32) throws {
-            try wait {
+            try wait("zero clients") {
                 let records = try ZmxListParser.parse(runZmx(["list"]))
                 return records.first { $0.name == configuration.daemonName }?.clients == 0 && kill(leader, 0) == 0
             }
         }
 
         func waitForOneClient(_ configuration: ZmxSupport.Configuration, leader: Int32) throws {
-            try wait {
+            try wait("one client") {
                 let records = try ZmxListParser.parse(runZmx(["list"]))
                 return records.first { $0.name == configuration.daemonName }?.clients == 1 && kill(leader, 0) == 0
             }
         }
 
         func waitForNoDaemon(_ configuration: ZmxSupport.Configuration) throws {
-            try wait { try !ZmxListParser.parse(runZmx(["list"])).contains { $0.name == configuration.daemonName } }
+            try wait("no daemon") { try !ZmxListParser.parse(runZmx(["list"])).contains { $0.name == configuration.daemonName } }
         }
 
         func waitForArgv(_ command: [String], in log: URL) throws {
-            try wait { FileManager.default.fileExists(atPath: log.path) && (try? argv(in: log)) == command }
+            try wait("argv in \(log.lastPathComponent)") { FileManager.default.fileExists(atPath: log.path) && (try? argv(in: log)) == command }
         }
 
         func killDaemon(_ configuration: ZmxSupport.Configuration, leader: Int32) throws {
             _ = try runZmx(["kill", configuration.daemonName, "--force"])
             let socket = URL(fileURLWithPath: configuration.socketDirectory).appendingPathComponent(configuration.daemonName).path
-            try wait {
+            try wait("daemon killed") {
                 let records = try ZmxListParser.parse(runZmx(["list"]))
                 return !records.contains { $0.name == configuration.daemonName }
                     && !FileManager.default.fileExists(atPath: socket) && kill(leader, 0) == -1
@@ -527,16 +532,127 @@ final class SessionHostFishSeamTests: XCTestCase {
             return result
         }
 
+        /// cleanup keeps the fixture's directories when its daemon's shell outlives the kill: they hold the zmx
+        /// binary and socket that are the only way left to inspect or end it.
         func cleanup() {
             for surface in surfaces { surface.teardown() }
             let daemon = ZmxSupport.daemonName(for: paneID)
+            var unconfirmed: String?
             if zmx.isFileURL, FileManager.default.isExecutableFile(atPath: zmx.path) {
-                _ = try? runZmx(["kill", daemon, "--force"])
+                let list = runBounded(["list"])
+                let records = list.status == 0 ? try? ZmxListParser.parse(list.output) : nil
+                if let records {
+                    if let record = records.first(where: { $0.name == daemon }) {
+                        let killed = runBounded(["kill", daemon, "--force"])
+                        if let leader = record.leaderPID, !exited(leader) {
+                            unconfirmed = "daemon \(daemon) leader \(leader) after kill (\(killed))"
+                        } else if record.leaderPID == nil {
+                            unconfirmed = "daemon \(daemon) listed with no leader pid, kill \(killed)"
+                        }
+                    }
+                } else {
+                    unconfirmed = "daemon \(daemon) state unknown, zmx list \(list)"
+                }
             }
             if let pid = hostPID { killHostIfOwned(pid) }
             for window in windows { window.close() }
+            if let unconfirmed {
+                XCTFail("fixture cleanup could not confirm its daemon ended, \(directory.path) kept: \(unconfirmed)")
+                return
+            }
             try? FileManager.default.removeItem(atPath: ZmxSupport.socketDirectory(forStateDirectory: directory.path))
             try? FileManager.default.removeItem(at: directory)
+        }
+
+        /// reportingFailure prints what the fixture can see when `body` throws, so a CI log shows why a wait
+        /// expired, then rethrows the original error.
+        func reportingFailure(supervised: Bool, _ body: () throws -> Void) throws {
+            do {
+                try body()
+            } catch {
+                let report = diagnostics(supervised: supervised, error: error)
+                print(report)
+                let attachment = XCTAttachment(string: report)
+                attachment.lifetime = .keepAlways
+                XCTContext.runActivity(named: "fish seam diagnostics") { $0.add(attachment) }
+                throw error
+            }
+        }
+
+        private func diagnostics(supervised: Bool, error: Error) -> String {
+            var lines = ["=== fish seam diagnostics: \(error) during \(phase), supervised \(supervised) ==="]
+            for (index, surface) in surfaces.enumerated() {
+                lines.append("--- surface \(index) seed: \(index < seeds.count ? seeds[index] : "unknown")")
+                lines.append(surface.readScreenText(all: true, lines: nil) ?? "<screen read failed>")
+            }
+            let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+            for name in names.sorted() where !name.hasSuffix("-probe") {
+                guard let data = FileManager.default.contents(atPath: directory.appendingPathComponent(name).path) else {
+                    lines.append("--- \(name): directory or unreadable")
+                    continue
+                }
+                lines.append("--- \(name) (\(data.count) bytes):")
+                lines.append(String(decoding: data.prefix(4096), as: UTF8.self).replacingOccurrences(of: "\0", with: "\\0"))
+            }
+            lines.append("--- host pid \(hostPID.map(String.init) ?? "none"), alive \(hostPID.map { kill($0, 0) == 0 } ?? false)")
+            lines.append("--- host log:")
+            lines.append((try? String(contentsOfFile: paths.log, encoding: .utf8)).map { String($0.suffix(4096)) } ?? "none")
+            lines.append("--- zmx list \(runBounded(["list"]))")
+            lines.append("=== end fish seam diagnostics ===")
+            return lines.joined(separator: "\n")
+        }
+
+        /// ZmxRun is one bounded zmx invocation: stdout alone is what the parser reads, since zmx reports an
+        /// empty listing as "no sessions found" on stderr.
+        struct ZmxRun: CustomStringConvertible {
+            let status: Int32?
+            let output: String
+            let errors: String
+
+            var description: String {
+                "status \(status.map(String.init) ?? "timed out or did not start"), stdout \(output.debugDescription), "
+                    + "stderr \(errors.debugDescription)"
+            }
+        }
+
+        /// runBounded runs zmx under its own deadline and never throws: the diagnostics and cleanup that use
+        /// it must not go through `wait`, whose stall they report.
+        private func runBounded(_ arguments: [String], timeout: TimeInterval = 3) -> ZmxRun {
+            guard let stdout = try? OutputCapture(), let stderr = try? OutputCapture() else {
+                return ZmxRun(status: nil, output: "", errors: "no output capture")
+            }
+            defer {
+                stdout.remove()
+                stderr.remove()
+            }
+            let process = Process()
+            process.executableURL = zmx
+            process.arguments = arguments
+            process.environment = zmxEnvironment
+            process.currentDirectoryURL = directory
+            process.standardOutput = stdout.handle
+            process.standardError = stderr.handle
+            guard (try? process.run()) != nil else { return ZmxRun(status: nil, output: "", errors: "zmx did not start") }
+            let deadline = Date().addingTimeInterval(timeout)
+            while process.isRunning, Date() < deadline { usleep(10_000) }
+            var status: Int32?
+            if process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+                process.waitUntilExit()
+            } else {
+                status = process.terminationStatus
+            }
+            return ZmxRun(status: status, output: (try? stdout.text()) ?? "", errors: (try? stderr.text()) ?? "")
+        }
+
+        private func exited(_ pid: Int32, within timeout: TimeInterval = 3) -> Bool {
+            let deadline = Date().addingTimeInterval(timeout)
+            while kill(pid, 0) == 0, Date() < deadline { usleep(10_000) }
+            return kill(pid, 0) != 0
+        }
+
+        private var zmxEnvironment: [String: String] {
+            ["ZMX_DIR": ZmxSupport.socketDirectory(forStateDirectory: directory.path), "ZMX_SESSION": "", "ZMX_SESSION_PREFIX": ""]
         }
 
         private func startHost() throws {
@@ -546,12 +662,12 @@ final class SessionHostFishSeamTests: XCTestCase {
                 argv: [executable.path, "host", ZmxSupport.socketDirectory(forStateDirectory: directory.path)],
                 env: ["HOME": directory.path, "PATH": ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"]
             )
-            try wait(timeout: 5) { FileManager.default.fileExists(atPath: paths.socket) }
+            try wait("host socket", timeout: 5) { FileManager.default.fileExists(atPath: paths.socket) }
         }
 
         private func waitForPrompt(_ token: String) throws -> PromptRecord {
             var matching: PromptRecord?
-            try wait(timeout: 15) {
+            try wait("prompt \(token)", timeout: 15) {
                 matching = promptRecords().last { $0.lastLine == token }
                 return matching != nil
             }
@@ -592,8 +708,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             let process = Process()
             process.executableURL = zmx
             process.arguments = arguments
-            process.environment = ["ZMX_DIR": ZmxSupport.socketDirectory(forStateDirectory: directory.path),
-                                   "ZMX_SESSION": "", "ZMX_SESSION_PREFIX": ""]
+            process.environment = zmxEnvironment
             process.currentDirectoryURL = directory
             let output = try OutputCapture()
             defer { output.remove() }
@@ -633,7 +748,10 @@ final class SessionHostFishSeamTests: XCTestCase {
             XCTAssertEqual(kill(pid, 0), -1)
         }
 
-        private func wait(timeout: TimeInterval = 10, until condition: () throws -> Bool) throws {
+        /// wait records `label` as the fixture's phase, so a timeout reports which wait expired; nil keeps the
+        /// caller's phase for a wait nested inside another one's condition.
+        private func wait(_ label: String? = nil, timeout: TimeInterval = 10, until condition: () throws -> Bool) throws {
+            if let label { phase = label }
             let deadline = Date().addingTimeInterval(timeout)
             while Date() < deadline {
                 if try condition() { return }
