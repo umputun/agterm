@@ -199,6 +199,7 @@
             <a href="#quick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">quick</a>
             <a href="#sidebar" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">sidebar</a>
             <a href="#notify" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">notify</a>
+            <a href="#msg" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">msg</a>
             <a href="#font" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">font</a>
             <a href="#theme" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">theme</a>
             <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">keymap</a>
@@ -465,7 +466,8 @@
                 primary/split pane is currently zmx-backed; each primary/split object in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> reports its own value, its
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span> (the stable token <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> takes, which follows the terminal through a swap
-                and is omitted for an overlay or a pane whose surface is not created yet), and its
+                and is omitted for an overlay or a pane whose surface is not created yet), its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pendingMessages</span> (messages waiting in the pane's <a href="#msg" style="color: #6d82f3">msg</a> mailbox, omitted at zero), and its
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span>: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">leader</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">follower</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unowned</span>, which says whether this Mac's
                 window size is the one the pane's program sees. A pane that does not lead is covered. A remote pane waiting to be attached again after its ssh dropped also carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reconnect</span>, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">failures</span> (the retry streak) and, when ssh said anything on the last failed try, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reason</span>.
@@ -709,7 +711,7 @@
                 left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>; they ride the
                 created/closed edges, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span>, and they say nothing
                 about whether ssh is still connected), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app.launched</span> (once per app run, with no
-                window or session, after hooks are loaded and the control socket accepts connections). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
+                window or session, after hooks are loaded and the control socket accepts connections), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> (a message was queued for a pane: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span> is the recipient's, the payload carries its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span>, the sender as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">from</span> (absent for a sender outside agterm) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">messageID</span>, never the body). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
                 comma-separated; an unknown kind errors. Every event carries
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">seq</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ts</span>,
@@ -3501,6 +3503,59 @@
                 banner with no lasting state, while a status is typed and persistent, and drives the attention list, the title-bar
                 bell, and attention navigation. Keep
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> for a one-off nudge.
+              </p>
+            </div>
+          </section>
+
+          <!-- MSG -->
+          <section id="msg" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              msg
+            </h2>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl msg send &lt;text&gt;|--stdin (--to SESSION:PANE ... | --all [--workspace W]) [--as SESSION:PANE-ID]<br />
+                agtermctl msg read [--ack] [--wait [--timeout N]] [--as SESSION:PANE-ID]<br />
+                agtermctl msg ack ID... [--as SESSION:PANE-ID]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">msg.send · msg.read · msg.ack</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Leave a message in another pane's mailbox instead of typing into its terminal. Each live pane has one, kept in
+                memory by the running app; nothing is drawn on screen. A recipient is SESSION:PANE, where PANE is a pane id
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span> on a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> surface) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">primary</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span>), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span>) or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>, resolved
+                once at send time. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> repeats; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--all</span> reaches every live pane in every open window except the
+                sender and remote rows, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> narrows it. A pane whose split is hidden since launch has no terminal
+                yet and cannot receive. Bodies are at most 64 KiB; a mailbox holds 256 messages or 1 MiB, and a full one rejects that
+                recipient alone. The reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">messageID</span> (shared by every copy), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">delivered</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rejected</span> with a reason; the CLI prints the id and exits 1 when any recipient was rejected.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Identity: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">read</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ack</span> act on the caller's own mailbox, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">send</span> names the
+                caller as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">from</span>. The CLI takes it from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--as SESSION:PANE-ID</span>; the pane must be a live pane of that session. A send with neither variable present
+                and no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--as</span> is anonymous; one variable without the other is an error.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">read</span> returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">messages</span>, the oldest up to 32, each <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id, from?, to, ts, body}</span>, plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remaining</span>, the pending messages not in this batch, and removes nothing;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ack</span> removes ids and answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">acked</span> with those actually removed.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">read --ack</span> removes the returned batch in the same step and reports it in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">acked</span> (at most
+                once: a reply lost on the way is not redelivered). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> repeats the read every 250 ms until mail
+                arrives; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--timeout</span> exits 124. Read back: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pendingMessages</span> on the tree surface node, and the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> event.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A mailbox lives while the same program runs in its pane. Closing the pane, its session, workspace or window,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session restart</span> and a respawn drop it; an undone close comes back empty. Hiding a split and a swap
+                keep it. Nothing survives quitting the app.
               </p>
             </div>
           </section>

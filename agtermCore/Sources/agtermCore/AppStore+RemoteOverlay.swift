@@ -193,6 +193,7 @@ extension AppStore {
     /// whose held exit went unseen, so each ends now.
     func releaseLeavingSession(_ session: Session) {
         session.cancelPendingAsk()
+        disposeMailboxes(of: session)
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()
         for slot in session.overlayReplicas { closeReplicaOverlay(slot.replica.job, forSession: session.id) }

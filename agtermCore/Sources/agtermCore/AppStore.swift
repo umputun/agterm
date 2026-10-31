@@ -348,7 +348,8 @@ public final class AppStore {
                                               backedByZmx: session.zmxBacking(for: surface),
                                               lead: ZmxLeadBook.shared.role(pane: pane),
                                               reconnect: RemoteReconnectBook.shared.readback(pane: pane),
-                                              paneID: token?.isEmpty == false ? token : nil)
+                                              paneID: token?.isEmpty == false ? token : nil,
+                                              pendingMessages: pendingMessages(token: token))
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: (session.content == .page ? parent(of: session) : nil)?.effectiveCwd

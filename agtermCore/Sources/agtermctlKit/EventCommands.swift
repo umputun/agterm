@@ -112,6 +112,9 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
         case .appLaunched:
             return "\(time) \(event.kind.rawValue)"
+        case .message:
+            return "\(time) \(event.kind.rawValue) \(name) pane-id=\(event.payload.paneID ?? "-")"
+                + " from=\(event.payload.from ?? "-") id=\(event.payload.messageID ?? "-")"
         }
     }
 }

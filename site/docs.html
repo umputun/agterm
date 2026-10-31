@@ -2900,6 +2900,49 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </div>
 
             <h3
+              id="messages"
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+                scroll-margin-top: 88px;
+              "
+            >
+              Messages between panes
+            </h3>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A program in one pane can leave a message for another pane without typing into its terminal, so nothing has to guess
+              when the receiver is ready for input. Every live pane has a mailbox; the receiver reads it when it chooses and
+              acknowledges what it handled. Run inside a pane, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl msg</span> acts as that pane through
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_SESSION_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE_ID</span>. Mail lives in the running app only: closing or
+              restarting the pane, or closing its session, workspace or window, drops it, and so does quitting agterm.
+              A full mailbox refuses that recipient alone. Details in the
+              <a href="/commands#msg" style="color: #6d82f3">command reference</a>.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl msg send <span style="color: #f2b45c">"build done"</span> --to <span style="color: #f2b45c">"$AGTERM_SESSION_ID:right"</span>
+              <span style="color: #6b727a">&nbsp;# the split pane</span><br />agtermctl msg send --all <span style="color: #f2b45c">"deploy starting"</span>
+              <span style="color: #6b727a">&nbsp;# every live pane but this one</span><br />agtermctl msg read
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# oldest first; removes nothing</span><br />agtermctl msg ack <span style="color: #f2b45c">ID</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# remove what was handled</span><br />agtermctl msg read --ack --wait --timeout 60
+              <span style="color: #6b727a">&nbsp;# block until mail arrives and take it</span>
+            </div>
+
+            <h3
               id="remote-sessions"
               style="
                 font-family: &quot;JetBrains Mono&quot;, monospace;
