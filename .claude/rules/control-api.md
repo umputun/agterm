@@ -1874,7 +1874,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `session.overlay.job.run`, which is the claim itself: one winner against a 30-second launch deadline,
   after which a late claim spawns nothing. The helper runs the program under the ssh terminal, in the cwd a
   local overlay would get and with agterm's session variables over the environment and `TERM` the ssh
-  session gave the helper, and reports `started` and one outcome. The first outcome
+  session gave the helper, and reports `started` and one outcome. For `TERM=xterm-ghostty` the helper fills
+  an absent or empty `TERMINFO` from the database beside its resolved CLI, when one is found
+  (`OverlayJobRunner.terminalEnvironment`), since an ssh-spawned overlay bypasses libghostty's terminfo setup. The first outcome
   wins: the exit code where a local overlay keeps one, or `launch-failed` (refused, or nothing claimed it in
   time), `canceled` (closed, or the ssh went away) or `unknown` (the helper went away, or never reported
   starting), which does not prove the program stopped. A refused open ends `launch-failed`; nothing falls back to a local overlay, since the caller's

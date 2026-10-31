@@ -36,6 +36,14 @@ final class OverlayJobRunner: @unchecked Sendable {
         return context
     }
 
+    // ssh-spawned overlays bypass libghostty's terminfo setup
+    static func terminalEnvironment(_ base: [String: String], bundledTerminfo: String?) -> [String: String] {
+        guard base["TERM"] == TerminfoInstall.entry, base["TERMINFO"]?.isEmpty ?? true, let bundledTerminfo else { return base }
+        var environment = base
+        environment["TERMINFO"] = bundledTerminfo
+        return environment
+    }
+
     /// Runs `context` to the end and returns the helper's own exit status: the program's, 128 plus the
     /// signal that ended it, or 127 when it could not be launched. The program starts from `baseEnvironment`, the helper's own, with the context
     /// over it, so it keeps HOME, PATH and TERM. A report the app never receives changes nothing here.
@@ -246,7 +254,9 @@ extension Session.Overlay {
                 source.resume()
                 sources.append(source)
             }
-            let status = runner.run(context, baseEnvironment: ProcessInfo.processInfo.environment)
+            let bundled = TerminfoInstall.terminfoDirectory(clientPath: Version.clientPath(), environment: [:])
+            let base = OverlayJobRunner.terminalEnvironment(ProcessInfo.processInfo.environment, bundledTerminfo: bundled)
+            let status = runner.run(context, baseEnvironment: base)
             sources.forEach { $0.cancel() }
             throw ExitCode(status)
         }
