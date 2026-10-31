@@ -372,27 +372,3 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
             + #""sessions":[\#(sessions)]}}}"#, stderr: "")
     }
 }
-
-/// ScriptedRunner answers each ssh call with the next scripted result, so one remote flow's several calls are covered.
-private final class ScriptedRunner: RemoteCommandRunner, @unchecked Sendable {
-    private let lock = NSLock()
-    private var results: [RemoteCommandResult]
-    private var recorded: [[String]] = []
-    /// beforeCall runs with each call's index before it answers, so a test can change the model mid-flow.
-    var beforeCall: (@Sendable (Int) -> Void)?
-
-    var invocations: [[String]] { lock.withLock { recorded } }
-
-    init(_ results: [RemoteCommandResult]) {
-        self.results = results
-    }
-
-    func run(_ argv: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
-        beforeCall?(invocations.count)
-        await Task.yield()
-        return lock.withLock {
-            recorded.append(argv)
-            return results.isEmpty ? RemoteCommandResult(status: 255, stdout: "", stderr: "unscripted call") : results.removeFirst()
-        }
-    }
-}

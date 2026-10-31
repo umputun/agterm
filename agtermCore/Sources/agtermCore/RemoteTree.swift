@@ -153,11 +153,15 @@ public enum RemoteTreeMerger {
             guard let right = daemons["right"] else { return nil }
             panes.append(ControlRemotePane(pane: "right", daemon: right, foreground: node.splitForeground))
         }
+        // from the unfiltered workspace, so a companion this listing drops is still named as a member
+        let companions = node.parent == nil
+            ? workspace.sessions.filter { $0.parent == node.id }.map { ControlRemoteMember(id: $0.id, name: $0.name) }
+            : nil
         return ControlRemoteSession(id: node.id, name: node.name, windowID: window.id,
                                     windowName: window.name, workspaceID: workspace.id,
                                     workspaceName: workspace.name, context: node.context, cwd: node.cwd,
                                     splitAxis: node.hasSplit == true ? node.splitAxis : nil, panes: panes,
                                     status: node.status, statusColor: node.statusColor,
-                                    statusShape: node.statusShape, parent: node.parent)
+                                    statusShape: node.statusShape, parent: node.parent, companions: companions)
     }
 }

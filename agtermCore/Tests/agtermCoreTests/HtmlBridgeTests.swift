@@ -135,6 +135,9 @@ struct HtmlBridgeTests {
         #expect(dashboard.args?.window == "W1")
         let elsewhere = try request(#"{"cmd":"dashboard","args":{"targets":["A"],"window":"W2"}}"#)
         #expect(elsewhere.args?.window == "W2")
+        let group = try request(#"{"cmd":"zmx.attach.group","target":"REMOTE","args":{"host":"mac"}}"#)
+        #expect(group.target == "REMOTE")
+        #expect(group.args?.window == "W1")
     }
 
     @Test func thePaneIsFilledOnlyForThePagesOwnOverlayCommands() throws {

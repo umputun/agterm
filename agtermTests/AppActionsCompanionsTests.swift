@@ -74,6 +74,10 @@ private final class HudRecorder: RemoteAttaching {
         ControlResponse(ok: false, error: "not scripted")
     }
 
+    func attachRemoteGroup(host _: String, session _: String, window _: String?) async -> ControlResponse {
+        ControlResponse(ok: false, error: "not scripted")
+    }
+
     func createRemoteCompanion(_: RemoteCompanionRequest, of _: UUID, in _: AppStore, select _: Bool,
                                progress _: (String) -> Void) async -> ControlResponse {
         ControlResponse(ok: false, error: "not scripted")

@@ -187,7 +187,7 @@ renumbering. Do not reintroduce a count anywhere.
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
 - `recent.list`, `recent.open`, `recent.clear`
-- `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.present`
+- `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
 
 `terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
@@ -389,6 +389,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   soft-closed page keeps serving through undo. URL pages get the same channel for lifetime only (no bridge), and a
   loopback URL is refused at both ends. `zmx tree` lists a page companion with no panes when its parent is listed; the
   Attach Remote picker hides those rows, and `zmx attach` places one only under the single row bound to its parent.
+  A terminal companion attached alone joins that row the same way (`attachedParentRows`), in the row's own workspace,
+  and stands alone when no row or several match.
   The viewer row binds the origin page session so New Companion on it makes a sibling there. `HtmlReplicaLink`
   keeps the page's own reload and navigation on the viewer's copy; every other bridge request goes to the origin.
   A channel ending while the viewer row is soft-closed finalizes that row alone (`finalizePendingClose(ofSession:)`),
@@ -793,7 +795,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ask.open`), its pane
   for its own overlay commands, its window as `target` for the window-object commands and as `args.window`
   otherwise. An explicit target, `active`, window or batch resolves as over the socket; `zmx.attach`,
-  `dashboard` and `recent.open` keep their ids and still land in the page's window, and `hooks.*`, which
+  `zmx.attach.group`, `dashboard` and `recent.open` keep their ids and still land in the page's window, and `hooks.*`, which
   refuse any window, and `browser.clear`, `browser.links`, `recent.list` and `recent.clear` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
   `zmx.present`, `session.overlay.job.run`, `session.overlay.page.serve` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
@@ -1551,8 +1553,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Remote sessions
 
-- `zmx.tree` lists another Mac's attachable sessions and `zmx.attach` opens one of them here. Each attach
-  imports one session, its split included; whole-workspace teleport is out of scope, and several remote
+- `zmx.tree` lists another Mac's attachable sessions and `zmx.attach` opens one of them here. `zmx.attach`
+  imports one session, its split included, and `zmx.attach.group` a top-level session with its companions;
+  whole-workspace teleport is out of scope (`docs/backlog/remote-workspace-attach.md`), and several remote
   rows may sit side by side.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
@@ -1654,7 +1657,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The runner is async behind an injected seam. `ControlActions` is `@MainActor`, so a blocking wait would
   freeze the UI for the whole network deadline, and the fake is what lets the end-to-end tests run without
   a second Mac.
-- Five commands leave the accept thread, in two ways. `zmx.tree` and `zmx.attach` wait on the network,
+- Commands leave the accept thread in two ways. `zmx.tree`, `zmx.attach` and `zmx.attach.group` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
   `zmx.present`, `session.overlay.job.run` and `session.overlay.page.serve` are streaming hand-offs: each is
   dispatched inline, its
@@ -1678,6 +1681,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a session; it never falls back or raises another window. The old `attachRemoteSession(host:session:)`
   witness remains callable. Hosts implementing only that form accept untargeted calls and refuse explicit
   window placement through the new overload's default.
+- `zmx.attach.group` is its own wire command for the Companions section's older-app reason, and the CLI's
+  `zmx attach --companions` maps the decode refusal through `companionSend`. One `zmx tree` read serves the
+  whole group: the far side lists every companion of a top-level row as `companions` (`[]` for none, absent
+  from an older origin, where the listed children stand in and `membershipKnown` is false). A companion target
+  is refused before any row exists. The parent attaches first and selected; each member re-resolves the
+  parent's store and workspace, since a page member's ssh wait lets the row move or close, and the parent is
+  checked once more after the last member. Any member unavailable or failing answers not ok with `result.id`
+  and `result.remoteGroup` kept and the attached rows left in place. File ▸ Attach Remote's use of it is in
+  [[menu-actions]].
 - The local cwd is this machine's home, not the remote one: libghostty chdirs the pane process here and a
   path that exists on the far side may not exist locally. The attached shell reports its real cwd through
   the terminal stream.

@@ -53,6 +53,29 @@ struct ZmxCommandsTests {
         #expect(try attach.makeRequest().target == "s1")
     }
 
+    @Test func attachWithCompanionsSendsTheGroupCommandWithTheSameArguments() throws {
+        let attach = try Zmx.Attach.parse(["buildbox", "s1", "--companions", "--window", "local-window"])
+        let request = try attach.makeRequest()
+
+        #expect(request == ControlRequest(cmd: .zmxAttachGroup, target: "s1",
+                                          args: ControlArgs(host: "buildbox", window: "local-window")))
+        #expect(try Zmx.Attach.parse(["buildbox", "s1"]).makeRequest().cmd == .zmxAttach)
+    }
+
+    @Test func aGroupAttachPrintsTheParentThenEachCompanionOriginToLocal() {
+        let group = ControlRemoteGroup(membershipKnown: true, companions: [
+            ControlRemoteGroupMember(origin: "c1", id: "L1"), ControlRemoteGroupMember(origin: "pg", id: "L2"),
+        ])
+
+        #expect(SocketClient.formatRemoteGroup(parent: "P", group: group) == "P\n  c1 -> L1\n  pg -> L2")
+        #expect(SocketClient.formatRemoteGroup(parent: "P", group: ControlRemoteGroup(membershipKnown: true, companions: [])) == "P")
+    }
+
+    @Test func theMembershipNoteNamesTheHost() {
+        #expect(SocketClient.remoteGroupNote(host: "buildbox")
+            == "note: buildbox does not report group membership; unlisted companions cannot be detected")
+    }
+
     @Test(arguments: [[], ["buildbox"]])
     func attachNeedsBothAHostAndASession(_ arguments: [String]) {
         #expect(throws: (any Error).self) { try Zmx.Attach.parse(arguments) }
