@@ -238,7 +238,7 @@ final class CustomCommandRunnerTests: XCTestCase {
 
         let press = keyDown("\u{F709}", keyCode: 97, mods: [.shift, .function])
         XCTAssertTrue(fix.runner.handleKeyEvent(press, in: window))
-        wait { FileManager.default.fileExists(atPath: marker.path) }
+        wait { (try? String(contentsOf: marker, encoding: .utf8)) == "x" }
         XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "x")
         XCTAssertEqual(usage.load().counts["X"], 1)
 
