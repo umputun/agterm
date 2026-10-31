@@ -74,6 +74,9 @@ extension ControlServer {
                 + "nothing was started")
         }
         store.clearPaneOwnedState(session.id, pane: pane)
+        // after the wait, which lets other requests run: mail sent to the old program meanwhile must not
+        // reach the new one, and nothing between here and the replace suspends
+        MessageBus.shared.dispose(pane: resolved.identity)
         let cwd = session.cwd(for: pane == .right ? .right : .left)
         let launch = PaneReattach(
             // the denylist was applied before the kill: a rejection here would start a plain shell instead

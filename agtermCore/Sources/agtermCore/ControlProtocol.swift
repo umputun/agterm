@@ -111,6 +111,9 @@ public enum Command: String, Codable, Sendable {
     case askOpen = "ask.open"
     case askResult = "ask.result"
     case askCancel = "ask.cancel"
+    case msgSend = "msg.send"
+    case msgRead = "msg.read"
+    case msgAck = "msg.ack"
     case restoreClear = "restore.clear"
     case version = "version"
     case restoreCapture = "restore.capture"
@@ -442,6 +445,14 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var value: String?
     /// page is the page id `session.overlay.result` reads the outcome of, instead of a program's exit status.
     public var page: String?
+    /// recipients are the `SESSION:PANE` addresses `msg.send --to` names; the scalar `to` keeps its navigation meaning.
+    public var recipients: [String]?
+    /// identity is the `SESSION:PANE-ID` the caller acts as on `msg.*`.
+    public var identity: String?
+    /// ack makes `msg.read` remove the batch it returns.
+    public var ack: Bool?
+    /// ids are the message ids `msg.ack` removes.
+    public var ids: [String]?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -473,7 +484,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 persistent: Bool? = nil, browse: Bool? = nil, image: String? = nil, cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
                 checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
-                tint: String? = nil, tintOn: [String]? = nil) {
+                tint: String? = nil, tintOn: [String]? = nil, recipients: [String]? = nil,
+                identity: String? = nil, ack: Bool? = nil, ids: [String]? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -571,6 +583,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.checked = checked
         self.other = other
         self.undoable = undoable
+        self.recipients = recipients
+        self.identity = identity
+        self.ack = ack
+        self.ids = ids
     }
 }
 
@@ -682,6 +698,16 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var closed: [String]?
     /// The page a `session.companion.page.attach` handed out, token included.
     public var companionPage: PresentationPage?
+    /// messageID is the id every copy of a `msg.send` shares.
+    public var messageID: String?
+    /// delivered and rejected are `msg.send`'s per-recipient results.
+    public var delivered: [String]?
+    public var rejected: [MessageRejection]?
+    /// messages are the oldest of the reader's mailbox; remaining counts the pending ones left out.
+    public var messages: [BusMessage]?
+    public var remaining: Int?
+    /// acked names the messages removed, present on every `msg.ack` and `msg.read --ack` reply, empty included.
+    public var acked: [String]?
     public var remoteGroup: ControlRemoteGroup?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
@@ -700,7 +726,15 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil,
                 recent: [ControlRecentItem]? = nil, recentOpen: ControlRecentOpen? = nil, undoable: Bool? = nil,
                 parent: String? = nil, closed: [String]? = nil, companionPage: PresentationPage? = nil,
+                messageID: String? = nil, delivered: [String]? = nil, rejected: [MessageRejection]? = nil,
+                messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil,
                 remoteGroup: ControlRemoteGroup? = nil) {
+        self.messageID = messageID
+        self.delivered = delivered
+        self.rejected = rejected
+        self.messages = messages
+        self.remaining = remaining
+        self.acked = acked
         self.companionPage = companionPage
         self.remoteGroup = remoteGroup
         self.parent = parent

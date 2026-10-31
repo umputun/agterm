@@ -188,6 +188,64 @@ final class ControlServerRestartTests: XCTestCase {
         XCTAssertTrue(command.contains(" -il"), "a restart command must hand the pane back to a login shell: \(command)")
     }
 
+    func testARestartDropsTheOldProgramsMailBeforeTheNewOneStarts() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        let program = try spawn("/bin/sleep", ["300"])
+        defer { program.terminate() }
+        let server = makeServer(daemon: daemon, foreground: program.processIdentifier) { _ in }
+        _ = try MessageBus.shared.send("for the old program", from: nil,
+                                       to: [MessageRecipient(pane: session.paneIdentity, address: "old")], now: 1)
+        defer { MessageBus.shared.dispose(pane: session.paneIdentity) }
+        var pendingAtLaunch: Int?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, _, _ in
+            pendingAtLaunch = MessageBus.shared.pending(for: session.paneIdentity)
+            return nil
+        }
+        defer { PaneLead.replace = replace }
+
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertEqual(pendingAtLaunch, 0)
+    }
+
+    func testMailSentWhileTheOldProgramEndsDoesNotReachTheNewOne() async throws {
+        let (session, view) = try livePane()
+        defer { MessageBus.shared.dispose(pane: session.paneIdentity) }
+        let recipient = MessageRecipient(pane: session.paneIdentity, address: "old")
+        let shell = ProcessRecord(pid: 4242, started: 1, group: 4242, foreground: 4300)
+        let program = ProcessRecord(pid: 4300, started: 2, group: 4300, foreground: 4300)
+        var hungUp = false, sentDuringWait = false
+        var sweeper = ProcessSweeper()
+        sweeper.signal = { signal, _ in if signal == SIGHUP { hungUp = true } }
+        sweeper.table = {
+            guard hungUp else { return [shell, program] }
+            if !sentDuringWait {
+                sentDuringWait = (try? MessageBus.shared.send("sent while the old program ends", from: nil,
+                                                              to: [recipient], now: 1)) != nil
+            }
+            return [shell]
+        }
+        let server = makeServer(daemon: ZmxSupport.daemonName(for: session.paneIdentity), sweeper: sweeper) { _ in }
+        var pendingAtLaunch: Int?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, _, _ in
+            pendingAtLaunch = MessageBus.shared.pending(for: session.paneIdentity)
+            return nil
+        }
+        defer { PaneLead.replace = replace }
+
+        _ = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertTrue(sentDuringWait)
+        XCTAssertEqual(pendingAtLaunch, 0)
+    }
+
     func testAShellStartedAsAJobIsReplayedLikeAnyProgram() async throws {
         let (session, view) = try livePane()
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)

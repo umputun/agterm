@@ -181,6 +181,7 @@ extension AppStore {
         session.surface = nil
         session.splitSurface = nil
         if session.searchSurface == nil || exited.contains(where: { $0 === session.searchSurface }) { session.clearSearch() }
+        disposeMailboxes([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 })
         session.splitPaneIdentity = nil
         session.isSplit = false
         session.hasSplit = false

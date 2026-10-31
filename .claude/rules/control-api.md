@@ -178,6 +178,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
 - `quick`, `quick.type`, `quick.text`
+- `msg.send`, `msg.read`, `msg.ack`
 - `sidebar`, `sidebar.mode`, `sidebar.flagged-layout`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`,
   `notify`
 - `font.inc`, `font.dec`, `font.reset`
@@ -1221,6 +1222,30 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   emits `tree.changed` when the shown value changed; re-setting the same value does neither. The tree's
   `context` is the shown value: an attached row also shows its origin's context, and the Remote sessions
   section owns that rule.
+
+## Message bus
+
+- `msg.*` is dispatcher-only: `ControlDispatcher+Messages` validates, runs the `MessageBus.shared` operation and
+  shapes the reply; `ControlActions` only resolves an address to a live pane, lists the `--all` panes and
+  reports a queued message. A host without the bus answers `MessagePaneError.unsupported`, which refuses the
+  whole command; only `.unresolved` becomes a per-recipient `unknown pane` rejection.
+- A live pane is a realized surface with a parseable token, the one definition recipients, identities and
+  `--all` share; a split hidden since launch has none. `ControlServer+Messages` resolves the session across
+  every open store with `window: nil`, never the frontmost default, then asks `AppStore.messageRecipient`.
+- An identity is `SESSION:PANE-ID` only and must be a live pane of that session, on send, read and ack alike.
+  There is no fallback to a role or the active pane, and a stale or incomplete identity never becomes an
+  anonymous send: the CLI sends without one only when neither `AGTERM_*` variable is present.
+- Disposal is per site, never by pruning panes that look dead, since close-then-undo cannot be told from a
+  live pane afterwards. `releaseLeavingSession` covers every session, workspace and window leaving; the
+  other sites are `closeSplit`, `closePrimaryPane` (the departing primary only), `closeScratch`,
+  `respawnPrimaryPane` and `session.restart` once the old program is gone, just before the new surface. The
+  restart's wait for the old program lets other requests run, so an earlier dispose would hand mail sent
+  meanwhile to the new program. A new lifetime boundary needs its own call.
+- The `message` event goes out through the recipient's store, once per delivered recipient, so
+  `window`/`workspace` are set; it never carries the body. Read back `pendingMessages` on the tree surface.
+- `read --ack` removes its batch in one synchronous mailbox operation and answers `acked`. The CLI refuses to
+  print unless `acked` names exactly the returned ids, and `--wait` repeats that same read rather than probing
+  first, since a probe leaves a gap in which another reader drains the mailbox.
 
 ## Keymap, config, theme, and sidebar
 
