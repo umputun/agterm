@@ -598,6 +598,8 @@ final class SessionHostFishSeamTests: XCTestCase {
             lines.append("--- host log:")
             lines.append((try? String(contentsOfFile: paths.log, encoding: .utf8)).map { String($0.suffix(4096)) } ?? "none")
             lines.append("--- zmx list \(runBounded(["list"]))")
+            lines.append("--- app ghostty config \(GhosttyApp.settingsConfigURL.path):")
+            lines.append((try? String(contentsOf: GhosttyApp.settingsConfigURL, encoding: .utf8)) ?? "unreadable")
             lines.append("=== end fish seam diagnostics ===")
             return lines.joined(separator: "\n")
         }
