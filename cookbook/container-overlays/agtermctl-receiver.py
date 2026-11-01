@@ -17,17 +17,17 @@ Protocol, one JSON object per line:
 
 The exec form is the only way an overlay COMMAND crosses: the receiver
 builds the docker exec line itself, from its own template and the
-ingredients above, so no caller-written shell line ever reaches the Mac.
-Every refusal carries an err frame with the reason plus rc 2.
+ingredients above — no caller-written overlay COMMAND reaches the Mac as a
+shell line. Every refusal carries an err frame with the reason plus rc 2.
 
 Plainly: this receiver only ever starts its one resolved agtermctl binary
-and refuses `--socket`, so a caller can neither hand the Mac a raw shell
-line through it nor point it at another agterm instance — this receiver's
-own environment decides which one it drives. Everything else agtermctl
-itself can do is still on the wire: anyone who reaches this port drives
-your terminal as you, `session new --command` and typing into your shells
-included. Bind 127.0.0.1, run it on a single-user machine, stop it when
-done.
+and refuses `--socket`, so a caller can neither smuggle a raw overlay
+COMMAND onto the Mac nor point it at another agterm instance — this
+receiver's own environment decides which one it drives. Everything else
+agtermctl itself can do is still on the wire: anyone who reaches this port
+drives your terminal as you, `session new --command` and typing into your
+shells included. Bind 127.0.0.1, run it on a single-user machine, stop it
+when done.
 
 Only AGTERM_* names from the request environment are honored — the wrapper
 sends the session identity so the call targets the container's own session.
@@ -82,7 +82,9 @@ BOOL_FLAGS = {
 # root-level flags in 0.39.0, so the host CLI judges anything a caller
 # puts there — except --socket, which the token scan refuses everywhere.
 
-CONTAINER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+# fullmatch, not match: `$` alone also matches before a trailing newline,
+# and a name like "alpine\n" would split the docker line under the shell.
+CONTAINER_NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 # The only shell line this receiver ever builds: {ENVFLAGS} {CONTAINER}
 # {B64} are replaced. The absolute docker path matters — the overlay
@@ -247,7 +249,7 @@ def build_child(agtermctl, template, request):
         payload_b64 = request.get("payload_b64")
         global_flags = request.get("global_flags", [])
         flags = request.get("flags", [])
-        if not isinstance(container, str) or not CONTAINER_NAME_RE.match(container):
+        if not isinstance(container, str) or not CONTAINER_NAME_RE.fullmatch(container):
             raise Refused("exec request: container must be a docker container name")
         if not isinstance(payload_b64, str):
             raise Refused("exec request: payload_b64 must be a base64 string")
@@ -410,7 +412,10 @@ class Handler(socketserver.StreamRequestHandler):
                     client_gone.set()
                     return False
 
-        proc = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        # stdin never crosses the wire; DEVNULL keeps the child off this
+        # process's own stdin instead of hanging on it.
+        proc = subprocess.Popen(argv, env=env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         self.server.track(proc)
 
         def pump(stream, kind):
@@ -595,6 +600,8 @@ class RT(unittest.TestCase):
     def test_build_child_refusals(self):
         cases = [
             {"op": "exec", "container": "dev; rm -rf", "payload_b64": "Q0Q="},
+            {"op": "exec", "container": "dev\n", "payload_b64": "Q0Q="},
+            {"op": "exec", "container": "alpine\nrm -rf /", "payload_b64": "Q0Q="},
             {"op": "exec", "container": "dev", "payload_b64": "not b64!"},
             {"op": "exec", "container": "dev", "payload_b64": "Q0Q=",
              "global_flags": ["--socket", "/x"]},
@@ -663,6 +670,15 @@ class RT(unittest.TestCase):
         self.assertIn("--json session overlay open --block --", out)
         self.assertIn("dev Q0Q=", out)
         self.assertEqual(frames[-1]["rc"], 0)
+
+    def test_child_stdin_is_closed(self):
+        """stdin does not cross the wire; the child sees EOF immediately
+        instead of reading (and hanging on) the receiver's own stdin."""
+        server = self.make_server()
+        frames = self.call(server.server_address,
+                           {"argv": ["-c", "cat; echo done"], "env": {}})
+        self.assertEqual(frames[-1], {"t": "rc", "rc": 0})
+        self.assertEqual(self.frame_bytes(frames, "out"), b"done\n")
 
     def test_client_disconnect_reaps_child(self):
         server = self.make_server()

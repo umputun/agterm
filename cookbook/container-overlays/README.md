@@ -126,10 +126,11 @@ The wrapper replaces `agtermctl` inside the container and rewrites only `session
 
 **Anyone who reaches the receiver — every local process, and every container on this machine through `host.docker.internal` — drives your terminal as you: it still accepts `session new --command`, typing into your shells, closing sessions, rearranging windows.** It binds 127.0.0.1, which keeps other machines out but no one else on this Mac. Run it only on a single-user machine you control, and stop it when you are done.
 
-What it will not do, even if asked: it never starts anything but its one resolved `agtermctl` binary; it refuses `--socket` in any request, so a caller cannot retarget it at another agterm instance — the receiver's own environment decides which one it drives; and it refuses a raw COMMAND on `session overlay open`, so no caller-written shell line reaches the Mac — overlay COMMANDs cross only as the structured exec request above.
+What it will not do, even if asked: it never starts anything but its one resolved `agtermctl` binary; it refuses `--socket` in any request, so a caller cannot retarget it at another agterm instance — the receiver's own environment decides which one it drives; and it refuses a raw COMMAND on `session overlay open`, so no caller-written overlay COMMAND reaches the Mac's shell — an overlay COMMAND crosses only as the structured exec request above.
 
 - Staged pages are snapshots: edits show up only through `overlay reload`, and Show in Finder / open in browser reveal the staged copy, not the source file. A staged page nobody reloads for over 24 h can be deleted by the next staged open, and its manifest entry goes with it, so a later `overlay reload` cannot restore it — `overlay reload` refreshes the age.
 - Closing the container side of a `--block` call stops the waiting call, not the overlay: the overlay program belongs to the app and keeps running.
+- Stdin does not cross: `printf 'a\nb\n' | agtermctl pick` inside the container never reaches the pick — the receiver's child reads EOF immediately.
 - `--url` pages never get agterm's in-page command bridge (`data-agterm` buttons); interactive pages must go the `--html` route.
 - URL pages send `Host: 127.0.0.1:<port>`; dev servers with strict host checks (Django's `ALLOWED_HOSTS`, some Vite configs) must allowlist loopback.
 - Without the terminfo entry in the image, full-screen TUI programs fall back to degraded colors or fail; the receiver template's alternative is `TERM=xterm-256color`.
