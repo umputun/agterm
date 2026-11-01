@@ -17,7 +17,7 @@ extension NSView {
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView`/`VSplitView` to (1) persist and restore the split
 /// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
-/// of the titlebar strip, (3) paint the divider's own resize cursor, which nothing else writes,
+/// of the titlebar strip, (3) paint the divider's resize cursor and keep a hidden split's AppKit one off screen,
 /// (4) restore an even split on a divider double-click, and (5) color the divider. Attached as a
 /// `.background` on the primary pane so its `NSView` lives inside the split's view tree without becoming
 /// a third arranged pane.
@@ -82,7 +82,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
         var dividerColor: NSColor = .separatorColor { didSet { if dividerColor != oldValue { updateDividerStrip() } } }
-        var deckVisible: Bool = true
+        var deckVisible: Bool = true { didSet { if deckVisible != oldValue { updateNativeDividerCursor() } } }
         var suspended: Bool = false {
             didSet {
                 guard suspended != oldValue else { return }
@@ -201,6 +201,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             if splitView !== enclosing { detach() }
             guard splitView == nil, let split = enclosing else { return }
             splitView = split
+            updateNativeDividerCursor()
             resizeObserver = NotificationCenter.default.addObserver(
                 forName: NSSplitView.didResizeSubviewsNotification, object: split, queue: .main) { [weak self] _ in
                 // the observer fires on the main queue; assume the main actor to call the @MainActor
@@ -233,6 +234,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             dividerClipMask = nil
             dividerStrip?.removeFromSuperlayer()
             dividerStrip = nil
+            if let splitView { SplitCursorRects.setSuppressed(false, for: splitView) }
             splitView = nil
             restored = false
         }
@@ -279,9 +281,14 @@ struct SplitRatioAccessor: NSViewRepresentable {
             dividerTracking = area
         }
 
-        /// Paint ↔ over the divider. Nothing else does once a second session is mounted: the pane declines the
-        /// band (`ownsPointer`) and AppKit's own divider cursor never fires there, leaving the arrow. Per move
-        /// plus one deferred re-assert, as the cursor section of `.claude/rules/libghostty.md` requires.
+        /// An off-screen split's AppKit divider rect paints ↔ over the session on screen; see `SplitCursorRects`.
+        private func updateNativeDividerCursor() {
+            guard let splitView else { return }
+            SplitCursorRects.setSuppressed(!deckVisible, for: splitView)
+        }
+
+        /// Paint ↔ over the divider, which the pane declines (`ownsPointer`). Per move plus one deferred
+        /// re-assert, as the cursor section of `.claude/rules/libghostty.md` requires.
         override func mouseMoved(with event: NSEvent) { paintDividerCursor(at: event.locationInWindow) }
         override func cursorUpdate(with event: NSEvent) { paintDividerCursor(at: event.locationInWindow) }
 
