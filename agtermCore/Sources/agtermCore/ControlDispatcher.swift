@@ -289,6 +289,15 @@ public struct ControlDispatcher {
         case .workspaceSelect:
             return actions.selectWorkspace(request.target, window: request.args?.window)
         case .workspaceGo:
+            if let rawPrefix = request.args?.prefix {
+                guard request.args?.to == nil else {
+                    return ControlResponse(ok: false, error: "workspace.go takes --to or --prefix, not both")
+                }
+                guard let prefix = rawPrefix.trimmedOrNil else {
+                    return ControlResponse(ok: false, error: "workspace.go --prefix must not be blank")
+                }
+                return actions.goWorkspace(window: request.args?.window, prefix: prefix)
+            }
             guard let dir = (request.args?.to).flatMap(WorkspaceNavigation.init(wire:)) else {
                 return ControlResponse(ok: false, error: "workspace.go requires --to next|prev")
             }

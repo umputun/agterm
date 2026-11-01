@@ -176,7 +176,7 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
     }
     if !dashboardMapped, oldConfigUsesNewDashboardChord { compatibilityUnbound.insert(.dashboard) }
     // later defaults: explicit bindings keep these chords unless the new action is mapped.
-    for newAction in [BuiltinAction.attachRemote, .toggleOverlay] {
+    for newAction in [BuiltinAction.attachRemote, .toggleOverlay, .workspacePalette] {
         guard let newChord = newAction.defaultChord else { continue }
         let mapped = resolved.overrides.contains { $0.action == newAction }
             || resolved.alternatives[newAction] != nil || resolved.unbound.contains(newAction)

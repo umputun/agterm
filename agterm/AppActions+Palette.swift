@@ -169,6 +169,7 @@ extension AppActions {
         case .renameWindow: return renameActiveWindow
         case .deleteWindow: return deleteActiveWindow
         case .sessionPalette: return toggleSessionPalette
+        case .workspacePalette: return toggleWorkspacePalette
         case .commandPalette: return toggleActionPalette
         case .customCommandPalette: return toggleCustomCommandPalette
         default: return nil
@@ -258,6 +259,26 @@ extension AppActions {
         return store.listOrdered(store.navigableSessions).map { paletteItem(for: $0, in: store) }
     }
 
+    /// The visible workspaces in sidebar order (`.workspaces` mode), the scope `workspace.go --prefix`
+    /// resolves in; running a row goes through `selectWorkspace` like a workspace step.
+    func paletteWorkspaces() -> [PaletteItem] {
+        guard let store, store.sidebarMode == .tree else { return [] }
+        let current = store.currentWorkspaceID
+        return store.visibleWorkspaces.map { workspace in
+            let id = workspace.id
+            let count = workspace.sessions.count
+            return PaletteItem(id: id.uuidString, title: workspace.name,
+                               subtitle: count == 1 ? "1 session" : "\(count) sessions",
+                               badge: id == current ? "current" : nil,
+                               run: { [weak self, weak store] in
+                guard let self, uiActionsEnabled, let store else { return }
+                store.noteUserActivity()
+                guard let step = store.selectWorkspace(id) else { return }
+                DispatchQueue.main.async { self.revealActiveBlockedPane(captured: step.indicator) }
+            })
+        }
+    }
+
     /// Every open window's non-idle sessions as palette items (`.attention` mode), in the library's order so
     /// the empty query keeps it. Enablement asks the OWNING window, not the frontmost one, and the run
     /// defers `selectAttention` past the palette's close and focus-restore so a raise never competes with
@@ -313,6 +334,11 @@ extension AppActions {
     func toggleSessionPalette() {
         guard uiActionsEnabled else { return }
         palette?.toggle(.sessions)
+    }
+
+    func toggleWorkspacePalette() {
+        guard uiActionsEnabled, store?.sidebarMode == .tree else { return }
+        palette?.toggle(.workspaces)
     }
 
     func toggleActionPalette() {

@@ -451,6 +451,28 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func workspaceGoPrefixRoutesTrimmedPrefixThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .workspaceGo, args: ControlArgs(window: "win", prefix: "  ag ")))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.workspaceGoPrefix(window: "win", "ag")])
+    }
+
+    @Test func workspaceGoPrefixRejectsBlankOrCombinedWithToWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let blank = await dispatcher.dispatch(ControlRequest(cmd: .workspaceGo, args: ControlArgs(prefix: "  ")))
+        let both = await dispatcher.dispatch(ControlRequest(cmd: .workspaceGo, args: ControlArgs(to: "next", prefix: "ag")))
+
+        #expect(blank == ControlResponse(ok: false, error: "workspace.go --prefix must not be blank"))
+        #expect(both == ControlResponse(ok: false, error: "workspace.go takes --to or --prefix, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func workspaceRenameRejectsMissingOrBlankNameWithoutCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

@@ -376,6 +376,9 @@ buys nothing. A caller with no tree uses `version`.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
+- `workspace go --prefix TEXT [--window W]` — jump to the visible workspace whose name starts with TEXT
+  (case- and accent-insensitive; a lone exact name beats longer names sharing it). No match or several
+  matches errors and names them; flagged mode refuses it. Returns the workspace id; read back via `tree`.
 - `workspace go --to next|prev [--window W]` — step the CURRENT workspace one place through the
   sidebar's visible order, wrapping at both ends, and select the workspace it lands on. Relative, so it
   takes NO `--target`; `workspace move` is the neighbouring verb that REORDERS a workspace instead.
@@ -1942,7 +1945,7 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
-`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
+`session_palette`, `workspace_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `previous_window`, `next_window`, `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.

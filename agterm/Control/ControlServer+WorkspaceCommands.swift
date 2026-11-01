@@ -42,6 +42,17 @@ extension ControlServer {
         }
     }
 
+    func goWorkspace(window: String?, prefix: String) -> ControlResponse {
+        resolver.resolvePlacementStore(window) { store in
+            let outcome = store.resolveWorkspacePrefix(prefix)
+            guard case .workspace(let id) = outcome else {
+                return ControlResponse(ok: false, error: outcome.controlError(prefix: prefix))
+            }
+            store.selectWorkspace(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
         resolver.resolveWorkspace(target, window: window) { store, id in
             store.renameWorkspace(id, to: name)

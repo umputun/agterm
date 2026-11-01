@@ -453,6 +453,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var ack: Bool?
     /// ids are the message ids `msg.ack` removes.
     public var ids: [String]?
+    /// prefix is the workspace name prefix `workspace.go --prefix` jumps to, instead of a `to` step.
+    public var prefix: String?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -485,7 +487,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
                 checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, recipients: [String]? = nil,
-                identity: String? = nil, ack: Bool? = nil, ids: [String]? = nil) {
+                identity: String? = nil, ack: Bool? = nil, ids: [String]? = nil, prefix: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -587,6 +589,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.identity = identity
         self.ack = ack
         self.ids = ids
+        self.prefix = prefix
     }
 }
 

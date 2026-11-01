@@ -55,17 +55,24 @@ struct Workspace: ParsableCommand {
         }
     }
 
-    /// `agtermctl workspace go --to next|prev` — steps the CURRENT workspace and selects its first session.
+    /// `agtermctl workspace go --to next|prev` — steps the CURRENT workspace and selects its first session;
+    /// `--prefix` jumps to the visible workspace whose name starts with it instead.
     /// Deliberately NO `--target`: it is relative to what is current, the shape `session go` takes, not the
     /// `workspace.*` target commands. `move` is the neighbouring verb that REORDERS instead.
     struct Go: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "go",
-            abstract: "Navigate workspaces: next|prev.")
-        @Option(name: .long, help: "Direction: next or prev.") var to: String
+            abstract: "Navigate workspaces: next|prev, or jump by name prefix.")
+        @Option(name: .long, help: "Direction: next or prev.") var to: String?
+        @Option(name: .long, help: "Jump to the workspace whose name starts with this (case-insensitive).")
+        var prefix: String?
         @OptionGroup var options: ClientOptions
 
+        func validate() throws {
+            guard (to == nil) != (prefix == nil) else { throw ValidationError("give exactly one of --to or --prefix") }
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceGo, args: options.withWindow(ControlArgs(to: to)))
+            ControlRequest(cmd: .workspaceGo, args: options.withWindow(ControlArgs(to: to, prefix: prefix)))
         }
     }
 

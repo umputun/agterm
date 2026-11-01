@@ -1365,6 +1365,14 @@ struct KeymapTests {
         #expect(keymap.commands.first?.shortcut == "")
     }
 
+    @Test func existingCtrlShiftWBindingIsNotBrokenByWorkspacePaletteDefault() {
+        #expect(parseKeymap("").keymap.equivalent(for: .workspacePalette) == Chord(mods: [.control, .shift], key: "w"))
+        let (keymap, diagnostics) = parseKeymap("command \"Old binding\" ctrl+shift+w echo ok")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.first?.shortcut == "ctrl+shift+w")
+        #expect(keymap.equivalent(for: .workspacePalette) == nil)
+    }
+
     @Test func toggleOverlayShipsOnCmdShiftJAndCanBeRemapped() {
         #expect(parseKeymap("").keymap.equivalent(for: .toggleOverlay) == Chord(mods: [.command, .shift], key: "j"))
 

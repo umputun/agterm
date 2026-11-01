@@ -372,6 +372,9 @@ extension agtermApp {
                 Button { actions.toggleSessionPalette() } label: { Label("Go to Session", systemImage: "rectangle.stack") }
                     .keyboardShortcut(shortcut(for: .sessionPalette))
                     .disabled(modalActive)
+                Button { actions.toggleWorkspacePalette() } label: { Label("Go to Workspace", systemImage: "folder") }
+                    .keyboardShortcut(shortcut(for: .workspacePalette))
+                    .disabled(modalActive || !context.sidebarShowsWorkspaceTree)
                 Button { actions.toggleActionPalette() } label: { Label("Command Palette", systemImage: "command") }
                     .keyboardShortcut(shortcut(for: .commandPalette))
                     .disabled(modalActive)

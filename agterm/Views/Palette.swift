@@ -69,6 +69,7 @@ enum PaletteMark: Equatable {
 enum PaletteMode {
     case actions
     case sessions
+    case workspaces
     case themes
     case customCommands
     case attention
@@ -77,7 +78,7 @@ enum PaletteMode {
 
     var keepsOpenOnRun: Bool { self == .flaggedEditor || self == .focusEditor }
     /// keepsSourceOrder lists an empty query in the order the feed supplied rather than A→Z.
-    var keepsSourceOrder: Bool { self == .sessions || self == .attention || keepsOpenOnRun }
+    var keepsSourceOrder: Bool { self == .sessions || self == .workspaces || self == .attention || keepsOpenOnRun }
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -130,6 +131,11 @@ struct CommandPalette: View {
     /// one array — a computed property could be evaluated out of sync between the list and the handler.
     @State private var filtered: [PaletteItem] = []
     @FocusState private var fieldFocused: Bool
+    @State private var pendingJump: DispatchWorkItem?
+
+    /// How long a unique workspace prefix must stand before the palette jumps. Jumping on the keystroke
+    /// would hand the rest of a word typed fast to the terminal behind it.
+    static let prefixJumpDelay: TimeInterval = 0.3
 
     /// The chrome text sizes and the panel's scale, read from the non-observable `GhosttyApp` — a palette
     /// mounts fresh on every open, so it never renders a stale size.
@@ -170,6 +176,7 @@ struct CommandPalette: View {
         switch controller.mode {
         case .actions: return actions.paletteActions()
         case .sessions: return actions.paletteSessions()
+        case .workspaces: return actions.paletteWorkspaces()
         case .themes: return actions.paletteThemes()
         case .customCommands: return actions.paletteCustomCommands()
         case .attention: return actions.paletteAttention()
@@ -181,8 +188,16 @@ struct CommandPalette: View {
 
     // skipping the rank is what preserves the source order: every row scores 0 on an empty query and the
     // tie-break would re-sort A→Z, replacing the intended first row — the one Return runs.
-    static func ranked(_ items: [PaletteItem], query: String, keepsSourceOrder: Bool, callerSupplied: Bool) -> [PaletteItem] {
+    // `prefixFirst` lists name-prefix matches in source order ahead of the fuzzy rest, so the row Return runs
+    // is the one the auto-jump would have picked.
+    static func ranked(_ items: [PaletteItem], query: String, keepsSourceOrder: Bool, callerSupplied: Bool,
+                       prefixFirst: Bool = false) -> [PaletteItem] {
         if query.isEmpty, keepsSourceOrder || callerSupplied { return items }
+        if prefixFirst, !query.isEmpty {
+            let lead = items.filter { WorkspacePrefix.matches(query, name: $0.title) }
+            let rest = items.filter { !WorkspacePrefix.matches(query, name: $0.title) }
+            return lead + ranked(rest, query: query, keepsSourceOrder: keepsSourceOrder, callerSupplied: callerSupplied)
+        }
         return fuzzyRank(query: query, items: items) { item in
             paletteSearchKeys(title: item.title, subtitle: item.subtitle, callerSupplied: callerSupplied)
         }
@@ -197,7 +212,7 @@ struct CommandPalette: View {
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         filtered = Self.ranked(allItems, query: q, keepsSourceOrder: controller.mode?.keepsSourceOrder == true,
-                               callerSupplied: explicitItems != nil)
+                               callerSupplied: explicitItems != nil, prefixFirst: jumpsOnUniquePrefix)
         if explicitItems != nil, !q.isEmpty,
            let label = pickCustomRowLabel(query: q, filteredCount: filtered.count, allowCustom: allowCustom) {
             filtered = [PaletteItem(id: "pick-custom", title: label) { onCustom?(q) }]
@@ -205,10 +220,34 @@ struct CommandPalette: View {
         selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
     }
 
+    private var jumpsOnUniquePrefix: Bool { explicitItems == nil && controller.mode == .workspaces }
+
+    /// The row a query names unambiguously by prefix, nil when none or several do.
+    static func uniquePrefixIndex(_ items: [PaletteItem], query: String) -> Int? {
+        let matches = WorkspacePrefix.matchingIndices(query, in: items.map(\.title))
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    private func scheduleUniquePrefixJump() {
+        pendingJump?.cancel()
+        pendingJump = nil
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard jumpsOnUniquePrefix, let index = Self.uniquePrefixIndex(filtered, query: q) else { return }
+        let target = filtered[index].id
+        let jump = DispatchWorkItem {
+            guard query.trimmingCharacters(in: .whitespacesAndNewlines) == q,
+                  let item = filtered.first(where: { $0.id == target }) else { return }
+            runItem(item)
+        }
+        pendingJump = jump
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.prefixJumpDelay, execute: jump)
+    }
+
     private var placeholder: String {
         if explicitItems != nil { return prompt ?? "Select…" }
         switch controller.mode {
         case .sessions: return "Go to session…"
+        case .workspaces: return "Go to workspace… (type its first letters)"
         case .themes: return "Select a theme…"
         case .customCommands: return "Run a custom command…"
         case .attention: return "Go to a session that needs attention…"
@@ -275,7 +314,7 @@ struct CommandPalette: View {
                     .focused($fieldFocused)
                     .font(.system(size: metrics.base))
                     .onSubmit { runSelected() }
-                    .onChange(of: query) { selection = 0; updateFiltered(); previewSelected() }
+                    .onChange(of: query) { selection = 0; updateFiltered(); previewSelected(); scheduleUniquePrefixJump() }
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
                     // taken from the field editor: ctrl+k is its kill-to-end-of-line.
@@ -335,6 +374,7 @@ struct CommandPalette: View {
             syncThemeSession()
         }
         .onDisappear {
+            pendingJump?.cancel()
             if explicitItems == nil { actions.cancelThemePreview() }
         }
     }

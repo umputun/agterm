@@ -38,6 +38,8 @@ public protocol ControlActions {
     /// the destination's first session when it has one — an EMPTY destination becomes current with the
     /// selection left where it was. Relative, so no target: the counterpart of `session.go` one level up.
     func goWorkspace(window: String?, direction: WorkspaceNavigation) -> ControlResponse
+    /// Jumps to the visible workspace `WorkspacePrefix.resolve` picks for an already trimmed, non-blank prefix.
+    func goWorkspace(window: String?, prefix: String) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse

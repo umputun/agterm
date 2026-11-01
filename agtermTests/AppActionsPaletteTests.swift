@@ -289,6 +289,22 @@ final class AppActionsPaletteTests: XCTestCase {
         }
     }
 
+    func testWorkspacePaletteListsVisibleWorkspacesAndRunsSelectWorkspace() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let target = store.addWorkspace(name: "zz-prefix-target")
+        let session = try XCTUnwrap(store.addSession(toWorkspace: target.id, cwd: NSHomeDirectory(), select: false))
+        let palette = PaletteController()
+        actions.palette = palette
+
+        actions.perform(.workspacePalette, in: nil)
+        XCTAssertEqual(palette.mode, .workspaces)
+
+        let rows = actions.paletteWorkspaces()
+        XCTAssertEqual(rows.map(\.id), store.visibleWorkspaces.map(\.id.uuidString))
+        try XCTUnwrap(rows.first { $0.id == target.id.uuidString }).run()
+        XCTAssertEqual(store.selectedSessionID, session.id)
+    }
+
     func testSessionRowsGroupCompanionsUnderIdenticallyNamedParents() throws {
         let store = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(store.workspaces.first)

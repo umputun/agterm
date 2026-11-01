@@ -264,6 +264,10 @@ paths:
   and Enter target cannot diverge; sort by score then title. Built-in palettes match label plus subtitle;
   caller-supplied pickers match the label only, so subtitle consequence text cannot filter a safe row out
   and leave a destructive one preselected. Ctrl-P opens sessions; Ctrl-Shift-P opens actions.
+- Go to Workspace (`.workspaces`, `workspace_palette`, ⌃⇧W) lists `visibleWorkspaces` in sidebar order, tree mode
+  only. A query ranks name-prefix matches first, and a query matching exactly one name by prefix runs it after
+  `CommandPalette.prefixJumpDelay`; an immediate jump would type the rest of a fast-typed word into the terminal.
+  The sidebar itself offers no type-select: `SidebarOutlineView` never takes first responder.
 - An empty query skips ranking in four cases: attention mode, ⌃P sessions, the two membership editors, and a
   caller-supplied picker. All keep their source order, because every row scores 0 and the tie-break would
   re-sort A→Z and replace the row Return runs. ⌃P's source order is `AppStore.listOrdered`: A→Z by label,

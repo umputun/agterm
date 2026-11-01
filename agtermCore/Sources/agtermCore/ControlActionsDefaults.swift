@@ -188,6 +188,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: "session.restart is not supported by this host")
     }
 
+    func goWorkspace(window _: String?, prefix _: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "workspace.go --prefix is not supported by this host")
+    }
+
     func takeSessionLead(_: String?, window _: String?, pane _: StatusPane?) -> ControlResponse {
         ControlResponse(ok: false, error: "session.lead is not supported by this host")
     }

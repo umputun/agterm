@@ -256,6 +256,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   term — a folded workspace is stepped into like any other, and issue #435 assumed otherwise. Errors with
   `no other workspace to navigate to` where there is nowhere to step: flagged mode, or one visible
   workspace. Read back through `tree` selection; the GUI twins are `previous_workspace`/`next_workspace`.
+  `--prefix` replaces `--to` (both is refused) and lands through the same `selectWorkspace`;
+  `AppStore.resolveWorkspacePrefix` over `WorkspacePrefix.resolve` decides, and the ⌃⇧W palette's
+  unique-prefix jump uses the same matcher. An older server drops `prefix` and refuses for the missing `--to`.
 - `session.split` drives the addressed session, not active-only `AppActions.toggleSplit`. `--axis
   vertical|horizontal` selects left/right or top/bottom; omitting it preserves an existing split's axis
   and defaults a new split to left/right. Off hides and retains the shell; `session.split.close` and the

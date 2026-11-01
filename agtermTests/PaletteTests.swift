@@ -38,8 +38,22 @@ final class PaletteTests: XCTestCase {
         }
     }
 
+    func testPrefixFirstRankingLeadsWithPrefixMatchesInFeedOrder() {
+        let items = ["billing", "agterm", "stage", "api"].map { PaletteItem(title: $0) {} }
+        let ranked = CommandPalette.ranked(items, query: "a", keepsSourceOrder: true, callerSupplied: false, prefixFirst: true)
+        XCTAssertEqual(ranked.prefix(2).map(\.title), ["agterm", "api"])
+        XCTAssertTrue(ranked.map(\.title).contains("stage"), "fuzzy matches still follow the prefix matches")
+    }
+
+    func testUniquePrefixIndexNeedsExactlyOneMatch() {
+        let items = ["agterm", "api", "billing"].map { PaletteItem(title: $0) {} }
+        XCTAssertEqual(CommandPalette.uniquePrefixIndex(items, query: "B"), 2)
+        XCTAssertNil(CommandPalette.uniquePrefixIndex(items, query: "a"))
+        XCTAssertNil(CommandPalette.uniquePrefixIndex(items, query: ""))
+    }
+
     func testEmptyQueriesKeepTheFeedOrderExceptForActionsThemesAndCustomCommands() {
-        for mode in [PaletteMode.sessions, .attention, .flaggedEditor, .focusEditor] {
+        for mode in [PaletteMode.sessions, .workspaces, .attention, .flaggedEditor, .focusEditor] {
             XCTAssertTrue(mode.keepsSourceOrder, "\(mode)")
         }
         for mode in [PaletteMode.actions, .themes, .customCommands] {

@@ -42,7 +42,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
         #expect(BuiltinAction.editFlaggedSessions.rawValue == "edit_flagged_sessions")
         #expect(BuiltinAction.editFocusedWorkspaces.rawValue == "edit_focused_workspaces")
-        #expect(BuiltinAction.allCases.count == 54)
+        #expect(BuiltinAction.workspacePalette.rawValue == "workspace_palette")
+        #expect(BuiltinAction.allCases.count == 55)
     }
 
     @Test func rejectsUnknownName() {
@@ -133,6 +134,7 @@ struct BuiltinActionTests {
             .lastSession: nil,
             .quickTerminal: Chord(mods: [.control], key: "`"),
             .sessionPalette: Chord(mods: [.control], key: "p"),
+            .workspacePalette: Chord(mods: [.control, .shift], key: "w"),
             .commandPalette: Chord(mods: [.control, .shift], key: "p"),
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),

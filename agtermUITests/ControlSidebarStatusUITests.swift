@@ -566,6 +566,26 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertEqual(bad["error"] as? String, "workspace.go requires --to next|prev")
     }
 
+    func testWorkspaceGoPrefixJumpsToTheUniquelyNamedWorkspace() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        var ids: [String: String] = [:]
+        for name in ["qx-alpha", "qx-alps", "qz-beta"] {
+            let made = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"\#(name)"}}"#)
+            ids[name] = try XCTUnwrap((made["result"] as? [String: Any])?["id"] as? String, "workspace.new returns an id")
+        }
+        let session = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(ids["qz-beta"]!)"}}"#)
+        let sessionID = try XCTUnwrap((session["result"] as? [String: Any])?["id"] as? String, "session.new returns an id")
+
+        let jump = try sendCommand(#"{"cmd":"workspace.go","args":{"prefix":"QZ"}}"#)
+        XCTAssertEqual((jump["result"] as? [String: Any])?["id"] as? String, ids["qz-beta"], "a unique prefix lands: \(jump)")
+        XCTAssertTrue(pollActiveSession(sessionID, timeout: 10), "landing selects the target's first session")
+
+        let ambiguous = try sendCommand(#"{"cmd":"workspace.go","args":{"prefix":"qx-al"}}"#)
+        XCTAssertEqual(ambiguous["error"] as? String, "prefix qx-al matches several workspaces: qx-alpha, qx-alps")
+        let missing = try sendCommand(#"{"cmd":"workspace.go","args":{"prefix":"nope"}}"#)
+        XCTAssertEqual(missing["error"] as? String, "no workspace matches prefix: nope")
+    }
+
     // issue #435: collapsing a workspace must not steer navigation — the fold is a display state, so the
     // step lands on the collapsed workspace exactly as it would on an open one
     func testWorkspaceGoStepsIntoACollapsedWorkspace() throws {

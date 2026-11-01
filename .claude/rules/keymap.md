@@ -70,7 +70,7 @@ paths:
   alternative, `alternative skipped`/`alternative dropped` with more), pinned by
   `KeymapTests.pipeFreeKeymapParsesExactlyAsItDidBeforeAlternatives`.
 - Pure types live in `Keybind.swift`, `KeybindMatcher`, `CustomCommand`/`CommandContext`,
-  `BuiltinAction` (54 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
+  `BuiltinAction` (55 cases, pinned by `BuiltinActionTests`), `Keymap`, and `ConfigPaths`.
   `CommandContext` owns the shared expansion/environment token table.
 - Built-ins use AppKit menu key equivalents from `keymap.equivalent(for:)`; apply only non-nil
   `KeyboardShortcut`s. SwiftUI rebuilds menu shortcuts lazily, on activation or key dispatch rather than on
@@ -276,8 +276,8 @@ paths:
   `scroll_to_selection` and ⇧⌘J `write_screen_file:paste`.
 - New shipped defaults must not break a valid existing keymap. `parseKeymap` vacates the new horizontal
   split default when an old file explicitly uses `cmd+shift+d`, and vacates Dashboard's new default when
-  an old file explicitly uses `cmd+shift+g`, `attach_remote`'s when one uses `cmd+shift+r`, and
-  `toggle_overlay`'s when one uses `cmd+shift+j`.
+  an old file explicitly uses `cmd+shift+g`, `attach_remote`'s when one uses `cmd+shift+r`,
+  `toggle_overlay`'s when one uses `cmd+shift+j`, and `workspace_palette`'s when one uses `ctrl+shift+w`.
   An explicit map for the new action opts into its new chord.
 - **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
   session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject

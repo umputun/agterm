@@ -22,7 +22,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case previousSession = "previous_session", nextSession = "next_session"
     case previousAttentionSession = "previous_attention_session", nextAttentionSession = "next_attention_session"
     case firstSession = "first_session", lastSession = "last_session"
-    case quickTerminal = "quick_terminal", sessionPalette = "session_palette", commandPalette = "command_palette"
+    case quickTerminal = "quick_terminal", sessionPalette = "session_palette", workspacePalette = "workspace_palette"
+    case commandPalette = "command_palette"
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
     case dashboard = "dashboard"
     case attachRemote = "attach_remote"
@@ -56,6 +57,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .toggleFlag: return Chord(mods: [.command, .shift], key: "f")
         case .quickTerminal: return Chord(mods: [.control], key: "`")
         case .sessionPalette: return Chord(mods: [.control], key: "p")
+        case .workspacePalette: return Chord(mods: [.control, .shift], key: "w")
         case .commandPalette: return Chord(mods: [.control, .shift], key: "p")
         case .customCommandPalette: return Chord(mods: [.control, .shift], key: "o")
         case .showAttention: return Chord(mods: [.control, .shift], key: "i")

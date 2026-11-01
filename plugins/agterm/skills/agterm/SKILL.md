@@ -317,6 +317,7 @@ joins the marked set while the filter is applied, so it is visible) · `workspac
 `workspace go --to next|prev` (step the CURRENT workspace one place through the sidebar's visible order, wrapping,
 and select the first session of the one it lands on — relative, so no `--target`, and unaffected by
 whether a workspace is collapsed; `workspace move` REORDERS instead) ·
+`workspace go --prefix TEXT` (jump to the visible workspace whose name starts with TEXT; ambiguous or no match errors) ·
 `workspace move --to up|down|top|bottom` ·
 `workspace focus [on|off|toggle|add]` (mark ONE workspace in the sidebar's focus set — `on` marks it alone and
 applies the filter, `off` unmarks it, `toggle` (default) replace-toggles, and `add` marks it alongside

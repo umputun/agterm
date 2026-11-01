@@ -343,6 +343,7 @@ struct SocketClientTests {
             last_session                -
             quick_terminal              ctrl+`
             session_palette             ctrl+p
+            workspace_palette           ctrl+shift+w
             command_palette             ctrl+shift+p
             custom_command_palette      ctrl+shift+o
             show_attention              ctrl+shift+i

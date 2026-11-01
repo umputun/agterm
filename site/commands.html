@@ -814,7 +814,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl workspace go --to next|prev [--window W]
+                agtermctl workspace go --to next|prev [--window W]<br />agtermctl workspace go --prefix TEXT [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.go</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -830,6 +830,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session go</span> gets. With nowhere to step — flagged mode in
                 any layout, or a single visible workspace — it errors with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no other workspace to navigate to</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--prefix</span> replaces
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span> and jumps to the visible workspace whose name
+                starts with the text, ignoring case and accents; an exact name wins over longer names sharing it. No match or several
+                matches is an error naming them, and flagged mode refuses it. It is the scripted form of Navigate ▸ Go to Workspace (⌃⇧W).
               </p>
             </div>
 
