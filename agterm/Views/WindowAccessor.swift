@@ -54,12 +54,32 @@ struct WindowAccessor: NSViewRepresentable {
         /// XCUITest title-matching, but hidden via titleVisibility — the custom header draws the visible one.
         private var latestTitle = ""
 
+        /// The OS title is hidden yet each write still runs AppKit's title machinery, about 1.3 ms, so an
+        /// animated OSC title lands at most once per interval and a trailing write carries the final value.
+        private static let titleWriteInterval: Duration = .milliseconds(500)
+        private var lastTitleWrite: ContinuousClock.Instant?
+        private var pendingTitleWrite: Task<Void, Never>?
+
         /// Writes the title and nothing else: an animated OSC title ticks this many times a second, and the
         /// blend's other inputs reach `applyTitlebarBlend` through attach and the notifications below (#516).
         func setTitle(_ title: String) {
             latestTitle = title
-            guard let window, window.title != title else { return }
-            window.title = title
+            guard window != nil, pendingTitleWrite == nil else { return }
+            guard let last = lastTitleWrite, ContinuousClock.now - last < Self.titleWriteInterval else {
+                writeTitle()
+                return
+            }
+            pendingTitleWrite = Task { [weak self] in
+                try? await Task.sleep(until: last + Self.titleWriteInterval)
+                self?.writeTitle()
+            }
+        }
+
+        private func writeTitle() {
+            pendingTitleWrite = nil
+            guard let window, window.title != latestTitle else { return }
+            lastTitleWrite = .now
+            window.title = latestTitle
         }
 
         override func viewDidMoveToWindow() {

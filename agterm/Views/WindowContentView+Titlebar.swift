@@ -68,6 +68,8 @@ extension WindowContentView {
                 // the title text falls through to the drag/zoom layer behind it, so double-click zooms and
                 // drag moves the window; the rest of the row is non-hittable spacers plus the buttons.
                 .allowsHitTesting(false)
+                // a text-sized label re-ran the window's ZStack layout on every animated-title tick (#516)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Spacer(minLength: 12)
             titlebarTrailingActions
         }
