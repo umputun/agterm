@@ -51,6 +51,7 @@ final class SplitCursorRectsTests: XCTestCase {
 
     func testAnUnmanagedSplitKeepsItsDividerRect() {
         let split = makeSplit()
+        SplitCursorRects.setSuppressed(false, for: split)
         XCTAssertEqual(split.rebuildCursorRects().count, 1)
     }
 

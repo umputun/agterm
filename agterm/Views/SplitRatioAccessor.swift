@@ -17,7 +17,7 @@ extension NSView {
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView`/`VSplitView` to (1) persist and restore the split
 /// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
-/// of the titlebar strip, (3) paint the divider's own resize cursor, which nothing else writes,
+/// of the titlebar strip, (3) paint the divider's resize cursor and keep a hidden split's AppKit one off screen,
 /// (4) restore an even split on a divider double-click, and (5) color the divider. Attached as a
 /// `.background` on the primary pane so its `NSView` lives inside the split's view tree without becoming
 /// a third arranged pane.
