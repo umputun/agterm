@@ -73,6 +73,22 @@ final class ZmxLiveUITests: ControlAPITestCase {
         XCTAssertTrue(held.contains("last-held-line"), "the final screen should survive exit, got: \(held)")
     }
 
+    func testAWaitCommandKeepsScrollbackOnceThePaneIsAttached() throws {
+        _ = try activeSessionID()
+        let release = stateDir.appendingPathComponent("release-scrollback")
+        let command = "echo pane-attached-marker; while [ ! -e '\(release.path)' ]; do sleep 0.05; done; "
+            + "echo first-held-line; seq 1 300; printf '\\033[?1000h\\033[?1006h\\033[?2004h'; echo last-held-line"
+        let created = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": command, "wait": true],
+        ]), as: UTF8.self))
+        let sessionID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: self.paneText(sessionID).contains("pane-attached-marker"), timeout: 20))
+        XCTAssertTrue(FileManager.default.createFile(atPath: release.path, contents: Data()))
+        let held = try heldText(sessionID)
+        XCTAssertTrue(held.contains("first-held-line"), "scrollback above the screen should survive exit, got: \(held)")
+        XCTAssertTrue(held.contains("last-held-line"), "the final screen should survive exit, got: \(held)")
+    }
+
     func testALiveParentWhoseShellExitsRespawnsAndTakesInput() throws {
         let parent = try activeSessionID()
         let created = try sendCommand(#"{"cmd":"session.companion.new","target":"\#(parent)","args":{"noSelect":true}}"#)
