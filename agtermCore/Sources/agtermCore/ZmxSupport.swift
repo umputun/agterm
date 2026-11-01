@@ -165,9 +165,11 @@ public enum ZmxSupport {
                                      creationCommand: String? = nil, paneCommand: String? = nil,
                                      denylist: Set<String>) -> String {
         let creation = paneCommand.map(Creation.endingPane) ?? creationCommand.map(Creation.returningToShell)
-        var arguments = configuration.attachArguments + creationArguments(configuration, replaying: argv, creation: creation, denylist: denylist)
+        let payload = creationArguments(configuration, replaying: argv, creation: creation, denylist: denylist)
+        var arguments = configuration.attachArguments + payload
         if let host = configuration.sessionHostExecutablePath {
-            arguments = [host, "client", configuration.daemonName, "--"] + arguments
+            let endsPane = argv == nil && paneCommand != nil && !payload.isEmpty
+            arguments = [host, "client", configuration.daemonName] + (endsPane ? ["--ends-pane"] : []) + ["--"] + arguments
         }
         if let shell = configuration.environment["SHELL"], shellKind(for: shell) == .fish,
            let integrationRoot = configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] {

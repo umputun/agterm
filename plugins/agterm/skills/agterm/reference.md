@@ -471,17 +471,17 @@ buys nothing. A caller with no tree uses `version`.
   default — no `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
   (`/opt/homebrew/bin/htop`). All of that describes Fresh shells and Re-run commands. In Live sessions
-  mode the command is instead a create-only zmx payload the persistent shell runs as a login shell, so
-  the line uses that shell's syntax (zsh or fish), shell operators are interpreted, the `PATH` is that shell's rather than the launchd default, and the
-  session stays open after the command exits.
+  mode the command is instead a create-only zmx payload the user's login shell runs, so
+  the line uses that shell's syntax (zsh or fish), shell operators are interpreted, and the `PATH` is that shell's rather than the launchd default.
   `--wait` (only with `--command`, else an error) HOLDS the session open after the command exits —
   showing libghostty's press-any-key prompt with the final output intact instead of closing immediately —
   so you can read a build/test/deploy's final output or an early failure that would otherwise flash and
   vanish. In Re-run commands mode it persists across restart (unlike an overlay's live-only `--wait`),
   so a restored command session that starts its command again also holds; read it back on `tree`'s
   `commandWait`. Live sessions mode passes the command as a create-only zmx payload, which bypasses the
-  1,024-byte PTY input cap. A surviving daemon ignores the payload; a new daemon runs it, then starts the persistent
-  shell. The shell stays open when it exits, and `--wait` adds no hold prompt. After a clean quit, a missing daemon
+  1,024-byte PTY input cap. A surviving daemon ignores the payload; a new daemon runs it, and the pane closes or,
+  with `--wait`, holds when the command exits, as in the other modes. A command that ends within a moment of the
+  pane's creation can lose its output: the pane then shows only `agterm: session is gone`. After a clean quit, a missing daemon
   is recreated running whatever that pane's foreground command was; if the command had already exited, or the
   quit never happened, the pane comes back as a fresh shell.
   The command is persisted (`SessionSnapshot.initialCommand`) and starts again on restore in Re-run commands

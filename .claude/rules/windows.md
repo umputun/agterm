@@ -211,6 +211,11 @@ session drag are out of scope.
 - The host answers one client at a time.
   A connected client waits up to 30 seconds for its turn before falling back to a bare attach,
   so a long enough queue of creations still yields an `app` pane.
+- After a confirmed or uncertain creation, a `session new --command` pane (`client NAME --ends-pane`)
+  attaches with a "session is gone" guard in place of its payload (`Client.attachArgv`): a command that
+  ended during the handoff ends the pane instead of leaving a login shell, and its output is lost
+  (`docs/backlog/fast-live-command-loses-output-in-host-handoff.md`). A replay, a restart and a plain shell
+  attach bare, which recreates their shell.
 - Fresh shells and Re-run never stop a live host.
 - The host's files live under `/tmp`, where macOS deletes a regular file after three days untouched
   (`/usr/libexec/tmp_cleaner`; sockets stay). The host touches its lock, log and pidfile at start and

@@ -22,7 +22,7 @@ public final class Client {
         self.execute = execute
     }
 
-    func run(request: SessionHost.Ensure) throws {
+    func run(request: SessionHost.Ensure, endsPane: Bool = false) throws {
         guard request.argv.count >= 3, request.argv[1] == "attach", request.argv[2] == request.name else { throw HostFailure.invalidRequest }
         var phase = SessionHost.DispatchPhase.beforeDispatch
         var reply: SessionHost.Response?
@@ -42,10 +42,20 @@ public final class Client {
         }
         let outcome = SessionHost.ClientOutcome.decide(phase: phase, reply: reply)
         if let message = outcome.diagnostic { diagnostic(message) }
-        try execute(outcome == .fullAttach ? request.argv : Array(request.argv.prefix(3)), request.env)
+        try execute(attachArgv(outcome: outcome, request: request, endsPane: endsPane), request.env)
     }
 
-    public static func run(name: String, argv: [String]) throws {
+    /// zmx runs the guard only when it must create the daemon, so a pane command that already ended ends
+    /// the pane instead of leaving a fresh login shell. A payload that returns to a shell keeps the bare
+    /// attach, which recreates that shell.
+    private func attachArgv(outcome: SessionHost.ClientOutcome, request: SessionHost.Ensure, endsPane: Bool) -> [String] {
+        guard outcome != .fullAttach else { return request.argv }
+        let bare = Array(request.argv.prefix(3))
+        guard endsPane, request.argv.count > 3 else { return bare }
+        return bare + ["/bin/sh", "-c", "printf '%s\\n' 'agterm: session is gone'; exit 1"]
+    }
+
+    public static func run(name: String, argv: [String], endsPane: Bool = false) throws {
         let environment = ProcessInfo.processInfo.environment
         var size = winsize()
         if ioctl(STDIN_FILENO, TIOCGWINSZ, &size) != 0 { _ = ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) }
@@ -57,7 +67,7 @@ public final class Client {
         }, diagnostic: { message in
             try? FileHandle.standardError.write(contentsOf: Data((message + "\n").utf8))
         }, execute: exec)
-        try client.run(request: request)
+        try client.run(request: request, endsPane: endsPane)
     }
 
     private static func exec(_ argv: [String], _ environment: [String: String]) throws {
