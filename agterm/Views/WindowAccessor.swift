@@ -246,6 +246,7 @@ struct WindowAccessor: NSViewRepresentable {
             if GhosttyApp.shared.autoHideSidebarInactiveWindows {
                 library.applyInactiveWindowSidebarHiding()
             }
+            library.store(for: id)?.requestIdleWorkspaceSink()
             // the active-window change is async; let the control server refresh its cached window list so a
             // `window.list` poll sees the new `active` flag without waiting for the next command.
             if changed {

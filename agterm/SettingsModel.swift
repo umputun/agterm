@@ -356,6 +356,12 @@ final class SettingsModel {
         try? settingsStore.save(settings)
         applyWindowSettingsToAllWindows()
     }
+    /// Persist whether idle workspaces sink (nil = off) and fan it out; turning it on sinks at once.
+    func setSinkIdleWorkspaces(_ value: Bool?) {
+        settings.sinkIdleWorkspaces = value
+        try? settingsStore.save(settings)
+        applyWindowSettingsToAllWindows()
+    }
     /// Persist whether attention navigation also stops on `active` sessions (nil = off) and fan it out.
     func setAttentionIncludesActive(_ value: Bool?) {
         settings.attentionIncludesActive = value
@@ -832,6 +838,11 @@ final class SettingsModel {
         let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
         store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
         store.attentionIncludesActive = settings.attentionIncludesActive ?? false
+        let sinks = settings.sinkIdleWorkspaces ?? false
+        if store.sinksIdleWorkspaces != sinks {
+            store.sinksIdleWorkspaces = sinks
+            store.requestIdleWorkspaceSink()
+        }
         let acrossWindows = settings.attentionNavigationAcrossWindows ?? false
         if store.attentionNavigationAcrossWindows != acrossWindows { store.attentionNavigationAcrossWindows = acrossWindows }
     }

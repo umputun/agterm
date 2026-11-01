@@ -89,6 +89,11 @@ paths:
   auto-follow, the bell and pane reveal are unchanged. `SettingsModel.applyWindowSettings` pushes it with
   auto-follow into every store; read back as top-level `tree.attentionIncludesActive`, no setter. Reset
   leaves it, as it leaves auto-follow.
+- `sinkIdleWorkspaces` (default off) moves workspaces with no live agent below the rest, keeping each group's
+  order (`AppStore.sinkIdleWorkspaces(runsAgent:)`). Live means a non-idle status or a pane whose foreground is
+  Claude Code (`AgentProgram.isClaudeCode`), read by `ControlServer`'s sink so Live panes use the daemon leader.
+  It runs a main-queue turn after a selection switch and on every window activation, never on a timer, so rows
+  do not move while the user stays put. Read back as top-level `tree.sinkIdleWorkspaces`, no setter.
 - `attentionNavigationAcrossWindows` makes GUI attention navigation walk every open window
   (`WindowLibrary.attentionStep`, [[menu-actions]]). Pushed into every store the same way and read back as
   top-level `tree.attentionNavigationAcrossWindows`, no setter; `session.go` stays window-scoped. Reset

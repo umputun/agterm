@@ -365,6 +365,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Whether attention navigation also stops on `active` sessions, not only blocked and completed ones;
     /// nil = off. Pushed into every window's `AppStore.attentionIncludesActive`.
     public var attentionIncludesActive: Bool?
+    /// Whether workspaces with no session running an agent sink below the rest on each selection change;
+    /// nil = off. Pushed into every window's `AppStore.sinksIdleWorkspaces`.
+    public var sinkIdleWorkspaces: Bool?
     /// Whether attention navigation walks every open window, in window order, instead of the active one
     /// only; nil = off. GUI navigation only, `session.go` stays window-scoped. Pushed into every window's `AppStore.attentionNavigationAcrossWindows`.
     public var attentionNavigationAcrossWindows: Bool?
@@ -427,7 +430,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
-                linkOpenMode: String? = nil, terminalInputSource: String? = nil,
+                linkOpenMode: String? = nil, terminalInputSource: String? = nil, sinkIdleWorkspaces: Bool? = nil,
                 htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
@@ -471,6 +474,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.attentionIncludesActive = attentionIncludesActive
+        self.sinkIdleWorkspaces = sinkIdleWorkspaces
         self.attentionNavigationAcrossWindows = attentionNavigationAcrossWindows
         self.sidebarFontSize = sidebarFontSize
         self.interfaceFontSize = interfaceFontSize

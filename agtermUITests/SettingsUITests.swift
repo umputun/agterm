@@ -455,6 +455,14 @@ final class SettingsUITests: XCTestCase {
                       "turning row-click expansion off should persist workspaceRowClickExpands=false")
     }
 
+    func testSinkIdleWorkspacesTogglePersistsAndTheTabStillFits() throws {
+        let toggle = settingsControl(tab: "General", control: "settings-sink-idle-workspaces")
+        assertGeneralTabFits(control: "settings-sink-idle-workspaces")
+        toggle.click()
+        XCTAssertTrue(poll { self.settingsBool("sinkIdleWorkspaces") == true },
+                      "turning the sink on should persist sinkIdleWorkspaces=true")
+    }
+
     func testNewSessionDirectoryPickerPersists() throws {
         let picker = settingsControl(tab: "General", control: "settings-new-session-directory")
         picker.click()

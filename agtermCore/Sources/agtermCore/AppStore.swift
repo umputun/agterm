@@ -182,6 +182,12 @@ public final class AppStore {
     /// Whether `nextAttention`/`previousAttention` also stop on `active` sessions. Set by the Settings fan-out.
     @ObservationIgnored public var attentionIncludesActive = false
 
+    /// Whether workspaces without a live agent sink to the bottom; set by the Settings fan-out.
+    @ObservationIgnored public var sinksIdleWorkspaces = false
+    /// The app's sink pass, which reads pane processes the store cannot. Asked on every selection change
+    /// while `sinksIdleWorkspaces` is on.
+    @ObservationIgnored public var idleWorkspaceSinker: ((AppStore) -> Void)?
+
     /// Whether GUI attention navigation walks every open window (`WindowLibrary.attentionStep`). Observed,
     /// unlike `attentionIncludesActive`, because the Navigate menu's enablement reads it.
     public var attentionNavigationAcrossWindows = false
@@ -430,7 +436,8 @@ public final class AppStore {
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
                            pickPending: pickPending(), askPending: askPending(), app: app, liveReset: liveReset,
-                           indexUnsaved: indexUnsaved ? true : nil, linkOpenMode: linkOpenMode?.rawValue)
+                           indexUnsaved: indexUnsaved ? true : nil, linkOpenMode: linkOpenMode?.rawValue,
+                           sinkIdleWorkspaces: sinksIdleWorkspaces)
     }
 
     /// The tree's `paneOverlays`: the panes covered by their own overlay, omitted when neither is.
@@ -556,6 +563,7 @@ public final class AppStore {
         clearAutoResetIndicator(previous)
         recordRecency()
         scheduleSave()
+        if previous != sessionID { requestIdleWorkspaceSink() }
         return destinationIndicator
     }
 

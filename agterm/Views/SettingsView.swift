@@ -130,6 +130,8 @@ private struct GeneralSettingsView: View {
                     Text("After the current session").tag(AppSettings.NewSessionPlacement.afterCurrent)
                 }
                 .accessibilityIdentifier("settings-new-session-placement")
+                Toggle("Move workspaces without a running agent to the bottom", isOn: sinkIdleWorkspaces)
+                    .accessibilityIdentifier("settings-sink-idle-workspaces")
                 Picker("Restore sessions", selection: restoreMode) {
                     ForEach(RestoreMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
@@ -198,6 +200,11 @@ private struct GeneralSettingsView: View {
     }
 
     /// Default ON; turning it off stores false and leaves only the disclosure triangle as the hit target.
+    private var sinkIdleWorkspaces: Binding<Bool> {
+        Binding(get: { model.settings.sinkIdleWorkspaces ?? false },
+                set: { model.setSinkIdleWorkspaces($0 ? true : nil) })
+    }
+
     private var workspaceRowClickExpands: Binding<Bool> {
         Binding(get: { model.settings.workspaceRowClickExpands ?? true },
                 set: { model.setWorkspaceRowClickExpands($0 ? nil : false) })

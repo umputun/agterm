@@ -389,6 +389,7 @@ final class AppActions {
     var hooksEditOverlaySession: UUID?
     weak var remoteAttacher: (any RemoteAttaching)?
     weak var companionDuplicator: (any CompanionDuplicating)?
+    weak var workspaceSinker: (any IdleWorkspaceSinking)?
 
     /// Open `hooks.conf` in the user's editor in a 95% overlay over the active session, exactly like
     /// `editKeymap`; exiting reloads the hooks.

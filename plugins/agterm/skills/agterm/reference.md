@@ -319,6 +319,8 @@ timeout in milliseconds, omitted when the setting is Disabled), `attentionInclud
 next-attention/prev-attention also stop on `active` sessions, Settings ▸ Agent Status; no command sets it),
 `attentionNavigationAcrossWindows` (whether the GUI attention keys walk every open window, Settings ▸ Agent
 Status; no command sets it, and `session go` stays in its window either way),
+`sinkIdleWorkspaces` (whether workspaces with no session running Claude Code and no non-idle status move
+below the rest on each session switch and window activation, Settings ▸ General; no command sets it),
 `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
