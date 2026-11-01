@@ -42,7 +42,16 @@ public final class Client {
         }
         let outcome = SessionHost.ClientOutcome.decide(phase: phase, reply: reply)
         if let message = outcome.diagnostic { diagnostic(message) }
-        try execute(outcome == .fullAttach ? request.argv : Array(request.argv.prefix(3)), request.env)
+        try execute(attachArgv(outcome: outcome, request: request), request.env)
+    }
+
+    /// zmx runs the guard only when it must create the daemon, so a command that already ended ends the
+    /// pane instead of leaving a fresh login shell.
+    private func attachArgv(outcome: SessionHost.ClientOutcome, request: SessionHost.Ensure) -> [String] {
+        guard outcome != .fullAttach else { return request.argv }
+        let bare = Array(request.argv.prefix(3))
+        guard request.argv.count > 3 else { return bare }
+        return bare + ["/bin/sh", "-c", "printf '%s\\n' 'agterm: session is gone'; exit 1"]
     }
 
     public static func run(name: String, argv: [String]) throws {

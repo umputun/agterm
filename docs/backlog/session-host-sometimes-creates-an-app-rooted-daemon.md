@@ -26,9 +26,11 @@ as the route taken in this failure:
   selects `fullAttach`, and `agtermCore/Sources/SessionHostRuntime/Client.swift:45` executes the
   original attach from the app's child. If the daemon is absent, that client creates it.
 - A temporary attach spawn failure at `agtermCore/Sources/SessionHostRuntime/Host.swift:87`, or an
-  early child exit at `Host.swift:117`, returns a `started` failure. The client selects `uncertain`
-  and executes bare `zmx attach NAME` at `Client.swift:45`. Removing the command payload prevents its
-  replay, but bare attach still creates an absent daemon under the app.
+  early child exit at `Host.swift:117`, returns a `started` failure. The client selects `uncertain`.
+  A payload request then attaches with a "session is gone" guard (`Client.attachArgv`), which never
+  replays the payload and ends the pane when the daemon is absent, so it creates no shell under the app.
+  A plain-shell request still executes bare `zmx attach NAME`, which creates an absent daemon under the
+  app; the earlier sightings were plain shells, so this route stays open.
 
 On recurrence, read unified logging for the client PID and failure time:
 

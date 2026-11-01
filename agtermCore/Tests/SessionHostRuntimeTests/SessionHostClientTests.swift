@@ -5,10 +5,10 @@ import agtermCore
 
 struct SessionHostClientTests {
     @Test(arguments: [SessionHost.Ready.State.existing, .created])
-    func successAttachesWithoutPayload(_ state: SessionHost.Ready.State) throws {
+    func successAttachesWithTheGoneGuardInsteadOfThePayload(_ state: SessionHost.Ready.State) throws {
         let peer = Peer(reply: .ok(.init(state: state, leaderPid: 42)))
         let result = try execute(peer: peer)
-        #expect(result.argv == Array(request.argv.prefix(3)))
+        #expect(result.argv == guarded)
         #expect(result.events == ["attach"])
         #expect(peer.frames.count == 1)
         #expect(try SessionHost.decodeFrame(SessionHost.Request.self, from: peer.frames[0]) == .ensure(request))
@@ -41,7 +41,7 @@ struct SessionHostClientTests {
         var executions = 0
         peer.onSend = { executions += 1 }
         let result = try execute(peer: peer)
-        #expect(result.argv == Array(request.argv.prefix(3)))
+        #expect(result.argv == guarded)
         #expect(result.events == [SessionHost.ClientOutcome.uncertain.diagnostic!, "attach"])
         #expect(executions == 1)
         #expect(peer.closed)
@@ -51,15 +51,26 @@ struct SessionHostClientTests {
         let peer = Peer(reply: nil)
         peer.failSend = true
         let result = try execute(peer: peer)
-        #expect(result.argv == Array(request.argv.prefix(3)))
+        #expect(result.argv == guarded)
         #expect(result.events.count == 2)
     }
 
     @Test func startedFailureDiagnosesBeforeAttach() throws {
         let peer = Peer(reply: .error(.init(stage: .started, message: "timeout")))
         let result = try execute(peer: peer)
-        #expect(result.argv == Array(request.argv.prefix(3)))
+        #expect(result.argv == guarded)
         #expect(result.events == [SessionHost.ClientOutcome.uncertain.diagnostic!, "attach"])
+    }
+
+    @Test(arguments: [SessionHost.Response.ok(.init(state: .created, leaderPid: 42)),
+                      .error(.init(stage: .started, message: "timeout"))])
+    func plainShellRequestKeepsTheBareAttach(_ reply: SessionHost.Response) throws {
+        let plain = SessionHost.Ensure(name: request.name, argv: Array(request.argv.prefix(3)), cwd: request.cwd,
+                                       env: request.env, rows: request.rows, cols: request.cols)
+        let result = Recorder()
+        let client = Client(connect: { Peer(reply: reply) }, diagnostic: result.diagnostic, execute: result.execute)
+        try client.run(request: plain)
+        #expect(result.argv == plain.argv)
     }
 
     @Test func oversizedEnvironmentFallsBackWithoutConnecting() throws {
@@ -72,6 +83,10 @@ struct SessionHostClientTests {
         #expect(connects == 0)
         #expect(result.argv == large.argv)
         #expect(result.env == large.env)
+    }
+
+    private var guarded: [String] {
+        Array(request.argv.prefix(3)) + ["/bin/sh", "-c", "printf '%s\\n' 'agterm: session is gone'; exit 1"]
     }
 
     private var request: SessionHost.Ensure {
