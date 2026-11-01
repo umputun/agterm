@@ -69,8 +69,17 @@ struct SessionHostClientTests {
                                        env: request.env, rows: request.rows, cols: request.cols)
         let result = Recorder()
         let client = Client(connect: { Peer(reply: reply) }, diagnostic: result.diagnostic, execute: result.execute)
-        try client.run(request: plain)
+        try client.run(request: plain, endsPane: true)
         #expect(result.argv == plain.argv)
+    }
+
+    @Test(arguments: [SessionHost.Response.ok(.init(state: .created, leaderPid: 42)),
+                      .error(.init(stage: .started, message: "timeout"))])
+    func returningPayloadKeepsTheBareAttach(_ reply: SessionHost.Response) throws {
+        let result = Recorder()
+        let client = Client(connect: { Peer(reply: reply) }, diagnostic: result.diagnostic, execute: result.execute)
+        try client.run(request: request, endsPane: false)
+        #expect(result.argv == Array(request.argv.prefix(3)))
     }
 
     @Test func oversizedEnvironmentFallsBackWithoutConnecting() throws {
@@ -97,7 +106,7 @@ struct SessionHostClientTests {
     private func execute(peer: Peer) throws -> Recorder {
         let recorder = Recorder()
         let client = Client(connect: { peer }, diagnostic: recorder.diagnostic, execute: recorder.execute)
-        try client.run(request: request)
+        try client.run(request: request, endsPane: true)
         #expect(recorder.env == request.env)
         return recorder
     }

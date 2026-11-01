@@ -131,7 +131,7 @@ def main():
         pids.append(p4)
         tail = drain(f4, 3.0).rpartition(b"EXIT-MARK")[2]
         ok &= check("a managed client whose session ends leaves the screen and turns reporting off",
-                    b"\x1bc" not in tail and b"\x1b[?1000l" in tail, repr(tail))
+                    b"\x1bc" not in tail and b"\x1b[?9l" in tail and b"\x1b[?1000l" in tail, repr(tail))
         p5, f5 = attach(None, 30, 83, claim=False, name="exit-plain", argv=ending)
         pids.append(p5)
         tail = drain(f5, 3.0).rpartition(b"EXIT-MARK")[2]

@@ -480,7 +480,8 @@ buys nothing. A caller with no tree uses `version`.
   so a restored command session that starts its command again also holds; read it back on `tree`'s
   `commandWait`. Live sessions mode passes the command as a create-only zmx payload, which bypasses the
   1,024-byte PTY input cap. A surviving daemon ignores the payload; a new daemon runs it, and the pane closes or,
-  with `--wait`, holds when the command exits, as in the other modes. After a clean quit, a missing daemon
+  with `--wait`, holds when the command exits, as in the other modes. A command that ends within a moment of the
+  pane's creation can lose its output: the pane then shows only `agterm: session is gone`. After a clean quit, a missing daemon
   is recreated running whatever that pane's foreground command was; if the command had already exited, or the
   quit never happened, the pane comes back as a fresh shell.
   The command is persisted (`SessionSnapshot.initialCommand`) and starts again on restore in Re-run commands

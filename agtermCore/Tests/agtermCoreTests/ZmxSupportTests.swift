@@ -34,8 +34,9 @@ struct ZmxSupportTests {
         let ending = ZmxReplayScript.renderEnding(commandLine: line)
         let returning = ZmxReplayScript.render(commandLine: line, integrationDirectory: "/bundle/zsh", inheritedZdotdir: nil, shell: "/bin/zsh")
 
+        let endingPrefix = ["/bundle/host", "client", "agterm-pane", "--ends-pane", "--", "/bundle/zmx", "attach", "agterm-pane"]
         #expect(ZmxSupport.attachCommand(configuration, replaying: nil, paneCommand: line, denylist: []) ==
-                CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", ending]))
+                CommandRestore.shellQuotedLine(endingPrefix + ["/bin/zsh", "-lic", ending]))
         #expect(ZmxSupport.attachCommand(configuration, replaying: nil, creationCommand: line, denylist: []) ==
                 CommandRestore.shellQuotedLine(prefix + ["/bin/zsh", "-lic", returning]))
     }

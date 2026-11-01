@@ -348,7 +348,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
                 while duplicate.poll() == .running { Thread.sleep(forTimeInterval: 0.01) }
             }
         })
-        try client.run(request: request)
+        try client.run(request: request, endsPane: true)
         #expect(try String(contentsOf: marker, encoding: .utf8) == "x")
         #expect(context.backend.spawns == 1)
         #expect(events == [SessionHost.ClientOutcome.uncertain.diagnostic!, "attach"])
@@ -845,7 +845,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         var paneArgv: [String] = []
         let client = Client(connect: { ForwardingPeer(reply: reply) }, diagnostic: { _ in },
                             execute: { argv, _ in paneArgv = argv })
-        try client.run(request: request)
+        try client.run(request: request, endsPane: true)
         try #require(!paneArgv.isEmpty)
         let writer = open(gate.path, O_WRONLY)
         try #require(writer >= 0)

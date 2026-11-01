@@ -196,7 +196,8 @@ agtermctl session new --cwd ~/proj --name worker \
 
 The session closes when this command exits unless `--wait` holds the final output. In Live sessions mode the
 command is a create-only zmx payload, which bypasses the 1,024-byte PTY input cap. A surviving daemon ignores
-the payload; a new daemon runs it. After a clean quit, a missing daemon
+the payload; a new daemon runs it. A command that ends within a moment of the pane's creation can lose its
+output and leave only `agterm: session is gone`. After a clean quit, a missing daemon
 replays the captured running command inside a new persistent shell. The exclusions above start a fresh shell.
 
 `session type` drives an ALREADY-RUNNING program — it is not a launcher. Its keystrokes land in a line
