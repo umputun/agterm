@@ -56,9 +56,21 @@ final class ZmxLiveUITests: ControlAPITestCase {
             "cmd": "session.new", "args": ["command": "echo held-output; sleep 1", "wait": true],
         ]), as: UTF8.self))
         let holdingID = try XCTUnwrap((holding["result"] as? [String: Any])?["id"] as? String)
-        XCTAssertTrue(poll(until: self.paneText(holdingID).contains("held-output"), timeout: 20))
-        RunLoop.current.run(until: Date().addingTimeInterval(4))
-        XCTAssertNotNil(try sessionNodeIfPresent(id: holdingID), "--wait should hold the exited command's output")
+        let held = try heldText(holdingID)
+        XCTAssertTrue(held.contains("held-output"), "--wait should hold the exited command's output, got: \(held)")
+        XCTAssertNotNil(try sessionNodeIfPresent(id: holdingID))
+    }
+
+    func testAWaitCommandKeepsScrollbackPastOneScreenAfterExit() throws {
+        _ = try activeSessionID()
+        let command = "echo first-held-line; seq 1 300; printf '\\033[?1000h\\033[?1006h\\033[?2004h'; echo last-held-line"
+        let created = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": command, "wait": true],
+        ]), as: UTF8.self))
+        let sessionID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        let held = try heldText(sessionID)
+        XCTAssertTrue(held.contains("first-held-line"), "scrollback above the screen should survive exit, got: \(held)")
+        XCTAssertTrue(held.contains("last-held-line"), "the final screen should survive exit, got: \(held)")
     }
 
     func testALiveParentWhoseShellExitsRespawnsAndTakesInput() throws {
@@ -161,6 +173,17 @@ final class ZmxLiveUITests: ControlAPITestCase {
     private func paneText(_ sessionID: String) -> String {
         let response = try? sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"pane":"left"}}"#)
         return ((response?["result"] as? [String: Any])?["text"] as? String) ?? ""
+    }
+
+    private func heldText(_ sessionID: String) throws -> String {
+        var text = ""
+        let exited = poll(until: {
+            let response = try? self.sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"all":true}}"#)
+            text = ((response?["result"] as? [String: Any])?["text"] as? String) ?? ""
+            return text.contains("Process exited")
+        }(), timeout: 20)
+        XCTAssertTrue(exited, "the --wait pane should reach the exit prompt, got: \(text)")
+        return text
     }
 
     private func paneID(_ sessionID: String, kind: String) -> String? {

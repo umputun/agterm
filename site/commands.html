@@ -1065,9 +1065,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">--command "zsh -lc 'htop'"</span>. The
                 command is persisted and runs again when a restored session launches in rerun mode.
                 All of that describes <em>Fresh shells</em> and <em>Re-run commands</em>. In <em>Live sessions</em> mode the
-                command is instead a create-only zmx payload the persistent shell runs as a login shell, so the line uses that
-                shell's syntax (zsh or fish), shell operators are interpreted, the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> is that shell's
-                rather than the launchd default, and the session stays open after the command exits.
+                command is instead a create-only zmx payload your login shell runs, so the line uses that
+                shell's syntax (zsh or fish), shell operators are interpreted, and the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> is that shell's
+                rather than the launchd default.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-select</span> creates the session in the

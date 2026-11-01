@@ -18,16 +18,19 @@ NAME = "e2e"
 ROLE = re.compile(rb"\x1b\]2;zmx-role;([A-Za-z0-9-]+):(\w+):(\d+)\x1b\\")
 
 
-def attach(nonce, rows, cols, claim):
+def attach(nonce, rows, cols, claim, name=NAME, argv=("/bin/sh",)):
     pid, fd = pty.fork()
     if pid == 0:
-        env = dict(os.environ, ZMX_DIR=ZDIR, ZMX_MANAGED=nonce, ZMX_NO_DETACH_KEY="1", TERM="xterm-256color")
+        env = dict(os.environ, ZMX_DIR=ZDIR, ZMX_NO_DETACH_KEY="1", TERM="xterm-256color")
         env.pop("ZMX_SESSION", None)
+        env.pop("ZMX_MANAGED", None)
+        if nonce:
+            env["ZMX_MANAGED"] = nonce
         if claim:
             env["ZMX_MANAGED_CLAIM"] = "1"
         # before exec, so the client's Init reads this size and not the pty default
         fcntl.ioctl(0, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
-        os.execve(ZMX, [ZMX, "attach", NAME, "/bin/sh"], env)
+        os.execve(ZMX, [ZMX, "attach", name, *argv], env)
     return pid, fd
 
 
@@ -122,6 +125,17 @@ def main():
                     red + b"ab\x1b[0m  \x1b[0m" + red + b"c\x1b[0m" in replay, repr(replay[-300:]))
         ok &= check("replayed spaces the program wrote keep their style",
                     red + b"ab  c\x1b[0m" in replay, repr(replay[-300:]))
+
+        ending = ("/bin/sh", "-c", "sleep 0.5; printf '\\033[?1000hEXIT-MARK\\n'; sleep 0.5")
+        p4, f4 = attach("exit-4", 30, 83, claim=False, name="exit-managed", argv=ending)
+        pids.append(p4)
+        tail = drain(f4, 3.0).rpartition(b"EXIT-MARK")[2]
+        ok &= check("a managed client whose session ends leaves the screen and turns reporting off",
+                    b"\x1bc" not in tail and b"\x1b[?1000l" in tail, repr(tail))
+        p5, f5 = attach(None, 30, 83, claim=False, name="exit-plain", argv=ending)
+        pids.append(p5)
+        tail = drain(f5, 3.0).rpartition(b"EXIT-MARK")[2]
+        ok &= check("an unmanaged client whose session ends still resets the terminal", b"\x1bc" in tail, repr(tail))
     finally:
         cli("kill", NAME, "--force")
         for pid in pids:

@@ -33,6 +33,10 @@ longer apply, and re-running `check.py`.
   name exists, so a losing creator gets the same `AddressInUse` a bind gave it and never removes the
   winner's socket. When `.s` cannot be made or the staged path is too long for `sockaddr_un`, it binds the
   session name directly and keeps the old window.
+- `0004-managed-exit-keeps-screen.patch` keeps the screen when a managed client exits. Upstream writes RIS
+  on every attach exit, which erases a Live `--command --wait` pane's output under its hold prompt. A client
+  with a valid `ZMX_MANAGED` instead turns off the input reports a program may have left on and resets SGR
+  and the OSC colors. An unmanaged client and a session switch still write RIS.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program

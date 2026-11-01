@@ -3988,8 +3988,8 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 New output after reattach behaves normally. In live mode,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --command</span> passes the
                 command as a create-only zmx payload, which bypasses the 1,024-byte PTY input cap. A surviving daemon ignores the payload;
-                a new daemon runs it, then starts the persistent shell. The session stays open when that command exits,
-                so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> adds no hold prompt. After
+                a new daemon runs it. The pane closes when that command exits, or with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> holds its final output, as in the other modes. After
                 a clean quit, a missing daemon replays the captured running command inside a new persistent shell; the exclusions above
                 start a fresh shell.
                 A Live pane created through the session host may complete its shell's startup terminal negotiation with
