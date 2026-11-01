@@ -883,6 +883,9 @@ error keeps those names for compatibility.
   `SessionStart` hook that rewrites the override to the live session id on every start makes the next
   restart reattach instead of fork (see examples.md). Ownership flips to whoever sets it: write once and
   forget, and it stays pinned to a stale id — that is the deliberate hook-driven tradeoff.
+  Help ▸ Install Agent Status Hooks now ships exactly that: its SessionStart and SessionEnd entries pin
+  `claude --resume <id>` on the pane (`agterm-claude-resume.sh`), so check `tree`'s `restoreCommand`
+  before adding a second hook that would fight it. `AGTERM_CLAUDE_RESUME=0` turns the installed one off.
   `--pane` (default `left`) picks the pane; `--pane right` errors when the session has no split, and
   `scratch` is rejected (`the scratch terminal is never restored`). `--pane-id` (the shell's
   `$AGTERM_PANE_ID`) resolves the pane's LIVE slot, so a hook in a promoted-then-re-split pane still pins

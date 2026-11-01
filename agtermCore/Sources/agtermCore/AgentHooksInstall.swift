@@ -19,6 +19,9 @@ public enum AgentHooksInstall {
     /// keeping the Claude-specific knowledge in the hook resource the way the Codex adapter does.
     static let claudeWrapperName = "agterm-claude-status.sh"
 
+    /// Pins `claude --resume <id>` as the pane's restore command; the adapter's `resume` mode execs it.
+    public static let claudeResumeName = "agterm-claude-resume.sh"
+
     /// The bundled Pi extension's path relative to the agent-status package, and its destination filename.
     public static let piExtensionRelativePath = "pi/agterm-status.ts"
     static let piExtensionName = "agterm-status.ts"
@@ -117,13 +120,16 @@ public enum AgentHooksInstall {
     /// `Notification[permission_prompt]` fires only once the prompt has waited about six seconds with no
     /// keystroke, and stays for the sandboxed network prompt, which `PermissionRequest` does not cover.
     /// `Notification` alone carries a matcher, and only `Stop`→`completed` passes `--auto-reset` (it clears
-    /// on visit); the rest stay keep-state.
+    /// on visit); the rest stay keep-state. `SessionStart`/`SessionEnd` are not states: the adapter's `resume`
+    /// mode pins the live conversation id, so a quit by hand and an agterm exit both restore it.
     static let claudeHooks: [(event: String, matcher: String?, state: String)] = [
         ("UserPromptSubmit", nil, "active --blink"),
         ("PostToolUse", nil, "active --blink"),
         ("Stop", nil, "completed --auto-reset"),
         ("PermissionRequest", nil, "blocked"),
         ("Notification", "permission_prompt", "blocked"),
+        ("SessionStart", nil, "resume start"),
+        ("SessionEnd", nil, "resume end"),
     ]
 
     /// Codex lifecycle events paired with actions the installed Codex hook understands; the adapter, not

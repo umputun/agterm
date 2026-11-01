@@ -3,7 +3,7 @@ import agtermCore
 
 /// Installs the bundled agent-status hooks package into the user's home: the scripts into
 /// `~/.config/agterm/agent-status/`, the bundled `agtermctl`'s absolute path baked into the wrapper, a
-/// marker-guarded `source` line in `~/.zshrc`/`~/.bashrc`/`~/.config/fish/config.fish`, the five Claude Code
+/// marker-guarded `source` line in `~/.zshrc`/`~/.bashrc`/`~/.config/fish/config.fish`, the seven Claude Code
 /// hooks merged into `~/.claude/settings.json`, the six Codex lifecycle hooks into `~/.codex/config.toml`,
 /// and — when each is configured — Pi's lifecycle extension into `~/.pi/agent/extensions/` and OpenCode's
 /// plugin into `~/.config/opencode/plugins/`. Claude/Codex configs get a `.bak` first; the Codex step parses
@@ -144,7 +144,7 @@ enum AgentHooksInstaller {
     // generic wrapper — which carries the baked path — so there is nothing to bake into it.
     private static func bakeAgtermctlPath() throws {
         guard let tool = bundledTool else { return } // no bundled CLI: leave the PATH fallback in place
-        for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {
+        for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName, AgentHooksInstall.claudeResumeName] {
             let wrapper = destinationFolder.appendingPathComponent(name)
             let original = try String(contentsOf: wrapper, encoding: .utf8)
             let baked = AgentHooksInstall.bakeAgtermctlPath(into: original, toolPath: tool.path)

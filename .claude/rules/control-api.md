@@ -45,6 +45,9 @@ paths:
   request to blocked. `PermissionRequest` fires as the prompt opens.
   `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
   prompt, which `PermissionRequest` skips. PostToolUse clears a prior block because there is no answer event.
+  SessionStart and SessionEnd run the adapter's `resume` mode, which execs `agterm-claude-resume.sh` past the
+  worker guard: it pins `claude --resume <session_id>` through `session.restore`, read with `plutil` because
+  `jq` is not on a stock Mac, and only for a UUID-shaped id, since the pin is persisted shell code.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
   Those first four report nothing for a null `transcript_path`: Codex's ephemeral memory consolidation
   thread fires them but never a user Stop, so they would leave the pane active.

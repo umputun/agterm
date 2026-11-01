@@ -23,11 +23,11 @@ struct AgentHooksInstallTests {
         (entry["hooks"] as? [[String: Any]])?.first?["command"] as? String
     }
 
-    @Test func mergeWhenAbsentAddsAllFiveHooks() throws {
+    @Test func mergeWhenAbsentAddsAllSevenHooks() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: nil, scriptDir: scriptDir)
         #expect(result.changed)
         let evts = events(result.json)
-        #expect(evts.count == 5)
+        #expect(evts.count == 7)
         #expect(evts["UserPromptSubmit"]?.count == 1)
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
@@ -35,6 +35,8 @@ struct AgentHooksInstallTests {
         #expect(evts["PermissionRequest"]?.count == 1)
         // the entries invoke the Claude adapter, which guards on ownership and forwards to the wrapper
         let adapter = AgentHooksInstall.claudeWrapperPath(scriptDir: scriptDir)
+        #expect(command(evts["SessionStart"]![0]) == "'\(adapter)' resume start")
+        #expect(command(evts["SessionEnd"]![0]) == "'\(adapter)' resume end")
         #expect(command(evts["UserPromptSubmit"]![0]) == "'\(adapter)' active --blink")
         // PostToolUse re-asserts active after every tool, clearing a lingering blocked on resume
         #expect(command(evts["PostToolUse"]![0]) == "'\(adapter)' active --blink")
@@ -173,7 +175,7 @@ struct AgentHooksInstallTests {
         let first = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
         #expect(first.changed)
         let evts = events(first.json)
-        #expect(evts.count == 5)
+        #expect(evts.count == 7)
         for event in ["UserPromptSubmit", "PostToolUse", "Stop", "Notification", "PermissionRequest"] {
             #expect(evts[event]?.count == 1)
         }
@@ -294,13 +296,13 @@ struct AgentHooksInstallTests {
         // a whitespace-only file has no content to lose, so it starts fresh like an empty file
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "   \n\t\n", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 5)
+        #expect(events(result.json).count == 7)
     }
 
     @Test func mergeHandlesEmptyExisting() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 5)
+        #expect(events(result.json).count == 7)
     }
 
     @Test func codexHooksBlockContainsAllSixEvents() {

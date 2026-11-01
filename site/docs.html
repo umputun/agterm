@@ -3708,8 +3708,16 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               hooks package: a generic bash/zsh/fish shell integration (flags
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
-              the default set is gemini, cursor-agent, aider, crush, goose), five Claude Code hooks (prompt → active,
-              tool run → active, Stop → completed, permission request and permission prompt → blocked), and an OpenCode lifecycle plugin.
+              the default set is gemini, cursor-agent, aider, crush, goose), seven Claude Code hooks (prompt → active,
+              tool run → active, Stop → completed, permission request and permission prompt → blocked, and session start and
+              end → resume), and an OpenCode lifecycle plugin. The two resume hooks pin
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">claude --resume &lt;id&gt;</span>
+              as the pane's restore command, so under Re-run commands the next launch reopens that conversation whether you quit
+              Claude Code yourself or agterm exited around it. The pin stays until replaced;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session restore --clear</span>
+              drops it, and exporting
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_CLAUDE_RESUME=0</span>
+              turns the resume hooks off.
               When Claude Code runs as a worker under another agent with a shell process still between them, as in a
               tool call, its hooks stay silent, so the status of the pane that spawned it is not overwritten.
             </p>
@@ -3724,7 +3732,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.bashrc</span>, and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/fish/config.fish</span>
               (fish only when that directory already exists); open a new terminal for it to take effect. The per-agent hooks are
-              merged into each agent's own config: five Claude Code hooks into
+              merged into each agent's own config: seven Claude Code hooks into
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.claude/settings.json</span> and
               six Codex lifecycle hooks into
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>. Before it

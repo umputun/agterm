@@ -81,4 +81,8 @@ for _ in 1 2 3 4 5 6 7 8; do
   p=$ppid
 done
 
+if [ "${1:-}" = resume ]; then
+  shift
+  exec "$script_dir/agterm-claude-resume.sh" "$@"
+fi
 exec "$status_wrapper" "$@"
