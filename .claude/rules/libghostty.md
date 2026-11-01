@@ -330,8 +330,12 @@ paths:
   suppress hit testing and the deck never sets `isHidden`.
 - Both dividers paint ↔ themselves: the sidebar handle from `onContinuousHover`, the split from
   `SplitProbeView`'s tracking area over the split, which covers both panes, so it repaints only inside the
-  band and gates on the deck's `visible` minus any overlay or scratch. AppKit's own divider cursor stops
-  firing once a second session is mounted, so nothing else writes it.
+  band and gates on the deck's `visible` minus any overlay or scratch.
+- AppKit's own divider cursor rect stays live on a background session's split, which the deck hides by
+  opacity only. The visible terminal's per-move writes mask it, so it surfaces only under a cover with no
+  per-move writer: a session ask left ↔ stuck over the hidden divider's column.
+  `SplitCursorRects` drops that rect while the probe's `deckVisible` is false and restores it when shown.
+  Reproduce with two split sessions at different ratios.
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.
