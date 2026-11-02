@@ -294,6 +294,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             syncSelection()
             // agent-status colors are global, so the content diff can't see a color change — re-apply all.
             reapplyStatusGlyphs()
+            reapplyRowIconVisibility()
             updateEmptyState()
             // cheap re-assert in case a settings change requires recomputing the inset.
             applySidebarContentInset(outlineView?.enclosingScrollView)

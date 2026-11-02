@@ -23,7 +23,14 @@ code, so one pass proves nothing.
 Run 41408692761 (PR #864 head `560228b4`) stalled the same way: `new-0` and `new-1` in 75 and 177 ms,
 `new-2` timed out, the app `sample` timed out after 20 s and the CLI had exited before its sample ran.
 
-A stalled call now also gets a `sudo -n spindump` of the app and CLI in one snapshot, bounded at 15 s, and the
-step checks that collector once against two throwaway processes into `spindump-check.json`. Run 41414892558
-validated it on the runner (a readable 1.3 MB report naming its target), so the next stall's evidence should
-include `spindump-NN-<op>.txt`; start there.
+A stalled call now also gets a `sudo -n spindump` of the app, bounded at 15 s, and the step checks that
+collector once against a throwaway process into `spindump-check.json`. Run 41414892558 validated the previous
+two-target invocation on the runner (a readable 1.3 MB report naming its target). The next stall's evidence
+should include `spindump-NN-<op>.txt`; start there.
+
+Run 41424943333 (PR #865 head `acef8084`) stalled the same way: `new-0` and `new-1` in 57 and 131 ms, `new-2`
+timed out. All three collectors failed: the app `sample` timed out after 20 s, the CLI `sample` could not
+examine the CLI pid, and the spindump, which then also named the CLI with `-proc`, failed whole with `Cannot
+find process with pid or partial name` for that pid. Collectors start at 3 s and the CLI is killed at 5 s, so
+the spindump may have looked after the CLI was gone; the cause is not established. The CLI was dropped from
+the spindump so a lost CLI cannot cost the app snapshot; that does not guarantee the app stack next time.

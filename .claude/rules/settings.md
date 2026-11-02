@@ -103,7 +103,7 @@ paths:
   contract, so freeing it risks a crash and the rare leak is accepted.
 - `.agtermAppearanceChanged` is required because terminal color is not observable; it updates
   `terminalColor`, quick-terminal backing, title/window appearance, and non-observable chrome mirrors.
-- Settings is a 540x680 six-tab SwiftUI scene with explicit selection defaulting General, preventing
+- Settings is a 540x710 six-tab SwiftUI scene with explicit selection defaulting General, preventing
   `com_apple_SwiftUI_Settings_selectedTabIndex` persistence. General holds Mouse and Sessions; the
   global-Ghostty-config toggle and its hint close Sessions, since a third section made the tab scroll.
   Appearance holds Terminal and Window. Interface groups `InterfaceElement`s two per row, with the
@@ -112,7 +112,7 @@ paths:
   which sits there rather than under Appearance's Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
   status reset, Navigation (attention-includes-active, attention-across-windows, auto-follow), and Reset,
-  and is exactly full:
+  and must not scroll:
   `testAttentionIncludesActiveTogglePersists` requires Reset not to move when scrolled. Key Mapping holds the keyboard layout lock,
   config directory, diagnostics, and Reload.
 - Every change that adds or moves a Settings control checks that its tab does not scroll: scroll the
@@ -267,7 +267,8 @@ paths:
   `sessionContext`, `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`,
   `overlayToggle`;
   sidebar cases are `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level
-  `workspaceAddSession`.
+  `workspaceAddSession`, `workspaceIcons` and `sessionIcons`. The two icon toggles show the glyph their rows
+  draw, so they share it with `focusFilter` and `quickTerminal`.
   A `hiddenByDefault` case (`workspaceName`, `customCommands` and `overlayToggle`) is governed by
   `shownInterfaceElements` instead, the same shape with the opposite sense, and its name in the hidden list is ignored. Attention
   has its separate default-off setting.
@@ -295,8 +296,8 @@ paths:
 - `flaggedViewLayout` is a raw `FlaggedViewLayout` (`flat`|`plain`|`tree`), nil for the default `flat`, resolved by
   `effectiveFlaggedViewLayout` and mirrored to `GhosttyApp.flaggedViewLayout`. App-wide, never per window.
   Every sidebar Coordinator picks it up on `.agtermAppearanceChanged`, and only one showing the flagged view
-  rebuilds. The picker sits at the bottom of the General tab's Sessions section: the Interface tab is exactly full at
-  540x680, and one more row pushes the quick-terminal Size off the bottom. A grouped Form scrolls, so an
+  rebuilds. The picker sits at the bottom of the General tab's Sessions section: the Interface tab is full at
+  540x710, and one more row pushes the quick-terminal Size off the bottom. A grouped Form scrolls, so an
   overflowing tab still reports every control hittable, and its last text can sit inside the window while
   the section's bottom inset does not; `assertGeneralTabFits` in `SettingsUITests` scrolls the tab and
   requires the closing hint not to move.

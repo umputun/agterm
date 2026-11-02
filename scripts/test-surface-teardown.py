@@ -124,30 +124,29 @@ def sampler(pid, path):
     return Collector("sample", ["sample", str(pid), "2", "-file", str(path)], path, SAMPLE_LIMIT)
 
 
-def spindump(app_pid, cli_pid, path):
-    """Both processes in one passive snapshot; `sample` has timed out on a stalled app in CI."""
-    argv = ["sudo", "-n", "/usr/sbin/spindump", str(app_pid), "1", "10", "-onlyTarget", "-proc", str(cli_pid),
+def spindump(app_pid, path):
+    """A passive app snapshot; `sample` has timed out on a stalled app in CI. The CLI is left out because a
+    spindump fails whole when one named pid cannot be found, and the CLI is killed 2 s after collectors start."""
+    argv = ["sudo", "-n", "/usr/sbin/spindump", str(app_pid), "1", "10", "-onlyTarget",
             "-noProcessingWhileSampling", "-timelimit", "10", "-o", str(path)]
     return Collector("spindump", argv, path, SPINDUMP_LIMIT, privileged=True)
 
 
 def check_spindump(evidence):
-    """Runs the stall collector once against two throwaway processes, so a stall's missing report can be told
+    """Runs the stall collector once against a throwaway process, so a stall's missing report can be told
     apart from a collector that never works on this runner."""
     path = evidence / "spindump-check.txt"
-    first = subprocess.Popen(["/bin/sleep", "30"])
-    second = subprocess.Popen(["/bin/sleep", "30"])
+    target = subprocess.Popen(["/bin/sleep", "30"])
     try:
-        failure = spindump(first.pid, second.pid, path).finish()
+        failure = spindump(target.pid, path).finish()
     finally:
-        for proc in (first, second):
-            proc.kill()
-            proc.wait()
+        target.kill()
+        target.wait()
     try:
         report = path.read_text(errors="replace")
     except OSError as exc:
         report, failure = "", failure or f"report unreadable: {exc}"
-    if not failure and str(first.pid) not in report:
+    if not failure and str(target.pid) not in report:
         failure = "report is empty" if not report else "report does not name the target process"
     (evidence / "spindump-check.json").write_text(json.dumps({"error": failure, "report_bytes": len(report)}))
     print(f"spindump check: {failure or f'{len(report)} bytes'}", flush=True)
@@ -215,7 +214,7 @@ def run_case(app, evidence, count, busy):
             index = len(result["calls"]) - 1
             for side, target in (("app", pid), ("cli", proc.pid)):
                 samplers.append((entry, side, sampler(target, case_dir / f"sample-{index:02d}-{op}-{side}.txt")))
-            samplers.append((entry, "spindump", spindump(pid, proc.pid, case_dir / f"spindump-{index:02d}-{op}.txt")))
+            samplers.append((entry, "spindump", spindump(pid, case_dir / f"spindump-{index:02d}-{op}.txt")))
             try:
                 out, err = proc.communicate(timeout=max(0, begin + CALL_LIMIT - time.monotonic()))
             except subprocess.TimeoutExpired:
