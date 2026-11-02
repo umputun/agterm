@@ -54,9 +54,7 @@ public enum MarkdownPage {
     static func localPath(_ reference: String, folder: String) -> String? {
         guard folder.hasPrefix("/"), !reference.isEmpty else { return nil }
         let candidate: String
-        if reference.hasPrefix("file:///") {
-            candidate = String(reference.dropFirst(7))
-        } else if reference.hasPrefix("/") {
+        if reference.hasPrefix("/") {
             candidate = reference
         } else if reference.hasPrefix("~") || hasScheme(reference) {
             return nil

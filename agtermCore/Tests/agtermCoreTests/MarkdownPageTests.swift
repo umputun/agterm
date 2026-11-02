@@ -62,7 +62,7 @@ struct MarkdownPageTests {
         let shot = try touch("img/shot.png")
 
         #expect(MarkdownPage.localPath(shot, folder: folder) == shot)
-        #expect(MarkdownPage.localPath("file://" + shot, folder: folder) == shot)
+        #expect(MarkdownPage.localPath("file://" + shot, folder: folder) == nil, "the renderer drops file: sources, so none is read")
     }
 
     @Test func anOutwardSymlinkIsRefusedAndAnInwardOneResolvesToItsTarget() throws {

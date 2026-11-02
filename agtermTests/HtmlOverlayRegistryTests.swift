@@ -977,6 +977,29 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         try await waitForScript("document.images[0]?.naturalWidth ?? 0", in: page.webView) { $0 == "30" }
     }
 
+    // regression: every repeated reference wrote the whole data URI into the rendered markup
+    func testARepeatedPictureIsSetThroughTheDomAndCappedAtTheEmbeddedLimit() async throws {
+        _ = try writePNG("shot.png", width: 30)
+        let source = (0..<1000).map { _ in "![s](shot.png)" }.joined(separator: " ") + " ![r](https://example.com/r.png)"
+        let page = registry.page(for: try openMarkdown("doc.md", source), store: store)
+        page.webView.configuration.userContentController.addUserScript(WKUserScript(source: """
+            const setter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML').set;
+            Object.defineProperty(Element.prototype, 'innerHTML', { set(html) {
+              const root = document.documentElement;
+              root.dataset.markupPlaceholders = String((html.match(/data-agterm-image=/g) || []).length);
+              root.dataset.markupPayload = String(html.includes('data:image'));
+              setter.call(this, html);
+            } });
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: .world(name: "agterm-markdown")))
+        try await waitForScript("document.querySelectorAll('.agterm-alt').length", in: page.webView) { $0 == "745" }
+
+        let seen = try await page.webView.evaluateJavaScript("""
+            [document.images.length, document.querySelectorAll('img[src^="data:image/png"]').length,
+             document.documentElement.dataset.markupPlaceholders, document.documentElement.dataset.markupPayload].join('|')
+            """)
+        XCTAssertEqual(seen as? String, "256|256|256|false")
+    }
+
     func testAMarkdownPageLinksHeadingsAndKeepsOtherTargetsInert() async throws {
         let source = "# Intro & Setup!\n\n## Usage\n\n## Usage\n\n## Usage-1\n\n"
             + "[a](#usage-1) [b](about:blank) [c](other.md) [d](https://example.com/x)\n"

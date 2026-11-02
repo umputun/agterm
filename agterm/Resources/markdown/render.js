@@ -16,19 +16,28 @@
       try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch (_) { return ''; }
     },
   });
-  // a picture is emitted only as a data URI the app embedded, so no authored source ever reaches the document
+  // only app-embedded data URIs are shown, so no authored source reaches the document;
+  // placeholders keep repeated base64 payloads out of rendered markup
+  const maxImages = 256;
+  let shown = 0;
   md.renderer.rules.image = (tokens, idx, options, env, self) => {
     const token = tokens[idx];
     const key = decoded(token.attrGet('src') || '');
     const alt = md.utils.escapeHtml(self.renderInlineAsText(token.children || [], options, env));
-    const uri = Object.prototype.hasOwnProperty.call(refs, key) ? uris[refs[key]] : null;
-    if (typeof uri === 'string' && uri.startsWith('data:image/')) {
-      return `<img src="${md.utils.escapeHtml(uri)}" alt="${alt}">`;
+    const index = Object.prototype.hasOwnProperty.call(refs, key) ? refs[key] : null;
+    const uri = Number.isInteger(index) ? uris[index] : null;
+    if (typeof uri === 'string' && uri.startsWith('data:image/') && shown < maxImages) {
+      shown++;
+      return `<img data-agterm-image="${index}" alt="${alt}">`;
     }
     return `<span class="agterm-alt">${alt || md.utils.escapeHtml(key)}</span>`;
   };
   page.innerHTML = md.render(source.textContent);
   source.remove();
+  for (const img of page.querySelectorAll('img[data-agterm-image]')) {
+    img.src = uris[Number(img.dataset.agtermImage)];
+    img.removeAttribute('data-agterm-image');
+  }
 
   // a web link goes through the app's confirmed hand-off and a fragment scrolls in place; anything else
   // (about:, a relative file, another scheme) would navigate the page off its document, so it stays text

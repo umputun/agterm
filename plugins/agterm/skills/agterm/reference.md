@@ -1131,7 +1131,7 @@ error keeps those names for compatibility.
   - render a `.md` or `.markdown` file as a page in the terminal theme, the view a user's ⌘-click on its path opens
   (at the link-open size, 95% when links open in the browser). Code is highlighted, task lists show boxes, and
   headings get GitHub-style anchors. Pictures in the file's own folder are embedded, symlinks resolved first;
-  any other picture shows its alt text and nothing is fetched. Raw HTML stays text and the page runs no script
+  any other picture, and any past the first 256, shows its alt text and nothing is fetched. Raw HTML stays text and the page runs no script
   of its own; a web link opens in the browser after the confirmation, a `#heading` link scrolls, any other link
   is plain text. No bridge; Open in Browser and Show in Finder are refused. Refuses a COMMAND, `--html`,
   `--url`, `--image`, the page flags, `--cwd`, `--wait`, `--block` and `--companion`; a relative FILE resolves

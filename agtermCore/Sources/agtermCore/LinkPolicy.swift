@@ -206,7 +206,8 @@ public enum LinkPolicy {
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
     /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
     /// markdown file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
-    /// A remote pane ignores bare paths and reveals `file://` images, since both name files on another Mac.
+    /// A remote pane ignores bare paths and reveals `file://` pictures and markdown files, since both name files
+    /// on another Mac.
     /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
                              localHosts: Set<String> = localHostNames, home: String = NSHomeDirectory()) -> Route {
