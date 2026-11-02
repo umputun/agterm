@@ -138,23 +138,23 @@ No new enum cases yet, so the app builds unchanged around the new code.
 - Create: `agterm/Views/MarkdownProbe.swift`
 - Create: `agtermTests/MarkdownProbeTests.swift`
 
-- [ ] `MarkdownPage`: limits; image-reference extraction with Foundation's parser, keyed by the
+- [x] `MarkdownPage`: limits; image-reference extraction with Foundation's parser, keyed by the
   percent-decoded string; containment of each local candidate against the markdown file's folder with
   symlinks resolved first and canonical paths deduplicated; the HTML document builder that escapes the
   markdown and the image map as inert data and carries the CSP
-- [ ] `ImageProbe`: the descriptor read (`fstat`, regular file, byte cap, offloaded iCloud refused) moves
+- [x] `ImageProbe`: the descriptor read (`fstat`, regular file, byte cap, offloaded iCloud refused) moves
   into a shared reader that takes the cap and returns a neutral failure; the image path keeps its
   behavior and messages
-- [ ] `MarkdownProbe`: reads the markdown through the shared reader off the main actor, then reads each
+- [x] `MarkdownProbe`: reads the markdown through the shared reader off the main actor, then reads each
   contained image through `ImageProbe`'s checks until the total byte or pixel budget is reached; returns
   markdown text plus the reference-to-data-URI map
-- [ ] package tests: escaping (a literal `</script>` and `<img>` in the source stay inert); extraction
+- [x] package tests: escaping (a literal `</script>` and `<img>` in the source stay inert); extraction
   (inline, reference-style, remote, duplicates, a filename with a space and one with non-ASCII);
   containment (`../` escape, an outward symlink, an inward symlink, canonical dedupe); limits
-- [ ] hosted tests: `ImageProbeTests` still pass with the shared reader; `MarkdownProbeTests` for a plain
+- [x] hosted tests: `ImageProbeTests` still pass with the shared reader; `MarkdownProbeTests` for a plain
   file, non-regular and oversized files refused, an embedded image, a bad signature not embedded, and the
   byte and pixel budgets stopping further embedding
-- [ ] run `swift test --filter MarkdownPageTests` and the hosted `ImageProbeTests` and
+- [x] run `swift test --filter MarkdownPageTests` and the hosted `ImageProbeTests` and
   `MarkdownProbeTests`; leak check - must pass before task 2
 
 ### Task 2: Markdown page source and rendering
