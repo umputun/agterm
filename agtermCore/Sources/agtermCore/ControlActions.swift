@@ -58,6 +58,9 @@ public protocol ControlActions {
     /// Sets or clears the session's title-bar context; `context` is already trimmed and validated, and nil
     /// means clear.
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse
+    /// Sets or clears the session's sidebar info line; `info` is already validated and parsed, and nil
+    /// means clear.
+    func setSessionInfo(_ target: String?, window: String?, info: SessionInfo?) -> ControlResponse
     /// Sets or clears a session's sidebar tint; the dispatcher has parsed the color and parts.
     func setSessionTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse
     /// Sets or clears a workspace row's own tint.

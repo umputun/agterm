@@ -166,19 +166,22 @@ public struct SessionInfo: Equatable, Sendable {
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherSessionMetadataTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
+- Modify: `agterm/Control/ControlServer.swift`
 
-- [ ] add `case sessionInfo = "session.info"` and the `markdown`/`hideAfter` args; dispatch it in
+- [x] ➕ register `.sessionInfo` in `ControlServer.dispatch`'s exhaustive switch beside `.sessionContext`, moved
+      here from task 3 because a new command case breaks the app build until it is listed
+- [x] add `case sessionInfo = "session.info"` and the `markdown`/`hideAfter` args; dispatch it in
       `ControlDispatcher+SessionMetadata.swift` with `mode: set|clear`, building the value through
       `SessionInfo.make` and rejecting every bad combination before any action runs
-- [ ] add `setSessionInfo` to `ControlActions` with the unimplemented default
-- [ ] add optional `info`, `infoMarkdown`, `infoHideAfter` to `ControlSessionNode` with defaults in the
+- [x] add `setSessionInfo` to `ControlActions` with the unimplemented default
+- [x] add optional `info`, `infoMarkdown`, `infoHideAfter` to `ControlSessionNode` with defaults in the
       compatibility initializer (agtermCore is consumed by the agterm-linux fork), populated in `AppStore`
       from `effectiveInfo` per the read-back rule in Technical Details
-- [ ] write dispatcher tests in `ControlDispatcherSessionMetadataTests` (`ControlProtocolTests.swift` is at
+- [x] write dispatcher tests in `ControlDispatcherSessionMetadataTests` (`ControlProtocolTests.swift` is at
       its cap): set, clear, the encoded request shape, and every rejection path calling NO action
-- [ ] write projection tests: all three fields present with `infoMarkdown: false` and `infoHideAfter: 0` for a
+- [x] write projection tests: all three fields present with `infoMarkdown: false` and `infoHideAfter: 0` for a
       plain untimed line, all omitted when unset
-- [ ] run `swift test --filter "ControlDispatcherSessionMetadataTests|AppStoreTreeProjectionTests"` - must pass
+- [x] run `swift test --filter "ControlDispatcherSessionMetadataTests|AppStoreTreeProjectionTests"` - must pass
       before task 3
 
 ### Task 3: App effect, expiry timer and close/undo
@@ -192,8 +195,8 @@ public struct SessionInfo: Equatable, Sendable {
 - Create: `agtermTests/ControlServerSessionInfoTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePendingCloseTests.swift`
 
-- [ ] implement `setSessionInfo` in the new file through `AppStore.setInfo`, and register the command beside
-      `.sessionContext` in `ControlServer.swift` (`ControlServer+SessionActions.swift` is at its cap)
+- [ ] implement `setSessionInfo` in the new file through `AppStore.setInfo` (`ControlServer+SessionActions.swift`
+      is at its cap; the switch registration landed in task 2)
 - [ ] add `armInfoAutoHide` mirroring `armHudAutoHide`: a per-session revision, restart on every successful
       set including identical text, cancel through `Session.onInfoDiscarded` and on a set without
       `--hide-after`; expiry clears through `AppStore.setInfo(nil, ...)`

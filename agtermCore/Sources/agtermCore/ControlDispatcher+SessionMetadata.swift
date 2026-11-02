@@ -31,6 +31,30 @@ extension ControlDispatcher {
         return actions.setSessionContext(request.target, window: args?.window, context: context)
     }
 
+    /// `session.info`: `set` takes `text` plus optional `markdown` and `hideAfter`, `clear` takes none of them.
+    /// The whole value is built and validated here, so a refused set reaches no action and leaves the line and
+    /// its timer standing.
+    func dispatchSessionInfo(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        switch args?.mode ?? "" {
+        case "set":
+            guard let text = args?.text else {
+                return ControlResponse(ok: false, error: "session.info set requires text")
+            }
+            switch SessionInfo.make(source: text, markdown: args?.markdown ?? false, hideAfter: args?.hideAfter ?? 0) {
+            case .success(let info): return actions.setSessionInfo(request.target, window: args?.window, info: info)
+            case .failure(let rejection): return ControlResponse(ok: false, error: "session.info: \(rejection.message)")
+            }
+        case "clear":
+            guard args?.text == nil, args?.markdown == nil, args?.hideAfter == nil else {
+                return ControlResponse(ok: false, error: "session.info clear takes no text, markdown or hide-after")
+            }
+            return actions.setSessionInfo(request.target, window: args?.window, info: nil)
+        default:
+            return ControlResponse(ok: false, error: "invalid info mode: \(args?.mode ?? "") (set|clear)")
+        }
+    }
+
     /// `session.tint` and `workspace.tint` share one parse, so both refuse the same input the same way.
     func dispatchTint(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
