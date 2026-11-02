@@ -154,10 +154,10 @@ not an implementation detail.
   content, so a binary file fails the click; `load(path:)` returns the validated text; `checkDetached` for
   the click.
 - `LinkPolicy`:
-  - `LinkDisposition.text(URL, line: Int?)`, `Route.text(URL, line:, session:, sizePercent:)`, routed with
-    the markdown origin rules and sizes.
-  - `location(of path: String) -> (path: String, line: Int, column: Int?)?` strips a trailing
-    `:digits[:digits]`, pure.
+  - `LinkDisposition.text(URL, line: Int?)`, `Route.text(TextLink)`, routed with the markdown origin rules
+    and sizes.
+  - `locations(for:origin:cwd:) -> [LinkLocation]` lists the candidates; the internal `lineSuffix` strips a
+    trailing `:digits[:digits]` and drops the column, pure.
   - A relative raw link (`./`, `../`, or `dir/` first segment, no scheme parse) is joined to the click's cwd
     lexically; the cwd is captured on the main actor with the click. A first segment containing `:` is never
     a relative directory, so `http://localhost:3000` keeps its web routing.
@@ -169,8 +169,8 @@ not an implementation detail.
   `ControlHtmlOverlayNode.text: ControlTextOverlayNode?` with `file`, `language` (the mapped language,
   omitted when unmapped; a file over `maxHighlightBytes` still reports it and renders plain, since the
   host-free projection never sees the size) and `line` (requested, not the viewport).
-- Click intent: `LinkClickIntent { normal, browser, reveal }` in agtermCore with
-  `LinkPolicy.clickIntent(modifiers:mode:origin:mouseCaptured:)` replacing `wantsBrowser`:
+- Click intent: `LinkPolicy.ClickIntent { normal, browser, reveal }` in agtermCore with
+  `LinkPolicy.clickIntent(modifiers:mode:origin:mouseCaptured:)`:
   - ⌘⇧ → `browser` (unchanged rules); ⌘⌥ → `reveal`; under mouse capture ⌘⌥⇧ → `reveal` unconditionally,
     and libghostty's own Shift bypass decides whether `OPEN_URL` fires: the app has no shift-capture state
     (`ghostty.h` exposes only `ghostty_surface_mouse_captured`). Shift is kept in captured events so
@@ -356,8 +356,8 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 
 - [x] fork check for public `LinkPolicy.wantsBrowser` callers in agterm-linux; remove it, or keep it as a
   wrapper over `clickIntent` when a caller exists
-- [x] `LinkClickIntent` and `clickIntent(...)` replace `wantsBrowser`; the release lock holds the intent and
-  `OPEN_URL` snapshots it; `follow` takes the intent, and `reveal` on a local path reveals after the guarded
+- [x] `LinkPolicy.ClickIntent` and `clickIntent(...)` added, `wantsBrowser` kept as a wrapper for the
+  fork's caller; the release lock holds the intent and `OPEN_URL` snapshots it; `follow` takes the intent, and `reveal` on a local path reveals after the guarded
   classification and candidate resolution, skipping only the viewer choice, a web URL keeping its policy
 - [x] `linkMods` normalizes ALT on the exact chord alone for hover, the press and an undragged release,
   never on a drag event or the release after one; `HudLinkClick` accepts the reveal chord and forwards

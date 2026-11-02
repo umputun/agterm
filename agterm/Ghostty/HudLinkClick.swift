@@ -70,7 +70,7 @@ enum HudLinkClick {
         event.type == .leftMouseDown && isLinkChord(event.modifierFlags)
     }
 
-    static func isLinkChord(_ flags: NSEvent.ModifierFlags) -> Bool {
+    private static func isLinkChord(_ flags: NSEvent.ModifierFlags) -> Bool {
         let held = flags.intersection([.command, .shift, .control, .option])
         return held == .command || held == [.command, .option]
     }

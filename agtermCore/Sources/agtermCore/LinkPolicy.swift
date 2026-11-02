@@ -190,7 +190,7 @@ public enum LinkPolicy {
     }
 
     /// disposition maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`,
-    /// `.markdown` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
+    /// `.markdown`, `.text` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
     /// unparseable input → `.ignore`. A local path is a LOCAL `file://` link (empty host, or a host in
     /// `localHosts`), host-stripped so Finder never leans on the original authority, or a bare path
     /// (`isBarePath`) taken literally with `~/` expanded against `home`. Both are injected so the decision
@@ -216,7 +216,7 @@ public enum LinkPolicy {
     }
 
     /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.markdown` for a
-    /// `markdownExtensions` one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
+    /// `markdownExtensions` one, `.text` for a `TextPage`-eligible one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
     /// resolve against the process directory), a UNC-style `//` path (a remote target the host check cannot
     /// see), or an auto-mount path. The automount check runs after LEXICAL `..` collapsing, so
     /// `/tmp/../net/x` cannot sneak through and the classifier never stats the path it is about to deny.
@@ -323,7 +323,7 @@ public enum LinkPolicy {
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
     /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
     /// markdown file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
-    /// A remote pane ignores bare paths and reveals `file://` pictures and markdown files, since both name files
+    /// A remote pane ignores bare paths and reveals `file://` pictures, markdown and text files, since all name files
     /// on another Mac.
     /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
