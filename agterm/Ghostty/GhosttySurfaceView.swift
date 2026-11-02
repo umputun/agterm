@@ -358,7 +358,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     var lastReportedMousePoint: NSPoint?
 
     // the nonisolated URL callback snapshots this during the synchronous release call.
-    nonisolated let releaseWantsBrowser = OSAllocatedUnfairLock(initialState: false)
+    nonisolated let releaseIntent = OSAllocatedUnfairLock(initialState: LinkPolicy.ClickIntent.normal)
+    var linkPressDragged = false
 
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:],

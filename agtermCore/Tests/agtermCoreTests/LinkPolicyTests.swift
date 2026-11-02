@@ -481,4 +481,42 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.route(for: Self.loc("/x/a.go:42"), mode: .overlay, origin: .pane(session))
             == .reveal(URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)))
     }
+
+    // MARK: click intent
+
+    @Test(arguments: [
+        ([KeyModifiers.command], false, LinkPolicy.ClickIntent.normal),
+        ([.command, .shift], false, .browser),
+        ([.command, .option], false, .reveal),
+        ([.command, .option, .shift], false, .normal),
+        ([.option], false, .normal),
+        ([.command, .control], false, .normal),
+        ([.command, .option, .control], false, .normal),
+        ([.command], true, .normal),
+        ([.command, .shift], true, .normal),
+        ([.command, .option], true, .normal),
+        ([.command, .option, .shift], true, .reveal),
+    ] as [(KeyModifiers, Bool, LinkPolicy.ClickIntent)])
+    func theChordDecidesTheClickIntent(_ modifiers: KeyModifiers, _ captured: Bool, _ intent: LinkPolicy.ClickIntent) {
+        #expect(LinkPolicy.clickIntent(modifiers: modifiers, mode: .overlay, origin: .pane(Self.session), mouseCaptured: captured) == intent)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, origins)
+    func theRevealChordWorksInEveryModeAndOrigin(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.clickIntent(modifiers: [.command, .option], mode: mode, origin: origin, mouseCaptured: false) == .reveal)
+        #expect(LinkPolicy.clickIntent(modifiers: [.command, .option, .shift], mode: mode, origin: origin, mouseCaptured: true) == .reveal)
+    }
+
+    @Test func aLocalRouteNamesItsFileAndAWebOrIgnoredOneNone() throws {
+        let file = URL(fileURLWithPath: "/x/a.go", isDirectory: false)
+        let web = try #require(URL(string: "https://example.com/"))
+        let session = Self.session
+        #expect(LinkPolicy.Route.image(file, session: session).localFile == file)
+        #expect(LinkPolicy.Route.markdown(file, session: session, sizePercent: 95).localFile == file)
+        #expect(LinkPolicy.Route.text(LinkPolicy.TextLink(url: file, line: 3, session: session, sizePercent: nil)).localFile == file)
+        #expect(LinkPolicy.Route.reveal(file).localFile == file)
+        #expect(LinkPolicy.Route.browser(web).localFile == nil)
+        #expect(LinkPolicy.Route.overlay(web, session: session, sizePercent: nil).localFile == nil)
+        #expect(LinkPolicy.Route.ignore.localFile == nil)
+    }
 }

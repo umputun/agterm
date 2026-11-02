@@ -28,20 +28,23 @@ struct LinkOpener {
 
     /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link. A link that
     /// only the filesystem can resolve is looked up off the main actor, the first existing candidate winning, and
-    /// one with no candidate on disk keeps the route it has as typed.
-    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, cwd: String?, wantsBrowser: Bool) {
-        let mode = wantsBrowser ? LinkOpenMode.browser : mode()
+    /// one with no candidate on disk keeps the route it has as typed. A reveal intent selects the file a local
+    /// route names in Finder after that guarded routing, and leaves a web link to its web route.
+    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, cwd: String?, intent: LinkPolicy.ClickIntent) {
+        let mode = intent == .browser ? LinkOpenMode.browser : mode()
+        let reveals = intent == .reveal
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
-        guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: mode, origin: origin)) }
+        guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: mode, origin: origin), revealing: reveals) }
         let exists = exists
         Task { @MainActor in
             let found = await Task.detached(priority: .userInitiated) { candidates.first { exists($0.path) } }.value
             carryOut(found.map { LinkPolicy.route(for: $0, mode: mode, origin: origin) }
-                ?? LinkPolicy.route(for: raw, mode: mode, origin: origin))
+                ?? LinkPolicy.route(for: raw, mode: mode, origin: origin), revealing: reveals)
         }
     }
 
-    private func carryOut(_ route: LinkPolicy.Route) {
+    private func carryOut(_ route: LinkPolicy.Route, revealing: Bool) {
+        if revealing, let file = route.localFile { return reveal(file) }
         switch route {
         case .browser(let url): open(url)
         case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }

@@ -354,24 +354,24 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`
 - Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`
 
-- [ ] fork check for public `LinkPolicy.wantsBrowser` callers in agterm-linux; remove it, or keep it as a
+- [x] fork check for public `LinkPolicy.wantsBrowser` callers in agterm-linux; remove it, or keep it as a
   wrapper over `clickIntent` when a caller exists
-- [ ] `LinkClickIntent` and `clickIntent(...)` replace `wantsBrowser`; the release lock holds the intent and
+- [x] `LinkClickIntent` and `clickIntent(...)` replace `wantsBrowser`; the release lock holds the intent and
   `OPEN_URL` snapshots it; `follow` takes the intent, and `reveal` on a local path reveals after the guarded
   classification and candidate resolution, skipping only the viewer choice, a web URL keeping its policy
-- [ ] `linkMods` normalizes ALT on the exact chord alone for hover, the press and an undragged release,
+- [x] `linkMods` normalizes ALT on the exact chord alone for hover, the press and an undragged release,
   never on a drag event or the release after one; `HudLinkClick` accepts the reveal chord and forwards
   normalized mods
-- [ ] package tests: the intent table over modifiers × modes × origins × capture (⌘, ⌘⇧, ⌘⌥, ⌘⌥⇧, ⌥ alone,
+- [x] package tests: the intent table over modifiers × modes × origins × capture (⌘, ⌘⇧, ⌘⌥, ⌘⌥⇧, ⌥ alone,
   ⌘⌃); `reveal` beats image, markdown and text in every mode; the refused inputs from Task 4 make no
   filesystem, reveal or open call under `reveal` either
-- [ ] hosted tests: a ⌘⌥ release on a link reveals a `.go`, a `.png`, a `.md`, a `.command`, an `.app`, an
+- [x] hosted tests: a ⌘⌥ release on a link reveals a `.go`, a `.png`, a `.md`, a `.command`, an `.app`, an
   `.html` and an `.svg`, recording zero calls to the open seam; a ⌘⌥ drag starting on a link (the press may
   be normalized) and one crossing a link keep ALT in every drag update and the release, still select a
   rectangle and reveal nothing; plain ⌥ events are unchanged; a ⌘⌥ HUD link click reveals and does not
   reach the pane under it; under mouse capture, ⌘⌥⇧ forwards mods with Shift kept and ALT cleared, the
   recorded limitation
-- [ ] run `swift test --filter LinkPolicyTests` and the hosted input tests; leak check - must pass before
+- [x] run `swift test --filter LinkPolicyTests` and the hosted input tests; leak check - must pass before
   task 6
 
 ### Task 6: Verify acceptance criteria

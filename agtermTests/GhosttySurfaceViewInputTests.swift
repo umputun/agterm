@@ -95,13 +95,13 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)
 
         let shown = recordLinks(mode: .browser, overlayOpens: true)
-        pane.openLink("/tmp/shot.png", wantsBrowser: false)
+        pane.openLink("/tmp/shot.png", intent: .normal)
         XCTAssertEqual(shown.images.map(\.0), [url])
         XCTAssertEqual(shown.images.map(\.1), [session.id])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("/tmp/shot.png", wantsBrowser: false)
+        pane.openLink("/tmp/shot.png", intent: .normal)
         XCTAssertEqual(refused.images.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -113,18 +113,18 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
 
         let shown = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink("/tmp/notes.md", wantsBrowser: false)
+        pane.openLink("/tmp/notes.md", intent: .normal)
         XCTAssertEqual(shown.markdowns.map(\.0), [url])
         XCTAssertEqual(shown.markdowns.map(\.1), [session.id])
         XCTAssertEqual(shown.markdowns.map(\.2), [75])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let browser = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/tmp/notes.md", wantsBrowser: true)
+        pane.openLink("/tmp/notes.md", intent: .browser)
         XCTAssertEqual(browser.markdowns.map(\.2), [95])
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("file:///tmp/notes.md", wantsBrowser: false)
+        pane.openLink("file:///tmp/notes.md", intent: .normal)
         XCTAssertEqual(refused.markdowns.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -136,12 +136,12 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = URL(fileURLWithPath: "/tmp/main.go", isDirectory: false)
 
         let shown = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink("/tmp/main.go", wantsBrowser: false)
+        pane.openLink("/tmp/main.go", intent: .normal)
         XCTAssertEqual(shown.texts, [LinkPolicy.TextLink(url: url, line: nil, session: session.id, sizePercent: 75)])
         XCTAssertTrue(shown.revealed.isEmpty)
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink("file:///tmp/main.go", wantsBrowser: false)
+        pane.openLink("file:///tmp/main.go", intent: .normal)
         XCTAssertEqual(refused.texts.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
@@ -154,7 +154,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let probe = ExistsProbe(["/w/src/a.go"])
         LinkOpener.shared.exists = { probe.check($0) }
 
-        pane.openLink("src/a.go:42:7", wantsBrowser: false)
+        pane.openLink("src/a.go:42:7", intent: .normal)
 
         try await waitUntil { !followed.texts.isEmpty }
         XCTAssertEqual(followed.texts, [LinkPolicy.TextLink(url: URL(fileURLWithPath: "/w/src/a.go", isDirectory: false), line: 42,
@@ -169,14 +169,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         pane.session = session
         let literal = recordLinks(mode: .overlay, overlayOpens: true)
         LinkOpener.shared.exists = { $0 == "/x/a.go:42" || $0 == "/x/a.go" }
-        pane.openLink("/x/a.go:42", wantsBrowser: false)
+        pane.openLink("/x/a.go:42", intent: .normal)
         try await waitUntil { !literal.revealed.isEmpty }
         XCTAssertEqual(literal.revealed, [URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)])
         XCTAssertTrue(literal.texts.isEmpty)
 
         let missing = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/x/b.go:3", wantsBrowser: false)
-        pane.openLink("./c.go:3", wantsBrowser: false)
+        pane.openLink("/x/b.go:3", intent: .normal)
+        pane.openLink("./c.go:3", intent: .normal)
         try await waitUntil { !missing.revealed.isEmpty }
         try await Task.sleep(for: .milliseconds(200))
         XCTAssertEqual(missing.revealed, [URL(fileURLWithPath: "/x/b.go:3", isDirectory: false)])
@@ -192,7 +192,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let probe = ExistsProbe([])
         LinkOpener.shared.exists = { probe.check($0) }
 
-        pane.openLink("./a;$(rm -rf x)`id`'.go:3", wantsBrowser: false)
+        pane.openLink("./a;$(rm -rf x)`id`'.go:3", intent: .normal)
 
         try await waitUntil { probe.paths.count == 2 }
         try await Task.sleep(for: .milliseconds(200))
@@ -212,14 +212,50 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
     }
 
+    func testARevealIntentSelectsEveryLocalFileInFinderAndOpensNone() async throws {
+        let session = Session(initialCwd: "/w")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        LinkOpener.shared.exists = { $0 == "/x/a.go" }
+        let files = ["/tmp/a.go", "/tmp/a.png", "/tmp/r.md", "/tmp/Run.command", "/Applications/Some.app", "/tmp/a.html",
+                     "/tmp/a.svg", "file:///tmp/b.go"]
+
+        for raw in files { pane.openLink(raw, intent: .reveal) }
+        pane.openLink("/x/a.go:3", intent: .reveal)
+        try await waitUntil { followed.revealed.count == files.count + 1 }
+
+        let paths = files.map { $0.replacingOccurrences(of: "file://", with: "") } + ["/x/a.go"]
+        XCTAssertEqual(followed.revealed, paths.map { URL(fileURLWithPath: $0, isDirectory: false) })
+        XCTAssertTrue(followed.opened.isEmpty)
+        XCTAssertTrue(followed.texts.isEmpty && followed.images.isEmpty && followed.markdowns.isEmpty && followed.overlaid.isEmpty)
+    }
+
+    func testARevealIntentLeavesAWebLinkToItsRouteAndARefusedPathIgnored() throws {
+        let session = Session(initialCwd: "/w")
+        let pane = bareSurface()
+        pane.session = session
+        let web = try XCTUnwrap(URL(string: "https://example.com/pr/1"))
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+
+        pane.openLink(web.absoluteString, intent: .reveal)
+        pane.openLink("/net/host/a.go", intent: .reveal)
+        pane.openLink("file://otherhost/tmp/a.go", intent: .reveal)
+        pane.openLink("//host/share/a.go", intent: .reveal)
+
+        XCTAssertEqual(followed.overlaid.map(\.0), [web])
+        XCTAssertTrue(followed.revealed.isEmpty)
+        XCTAssertTrue(followed.opened.isEmpty)
+    }
+
     func testARemotePaneIgnoresABarePath() {
         let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         let pane = bareSurface()
         pane.session = session
 
         let followed = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink("/tmp/shot.png", wantsBrowser: false)
-        pane.openLink("/tmp/notes.md", wantsBrowser: false)
+        pane.openLink("/tmp/shot.png", intent: .normal)
+        pane.openLink("/tmp/notes.md", intent: .normal)
         XCTAssertTrue(followed.images.isEmpty)
         XCTAssertTrue(followed.markdowns.isEmpty)
         XCTAssertTrue(followed.revealed.isEmpty)
@@ -232,18 +268,18 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let url = try XCTUnwrap(URL(string: "https://example.com/pr/1"))
 
         let shown = recordLinks(mode: .overlay, overlayOpens: true)
-        pane.openLink(url.absoluteString, wantsBrowser: false)
+        pane.openLink(url.absoluteString, intent: .normal)
         XCTAssertEqual(shown.overlaid.map(\.0), [url])
         XCTAssertEqual(shown.overlaid.map(\.1), [session.id])
         XCTAssertEqual(shown.overlaid.map(\.2), [nil])
         XCTAssertTrue(shown.opened.isEmpty)
 
         let sized = recordLinks(mode: .overlay75, overlayOpens: true)
-        pane.openLink(url.absoluteString, wantsBrowser: false)
+        pane.openLink(url.absoluteString, intent: .normal)
         XCTAssertEqual(sized.overlaid.map(\.2), [75])
 
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
-        pane.openLink(url.absoluteString, wantsBrowser: false)
+        pane.openLink(url.absoluteString, intent: .normal)
         XCTAssertEqual(refused.overlaid.count, 1)
         XCTAssertEqual(refused.opened, [url])
     }
@@ -260,14 +296,14 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let mail = try XCTUnwrap(URL(string: "mailto:a@example.com"))
 
         let browser = recordLinks(mode: .browser, overlayOpens: true)
-        pane.openLink(web.absoluteString, wantsBrowser: false)
+        pane.openLink(web.absoluteString, intent: .normal)
         XCTAssertEqual(browser.opened, [web])
 
         let overlay = recordLinks(mode: .overlay, overlayOpens: true)
-        hud.openLink(web.absoluteString, wantsBrowser: false)
-        pane.openLink(mail.absoluteString, wantsBrowser: false)
-        pane.openLink("file:///tmp/x.bin", wantsBrowser: false)
-        pane.openLink("x-custom://run", wantsBrowser: false)
+        hud.openLink(web.absoluteString, intent: .normal)
+        pane.openLink(mail.absoluteString, intent: .normal)
+        pane.openLink("file:///tmp/x.bin", intent: .normal)
+        pane.openLink("x-custom://run", intent: .normal)
         XCTAssertEqual(overlay.opened, [web, mail])
         XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.bin", isDirectory: false)])
         XCTAssertTrue(browser.overlaid.isEmpty && overlay.overlaid.isEmpty)
@@ -335,6 +371,109 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         fixture.wait { !shown.opened.isEmpty || !shown.overlaid.isEmpty }
         XCTAssertEqual(shown.overlaid.map(\.0), [try XCTUnwrap(URL(string: "https://example.com/pr/1"))], fixture.geometry)
         XCTAssertTrue(shown.opened.isEmpty)
+    }
+
+    func testCommandOptionClickOnAPrintedPathRevealsItWhereCommandClickShowsIt() throws {
+        let fixture = try LinkClickFixture(printing: "/tmp/agterm-reveal-chord.go")
+        defer { fixture.close() }
+        let url = URL(fileURLWithPath: "/tmp/agterm-reveal-chord.go", isDirectory: false)
+
+        let plain = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: .command)
+        fixture.click(flags: .command)
+        fixture.wait { !plain.texts.isEmpty }
+        XCTAssertEqual(plain.texts.map(\.url), [url], fixture.geometry)
+
+        let chord = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: [.command, .option])
+        fixture.click(flags: [.command, .option])
+        fixture.wait { !chord.revealed.isEmpty }
+        XCTAssertEqual(chord.revealed, [url], fixture.geometry)
+        XCTAssertTrue(chord.texts.isEmpty && chord.opened.isEmpty)
+    }
+
+    func testCommandOptionShiftClickUnderMouseCaptureRevealsThePath() throws {
+        let fixture = try LinkClickFixture(printing: "/tmp/agterm-reveal-chord.go", before: #"\033[?1000h"#)
+        defer { fixture.close() }
+        let shown = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.wait { fixture.surface.surface.map(ghostty_surface_mouse_captured) == true }
+        fixture.move(flags: [.command, .option, .shift])
+        fixture.click(flags: [.command, .option, .shift])
+        fixture.wait { !shown.revealed.isEmpty }
+        XCTAssertEqual(shown.revealed, [URL(fileURLWithPath: "/tmp/agterm-reveal-chord.go", isDirectory: false)], fixture.geometry)
+        let forwarded = fixture.forwardedMods(flags: [.command, .option, .shift]).rawValue
+        XCTAssertNotEqual(forwarded & GHOSTTY_MODS_SHIFT.rawValue, 0, "shift stays, the bypass libghostty decides on")
+        XCTAssertEqual(forwarded & (GHOSTTY_MODS_ALT.rawValue | GHOSTTY_MODS_ALT_RIGHT.rawValue), 0)
+    }
+
+    func testOptionClickAloneIsNotALinkClick() throws {
+        let fixture = try LinkClickFixture(printing: "/tmp/agterm-reveal-chord.go")
+        defer { fixture.close() }
+        let shown = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: .option)
+        fixture.click(flags: .option)
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.3))
+        XCTAssertTrue(shown.revealed.isEmpty && shown.texts.isEmpty && shown.opened.isEmpty)
+    }
+
+    func testACommandOptionDragStartingOnOrCrossingALinkKeepsItsRectangleAndRevealsNothing() throws {
+        let fixture = try LinkClickFixture(printing: #"/tmp/agterm-drag-target.go\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"#)
+        defer { fixture.close() }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+
+        fixture.drag(from: try fixture.cell(column: 1, rowsAboveCursor: 1), to: try fixture.cell(column: 5, rowsAboveCursor: 0),
+                     flags: [.command, .option])
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        let fromLink = try XCTUnwrap(fixture.surface.readSelection(), fixture.geometry)
+        XCTAssertTrue(fromLink.contains("\n"), "both rows are selected: \(fromLink)")
+        XCTAssertFalse(fromLink.contains("agterm-drag-target"), "a rectangle stops at the drag's column: \(fromLink)")
+
+        fixture.drag(from: try fixture.cell(column: 0, rowsAboveCursor: 0), to: try fixture.cell(column: 25, rowsAboveCursor: 1),
+                     flags: [.command, .option])
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+        let acrossLink = try XCTUnwrap(fixture.surface.readSelection(), fixture.geometry)
+        XCTAssertTrue(acrossLink.contains("agterm-drag-target"), "a rectangle keeps the upper row's columns: \(acrossLink)")
+        XCTAssertFalse(acrossLink.contains("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"), "and the lower row's: \(acrossLink)")
+        XCTAssertTrue(followed.revealed.isEmpty && followed.texts.isEmpty && followed.opened.isEmpty)
+    }
+
+    // regression: a drag ending within a few points of its press still crossed a row and lost its rectangle
+    func testAShortCommandOptionDragAcrossARowStaysARectangle() throws {
+        let fixture = try LinkClickFixture(printing: #"/tmp/agterm-drag-target.go\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"#)
+        defer { fixture.close() }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        // 0.3 cells right across the 60% column threshold and 1 point down across the row edge: under 3 points
+        let start = try fixture.cell(column: 5, rowsAboveCursor: 1, across: 0.4, up: 0.5 / 17)
+        let end = try fixture.cell(column: 5, rowsAboveCursor: 0, across: 0.7, up: 1 - 0.5 / 17)
+        XCTAssertLessThan(hypot(end.x - start.x, end.y - start.y), 3)
+
+        fixture.drag(from: start, to: end, flags: [.command, .option])
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.2))
+
+        let selection = try XCTUnwrap(fixture.surface.readSelection(), fixture.geometry)
+        XCTAssertTrue(selection.contains("\n"), "both rows are selected: \(selection)")
+        XCTAssertFalse(selection.contains("agterm-drag-target"), "a one-column rectangle: \(selection)")
+        XCTAssertTrue(followed.revealed.isEmpty && followed.texts.isEmpty)
+    }
+
+    func testAHudPanelTakesTheRevealChordAndForwardsItAsALinkClick() throws {
+        let flags = { (flags: NSEvent.ModifierFlags) in
+            NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
+                               context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+        }
+        XCTAssertTrue(HudLinkClick.isLinkClick(flags(.command)))
+        XCTAssertTrue(HudLinkClick.isLinkClick(flags([.command, .option])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(flags([.command, .shift])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(flags(.option)))
+
+        let fixture = try LinkClickFixture(printing: "/tmp/agterm-reveal-chord.go")
+        defer { fixture.close() }
+        fixture.surface.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
+        defer { fixture.surface.hudBodyFile = nil }
+        let shown = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.passiveClick(flags: [.command, .option])
+        fixture.wait { !shown.revealed.isEmpty }
+        XCTAssertEqual(shown.revealed, [URL(fileURLWithPath: "/tmp/agterm-reveal-chord.go", isDirectory: false)], fixture.geometry)
     }
 
     func testCommandShiftClickInBrowserModeIsNotALinkClick() throws {
@@ -483,7 +622,7 @@ private final class LinkClickFixture {
         window.contentView?.addSubview(surface)
         surface.createSurface()
         XCTAssertTrue(surface.isRealized)
-        let printed = { self.surface.readScreenText(all: false, lines: nil).map { $0.contains("example") || $0.contains("pull request") } == true }
+        let printed = { self.surface.readScreenText(all: false, lines: nil).map { ["example", "pull request", "/tmp/"].contains(where: $0.contains) } == true }
         wait(printed)
         XCTAssertTrue(printed())
         let raw = try XCTUnwrap(surface.surface)
@@ -512,6 +651,43 @@ private final class LinkClickFixture {
     func click(flags: NSEvent.ModifierFlags) {
         surface.mouseDown(with: mouseEvent(.leftMouseDown, at: link, flags: flags))
         surface.mouseUp(with: mouseEvent(.leftMouseUp, at: link, flags: flags))
+    }
+
+    /// cell is a window point inside a cell, `across` and `up` its fractions from the cell's left and bottom
+    /// edges. The IME point is the cursor cell's horizontal midpoint at its bottom edge, as `readCursorColumn`
+    /// solves it.
+    func cell(column: Int, rowsAboveCursor rows: Int, across: Double = 0.5, up: Double = 0.5) throws -> NSPoint {
+        let raw = try XCTUnwrap(surface.surface)
+        let cell = try XCTUnwrap(surface.cellSize())
+        let cursor = try XCTUnwrap(surface.readCursorColumn())
+        var x = 0.0, y = 0.0, w = 0.0, h = 0.0
+        ghostty_surface_ime_point(raw, &x, &y, &w, &h)
+        let column0 = x - (Double(cursor) + 0.5) * cell.width
+        let rowBottom = y - Double(rows) * cell.height
+        return NSPoint(x: column0 + (Double(column) + across) * cell.width, y: surface.bounds.height - rowBottom + up * cell.height)
+    }
+
+    func drag(from start: NSPoint, to end: NSPoint, flags: NSEvent.ModifierFlags) {
+        surface.mouseMoved(with: mouseEvent(.mouseMoved, at: start, flags: flags))
+        surface.mouseDown(with: mouseEvent(.leftMouseDown, at: start, flags: flags))
+        // the release lands past the last drag event, as a real one can, so libghostty redraws from its mods
+        for step in 1..<8 {
+            let t = Double(step) / 8
+            let point = NSPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+            surface.mouseDragged(with: mouseEvent(.leftMouseDragged, at: point, flags: flags))
+        }
+        surface.mouseUp(with: mouseEvent(.leftMouseUp, at: end, flags: flags))
+    }
+
+    func forwardedMods(flags: NSEvent.ModifierFlags) -> ghostty_input_mods_e {
+        surface.linkMods(mouseEvent(.leftMouseDown, at: link, flags: flags))
+    }
+
+    func passiveClick(flags: NSEvent.ModifierFlags) {
+        let point = surface.convert(link, to: nil)
+        surface.passivePointer(at: point, with: mouseEvent(.mouseMoved, at: link, flags: flags))
+        surface.passiveClick(GHOSTTY_MOUSE_PRESS, with: mouseEvent(.leftMouseDown, at: link, flags: flags))
+        surface.passiveClick(GHOSTTY_MOUSE_RELEASE, with: mouseEvent(.leftMouseUp, at: link, flags: flags))
     }
 
     func flagsChanged(keyCode: UInt16, flags: NSEvent.ModifierFlags) {

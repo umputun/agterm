@@ -110,6 +110,16 @@ public enum LinkPolicy {
         case text(TextLink)
         case reveal(URL)
         case ignore
+
+        /// localFile is the file a local route names, which a reveal chord selects in Finder instead; nil for a
+        /// web route and for an ignored link.
+        public var localFile: URL? {
+            switch self {
+            case .image(let url, _), .markdown(let url, _, _), .reveal(let url): return url
+            case .text(let link): return link.url
+            case .browser, .overlay, .ignore: return nil
+            }
+        }
     }
 
     /// Lowercased host names counting as "this machine" for a `file://` link: `localhost` and the
@@ -285,15 +295,28 @@ public enum LinkPolicy {
         return (base, line)
     }
 
+    /// ClickIntent is what a link click's chord asks for: the setting's route, the browser, or a Finder reveal.
+    public enum ClickIntent: Equatable, Sendable {
+        case normal, browser, reveal
+    }
+
+    /// clickIntent reads a link click's chord. ⌘⇧ asks for the browser over an overlay setting, except under
+    /// mouse capture, where ⌘⇧ is the only link click and so follows the setting. ⌘⌥ reveals a local path in
+    /// Finder from any origin; under capture, where Shift is the bypass, ⌘⌥⇧ does.
+    public static func clickIntent(modifiers: KeyModifiers, mode: LinkOpenMode, origin: ClickOrigin,
+                                   mouseCaptured: Bool) -> ClickIntent {
+        if modifiers == (mouseCaptured ? [.command, .option, .shift] : [.command, .option]) { return .reveal }
+        guard modifiers == [.command, .shift], mode != .browser, !mouseCaptured else { return .normal }
+        switch origin {
+        case .pane, .remotePane, .scratch: return .browser
+        case .hud, .programOverlay, .quick: return .normal
+        }
+    }
+
     /// wantsBrowser reports whether a ⌘⇧ link click overrides the overlay setting and goes to the browser.
-    /// Under mouse capture ⌘⇧ is the only link click, so there it follows the setting.
     public static func wantsBrowser(modifiers: KeyModifiers, mode: LinkOpenMode, origin: ClickOrigin,
                                     mouseCaptured: Bool) -> Bool {
-        guard modifiers == [.command, .shift], mode != .browser, !mouseCaptured else { return false }
-        switch origin {
-        case .pane, .remotePane, .scratch: return true
-        case .hud, .programOverlay, .quick: return false
-        }
+        clickIntent(modifiers: modifiers, mode: mode, origin: origin, mouseCaptured: mouseCaptured) == .browser
     }
 
     /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
