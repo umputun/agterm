@@ -17,6 +17,9 @@ public enum HtmlSource: Equatable, Sendable {
     /// markdown is a markdown file the app renders with its pictures embedded: no file grant or bridge,
     /// but themed.
     case markdown(path: String)
+    /// text is a source, config or log file shown read-only, scrolled to `line` when one is set: no file
+    /// grant, bridge, link or navigation, but themed.
+    case text(path: String, line: Int?)
 
     /// imagePath is the picture an `.image` page shows, nil for every other source.
     public var imagePath: String? {
@@ -27,6 +30,12 @@ public enum HtmlSource: Equatable, Sendable {
     /// markdownPath is the file a `.markdown` page renders, nil for every other source.
     public var markdownPath: String? {
         if case .markdown(let path) = self { return path }
+        return nil
+    }
+
+    /// textPath is the file a `.text` page shows, nil for every other source.
+    public var textPath: String? {
+        if case .text(let path, _) = self { return path }
         return nil
     }
 
@@ -175,7 +184,7 @@ extension HtmlOverlay {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .image(let path), .markdown(let path): return URL(fileURLWithPath: path).lastPathComponent
+        case .image(let path), .markdown(let path), .text(let path, _): return URL(fileURLWithPath: path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -286,6 +295,11 @@ public enum HtmlNavigationDecision: Sendable {
 /// openExternal requires app confirmation because WebKit reports synthetic clicks as link activations.
 public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
+        // ahead of the shared exits: a text page shows only the document the app built, so not even a
+        // user-activated web link or another about: address leaves it
+        if case .text = overlay.source {
+            return action.target == .mainFrame && action.url.absoluteString == "about:blank" ? .allow : .cancel
+        }
         let scheme = action.url.scheme?.lowercased()
         let web = scheme == "http" || scheme == "https"
         if action.target == .newWindow { return web && action.userActivated ? .openExternal : .cancel }
@@ -303,6 +317,8 @@ public enum HtmlNavigationPolicy {
             return .cancel
         case .markdown:
             return web && action.userActivated ? .openExternal : .cancel
+        case .text:
+            return .cancel
         case .url(let original):
             guard web else { return .cancel }
             if HtmlOrigin(action.url) == HtmlOrigin(original) || overlay.browse { return .allow }

@@ -16,10 +16,24 @@ final class MarkdownAssetsTests: XCTestCase {
         }
     }
 
+    func testTheTextRendererCarriesHighlightJsWithoutTheMarkdownParser() throws {
+        let assets = MarkdownAssets(bundle: .main)
+
+        let highlight = try XCTUnwrap(assets.textScript.range(of: "Highlight.js v11.11.1"))
+        let render = try XCTUnwrap(assets.textScript.range(of: "getElementById('agterm-text')"))
+        XCTAssertLessThan(highlight.lowerBound, render.lowerBound)
+        XCTAssertNil(assets.textScript.range(of: "markdown-it"))
+        let shared = try XCTUnwrap(assets.textStyle.range(of: "--agterm-foreground"))
+        let own = try XCTUnwrap(assets.textStyle.range(of: ".agterm-gutter"))
+        XCTAssertLessThan(shared.lowerBound, own.lowerBound)
+    }
+
     func testABundleWithoutTheFolderReadsEmpty() {
         let assets = MarkdownAssets(bundle: Bundle(for: MarkdownAssetsTests.self))
 
         XCTAssertEqual(assets.script, ";\n;\n")
         XCTAssertEqual(assets.style, "")
+        XCTAssertEqual(assets.textScript, ";\n")
+        XCTAssertEqual(assets.textStyle, "\n")
     }
 }

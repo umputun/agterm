@@ -229,7 +229,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
     private var closeRequested = false
-    // an image or markdown page reads its file off the main actor; a result is applied only while this still
+    // an image, markdown or text page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
     private let storageFailure: String?
@@ -327,7 +327,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if styled { reloadShown() }
     }
 
-    // one set, because removing user scripts removes them all: the theme, the markdown renderer, and on a file
+    // one set, because removing user scripts removes them all: the theme, the markdown or text renderer, and on a file
     // page the bridge adapter
     private func installScripts() {
         let controller = webView.configuration.userContentController
@@ -338,6 +338,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
         if overlay.source.markdownPath != nil {
             controller.addUserScript(WKUserScript(source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true, in: Self.markdownWorld))
+        }
+        if overlay.source.textPath != nil {
+            controller.addUserScript(WKUserScript(source: MarkdownAssets.shared.textScript, injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true, in: Self.markdownWorld))
         }
         guard bridged else { return }
@@ -399,15 +403,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var bridged: Bool { Self.bridged(overlay.source, linked: replica != nil) }
 
     private static func styled(_ source: HtmlSource, linked: Bool) -> Bool {
-        source.markdownPath != nil || bridged(source, linked: linked)
+        source.markdownPath != nil || source.textPath != nil || bridged(source, linked: linked)
     }
 
-    // only a page its author wrote drives the control API; a markdown file comes from untrusted output
+    // only a page its author wrote drives the control API; a markdown or text file comes from untrusted output
     private static func bridged(_ source: HtmlSource, linked: Bool) -> Bool {
         switch source {
         case .file: return true
         case .replica: return linked
-        case .url, .image, .markdown: return false
+        case .url, .image, .markdown, .text: return false
         }
     }
 
@@ -443,6 +447,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .browser:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
             if case .markdown = overlay.source { return OverlayHtmlError.markdownInOverlay }
+            if case .text = overlay.source { return OverlayHtmlError.textInOverlay }
             guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
         case .finder:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
@@ -478,12 +483,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
-    // a file page without a grant, an image page and a markdown page are loaded from text: they sit at
+    // a file page without a grant and an image, markdown or text page are loaded from text: they sit at
     // about:blank and cannot navigate, so the file they came from is both the current page and what the user
     // is looking at
     private var textLoaded: Bool {
         switch overlay.source {
-        case .file(_, nil), .image, .markdown: return true
+        case .file(_, nil), .image, .markdown, .text: return true
         default: return false
         }
     }
@@ -534,6 +539,20 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 case .success(let html): webView.loadHTMLString(html, baseURL: nil)
                 }
             }
+        case .text(let path, let line):
+            textLoad += 1
+            let load = textLoad
+            let style = MarkdownAssets.shared.textStyle
+            Task { @MainActor [weak self] in
+                let page = await Task.detached(priority: .userInitiated) {
+                    TextProbe.load(path: path).map { TextPage.html(text: $0, language: TextPage.language(forFile: path), line: line, style: style) }
+                }.value
+                guard let self, textLoad == load else { return }
+                switch page {
+                case .failure(let failure): fail(failure.description)
+                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
+                }
+            }
         }
     }
 
@@ -541,7 +560,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path):
+        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -599,7 +618,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path): return URL(fileURLWithPath: path)
+        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _):
+            return URL(fileURLWithPath: path)
         case .url(let url): return url
         }
     }

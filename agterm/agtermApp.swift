@@ -148,6 +148,10 @@ struct agtermApp: App {
             guard let controlServer else { return done(false) }
             controlServer.openMarkdownLink(url, session: session, sizePercent: percent, completion: done)
         }
+        LinkOpener.shared.text = { [weak controlServer] link, done in
+            guard let controlServer else { return done(false) }
+            controlServer.openTextLink(link, completion: done)
+        }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })
         controlServer.liveReset = liveReset

@@ -165,6 +165,21 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--persistent"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--browse"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "revdiff", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--companion"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--block"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--wait"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--navigation"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--js"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--chromeless"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--persistent"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--browse"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--line", "0"],
+        ["session", "overlay", "open", "--line", "3", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "revdiff", "--line", "3"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))
@@ -194,6 +209,19 @@ struct OverlayCommandsTests {
         let json = String(decoding: data, as: UTF8.self)
         #expect(json.contains(#""markdownFile":"#))
         #expect(!json.contains(#""markdown":"#))
+    }
+
+    @Test func textOpenSendsTheResolvedPathLiterallyAndItsLine() throws {
+        let req = try request(["session", "overlay", "open", "--text", "src/../src/a.go:12", "--line", "40"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.textFile == URL(fileURLWithPath: cwd).appendingPathComponent("src/a.go:12").standardizedFileURL.path)
+        #expect(req.args?.line == 40)
+        #expect(req.args?.markdownFile == nil)
+        #expect(req.args?.cwd == nil)
+        let bare = try request(["session", "overlay", "open", "--text", "/tmp/notes.txt"])
+        #expect(bare.args?.textFile == "/tmp/notes.txt")
+        #expect(bare.args?.line == nil)
     }
 
     @Test func submitSendsTheValuePaneAndTarget() throws {

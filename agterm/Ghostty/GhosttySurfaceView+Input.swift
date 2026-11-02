@@ -139,7 +139,7 @@ extension GhosttySurfaceView {
         var ke = buildKeyEvent(from: event, action: isFlagPress(event) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE)
         ke.text = nil
         _ = ghostty_surface_key(surface, ke)
-        guard wantsBrowser(event), NSEvent.pressedMouseButtons == 0,
+        guard clickIntent(event) != .normal, NSEvent.pressedMouseButtons == 0,
               let point = lastReportedMousePoint, point.x >= 0, point.y >= 0 else { return }
         refreshLinkHover(at: point, with: event)
     }
@@ -161,23 +161,31 @@ extension GhosttySurfaceView {
 
     /// Push the pointer position to libghostty and remember it in `lastReportedMousePoint`. Every
     /// position-reporting handler routes through here so `scrollWheel` can skip a redundant `mouse_pos`.
-    private func reportMousePos(from event: NSEvent) {
+    private func reportMousePos(from event: NSEvent, mods forwarded: ghostty_input_mods_e? = nil) {
         guard let surface else { return }
         let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, linkMods(event))
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, forwarded ?? linkMods(event))
         lastReportedMousePoint = pt
     }
 
-    private func wantsBrowser(_ event: NSEvent) -> Bool {
-        guard let surface else { return false }
-        return LinkPolicy.wantsBrowser(modifiers: keyModifiers(event), mode: LinkOpener.shared.mode(),
-                                       origin: linkClickOrigin, mouseCaptured: ghostty_surface_mouse_captured(surface))
+    private func clickIntent(_ event: NSEvent) -> LinkPolicy.ClickIntent {
+        guard let surface else { return .normal }
+        return LinkPolicy.clickIntent(modifiers: keyModifiers(event), mode: LinkOpener.shared.mode(),
+                                      origin: linkClickOrigin, mouseCaptured: ghostty_surface_mouse_captured(surface))
     }
 
-    private func linkMods(_ event: NSEvent) -> ghostty_input_mods_e {
+    /// linkMods is what libghostty hears for a hover, a press or an unmoved release: a link matches only on ⌘
+    /// alone, so a browser chord drops Shift and a reveal chord drops Option. Shift stays in a captured reveal
+    /// chord, the bypass libghostty itself decides on.
+    func linkMods(_ event: NSEvent) -> ghostty_input_mods_e {
         let raw = mods(event)
-        guard wantsBrowser(event) else { return raw }
-        return ghostty_input_mods_e(rawValue: raw.rawValue & ~(GHOSTTY_MODS_SHIFT.rawValue | GHOSTTY_MODS_SHIFT_RIGHT.rawValue))
+        switch clickIntent(event) {
+        case .normal: return raw
+        case .browser:
+            return ghostty_input_mods_e(rawValue: raw.rawValue & ~(GHOSTTY_MODS_SHIFT.rawValue | GHOSTTY_MODS_SHIFT_RIGHT.rawValue))
+        case .reveal:
+            return ghostty_input_mods_e(rawValue: raw.rawValue & ~(GHOSTTY_MODS_ALT.rawValue | GHOSTTY_MODS_ALT_RIGHT.rawValue))
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -185,29 +193,39 @@ extension GhosttySurfaceView {
         guard let surface else { return }
         window?.makeFirstResponder(self)
         updateGhosttyFocus()
+        linkPressDragged = false
         reportMousePos(from: event)
         // a pane without key focus never saw the chord's flagsChanged, and libghostty drops an
         // unmoved press position.
-        if wantsBrowser(event) { refreshLinkHover(at: mousePoint(from: event), with: event) }
+        if clickIntent(event) != .normal { refreshLinkHover(at: mousePoint(from: event), with: event) }
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, linkMods(event))
     }
 
     override func mouseUp(with event: NSEvent) {
         guard !askBlocksFocus else { return }
         guard let surface else { return }
-        reportMousePos(from: event)
-        let browser = wantsBrowser(event)
-        releaseWantsBrowser.withLock { $0 = browser }
-        defer { releaseWantsBrowser.withLock { $0 = false } }
-        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, linkMods(event))
+        // with the button still down libghostty redraws a drag from these mods, so a dragged reveal chord keeps
+        // its ⌥ and the rectangle; Shift sets no shape, so a browser chord stays normalized and opens as before
+        let chord = clickIntent(event)
+        let keepsAlt = chord == .reveal && linkPressDragged
+        linkPressDragged = false
+        let forwarded = keepsAlt ? mods(event) : linkMods(event)
+        reportMousePos(from: event, mods: forwarded)
+        let intent = keepsAlt ? .normal : chord
+        releaseIntent.withLock { $0 = intent }
+        defer { releaseIntent.withLock { $0 = .normal } }
+        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, forwarded)
     }
 
-    /// Forwards the ⌘-click `HudLinkClick` claims for a HUD panel, so libghostty opens the link under it. It
-    /// moves no focus.
+    /// Forwards the ⌘-click or ⌘⌥-click `HudLinkClick` claims for a HUD panel, so libghostty opens the link
+    /// under it, or reveals its file. It moves no focus.
     func passiveClick(_ state: ghostty_input_mouse_state_e, with event: NSEvent) {
         guard let surface else { return }
         reportMousePos(from: event)
-        _ = ghostty_surface_mouse_button(surface, state, GHOSTTY_MOUSE_LEFT, mods(event))
+        let intent = state == GHOSTTY_MOUSE_RELEASE ? clickIntent(event) : .normal
+        releaseIntent.withLock { $0 = intent }
+        defer { releaseIntent.withLock { $0 = .normal } }
+        _ = ghostty_surface_mouse_button(surface, state, GHOSTTY_MOUSE_LEFT, linkMods(event))
     }
 
     /// Tells a HUD panel where the pointer is while `HudLinkClick` sees ⌘ held over it, or with nil that it
@@ -221,7 +239,7 @@ extension GhosttySurfaceView {
         }
         let local = convert(windowPoint, from: nil)
         let point = NSPoint(x: local.x, y: bounds.height - local.y)
-        ghostty_surface_mouse_pos(surface, point.x, point.y, mods(event))
+        ghostty_surface_mouse_pos(surface, point.x, point.y, linkMods(event))
         lastReportedMousePoint = point
     }
 
@@ -254,7 +272,13 @@ extension GhosttySurfaceView {
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE, mods(event))
     }
 
-    override func mouseDragged(with event: NSEvent) { mouseMoved(with: event) }
+    /// A drag keeps ⌥: libghostty recomputes a rectangle selection from the live mods on every drag update.
+    override func mouseDragged(with event: NSEvent) {
+        linkPressDragged = true
+        reportMousePos(from: event, mods: mods(event))
+        guard deckVisible, ownsPointer(at: event.locationInWindow) else { return }
+        Self.nsCursor(for: mouseShape).set()
+    }
     override func rightMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
     override func otherMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
 
@@ -613,8 +637,14 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 
     /// Acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); the scheme/host decision lives in the
     /// host-free `LinkPolicy`. A `file://` link is REVEALED in Finder, never opened — reveal executes nothing.
-    func openLink(_ raw: String, wantsBrowser: Bool) {
-        LinkOpener.shared.follow(raw, from: linkClickOrigin, wantsBrowser: wantsBrowser)
+    func openLink(_ raw: String, intent: LinkPolicy.ClickIntent) {
+        LinkOpener.shared.follow(raw, from: linkClickOrigin, cwd: linkClickCwd, intent: intent)
+    }
+
+    /// The directory a relative link names a file in: this pane's reported cwd. Nil for the scratch, quick and
+    /// overlay terminals, whose own directory the app does not track, so a relative link there stays ignored.
+    var linkClickCwd: String? {
+        session.map { isSplitPane ? $0.cwd(for: .right) : $0.effectiveCwd }
     }
 
     /// Which kind of surface a clicked link came from, read off the ownership each factory already sets.

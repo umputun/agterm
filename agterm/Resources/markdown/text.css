@@ -1,0 +1,10 @@
+#agterm-page { display: flex; position: relative; max-width: none; min-width: max-content; margin: 0; padding: 0; }
+.agterm-gutter, #agterm-page pre {
+  margin: 0; padding: 12px 16px; font: 13px/20px var(--mono); white-space: pre; border-radius: 0; background: none;
+}
+.agterm-gutter { text-align: right; color: var(--muted); border-right: 1px solid var(--rule); user-select: none; }
+#agterm-page pre { flex: 1; overflow: visible; }
+.agterm-band {
+  position: absolute; left: 0; right: 0; height: 20px; pointer-events: none;
+  background: color-mix(in srgb, var(--agterm-color-11, #d9b45a) 22%, transparent);
+}

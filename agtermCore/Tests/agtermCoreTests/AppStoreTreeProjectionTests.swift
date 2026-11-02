@@ -782,6 +782,26 @@ struct AppStoreTreeProjectionTests {
         #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("markdown"))
     }
 
+    @Test func aTextPageProjectsItsFileMappedLanguageAndRequestedLine() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .text(path: "/tmp/src/main.go", line: 42))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: 95) == nil)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions[0].htmlOverlays?.first)
+
+        let text = ControlTextOverlayNode(file: "/tmp/src/main.go", language: "go", line: 42)
+        #expect(node == ControlHtmlOverlayNode(pane: nil, text: text, state: "loading", error: nil, id: page.id.uuidString))
+        let data = try JSONEncoder().encode(node)
+        #expect(try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: data) == node)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""text":{"#))
+        let plain = ControlTextOverlayNode(file: "/tmp/notes.txt", language: nil, line: nil)
+        #expect(String(decoding: try JSONEncoder().encode(plain), as: UTF8.self) == #"{"file":"\/tmp\/notes.txt"}"#)
+        let file = ControlHtmlOverlayNode(pane: nil, file: "/tmp/r.html", state: "loaded", error: nil)
+        #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("text"))
+    }
+
     @Test func htmlOverlaysProjectEachPageWithItsLoadState() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

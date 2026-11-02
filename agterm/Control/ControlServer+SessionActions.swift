@@ -43,6 +43,7 @@ extension ControlServer: ControlActions {
             // the control path is trusted and synchronous: a file on slow storage stalls the app while it is read
             if let path = options.page?.imagePath { return openImageFile(in: store, sessionID: id, path: path, options: options) }
             if let path = options.page?.markdownPath, let refusal = markdownFileRefusal(path) { return refusal }
+            if let path = options.page?.textPath, let refusal = textFileRefusal(path) { return refusal }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }

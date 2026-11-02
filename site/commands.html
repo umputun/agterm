@@ -501,7 +501,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, omitted when none is hidden; see
                 <a href="#overlay" style="color: #6d82f3">session overlay hide</a>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span> (the pages in the overlay slots as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, image?, markdown?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id, hidden?, remote?, replica?}</span>, one of file, url, image and markdown set; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span> marks a page shown on the presenting Mac, whose live fields are as that Mac reports them, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">replica</span> the presenting Mac's copy, whose <span style="font-family: &quot;JetBrains Mono&quot;, monospace">file</span> is the path on the origin for a file page,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{pane?, file?, cwd?, url?, image?, markdown?, text?, state, error?, page?, title?, canGoBack?, canGoForward?, navigation?, javascript, chromeless, persistent, browse, zoom?, id, hidden?, remote?, replica?}</span>, one of file, url, image, markdown and text set, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span> being <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{file, language?, line?}</span>; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span> marks a page shown on the presenting Mac, whose live fields are as that Mac reports them, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">replica</span> the presenting Mac's copy, whose <span style="font-family: &quot;JetBrains Mono&quot;, monospace">file</span> is the path on the origin for a file page,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> being loading, loaded or failed; omitted when none is open),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span> (the message panel holding the session-wide
                 slot — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{message, detail?, spinner, backgroundColor?, textColor?, sizePercent?, heightPercent?, position, pane?, hideAfter, markdown, fontSize?, sticky, frame}</span>, where
@@ -2200,6 +2200,24 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companion</span> are refused. A path that is not a regular file or a file over 4 MB is refused before the open answers.
                 The wire field is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">markdownFile</span>, apart from the HUD's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">markdown</span> flag. A markdown page is local-only, like an image page.
                 Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">markdown</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span>.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay open --text FILE [--line N] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show a source, config, text or log file read-only in the terminal's theme, the same view a ⌘-click on its path opens:
+                line numbers, and highlighting when its name maps to a known language, up to 256 KB; a larger file shows plain.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--line N</span> opens it scrolled to line N, from 1, and marks it. FILE is taken literally, never read
+                as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">path:line</span>. The page runs none of the file's text as code, loads nothing and has no links. It
+                gets no bridge, and Open in Browser and Show in Finder are refused; the page flags, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--block</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companion</span> are refused. A path that is not a regular file, a file
+                over 4 MB, or one that is not UTF-8 text or holds a NUL byte is refused before the open answers. Markdown, HTML
+                and SVG files are not text pages. The wire fields are <span style="font-family: &quot;JetBrains Mono&quot;, monospace">textFile</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">line</span>. A text
+                page is local-only, like an image page. Read back <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays</span>: the
+                file, the language its name maps to, and the line it was opened at, not the line in view.
               </p>
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">

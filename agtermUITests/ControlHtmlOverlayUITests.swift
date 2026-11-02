@@ -52,6 +52,24 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
     }
 
+    func testATextFileRendersAtItsLineAndTheTreeNamesItsSource() throws {
+        let id = try activeSessionID()
+        let file = pageDir.appendingPathComponent("main.go")
+        try "package main\n\n// Rendered Text Line\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","line":3}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "text open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) {
+            let text = $0["text"] as? [String: Any]
+            return (text?["file"] as? String)?.hasSuffix("/main.go") == true && text?["language"] as? String == "go"
+                && text?["line"] as? Int == 3 && $0["file"] == nil && $0["state"] as? String == "loaded"
+        }, "the tree should name the text source, its language and line")
+        let rendered = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Rendered Text Line", "Rendered Text Line")
+        XCTAssertTrue(app.webViews.staticTexts.matching(rendered).firstMatch.waitForExistence(timeout: 10), "the text should render")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "main.go")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
+    }
+
     func testWithoutNavigationThePageShowsItsSourceAndACloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)

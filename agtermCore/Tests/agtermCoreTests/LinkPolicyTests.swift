@@ -28,17 +28,17 @@ struct LinkPolicyTests {
     }
 
     /// A local `file://` reveals the HOST-STRIPPED, dot-normalized path — Finder never sees the original
-    /// authority — so every host form of `/tmp/x.txt` resolves to the same plain `file:///tmp/x.txt`.
+    /// authority — so every host form of `/tmp/x.bin` resolves to the same plain `file:///tmp/x.bin`.
     @Test(arguments: [
-        ("file:///tmp/x.txt", "file:///tmp/x.txt"),            // empty host
-        ("file:/tmp/x.txt", "file:///tmp/x.txt"),              // authority-less (single-slash) form → no host
-        ("file://localhost/tmp/x.txt", "file:///tmp/x.txt"),   // localhost — host stripped
-        ("file://myhost/tmp/x.txt", "file:///tmp/x.txt"),      // this machine's own name (GNU ls) — host stripped
-        ("file://MYHOST/tmp/x.txt", "file:///tmp/x.txt"),      // host match is case-insensitive
-        ("file://myhost./tmp/x.txt", "file:///tmp/x.txt"),     // trailing FQDN dot is stripped
-        ("FILE:///tmp/x.txt", "file:///tmp/x.txt"),            // scheme match is case-insensitive
-        ("file:///tmp/../tmp/x.txt", "file:///tmp/x.txt"),     // dot segments normalized away
-        ("file://myhost/tmp/a%20b.txt", "file:///tmp/a%20b.txt"),  // percent-encoded space survives the round-trip
+        ("file:///tmp/x.bin", "file:///tmp/x.bin"),            // empty host
+        ("file:/tmp/x.bin", "file:///tmp/x.bin"),              // authority-less (single-slash) form → no host
+        ("file://localhost/tmp/x.bin", "file:///tmp/x.bin"),   // localhost — host stripped
+        ("file://myhost/tmp/x.bin", "file:///tmp/x.bin"),      // this machine's own name (GNU ls) — host stripped
+        ("file://MYHOST/tmp/x.bin", "file:///tmp/x.bin"),      // host match is case-insensitive
+        ("file://myhost./tmp/x.bin", "file:///tmp/x.bin"),     // trailing FQDN dot is stripped
+        ("FILE:///tmp/x.bin", "file:///tmp/x.bin"),            // scheme match is case-insensitive
+        ("file:///tmp/../tmp/x.bin", "file:///tmp/x.bin"),     // dot segments normalized away
+        ("file://myhost/tmp/a%20b.bin", "file:///tmp/a%20b.bin"),  // percent-encoded space survives the round-trip
         ("file:///Applications/Some.app", "file:///Applications/Some.app"),  // revealed in Finder, NOT launched
     ])
     func localFileReveals(_ raw: String, _ expected: String) {
@@ -49,9 +49,9 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        "file:///net/server/share/x.txt",         // /net (-hosts) auto-mount root
+        "file:///net/server/share/x.bin",         // /net (-hosts) auto-mount root
         "file:///Network/Servers/host/share",     // /Network auto-mount root
-        "file:///home/someone/x.txt",              // /home (auto_home) auto-mount root
+        "file:///home/someone/x.bin",              // /home (auto_home) auto-mount root
         "file://localhost/net/server/share",      // local host but an auto-mount path
         "file:///tmp/../net/server/share",        // dot segments resolve INTO /net — must still ignore
         "file:///tmp/%2E%2E/net/server/share",    // percent-encoded `..` decodes BEFORE normalization — still ignore
@@ -59,7 +59,7 @@ struct LinkPolicyTests {
         "file:///net",                            // bare root (no child) — exercises the `lower == root` branch
         "file:///home",                           // bare root
         "file:///network",                        // bare root
-        "file:///System/Volumes/Data/home/someone/x.txt",     // canonical Data path where auto_home really mounts
+        "file:///System/Volumes/Data/home/someone/x.bin",     // canonical Data path where auto_home really mounts
         "file:///System/Volumes/Data/net/server/share",      // canonical Data /net
         "file:///System/Volumes/Data/Network/Servers/host",  // canonical Data /Network/Servers
     ])
@@ -71,10 +71,10 @@ struct LinkPolicyTests {
     /// The last case is the boundary that keeps the Data denylist narrow: a normal file on the Data volume
     /// (`/System/Volumes/Data/Users/…`, where every real file lives) must reveal, not be treated as automount.
     @Test(arguments: [
-        ("file:///networkx/x.txt", "file:///networkx/x.txt"),
-        ("file:///nettools/x.txt", "file:///nettools/x.txt"),
-        ("file:///homebrew/x.txt", "file:///homebrew/x.txt"),
-        ("file:///System/Volumes/Data/Users/me/doc.txt", "file:///System/Volumes/Data/Users/me/doc.txt"),
+        ("file:///networkx/x.bin", "file:///networkx/x.bin"),
+        ("file:///nettools/x.bin", "file:///nettools/x.bin"),
+        ("file:///homebrew/x.bin", "file:///homebrew/x.bin"),
+        ("file:///System/Volumes/Data/Users/me/doc.bin", "file:///System/Volumes/Data/Users/me/doc.bin"),
     ])
     func autoMountLookalikesStillReveal(_ raw: String, _ expected: String) {
         guard case let .reveal(url) = LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) else {
@@ -92,14 +92,14 @@ struct LinkPolicyTests {
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         // the real leaf MUST exist, else `resolvingSymlinksInPath()` also returns the link path and the test
         // could not tell the lexical normalizer from a symlink-resolving regression.
-        try Data().write(to: target.appendingPathComponent("x.txt"))
+        try Data().write(to: target.appendingPathComponent("x.bin"))
         try FileManager.default.createSymbolicLink(at: base.appendingPathComponent("link"), withDestinationURL: target)
         defer { try? FileManager.default.removeItem(at: base) }
-        let linkLeaf = base.appendingPathComponent("link").appendingPathComponent("x.txt")
+        let linkLeaf = base.appendingPathComponent("link").appendingPathComponent("x.bin")
         guard case let .reveal(url) = LinkPolicy.disposition(for: linkLeaf.absoluteString, localHosts: Self.localHosts) else {
             Issue.record("expected .reveal for \(linkLeaf.absoluteString)"); return
         }
-        // reveal keeps the LINK path; a regression to resolvingSymlinksInPath() would yield .../target/x.txt
+        // reveal keeps the LINK path; a regression to resolvingSymlinksInPath() would yield .../target/x.bin
         #expect(url.path(percentEncoded: false) == linkLeaf.path(percentEncoded: false))
     }
 
@@ -120,6 +120,14 @@ struct LinkPolicyTests {
     ])
     func nonLocalFileIgnored(_ raw: String) {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
+    }
+
+    // a decoded NUL made open() read the name before it while eligibility judged the suffix after it
+    @Test(arguments: ["file:///tmp/id_rsa%00.go", "file:///tmp/id_rsa%00.md", "file://localhost/tmp/a%0A.txt",
+                      "file:///tmp/a%00.go:3"])
+    func aFileLinkDecodingToAControlCharacterIsIgnoredAndOffersNothing(_ raw: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
+        #expect(LinkPolicy.locations(for: raw, origin: .pane(Self.session), cwd: "/w", localHosts: Self.localHosts).isEmpty)
     }
 
     @Test(arguments: [
@@ -166,12 +174,12 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        ("/tmp/notes.txt", "/tmp/notes.txt"),
+        ("/tmp/notes.bin", "/tmp/notes.bin"),
         ("/tmp/x.svg", "/tmp/x.svg"),
         ("/tmp/x.pdf", "/tmp/x.pdf"),
         ("/usr/bin", "/usr/bin"),
         ("/tmp/png", "/tmp/png"),
-        ("~/notes.txt", "/Users/me/notes.txt"),
+        ("~/notes.bin", "/Users/me/notes.bin"),
     ])
     func otherBarePathsReveal(_ raw: String, _ path: String) {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
@@ -279,12 +287,12 @@ struct LinkPolicyTests {
 
     /// Smoke test on the DEFAULT `localHosts` parameter: without injection the decision must reach
     /// `localHostNames`, so an empty-host / localhost file link still reveals (host-stripped).
-    @Test(arguments: ["file:///tmp/x.txt", "file://localhost/tmp/x.txt"])
+    @Test(arguments: ["file:///tmp/x.bin", "file://localhost/tmp/x.bin"])
     func defaultLocalHostsRevealLocalFiles(_ raw: String) {
         guard case let .reveal(url) = LinkPolicy.disposition(for: raw) else {
             Issue.record("expected .reveal for \(raw)"); return
         }
-        #expect(url.absoluteString == "file:///tmp/x.txt")
+        #expect(url.absoluteString == "file:///tmp/x.bin")
     }
 
     // MARK: route (browser / overlay / reveal / ignore)
@@ -343,8 +351,8 @@ struct LinkPolicyTests {
 
     @Test(arguments: LinkOpenMode.allCases, origins)
     func fileLinksRevealAndOtherSchemesStayIgnoredInEveryMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
-        #expect(LinkPolicy.route(for: "file:///tmp/x.txt", mode: mode, origin: origin, localHosts: Self.localHosts)
-            == .reveal(URL(fileURLWithPath: "/tmp/x.txt", isDirectory: false)))
+        #expect(LinkPolicy.route(for: "file:///tmp/x.bin", mode: mode, origin: origin, localHosts: Self.localHosts)
+            == .reveal(URL(fileURLWithPath: "/tmp/x.bin", isDirectory: false)))
         #expect(LinkPolicy.route(for: "x-custom://run", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
         #expect(LinkPolicy.route(for: "file://elsewhere/tmp/x.txt", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
     }
@@ -373,5 +381,150 @@ struct LinkPolicyTests {
     @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
     func sessionlessOriginsNeverTakeTheOverride(_ origin: LinkPolicy.ClickOrigin) {
         #expect(!LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay, origin: origin, mouseCaptured: false))
+    }
+
+    // MARK: text pages and line locations
+
+    private static func loc(_ path: String, _ line: Int? = nil) -> LinkPolicy.LinkLocation {
+        LinkPolicy.LinkLocation(path: path, line: line)
+    }
+
+    private static func locations(_ raw: String, cwd: String? = nil,
+                                  origin: LinkPolicy.ClickOrigin = .pane(session)) -> [LinkPolicy.LinkLocation] {
+        LinkPolicy.locations(for: raw, origin: origin, cwd: cwd, localHosts: localHosts, home: home)
+    }
+
+    @Test(arguments: ["/tmp/a.go", "/tmp/notes.txt", "file:///tmp/Makefile", "file://localhost/tmp/.zshrc", "~/a.swift"])
+    func eligibleLocalFilesAreTextPages(_ raw: String) {
+        guard case .text(_, let line) = LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home) else {
+            Issue.record("expected .text for \(raw)"); return
+        }
+        #expect(line == nil)
+    }
+
+    // regression: an absolute compiler location read its suffix as the extension and was revealed
+    @Test func anAbsoluteLocationNamesTheLiteralPathThenTheFileAtItsLine() {
+        #expect(Self.locations("/x/a.go:42:7") == [Self.loc("/x/a.go:42:7"), Self.loc("/x/a.go", 42)])
+        #expect(Self.locations("/x/a.go:42") == [Self.loc("/x/a.go:42"), Self.loc("/x/a.go", 42)])
+        #expect(Self.locations("file:///x/a.go:9") == [Self.loc("/x/a.go:9"), Self.loc("/x/a.go", 9)])
+    }
+
+    // regression: a relative compiler location was parsed as a URL scheme and ignored
+    @Test func aRelativeLocationJoinsThePaneDirectoryBeforeAnySchemeParse() {
+        #expect(Self.locations("./a.go:42", cwd: "/w") == [Self.loc("/w/a.go:42"), Self.loc("/w/a.go", 42)])
+        #expect(Self.locations("src/a.go:3:1", cwd: "/w/") == [Self.loc("/w/src/a.go:3:1"), Self.loc("/w/src/a.go", 3)])
+        #expect(Self.locations("../lib/b.rs:10", cwd: "/w/app") == [Self.loc("/w/lib/b.rs:10"), Self.loc("/w/lib/b.rs", 10)])
+        #expect(Self.locations("src/a.go", cwd: "/w") == [Self.loc("/w/src/a.go")])
+    }
+
+    @Test(arguments: ["/x/a.go", "/x/a.go:", "/x/a.go:0", "/x/a.go:-3", "/x/a.go:abc", "/x/a.go:4x",
+                      "/x/a.go:99999999999999999999", "/x/:12"])
+    func anAbsolutePathWithoutAValidLineNeedsNoLookup(_ raw: String) {
+        #expect(Self.locations(raw).isEmpty)
+    }
+
+    @Test(arguments: ["http://localhost:3000", "https://host:8443", "https://host:8443/a.go:3", "mailto:a@b.c",
+                      "x-custom://run/a.go:3", "file://otherhost/x/a.go:3", "file:////server/share/a.go:3"])
+    func webAndForeignLinksAreNeverPaths(_ raw: String) {
+        #expect(Self.locations(raw, cwd: "/w").isEmpty)
+    }
+
+    @Test(arguments: ["/net/x/a.go:3", "/Network/a.go:3", "/home/me/a.go:3", "/tmp/../net/x/a.go:3",
+                      "//host/share/a.go:3", "/System/Volumes/Data/home/me/a.go:3"])
+    func refusedAbsolutePathsOfferNothingToStat(_ raw: String) {
+        #expect(Self.locations(raw, cwd: "/w").isEmpty)
+    }
+
+    @Test(arguments: [nil, "", "rel/dir", "/net/x", "/w\u{07}", "/w\nx", "//host/share", "/Network"] as [String?])
+    func aRelativePathUnderAMissingOrRefusedDirectoryOffersNothing(_ cwd: String?) {
+        #expect(Self.locations("src/a.go:3", cwd: cwd).isEmpty)
+        #expect(Self.locations("./a.go:3", cwd: cwd).isEmpty)
+    }
+
+    @Test func aRelativePathEscapingIntoAnAutomountRootOffersNothing() {
+        #expect(Self.locations("../../net/x/a.go:3", cwd: "/w/app").isEmpty)
+        #expect(Self.locations("../../../home/x/a.go:3", cwd: "/w/a/b").isEmpty)
+    }
+
+    @Test func aRemotePaneOffersNothingToStat() {
+        #expect(Self.locations("/x/a.go:42", origin: .remotePane(Self.session)).isEmpty)
+        #expect(Self.locations("./a.go:42", cwd: "/w", origin: .remotePane(Self.session)).isEmpty)
+        #expect(Self.locations("file:///x/a.go:42", origin: .remotePane(Self.session)).isEmpty)
+    }
+
+    @Test func noFoundCandidateKeepsTodaysRoute() {
+        let route = { (raw: String) in
+            LinkPolicy.route(for: raw, mode: .overlay, origin: .pane(Self.session), localHosts: Self.localHosts, home: Self.home)
+        }
+        #expect(route("/x/a.go:42") == .reveal(URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)))
+        #expect(route("./a.go:42") == .ignore)
+        #expect(route("src/a.go:42") == .ignore)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases)
+    func aFoundLocationOpensAsTextAtItsLineFromAPaneOrTheScratch(_ mode: LinkOpenMode) {
+        let size = mode == .browser ? 95 : mode.overlaySizePercent
+        let url = URL(fileURLWithPath: "/x/a.go", isDirectory: false)
+        for origin in [LinkPolicy.ClickOrigin.pane(Self.session), .scratch(Self.session)] {
+            #expect(LinkPolicy.route(for: Self.loc("/x/a.go", 42), mode: mode, origin: origin)
+                == .text(LinkPolicy.TextLink(url: url, line: 42, session: Self.session, sizePercent: size)))
+        }
+        #expect(LinkPolicy.route(for: "/x/a.go", mode: mode, origin: .pane(Self.session), localHosts: Self.localHosts)
+            == .text(LinkPolicy.TextLink(url: url, line: nil, session: Self.session, sizePercent: size)))
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.remotePane(session), .hud, .programOverlay, .quick])
+    func aTextFileFromAnotherOriginIsRevealed(_ origin: LinkPolicy.ClickOrigin) {
+        let url = URL(fileURLWithPath: "/x/a.go", isDirectory: false)
+        #expect(LinkPolicy.route(for: Self.loc("/x/a.go", 42), mode: .overlay, origin: origin) == .reveal(url))
+        #expect(LinkPolicy.route(for: "file:///x/a.go", mode: .overlay, origin: origin, localHosts: Self.localHosts) == .reveal(url))
+    }
+
+    @Test func aFoundLocationKeepsTheImageAndMarkdownRoutesAndRevealsTheRest() {
+        let session = Self.session
+        #expect(LinkPolicy.route(for: Self.loc("/x/a.png", 3), mode: .overlay, origin: .pane(session))
+            == .image(URL(fileURLWithPath: "/x/a.png", isDirectory: false), session: session))
+        #expect(LinkPolicy.route(for: Self.loc("/x/r.md", 3), mode: .overlay, origin: .pane(session))
+            == .markdown(URL(fileURLWithPath: "/x/r.md", isDirectory: false), session: session, sizePercent: nil))
+        #expect(LinkPolicy.route(for: Self.loc("/x/a.go:42"), mode: .overlay, origin: .pane(session))
+            == .reveal(URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)))
+    }
+
+    // MARK: click intent
+
+    @Test(arguments: [
+        ([KeyModifiers.command], false, LinkPolicy.ClickIntent.normal),
+        ([.command, .shift], false, .browser),
+        ([.command, .option], false, .reveal),
+        ([.command, .option, .shift], false, .normal),
+        ([.option], false, .normal),
+        ([.command, .control], false, .normal),
+        ([.command, .option, .control], false, .normal),
+        ([.command], true, .normal),
+        ([.command, .shift], true, .normal),
+        ([.command, .option], true, .normal),
+        ([.command, .option, .shift], true, .reveal),
+    ] as [(KeyModifiers, Bool, LinkPolicy.ClickIntent)])
+    func theChordDecidesTheClickIntent(_ modifiers: KeyModifiers, _ captured: Bool, _ intent: LinkPolicy.ClickIntent) {
+        #expect(LinkPolicy.clickIntent(modifiers: modifiers, mode: .overlay, origin: .pane(Self.session), mouseCaptured: captured) == intent)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, origins)
+    func theRevealChordWorksInEveryModeAndOrigin(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.clickIntent(modifiers: [.command, .option], mode: mode, origin: origin, mouseCaptured: false) == .reveal)
+        #expect(LinkPolicy.clickIntent(modifiers: [.command, .option, .shift], mode: mode, origin: origin, mouseCaptured: true) == .reveal)
+    }
+
+    @Test func aLocalRouteNamesItsFileAndAWebOrIgnoredOneNone() throws {
+        let file = URL(fileURLWithPath: "/x/a.go", isDirectory: false)
+        let web = try #require(URL(string: "https://example.com/"))
+        let session = Self.session
+        #expect(LinkPolicy.Route.image(file, session: session).localFile == file)
+        #expect(LinkPolicy.Route.markdown(file, session: session, sizePercent: 95).localFile == file)
+        #expect(LinkPolicy.Route.text(LinkPolicy.TextLink(url: file, line: 3, session: session, sizePercent: nil)).localFile == file)
+        #expect(LinkPolicy.Route.reveal(file).localFile == file)
+        #expect(LinkPolicy.Route.browser(web).localFile == nil)
+        #expect(LinkPolicy.Route.overlay(web, session: session, sizePercent: nil).localFile == nil)
+        #expect(LinkPolicy.Route.ignore.localFile == nil)
     }
 }

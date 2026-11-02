@@ -706,8 +706,27 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and spaces stay in the name. A local path, bare or `file://`, with an `imageExtensions` extension routes to
   `ControlServer.openImageLink` (the same HUD and zoom guards) and is revealed when that refuses; one with a
   `markdownExtensions` extension routes to `ControlServer.openMarkdownLink` the same way, at the mode's size, 95 in
-  browser mode (`Route.markdown` carries it); any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
+  browser mode (`Route.markdown` carries it), and one `TextPage.isEligible` accepts routes to `openTextLink` the same
+  way; any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
   on the far Mac and are ignored, while its scratch stays `.scratch` because that shell is local.
+- libghostty keeps a `:line[:column]` suffix in the path it hands over and resolves a relative path only when that
+  exact path exists, so `./main.go:42` arrives raw. `LinkPolicy.locations` lists the candidates for such a link, the
+  literal path first so a file named with a colon wins, then the path without the suffix; a relative link is joined to
+  the clicking pane's session cwd before any scheme parse, and a first segment with a colon is never a directory, so
+  `http://localhost:3000` stays a web link. The scratch, quick and overlay terminals pass no cwd. Every candidate has
+  passed `guardedLocalPath` (absolute, no `//`, no automount root) and a remote pane offers none, so a refused path
+  is never stat'ed. `LinkOpener` checks them off the main actor and routes the first that exists; with none on disk
+  the link keeps its typed route.
+- `LinkPolicy.ClickIntent` reads the chord. ⌘⇧ asks for the browser as before; ⌘⌥ reveals the file a local route
+  names, after that guarded routing (`Route.localFile`), from any origin, HUD panels included, and leaves a web link
+  to its web route; under mouse capture the chord is ⌘⌥⇧. libghostty matches a link only on ⌘ alone, so `linkMods`
+  drops Shift or Option for the hover, the press and an undragged release. Every drag event keeps Option, and so does
+  a reveal release after any drag event (`linkPressDragged`): libghostty redraws a rectangle selection from the mods
+  of the release's position report while the button is down. A dragged ⌘⇧ release stays normalized, Shift setting no
+  shape. Accepted: a ⌘⌥ click that sends any drag event reveals nothing, and when the program captures Shift it
+  receives ⌘⇧ for a ⌘⌥⇧ click, since the Option strip is not undone. The chord is a gesture modifier with no control
+  twin: `overlay open --text` and Finder reveal are already reachable. `wantsBrowser` stays public for the
+  agterm-linux fork's caller.
 - An image page (`HtmlSource.image`, `--image`) embeds the file as a data URI in an HTML string, so it gets no
   file grant, theme or bridge, and `presentationSource` has no remote form for it, which makes a presented
   session refuse it through `pageBelongsRemote`. `BoundedFile.read` opens the path once and judges that
@@ -730,6 +749,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   JavaScript off; its image rule emits only app-embedded data URIs, so no authored source reaches WebKit, and it
   strips every link but http(s) and fragments, since `about:` passes the navigation policy. The click and the
   control path check only the descriptor; the page load reads pictures, under the shared `textLoad` counter.
+- A text page (`HtmlSource.text`, `--text` with `--line`, wire `textFile` and `line`) is built from text too and
+  themed, but has no links at all: its arm of `HtmlNavigationPolicy` runs before the shared new-window and `about`
+  exits and allows only a main-frame `about:blank`. `TextProbe` reads through `BoundedFile` and refuses invalid UTF-8
+  and NUL bytes in the check as well as the load, so a binary click is revealed. `TextPage.html` holds the escaped text
+  in a hidden `div` (a parser drops a newline after `<pre>`, shifting every line) under a CSP that loads nothing;
+  `text.js` writes it through `textContent`, and highlight.js's escaped value, chosen by the app's extension and
+  basename map up to `maxHighlightBytes`, is the only `innerHTML` it assigns. Markdown, HTML and SVG are not text
+  pages. `--text` is taken literally, never suffix-parsed; read back `htmlOverlays[].text` with the file, the mapped
+  language and the requested line.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
@@ -815,7 +843,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `zmx.present`, `session.overlay.job.run`, `session.overlay.page.serve` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
 - The theme, markdown renderer, adapter and helper scripts install as ONE set: removing user scripts removes them
   all, so a separate install would lose the adapter or the renderer at the next theme change. Theme styling
-  (`styled`) and the bridge (`bridged`) are separate eligibilities: a markdown page wears the theme with no bridge. Release unregisters the handlers;
+  (`styled`) and the bridge (`bridged`) are separate eligibilities: a markdown or text page wears the theme with no bridge. Release unregisters the handlers;
   reload keeps them.
 - `HtmlPageOutcomes` keys every page's selector outcome by page id, outside the slot, so a caller blocked
   on a page reads it after the page and its session are gone. A successful open registers `pending`;
