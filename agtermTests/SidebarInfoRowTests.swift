@@ -13,7 +13,7 @@ final class SidebarInfoRowTests: XCTestCase {
     private var outline: SidebarOutlineView!
     private var coordinator: WorkspaceSidebar.Coordinator!
     private var server: ControlServer?
-    private var savedHidden: Set<InterfaceElement> = []
+    private var savedDisplay = SessionInfoDisplay.always
 
     override func setUp() async throws {
         try await super.setUp()
@@ -21,12 +21,12 @@ final class SidebarInfoRowTests: XCTestCase {
             .appendingPathComponent("agterm-sidebar-info-tests-\(UUID().uuidString)", isDirectory: true)
         library = WindowLibrary(directory: stateDir)
         actions = AppActions(library: library)
-        savedHidden = GhosttyApp.shared.hiddenInterfaceElements
-        GhosttyApp.shared.setHiddenInterfaceElements(savedHidden.subtracting([.sessionInfo]))
+        savedDisplay = GhosttyApp.shared.sessionInfoDisplay
+        GhosttyApp.shared.setSessionInfoDisplay(.always)
     }
 
     override func tearDown() async throws {
-        GhosttyApp.shared.setHiddenInterfaceElements(savedHidden)
+        GhosttyApp.shared.setSessionInfoDisplay(savedDisplay)
         server?.stop()
         server = nil
         window?.orderOut(nil)
@@ -54,18 +54,50 @@ final class SidebarInfoRowTests: XCTestCase {
         XCTAssertEqual(try height(of: session.id), plainHeight)
     }
 
-    func testAHiddenElementDrawsNoLineButKeepsIt() throws {
+    func testOffDrawsNoLineButKeepsItAndItsTimer() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try seed(store)
+        store.setInfo(try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 30).get(), forSession: session.id)
+        buildSidebar(for: store)
+        XCTAssertEqual(try height(of: session.id), infoHeight)
+
+        GhosttyApp.shared.setSessionInfoDisplay(.off)
+        coordinator.reconcile()
+
+        XCTAssertEqual(try height(of: session.id), plainHeight)
+        XCTAssertEqual(session.info?.source, "3 agents")
+        XCTAssertEqual(session.info?.hideAfter, 30)
+    }
+
+    func testFlaggedViewOnlyHidesTheLineInTheTreeAndShowsItInTheFlaggedView() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try seed(store)
+        store.setFlag(true, forSession: session.id)
+        store.setInfo(try info("3 agents"), forSession: session.id)
+        GhosttyApp.shared.setSessionInfoDisplay(.flagged)
+        buildSidebar(for: store)
+        XCTAssertEqual(try height(of: session.id), plainHeight)
+
+        store.setSidebarMode(.flagged)
+        coordinator.reconcile()
+        XCTAssertEqual(try height(of: session.id), infoHeight)
+
+        store.setSidebarMode(.tree)
+        coordinator.reconcile()
+        XCTAssertEqual(try height(of: session.id), plainHeight)
+    }
+
+    func testChangingTheDisplaySettingRedrawsThroughTheAppearanceBroadcast() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try seed(store)
         store.setInfo(try info("3 agents"), forSession: session.id)
         buildSidebar(for: store)
         XCTAssertEqual(try height(of: session.id), infoHeight)
 
-        GhosttyApp.shared.setHiddenInterfaceElements(savedHidden.union([.sessionInfo]))
-        coordinator.reconcile()
+        GhosttyApp.shared.setSessionInfoDisplay(.off)
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
 
         XCTAssertEqual(try height(of: session.id), plainHeight)
-        XCTAssertEqual(session.info?.source, "3 agents")
     }
 
     func testASelectedRowKeepsColoredFragmentsAndFollowsTheSelectionForegroundElsewhere() throws {
@@ -107,7 +139,6 @@ final class SidebarInfoRowTests: XCTestCase {
             settingsModel: SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir)),
             identity: AppIdentity(version: "9.9.9"), socketPath: "/tmp/agterm-info-row-\(UUID().uuidString.prefix(8)).sock")
         self.server = server
-        GhosttyApp.shared.setHiddenInterfaceElements(savedHidden.subtracting([.sessionInfo]))
         try mountSidebar(for: store)
         let dispatcher = ControlDispatcher(actions: server)
 

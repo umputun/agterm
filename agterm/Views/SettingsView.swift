@@ -252,12 +252,13 @@ private struct InterfaceSettingsView: View {
 
     var body: some View {
         Form {
-            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar)) {
+            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() }) {
                 EmptyView()
             }
             // the multi-window toggle rides the Sidebar section: the tab is full at 540x680, and its own
             // section header would push the quick-terminal Size off the bottom.
-            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar)) {
+            // the info-line picker takes the grid's empty half: a row of its own would push the Size off the bottom
+            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { sessionInfoPicker }) {
                 Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
             }
@@ -287,10 +288,10 @@ private struct InterfaceSettingsView: View {
                 set: { model.setQuickTerminalSizePercent($0) })
     }
 
-    /// A section whose toggles lay out TWO per row, each filling half the row around a centered `Divider` so
-    /// the columns read as EVEN and visibly separated; an odd final element pairs with an empty half.
+    /// twoColumnSection lays toggles out TWO per row, each filling half the row around a centered `Divider` so
+    /// the columns read as EVEN and visibly separated; an odd final element pairs with `fill`.
     @ViewBuilder
-    private func twoColumnSection(_ title: String, elements: [InterfaceElement],
+    private func twoColumnSection(_ title: String, elements: [InterfaceElement], @ViewBuilder fill: @escaping () -> some View,
                                   @ViewBuilder trailing: () -> some View) -> some View {
         Section(title) {
             ForEach(Array(stride(from: 0, to: elements.count, by: 2)), id: \.self) { start in
@@ -300,7 +301,7 @@ private struct InterfaceSettingsView: View {
                     if start + 1 < elements.count {
                         toggle(for: elements[start + 1]).frame(maxWidth: .infinity)
                     } else {
-                        Spacer().frame(maxWidth: .infinity)
+                        fill().frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -330,6 +331,19 @@ private struct InterfaceSettingsView: View {
     private func binding(for element: InterfaceElement) -> Binding<Bool> {
         Binding(get: { !model.settings.isInterfaceElementHidden(element) },
                 set: { model.setInterfaceElementVisible(element, visible: $0) })
+    }
+
+    private var sessionInfoPicker: some View {
+        Picker(selection: Binding(get: { model.settings.effectiveSessionInfoDisplay },
+                                  set: { model.setSessionInfoDisplay($0) })) {
+            ForEach(SessionInfoDisplay.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        } label: {
+            HStack(spacing: 6) {
+                Color.clear.frame(width: 18).accessibilityHidden(true)
+                Text("Session info").fixedSize()
+            }
+        }
+        .accessibilityIdentifier("settings-session-info-display")
     }
 }
 

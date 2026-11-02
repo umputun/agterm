@@ -33,11 +33,14 @@ extension WorkspaceSidebar.Coordinator {
         return SidebarInfoMetrics.rowHeight(base: base)
     }
 
-    /// sessionInfo is the info line a session row shows, shared by the height, the cell builder and the row diff;
-    /// nil while the Session info Interface element is hidden, which leaves the line and its timer in place.
+    /// sessionInfo is the info line a session row shows, shared by the height, the cell builder and the row diff.
+    /// The display setting gates drawing only, so a hidden line keeps its value and its timer.
     func sessionInfo(forSession id: UUID) -> [SessionInfoSpan]? {
-        guard !GhosttyApp.shared.hiddenInterfaceElements.contains(.sessionInfo) else { return nil }
-        return store.session(withID: id)?.effectiveInfo?.spans
+        switch GhosttyApp.shared.sessionInfoDisplay {
+        case .off: return nil
+        case .flagged where store.sidebarMode != .flagged: return nil
+        case .always, .flagged: return store.session(withID: id)?.effectiveInfo?.spans
+        }
     }
 
     func outlineView(_ outlineView: NSOutlineView, viewFor tableColumn: NSTableColumn?, item: Any) -> NSView? {

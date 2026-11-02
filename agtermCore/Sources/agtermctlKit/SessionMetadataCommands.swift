@@ -183,7 +183,8 @@ extension Session {
             discussion: """
                 The line shows current activity, such as a status or a count. Each set replaces the whole \
                 line: omitting --markdown sends plain text and omitting --hide-after cancels an earlier \
-                expiry. It is not kept across a relaunch. Shown when Settings > Interface > Session info is on.
+                expiry. It is not kept across a relaunch. Settings > Interface > Session info picks where it \
+                shows: Always (default), Flagged (the flagged view only) or Off; that hides it, never clears it.
                 Markdown example: '**3** agents ^[running](color: "green") ^[idle](dim: true)'. Colors: \
                 \(TintColor.validNamesList); the value must be quoted.
                 """)

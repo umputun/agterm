@@ -78,8 +78,9 @@ mirrored to a viewer attached to a remote session.
 
 `Session.info: SessionInfo?` holds the caller's source, its markdown flag, the configured hide-after and the
 parsed spans. It is set only over the control channel, never persisted, projected on `ControlSessionNode`,
-mirrored over remote presentation, and drawn by `SidebarInfoCellView` when the `sessionInfo` Interface
-element is shown.
+mirrored over remote presentation, and drawn by `SidebarInfoCellView` where the app-wide `SessionInfoDisplay`
+setting allows: Always (default), Flagged (the flagged sidebar view only) or Off. The setting gates drawing
+only; the line, its expiry, mirroring and read-back are untouched.
 
 Every successful set replaces the whole value, as `hud.update` does: omitting `--markdown` means plain,
 omitting `--hide-after` cancels a prior expiry. Each successful set restarts the timer, even with identical
@@ -292,7 +293,36 @@ public struct SessionInfo: Equatable, Sendable {
       `tree` reads `info`, `infoMarkdown` and `infoHideAfter` back
 - [x] run `swift test --filter SessionMetadataCommandsTests` and the scoped XCUITest - must pass before task 7
 
-### Task 7: Cross-surface documentation
+### Task 7: ➕ Three-way info display setting
+
+Eugene replaced task 5's on/off Interface toggle with a three-way choice after seeing it; codex agreed.
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/AppSettings.swift`
+- Modify: `agterm/Ghostty/GhosttyApp.swift`
+- Modify: `agterm/SettingsModel.swift`
+- Modify: `agterm/Views/SettingsView.swift`
+- Modify: `agterm/Views/WorkspaceSidebar+RowRendering.swift`
+- Modify: `agtermCore/Sources/agtermctlKit/SessionMetadataCommands.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
+- Modify: `agtermTests/SidebarInfoRowTests.swift`
+- Modify: `agtermUITests/SettingsUITests.swift`
+
+- [x] drop `InterfaceElement.sessionInfo` (never shipped) and restore the settings tests that enumerate it
+- [x] add `SessionInfoDisplay` (`always`|`flagged`|`off`, labels Always/Flagged/Off) and raw
+      `AppSettings.sessionInfoDisplay`, nil and unknown resolving to `always`, persisted nil for Always,
+      mirrored to `GhosttyApp` and set through `SettingsModel.setSessionInfoDisplay` like the flagged layout
+- [x] gate `sessionInfo(forSession:)`: Off draws nothing, Flagged draws only while `store.sidebarMode` is
+      flagged; the line, timer, mirroring and read-back are never touched
+- [x] put a menu Picker "Session info" in the Interface Sidebar grid's empty half-cell; checked by eye that
+      the label and the selected value fit and the tab does not scroll
+- [x] update the CLI help to the three-way rule
+- [x] write tests: settings default, resolution, round trip and labels; hosted rows for Off keeping the line and
+      timer, Flagged hiding in the tree and showing after a mode flip, and a setting change redrawing through
+      `.agtermAppearanceChanged`; the Interface tab UI test picks Flagged, checks it persists and the tab fits
+- [x] run the settings tests, the scoped hosted tests and the scoped UI test - must pass before task 8
+
+### Task 8: Cross-surface documentation
 
 **Files:**
 - Modify: `.claude/rules/control-api.md`
@@ -311,10 +341,10 @@ public struct SessionInfo: Equatable, Sendable {
       full contract in `reference.md`, including that a recipe reporting activity must pass `--hide-after`
       and refresh it
 - [ ] `site/commands.html` mirrors the command, arguments and read-back fields; `site/docs.html` describes the
-      feature, the markup with an example, the Interface toggle, and that attached sessions show it
+      feature, the markup with an example, the Session info display setting, and that attached sessions show it
 - [ ] state no command total anywhere
 
-### Task 8: Verify acceptance criteria
+### Task 9: Verify acceptance criteria
 
 - [ ] a caller can set, restyle, renew and clear a line, and `tree` reads back source, markdown and hide-after
 - [ ] a rejected set leaves value and deadline untouched; `--clear` is the only clearing form
@@ -323,7 +353,7 @@ public struct SessionInfo: Equatable, Sendable {
       and on stream end, and a local override hides and then reveals the origin's line
 - [ ] run `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint` - all clean
 
-### Task 9: [Final] Wrap up
+### Task 10: [Final] Wrap up
 
 - [ ] update `ARCHITECTURE.md` if the surface split changed
 - [ ] move this plan to `docs/plans/completed/`
@@ -331,10 +361,10 @@ public struct SessionInfo: Equatable, Sendable {
 ## Post-Completion
 
 **Manual verification:**
-- Launch an isolated Debug instance, enable Settings > Interface > Session info, set lines from
+- Launch an isolated Debug instance, set lines from
   `agtermctl --socket` (plain, markdown with colors, emoji, a long one, one with `--hide-after 5`), and check
   by eye: row height, truncation and tooltip, selection colors, a tinted row, and the line disappearing on
   expiry.
-- Look at Settings > Interface with the new toggle: the tab fits without scrolling.
+- Look at Settings > Interface with the Session info picker on each value, and switch the sidebar to the flagged view under Flagged.
 
 Smells pre-check: skipped — non-Go project.
