@@ -538,6 +538,7 @@ struct agtermApp: App {
         view.onFontSizeChange = { [weak view] size in
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
+        view.onPwdChange = { store.rememberFolder($0, reportedBy: sessionID) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
         view.onExitHeld = { [weak view] in
             guard let view else { return }

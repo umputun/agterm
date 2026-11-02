@@ -656,6 +656,28 @@ struct AppSettingsTests {
         #expect(settings.resolveNewSessionCwd(currentSessionCwd: "", home: "/home") == "/home")
     }
 
+    @Test func resolveNewSessionCwdCurrentSessionPrefersAnExistingRememberedFolder() {
+        let settings = AppSettings(newSessionDirectory: "currentSession")
+        #expect(settings.resolveNewSessionCwd(rememberedFolder: "/ws", currentSessionCwd: "/proj", home: "/home",
+                                              directoryExists: { _ in true }) == "/ws")
+        #expect(settings.resolveNewSessionCwd(rememberedFolder: "/gone", currentSessionCwd: "/proj", home: "/home",
+                                              directoryExists: { _ in false }) == "/proj")
+        #expect(settings.resolveNewSessionCwd(rememberedFolder: "/gone", currentSessionCwd: nil, home: "/home",
+                                              directoryExists: { _ in false }) == "/home")
+    }
+
+    @Test func rememberedFolderIsIgnoredOutsideCurrentSessionMode() {
+        for settings in [AppSettings(), AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/fixed")] {
+            let resolved = settings.resolveNewSessionCwd(rememberedFolder: "/ws", currentSessionCwd: "/proj", home: "/home",
+                                                         directoryExists: { _ in true })
+            #expect(resolved != "/ws")
+            #expect(!settings.usesRememberedFolder)
+            #expect(settings.usableRememberedFolder("/ws", directoryExists: { _ in true }) == nil)
+        }
+        #expect(AppSettings(newSessionDirectory: "currentSession").usableRememberedFolder("/ws", directoryExists: { _ in true }) == "/ws")
+        #expect(AppSettings(newSessionDirectory: "currentSession").usableRememberedFolder(nil) == nil)
+    }
+
     @Test func resolveNewSessionCwdCustomUsesPathElseHome() {
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/fixed")
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/fixed")

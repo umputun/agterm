@@ -25,7 +25,7 @@ struct Session: ParsableCommand {
 
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create a session.")
-        @Option(name: .long, help: "Working directory (defaults to $HOME).") var cwd: String?
+        @Option(name: .long, help: "Working directory (defaults to the workspace's remembered folder in the Current session's directory mode, else $HOME). In that mode, without --workspace/--workspace-name/--after/--before, the session joins the first workspace whose remembered folder equals it.") var cwd: String?
         @Option(name: .long, help: "Target workspace by id/prefix/active (defaults to the current one). Mutually exclusive with --workspace-name.") var workspace: String?
         @Option(name: .long, help: "Target workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.") var workspaceName: String?
         @Flag(name: .long, help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).") var createWorkspace = false

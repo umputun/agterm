@@ -636,11 +636,14 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let tint: String?
     /// The workspace row parts the tint colors; present exactly when `tint` is.
     public let tintOn: [String]?
+    /// The workspace's remembered folder (the last directory a local pane reported over OSC 7); nil/omitted
+    /// when none. Read-only: the shell sets it with `cd`, there is no setter command.
+    public let rememberedFolder: String?
     public let sessions: [ControlSessionNode]
 
     public init(id: String, name: String, active: Bool, focused: Bool? = nil,
                 collapsed: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil,
-                sessions: [ControlSessionNode]) {
+                rememberedFolder: String? = nil, sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
@@ -648,6 +651,7 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
         self.collapsed = collapsed
         self.tint = tint
         self.tintOn = tintOn
+        self.rememberedFolder = rememberedFolder
         self.sessions = sessions
     }
 }

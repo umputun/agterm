@@ -147,6 +147,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// can persist it. Pane surfaces share a live-role-aware callback; scratch and overlays leave it unset.
     /// libghostty has no font-size getter or change event, so this rides CELL_SIZE and reads the inherited config.
     var onFontSizeChange: ((Double) -> Void)?
+    /// Every OSC 7 report of a session pane, for its workspace's remembered folder; scratch and overlays leave it unset.
+    var onPwdChange: ((String) -> Void)?
 
     /// Called when libghostty enters search mode (START_SEARCH) with the current needle (nil when none). The
     /// main/split factory toggles the session's search bar: visible → send `end_search` (the ⌘F-again close),
@@ -513,6 +515,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         } else {
             if session?.currentCwd != pwd { session?.currentCwd = pwd }
         }
+        onPwdChange?(pwd)
     }
 
     func applyTitle(_ rawTitle: String) {
@@ -894,6 +897,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         onUserInput = nil
         onGridChange = nil
         onFontSizeChange = nil
+        onPwdChange = nil
         onSearchStart = nil
         onSearchEnd = nil
         onSearchTotal = nil

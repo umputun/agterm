@@ -415,7 +415,8 @@ public final class AppStore {
                                         focused: focusedWorkspaceIDs.contains(workspace.id) ? true : nil,
                                         collapsed: workspace.isExpanded ? nil : true,
                                         tint: workspace.tint?.color.rawValue,
-                                        tintOn: workspace.tint?.parts.map(\.rawValue), sessions: sessions)
+                                        tintOn: workspace.tint?.parts.map(\.rawValue),
+                                        rememberedFolder: workspace.rememberedFolder, sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            attentionIncludesActive: attentionIncludesActive,

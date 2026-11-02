@@ -602,20 +602,39 @@ public struct AppSettings: Codable, Equatable, Sendable {
         return raw.flatMap(StatusShape.init(rawValue:))
     }
 
-    /// The working directory a new session opens in, resolving `newSessionDirectory` against the active
-    /// session's focused-pane cwd and home. An unknown/nil mode, a blank `currentSessionCwd`, or a blank
-    /// custom path all fall back to home. Host-free so `AppActions` and the tests share one resolution.
-    public func resolveNewSessionCwd(currentSessionCwd: String?, home: String) -> String {
+    /// The working directory a new session opens in, resolving `newSessionDirectory` against the target
+    /// workspace's remembered folder, the active session's focused-pane cwd and home. An unknown/nil mode, a
+    /// blank `currentSessionCwd`, or a blank custom path all fall back to home. Host-free so `AppActions` and
+    /// the tests share one resolution.
+    public func resolveNewSessionCwd(rememberedFolder: String? = nil, currentSessionCwd: String?, home: String,
+                                     directoryExists: (String) -> Bool = AppSettings.directoryExists) -> String {
         switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
         case .home:
             return home
         case .currentSession:
+            if let folder = usableRememberedFolder(rememberedFolder, directoryExists: directoryExists) { return folder }
             guard let cwd = currentSessionCwd, !cwd.isEmpty else { return home }
             return cwd
         case .custom:
             guard let dir = newSessionCustomDirectory, !dir.isEmpty else { return home }
             return dir
         }
+    }
+
+    /// Whether new sessions use each workspace's remembered folder: only the `currentSession` mode does.
+    public var usesRememberedFolder: Bool { newSessionDirectory == NewSessionDirectory.currentSession.rawValue }
+
+    /// `folder` when the mode uses remembered folders and the directory still exists, else nil. A vanished
+    /// folder is skipped, not cleared.
+    public func usableRememberedFolder(_ folder: String?,
+                                       directoryExists: (String) -> Bool = AppSettings.directoryExists) -> String? {
+        guard usesRememberedFolder, let folder, directoryExists(folder) else { return nil }
+        return folder
+    }
+
+    public static func directoryExists(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     /// The SwiftUI overlay opacity for an inactive-pane mute strength, clamped and scaled by 0.08 (the

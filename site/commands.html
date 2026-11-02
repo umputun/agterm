@@ -604,7 +604,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tint</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tintOn</span> (the workspace row's own tint, the read side of
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint</span>; both omitted when untinted).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace tint</span>; both omitted when untinted), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rememberedFolder</span> (the last directory a local pane of the workspace reported, kept when it empties; set only by
+                the shell's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cd</span>, no setter; omitted when none).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Top level:</strong>
@@ -1025,7 +1027,9 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Create a session and focus it.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> sets the start directory (default
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$HOME</span>). The destination workspace is addressed
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$HOME</span>; with New session directory set to Current session's directory, the target workspace's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rememberedFolder</span> when it still exists). In that mode a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span> with no other placement joins the first
+                workspace whose <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rememberedFolder</span> is that exact path. The destination workspace is addressed
                 either by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace</span> (id / prefix /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) or by
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--workspace-name</span> (the sidebar label) — the

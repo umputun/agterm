@@ -936,7 +936,8 @@ final class ControlServer {
         )
     }
 
-    /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME, optional
+    /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default the workspace's
+    /// remembered folder in `currentSession` mode, else $HOME; optional
     /// command/name) and returns its id; shared by the id- and name-addressed `.sessionNew` paths. Focuses it
     /// only when it lands in the frontmost window, so a keymap `session new` opens focused like GUI New
     /// Session while a background `--window` target keeps focus. `at` is the anchor-relative
@@ -944,7 +945,9 @@ final class ControlServer {
     /// background, selection and focus untouched.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID, options: ControlSessionCreateOptions,
                              tint: SidebarTint? = nil, at index: Int? = nil) -> ControlResponse {
-        let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let cwd = options.cwd
+            ?? settingsModel.settings.usableRememberedFolder(store.rememberedFolder(ofWorkspace: workspaceID))
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
                                              command: options.command, name: options.name,
                                              wait: options.wait ?? false, at: index, select: !options.noSelect,

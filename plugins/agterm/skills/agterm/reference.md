@@ -311,7 +311,9 @@ says, `tree` mode with the filter OFF renders the whole tree regardless of membe
 mode with the filter ON narrows visibility to the members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys), and `tint`/`tintOn` (the workspace row's own
-tint, the read side of `workspace tint`; both omitted when untinted).
+tint, the read side of `workspace tint`; both omitted when untinted), and `rememberedFolder` (the last
+directory a local pane of the workspace reported, kept when it empties; set only by the shell's `cd`, no
+setter; omitted when none).
 
 The tree object itself carries these top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
