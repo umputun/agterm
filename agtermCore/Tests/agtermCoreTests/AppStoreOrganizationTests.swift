@@ -791,6 +791,23 @@ struct AppStoreOrganizationTests {
         #expect(store.newSessionInsertionIndex(inWorkspace: other.id, placement: .afterCurrent) == nil)
     }
 
+    @Test func directorySourceFollowsTheDestinationWorkspace() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let other = store.addWorkspace(name: "other")
+        let empty = store.addWorkspace(name: "empty")
+        let older = try #require(store.addSession(toWorkspace: other.id, cwd: "/x"))
+        let recent = try #require(store.addSession(toWorkspace: other.id, cwd: "/y"))
+        let selected = try #require(store.addSession(toWorkspace: work.id, cwd: "/1"))
+        store.selectSession(older.id)
+        store.selectSession(recent.id)
+        store.selectSession(selected.id)
+
+        #expect(store.newSessionDirectorySource(inWorkspace: work.id)?.id == selected.id)
+        #expect(store.newSessionDirectorySource(inWorkspace: other.id)?.id == recent.id)
+        #expect(store.newSessionDirectorySource(inWorkspace: empty.id)?.id == selected.id)
+    }
+
     @Test func afterCurrentAppendsWithNoSelection() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -239,9 +239,10 @@ paths:
   `restore.capture`, `restore.clear` and tree foreground fields are the control surface; the tree fields
   report the live process, not the captured slot, which [[control-api]] keeps read-back-free by design.
 - `newSessionDirectory` is raw `home|currentSession|custom`, with fixed custom path. Unknown/blank/missing
-  values fall back home. Resolve once from active session's `focusedCwd` for every GUI creation path,
-  including a right-clicked workspace; setters save only. Control `session.new --cwd` remains explicit
-  and ignores this setting.
+  values fall back home. Every GUI creation path resolves once from the `focusedCwd` of
+  `newSessionDirectorySource`: the selection only when it is in the destination workspace, else that
+  workspace's most recent session, else the selection; setters save only. Control `session.new --cwd`
+  remains explicit and ignores this setting.
 - `cursorStyle` is a raw string that `effectiveCursorStyle` recognizes only as `block|bar|underline`, and
   `cursorBlink` is ghostty's own `?bool`. Unlike the two keys above, neither is emitted unconditionally:
   only a RECOGNIZED style emits `cursor-style`, and `cursorBlink` emits whenever it is non-nil.
