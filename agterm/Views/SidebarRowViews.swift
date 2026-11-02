@@ -44,6 +44,29 @@ class SidebarCellView: NSTableCellView {
 
     private static let addButtonWidth: CGFloat = 16
 
+    var iconWidthConstraint: NSLayoutConstraint?
+    var iconGapConstraint: NSLayoutConstraint?
+
+    static let iconWidth: CGFloat = 16
+    static let iconGap: CGFloat = 6
+
+    /// notice is the remote presentation warning.
+    var notice: String? {
+        didSet { applyNotice() }
+    }
+
+    func setIconVisible(_ visible: Bool) {
+        imageView?.isHidden = !visible
+        iconWidthConstraint?.constant = visible ? Self.iconWidth : 0
+        iconGapConstraint?.constant = visible ? Self.iconGap : 0
+        applyNotice()
+    }
+
+    private func applyNotice() {
+        imageView?.toolTip = imageView?.isHidden == false ? notice : nil
+        updateNameTooltip()
+    }
+
     /// The row's tint, applied by `setColors` so a selection change keeps it; nil restores the theme colors.
     var tint: SidebarTint? {
         didSet { imageView?.setAccessibilityValue(tint.map { "\($0.color.rawValue) tint" }) }
@@ -71,7 +94,10 @@ class SidebarCellView: NSTableCellView {
     private func updateNameTooltip() {
         guard let field = textField, field.currentEditor() == nil else { return }
         let available = field.cell?.titleRect(forBounds: field.bounds).width ?? field.bounds.width
-        field.toolTip = field.attributedStringValue.size().width > available ? field.stringValue : nil
+        let name = field.attributedStringValue.size().width > available ? field.stringValue : nil
+        let hiddenNotice = imageView?.isHidden == true ? notice : nil
+        let parts = [name, hiddenNotice].compactMap(\.self)
+        field.toolTip = parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
     // hover tracking for the "+" reveal, workspace cells only (session cells have no button to show)
@@ -313,7 +339,11 @@ final class SidebarRowView: NSTableRowView {
 /// identity (`===`) — nodes must be the SAME instances across reloads, never fresh structs. The coordinator
 /// caches one per workspace/session id and rebuilds only the child lists.
 final class SidebarNode {
-    enum Kind { case workspace, session }
+    enum Kind {
+        case workspace, session
+
+        var iconElement: InterfaceElement { self == .workspace ? .workspaceIcons : .sessionIcons }
+    }
 
     let kind: Kind
     let id: UUID

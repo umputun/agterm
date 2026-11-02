@@ -496,6 +496,19 @@ final class SettingsUITests: XCTestCase {
                       "re-showing the last hidden element should remove hiddenInterfaceElements from settings.json")
     }
 
+    func testSessionIconsToggleHidesOnlyTheSessionRowIcon() throws {
+        let sessionIcon = app.descendants(matching: .any).matching(identifier: "session-icon").firstMatch
+        let workspaceIcon = app.descendants(matching: .any).matching(identifier: "workspace-icon").firstMatch
+        XCTAssertTrue(sessionIcon.waitForExistence(timeout: 20), "the session row shows its icon by default")
+
+        settingsControl(tab: "Interface", control: "settings-interface-sessionIcons").click()
+
+        XCTAssertTrue(poll { self.settingsStringArray("hiddenInterfaceElements")?.contains("sessionIcons") == true },
+                      "hiding session icons should persist \"sessionIcons\" into hiddenInterfaceElements")
+        XCTAssertTrue(poll { !sessionIcon.exists }, "the open window's session row should drop its icon live")
+        XCTAssertTrue(workspaceIcon.exists, "the workspace row keeps its icon; the two toggles are independent")
+    }
+
     func testCommandWClosesTheSettingsWindowNotTheSession() throws {
         // #401: close_session owns ⌘W app-wide, so ⌘W over Settings reached the deck behind it.
         app.typeKey("n", modifierFlags: .command)

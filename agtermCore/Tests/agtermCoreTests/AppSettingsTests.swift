@@ -778,8 +778,11 @@ struct AppSettingsTests {
         for element in InterfaceElement.allCases {
             #expect((element.symbolName == nil) == textOnly.contains(element), "\(element)")
         }
-        let symbols = InterfaceElement.allCases.compactMap(\.symbolName)
+        let rowIcons: Set<InterfaceElement> = [.sessionIcons, .workspaceIcons]
+        let symbols = InterfaceElement.allCases.filter { !rowIcons.contains($0) }.compactMap(\.symbolName)
         #expect(Set(symbols).count == symbols.count)
+        #expect(InterfaceElement.sessionIcons.symbolName == InterfaceElement.quickTerminal.symbolName)
+        #expect(InterfaceElement.workspaceIcons.symbolName == InterfaceElement.focusFilter.symbolName)
     }
 
     @Test func settingsOrderListsTextOnlyElementsFirst() {
@@ -810,6 +813,19 @@ struct AppSettingsTests {
         let hidden = AppSettings(hiddenInterfaceElements: ["workspaceAddSession"])
         #expect(hidden.isInterfaceElementHidden(.workspaceAddSession))
         #expect(!hidden.isInterfaceElementHidden(.newSession))
+    }
+
+    @Test(arguments: [(InterfaceElement.sessionIcons, "Session icons", InterfaceElement.workspaceIcons),
+                      (.workspaceIcons, "Workspace icons", .sessionIcons)])
+    func rowIconElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
+                                                              other: InterfaceElement) {
+        #expect(element.section == .sidebar)
+        #expect(element.displayName == name)
+        #expect(!element.hiddenByDefault)
+        #expect(!AppSettings().isInterfaceElementHidden(element))
+        let hidden = AppSettings(hiddenInterfaceElements: [element.rawValue])
+        #expect(hidden.isInterfaceElementHidden(element))
+        #expect(!hidden.isInterfaceElementHidden(other))
     }
 
     @Test func sessionContextIsATitleBarInterfaceElementGatingOnlyItself() {
@@ -877,7 +893,7 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons])
         #expect(!titleBar.isEmpty)
     }
 

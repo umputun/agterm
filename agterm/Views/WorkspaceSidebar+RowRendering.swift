@@ -70,6 +70,8 @@ extension WorkspaceSidebar.Coordinator {
         // glyph: each branch assigns it in full, and an idle round-trip restarts the blink on reload.
         applyBadge(toCell: cell, count: 0)
         cell.setAddButtonVisible(false)
+        cell.notice = nil
+        cell.setIconVisible(!GhosttyApp.shared.hiddenInterfaceElements.contains(node.kind.iconElement))
         switch node.kind {
         case .workspace:
             let workspace = store.workspaces.first(where: { $0.id == node.id })
@@ -87,7 +89,6 @@ extension WorkspaceSidebar.Coordinator {
             // alone and NOT on `focusEnabled` — so the marked set stays legible with the filter off, while
             // looking at the whole tree.
             cell.imageView?.image = store.focusedWorkspaceIDs.contains(node.id) ? focusedWorkspaceIcon : workspaceIcon
-            cell.imageView?.toolTip = nil
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
             cell.tint = workspace?.tint
         case .session:
@@ -111,7 +112,7 @@ extension WorkspaceSidebar.Coordinator {
                 ? (flagged ? flaggedPageSessionIcon : pageSessionIcon)
                 : iconForSession(split: showSplitIcon, axis: session?.splitAxis ?? .leftRight, flagged: flagged,
                                  remote: session?.remoteHost != nil, disconnected: notice != nil)
-            cell.imageView?.toolTip = notice
+            cell.notice = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
             cell.tint = session?.tint
             if let info { (cell as? SidebarInfoCellView)?.apply(spans: info, base: GhosttyApp.shared.sidebarFontSize) }
@@ -125,6 +126,17 @@ extension WorkspaceSidebar.Coordinator {
         let selected = outlineView.selectedRowIndexes.contains(outlineView.row(forItem: item))
         cell.setColors(selected: selected)
         return cell
+    }
+
+    // offscreen cells pick up visibility when configured.
+    func reapplyRowIconVisibility() {
+        guard let outline = outlineView else { return }
+        let hidden = GhosttyApp.shared.hiddenInterfaceElements
+        for row in 0 ..< outline.numberOfRows {
+            guard let node = outline.item(atRow: row) as? SidebarNode,
+                  let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView else { continue }
+            cell.setIconVisible(!hidden.contains(node.kind.iconElement))
+        }
     }
 
     /// The notice a remote row shows while its presentation stream is not up, nil otherwise.
@@ -193,6 +205,8 @@ extension WorkspaceSidebar.Coordinator {
         icon.setContentCompressionResistancePriority(.required, for: .horizontal)
         cell.addSubview(icon)
         cell.imageView = icon
+        let iconWidth = icon.widthAnchor.constraint(equalToConstant: SidebarCellView.iconWidth)
+        cell.iconWidthConstraint = iconWidth
 
         let field = NSTextField(labelWithString: "")
         field.translatesAutoresizingMaskIntoConstraints = false
@@ -205,6 +219,8 @@ extension WorkspaceSidebar.Coordinator {
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         cell.addSubview(field)
         cell.textField = field
+        let iconGap = field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: SidebarCellView.iconGap)
+        cell.iconGapConstraint = iconGap
 
         let statusIcon = cell.statusIcon
         statusIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -221,9 +237,9 @@ extension WorkspaceSidebar.Coordinator {
         var constraints: [NSLayoutConstraint] = [
             icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
             icon.centerYAnchor.constraint(equalTo: center),
-            icon.widthAnchor.constraint(equalToConstant: 16),
+            iconWidth,
             icon.heightAnchor.constraint(equalToConstant: 16),
-            field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
+            iconGap,
             field.centerYAnchor.constraint(equalTo: center),
             // chain: name (flex) | [+ button for workspace] | status icon | badge (trailing).
             // the status icon and badge hug their content, so the name truncates first and both stay whole.

@@ -14,6 +14,7 @@ final class SidebarRowViewsTests: XCTestCase {
     private var scroll: NSScrollView!
     private var outline: SidebarOutlineView!
     private var coordinator: WorkspaceSidebar.Coordinator!
+    private var savedHiddenElements: Set<InterfaceElement> = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -22,11 +23,13 @@ final class SidebarRowViewsTests: XCTestCase {
                 .appendingPathComponent("agterm-row-views-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
             actions = AppActions(library: library)
+            savedHiddenElements = GhosttyApp.shared.hiddenInterfaceElements
         }
     }
 
     override func tearDown() async throws {
         await MainActor.run {
+            GhosttyApp.shared.setHiddenInterfaceElements(savedHiddenElements)
             window?.orderOut(nil)
             window = nil
             scroll = nil
@@ -134,6 +137,75 @@ final class SidebarRowViewsTests: XCTestCase {
 
         XCTAssertEqual(try renderedIcon(forSession: remote.id), coordinator.remoteSessionIcon,
                        "on a remote row the weight carries split, so flagging must not claim it")
+    }
+
+    func testHiddenSessionIconsGiveTheSlotToTheNameAndLeaveWorkspaceIcons() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        GhosttyApp.shared.setHiddenInterfaceElements([.sessionIcons])
+        buildSidebar(for: store)
+
+        let cell = try renderedCell(forSession: session.id)
+        cell.layoutSubtreeIfNeeded()
+        let icon = try XCTUnwrap(cell.imageView)
+        XCTAssertTrue(icon.isHidden)
+        XCTAssertEqual(icon.frame.width, 0)
+        let field = try XCTUnwrap(cell.textField)
+        XCTAssertEqual(field.alignmentRect(forFrame: field.frame).minX, icon.frame.minX)
+        XCTAssertEqual(try renderedWorkspaceCell(store.workspaces[0].id).imageView?.isHidden, false)
+    }
+
+    func testHiddenWorkspaceIconsLeaveSessionIcons() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        GhosttyApp.shared.setHiddenInterfaceElements([.workspaceIcons])
+        buildSidebar(for: store)
+
+        XCTAssertEqual(try renderedWorkspaceCell(store.workspaces[0].id).imageView?.isHidden, true)
+        XCTAssertEqual(try renderedCell(forSession: session.id).imageView?.isHidden, false)
+    }
+
+    func testAnAppearanceChangeReGatesTheOnScreenRowsBothWays() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        let cell = try renderedCell(forSession: session.id)
+        let shownMinX = try renderedNameField(forSession: session.id).frame.minX
+
+        GhosttyApp.shared.setHiddenInterfaceElements([.sessionIcons])
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertTrue(try renderedCell(forSession: session.id) === cell, "the re-gate must reach the live cell")
+        XCTAssertEqual(cell.imageView?.isHidden, true)
+        XCTAssertLessThan(try renderedNameField(forSession: session.id).frame.minX, shownMinX)
+
+        GhosttyApp.shared.setHiddenInterfaceElements([])
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertEqual(cell.imageView?.isHidden, false)
+        XCTAssertEqual(try renderedNameField(forSession: session.id).frame.minX, shownMinX)
+    }
+
+    func testADisconnectedNoticeMovesToTheNameWhileTheIconIsHidden() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1),
+                         forSession: remote.id)
+        store.setRemoteConnection(.failed("exit 255"), forSession: remote.id)
+        let notice = try XCTUnwrap(RemotePresentationConnection.failed("exit 255").rowNotice(host: "buildbox"))
+        buildSidebar(for: store)
+        store.renameSession(remote.id, to: "api")
+        coordinator.reconcile()
+
+        XCTAssertEqual(try renderedCell(forSession: remote.id).imageView?.toolTip, notice)
+        XCTAssertNil(try renderedNameField(forSession: remote.id).toolTip)
+
+        GhosttyApp.shared.setHiddenInterfaceElements([.sessionIcons])
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertNil(try renderedCell(forSession: remote.id).imageView?.toolTip)
+        XCTAssertEqual(try renderedNameField(forSession: remote.id).toolTip, notice)
+
+        store.setRemoteConnection(.connected, forSession: remote.id)
+        coordinator.reconcile()
+        XCTAssertNil(try renderedNameField(forSession: remote.id).toolTip, "a reconnect must clear the notice")
     }
 
     func testFlaggedRenameRestoresTheLabelAfterAnUnchangedCustomName() async throws {
@@ -290,6 +362,15 @@ final class SidebarRowViewsTests: XCTestCase {
             guard let node = outline.item(atRow: index) as? SidebarNode else { return false }
             return node.kind == .session && node.id == id
         }, "the session row should be visible in the outline")
+        return try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
+    }
+
+    private func renderedWorkspaceCell(_ id: UUID) throws -> SidebarCellView {
+        outline.layoutSubtreeIfNeeded()
+        let row = try XCTUnwrap((0..<outline.numberOfRows).first { index in
+            guard let node = outline.item(atRow: index) as? SidebarNode else { return false }
+            return node.kind == .workspace && node.id == id
+        }, "the workspace row should be visible in the outline")
         return try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
     }
 

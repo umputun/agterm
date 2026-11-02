@@ -132,6 +132,10 @@ paths:
   The split axis is not distinguished — no cloud symbol carries both arrangements. The title bar draws
   the same `cloud` beside the host, gated by `InterfaceElement.remoteHost`.
   See [[control-api]].
+- `InterfaceElement.workspaceIcons`/`.sessionIcons` hide a row kind's leading icon: `setIconVisible` zeroes its
+  width and gap so the name takes the slot, on every cell configuration and, through `reapplyRowIconVisibility`,
+  on `.agtermAppearanceChanged`. Everything the icon encodes goes with it; only the remote notice moves, into the
+  name's tooltip, because it is the one fact with nowhere else to show.
 - A row's tint (`Session.tint`, `Workspace.tint`) colors its icon and/or name through `SidebarCellView.setColors`,
   selected rows included, so every retint keeps it; `RowContent.tint` reloads that row alone. The Tint submenu
   checks an entry only when every target shares it and disables Show On unless every target is tinted.

@@ -39,7 +39,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 540, height: 680)
+        .frame(width: 540, height: 710)
         // without this a process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale
         // Settings window on its last tab, stealing key focus from the real launch window.
         .background(NonRestorableWindow())
@@ -242,7 +242,7 @@ private struct GeneralSettingsView: View {
 }
 
 /// Interface tab: per-element title-bar and sidebar chrome visibility, grouped by surface, two toggles per
-/// row so the tab keeps fitting the fixed 540×680 window as the element set grows, plus the quick terminal's
+/// row so the tab keeps fitting the fixed 540×710 window as the element set grows, plus the quick terminal's
 /// panel size — that panel belongs to no window, so it is not a Window setting. A toggle off adds the
 /// element to `AppSettings.hiddenInterfaceElements`, a `hiddenByDefault` one toggled on to
 /// `shownInterfaceElements`, and both live-apply — title-bar and footer elements re-gate in open windows on
@@ -254,7 +254,7 @@ private struct InterfaceSettingsView: View {
         Form {
             twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() },
                              trailing: { EmptyView() })
-            // the multi-window toggle rides the Sidebar section: the tab is full at 540x680, and its own
+            // the multi-window toggle rides the Sidebar section: the tab is full at 540x710, and its own
             // section header would push the quick-terminal Size off the bottom.
             // the info-line picker takes the grid's empty half: a row of its own would push the Size off the bottom
             twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { sessionInfoPicker },
