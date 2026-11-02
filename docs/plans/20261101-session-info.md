@@ -219,6 +219,9 @@ public struct SessionInfo: Equatable, Sendable {
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/PresentationFrames.swift`
+- Modify: `agtermCore/Sources/agtermCore/PresentationHub.swift` (➕ `info` joins `supportedKinds`, which advertises
+  it; `publish` does not filter by negotiated kinds, so an older viewer still receives the frames and stays safe by
+  decoding them as `.unknown` and ignoring the snapshot's extra key)
 - Modify: `agtermCore/Sources/agtermCore/RemotePresentationClient.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+SessionState.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Presentation.swift`
@@ -228,19 +231,19 @@ public struct SessionInfo: Equatable, Sendable {
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePresentationStateTests.swift`
 - Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] add an `info` frame and an optional, defaulted `PresentationSnapshot.info` carrying source, markdown
+- [x] add an `info` frame and an optional, defaulted `PresentationSnapshot.info` carrying source, markdown
       flag and configured hideAfter; `AppStore.setInfo` publishes the local value to `presentationHub` as
       `setContext` does, and `AppStore+Presentation.swift` puts it in the initial snapshot
-- [ ] the viewer applies a frame or snapshot into `mirroredInfo` (`AppStore+RemotePresentation.swift`, wired
+- [x] the viewer applies a frame or snapshot into `mirroredInfo` (`AppStore+RemotePresentation.swift`, wired
       through `ControlServer+RemotePresentation.swift`), parsing the source and dropping an unparseable one,
       arms no timer, and clears only the mirror on stream end, exactly as `mirroredContext` does
-- [ ] write frame tests: encode/decode round trip including hideAfter, a snapshot without the key decodes
+- [x] write frame tests: encode/decode round trip including hideAfter, a snapshot without the key decodes
       to nil
-- [ ] write state and hosted tests: set, clear and origin expiry reach the viewer row; the viewer's `tree`
+- [x] write state and hosted tests: set, clear and origin expiry reach the viewer row; the viewer's `tree`
       reports the origin's configured hideAfter; stream end clears the mirror
-- [ ] write override tests: local set over a mirror -> origin update stays hidden -> local clear or expiry
+- [x] write override tests: local set over a mirror -> origin update stays hidden -> local clear or expiry
       reveals the latest origin value; disconnect while a local override remains keeps the local line
-- [ ] run the scoped suites - must pass before task 5
+- [x] run the scoped suites - must pass before task 5
 
 ### Task 5: Sidebar rendering from the store, and the Interface toggle
 

@@ -222,6 +222,52 @@ struct RemotePresentationStateTests {
         #expect(session.agentIndicator.status == .completed)
     }
 
+    @Test func aMirroredInfoShowsOnARowWithNoneOfItsOwn() throws {
+        let (store, session) = try attached()
+
+        store.applyRemoteInfo(PresentationInfo(source: "**3** agents", markdown: true, hideAfter: 30), forSession: session.id)
+
+        #expect(session.effectiveInfo?.spans.first == SessionInfoSpan(text: "3", bold: true))
+        #expect(session.info == nil)
+        let node = store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.info == "**3** agents")
+        #expect(node?.infoHideAfter == 30)
+    }
+
+    @Test func anUnparseableMirroredInfoReadsAsNone() throws {
+        let (store, session) = try attached()
+        store.applyRemoteInfo(PresentationInfo(source: "previous", markdown: false, hideAfter: 0), forSession: session.id)
+
+        store.applyRemoteInfo(PresentationInfo(source: "^[a](color: \"pink\")", markdown: true, hideAfter: 0),
+                              forSession: session.id)
+
+        #expect(session.mirroredInfo == nil)
+    }
+
+    @Test func aLocalInfoHidesOriginUpdatesUntilItIsCleared() throws {
+        let (store, session) = try attached()
+        store.applyRemoteInfo(PresentationInfo(source: "first", markdown: false, hideAfter: 0), forSession: session.id)
+        store.setInfo(try SessionInfo.make(source: "local", markdown: false, hideAfter: 0).get(), forSession: session.id)
+
+        store.applyRemoteInfo(PresentationInfo(source: "second", markdown: false, hideAfter: 0), forSession: session.id)
+        #expect(session.effectiveInfo?.source == "local")
+
+        store.setInfo(nil, forSession: session.id)
+        #expect(session.effectiveInfo?.source == "second")
+    }
+
+    @Test func aDisconnectDropsOnlyTheMirroredInfo() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        store.applyRemoteInfo(PresentationInfo(source: "origin", markdown: false, hideAfter: 0), forSession: session.id)
+        store.setInfo(try SessionInfo.make(source: "local", markdown: false, hideAfter: 0).get(), forSession: session.id)
+
+        store.setRemoteConnection(.failed("gone"), forSession: session.id)
+
+        #expect(session.mirroredInfo == nil)
+        #expect(session.effectiveInfo?.source == "local")
+    }
+
     @Test func aMirroredContextShowsOnARowWithNoneOfItsOwn() throws {
         let (store, session) = try attached()
 

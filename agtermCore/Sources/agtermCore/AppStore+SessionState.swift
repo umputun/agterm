@@ -39,6 +39,7 @@ extension AppStore {
         guard let session = session(withID: id), session.info != info else { return false }
         let previous = session.effectiveInfo
         if let info { session.info = info } else { session.discardInfo() }
+        presentationHub?.publish(.info(info.map(Self.presentationInfo)), session: id)
         if previous != session.effectiveInfo { scheduleTreeChanged() }
         return true
     }

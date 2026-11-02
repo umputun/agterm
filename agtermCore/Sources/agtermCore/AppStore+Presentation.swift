@@ -18,7 +18,12 @@ extension AppStore {
         guard let session = session(withID: id) else { return PresentationSnapshot(status: nil, hud: nil) }
         return PresentationSnapshot(status: presentationStatus(of: session),
                                     hud: presentationHud(of: session, now: now), context: session.context,
-                                    layout: presentationLayout(of: session))
+                                    layout: presentationLayout(of: session), info: session.info.map(Self.presentationInfo))
+    }
+
+    /// presentationInfo is the wire form of a local info line; the origin mirrors only its own line, never a mirror.
+    static func presentationInfo(_ info: SessionInfo) -> PresentationInfo {
+        PresentationInfo(source: info.source, markdown: info.markdown, hideAfter: info.hideAfter)
     }
 
     func presentationLayout(of session: Session) -> PresentationLayout? {

@@ -401,6 +401,20 @@ public struct PresentationRespawns: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationInfo is a session's local info line as the origin mirrors it. The viewer parses the source itself and
+/// runs no timer: `hideAfter` is the configured value for read-back, and the origin's expiry arrives as a clear.
+public struct PresentationInfo: Codable, Equatable, Sendable {
+    public var source: String
+    public var markdown: Bool
+    public var hideAfter: Double
+
+    public init(source: String, markdown: Bool, hideAfter: Double) {
+        self.source = source
+        self.markdown = markdown
+        self.hideAfter = hideAfter
+    }
+}
+
 /// PresentationSnapshot is the replaceable state a subscriber starts from.
 public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var status: PresentationStatus?
@@ -409,14 +423,17 @@ public struct PresentationSnapshot: Codable, Equatable, Sendable {
     public var layout: PresentationLayout?
     /// respawns is nil from an origin that predates parent respawn.
     public var respawns: PresentationRespawns?
+    /// info is nil from an origin that predates the info line, or with no local line set.
+    public var info: PresentationInfo?
 
     public init(status: PresentationStatus?, hud: PresentationHud?, context: String? = nil, layout: PresentationLayout? = nil,
-                respawns: PresentationRespawns? = nil) {
+                respawns: PresentationRespawns? = nil, info: PresentationInfo? = nil) {
         self.status = status
         self.hud = hud
         self.context = context
         self.layout = layout
         self.respawns = respawns
+        self.info = info
     }
 }
 
@@ -430,6 +447,7 @@ public struct PresentationFrame: Equatable, Sendable {
         case snapshot(PresentationSnapshot)
         case status(PresentationStatus?)
         case context(String?)
+        case info(PresentationInfo?)
         case layout(PresentationLayout)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
@@ -473,6 +491,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .snapshot: return "snapshot"
             case .status: return "status"
             case .context: return "context"
+            case .info: return "info"
             case .layout: return "layout"
             case .hud: return "hud"
             case .notify: return "notify"
@@ -514,7 +533,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, layout, hud, notify, sound, ask, overlay, page, respawn
+        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, overlay, page, respawn
     }
 
     public init(from decoder: Decoder) throws {
@@ -529,6 +548,7 @@ extension PresentationFrame: Codable {
         case "snapshot": body = .snapshot(try container.decode(PresentationSnapshot.self, forKey: .snapshot))
         case "status": body = .status(try container.decodeIfPresent(PresentationStatus.self, forKey: .status))
         case "context": body = .context(try container.decodeIfPresent(String.self, forKey: .context))
+        case "info": body = .info(try container.decodeIfPresent(PresentationInfo.self, forKey: .info))
         case "layout": body = .layout((try? container.decode(PresentationLayout.self, forKey: .layout)) ?? .invalid)
         case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
         case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
@@ -567,6 +587,7 @@ extension PresentationFrame: Codable {
         case .snapshot(let snapshot): try container.encode(snapshot, forKey: .snapshot)
         case .status(let status): try container.encodeIfPresent(status, forKey: .status)
         case .context(let context): try container.encodeIfPresent(context, forKey: .context)
+        case .info(let info): try container.encodeIfPresent(info, forKey: .info)
         case .layout(let layout): try container.encode(layout, forKey: .layout)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)

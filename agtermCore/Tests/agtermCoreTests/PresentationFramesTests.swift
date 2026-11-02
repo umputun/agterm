@@ -52,6 +52,10 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 28, body: .context("PR #517")),
         PresentationFrame(gen: 1, rev: 29, body: .context(nil)),
         PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))),
+        PresentationFrame(gen: 1, rev: 30, body: .info(PresentationInfo(source: "**3** agents", markdown: true, hideAfter: 30))),
+        PresentationFrame(gen: 1, rev: 30, body: .info(nil)),
+        PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(
+            status: nil, hud: nil, info: PresentationInfo(source: "idle", markdown: false, hideAfter: 0)))),
         PresentationFrame(gen: 1, rev: 31, body: .sound(PresentationSound(name: "Glass"))),
         PresentationFrame(gen: 1, rev: 32, body: .sound(PresentationSound(name: nil))),
         PresentationFrame(gen: 1, rev: 33, body: .askRequest(PresentationAsk(
@@ -156,6 +160,15 @@ struct PresentationFramesTests {
 
         #expect(try PresentationCodec.decode(line) == PresentationFrame(
             gen: 1, rev: 1, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: nil))))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutInfoDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.info == nil)
     }
 
     @Test func anOversizeLineIsRefusedBeforeDecoding() {
