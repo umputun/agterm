@@ -859,18 +859,77 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         defer { close(pane.ptyFD) }
         var status: Int32 = 0
         var ended = false
+        var lastWait: pid_t = 0
+        var lastErrno: Int32 = 0
+        let clock = ContinuousClock()
+        let windowStart = clock.now
         let attachDeadline = Date().addingTimeInterval(3)
         while !ended, Date() < attachDeadline {
-            ended = waitpid(pane.pid, &status, WNOHANG) == pane.pid
+            lastWait = waitpid(pane.pid, &status, WNOHANG)
+            lastErrno = lastWait == -1 ? errno : 0
+            ended = lastWait == pane.pid
             if !ended { Thread.sleep(forTimeInterval: 0.02) }
         }
+        let report = ended ? "" : StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: clock.now - windowStart,
+                                                lastWait: lastWait, lastErrno: lastErrno).report(fixture: fixture)
+        #expect(ended, "the pane's attach to an ended command kept running\n\(report)")
         if !ended {
             kill(pane.pid, SIGKILL)
             _ = waitpid(pane.pid, &status, 0)
         }
         let leftover = try fixture.list().filter { $0.name == name }
-        #expect(ended, "the pane's attach to an ended command kept running")
         #expect(leftover.isEmpty, "a daemon started under the ended command's name: \(leftover)")
+    }
+
+    private struct StalledAttach {
+        let pane: PTYProcess
+        let argv: [String]
+        let daemon: String
+        let elapsed: Duration
+        let lastWait: pid_t
+        let lastErrno: Int32
+
+        func report(fixture: Fixture) -> String {
+            let listing: String
+            do {
+                listing = try fixture.list().map { "\($0.name)" }.joined(separator: ", ")
+            } catch {
+                listing = "list failed: \(error)"
+            }
+            return """
+                pid=\(pane.pid) elapsed=\(elapsed) waitpid=\(lastWait) errno=\(lastErrno) \
+                p_stat=\(SessionHostServerTests.processState(pane.pid)) argv=\(argv) daemon=\(daemon)
+                pty: \(SessionHostServerTests.available(pane.ptyFD).debugDescription)
+                exec error: \(SessionHostServerTests.available(pane.execErrorFD).debugDescription)
+                zmx list: \(listing)
+                host log: \(fixture.hostLog())
+                """
+        }
+    }
+
+    private static func available(_ fd: Int32) -> String {
+        guard fd >= 0 else { return "<no fd>" }
+        let flags = fcntl(fd, F_GETFL)
+        _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+        var bytes: [UInt8] = []
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while bytes.count < 16384 {
+            let count = read(fd, &buffer, buffer.count)
+            guard count > 0 else { break }
+            bytes.append(contentsOf: buffer[0..<count])
+        }
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    private static func processState(_ pid: pid_t) -> String {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return "sysctl errno \(errno)" }
+        guard size > 0 else { return "absent" }
+        let names: [Int32: String] = [1: "SIDL", 2: "SRUN", 3: "SSLEEP", 4: "SSTOP", 5: "SZOMB"]
+        let stat = Int32(info.kp_proc.p_stat)
+        return "\(names[stat] ?? "\(stat)") flags=0x\(String(info.kp_proc.p_flag, radix: 16))"
     }
 
     private final class ForwardingPeer: ClientPeer {

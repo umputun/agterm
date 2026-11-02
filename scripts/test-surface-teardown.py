@@ -15,6 +15,7 @@ from pathlib import Path
 CALL_LIMIT = 5
 SLOW_CALL = 3
 SAMPLE_LIMIT = 20
+SPINDUMP_LIMIT = 15
 
 
 def app_pids():
@@ -42,42 +43,114 @@ def stop_test_app(pid):
     stop_tree(pid)
 
 
-class Sampler:
-    """A `sample` run in the background, killed SAMPLE_LIMIT seconds after it starts and reaped by finish."""
+class Collector:
+    """A stack collector run in the background, stopped `limit` seconds after it starts and reaped by finish."""
 
-    def __init__(self, pid, path):
+    def __init__(self, label, argv, path, limit, privileged=False):
+        self.label, self.limit, self.privileged = label, limit, privileged
         self.error = None
         self.expired = False
+        self.leftover = None
+        self.cleaned = threading.Event()
         self.stderr = Path(f"{path}.err")
         try:
             with self.stderr.open("w") as err:
-                self.proc = subprocess.Popen(["sample", str(pid), "2", "-file", str(path)],
-                                             stdout=subprocess.DEVNULL, stderr=err)
+                # its own process group, so a hard stop reaches a child sudo started, not only sudo itself
+                self.proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=err, start_new_session=True)
         except OSError as exc:
             self.proc, self.error = None, str(exc)
             return
-        self.timer = threading.Timer(SAMPLE_LIMIT, self.expire)
+        self.timer = threading.Timer(limit, self.expire)
         self.timer.daemon = True
         self.timer.start()
 
     def expire(self):
-        if self.proc.poll() is None:
-            self.expired = True
-            self.proc.kill()
+        if self.proc.poll() is not None:
+            return
+        self.expired = True
+        try:
+            self.stop()
+        finally:
+            self.cleaned.set()
+
+    def stop(self):
+        self.proc.terminate()
+        try:
+            self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        group = self.proc.pid
+        if self.privileged:
+            subprocess.run(["sudo", "-n", "kill", "-KILL", "--", f"-{group}"], capture_output=True, timeout=5, check=False)
+        else:
+            try:
+                os.killpg(group, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        try:
+            self.proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        alive = subprocess.run(["pgrep", "-g", str(group)], capture_output=True, text=True, check=False).stdout.split()
+        if alive:
+            self.leftover = f"group {group} still has {', '.join(alive)}"
 
     def finish(self):
-        """Reap the sampler; returns its failure, or None when it wrote its file."""
+        """Reap the collector; returns its failure, or None when it wrote its file."""
         if self.proc is None:
             return self.error
-        self.proc.wait()
+        try:
+            self.proc.wait(timeout=self.limit + 20)
+        except subprocess.TimeoutExpired:
+            pass
         self.timer.cancel()
+        # a TERM can end the launcher while expire is still killing the group, so wait for its cleanup too
+        cleaned = self.cleaned.wait(timeout=20) if self.expired else True
         detail = self.stderr.read_text().strip()
         self.stderr.unlink()
+        if not cleaned:
+            return f"{self.label} timed out after {self.limit} seconds; cleanup did not finish within 20 s"
+        if self.proc.poll() is None:
+            return f"{self.label} still running as pid {self.proc.pid} after cleanup"
         if self.expired:
-            return f"sample timed out after {SAMPLE_LIMIT} seconds"
+            suffix = f"; {self.leftover}" if self.leftover else ""
+            return f"{self.label} timed out after {self.limit} seconds{suffix}"
         if self.proc.returncode:
-            return f"exit {self.proc.returncode}: {detail}"
+            return f"{self.label} exit {self.proc.returncode}: {detail}"
         return None
+
+
+def sampler(pid, path):
+    return Collector("sample", ["sample", str(pid), "2", "-file", str(path)], path, SAMPLE_LIMIT)
+
+
+def spindump(app_pid, cli_pid, path):
+    """Both processes in one passive snapshot; `sample` has timed out on a stalled app in CI."""
+    argv = ["sudo", "-n", "/usr/sbin/spindump", str(app_pid), "1", "10", "-onlyTarget", "-proc", str(cli_pid),
+            "-noProcessingWhileSampling", "-timelimit", "10", "-o", str(path)]
+    return Collector("spindump", argv, path, SPINDUMP_LIMIT, privileged=True)
+
+
+def check_spindump(evidence):
+    """Runs the stall collector once against two throwaway processes, so a stall's missing report can be told
+    apart from a collector that never works on this runner."""
+    path = evidence / "spindump-check.txt"
+    first = subprocess.Popen(["/bin/sleep", "30"])
+    second = subprocess.Popen(["/bin/sleep", "30"])
+    try:
+        failure = spindump(first.pid, second.pid, path).finish()
+    finally:
+        for proc in (first, second):
+            proc.kill()
+            proc.wait()
+    try:
+        report = path.read_text(errors="replace")
+    except OSError as exc:
+        report, failure = "", failure or f"report unreadable: {exc}"
+    if not failure and str(first.pid) not in report:
+        failure = "report is empty" if not report else "report does not name the target process"
+    (evidence / "spindump-check.json").write_text(json.dumps({"error": failure, "report_bytes": len(report)}))
+    print(f"spindump check: {failure or f'{len(report)} bytes'}", flush=True)
 
 
 def run_case(app, evidence, count, busy):
@@ -141,7 +214,8 @@ def run_case(app, evidence, count, busy):
             entry["sampled"] = True
             index = len(result["calls"]) - 1
             for side, target in (("app", pid), ("cli", proc.pid)):
-                samplers.append((entry, side, Sampler(target, case_dir / f"sample-{index:02d}-{op}-{side}.txt")))
+                samplers.append((entry, side, sampler(target, case_dir / f"sample-{index:02d}-{op}-{side}.txt")))
+            samplers.append((entry, "spindump", spindump(pid, proc.pid, case_dir / f"spindump-{index:02d}-{op}.txt")))
             try:
                 out, err = proc.communicate(timeout=max(0, begin + CALL_LIMIT - time.monotonic()))
             except subprocess.TimeoutExpired:
@@ -189,11 +263,11 @@ def run_case(app, evidence, count, busy):
         save()
         last = result["calls"][-1] if result["calls"] else {}
         if not (last.get("sampled") and last.get("outcome") != "ok"):
-            samplers.append((result, "app", Sampler(pid, case_dir / "sample.txt")))
+            samplers.append((result, "app", sampler(pid, case_dir / "sample.txt")))
         raise
     finally:
-        for owner, side, sampler in samplers:
-            failure = sampler.finish()
+        for owner, side, collector in samplers:
+            failure = collector.finish()
             if failure:
                 owner.setdefault("sample_errors", {})[side] = failure
         if samplers:
@@ -206,6 +280,8 @@ def main():
     parser.add_argument("app", type=Path)
     parser.add_argument("--evidence", type=Path, required=True)
     args = parser.parse_args()
+    args.evidence.mkdir(parents=True, exist_ok=True)
+    check_spindump(args.evidence.resolve())
     failed = []
     for count, busy in [(1, True), (8, True), (8, False)]:
         try:
