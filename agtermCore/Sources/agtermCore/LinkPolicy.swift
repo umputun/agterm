@@ -148,8 +148,8 @@ public enum LinkPolicy {
         return "/" + out.joined(separator: "/")
     }
 
-    /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`
-    /// or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
+    /// disposition maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`,
+    /// `.markdown` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
     /// unparseable input → `.ignore`. A local path is a LOCAL `file://` link (empty host, or a host in
     /// `localHosts`), host-stripped so Finder never leans on the original authority, or a bare path
     /// (`isBarePath`) taken literally with `~/` expanded against `home`. Both are injected so the decision
@@ -174,8 +174,8 @@ public enum LinkPolicy {
         raw.hasPrefix("/") || raw.hasPrefix("~/")
     }
 
-    /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.reveal` for
-    /// anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
+    /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.markdown` for a
+    /// `markdownExtensions` one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
     /// resolve against the process directory), a UNC-style `//` path (a remote target the host check cannot
     /// see), or an auto-mount path. The automount check runs after LEXICAL `..` collapsing, so
     /// `/tmp/../net/x` cannot sneak through and the classifier never stats the path it is about to deny.

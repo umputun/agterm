@@ -34,6 +34,15 @@ struct MarkdownPageTests {
         #expect(html.contains("<style>p{}</style>"))
     }
 
+    // regression: a quote or bracket fused with a combining mark is one Character and skipped escaping
+    @Test func aMetacharacterFollowedByACombiningMarkIsStillEscaped() {
+        let images = MarkdownPage.Embedded(uris: ["data:image/png;base64,AA=="], references: ["x\"\u{301} data-test=1.png": 0])
+        let html = MarkdownPage.html(markdown: "<\u{301}b>", images: images, style: "")
+
+        #expect(html.contains("x\\&quot;\u{301} data-test=1.png"))
+        #expect(html.contains("&lt;\u{301}b&gt;"))
+    }
+
     @Test func inlineAndReferenceImagesInsideTheFolderResolve() throws {
         let shot = try touch("img/shot.png")
         let ref = try touch("ref.jpg")

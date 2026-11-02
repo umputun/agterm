@@ -95,19 +95,20 @@ public enum MarkdownPage {
         """
     }
 
+    /// escaped walks scalars, not Characters: a quote fused with a combining mark is one Character
+    /// that would match no case and pass through.
     static func escaped(_ text: String) -> String {
-        var out = ""
-        out.reserveCapacity(text.utf8.count)
-        for char in text {
-            switch char {
-            case "&": out += "&amp;"
-            case "<": out += "&lt;"
-            case ">": out += "&gt;"
-            case "\"": out += "&quot;"
-            case "'": out += "&#39;"
-            default: out.append(char)
+        var out = String.UnicodeScalarView()
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "&": out.append(contentsOf: "&amp;".unicodeScalars)
+            case "<": out.append(contentsOf: "&lt;".unicodeScalars)
+            case ">": out.append(contentsOf: "&gt;".unicodeScalars)
+            case "\"": out.append(contentsOf: "&quot;".unicodeScalars)
+            case "'": out.append(contentsOf: "&#39;".unicodeScalars)
+            default: out.append(scalar)
             }
         }
-        return out
+        return String(out)
     }
 }

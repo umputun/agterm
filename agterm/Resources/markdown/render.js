@@ -47,11 +47,17 @@
     link.removeAttribute('href');
   }
 
-  const used = new Set();
+  // next keeps a run of identical headings linear; used still catches an authored `x-1` heading
+  const used = new Set(), next = new Map();
   for (const heading of page.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
     const base = heading.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
     let slug = base;
-    for (let n = 1; used.has(slug); n++) slug = `${base}-${n}`;
+    if (used.has(slug)) {
+      let n = next.get(base) || 1;
+      while (used.has(`${base}-${n}`)) n++;
+      slug = `${base}-${n}`;
+      next.set(base, n + 1);
+    }
     used.add(slug);
     heading.id = slug;
   }

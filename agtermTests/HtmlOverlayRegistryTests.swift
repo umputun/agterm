@@ -1000,6 +1000,20 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(seen as? String, "256|256|256|false")
     }
 
+    // regression: each duplicate heading probed every earlier suffix, quadratic in the run length
+    func testManyIdenticalHeadingsGetTheirSuffixesInLinearTime() async throws {
+        let source = "# x-2\n\n" + String(repeating: "# x\n\n", count: 50000)
+        let clock = ContinuousClock(), started = clock.now
+        let page = registry.page(for: try openMarkdown("doc.md", source), store: store)
+        try await waitForScript("document.querySelectorAll('h1').length", in: page.webView) { $0 == "50001" }
+
+        let ids = try await page.webView.evaluateJavaScript("""
+            (() => { const h = document.querySelectorAll('h1'); return [h[0].id, h[1].id, h[2].id, h[3].id, h[50000].id].join(',') })()
+            """)
+        XCTAssertEqual(ids as? String, "x-2,x,x-1,x-3,x-50000")
+        XCTAssertLessThan(clock.now - started, .seconds(10))
+    }
+
     func testAMarkdownPageLinksHeadingsAndKeepsOtherTargetsInert() async throws {
         let source = "# Intro & Setup!\n\n## Usage\n\n## Usage\n\n## Usage-1\n\n"
             + "[a](#usage-1) [b](about:blank) [c](other.md) [d](https://example.com/x)\n"
