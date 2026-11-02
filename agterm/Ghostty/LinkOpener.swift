@@ -15,6 +15,9 @@ struct LinkOpener {
     /// image shows a local picture over the session and reports through its completion whether it did; false
     /// reveals the file. The report can come later, the file being read off the main actor.
     var image: (URL, UUID, @escaping @MainActor (Bool) -> Void) -> Void = { _, _, done in done(false) }
+    /// markdown renders a local markdown file over the session at the given size percent (nil for full size) and
+    /// reports through its completion whether it did; false reveals the file.
+    var markdown: (URL, UUID, Int?, @escaping @MainActor (Bool) -> Void) -> Void = { _, _, _, done in done(false) }
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
 
@@ -25,6 +28,9 @@ struct LinkOpener {
         case .image(let url, let session):
             let reveal = reveal
             image(url, session) { shown in if !shown { reveal(url) } }
+        case .markdown(let url, let session, let percent):
+            let reveal = reveal
+            markdown(url, session, percent) { shown in if !shown { reveal(url) } }
         case .reveal(let url): reveal(url)
         case .ignore: return
         }

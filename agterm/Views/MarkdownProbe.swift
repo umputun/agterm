@@ -35,9 +35,9 @@ struct MarkdownProbe: Sendable {
         }
     }
 
-    /// loadDetached runs `load` off the main actor, so a file on slow or network storage cannot stall every window.
-    static func loadDetached(path: String) async -> Result<MarkdownProbe, Failure> {
-        await Task.detached(priority: .userInitiated) { load(path: path) }.value
+    /// checkDetached runs `check` off the main actor, for a click: opening a file on slow storage can block.
+    static func checkDetached(path: String) async -> Result<Void, Failure> {
+        await Task.detached(priority: .userInitiated) { check(path: path) }.value
     }
 
     private static func embed(_ references: [MarkdownPage.Image]) -> MarkdownPage.Embedded {

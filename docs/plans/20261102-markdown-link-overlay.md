@@ -244,26 +244,27 @@ Adds `HtmlSource.markdown` together with every consumer, so the app builds at th
 - Create: `agterm/Control/ControlServer+MarkdownPage.swift`
 - Modify: `agterm/Ghostty/LinkOpener.swift`
 - Modify: `agterm/agtermApp.swift`
+- ➕ Modify: `agterm/Views/MarkdownProbe.swift` (`checkDetached` for the click; the unused `loadDetached` removed)
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`
 - Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`
 - Modify: `agtermTests/ControlServerLinkOverlayTests.swift`
 
-- [ ] `LinkPolicy` classifies `.md`/`.markdown` local paths as `.markdown` and routes them with the image
+- [x] `LinkPolicy` classifies `.md`/`.markdown` local paths as `.markdown` and routes them with the image
   origin rules and the mode's size, ⌘⇧ included
-- [ ] `LinkOpener.markdown(URL, UUID, Int?, completion)` and its `.markdown` route, revealing on refusal;
+- [x] `LinkOpener.markdown(URL, UUID, Int?, completion)` and its `.markdown` route, revealing on refusal;
   wired in `agtermApp`
-- [ ] `openMarkdownLink`: check `canShowLinkOverlay`, run the markdown descriptor check off-main, recheck
+- [x] `openMarkdownLink`: check `canShowLinkOverlay`, run the markdown descriptor check off-main, recheck
   HUD, zoom and slot after it, open at the routed size
-- [ ] existing tests whose `.md` fixtures mean "a revealed file" move to `.txt`, keeping what each tests:
+- [x] existing tests whose `.md` fixtures mean "a revealed file" move to `.txt`, keeping what each tests:
   `LinkPolicyTests` `localFileReveals`, `otherBarePathsReveal`, `defaultLocalHostsRevealLocalFiles`,
   `fileLinksRevealAndOtherSchemesStayIgnoredInEveryMode` and the symlink-kept case;
   `GhosttySurfaceViewInputTests.testBrowserModeAHudAndNonWebLinksNeverReachTheOverlay`
-- [ ] package tests: markdown routing for every origin, both extensions, every link-open mode, and ⌘⇧
+- [x] package tests: markdown routing for every origin, both extensions, every link-open mode, and ⌘⇧
   with and without mouse capture
-- [ ] hosted tests: `recordLinks` gets a markdown recorder; a pane markdown path calls the markdown
+- [x] hosted tests: `recordLinks` gets a markdown recorder; a pane markdown path calls the markdown
   closure with the routed size, and a refusal reveals the file; in `ControlServerLinkOverlayTests`, opens
   over the owning session, and HUD up, zoomed terminal, busy slot and unreadable file refuse
-- [ ] run `swift test --filter LinkPolicyTests` and the two hosted classes; leak check - must pass before
+- [x] run `swift test --filter LinkPolicyTests` and the two hosted classes; leak check - must pass before
   task 5
 
 ### Task 5: Verify acceptance criteria

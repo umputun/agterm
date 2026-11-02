@@ -16,12 +16,14 @@ public enum LinkPolicy {
     /// executable/handler.
     public static let permittedSchemes: Set<String> = ["http", "https", "mailto", "ftp"]
 
-    /// What a link click should do. Carries the target URL for `.open`/`.reveal`/`.image`.
+    /// LinkDisposition is the action for a clicked link.
     public enum LinkDisposition: Equatable {
         case open(URL)
         case reveal(URL)
         /// image is a local file with a `imageExtensions` extension, shown as a picture instead of revealed.
         case image(URL)
+        /// markdown is a local file with a `markdownExtensions` extension, rendered instead of revealed.
+        case markdown(URL)
         case ignore
     }
 
@@ -72,6 +74,9 @@ public enum LinkPolicy {
         case overlay(URL, session: UUID, sizePercent: Int?)
         /// image shows a local picture over `session`, sized from the image; a refused open reveals it instead.
         case image(URL, session: UUID)
+        /// markdown renders a local markdown file over `session` at `sizePercent`, nil for full size; a refused
+        /// open reveals it instead.
+        case markdown(URL, session: UUID, sizePercent: Int?)
         case reveal(URL)
         case ignore
     }
@@ -181,7 +186,9 @@ public enum LinkPolicy {
         let normalized = lexicallyNormalizedAbsolutePath(path)
         guard !isAutomountPath(normalized) else { return .ignore }
         let url = URL(fileURLWithPath: normalized, isDirectory: false)
-        return imageExtensions.contains(url.pathExtension.lowercased()) ? .image(url) : .reveal(url)
+        let ext = url.pathExtension.lowercased()
+        if imageExtensions.contains(ext) { return .image(url) }
+        return markdownExtensions.contains(ext) ? .markdown(url) : .reveal(url)
     }
 
     /// wantsBrowser reports whether a ⌘⇧ link click overrides the overlay setting and goes to the browser.
@@ -197,7 +204,8 @@ public enum LinkPolicy {
 
     /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
-    /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode.
+    /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
+    /// markdown file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
     /// A remote pane ignores bare paths and reveals `file://` images, since both name files on another Mac.
     /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
@@ -209,6 +217,12 @@ public enum LinkPolicy {
         case .image(let url):
             switch origin {
             case .pane(let session), .scratch(let session): return .image(url, session: session)
+            case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
+            }
+        case .markdown(let url):
+            switch origin {
+            case .pane(let session), .scratch(let session):
+                return .markdown(url, session: session, sizePercent: mode == .browser ? 95 : mode.overlaySizePercent)
             case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
             }
         case .open(let url):

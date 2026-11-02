@@ -210,6 +210,48 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testAClickedMarkdownFileOpensAtItsSizeWithoutSelectingIt() async throws {
+        let (store, session) = try addSession()
+        let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))
+        store.selectSession(other.id)
+        let doc = try writeMarkdown("doc.md")
+
+        let shown = await openMarkdown(doc, session: session.id, sizePercent: 75)
+
+        XCTAssertTrue(shown)
+        XCTAssertEqual(session.htmlOverlay?.source, .markdown(path: doc.path))
+        XCTAssertEqual(session.overlaySizePercent, 75)
+        XCTAssertEqual(store.selectedSessionID, other.id)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedMarkdownFileIsRefusedUnderAHudAZoomABusySlotOrWhenUnreadable() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+
+        let missing = await openMarkdown(stateDir.appendingPathComponent("missing.md"), session: session.id, sizePercent: nil)
+        XCTAssertFalse(missing)
+        XCTAssertTrue(store.openOverlay(session.id, command: "/bin/cat", sizePercent: nil))
+        let busy = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertFalse(busy)
+        store.closeOverlay(session.id)
+        XCTAssertTrue(store.openHud(session.id, command: "/bin/cat", spec: HudSpec(message: "recap"), file: "/tmp/hud",
+                                    size: HudPanelSize(widthPercent: 40, heightPercent: 20)))
+        let underHud = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertFalse(underHud)
+        XCTAssertTrue(session.hudActive)
+        store.closeOverlay(session.id)
+        let windowID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        zoom.set(.on, target: .session(session.id, .primary))
+        let zoomed = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertFalse(zoomed)
+        XCTAssertEqual(zoom.target, .session(session.id, .primary))
+        XCTAssertNil(session.htmlOverlay)
+    }
+
     func testAnImageLeavesAHudUpAndOpensNoPage() async throws {
         let (store, session) = try addSession()
         let path = try writePNG(width: 100, height: 100)
@@ -221,6 +263,19 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertFalse(shown)
         XCTAssertTrue(session.hudActive)
         store.closeOverlay(session.id)
+    }
+
+    private func openMarkdown(_ url: URL, session id: UUID, sizePercent: Int?) async -> Bool {
+        await withCheckedContinuation { continuation in
+            server.openMarkdownLink(url, session: id, sizePercent: sizePercent) { continuation.resume(returning: $0) }
+        }
+    }
+
+    private func writeMarkdown(_ name: String) throws -> URL {
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let url = stateDir.appendingPathComponent(name)
+        try Data("# Doc\n".utf8).write(to: url)
+        return url
     }
 
     private func openImage(_ url: URL, session id: UUID) async -> Bool {
