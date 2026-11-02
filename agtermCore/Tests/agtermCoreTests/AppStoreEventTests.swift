@@ -425,6 +425,42 @@ final class AppStoreEventTests {
         #expect(session.context == nil)
     }
 
+    @Test func settingSessionInfoEmitsTreeChangedOnlyWhenItChanges() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let window = library.newWindow(name: "open")
+        let store = try #require(library.store(for: window.id))
+        let session = try #require(store.activeSession)
+        let info = try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 0).get()
+        var discarded = 0
+        library.flushTreeEvents()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.setInfo(info, forSession: session.id))
+        library.flushTreeEvents()
+        let afterSet = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSet.items.count == 1)
+
+        #expect(!store.setInfo(info, forSession: session.id))
+        library.flushTreeEvents()
+        let afterSame = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSet.run, after: afterSet.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSame.items.isEmpty)
+
+        session.onInfoDiscarded = { discarded += 1 }
+        #expect(store.setInfo(nil, forSession: session.id))
+        library.flushTreeEvents()
+        let afterClear = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSame.run, after: afterSame.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterClear.items.count == 1)
+        #expect(discarded == 1)
+        #expect(session.info == nil)
+        #expect(session.onInfoDiscarded == nil)
+    }
+
     @Test func settingSessionContextWritesItToTheSavedSnapshot() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let window = library.newWindow(name: "open")

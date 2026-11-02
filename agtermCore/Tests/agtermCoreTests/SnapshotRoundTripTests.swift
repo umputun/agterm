@@ -493,6 +493,17 @@ struct SnapshotRoundTripTests {
         #expect(copy?.context == nil)
     }
 
+    @Test func sessionInfoIsNotSnapshottedOrDuplicated() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.setInfo(try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 0).get(), forSession: session.id)
+        let restored = makeStore()
+        restored.restore(from: store.snapshot())
+        #expect(restored.workspaces[0].sessions[0].info == nil)
+        #expect(store.duplicateSession(session.id)?.info == nil)
+    }
+
     @Test func emptyRestoreCommandRoundTripsAsEmptyNotNil() throws {
         // "" is the tri-state's "pinned to nothing"; collapsing it to nil turns the opt-out back into
         // auto-capture.

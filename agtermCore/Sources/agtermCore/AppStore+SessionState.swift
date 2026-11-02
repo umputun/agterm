@@ -31,6 +31,18 @@ extension AppStore {
         return true
     }
 
+    /// Sets (or clears) a session's local sidebar info line. Runtime-only, so nothing is saved. Returns whether
+    /// the local value CHANGED, while `tree.changed` fires only when the effective line did; a clear goes through
+    /// `Session.discardInfo`, which cancels the app's expiry timer.
+    @discardableResult
+    public func setInfo(_ info: SessionInfo?, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), session.info != info else { return false }
+        let previous = session.effectiveInfo
+        if let info { session.info = info } else { session.discardInfo() }
+        if previous != session.effectiveInfo { scheduleTreeChanged() }
+        return true
+    }
+
     /// Sets (or clears) multiple sessions' flags in one save. Unknown ids are ignored.
     public func setFlag(_ on: Bool, forSessions ids: [UUID]) {
         let targetIDs = Set(ids)

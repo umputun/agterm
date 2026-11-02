@@ -138,20 +138,20 @@ public struct SessionInfo: Equatable, Sendable {
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreEventTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SnapshotRoundTripTests.swift`
 
-- [ ] add `SessionInfo` and `SessionInfo.make(source:markdown:hideAfter:)` returning the value or a rejection
+- [x] add `SessionInfo` and `SessionInfo.make(source:markdown:hideAfter:)` returning the value or a rejection
       message: source cap, `HudSpec.isValidHideAfter`, then `SessionInfoMarkup.spans`
-- [ ] add runtime-only `public var info: SessionInfo?` to `Session`, with `mirroredInfo` (internal set) and
+- [x] add runtime-only `public var info: SessionInfo?` to `Session`, with `mirroredInfo` (internal set) and
       `effectiveInfo` mirroring `context`/`mirroredContext`/`effectiveContext`, plus `onInfoDiscarded` and
       `discardInfo()` mirroring `onHudDiscarded`/`discardHudBody()`; `SessionSnapshot` does not gain a field
-- [ ] add `AppStore.setInfo(_:forSession:) -> Bool` beside `setContext`: no save (runtime-only), returns
+- [x] add `AppStore.setInfo(_:forSession:) -> Bool` beside `setContext`: no save (runtime-only), returns
       whether the local value changed, calls `scheduleTreeChanged()` only when `effectiveInfo` changed; a nil
       goes through `discardInfo()`
-- [ ] write tests: the exact 512-byte boundary both sides with a multibyte source measured in bytes, bad
+- [x] write tests: the exact 512-byte boundary both sides with a multibyte source measured in bytes, bad
       hide-after, parse errors, plain and markdown success, and the existing parser cases
-- [ ] write `AppStoreEventTests` cases: set fires `tree.changed`, identical set fires nothing, clear fires and
+- [x] write `AppStoreEventTests` cases: set fires `tree.changed`, identical set fires nothing, clear fires and
       runs the discard hook
-- [ ] write tests: a snapshot round trip carries no info, and a duplicated session has none
-- [ ] run the three scoped suites - must pass before task 2
+- [x] write tests: a snapshot round trip carries no info, and a duplicated session has none
+- [x] run the three scoped suites - must pass before task 2
 
 ### Task 2: session.info protocol, dispatcher and read-back
 
