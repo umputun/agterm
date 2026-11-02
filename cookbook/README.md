@@ -44,6 +44,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [backlog-picker](backlog-picker/) | pick one of the repo's written-down deferred items and hand it to the agent in the pane | 0.20.2, python3, Claude Code |
 | [claude-account-swap](claude-account-swap/) | switch the left pane's Claude account with a conversation summary | 0.26.0, python3, jq, Claude Code, Codex CLI, Git |
 | [claude-conversation-picker](claude-conversation-picker/) | pick a past Claude Code conversation by what it was about and resume it in the pane | 0.21.0, python3, Claude Code |
+| [claude-git-info](claude-git-info/) | Claude Code keeps its branch, changed-file count and unpushed commits on a line under the sidebar row | 0.40.0, jq, git, Claude Code |
 | [claude-recap](claude-recap/) | one key lists what the Claude Code run in a session was working on | 0.10.0, zsh, jq, Claude Code |
 | [close-tab-when-done](close-tab-when-done/) | arm a tab with a chord and it closes itself when the agent stops replying | 0.22.0, jq, Claude Code |
 | [container-agent-status](container-agent-status/) | a containerized agent reports status onto its sidebar row via a TCP notification to the host | 0.7.1, nc, timeout, Claude Code |
