@@ -217,6 +217,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
                     outline.reloadItem(node)
                 }
+                // row updates were skipped while the editor was open, and a cancel changes no model value to retrigger them
+                reconcile()
+                syncSelection()
                 focusActiveTerminal()
             }
             // the menu/palette can't reach the inline editor directly, so they post a notification. Scoped

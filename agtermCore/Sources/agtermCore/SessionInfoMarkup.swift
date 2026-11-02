@@ -60,9 +60,9 @@ public struct SessionInfoRejection: Error, Equatable {
 /// SessionInfoMarkup turns a session info source into spans. Markdown is inline-only Foundation markdown plus
 /// `^[text](color: "NAME")` and `^[text](dim: true)`; a link keeps its label and drops its target. An unknown
 /// attribute key is dropped by Foundation and renders unstyled, which is accepted rather than lexed for.
-public enum SessionInfoMarkup {
+enum SessionInfoMarkup {
     /// ParseError is why a source was refused.
-    public enum ParseError: Error, Equatable {
+    enum ParseError: Error, Equatable {
         case empty
         case lineBreak
         case controlCharacter
@@ -82,7 +82,7 @@ public enum SessionInfoMarkup {
 
     /// spans parses `source` as markdown when `markdown` is set, otherwise as literal text. The visible text
     /// must be non-blank and one line with no control characters, checked after entities are decoded.
-    public static func spans(_ source: String, markdown: Bool) throws(ParseError) -> [SessionInfoSpan] {
+    static func spans(_ source: String, markdown: Bool) throws(ParseError) -> [SessionInfoSpan] {
         let spans = markdown ? try parseMarkdown(source) : [SessionInfoSpan(text: source)]
         try validate(spans.map(\.text).joined())
         return spans

@@ -156,6 +156,32 @@ final class SidebarInfoRowTests: XCTestCase {
         XCTAssertEqual(try height(of: session.id), plainHeight)
     }
 
+    // regression: a line cleared while another row was being renamed stayed on screen after the rename ended
+    func testAnInfoChangeDuringARenameCatchesUpWhenTheRenameEnds() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let renamed = try seed(store)
+        let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.workspaces.last).id, cwd: "/tmp/other"))
+        store.setInfo(try info("running"), forSession: other.id)
+        try mountSidebar(for: store)
+        try await waitUntil { (try? self.height(of: other.id)) == self.infoHeight }
+        let coordinator = try XCTUnwrap(outline.delegate as? WorkspaceSidebar.Coordinator)
+        let node = try XCTUnwrap(outline.item(atRow: try row(of: renamed.id)) as? SidebarNode)
+        coordinator.renameController.beginEditing(node: node)
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: try row(of: renamed.id), makeIfNecessary: true) as? NSTableCellView)
+        let field = try XCTUnwrap(cell.textField)
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+
+        store.setInfo(nil, forSession: other.id)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(try height(of: other.id), infoHeight)
+
+        XCTAssertTrue(coordinator.renameController.control(field, textView: editor,
+                                                           doCommandBy: #selector(NSResponder.cancelOperation(_:))))
+        try await waitUntil { (try? self.height(of: other.id)) == self.plainHeight }
+        XCTAssertEqual(try height(of: other.id), plainHeight)
+        XCTAssertFalse(coordinator.renameController.isEditing)
+    }
+
     private var plainHeight: CGFloat { AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize) }
     private var infoHeight: CGFloat { SidebarInfoMetrics.rowHeight(base: GhosttyApp.shared.sidebarFontSize) }
 
