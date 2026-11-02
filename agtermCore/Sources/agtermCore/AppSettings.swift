@@ -75,6 +75,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case flaggedView
     case focusFilter
     case workspaceAddSession
+    case sessionInfo
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
@@ -82,13 +83,15 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     /// The surface this element lives on; the title bar for everything not listed as sidebar.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession: return .sidebar
+        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .sessionInfo: return .sidebar
         default: return .titleBar
         }
     }
 
     /// Whether the element starts hidden, so its toggle reads off until the user opts in.
-    public var hiddenByDefault: Bool { self == .customCommands || self == .workspaceName || self == .overlayToggle }
+    public var hiddenByDefault: Bool {
+        self == .customCommands || self == .workspaceName || self == .overlayToggle || self == .sessionInfo
+    }
 
     /// The human-facing toggle label shown in the Interface settings tab.
     public var displayName: String {
@@ -111,6 +114,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .flaggedView: return "Flagged view"
         case .focusFilter: return "Workspace filter"
         case .workspaceAddSession: return "Workspace add-session"
+        case .sessionInfo: return "Session info"
         }
     }
 
@@ -125,7 +129,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     public var symbolName: String? {
         switch self {
         case .sidebarToggle: return "sidebar.left"
-        case .workspaceName, .sessionName, .windowName, .sessionContext: return nil
+        case .workspaceName, .sessionName, .windowName, .sessionContext, .sessionInfo: return nil
         case .remoteHost: return "cloud"
         case .recentSessions: return "clock.arrow.circlepath"
         case .scratch: return "rectangle"

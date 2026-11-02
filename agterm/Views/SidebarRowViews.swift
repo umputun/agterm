@@ -13,7 +13,7 @@ final class AddSessionButton: NSButton {
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge. The icon is the inherited
 /// `cell.imageView` (2x2 grid for a workspace, outlined terminal for a session), so AppKit re-tints it white on
 /// a selected row; the name is `cell.textField`, which the rename and selection wiring drives.
-final class SidebarCellView: NSTableCellView {
+class SidebarCellView: NSTableCellView {
     /// Trailing unseen-notification count — a session's `unseenCount` or a collapsed workspace's roll-up; 0 hides.
     let badge = BadgeView()
 
@@ -106,15 +106,20 @@ final class SidebarCellView: NSTableCellView {
     /// a row `tint` colors, which keep it selected or not. Never drive it from `backgroundStyle`, which AppKit
     /// flips only while the table is first responder.
     func setColors(selected: Bool) {
-        let app = GhosttyApp.shared
-        let color = selected
-            ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
-            : (app.terminalForegroundColor ?? .labelColor)
+        let color = themeTextColor(selected: selected)
         let tintColor = tint.map { NSColor.tint($0.color) }
         textField?.textColor = tint?.shows(.name) == true ? tintColor : color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
         imageView?.contentTintColor = tint?.shows(.icon) == true ? tintColor : color.withAlphaComponent(iconAlpha)
         addButton?.contentTintColor = color.withAlphaComponent(iconAlpha)
+    }
+
+    /// themeTextColor is the row text color the theme gives for a selection state, never a row tint.
+    func themeTextColor(selected: Bool) -> NSColor {
+        let app = GhosttyApp.shared
+        return selected
+            ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
+            : (app.terminalForegroundColor ?? .labelColor)
     }
 }
 

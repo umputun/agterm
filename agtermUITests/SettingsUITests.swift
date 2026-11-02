@@ -373,6 +373,13 @@ final class SettingsUITests: XCTestCase {
         toggle.click()
         XCTAssertTrue(poll { self.settingsStringArray("shownInterfaceElements")?.contains("overlayToggle") == true },
                       "enabling the overlays button should persist into shownInterfaceElements")
+
+        let info = app.descendants(matching: .any).matching(identifier: "settings-interface-sessionInfo").firstMatch
+        XCTAssertTrue(info.waitForExistence(timeout: 5) && info.isHittable, "the session info toggle renders on the tab")
+        XCTAssertEqual(info.value as? Int, 0, "the session info line is off until opted in")
+        info.click()
+        XCTAssertTrue(poll { self.settingsStringArray("shownInterfaceElements")?.contains("sessionInfo") == true },
+                      "enabling the session info line should persist into shownInterfaceElements")
     }
 
     func testQuickTerminalSizePickerPersists() throws {

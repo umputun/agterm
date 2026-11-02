@@ -257,22 +257,22 @@ public struct SessionInfo: Equatable, Sendable {
 - Create: `agtermTests/SidebarInfoRowTests.swift`
 - Modify: `agtermUITests/SettingsUITests.swift`
 
-- [ ] add `case sessionInfo` to `InterfaceElement` in the sidebar section, `hiddenByDefault`, label
+- [x] add `case sessionInfo` to `InterfaceElement` in the sidebar section, `hiddenByDefault`, label
       "Session info", a nil `symbolName`, placed by `settingsOrder(in:)`
-- [ ] `sessionInfo(forSession:)` reads `Session.effectiveInfo?.spans`, nil while the element is hidden;
+- [x] `sessionInfo(forSession:)` reads `Session.effectiveInfo?.spans`, nil while the element is hidden;
       delete the sample source and its environment flag
-- [ ] add the shown effective info to `RowContent` so a change reloads that row and re-asks its height
+- [x] add the shown effective info to `RowContent` so a change reloads that row and re-asks its height
       (`noteHeightOfRows`); a toggle flip arrives through `appearanceChanged` and takes the same path.
       ⚠️ `WorkspaceSidebar.swift` is at 979/1000 lines: if the change crosses the limit, STOP and ask
-- [ ] write `AppSettingsTests` cases: section, hidden by default, shown-set round trip
-- [ ] write hosted tests: row height grows with info and returns to plain on clear and when hidden; a
+- [x] write `AppSettingsTests` cases: section, hidden by default, shown-set round trip
+- [x] write hosted tests: row height grows with info and returns to plain on clear and when hidden; a
       selected row keeps colored fragments in their tint color and draws uncolored ones in the selection
       foreground; a row tint never reaches the info line
-- [ ] write one hosted integration test: a `session.info` request through the real dispatcher and
+- [x] write one hosted integration test: a `session.info` request through the real dispatcher and
       `ControlServer` refreshes the live outline row and changes its height, then `--clear` restores it
-- [ ] extend `testInterfaceTabFitsWithTheOverlaysToggle` with the new toggle: the tab still fits, and showing
+- [x] extend `testInterfaceTabFitsWithTheOverlaysToggle` with the new toggle: the tab still fits, and showing
       it saves into `shownInterfaceElements`
-- [ ] run `swift test --filter AppSettingsTests`, the scoped hosted tests and the scoped XCUITest - must pass
+- [x] run `swift test --filter AppSettingsTests`, the scoped hosted tests and the scoped XCUITest - must pass
       before task 6
 
 ### Task 6: agtermctl session info
