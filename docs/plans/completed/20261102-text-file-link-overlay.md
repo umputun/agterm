@@ -391,7 +391,7 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
   guarantees, the click-intent seam, the link-routing bullet's suffix and cwd rules, and the ⌘⌥ reveal
   chord's recorded exemption from a control twin (a gesture modifier over a click, with `overlay open
   --text` and Finder reveal already reachable)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
