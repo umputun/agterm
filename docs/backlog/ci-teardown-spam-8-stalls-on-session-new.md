@@ -20,5 +20,10 @@ That shape follows a close; this one has none before it, so the fix is not shown
 41132248681 (`aa772641`, with the fix) passed spam-8 in 9 s, and so did a concurrent PR's run of the old
 code, so one pass proves nothing.
 
-The next occurrence needs a stack first. The step uploads `surface-teardown` evidence, but a `sample` that
-outlives its 20 s limit leaves only `sample_errors` in `result.json`.
+Run 41408692761 (PR #864 head `560228b4`) stalled the same way: `new-0` and `new-1` in 75 and 177 ms,
+`new-2` timed out, the app `sample` timed out after 20 s and the CLI had exited before its sample ran.
+
+A stalled call now also gets a `sudo -n spindump` of the app and CLI in one snapshot, bounded at 15 s, and the
+step checks that collector once against two throwaway processes into `spindump-check.json`. Run 41414892558
+validated it on the runner (a readable 1.3 MB report naming its target), so the next stall's evidence should
+include `spindump-NN-<op>.txt`; start there.
