@@ -91,6 +91,7 @@ class SidebarCellView: NSTableCellView {
     /// tail and nothing else exposes what was cut. A tooltip repeating already-visible text would be noise, so
     /// the width decides. Runs from `layout`, so dragging the sidebar divider re-evaluates it. Skipped mid-rename
     /// — the field editor holds the text then, and `stringValue` is whatever has been typed so far.
+    /// A hidden icon's `notice` also appears when the name fits.
     private func updateNameTooltip() {
         guard let field = textField, field.currentEditor() == nil else { return }
         let available = field.cell?.titleRect(forBounds: field.bounds).width ?? field.bounds.width
