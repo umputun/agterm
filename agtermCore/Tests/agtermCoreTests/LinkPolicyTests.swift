@@ -122,6 +122,14 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
     }
 
+    // a decoded NUL made open() read the name before it while eligibility judged the suffix after it
+    @Test(arguments: ["file:///tmp/id_rsa%00.go", "file:///tmp/id_rsa%00.md", "file://localhost/tmp/a%0A.txt",
+                      "file:///tmp/a%00.go:3"])
+    func aFileLinkDecodingToAControlCharacterIsIgnoredAndOffersNothing(_ raw: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
+        #expect(LinkPolicy.locations(for: raw, origin: .pane(Self.session), cwd: "/w", localHosts: Self.localHosts).isEmpty)
+    }
+
     @Test(arguments: [
         "javascript:alert(1)",
         "vscode://file/x",

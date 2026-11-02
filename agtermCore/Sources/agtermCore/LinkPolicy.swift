@@ -231,9 +231,11 @@ public enum LinkPolicy {
         return TextPage.isEligible(file: normalized) ? .text(url, line: line) : .reveal(url)
     }
 
-    /// guardedLocalPath is `path` lexically normalized, nil for a relative, UNC-style or auto-mount path.
+    /// guardedLocalPath is `path` lexically normalized, nil for a relative, UNC-style or auto-mount path, or one
+    /// holding a control character: a decoded `%00` would make `open()` read the name before it.
     static func guardedLocalPath(_ path: String) -> String? {
-        guard path.hasPrefix("/"), !path.hasPrefix("//") else { return nil }
+        guard path.hasPrefix("/"), !path.hasPrefix("//"),
+              !path.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) else { return nil }
         let normalized = lexicallyNormalizedAbsolutePath(path)
         return isAutomountPath(normalized) ? nil : normalized
     }
