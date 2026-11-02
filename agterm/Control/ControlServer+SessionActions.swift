@@ -48,6 +48,9 @@ extension ControlServer: ControlActions {
                     return openImageOverlay(in: store, sessionID: id, path: path, probe: probe, options: options)
                 }
             }
+            if let path = options.page?.markdownPath, case .failure(let failure) = MarkdownProbe.check(path: path) {
+                return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
+            }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }

@@ -225,16 +225,16 @@ Adds `HtmlSource.markdown` together with every consumer, so the app builds at th
 - Modify: `agtermTests/ControlServerLinkOverlayTests.swift`
 - Modify: `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] `ControlArgs.markdownFile`; dispatcher validation mirroring `imageContent`; `dispatchCompanionPage`
+- [x] `ControlArgs.markdownFile`; dispatcher validation mirroring `imageContent`; `dispatchCompanionPage`
   refuses markdown with `companionNeedsPage`; `OverlayHtmlError.oneSource` names `--markdown`
-- [ ] CLI `--markdown FILE` with its exclusions, abstract, argument help and validation messages; the app
+- [x] CLI `--markdown FILE` with its exclusions, abstract, argument help and validation messages; the app
   opens it synchronously after the markdown descriptor check only, and a presented session refuses it
-- [ ] package tests: `markdownFile` request round-trip; markdown rows in the dispatcher refusal table,
+- [x] package tests: `markdownFile` request round-trip; markdown rows in the dispatcher refusal table,
   the raw companion request included; CLI validation
-- [ ] hosted test: a missing, non-regular or oversized markdown file is refused over the control path and
+- [x] hosted test: a missing, non-regular or oversized markdown file is refused over the control path and
   opens nothing
-- [ ] UI test: `overlay open --markdown` opens a page and `tree` reports `htmlOverlays[].markdown`
-- [ ] run the changed package suites, the hosted test and the one UI method; leak check - must pass before
+- [x] UI test: `overlay open --markdown` opens a page and `tree` reports `htmlOverlays[].markdown`
+- [x] run the changed package suites, the hosted test and the one UI method; leak check - must pass before
   task 4
 
 ### Task 4: Click path

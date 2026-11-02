@@ -29,6 +29,9 @@ public enum LinkPolicy {
     /// carry script, not a bitmap.
     public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp"]
 
+    /// markdownExtensions lists the local file extensions rendered as Markdown.
+    public static let markdownExtensions: Set<String> = ["md", "markdown"]
+
     /// Whether a web view of this app can load plain http from `host`. The app allows local networking
     /// only, and App Transport Security reads "local" off the host's SYNTAX, never off where it resolves:
     /// an unqualified name, a `.local` name, or an IP literal, a public one included.

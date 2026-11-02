@@ -1147,6 +1147,16 @@ struct ControlProtocolTests {
         #expect(node.file == "/tmp/r.html")
     }
 
+    @Test func aMarkdownOpenRequestRoundTripsItsFileApartFromTheHudFlag() throws {
+        let request = ControlRequest(cmd: .sessionOverlayOpen, target: "s", args: ControlArgs(markdownFile: "/tmp/r.md"))
+        let data = try JSONEncoder().encode(request)
+
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == request)
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(json.contains(#""markdownFile":"\/tmp\/r.md""#))
+        #expect(!json.contains(#""markdown":"#))
+    }
+
     @Test func controlHtmlOverlayNodeRoundTripsAMarkdownSourceAndOmitsItOtherwise() throws {
         let node = ControlHtmlOverlayNode(pane: nil, markdown: "/tmp/notes/readme.md", state: "loaded", error: nil)
         let data = try JSONEncoder().encode(node)

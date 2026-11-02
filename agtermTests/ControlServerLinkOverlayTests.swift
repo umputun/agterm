@@ -182,6 +182,34 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertNil(session.htmlOverlay)
     }
 
+    func testAMarkdownFileOpensOverTheControlPathAndAnUnreadableOneOpensNothing() throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let doc = stateDir.appendingPathComponent("doc.md")
+        try Data("# Doc\n".utf8).write(to: doc)
+        let missing = stateDir.appendingPathComponent("missing.md").path
+        let fifo = stateDir.appendingPathComponent("pipe.md").path
+        XCTAssertEqual(mkfifo(fifo, 0o600), 0)
+        let big = stateDir.appendingPathComponent("big.md")
+        FileManager.default.createFile(atPath: big.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: big)
+        try handle.truncate(atOffset: UInt64(MarkdownPage.maxBytes + 1))
+        try handle.close()
+        let open = { (path: String) in
+            self.server.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
+                command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, page: .markdown(path: path)))
+        }
+
+        XCTAssertEqual(open(missing), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.unreadable(missing))"))
+        XCTAssertEqual(open(fifo), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.unreadable(fifo))"))
+        XCTAssertEqual(open(big.path), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.tooLarge(big.path))"))
+        XCTAssertNil(session.htmlOverlay)
+
+        XCTAssertTrue(open(doc.path).ok)
+        XCTAssertEqual(session.htmlOverlay?.source, .markdown(path: doc.path))
+        store.closeOverlay(session.id)
+    }
+
     func testAnImageLeavesAHudUpAndOpensNoPage() async throws {
         let (store, session) = try addSession()
         let path = try writePNG(width: 100, height: 100)

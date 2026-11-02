@@ -37,6 +37,21 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the page")
     }
 
+    func testAMarkdownFileRendersAndTheTreeNamesItsSource() throws {
+        let id = try activeSessionID()
+        let doc = pageDir.appendingPathComponent("notes.md")
+        try "# Rendered Heading\n\nsome *text*\n".write(to: doc, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"markdownFile":"\#(doc.path)"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "markdown open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) {
+            ($0["markdown"] as? String)?.hasSuffix("/notes.md") == true && $0["file"] == nil && $0["state"] as? String == "loaded"
+        }, "the tree should name the markdown source")
+        XCTAssertTrue(app.webViews.staticTexts["Rendered Heading"].waitForExistence(timeout: 10), "the markdown should render")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "notes.md")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
+    }
+
     func testWithoutNavigationThePageShowsItsSourceAndACloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)
