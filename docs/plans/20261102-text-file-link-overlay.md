@@ -208,15 +208,15 @@ not an implementation detail.
 - Create: `agterm/Views/TextProbe.swift`
 - Create: `agtermTests/TextProbeTests.swift`
 
-- [ ] `TextPage`: limits, `language(forFile:)`, `isEligible(file:)`, `validate`, and the HTML builder with
+- [x] `TextPage`: limits, `language(forFile:)`, `isEligible(file:)`, `validate`, and the HTML builder with
   the CSP, reusing `MarkdownPage.escaped`
-- [ ] `TextProbe`: bounded descriptor read plus UTF-8/NUL validation in `check` and `load`, detached check
+- [x] `TextProbe`: bounded descriptor read plus UTF-8/NUL validation in `check` and `load`, detached check
   for the click
-- [ ] package tests: escaping (`</pre>`, `</script>`, `<img onerror>`, a quote fused with a combining mark
+- [x] package tests: escaping (`</pre>`, `</script>`, `<img onerror>`, a quote fused with a combining mark
   stay inert); the CSP string; every mapped extension and basename, case-insensitivity, unlisted
   extensions ineligible, `.html`/`.svg` ineligible; `validate` on invalid UTF-8, a NUL, a BOM, empty input
-- [ ] hosted tests: a plain file loads; FIFO, directory, oversized and binary files refused by `check`
-- [ ] run `swift test --filter TextPageTests` and the hosted `TextProbeTests`; leak check - must pass
+- [x] hosted tests: a plain file loads; FIFO, directory, oversized and binary files refused by `check`
+- [x] run `swift test --filter TextPageTests` and the hosted `TextProbeTests`; leak check - must pass
   before task 2
 
 ### Task 2: Text page source and rendering
@@ -264,8 +264,9 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
   renderer is in the `agterm-markdown` world; the page loads with no base URL and no file grant; no
   navigation and no browser hand-off occur; `navigate browser` and `navigate finder` refused
 - [ ] hosted behavior tests: Swift and Go highlight; plain text for an unmapped plain extension and for a
-  file over `maxHighlightBytes`; the requested line is scrolled to and marked; a theme change and reload
-  re-render
+  file over `maxHighlightBytes`; the requested line is scrolled to and marked; a source starting with a
+  blank line keeps it in the rendered DOM, so the gutter and target line stay aligned; a theme change and
+  reload re-render
 - [ ] measure WebKit render time for a 1 MB and a 4 MB file in a hosted test run and record the numbers
   here; lower `maxHighlightBytes` if 1 MB highlighted takes over ~300 ms
 - [ ] run the changed package suites and the hosted `HtmlOverlayRegistryTests`,
