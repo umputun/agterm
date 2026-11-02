@@ -92,10 +92,11 @@ public final class Session: Identifiable {
     public internal(set) var mirroredContext: String?
     public var effectiveContext: String? { context ?? mirroredContext }
 
-    /// Local sidebar info line (`session.info`), runtime-only; clearing reveals any mirrored info.
+    /// info is the local sidebar info line (`session.info`), runtime-only; clearing reveals any mirrored info.
     public internal(set) var info: SessionInfo?
-    /// Ephemeral origin info line from an attached stream.
+    /// mirroredInfo is the origin's info line from an attached stream.
     public internal(set) var mirroredInfo: SessionInfo?
+    /// effectiveInfo is the line the row shows: the local one, else the origin's.
     public var effectiveInfo: SessionInfo? { info ?? mirroredInfo }
     /// onInfoDiscarded cancels the app's expiry timer for the local line; `discardInfo` fires and clears it.
     @ObservationIgnored public var onInfoDiscarded: (() -> Void)?

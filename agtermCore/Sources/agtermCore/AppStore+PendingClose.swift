@@ -97,6 +97,7 @@ extension AppStore {
         let session = workspace.sessions[location.sessionIndex]
         releaseLeavingSession(session)
         closeTimedHud(session)
+        closeTimedInfo(session)
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(session, workspace: workspace.id)
         dropLaunchPanes([session])
@@ -171,6 +172,7 @@ extension AppStore {
                   workspaces[close.workspaceIndex].sessions[close.sessionIndex].id == close.session.id else { continue }
             releaseLeavingSession(close.session)
             closeTimedHud(close.session)
+            closeTimedInfo(close.session)
             _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
         }
         dropLaunchPanes(closes.map(\.session))
@@ -224,6 +226,7 @@ extension AppStore {
         for session in workspaces[index].sessions {
             releaseLeavingSession(session)
             closeTimedHud(session)
+            closeTimedInfo(session)
         }
         let visibleWorkspace = workspaces.remove(at: index)
         dropLaunchPanes(visibleWorkspace.sessions)
@@ -387,6 +390,13 @@ extension AppStore {
     private func closeTimedHud(_ session: Session) {
         guard session.hudActive, (session.hudSpec?.effectiveHideAfter ?? 0) > 0 else { return }
         closeHud(session.id)
+    }
+
+    /// closeTimedInfo drops a local info line that was counting itself out, for the reason `closeTimedHud` gives; an untimed
+    /// line stays for undo to restore.
+    private func closeTimedInfo(_ session: Session) {
+        guard (session.info?.hideAfter ?? 0) > 0 else { return }
+        setInfo(nil, forSession: session.id)
     }
 
     private func schedulePendingCloseFinalization(id: UUID, grace: TimeInterval) {
@@ -573,6 +583,7 @@ extension AppStore {
             session.teardownPaneOverlays()
             session.scratchSurface?.teardown()
             session.discardHudBody() // a HUD whose surface never realized has no teardown to delete its body file
+            session.discardInfo()
             WatermarkStorage.removeAllRenderedText(sessionID: session.id)
             removeFromRecency(session.id)
         }

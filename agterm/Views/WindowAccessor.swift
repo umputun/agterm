@@ -180,6 +180,7 @@ struct WindowAccessor: NSViewRepresentable {
                         session.teardownPaneOverlays()
                         session.scratchSurface?.teardown()
                         session.discardHudBody() // an unrealized HUD has no teardown to delete its body file
+                        session.discardInfo()
                     }
                     library.closeWindow(windowID)
                     // the quick-terminal panel belongs to no window, so nothing above tore it down. Usually

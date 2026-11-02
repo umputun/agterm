@@ -195,25 +195,25 @@ public struct SessionInfo: Equatable, Sendable {
 - Create: `agtermTests/ControlServerSessionInfoTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePendingCloseTests.swift`
 
-- [ ] implement `setSessionInfo` in the new file through `AppStore.setInfo` (`ControlServer+SessionActions.swift`
+- [x] implement `setSessionInfo` in the new file through `AppStore.setInfo` (`ControlServer+SessionActions.swift`
       is at its cap; the switch registration landed in task 2)
-- [ ] add `armInfoAutoHide` mirroring `armHudAutoHide`: a per-session revision, restart on every successful
+- [x] add `armInfoAutoHide` mirroring `armHudAutoHide`: a per-session revision, restart on every successful
       set including identical text, cancel through `Session.onInfoDiscarded` and on a set without
       `--hide-after`; expiry clears through `AppStore.setInfo(nil, ...)`
-- [ ] call `discardInfo()` only where the SESSION or its window is torn down (`AppStore+PendingClose.swift:575`,
+- [x] call `discardInfo()` only where the SESSION or its window is torn down (`AppStore+PendingClose.swift:575`,
       `AppStore.swift:614` and `:656`, `WindowAccessor.swift:182`), never from `closeOverlay`
       (`AppStore+Panes.swift:487`), which runs on every overlay, program or HUD close while the session lives
-- [ ] clear a timed info line at soft close (beside `closeTimedHud`) so undo never restores one whose time
+- [x] clear a timed info line at soft close (beside `closeTimedHud`) so undo never restores one whose time
       was up; an untimed line keeps the ordinary undo behavior
-- [ ] write hosted tests in the `ControlServerHudAutoHideTests` style, a short real expiry and a bounded
+- [x] write hosted tests in the `ControlServerHudAutoHideTests` style, a short real expiry and a bounded
       wait (a Date clock stamps deadlines but does not drive `Task.sleep`): set reaches the store; identical
       set restarts the deadline; expiry clears and fires the event; a superseded timer is inert
-- [ ] write hosted tests: a rejected write keeps the armed deadline and value; a set without `--hide-after`
+- [x] write hosted tests: a rejected write keeps the armed deadline and value; a set without `--hide-after`
       over a timed line cancels its expiry; closing the session cancels an armed timer; closing an overlay
       or HUD keeps the info line and its armed timer
-- [ ] write `AppStorePendingCloseTests` cases: soft close drops a timed line and keeps an untimed one
+- [x] write `AppStorePendingCloseTests` cases: soft close drops a timed line and keeps an untimed one
       through undo
-- [ ] run the scoped hosted tests and `swift test --filter AppStorePendingCloseTests` - must pass before task 4
+- [x] run the scoped hosted tests and `swift test --filter AppStorePendingCloseTests` - must pass before task 4
 
 ### Task 4: Remote presentation of the info line
 

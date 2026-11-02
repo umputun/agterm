@@ -31,7 +31,7 @@ extension AppStore {
         return true
     }
 
-    /// Sets (or clears) a session's local sidebar info line. Runtime-only, so nothing is saved. Returns whether
+    /// setInfo sets or clears a session's local sidebar info line. Runtime-only, so nothing is saved. Returns whether
     /// the local value CHANGED, while `tree.changed` fires only when the effective line did; a clear goes through
     /// `Session.discardInfo`, which cancels the app's expiry timer.
     @discardableResult

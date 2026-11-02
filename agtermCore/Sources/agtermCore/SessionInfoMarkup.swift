@@ -61,6 +61,7 @@ public struct SessionInfoRejection: Error, Equatable {
 /// `^[text](color: "NAME")` and `^[text](dim: true)`; a link keeps its label and drops its target. An unknown
 /// attribute key is dropped by Foundation and renders unstyled, which is accepted rather than lexed for.
 public enum SessionInfoMarkup {
+    /// ParseError is why a source was refused.
     public enum ParseError: Error, Equatable {
         case empty
         case lineBreak
