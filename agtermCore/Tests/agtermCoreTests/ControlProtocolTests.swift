@@ -1147,6 +1147,16 @@ struct ControlProtocolTests {
         #expect(node.file == "/tmp/r.html")
     }
 
+    @Test func controlHtmlOverlayNodeRoundTripsAMarkdownSourceAndOmitsItOtherwise() throws {
+        let node = ControlHtmlOverlayNode(pane: nil, markdown: "/tmp/notes/readme.md", state: "loaded", error: nil)
+        let data = try JSONEncoder().encode(node)
+
+        #expect(try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: data) == node)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""markdown":"\/tmp\/notes\/readme.md""#))
+        let file = ControlHtmlOverlayNode(pane: nil, file: "/tmp/r.html", state: "loaded", error: nil)
+        #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("markdown"))
+    }
+
     @Test func treeSessionNodeToleratesMissingHud() throws {
         // a pre-`session.hud.open` server omits the key entirely, so it must decode as nil.
         let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +

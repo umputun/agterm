@@ -1,0 +1,63 @@
+// runs in the app's own content world, since the document's JavaScript is off
+(() => {
+  const source = document.getElementById('agterm-markdown');
+  const page = document.getElementById('agterm-page');
+  if (!source || !page || typeof markdownit !== 'function') return;
+  let images = {};
+  try { images = JSON.parse(source.dataset.images || '{}'); } catch (_) { images = {}; }
+  const refs = images.references || {}, uris = images.uris || [];
+  const decoded = (text) => { try { return decodeURIComponent(text); } catch (_) { return text; } };
+
+  const md = markdownit({
+    html: false,
+    linkify: false,
+    highlight: (code, lang) => {
+      if (!lang || typeof hljs === 'undefined' || !hljs.getLanguage(lang)) return '';
+      try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch (_) { return ''; }
+    },
+  });
+  // a picture is emitted only as a data URI the app embedded, so no authored source ever reaches the document
+  md.renderer.rules.image = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    const key = decoded(token.attrGet('src') || '');
+    const alt = md.utils.escapeHtml(self.renderInlineAsText(token.children || [], options, env));
+    const uri = Object.prototype.hasOwnProperty.call(refs, key) ? uris[refs[key]] : null;
+    if (typeof uri === 'string' && uri.startsWith('data:image/')) {
+      return `<img src="${md.utils.escapeHtml(uri)}" alt="${alt}">`;
+    }
+    return `<span class="agterm-alt">${alt || md.utils.escapeHtml(key)}</span>`;
+  };
+  page.innerHTML = md.render(source.textContent);
+  source.remove();
+
+  // a web link goes through the app's confirmed hand-off and a fragment scrolls in place; anything else
+  // (about:, a relative file, another scheme) would navigate the page off its document, so it stays text
+  for (const link of page.querySelectorAll('a[href]')) {
+    const href = link.getAttribute('href');
+    if (/^https?:\/\//i.test(href) || /^#[^#]*$/.test(href)) continue;
+    link.removeAttribute('href');
+  }
+
+  const used = new Set();
+  for (const heading of page.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    const base = heading.textContent.trim().toLowerCase().replace(/[^\p{L}\p{N}\s_-]/gu, '').replace(/\s/g, '-');
+    let slug = base;
+    for (let n = 1; used.has(slug); n++) slug = `${base}-${n}`;
+    used.add(slug);
+    heading.id = slug;
+  }
+
+  for (const item of page.querySelectorAll('li')) {
+    const first = item.firstChild && item.firstChild.nodeType === Node.TEXT_NODE ? item.firstChild
+      : item.firstElementChild && item.firstElementChild.tagName === 'P' ? item.firstElementChild.firstChild : null;
+    const match = first && first.nodeType === Node.TEXT_NODE ? /^\[([ xX])\]\s/.exec(first.textContent) : null;
+    if (!match) continue;
+    first.textContent = first.textContent.slice(match[0].length);
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.disabled = true;
+    box.checked = match[1] !== ' ';
+    first.parentNode.insertBefore(box, first);
+    item.classList.add('task');
+  }
+})();

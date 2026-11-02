@@ -177,35 +177,38 @@ Adds `HtmlSource.markdown` together with every consumer, so the app builds at th
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreRemotePageTests.swift`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
+- ➕ Create: `agterm/Views/MarkdownAssets.swift`, `agtermTests/MarkdownAssetsTests.swift`
 
-- [ ] agtermCore: `HtmlSource.markdown(path:)` with a `markdownPath` accessor; `HtmlOverlay.identity`
+- [x] agtermCore: `HtmlSource.markdown(path:)` with a `markdownPath` accessor; `HtmlOverlay.identity`
   names the file; navigation policy (http(s) user-activated opens external, everything else cancelled);
   `presentationSource` returns nil; `ControlHtmlOverlayNode.markdown` with CodingKeys, decoder and
   projection
-- [ ] `project.yml`: `Resources/markdown` added to the `agterm` excludes and given its own folder-reference
+- [x] `project.yml`: `Resources/markdown` added to the `agterm` excludes and given its own folder-reference
   resource entry, like `Resources/hud`
-- [ ] registry: split `themed(_:linked:)` into styling and bridge eligibility (markdown gets the look and
+- [x] registry: split `themed(_:linked:)` into styling and bridge eligibility (markdown gets the look and
   transparent canvas, never the bridge); `applyTheme` reloads on styling eligibility; `installScripts()`
   adds the renderer for a markdown source; `loadOriginal` reads through `MarkdownProbe` detached under the
   shared `textLoad` counter; `textLoaded` includes markdown; `browserURL`/`pageURL` handled; `navigate
   browser` refused and `navigate finder` returns `finderRequiresFile` for markdown
-- [ ] `render.js`: `html: false`; highlight code blocks; GitHub-compatible heading slugs (lowercase,
+- [x] `render.js`: `html: false`; highlight code blocks; GitHub-compatible heading slugs (lowercase,
   punctuation stripped, spaces to `-`, `-1`/`-2` for duplicates); images swapped for app-supplied data URIs
   or escaped alt text; `href` kept only on http(s) and bare `#fragment` links. `page.css` themes with
   `--agterm-*` variables
-- [ ] `HtmlOverlayView` toolbar switch and `sourceText` handle markdown;
+- [x] `HtmlOverlayView` toolbar switch and `sourceText` handle markdown;
   `RemoteCompanionRequest.pageArguments` handles the case (companion creation stays refused)
-- [ ] package tests: `HtmlOverlayTests` for `identity` and the navigation policy per scheme and
+- [x] package tests: `HtmlOverlayTests` for `identity` and the navigation policy per scheme and
   activation; `ControlProtocolTests` for `ControlHtmlOverlayNode.markdown` round-trip and nil omission;
   `AppStoreTreeProjectionTests` for a projection that sets only `markdown`; `AppStoreRemotePageTests` for
   `presentationSource` nil
-- [ ] hosted tests: renders headings and a highlighted code block; theme variables apply; a theme change
+- [x] hosted tests: renders headings and a highlighted code block; theme variables apply; a theme change
   re-renders the page; no bridge handler; an authored `<script>` shows as escaped text and its side effect
   is absent; authored remote and data-URI images show alt text; an embedded image loads; a punctuated
   heading and a duplicate heading are reachable by their slugs; `about:blank` and relative `.md` links are
   inert; an http(s) link goes to the confirmation handoff; original and `--current` reload re-render after
   an anchor click; `navigate browser` and `navigate finder` refused
-- [ ] run `swift test --filter` for the changed suites and the hosted `HtmlOverlayRegistryTests`; leak
+- [x] ➕ `MarkdownAssets` reads the bundled renderer and stylesheet once; `OverlayHtmlError.markdownInOverlay`
+  is the browser refusal
+- [x] run `swift test --filter` for the changed suites and the hosted `HtmlOverlayRegistryTests`; leak
   check - must pass before task 3
 
 ### Task 3: Control API open path

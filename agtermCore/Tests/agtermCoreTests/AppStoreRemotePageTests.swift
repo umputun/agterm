@@ -38,6 +38,14 @@ struct AppStoreRemotePageTests {
         store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { drafts.kinds.append($0.kind) })
     }
 
+    @Test func onlyFileAndUrlPagesTravelToAnotherMac() throws {
+        #expect(AppStore.presentationSource(.file(path: "/a.html", grantRoot: "/")) == .file(path: "/a.html", grantRoot: "/"))
+        #expect(AppStore.presentationSource(.url(try #require(URL(string: "https://x.io/")))) == .url("https://x.io/"))
+        #expect(AppStore.presentationSource(.image(path: "/a.png")) == nil)
+        #expect(AppStore.presentationSource(.markdown(path: "/a.md")) == nil)
+        #expect(AppStore.presentationSource(.replica(path: "/a.html")) == nil)
+    }
+
     @Test func aPageOpensOnAPresenterThatSpeaksPages() throws {
         let (session, _) = try origin()
         let page = try url("https://example.com/review/42?token=abc")
