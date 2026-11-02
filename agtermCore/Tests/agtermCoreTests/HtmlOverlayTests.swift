@@ -281,7 +281,7 @@ struct HtmlOverlayTests {
         ("data:text/html,x", .mainFrame, true, .cancel),
     ])
     func markdownPagePolicyHandsWebLinksOutAndKeepsEverythingElse(_ url: String, _ target: HtmlNavigationTarget,
-                                                                 _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+                                                                  _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
         let overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
         let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
         #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)

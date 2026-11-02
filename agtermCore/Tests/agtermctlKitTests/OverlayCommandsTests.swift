@@ -189,6 +189,11 @@ struct OverlayCommandsTests {
         #expect(req.args?.markdown == nil)
         #expect(req.args?.image == nil)
         #expect(req.args?.sizePercent == 95)
+        let data = try JSONEncoder().encode(req)
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == req)
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(json.contains(#""markdownFile":"#))
+        #expect(!json.contains(#""markdown":"#))
     }
 
     @Test func submitSendsTheValuePaneAndTarget() throws {

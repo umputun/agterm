@@ -2,6 +2,12 @@ import Foundation
 import agtermCore
 
 extension ControlServer {
+    /// markdownFileRefusal checks the file's descriptor on the calling thread, nil when the page can open.
+    func markdownFileRefusal(_ path: String) -> ControlResponse? {
+        guard case .failure(let failure) = MarkdownProbe.check(path: path) else { return nil }
+        return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
+    }
+
     /// openMarkdownLink rechecks eligibility after the off-main file check, since the session may have changed meanwhile.
     func openMarkdownLink(_ url: URL, session id: UUID, sizePercent: Int?, completion: @escaping @MainActor (Bool) -> Void) {
         guard canShowLinkOverlay(session: id) else { return completion(false) }

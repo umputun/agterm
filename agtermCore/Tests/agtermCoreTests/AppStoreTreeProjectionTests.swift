@@ -775,6 +775,11 @@ struct AppStoreTreeProjectionTests {
 
         #expect(node == ControlHtmlOverlayNode(pane: nil, markdown: "/tmp/notes/readme.md", state: "loading", error: nil,
                                                id: page.id.uuidString))
+        let data = try JSONEncoder().encode(node)
+        #expect(try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: data) == node)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""markdown":"\/tmp\/notes\/readme.md""#))
+        let file = ControlHtmlOverlayNode(pane: nil, file: "/tmp/r.html", state: "loaded", error: nil)
+        #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("markdown"))
     }
 
     @Test func htmlOverlaysProjectEachPageWithItsLoadState() throws {

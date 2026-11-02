@@ -17,6 +17,15 @@ extension ControlServer {
         }
     }
 
+    /// openImageFile reads and probes the picture at `path` on the calling thread, then opens it.
+    func openImageFile(in store: AppStore, sessionID id: UUID, path: String,
+                       options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        switch ImageProbe.load(path: path) {
+        case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
+        case .success(let (probe, _)): return openImageOverlay(in: store, sessionID: id, path: path, probe: probe, options: options)
+        }
+    }
+
     /// openImageOverlay opens a probed picture: a session-wide panel the caller gave no size is sized to it, in
     /// the session's detail area at the density of the screen its window is on. Sized once; a later resize
     /// replaces it. It reads nothing, so the control path's synchronous probe and the click's detached one

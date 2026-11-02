@@ -41,16 +41,8 @@ extension ControlServer: ControlActions {
                 return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
             }
             // the control path is trusted and synchronous: a file on slow storage stalls the app while it is read
-            if let path = options.page?.imagePath {
-                switch ImageProbe.load(path: path) {
-                case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
-                case .success(let (probe, _)):
-                    return openImageOverlay(in: store, sessionID: id, path: path, probe: probe, options: options)
-                }
-            }
-            if let path = options.page?.markdownPath, case .failure(let failure) = MarkdownProbe.check(path: path) {
-                return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
-            }
+            if let path = options.page?.imagePath { return openImageFile(in: store, sessionID: id, path: path, options: options) }
+            if let path = options.page?.markdownPath, let refusal = markdownFileRefusal(path) { return refusal }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }
