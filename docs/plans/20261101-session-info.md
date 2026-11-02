@@ -283,14 +283,14 @@ public struct SessionInfo: Equatable, Sendable {
 - Modify: `agtermCore/Tests/agtermctlKitTests/SessionMetadataCommandsTests.swift`
 - Create: `agtermUITests/ControlSessionInfoUITests.swift`
 
-- [ ] add `session info [TEXT] [--clear] [--markdown] [--hide-after N]` beside `session context`, with
+- [x] add `session info [TEXT] [--clear] [--markdown] [--hide-after N]` beside `session context`, with
       target/window options and help showing the quoted color form `^[text](color: "green")`
-- [ ] reject at parse time: `TEXT` with `--clear`, neither, `--markdown`/`--hide-after` with `--clear`, and an
+- [x] reject at parse time: `TEXT` with `--clear`, neither, `--markdown`/`--hide-after` with `--clear`, and an
       out-of-range `--hide-after` through `HudSpec.isValidHideAfter`
-- [ ] write tests: parsing, each rejection, and the request shape sent to the socket
-- [ ] write one XCUITest following `ControlRecentUITests.swift:33`: `session info` over the real socket, then
+- [x] write tests: parsing, each rejection, and the request shape sent to the socket
+- [x] write one XCUITest following `ControlRecentUITests.swift:33`: `session info` over the real socket, then
       `tree` reads `info`, `infoMarkdown` and `infoHideAfter` back
-- [ ] run `swift test --filter SessionMetadataCommandsTests` and the scoped XCUITest - must pass before task 7
+- [x] run `swift test --filter SessionMetadataCommandsTests` and the scoped XCUITest - must pass before task 7
 
 ### Task 7: Cross-surface documentation
 

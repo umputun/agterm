@@ -1,9 +1,8 @@
 import ArgumentParser
 import agtermCore
 
-// The `session` subcommands carrying per-session METADATA rather than driving a surface: the agent status
-// glyph, the restore-command pin, flagged membership, and the title-bar context. Split out of
-// `SessionCommands.swift` for the file and type size limits.
+// the `session` subcommands carrying per-session METADATA rather than driving a surface: the agent status
+// glyph, the restore-command pin, flagged membership, the title-bar context and the sidebar info line.
 extension Session {
     struct Status: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Set a session's agent status indicator.")
@@ -174,6 +173,50 @@ extension Session {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionContext, target: target.target,
                            args: options.withWindow(ControlArgs(text: text, mode: clear ? "clear" : "set")))
+        }
+    }
+
+    struct Info: RequestCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "info",
+            abstract: "Set or clear the info line drawn under a session's sidebar row.",
+            discussion: """
+                The line shows current activity, such as a status or a count. Each set replaces the whole \
+                line: omitting --markdown sends plain text and omitting --hide-after cancels an earlier \
+                expiry. It is not kept across a relaunch. Shown when Settings > Interface > Session info is on.
+                Markdown example: '**3** agents ^[running](color: "green") ^[idle](dim: true)'. Colors: \
+                \(TintColor.validNamesList); the value must be quoted.
+                """)
+        @Argument(help: """
+            The line (omit with --clear); max \(SessionInfo.maxSourceBytes) UTF-8 bytes, one visible line.
+            """)
+        var text: String?
+        @Flag(name: .long, help: "Remove the line.") var clear = false
+        @Flag(name: .long, help: "Read TEXT as inline markdown with ^[text](color: \"NAME\") and ^[text](dim: true).")
+        var markdown = false
+        @Option(name: .customLong("hide-after"), help: """
+            Clear the line by itself after SECONDS, 0...\(Int(HudSpec.maxHideAfter)), 0 for never; each set \
+            restarts it. Use a positive value and refresh activity lines so they expire if the caller stops.
+            """)
+        var hideAfter: Double?
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            guard [text != nil, clear].filter({ $0 }).count == 1 else {
+                throw ValidationError("provide exactly one of a TEXT or --clear")
+            }
+            if clear, markdown || hideAfter != nil {
+                throw ValidationError("--clear takes no --markdown or --hide-after")
+            }
+            try Hud.validateHideAfter(hideAfter)
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            var args = ControlArgs(text: text, mode: clear ? "clear" : "set")
+            args.markdown = markdown ? true : nil
+            args.hideAfter = hideAfter
+            return ControlRequest(cmd: .sessionInfo, target: target.target, args: options.withWindow(args))
         }
     }
 }
