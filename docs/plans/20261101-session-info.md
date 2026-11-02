@@ -332,17 +332,17 @@ Eugene replaced task 5's on/off Interface toggle with a three-way choice after s
 - Modify: `site/commands.html`
 - Modify: `site/docs.html`
 
-- [ ] `control-api.md`: the command, its whole-value replacement, renew-on-identical timer, runtime-only
+- [x] `control-api.md`: the command, its whole-value replacement, renew-on-identical timer, runtime-only
       storage, read-back fields, that markup syntax counts toward the 512-byte source cap, why unknown
       attribute keys are not rejected, and info joining the mirrored presentation set with the
       local/mirrored/effective split and origin-owned expiry
-- [ ] `sidebar.md`: the info row's height, title band, selection colors and emoji scaling, owned once
-- [ ] bundled skill: a `SKILL.md` trigger ("show status or activity under a session in the sidebar") and the
+- [x] `sidebar.md`: the info row's height, title band, selection colors and emoji scaling, owned once
+- [x] bundled skill: a `SKILL.md` trigger ("show status or activity under a session in the sidebar") and the
       full contract in `reference.md`, including that a recipe reporting activity must pass `--hide-after`
       and refresh it
-- [ ] `site/commands.html` mirrors the command, arguments and read-back fields; `site/docs.html` describes the
+- [x] `site/commands.html` mirrors the command, arguments and read-back fields; `site/docs.html` describes the
       feature, the markup with an example, the Session info display setting, and that attached sessions show it
-- [ ] state no command total anywhere
+- [x] state no command total anywhere
 
 ### Task 9: Verify acceptance criteria
 

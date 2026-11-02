@@ -135,6 +135,18 @@ paths:
 - A row's tint (`Session.tint`, `Workspace.tint`) colors its icon and/or name through `SidebarCellView.setColors`,
   selected rows included, so every retint keeps it; `RowContent.tint` reloads that row alone. The Tint submenu
   checks an entry only when every target shares it and disables Show On unless every target is tinted.
+- A session with an info line (`session.info`, [[control-api]]) uses the `session-info-cell` identifier and a
+  taller row from `SidebarInfoMetrics`: the plain row, plus one line set 1.5 points smaller with a 9-point
+  minimum, lifted 6 points into the plain row's bottom padding. The title row centers in a band of plain
+  row height, so the name sits where a plain row puts it. `heightOfRowByItem` and the cell read the same `sessionInfo(forSession:)` gate.
+  `RowContent.info` reloads the row and calls `noteHeightOfRows`, which a reload alone does not do.
+- `SidebarInfoCellView` rebuilds its colors on every `setColors`. A colored fragment keeps its `TintColor`
+  on a selected row, as a row tint does, and uncolored text follows the selection foreground. Color emoji
+  are drawn at 0.7 of the line's size, centered on cap height, because a full-size glyph reads oversized
+  and low. A text-default symbol counts as emoji only with VS16, and VS15 always keeps text form.
+- `AppSettings.sessionInfoDisplay` (`always`|`flagged`|`off`, nil = always) decides where the line shows,
+  mirrored to `GhosttyApp.sessionInfoDisplay`. `flagged` shows it in the flagged view only. Hiding never
+  clears the line. The picker shares the Settings ▸ Interface Sidebar grid.
 
 ## Workspace focus
 
