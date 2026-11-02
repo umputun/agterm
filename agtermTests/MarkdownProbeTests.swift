@@ -108,6 +108,36 @@ final class MarkdownProbeTests: XCTestCase {
         XCTAssertEqual(probe.images.uris.count, 1)
     }
 
+    // regression: a budget used up exactly ended the loop, dropping later aliases of an embedded picture
+    func testAnAliasAfterTheSpentBudgetStillShowsItsPicture() throws {
+        let url = URL(fileURLWithPath: try writePNG(name: "a.png"))
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.truncate(atOffset: UInt64(MarkdownPage.maxImageBytes))
+        try handle.close()
+        _ = try writePNG(name: "b.png")
+        let path = try write("![a](a.png) ![b](b.png) ![c](./a.png)", name: "doc.md")
+
+        let probe = try XCTUnwrap(try? MarkdownProbe.load(path: path).get())
+
+        XCTAssertEqual(probe.images.references, ["a.png": 0, "./a.png": 0])
+        XCTAssertEqual(probe.images.uris.count, 1)
+    }
+
+    // regression: every distinct reference was read and probed, failures costing no budget
+    func testFailedProbesSpendTheProbeCapAndAnEmbeddedAliasStillResolves() throws {
+        _ = try writePNG(name: "a.png")
+        let bad = (1..<MarkdownPage.maxImages).map { "bad\($0).png" }
+        for name in bad { _ = try write("x", name: name) }
+        _ = try writePNG(name: "late.png")
+        let refs = (["a.png"] + bad + ["late.png", "./a.png"]).map { "![x](\($0))" }
+        let path = try write(refs.joined(separator: " "), name: "doc.md")
+
+        let probe = try XCTUnwrap(try? MarkdownProbe.load(path: path).get())
+
+        XCTAssertEqual(probe.images.references, ["a.png": 0, "./a.png": 0])
+        XCTAssertEqual(probe.images.uris.count, 1)
+    }
+
     private func failure(_ path: String) -> String? {
         guard case .failure(let failure) = MarkdownProbe.load(path: path) else { return nil }
         return failure.description

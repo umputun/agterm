@@ -63,8 +63,8 @@
   }
 
   for (const item of page.querySelectorAll('li')) {
-    const first = item.firstChild && item.firstChild.nodeType === Node.TEXT_NODE ? item.firstChild
-      : item.firstElementChild && item.firstElementChild.tagName === 'P' ? item.firstElementChild.firstChild : null;
+    const para = item.firstElementChild && item.firstElementChild.tagName === 'P' ? item.firstElementChild : null;
+    const first = para ? para.firstChild : item.firstChild && item.firstChild.nodeType === Node.TEXT_NODE ? item.firstChild : null;
     const match = first && first.nodeType === Node.TEXT_NODE ? /^\[([ xX])\]\s/.exec(first.textContent) : null;
     if (!match) continue;
     first.textContent = first.textContent.slice(match[0].length);

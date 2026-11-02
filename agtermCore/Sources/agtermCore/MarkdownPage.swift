@@ -12,6 +12,9 @@ public enum MarkdownPage {
     /// maxImagePixels bounds the decoded pictures one page embeds, all of them together: the budget one image
     /// page has, since several small compressed files can promise more pixels than one large one.
     public static let maxImagePixels = ImagePage.maxPixels
+    /// maxImages bounds the distinct picture files one page probes, a failed probe included. `render.js`
+    /// separately shows at most this many picture occurrences.
+    public static let maxImages = 256
 
     /// Image is one picture reference and the local file it may embed.
     public struct Image: Equatable, Sendable {

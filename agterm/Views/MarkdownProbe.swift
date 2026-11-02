@@ -48,7 +48,8 @@ struct MarkdownProbe: Sendable {
                 if let known { embedded.references[image.reference] = known }
                 continue
             }
-            guard bytes < MarkdownPage.maxImageBytes, pixels < MarkdownPage.maxImagePixels else { break }
+            guard read.count < MarkdownPage.maxImages, bytes < MarkdownPage.maxImageBytes,
+                  pixels < MarkdownPage.maxImagePixels else { continue }
             guard case .success(let (probe, data)) = ImageProbe.load(path: image.path, maxBytes: MarkdownPage.maxImageBytes - bytes),
                   pixels + probe.pixelWidth * probe.pixelHeight <= MarkdownPage.maxImagePixels else {
                 read[image.path] = .some(nil)

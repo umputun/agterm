@@ -926,6 +926,19 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    // regression: a loose list item opens with a newline text node, so its marker stayed text
+    func testALooseTaskListGetsItsBoxes() async throws {
+        let page = registry.page(for: try openMarkdown("doc.md", "- [x] done\n\n- [ ] open\n"), store: store)
+        try await waitForScript("document.querySelectorAll('li').length", in: page.webView) { $0 == "2" }
+
+        let rendered = try await page.webView.evaluateJavaScript("""
+            [document.querySelectorAll('li.task input[type=checkbox]:checked').length,
+             document.querySelectorAll('li.task input[type=checkbox]:not(:checked)').length,
+             [...document.querySelectorAll('li')].map(li => li.textContent.trim()).join(',')].join('|')
+            """)
+        XCTAssertEqual(rendered as? String, "1|1|done,open")
+    }
+
     func testAMarkdownPageRendersThemedWithCodeAndTasksAndGetsNoBridge() async throws {
         let page = registry.page(for: try openMarkdown("doc.md", "# Title\n\n- [x] done\n- [ ] open\n\n```swift\nlet x = 1\n```\n"),
                                  store: store)
