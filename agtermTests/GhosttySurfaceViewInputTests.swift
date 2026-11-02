@@ -13,6 +13,23 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         var overlaid: [(URL, UUID, Int?)] = []
         var images: [(URL, UUID)] = []
         var markdowns: [(URL, UUID, Int?)] = []
+        var texts: [LinkPolicy.TextLink] = []
+    }
+
+    private final class ExistsProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var asked: [(String, Bool)] = []
+        let existing: Set<String>
+
+        init(_ existing: Set<String>) { self.existing = existing }
+
+        func check(_ path: String) -> Bool {
+            lock.withLock { asked.append((path, Thread.isMainThread)) }
+            return existing.contains(path)
+        }
+
+        var paths: [String] { lock.withLock { asked.map(\.0) } }
+        var onMain: [Bool] { lock.withLock { asked.map(\.1) } }
     }
 
     private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
@@ -32,6 +49,11 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
             followed.markdowns.append((url, session, percent))
             done(overlayOpens)
         }
+        LinkOpener.shared.text = { link, done in
+            followed.texts.append(link)
+            done(overlayOpens)
+        }
+        LinkOpener.shared.exists = { _ in false }
         return followed
     }
 
@@ -107,6 +129,89 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(refused.revealed, [url])
     }
 
+    func testAPaneTextPathOpensAtItsModeSizeAndRevealsWhenItCannot() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let url = URL(fileURLWithPath: "/tmp/main.go", isDirectory: false)
+
+        let shown = recordLinks(mode: .overlay75, overlayOpens: true)
+        pane.openLink("/tmp/main.go", wantsBrowser: false)
+        XCTAssertEqual(shown.texts, [LinkPolicy.TextLink(url: url, line: nil, session: session.id, sizePercent: 75)])
+        XCTAssertTrue(shown.revealed.isEmpty)
+
+        let refused = recordLinks(mode: .overlay, overlayOpens: false)
+        pane.openLink("file:///tmp/main.go", wantsBrowser: false)
+        XCTAssertEqual(refused.texts.count, 1)
+        XCTAssertEqual(refused.revealed, [url])
+    }
+
+    func testARelativeLocationIsResolvedOffTheMainActorAgainstThePaneDirectory() async throws {
+        let session = Session(initialCwd: "/w")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let probe = ExistsProbe(["/w/src/a.go"])
+        LinkOpener.shared.exists = { probe.check($0) }
+
+        pane.openLink("src/a.go:42:7", wantsBrowser: false)
+
+        try await waitUntil { !followed.texts.isEmpty }
+        XCTAssertEqual(followed.texts, [LinkPolicy.TextLink(url: URL(fileURLWithPath: "/w/src/a.go", isDirectory: false), line: 42,
+                                                            session: session.id, sizePercent: nil)])
+        XCTAssertEqual(probe.paths, ["/w/src/a.go:42:7", "/w/src/a.go"])
+        XCTAssertEqual(probe.onMain, [false, false])
+    }
+
+    func testALiteralColonNameWinsAndAMissingLocationKeepsItsTypedRoute() async throws {
+        let session = Session(initialCwd: "/w")
+        let pane = bareSurface()
+        pane.session = session
+        let literal = recordLinks(mode: .overlay, overlayOpens: true)
+        LinkOpener.shared.exists = { $0 == "/x/a.go:42" || $0 == "/x/a.go" }
+        pane.openLink("/x/a.go:42", wantsBrowser: false)
+        try await waitUntil { !literal.revealed.isEmpty }
+        XCTAssertEqual(literal.revealed, [URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)])
+        XCTAssertTrue(literal.texts.isEmpty)
+
+        let missing = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink("/x/b.go:3", wantsBrowser: false)
+        pane.openLink("./c.go:3", wantsBrowser: false)
+        try await waitUntil { !missing.revealed.isEmpty }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(missing.revealed, [URL(fileURLWithPath: "/x/b.go:3", isDirectory: false)])
+        XCTAssertTrue(missing.texts.isEmpty)
+        XCTAssertTrue(missing.opened.isEmpty)
+    }
+
+    func testShellMetacharactersInTheDirectoryAndPathStayFilesystemData() async throws {
+        let session = Session(initialCwd: "/w;$(touch /tmp/agterm-pwned)`id`'q\"")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let probe = ExistsProbe([])
+        LinkOpener.shared.exists = { probe.check($0) }
+
+        pane.openLink("./a;$(rm -rf x)`id`'.go:3", wantsBrowser: false)
+
+        try await waitUntil { probe.paths.count == 2 }
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(probe.paths, ["/w;$(touch /tmp/agterm-pwned)`id`'q\"/a;$(rm -rf x)`id`'.go:3",
+                                     "/w;$(touch /tmp/agterm-pwned)`id`'q\"/a;$(rm -rf x)`id`'.go"])
+        XCTAssertTrue(followed.opened.isEmpty)
+        XCTAssertTrue(followed.revealed.isEmpty)
+        XCTAssertTrue(followed.texts.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/agterm-pwned"))
+    }
+
+    private func waitUntil(_ condition: @escaping () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition() {
+            guard Date() < deadline else { return XCTFail("condition not reached") }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
     func testARemotePaneIgnoresABarePath() {
         let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         let pane = bareSurface()
@@ -161,10 +266,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let overlay = recordLinks(mode: .overlay, overlayOpens: true)
         hud.openLink(web.absoluteString, wantsBrowser: false)
         pane.openLink(mail.absoluteString, wantsBrowser: false)
-        pane.openLink("file:///tmp/x.txt", wantsBrowser: false)
+        pane.openLink("file:///tmp/x.bin", wantsBrowser: false)
         pane.openLink("x-custom://run", wantsBrowser: false)
         XCTAssertEqual(overlay.opened, [web, mail])
-        XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.txt", isDirectory: false)])
+        XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.bin", isDirectory: false)])
         XCTAssertTrue(browser.overlaid.isEmpty && overlay.overlaid.isEmpty)
     }
 

@@ -283,6 +283,55 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertNil(session.htmlOverlay)
     }
 
+    func testAClickedTextFileOpensAtItsLineAndSizeWithoutSelectingIt() async throws {
+        let (store, session) = try addSession()
+        let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))
+        store.selectSession(other.id)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let source = stateDir.appendingPathComponent("main.go")
+        try Data("package main\n".utf8).write(to: source)
+
+        let shown = await openText(source, line: 12, session: session.id, sizePercent: 75)
+
+        XCTAssertTrue(shown)
+        XCTAssertEqual(session.htmlOverlay?.source, .text(path: source.path, line: 12))
+        XCTAssertEqual(session.overlaySizePercent, 75)
+        XCTAssertEqual(store.selectedSessionID, other.id)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedTextFileIsRefusedUnderAHudAZoomABusySlotOrWhenUnreadableOrBinary() async throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let source = stateDir.appendingPathComponent("main.go")
+        try Data("package main\n".utf8).write(to: source)
+        let binary = stateDir.appendingPathComponent("bin.txt")
+        try Data([0x61, 0x00, 0x62]).write(to: binary)
+
+        let missing = await openText(stateDir.appendingPathComponent("missing.go"), line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(missing)
+        let notText = await openText(binary, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(notText)
+        XCTAssertTrue(store.openOverlay(session.id, command: "/bin/cat", sizePercent: nil))
+        let busy = await openText(source, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(busy)
+        store.closeOverlay(session.id)
+        XCTAssertTrue(store.openHud(session.id, command: "/bin/cat", spec: HudSpec(message: "recap"), file: "/tmp/hud",
+                                    size: HudPanelSize(widthPercent: 40, heightPercent: 20)))
+        let underHud = await openText(source, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(underHud)
+        XCTAssertTrue(session.hudActive)
+        store.closeOverlay(session.id)
+        let windowID = try XCTUnwrap(library.windowID(forSession: session.id))
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        zoom.set(.on, target: .session(session.id, .primary))
+        let zoomed = await openText(source, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(zoomed)
+        XCTAssertNil(session.htmlOverlay)
+    }
+
     func testAnImageLeavesAHudUpAndOpensNoPage() async throws {
         let (store, session) = try addSession()
         let path = try writePNG(width: 100, height: 100)
@@ -294,6 +343,13 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertFalse(shown)
         XCTAssertTrue(session.hudActive)
         store.closeOverlay(session.id)
+    }
+
+    private func openText(_ url: URL, line: Int?, session id: UUID, sizePercent: Int?) async -> Bool {
+        let link = LinkPolicy.TextLink(url: url, line: line, session: id, sizePercent: sizePercent)
+        return await withCheckedContinuation { continuation in
+            server.openTextLink(link) { continuation.resume(returning: $0) }
+        }
     }
 
     private func openMarkdown(_ url: URL, session id: UUID, sizePercent: Int?) async -> Bool {

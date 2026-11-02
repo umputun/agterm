@@ -318,28 +318,28 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`
 - Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`, `agtermTests/ControlServerLinkOverlayTests.swift`
 
-- [ ] failing tests first: an absolute `/x/a.go:42:7` routes to text at line 42 (today revealed with
+- [x] failing tests first: an absolute `/x/a.go:42:7` routes to text at line 42 (today revealed with
   extension `go:42:7`); a relative `./a.go:42` with a cwd routes to text (today ignored)
-- [ ] `LinkPolicy`: eligible local paths classify as `.text`, routed with the markdown origin rules and
+- [x] `LinkPolicy`: eligible local paths classify as `.text`, routed with the markdown origin rules and
   sizes; `location(of:)`; relative-with-suffix joined to the captured cwd before any scheme parse; the
   remote-pane, local-host and automount guards run first
-- [ ] `LinkOpener`: candidate resolution off-main (literal first, then stripped), then the `.text`, image or
+- [x] `LinkOpener`: candidate resolution off-main (literal first, then stripped), then the `.text`, image or
   markdown route with the line; a refusal reveals the resolved file; `openTextLink` rechecks HUD, zoom and
   slot after the read
-- [ ] existing `.txt` fixtures that stand for "a revealed file" (moved there by #866) move to an ineligible
+- [x] existing `.txt` fixtures that stand for "a revealed file" (moved there by #866) move to an ineligible
   extension, keeping what each tests
-- [ ] package tests: every origin and link-open mode for `.text`; suffix forms (`:42`, `:42:7`, `:0`, a
+- [x] package tests: every origin and link-open mode for `.text`; suffix forms (`:42`, `:42:7`, `:0`, a
   trailing colon, non-digits); a literal file named `a:42` wins over `a`; neither candidate existing keeps
   today's disposition (absolute revealed, relative ignored); `http://localhost:3000` and `https://host:8443`
   keep web routing; relative without cwd ignored;
   refused inputs make no filesystem call (injected existence closure records none): `/net` and `/Network`
   paths, a remote pane, a non-local `file://` host, `//host/share`, a `../` escape normalized into `/net`, and
   an OSC-7 cwd of `/net/x`, empty, relative or holding a control character
-- [ ] hosted tests: a pane text path calls the text closure with the routed size and line, a binary file
+- [x] hosted tests: a pane text path calls the text closure with the routed size and line, a binary file
   reveals; HUD up, zoomed terminal, busy slot refuse; candidate resolution runs off the main actor; a cwd or
   path holding `;`, `$()`, a backtick or a quote is treated as filesystem data and nothing calls the open
   seam
-- [ ] run `swift test --filter LinkPolicyTests` and the two hosted classes; leak check - must pass before
+- [x] run `swift test --filter LinkPolicyTests` and the two hosted classes; leak check - must pass before
   task 5
 
 ### Task 5: ⌘⌥ reveal chord
