@@ -210,6 +210,37 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testATextFileOpensOverTheControlPathAndAnUnreadableOrBinaryOneOpensNothing() throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let source = stateDir.appendingPathComponent("main.go")
+        try Data("package main\n".utf8).write(to: source)
+        let missing = stateDir.appendingPathComponent("missing.go").path
+        let fifo = stateDir.appendingPathComponent("pipe.log").path
+        XCTAssertEqual(mkfifo(fifo, 0o600), 0)
+        let big = stateDir.appendingPathComponent("big.log")
+        FileManager.default.createFile(atPath: big.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: big)
+        try handle.truncate(atOffset: UInt64(TextPage.maxBytes + 1))
+        try handle.close()
+        let binary = stateDir.appendingPathComponent("bin.txt")
+        try Data([0x61, 0x00, 0x62]).write(to: binary)
+        let open = { (path: String) in
+            self.server.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
+                command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, page: .text(path: path, line: 4)))
+        }
+
+        XCTAssertEqual(open(missing), ControlResponse(ok: false, error: "session.overlay.open: \(TextProbe.Failure.unreadable(missing))"))
+        XCTAssertEqual(open(fifo), ControlResponse(ok: false, error: "session.overlay.open: \(TextProbe.Failure.unreadable(fifo))"))
+        XCTAssertEqual(open(big.path), ControlResponse(ok: false, error: "session.overlay.open: \(TextProbe.Failure.tooLarge(big.path))"))
+        XCTAssertEqual(open(binary.path), ControlResponse(ok: false, error: "session.overlay.open: \(TextProbe.Failure.notText(binary.path))"))
+        XCTAssertNil(session.htmlOverlay)
+
+        XCTAssertTrue(open(source.path).ok)
+        XCTAssertEqual(session.htmlOverlay?.source, .text(path: source.path, line: 4))
+        store.closeOverlay(session.id)
+    }
+
     func testAClickedMarkdownFileOpensAtItsSizeWithoutSelectingIt() async throws {
         let (store, session) = try addSession()
         let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))

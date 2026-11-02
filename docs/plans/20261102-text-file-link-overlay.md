@@ -291,19 +291,20 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 - Modify: `agtermTests/ControlServerLinkOverlayTests.swift`
 - Modify: `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] `ControlArgs.textFile` and `line`; dispatcher validation mirroring markdown (absolute path, eligible
+- [x] `ControlArgs.textFile` and `line`; dispatcher validation mirroring markdown (absolute path, eligible
   file, one source, `line` only with `textFile` and ≥ 1); companion refusal; `oneSource` names `--text`
-- [ ] CLI `--text FILE` (resolved to absolute, never suffix-parsed) and `--line N`, with the markdown
+- [x] CLI `--text FILE` (resolved to absolute, never suffix-parsed) and `--line N`, with the markdown
   exclusions, help and validation messages; the app checks through `TextProbe.check` before opening, and a
   presented session refuses it
-- [ ] package tests: request round-trip; refusal table rows (two sources, `--line` without `--text`,
+- [x] package tests: request round-trip; refusal table rows (two sources, `--line` without `--text`,
   `--line 0`, ineligible extension, companion, and raw-wire `textFile` with `javascript`, `navigation`,
   `cwd`, `browse`, `persistent`, `chromeless` or `wait`); CLI validation, `--block` included (CLI-only); a
   path containing `:12` stays literal
-- [ ] hosted tests: missing, non-regular, oversized and binary files refused over the control path, opening
-  nothing; a `--text` open on a presented session is refused
-- [ ] UI test: `overlay open --text FILE --line N` opens a page and `tree` reports `htmlOverlays[].text`
-- [ ] run the changed package suites, the hosted test and the one UI method; leak check - must pass before
+- [x] hosted tests: missing, non-regular, oversized and binary files refused over the control path, opening
+  nothing; a `--text` open on a presented session is refused (pinned host-free in
+  `AppStoreRemotePageTests`, where the store's presenter rule lives)
+- [x] UI test: `overlay open --text FILE --line N` opens a page and `tree` reports `htmlOverlays[].text`
+- [x] run the changed package suites, the hosted test and the one UI method; leak check - must pass before
   task 4
 
 ### Task 4: Click routing for text files and line suffixes

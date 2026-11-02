@@ -167,15 +167,22 @@ extension ControlDispatcher {
 
     static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        if args?.line != nil, args?.textFile == nil { return reject(OverlayHtmlError.lineWithoutText) }
         if let image = args?.image {
-            guard command.isEmpty, args?.html == nil, args?.url == nil, args?.markdownFile == nil else {
+            guard command.isEmpty, args?.html == nil, args?.url == nil, args?.markdownFile == nil, args?.textFile == nil else {
                 return reject(OverlayHtmlError.oneSource)
             }
             return imageContent(image, args: args)
         }
         if let markdown = args?.markdownFile {
-            guard command.isEmpty, args?.html == nil, args?.url == nil else { return reject(OverlayHtmlError.oneSource) }
+            guard command.isEmpty, args?.html == nil, args?.url == nil, args?.textFile == nil else {
+                return reject(OverlayHtmlError.oneSource)
+            }
             return markdownContent(markdown, args: args)
+        }
+        if let text = args?.textFile {
+            guard command.isEmpty, args?.html == nil, args?.url == nil else { return reject(OverlayHtmlError.oneSource) }
+            return textContent(text, args: args)
         }
         switch (args?.html, args?.url) {
         case (nil, nil):
@@ -231,6 +238,17 @@ extension ControlDispatcher {
             return reject(OverlayHtmlError.markdownType)
         }
         return .page(.markdown(path: url.path))
+    }
+
+    private static func textContent(_ path: String, args: ControlArgs?) -> OverlayContent {
+        let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        let flags = [args?.wait, args?.navigation, args?.javascript, args?.chromeless, args?.persistent, args?.browse]
+        if args?.cwd != nil || flags.contains(true) { return reject(OverlayHtmlError.textOptions) }
+        guard path.hasPrefix("/") else { return reject(OverlayHtmlError.textNotAbsolute) }
+        if let line = args?.line, line < 1 { return reject(OverlayHtmlError.lineNotPositive) }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard TextPage.isEligible(file: url.path) else { return reject(OverlayHtmlError.textType) }
+        return .page(.text(path: url.path, line: args?.line))
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on

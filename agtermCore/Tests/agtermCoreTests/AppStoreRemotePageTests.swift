@@ -71,6 +71,17 @@ struct AppStoreRemotePageTests {
                                                                                    pageID: page.id.uuidString)])
     }
 
+    @Test func aPresentedSessionRefusesATextPage() throws {
+        let (session, _) = try origin()
+        let page = HtmlOverlay(source: .text(path: "/tmp/src/main.go", line: 3))
+
+        #expect(open(session, page) == .local)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == .presenter)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(!session.overlayActive)
+        #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
+    }
+
     @Test func aPresenterWithoutPageKindsKeepsTheRefusal() throws {
         let (session, _) = try origin(kinds: [])
         let page = file()
