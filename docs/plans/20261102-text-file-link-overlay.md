@@ -384,10 +384,10 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 - [ ] run `make lint` with zero findings
 
 ### Task 7: [Final] Update documentation
-- [ ] `site/docs.html`: the local-path ⌘-click paragraph covers text files, `path:line`, and ⌘⌥ reveal
-- [ ] `site/commands.html`: `--text FILE`, `--line N` and the `text` read-back field
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: `--text` with a discovery trigger
-- [ ] `.claude/rules/control-api.md`: the text page bullet beside the markdown one, its security
+- [x] `site/docs.html`: the local-path ⌘-click paragraph covers text files, `path:line`, and ⌘⌥ reveal
+- [x] `site/commands.html`: `--text FILE`, `--line N` and the `text` read-back field
+- [x] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: `--text` with a discovery trigger
+- [x] `.claude/rules/control-api.md`: the text page bullet beside the markdown one, its security
   guarantees, the click-intent seam, the link-routing bullet's suffix and cwd rules, and the ⌘⌥ reveal
   chord's recorded exemption from a control twin (a gesture modifier over a click, with `overlay open
   --text` and Finder reveal already reachable)

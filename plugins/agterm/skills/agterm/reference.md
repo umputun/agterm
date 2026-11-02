@@ -201,7 +201,7 @@ session not laid out yet),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
-`htmlOverlays` (the pages in the overlay slots, see `session overlay open --html`, `--url`, `--image` and `--markdown`; `overlay` and
+`htmlOverlays` (the pages in the overlay slots, see `session overlay open --html`, `--url`, `--image`, `--markdown` and `--text`; `overlay` and
 `paneOverlays` count them as covers too),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
@@ -1138,6 +1138,21 @@ error keeps those names for compatibility.
   against the caller's directory. Refused: a path that is not a regular readable file (`unreadable markdown
   file`) and a file over 4 MB (`markdown file too large`). The wire field is `markdownFile`, apart from the
   HUD's `markdown` flag. Local-only, like an image page. Read back `markdown` in `htmlOverlays`.
+- `session overlay open --text FILE [--line N] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+  - show a source, config, text or log file read-only in the terminal theme, the view a user's ⌘-click on its
+  path opens (at the link-open size, 95% when links open in the browser), with line numbers. Highlighted when the
+  file's extension or exact name maps to a bundled language, up to 256 KB; a larger file shows plain. `--line N`
+  (from 1) opens it scrolled to that line and marks it; a line past the end marks nothing. FILE is taken literally,
+  never parsed as `path:line`; a relative FILE resolves against the caller's directory. The page runs none of the
+  text, loads nothing and has no links; no bridge, and Open in Browser and Show in Finder are refused. Refuses a
+  COMMAND, `--html`, `--url`, `--image`, `--markdown`, the page flags, `--cwd`, `--wait`, `--block` and
+  `--companion`, and `--line` without `--text` or below 1. Refused: a file that is not a source, config, text or
+  log file (markdown, HTML and SVG included), a path that is not a regular readable file (`unreadable text file`),
+  a file over 4 MB (`text file too large`) and one that is not UTF-8 or holds a NUL byte (`not a UTF-8 text file`).
+  Wire fields `textFile` and `line`. Local-only, like an image page. Read back `text` in `htmlOverlays`:
+  `{file, language?, line?}`, the language its name maps to and the line it was opened at, not the line in view.
+  The user's ⌘-click opens the same page on a path or a `path:line[:column]` location, a relative one looked up in
+  the pane's directory, and ⌘⌥-click (⌘⌥⇧ under mouse capture) reveals any local path in Finder.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,
