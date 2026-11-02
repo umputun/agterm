@@ -252,16 +252,16 @@ private struct InterfaceSettingsView: View {
 
     var body: some View {
         Form {
-            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() }) {
-                EmptyView()
-            }
+            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() },
+                             trailing: { EmptyView() })
             // the multi-window toggle rides the Sidebar section: the tab is full at 540x680, and its own
             // section header would push the quick-terminal Size off the bottom.
             // the info-line picker takes the grid's empty half: a row of its own would push the Size off the bottom
-            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { sessionInfoPicker }) {
+            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { sessionInfoPicker },
+                             trailing: {
                 Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
-            }
+            })
             Section("Quick Terminal") {
                 Picker("Size", selection: quickTerminalSizePercent) {
                     Text("Default").tag(Int?.none)

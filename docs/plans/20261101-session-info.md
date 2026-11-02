@@ -346,12 +346,16 @@ Eugene replaced task 5's on/off Interface toggle with a three-way choice after s
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] a caller can set, restyle, renew and clear a line, and `tree` reads back source, markdown and hide-after
-- [ ] a rejected set leaves value and deadline untouched; `--clear` is the only clearing form
-- [ ] expiry clears the line and shrinks the row while hidden too; relaunch starts with no info
-- [ ] an attached viewer shows the origin's line with its configured hideAfter, loses it on origin expiry
+- [x] a caller can set, restyle, renew and clear a line, and `tree` reads back source, markdown and hide-after
+- [x] a rejected set leaves value and deadline untouched; `--clear` is the only clearing form
+- [x] expiry clears the line and shrinks the row while hidden too; relaunch starts with no info
+- [x] an attached viewer shows the origin's line with its configured hideAfter, loses it on origin expiry
       and on stream end, and a local override hides and then reveals the origin's line
-- [ ] run `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint` - all clean
+- [x] run `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint` - all clean
+- [x] ➕ lint caught two `twoColumnSection` calls passing two closures by trailing syntax; fixed
+- [x] ➕ `watchdogFiresWhileTheGlobalQueueIsExhausted` (unrelated `session wait` test) timed out once in the
+      gate and passed in 26 later runs; it now records stage and process diagnostics on a timeout with
+      bounded cleanup, and `docs/backlog/session-wait-watchdog-probe-times-out-once.md` holds the evidence
 
 ### Task 10: [Final] Wrap up
 
