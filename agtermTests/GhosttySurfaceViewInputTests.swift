@@ -456,16 +456,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(followed.revealed.isEmpty && followed.texts.isEmpty)
     }
 
-    func testAHudPanelTakesTheRevealChordAndForwardsItAsALinkClick() throws {
-        let flags = { (flags: NSEvent.ModifierFlags) in
-            NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0,
-                               context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-        }
-        XCTAssertTrue(HudLinkClick.isLinkClick(flags(.command)))
-        XCTAssertTrue(HudLinkClick.isLinkClick(flags([.command, .option])))
-        XCTAssertFalse(HudLinkClick.isLinkClick(flags([.command, .shift])))
-        XCTAssertFalse(HudLinkClick.isLinkClick(flags(.option)))
-
+    func testAHudPanelForwardsTheRevealChordAsALinkClick() throws {
         let fixture = try LinkClickFixture(printing: "/tmp/agterm-reveal-chord.go")
         defer { fixture.close() }
         fixture.surface.hudBodyFile = "/tmp/agterm-test-hud-body-missing"

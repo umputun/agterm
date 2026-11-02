@@ -375,13 +375,13 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
   task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify every Overview point and every Security Contract guarantee has its named test
-- [ ] verify edge cases: remote pane, HUD, program overlay and quick origins; automount path; symlink to a
+- [x] verify every Overview point and every Security Contract guarantee has its named test
+- [x] verify edge cases: remote pane, HUD, program overlay and quick origins; automount path; symlink to a
   FIFO; a 4 MB file; a literal colon path; `</pre>` in the source
-- [ ] build: `scripts/build.sh`
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`, then the leak check
-- [ ] run `make lint` with zero findings
+- [x] build: `scripts/build.sh`
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`, then the leak check
+- [x] run `make lint` with zero findings
 
 ### Task 7: [Final] Update documentation
 - [x] `site/docs.html`: the local-path ⌘-click paragraph covers text files, `path:line`, and ⌘⌥ reveal
