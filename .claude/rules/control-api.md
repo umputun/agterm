@@ -704,22 +704,32 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - libghostty also detects plain paths and hands them over as typed: absolute, `~/`, or a relative path it
   resolved because it exists. `LinkPolicy.isBarePath` takes them literally, never URL-parsed, so `%`, `#`
   and spaces stay in the name. A local path, bare or `file://`, with an `imageExtensions` extension routes to
-  `ControlServer.openImageLink` (the same HUD and zoom guards) and is revealed when that refuses; any other
-  local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
+  `ControlServer.openImageLink` (the same HUD and zoom guards) and is revealed when that refuses; one with a
+  `markdownExtensions` extension routes to `ControlServer.openMarkdownLink` the same way, at the mode's size, 95 in
+  browser mode (`Route.markdown` carries it); any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
   on the far Mac and are ignored, while its scratch stays `.scratch` because that shell is local.
 - An image page (`HtmlSource.image`, `--image`) embeds the file as a data URI in an HTML string, so it gets no
   file grant, theme or bridge, and `presentationSource` has no remote form for it, which makes a presented
-  session refuse it through `pageBelongsRemote`. `ImageProbe.read` opens the path once and judges that
+  session refuse it through `pageBelongsRemote`. `BoundedFile.read` opens the path once and judges that
   descriptor (`fstat`): a symlink is measured at its target, and a non-regular file, an offloaded iCloud
   placeholder or one over 64 MB is refused before a byte is read. Only a PNG, JPEG, GIF or WebP signature
   (`ImagePage.mimeType(sniffing:)`) reaches ImageIO, and a header over `ImagePage.maxPixels` is refused, since
   a 560 KB PNG measured promising 144 MP. A click and a page build read off the main actor: a click rechecks the
   HUD, zoom and slot after the read and opens through `openImageOverlay`, never the synchronous probe again,
-  and a page drops a read that a close or newer reload overtook (`imageLoad`). The control path stays
+  and a page drops a read that a close or newer reload overtook (`textLoad`). The control path stays
   synchronous, its caller already holding full control, so a file on slow storage stalls the app there.
   With no size given the panel is sized once from `ImagePage.points` against the session's
   `hudPaneFrames.detail` at its window's backing scale; a later window resize does not refit. SVG is excluded
   because it is a document that can carry script.
+- A markdown page (`HtmlSource.markdown`, `--markdown`, wire `markdownFile` since `markdown` is the HUD's flag) is
+  built from text like an image page: no file grant, no bridge, no remote form, but it is themed. `MarkdownProbe`
+  reads the file through `BoundedFile` (the descriptor check `ImageProbe` shares) and embeds pictures that
+  `MarkdownPage.imageReferences` contains in the file's folder after resolving symlinks, each canonical file once
+  (`MarkdownPage.Embedded`), within a total byte and pixel budget. The renderer, bundled markdown-it and
+  highlight.js plus `render.js` (`MarkdownAssets`), runs as a user script in its own content world with page
+  JavaScript off; its image rule emits only app-embedded data URIs, so no authored source reaches WebKit, and it
+  strips every link but http(s) and fragments, since `about:` passes the navigation policy. The click and the
+  control path check only the descriptor; the page load reads pictures, under the shared `textLoad` counter.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
@@ -803,8 +813,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `zmx.attach.group`, `dashboard` and `recent.open` keep their ids and still land in the page's window, and `hooks.*`, which
   refuse any window, and `browser.clear`, `browser.links`, `recent.list` and `recent.clear` get none. `sidebar` and `sidebar.mode` read no window, so a page drives the frontmost one.
   `zmx.present`, `session.overlay.job.run`, `session.overlay.page.serve` and `zmx.reset` are refused: a stream hand-off and post-reply work do not fit one request and reply.
-- The theme, adapter and helper scripts install as ONE set: removing user scripts removes them all, so a
-  separate install would lose the adapter at the next theme change. Release unregisters the handlers;
+- The theme, markdown renderer, adapter and helper scripts install as ONE set: removing user scripts removes them
+  all, so a separate install would lose the adapter or the renderer at the next theme change. Theme styling
+  (`styled`) and the bridge (`bridged`) are separate eligibilities: a markdown page wears the theme with no bridge. Release unregisters the handlers;
   reload keeps them.
 - `HtmlPageOutcomes` keys every page's selector outcome by page id, outside the slot, so a caller blocked
   on a page reads it after the page and its session are gone. A successful open registers `pending`;

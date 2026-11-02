@@ -4,7 +4,7 @@ description: >
   Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch pane; run, hide or show overlays;
   read exit status; show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
-  post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images inline; type
+  post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
@@ -16,7 +16,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
-  show an image inline, show this HTML page or artifact, make an HTML page or explainer for this and show
+  show an image inline, show this markdown file rendered, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
@@ -498,7 +498,7 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js] | --image FILE) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js] | --image FILE | --markdown FILE) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay hide|show|toggle [--pane left|right]` ·
@@ -538,7 +538,8 @@ omitted when expanded).
   use `--follow` when you want the user pulled to the overlay, omit it to open quietly on your own or
   another session.
   `--background-color` gives the overlay pane its own solid color, independent of the session's.
-  `--image FILE` is how you **display an image inline** (see below).
+  `--image FILE` is how you **display an image inline**, and `--markdown FILE` how you **show a markdown file
+  rendered** (see below).
 - `session hud [open] <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--background-color #rrggbb] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud update <message> [--detail T] [--spinner] [--spinner-style S] [--position P] [--text-color #rrggbb] [--size-percent N] [--sticky] [--no-frame] [--hide-after SECONDS] [--pane P] [--pane-id ID]` ·
   `session hud close` — post a small **passive** panel over the session saying what you are doing
@@ -796,6 +797,18 @@ works as a preflight from a keymap-launched script, which has no `$TERM_PROGRAM_
 socket explicitly (`--socket "$AGTERM_SOCKET"`, or `"$AGT_SOCKET"` in a keymap child): a bare call
 resolves the DEFAULT socket, which may be another app. The same identity is on the tree top level as
 `app`.
+
+## Showing a markdown file rendered
+
+Render a `.md` or `.markdown` file as a themed page with `--markdown`, at 95% here:
+
+```bash
+agtermctl session overlay open --markdown /path/to/plan.md --size-percent 95 --target "$AGTERM_SESSION_ID"
+```
+
+Pictures kept in the file's own folder show; other pictures show their alt text, raw HTML stays text, and a web
+link opens in the browser after the user confirms. The user gets the same view by ⌘-clicking the file's path, so
+printing the absolute path of a plan or report you wrote is often enough. Read back `markdown` in `htmlOverlays`.
 
 ## Displaying an image inline
 

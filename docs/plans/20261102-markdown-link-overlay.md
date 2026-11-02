@@ -268,20 +268,20 @@ Adds `HtmlSource.markdown` together with every consumer, so the app builds at th
   task 5
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify every Overview point and the Technical Details rules are implemented
-- [ ] verify edge cases: remote pane, HUD and quick origins, symlink escape, budgets, `</script>` in source
-- [ ] build: `scripts/build.sh`
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`, then the leak check
-- [ ] run `make lint` with zero findings
+- [x] verify every Overview point and the Technical Details rules are implemented
+- [x] verify edge cases: remote pane, HUD and quick origins, symlink escape, budgets, `</script>` in source
+- [x] build: `scripts/build.sh`
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`, then the leak check
+- [x] run `make lint` with zero findings
 
 ### Task 6: [Final] Update documentation
-- [ ] `site/docs.html`: the local-path ⌘-click paragraph covers markdown files
-- [ ] `site/commands.html`: `--markdown FILE` and the `markdown` read-back field
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: `--markdown` with a discovery trigger
-- [ ] `.claude/rules/control-api.md`: the markdown page bullet beside the image page one, and the
+- [x] `site/docs.html`: the local-path ⌘-click paragraph covers markdown files
+- [x] `site/commands.html`: `--markdown FILE` and the `markdown` read-back field
+- [x] `plugins/agterm/skills/agterm/SKILL.md` and `reference.md`: `--markdown` with a discovery trigger
+- [x] `.claude/rules/control-api.md`: the markdown page bullet beside the image page one, and the
   theme/bridge split in the scripts-as-one-set bullet
-- [ ] `ARCHITECTURE.md` if the theme/bridge split warrants a line
+- [x] `ARCHITECTURE.md` if the theme/bridge split warrants a line (it does not: control-api.md owns the split)
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
