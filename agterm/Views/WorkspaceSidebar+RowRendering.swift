@@ -36,10 +36,20 @@ extension WorkspaceSidebar.Coordinator {
     /// sessionInfo is the info line a session row shows, shared by the height, the cell builder and the row diff.
     /// The display setting gates drawing only, so a hidden line keeps its value and its timer.
     func sessionInfo(forSession id: UUID) -> [SessionInfoSpan]? {
+        guard showsSessionInfo else { return nil }
+        return store.session(withID: id)?.effectiveInfo?.spans
+    }
+
+    /// sessionInfo(for:) is the same line for a caller that already holds the session, sparing the id lookup.
+    func sessionInfo(for session: Session) -> [SessionInfoSpan]? {
+        showsSessionInfo ? session.effectiveInfo?.spans : nil
+    }
+
+    private var showsSessionInfo: Bool {
         switch GhosttyApp.shared.sessionInfoDisplay {
-        case .off: return nil
-        case .flagged where store.sidebarMode != .flagged: return nil
-        case .always, .flagged: return store.session(withID: id)?.effectiveInfo?.spans
+        case .off: false
+        case .flagged: store.sidebarMode == .flagged
+        case .always: true
         }
     }
 

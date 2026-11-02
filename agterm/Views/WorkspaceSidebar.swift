@@ -517,7 +517,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
                        indicator: session.agentIndicator, flagged: session.flagged,
                        focusMember: false, presentationNotice: presentationNotice(for: session), tint: session.tint,
                        foldedAttention: foldedAttention(forSession: session.id).map(\.displayName),
-                       info: sessionInfo(forSession: session.id))
+                       info: sessionInfo(for: session))
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so NSOutlineView item
