@@ -305,6 +305,13 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let collapsed: Bool?
     /// `page` for a page companion, which has no terminal; omitted for a terminal session.
     public let content: String?
+    /// info is the sidebar info line's source as set (`Session.effectiveInfo`, so an attached row without a local
+    /// line shows its origin's). The three info fields are all present while a line is set, all omitted otherwise.
+    public let info: String?
+    /// infoMarkdown says whether `info` is read as markdown.
+    public let infoMarkdown: Bool?
+    /// infoHideAfter is the CONFIGURED expiry in seconds, 0 for none, never a countdown.
+    public let infoHideAfter: Double?
     /// The session's background watermark spec; nil/omitted when none is set. The read side of
     /// `session.background`.
     public let background: BackgroundWatermark?
@@ -386,8 +393,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil,
-                content: String? = nil) {
+                content: String? = nil, info: SessionInfo? = nil) {
         self.content = content
+        self.info = info?.source
+        self.infoMarkdown = info?.markdown
+        self.infoHideAfter = info?.hideAfter
         self.parent = parent
         self.collapsed = collapsed
         self.id = id

@@ -117,6 +117,65 @@ struct ControlDispatcherSessionMetadataTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionInfoRoutesSetAndClear() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionInfo, target: "session",
+            args: ControlArgs(text: "^[run](color: \"green\")", mode: "set", hideAfter: 30, markdown: true, window: "win")
+        ))
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: ControlArgs(text: "**x**", mode: "set")))
+        let cleared = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: ControlArgs(mode: "clear")))
+
+        #expect(set == ControlResponse(ok: true))
+        #expect(plain == ControlResponse(ok: true))
+        #expect(cleared == ControlResponse(ok: true))
+        let colored = try SessionInfo.make(source: "^[run](color: \"green\")", markdown: true, hideAfter: 30).get()
+        let literal = try SessionInfo.make(source: "**x**", markdown: false, hideAfter: 0).get()
+        #expect(actions.calls == [
+            .sessionInfo(target: "session", window: "win", info: colored),
+            .sessionInfo(target: nil, window: nil, info: literal),
+            .sessionInfo(target: nil, window: nil, info: nil),
+        ])
+    }
+
+    @Test func sessionInfoRequestEncodesItsWireShape() throws {
+        let request = ControlRequest(cmd: .sessionInfo, target: "s1",
+                                     args: ControlArgs(text: "**3**", mode: "set", hideAfter: 5, markdown: true))
+        let json = try String(decoding: JSONEncoder().encode(request), as: UTF8.self)
+        #expect(json.contains("\"cmd\":\"session.info\""))
+        #expect(json.contains("\"mode\":\"set\""))
+        #expect(json.contains("\"markdown\":true"))
+        #expect(json.contains("\"hideAfter\":5"))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8)) == request)
+    }
+
+    @Test(arguments: [
+        ControlArgs(mode: "set"),
+        ControlArgs(text: "x"),
+        ControlArgs(text: "x", mode: "toggle"),
+        ControlArgs(text: "x", mode: "clear"),
+        ControlArgs(mode: "clear", markdown: true),
+        ControlArgs(mode: "clear", hideAfter: 5),
+        ControlArgs(text: "x", mode: "set", hideAfter: -1),
+        ControlArgs(text: "x", mode: "set", hideAfter: 86_401),
+        ControlArgs(text: "   ", mode: "set"),
+        ControlArgs(text: "a\nb", mode: "set"),
+        ControlArgs(text: "^[a](color: \"pink\")", mode: "set", markdown: true),
+        ControlArgs(text: "^[a](color: red)", mode: "set", markdown: true),
+        ControlArgs(text: String(repeating: "a", count: 513), mode: "set"),
+    ])
+    func sessionInfoRejectionNeverReachesTheHost(args: ControlArgs) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: args))
+
+        #expect(response?.ok == false)
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionContextRejectsAValueOverTheByteLimit() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

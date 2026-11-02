@@ -222,6 +222,52 @@ struct RemotePresentationStateTests {
         #expect(session.agentIndicator.status == .completed)
     }
 
+    @Test func aMirroredInfoShowsOnARowWithNoneOfItsOwn() throws {
+        let (store, session) = try attached()
+
+        store.applyRemoteInfo(PresentationInfo(source: "**3** agents", markdown: true, hideAfter: 30), forSession: session.id)
+
+        #expect(session.effectiveInfo?.spans.first == SessionInfoSpan(text: "3", bold: true))
+        #expect(session.info == nil)
+        let node = store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.info == "**3** agents")
+        #expect(node?.infoHideAfter == 30)
+    }
+
+    @Test func anUnparseableMirroredInfoReadsAsNone() throws {
+        let (store, session) = try attached()
+        store.applyRemoteInfo(PresentationInfo(source: "previous", markdown: false, hideAfter: 0), forSession: session.id)
+
+        store.applyRemoteInfo(PresentationInfo(source: "^[a](color: \"pink\")", markdown: true, hideAfter: 0),
+                              forSession: session.id)
+
+        #expect(session.mirroredInfo == nil)
+    }
+
+    @Test func aLocalInfoHidesOriginUpdatesUntilItIsCleared() throws {
+        let (store, session) = try attached()
+        store.applyRemoteInfo(PresentationInfo(source: "first", markdown: false, hideAfter: 0), forSession: session.id)
+        store.setInfo(try SessionInfo.make(source: "local", markdown: false, hideAfter: 0).get(), forSession: session.id)
+
+        store.applyRemoteInfo(PresentationInfo(source: "second", markdown: false, hideAfter: 0), forSession: session.id)
+        #expect(session.effectiveInfo?.source == "local")
+
+        store.setInfo(nil, forSession: session.id)
+        #expect(session.effectiveInfo?.source == "second")
+    }
+
+    @Test func aDisconnectDropsOnlyTheMirroredInfo() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        store.applyRemoteInfo(PresentationInfo(source: "origin", markdown: false, hideAfter: 0), forSession: session.id)
+        store.setInfo(try SessionInfo.make(source: "local", markdown: false, hideAfter: 0).get(), forSession: session.id)
+
+        store.setRemoteConnection(.failed("gone"), forSession: session.id)
+
+        #expect(session.mirroredInfo == nil)
+        #expect(session.effectiveInfo?.source == "local")
+    }
+
     @Test func aMirroredContextShowsOnARowWithNoneOfItsOwn() throws {
         let (store, session) = try attached()
 
@@ -486,7 +532,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "no", label: "No", index: 1))
 
@@ -560,7 +606,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
 
@@ -571,7 +617,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.cancelPendingAsk()
 
@@ -582,7 +628,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         store.dismissReplicaAsk(PresentationAskRef(id: ask.id, owner: 4), forSession: session.id)
 
@@ -594,7 +640,7 @@ struct RemotePresentationStateTests {
     @Test func aDismissalNamingAnotherAskLeavesTheReplica() throws {
         let (store, session) = try attached()
         let ask = handedOver()
-        store.presentReplicaAsk(ask, forSession: session.id) { _ in }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { _ in })
 
         store.dismissReplicaAsk(PresentationAskRef(id: "other", owner: 4), forSession: session.id)
 
@@ -606,7 +652,7 @@ struct RemotePresentationStateTests {
         store.setRemoteConnection(.connected, forSession: session.id)
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         store.setRemoteConnection(.failed("exit 255"), forSession: session.id)
 
@@ -839,7 +885,7 @@ struct RemotePresentationStateTests {
             store.openOverlay(session.id, command: "top")
         } else {
             show(overlay(wait: true), in: store, session, closed: closed)
-            store.openPaneOverlay(session.id, pane: .right, command: "top")
+            #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
         }
 
         #expect(store.softCloseSession(session.id))

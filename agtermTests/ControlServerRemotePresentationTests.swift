@@ -276,6 +276,20 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.remotePresentation?.connection, .connected)
     }
 
+    func testAMirroredInfoLineFollowsTheSnapshotAndItsFrames() throws {
+        let (fix, transport) = try connected()
+
+        try transport.feed(.snapshot(PresentationSnapshot(
+            status: nil, hud: nil, info: PresentationInfo(source: "first", markdown: false, hideAfter: 30))), rev: 1)
+        XCTAssertEqual(fix.session.effectiveInfo?.source, "first")
+
+        try transport.feed(.info(PresentationInfo(source: "**second**", markdown: true, hideAfter: 0)), rev: 2)
+        XCTAssertEqual(fix.session.effectiveInfo?.spans, [SessionInfoSpan(text: "second", bold: true)])
+
+        try transport.feed(.info(nil), rev: 3)
+        XCTAssertNil(fix.session.effectiveInfo)
+    }
+
     func testAMirroredHudFrameIsShownOnTheRow() throws {
         let (fix, transport) = try connected()
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
@@ -763,6 +777,29 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(viewer.remotePresentation?.mode, .mirror)
         XCTAssertTrue(origin.hudActive, "the origin keeps drawing its own panel")
         XCTAssertEqual(origin.agentIndicator.status, .blocked)
+    }
+
+    func testInfoTravelsFromAnOriginSessionToItsViewerExpiresThereAndLeavesWithTheStream() throws {
+        let pair = try bridgedPair()
+        let (server, store, origin, viewer) = (pair.server, pair.store, pair.origin, pair.viewer)
+        let timed = try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 30).get()
+
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: timed).ok)
+        waitUntil("the origin's info line reaches the viewer row") { viewer.effectiveInfo?.source == "3 agents" }
+        XCTAssertNil(viewer.info, "a mirrored line never lands in the local slot")
+        XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == viewer.id.uuidString }?
+            .infoHideAfter, 30)
+        XCTAssertNil(server.infoAutoHide[viewer.id], "the viewer arms no timer of its own")
+
+        let brief = try SessionInfo.make(source: "brief", markdown: false, hideAfter: 0.2).get()
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: brief).ok)
+        waitUntil("the origin's expiry clears the viewer row") { viewer.effectiveInfo == nil && origin.info == nil }
+
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: timed).ok)
+        waitUntil("the line is back on the viewer") { viewer.effectiveInfo != nil }
+        server.shutdownPresentationStreams()
+        waitUntil("the mirrored line leaves with the stream") { viewer.effectiveInfo == nil }
+        XCTAssertEqual(origin.info?.source, "3 agents", "the origin keeps its own line")
     }
 
     func testAnAskAndAnOverlayJobHandedToTheViewerCompleteOnTheOrigin() throws {

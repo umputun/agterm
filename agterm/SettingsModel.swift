@@ -72,6 +72,7 @@ final class SettingsModel {
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
+        GhosttyApp.shared.setSessionInfoDisplay(settings.effectiveSessionInfoDisplay)
         applyHtmlOverlayZoom()
         TerminalInputSource.shared.setTarget(settings.terminalInputSource)
         ensureStarterKeymap()
@@ -262,6 +263,14 @@ final class SettingsModel {
     func setFlaggedViewLayout(_ layout: FlaggedViewLayout) {
         guard layout != settings.effectiveFlaggedViewLayout else { return }
         settings.flaggedViewLayout = layout == .flat ? nil : layout.rawValue
+        persistAndApply()
+    }
+
+    /// setSessionInfoDisplay persists where info lines draw; `always` is the nil case. Like the flagged layout it
+    /// rides `.agtermAppearanceChanged`, and an unchanged value skips the write.
+    func setSessionInfoDisplay(_ display: SessionInfoDisplay) {
+        guard display != settings.effectiveSessionInfoDisplay else { return }
+        settings.sessionInfoDisplay = display == .always ? nil : display.rawValue
         persistAndApply()
     }
 
@@ -764,6 +773,7 @@ final class SettingsModel {
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
+        GhosttyApp.shared.setSessionInfoDisplay(settings.effectiveSessionInfoDisplay)
         // refresh the chrome (title bar + sidebar + quick terminal) for the new terminal color,
         // translucency and toolbar style now, not at the next window re-key.
         NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)

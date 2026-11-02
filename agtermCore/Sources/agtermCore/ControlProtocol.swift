@@ -27,6 +27,7 @@ public enum Command: String, Codable, Sendable {
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
     case sessionContext = "session.context"
+    case sessionInfo = "session.info"
     case sessionTint = "session.tint"
     case sessionSeen = "session.seen"
     case sessionRestore = "session.restore"

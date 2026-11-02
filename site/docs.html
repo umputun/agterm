@@ -1553,6 +1553,8 @@
                 custom-commands button, and the hide-overlays button, which stays in place and is dimmed while the session
                 has no overlay to hide; in the sidebar the new-workspace, new-session,
                 flagged-view, and workspace-filter footer buttons plus the per-workspace add-session + revealed on hover. A
+                <strong style="color: #e6e1d7">Session info</strong> picker sets where a session's info line shows: Always, Flagged (the
+                flagged view only) or Off. A
                 <strong style="color: #e6e1d7">Multiple Windows</strong> option (off by default) shows the sidebar only in
                 the frontmost window and collapses it on every other, so switching windows moves the sidebar with focus.
               </div>
@@ -3042,7 +3044,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every attach also opens a
-              presentation stream back to it: this Mac mirrors the layout of panes already attached, the session's status, its session context, its
+              presentation stream back to it: this Mac mirrors the layout of panes already attached, the session's status, its session context, its sidebar info line, its
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> notifications and its HUD. A context set on this Mac's
               row wins over the mirrored one, and clearing it here shows the other Mac's again. A far side running an agterm
               from before context mirroring still connects and mirrors the rest, with no context. It needs nothing beyond
@@ -3665,6 +3667,42 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Hide it without clearing it under <strong style="color: #e6e1d7">Settings ▸ Interface</strong>. It reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">context</span> field.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              For current activity there is <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session info</span>:
+              one line drawn under the session's sidebar row, such as the step an agent is on or how many tests have run. With
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> it takes bold, italic and code,
+              and colors a fragment with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](color: "green")</span>
+              (any row-tint color) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
+              Each successful set replaces the whole line, and the line is never saved, so it is gone after a relaunch.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--hide-after SECONDS</span> clears it by itself.
+              Use a positive interval and repeat it on each refresh; the line then expires if the script stops.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl session info --markdown --hide-after 30 --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
+              <span style="color: #5ea1f2">'**3** agents ^[running](color: "green") ^[1 idle](dim: true)'</span><br />agtermctl session info
+              --clear --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <strong style="color: #e6e1d7">Settings ▸ Interface ▸ Session info</strong> shows the line Always, the default,
+              only in the flagged view (Flagged), or never (Off); hiding it never clears it. A session attached from another
+              Mac shows that Mac's line too, unless one is set here. It reads back on
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">info</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">infoMarkdown</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">infoHideAfter</span> fields.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A <strong style="color: #e6e1d7">row tint</strong> tells sessions apart at a glance, red for production and green for

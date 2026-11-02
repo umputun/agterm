@@ -26,6 +26,8 @@ public struct RemotePresentationEffects {
     public var sound: @MainActor (PresentationSound) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
     public var context: @MainActor (String?) -> Void
+    /// info carries the origin's sidebar info line, nil for none; a snapshot sends it too.
+    public var info: @MainActor (PresentationInfo?) -> Void
     public var layout: @MainActor (PresentationLayout) -> Void
     public var mode: @MainActor (PresentationMode) -> Void
     /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
@@ -49,6 +51,7 @@ public struct RemotePresentationEffects {
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
                 context: @escaping @MainActor (String?) -> Void = { _ in },
+                info: @escaping @MainActor (PresentationInfo?) -> Void = { _ in },
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
                 askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
@@ -69,6 +72,7 @@ public struct RemotePresentationEffects {
         self.sound = sound
         self.connection = connection
         self.context = context
+        self.info = info
         self.layout = layout
         self.mode = mode
         self.askRequest = askRequest
@@ -212,9 +216,11 @@ public final class RemotePresentationClient {
             effects.snapshotStatus(snapshot.status)
             effects.hud(snapshot.hud)
             effects.context(snapshot.context)
+            effects.info(snapshot.info)
             if let respawns = snapshot.respawns { effects.respawns(respawns, true) }
         case .status(let status): effects.status(status)
         case .context(let context): effects.context(context)
+        case .info(let info): effects.info(info)
         case .layout(let layout): applyLayout(layout)
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)

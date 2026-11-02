@@ -170,7 +170,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.page.attach`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
-  `.flag`, `.tint`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
+  `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
   `.overlay.show`, `.overlay.toggle`, `.hud.open`, `.hud.update`,
@@ -1226,6 +1226,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   emits `tree.changed` when the shown value changed; re-setting the same value does neither. The tree's
   `context` is the shown value: an attached row also shows its origin's context, and the Remote sessions
   section owns that rule.
+- `session.info set TEXT|clear` sets one line drawn under the session's sidebar row ([[sidebar]] owns the
+  drawing). `set` takes optional `markdown` and `hideAfter`; `clear` refuses all three and is the explicit
+  clearing form. Each successful set replaces the whole value: an omitted `markdown` means plain text and an omitted
+  `hideAfter` cancels an earlier expiry. `SessionInfo.make` validates and parses in the dispatcher, so a
+  rejected set changes neither the line nor its deadline. The 512-byte cap is on the SOURCE, markup
+  included. Visible text must be one non-blank line with no control character, checked after entities
+  decode. Foundation drops an unknown `^[...]` attribute key and the fragment renders unstyled; lexing
+  the source to refuse it would mean a second parser beside Foundation's.
+- `hideAfter` reuses the HUD's validation and ceiling. Every successful set calls
+  `ControlServer.armInfoAutoHide`: a positive duration restarts the interval, even with identical text,
+  because the expected caller refreshes its line to keep it alive; zero or omission cancels it.
+  It carries a per-session revision like `armHudAutoHide`. The clock is elapsed lifetime and
+  runs while the display setting hides the line. `Session.onInfoDiscarded` cancels it at session, workspace
+  and window teardown. A soft close drops a timed line in `AppStore.closeTimedInfo`, so undo
+  never brings back a line whose time ran out.
+- The line is runtime-only: never snapshotted, absent after relaunch, not copied by duplicate. A set
+  does not save. It emits `tree.changed` only when the effective value changes. Read back `info` (the
+  source), `infoMarkdown` and `infoHideAfter` (configured seconds, never a countdown), all omitted
+  when there is no line, and populated from `effectiveInfo`.
 
 ## Message bus
 
@@ -1789,7 +1808,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `ZmxLaunch.wrapsLocally` is the one gate both surface factories read, so a remote pane is never wrapped
   in a local daemon. Wrapping buys nothing for a session that never restores, and under live mode window
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
-- Presentation carries status, context, notifications, the HUD and the layout of attached panes. Such a program runs
+- Presentation carries status, context, the info line, notifications, the HUD and the layout of attached panes. Such a program runs
   on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
   Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
   bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
@@ -1830,6 +1849,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   effective value: setting the text the mirror already shows emits nothing. Attach does not seed the
   context from `zmx.tree`, which would make the origin's label a local override that wins forever, so an
   origin predating the `context` frame mirrors none.
+- The info line follows the same local, mirrored and effective split (`Session.info`, `mirroredInfo`,
+  `effectiveInfo`), with a local line winning and `clear` revealing the origin's. The origin sends its
+  LOCAL line's source, markdown flag and configured `hideAfter` in the `info` frame and the snapshot. The
+  viewer parses the source again and arms no timer: expiry is the origin's, and its clear reaches the
+  viewer as a nil frame. Stream end clears only the mirror.
 - A mirrored HUD carries the origin's REMAINING time, and the viewer counts that down on its own clock.
   The two expiries are not synchronized, so the panels can close a moment apart; the origin's withdrawal
   frame closes the viewer's early. A mirrored HUD yields to a HUD or program overlay this Mac's own caller
@@ -1837,8 +1861,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Only a `notify` command is mirrored. A terminal notification (OSC 9/777) already reaches the viewer in
   the pane's bytes and its libghostty raises it, so mirroring it would show it twice. Each app records
   its own `notify` event. Notifications are not part of the snapshot: one raised while the stream is down
-  is never shown on the viewer, where status, context and HUD are restored on reconnect.
-- When the stream ends, the mirrored status, context and HUD are cleared, since nothing would ever clear them. The
+  is never shown on the viewer, where status, context, info line and HUD are restored on reconnect.
+- When the stream ends, the mirrored status, context, info line and HUD are cleared, since nothing would ever clear them. The
   client retries after 1, 2, 4, 8, 16 then 30 seconds, moves to a 300-second cap after eight failures in a
   row, and never gives up; 30 seconds without a frame counts as a failure against the origin's 10-second
   ping. One warning per failure episode or changed reason. A soft close stops the client and undo starts a

@@ -359,6 +359,15 @@ final class SettingsUITests: XCTestCase {
     func testInterfaceTabFitsWithTheOverlaysToggle() throws {
         let toggle = settingsControl(tab: "Interface", control: "settings-interface-overlayToggle")
         XCTAssertEqual(toggle.value as? Int, 0, "the overlays button is off until opted in")
+        let info = app.popUpButtons["settings-session-info-display"]
+        XCTAssertTrue(info.waitForExistence(timeout: 5) && info.isHittable, "the session info picker renders on the tab")
+        XCTAssertEqual(info.value as? String, "Always", "the session info line shows everywhere by default")
+        info.click()
+        let flaggedOnly = app.menuItems["Flagged"]
+        XCTAssertTrue(flaggedOnly.waitForExistence(timeout: 5), "the picker should offer Flagged")
+        flaggedOnly.click()
+        XCTAssertTrue(poll { self.settingsObject()?["sessionInfoDisplay"] as? String == "flagged" },
+                      "choosing Flagged should persist sessionInfoDisplay=flagged")
         let window = app.windows.containing(.any, identifier: "settings-quick-terminal-size").firstMatch
         let size = app.popUpButtons["settings-quick-terminal-size"]
         XCTAssertTrue(size.waitForExistence(timeout: 5), "the tab's last control should exist")
@@ -373,6 +382,7 @@ final class SettingsUITests: XCTestCase {
         toggle.click()
         XCTAssertTrue(poll { self.settingsStringArray("shownInterfaceElements")?.contains("overlayToggle") == true },
                       "enabling the overlays button should persist into shownInterfaceElements")
+        XCTAssertLessThanOrEqual(info.frame.maxX, window.frame.maxX, "the widest choice stays inside the window")
     }
 
     func testQuickTerminalSizePickerPersists() throws {

@@ -291,6 +291,47 @@ struct AppStoreTreeProjectionTests {
         #expect(set.contains("\"context\":\"PR #517\""))
     }
 
+    @Test func controlTreeProjectsSessionInfoFields() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let plain = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a"))
+        let timed = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/b"))
+        let mirrored = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/c"))
+        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/d"))
+        store.setInfo(try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 0).get(), forSession: plain.id)
+        store.setInfo(try SessionInfo.make(source: "**ci**", markdown: true, hideAfter: 60).get(), forSession: timed.id)
+        mirrored.mirroredInfo = try SessionInfo.make(source: "origin", markdown: false, hideAfter: 15).get()
+
+        let sessions = store.controlTree().workspaces[0].sessions
+
+        #expect(sessions[0].info == "3 agents")
+        #expect(sessions[0].infoMarkdown == false)
+        #expect(sessions[0].infoHideAfter == 0)
+        #expect(sessions[1].info == "**ci**")
+        #expect(sessions[1].infoMarkdown == true)
+        #expect(sessions[1].infoHideAfter == 60)
+        #expect(sessions[2].info == "origin")
+        #expect(sessions[2].infoHideAfter == 15)
+        #expect(sessions[3].info == nil)
+        #expect(sessions[3].infoMarkdown == nil)
+        #expect(sessions[3].infoHideAfter == nil)
+    }
+
+    @Test func sessionInfoFieldsAreOmittedFromJSONWhenUnset() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a"))
+
+        let bare = try String(decoding: JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+        #expect(!bare.contains("\"info"))
+
+        store.setInfo(try SessionInfo.make(source: "x", markdown: false, hideAfter: 0).get(), forSession: session.id)
+        let set = try String(decoding: JSONEncoder().encode(store.controlTree()), as: UTF8.self)
+        #expect(set.contains("\"info\":\"x\""))
+        #expect(set.contains("\"infoMarkdown\":false"))
+        #expect(set.contains("\"infoHideAfter\":0"))
+    }
+
     @Test func aCompanionReportsItsParentAndAFoldedParentReportsCollapsed() throws {
         let g = try CompanionGroup()
         g.store.setSessionExpanded(g.parent.id, expanded: false)

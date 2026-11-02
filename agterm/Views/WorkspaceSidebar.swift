@@ -101,7 +101,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.workspaces.map {
             ($0.id, $0.name, $0.unseenCount, $0.tint, $0.sessions.map {
                 ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
-                 $0.remoteConnection, $0.tint)
+                 $0.remoteConnection, $0.tint, $0.effectiveInfo)
             })
         }
         _ = store.selectedSessionID
@@ -217,6 +217,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
                     outline.reloadItem(node)
                 }
+                // row updates were skipped while the editor was open, and a cancel changes no model value to retrigger them
+                reconcile()
+                syncSelection()
                 focusActiveTerminal()
             }
             // the menu/palette can't reach the inline editor directly, so they post a notification. Scoped
@@ -397,6 +400,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             var tint: SidebarTint?
             /// Names of a folded parent's companions that need attention.
             var foldedAttention: [String] = []
+            /// info is the shown info line; a change reloads the row and re-asks its height.
+            var info: [SessionInfoSpan]?
 
             func differsOnlyInLabel(from other: RowContent) -> Bool {
                 var relabeled = self
@@ -458,6 +463,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 guard let node = nodeCache[id] else { return }
                 if node.kind == .session, previous?.differsOnlyInLabel(from: content) == true, relabel(node, content.label) { return }
                 outline.reloadItem(node)
+                let row = outline.row(forItem: node)
+                if content.info != previous?.info, row >= 0 { outline.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row)) }
             }
             for workspace in store.workspaces {
                 reloadIfChanged(workspace.id, rowContent(forWorkspace: workspace))
@@ -509,7 +516,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                        unseen: effectiveUnseen(session.unseenCount),
                        indicator: session.agentIndicator, flagged: session.flagged,
                        focusMember: false, presentationNotice: presentationNotice(for: session), tint: session.tint,
-                       foldedAttention: foldedAttention(forSession: session.id).map(\.displayName))
+                       foldedAttention: foldedAttention(forSession: session.id).map(\.displayName),
+                       info: sessionInfo(for: session))
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so NSOutlineView item

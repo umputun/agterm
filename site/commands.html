@@ -1829,6 +1829,40 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session info &lt;TEXT|--clear&gt; [--markdown] [--hide-after SECONDS] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.info</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show one line under a session's sidebar row saying what it is doing now: a step, a count, a progress note.
+                Exactly one of TEXT or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> refuses TEXT,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--markdown</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--hide-after</span>. TEXT is at most 512 UTF-8 bytes, markup included, and must show as one non-blank line with no control characters. A rejected
+                call leaves the line and its expiry as they were. Read back via the node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">info</span> (the source as sent),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">infoMarkdown</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">infoHideAfter</span> fields, all omitted when there is no line.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Each successful set replaces the whole line: leaving out <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--markdown</span>
+                sends plain text and leaving out <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--hide-after</span> cancels an
+                earlier expiry. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--markdown</span> allows bold, italic, code,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">^[text](color: "green")</span> with a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session tint</span> color name, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">^[text](dim: true)</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--hide-after</span> (0 to 86400, 0 for never) clears the line
+                by itself. Every successful set with a positive value restarts that interval, even with identical text, so a
+                process reporting activity passes a positive value on each refresh. The line is never saved and is gone after
+                a relaunch. Settings ▸ Interface ▸ Session info shows it always, in the flagged view only, or never, without
+                clearing it. A set or clear that changes the line shown emits
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span>. A session attached from another Mac
+                also shows that Mac's line, and a line set here wins over it. Origin expiry clears the mirrored line; a line set
+                here remains until cleared or its own expiry.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session tint &lt;COLOR|clear&gt; [--on PARTS] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.tint</div>

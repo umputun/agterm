@@ -524,6 +524,21 @@ struct AppSettingsTests {
         #expect(legacy.effectiveFlaggedViewLayout == .flat)
     }
 
+    @Test func sessionInfoDisplayDefaultsToAlwaysResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().sessionInfoDisplay == nil)
+        #expect(AppSettings().effectiveSessionInfoDisplay == .always)
+        #expect(AppSettings(sessionInfoDisplay: "flagged").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        for display in SessionInfoDisplay.allCases {
+            let settings = AppSettings(sessionInfoDisplay: display.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.effectiveSessionInfoDisplay == display)
+        }
+        #expect(AppSettings(sessionInfoDisplay: "sometimes").effectiveSessionInfoDisplay == .always)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.effectiveSessionInfoDisplay == .always)
+        #expect(SessionInfoDisplay.allCases.map(\.displayName) == ["Always", "Flagged", "Off"])
+    }
+
     @Test func terminalInputSourceDefaultsOffRoundTripsAndIsNotAGhosttyKey() throws {
         #expect(AppSettings().terminalInputSource == nil)
         let settings = AppSettings(terminalInputSource: "com.apple.keylayout.US")

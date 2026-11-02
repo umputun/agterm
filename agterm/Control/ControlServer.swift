@@ -65,6 +65,8 @@ final class ControlServer {
     /// Live HUD auto-hide timers, one per session. `ControlServer+Hud` owns the logic; the state sits here
     /// because an extension cannot hold it. Main-actor only.
     var hudAutoHide: [UUID: HudAutoHide] = [:]
+    /// Live info-line expiry timers, one per session; `ControlServer+SessionInfo` owns the logic.
+    var infoAutoHide: [UUID: InfoAutoHide] = [:]
     /// hudGeometryPending holds the sessions whose HUD body rewrite is queued for this main-actor turn.
     var hudGeometryPending: Set<UUID> = []
     /// The clock HUD expiry deadlines are stamped from.
@@ -633,7 +635,7 @@ final class ControlServer {
                 .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionLead, .sessionRestart, .sessionScratch, .sessionFocus,
                 .sessionResize, .surfaceZoom,
                 .surfaceCursor,
-                .sessionStatus, .sessionFlag, .sessionContext, .sessionTint, .workspaceTint, .sessionSeen, .sessionRestore, .notify,
+                .sessionStatus, .sessionFlag, .sessionContext, .sessionInfo, .sessionTint, .workspaceTint, .sessionSeen, .sessionRestore, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .keymapRun, .hooksReload, .hooksList, .browserClear,
                 .browserLinks,
                 .configReload, .themeSet, .themeList,
