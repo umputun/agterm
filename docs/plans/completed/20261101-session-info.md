@@ -360,7 +360,7 @@ Eugene replaced task 5's on/off Interface toggle with a three-way choice after s
 ### Task 10: [Final] Wrap up
 
 - [x] update `ARCHITECTURE.md` if the surface split changed
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
