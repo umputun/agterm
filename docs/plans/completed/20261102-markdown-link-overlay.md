@@ -282,7 +282,7 @@ Adds `HtmlSource.markdown` together with every consumer, so the app builds at th
 - [x] `.claude/rules/control-api.md`: the markdown page bullet beside the image page one, and the
   theme/bridge split in the scripts-as-one-set bullet
 - [x] `ARCHITECTURE.md` if the theme/bridge split warrants a line (it does not: control-api.md owns the split)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
