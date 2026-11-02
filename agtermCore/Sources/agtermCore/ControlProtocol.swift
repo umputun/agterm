@@ -866,6 +866,8 @@ public enum OverlayHtmlError {
     public static let finderRequiresFile = "show in Finder requires a file page"
     /// markdownInOverlay: a markdown page is rendered by the app, so a browser would get the raw file instead.
     public static let markdownInOverlay = "a markdown page opens only in its overlay"
+    /// textInOverlay: a text page is built by the app, so a browser would get the raw file instead.
+    public static let textInOverlay = "a text page opens only in its overlay"
     /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
     public static let remoteFile = "the page's file is on another Mac"
     /// remotePage: Finder and Browser are refused for a file page shown on the presenting Mac.

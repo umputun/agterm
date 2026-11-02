@@ -5,8 +5,9 @@ import Foundation
 public enum TextPage {
     /// maxBytes bounds the file a page reads.
     public static let maxBytes = 4 << 20
-    /// maxHighlightBytes bounds the text the page highlights; a larger file renders plain.
-    public static let maxHighlightBytes = 1 << 20
+    /// maxHighlightBytes bounds the text the page highlights; a larger file renders plain. Highlighting
+    /// measured about 0.23 s over plain at 256 KB in WebKit, and 1.2 s at 1 MB.
+    public static let maxHighlightBytes = 256 << 10
 
     private static let languages: [String: String] = [
         "swift": "swift", "go": "go", "py": "python", "rb": "ruby", "rs": "rust",

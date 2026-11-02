@@ -43,6 +43,7 @@ struct AppStoreRemotePageTests {
         #expect(AppStore.presentationSource(.url(try #require(URL(string: "https://x.io/")))) == .url("https://x.io/"))
         #expect(AppStore.presentationSource(.image(path: "/a.png")) == nil)
         #expect(AppStore.presentationSource(.markdown(path: "/a.md")) == nil)
+        #expect(AppStore.presentationSource(.text(path: "/a.go", line: 3)) == nil)
         #expect(AppStore.presentationSource(.replica(path: "/a.html")) == nil)
     }
 

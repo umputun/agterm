@@ -136,8 +136,8 @@ not an implementation detail.
 
 ## Technical Details
 - `TextPage` (agtermCore):
-  - `maxBytes = 4 << 20`; `maxHighlightBytes = 1 << 20` (provisional, revisited by the Task 2 WebKit
-    measurement); above it the page renders plain text.
+  - `maxBytes = 4 << 20`; `maxHighlightBytes = 256 << 10`, set by the Task 2 WebKit measurement; above it
+    the page renders plain text.
   - `language(forFile:) -> String?` maps a lowercased extension, then an exact basename, to a bundled
     highlight.js language; nil means plain text. Extensions: swift, go, py, rb, rs, js, mjs, cjs, ts, c, h,
     cc, cpp, cxx, hpp, m, mm, java, kt, kts, cs, php, pl, pm, lua, r, sql, css, scss, less, graphql, sh,
@@ -240,36 +240,39 @@ Adds `HtmlSource.text` with every consumer, so the app builds at the end of the 
 - Create: `agtermTests/MarkdownPageRenderingTests.swift`, `agtermTests/TextPageRenderingTests.swift`
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift` (1981 lines), `agtermTests/MarkdownAssetsTests.swift`
 
-- [ ] split first, approved: the markdown page tests move from `HtmlOverlayRegistryTests` to
+- [x] split first, approved: the markdown page tests move from `HtmlOverlayRegistryTests` to
   `MarkdownPageRenderingTests` unchanged, and the moved tests pass before any text code lands; text page
   tests go in `TextPageRenderingTests`
 
-- [ ] agtermCore: `HtmlSource.text(path:line:)` with an accessor; `identity` names the file; the text arm
+- [x] agtermCore: `HtmlSource.text(path:line:)` with an accessor; `identity` names the file; the text arm
   of `HtmlNavigationPolicy.decide` runs before the shared new-window and `about` exits and allows only a
   main-frame `about:blank`; `presentationSource` nil; `ControlTextOverlayNode` read-back
-- [ ] `MarkdownAssets` also serves the text renderer and stylesheet (highlight.js plus `text.js`, without
+- [x] `MarkdownAssets` also serves the text renderer and stylesheet (highlight.js plus `text.js`, without
   markdown-it); `text.js` renders plain text via `textContent`, highlighted text via highlight.js's
   escaped value under `maxHighlightBytes`, a line-number gutter, and scrolls to and marks the target line
-- [ ] registry: styling eligibility without the bridge; `installScripts()` adds the text renderer in the
+- [x] registry: styling eligibility without the bridge; `installScripts()` adds the text renderer in the
   isolated world; `loadOriginal` reads through `TextProbe` under `textLoad`; reload re-reads; `navigate
   browser` refused with `textInOverlay`, `navigate finder` returns `finderRequiresFile`; view toolbar and
   `sourceText` handled
-- [ ] package tests: identity; the navigation policy for a text source per scheme, activation and target
+- [x] package tests: identity; the navigation policy for a text source per scheme, activation and target
   (main-frame `about:blank` allowed; `about:srcdoc`, a subframe `about:blank`, http(s) user-activated, a new
   window and `file:` cancelled); read-back round-trip and nil omission; `presentationSource` nil
-- [ ] hosted security tests, each with a hostile fixture rendered both plain and highlighted (the
+- [x] hosted security tests, each with a hostile fixture rendered both plain and highlighted (the
   highlighted path is the only `innerHTML` sink): `<script>`, `onerror`, `<img src>`, `<link>`, `<iframe>`,
   `<meta http-equiv=refresh>`, `<a href>` and `javascript:` text stay text, with no element of those kinds in
   the rendered DOM and their side effect absent; no message handler; page JavaScript off; the installed text
   renderer is in the `agterm-markdown` world; the page loads with no base URL and no file grant; no
   navigation and no browser hand-off occur; `navigate browser` and `navigate finder` refused
-- [ ] hosted behavior tests: Swift and Go highlight; plain text for an unmapped plain extension and for a
+- [x] hosted behavior tests: Swift and Go highlight; plain text for an unmapped plain extension and for a
   file over `maxHighlightBytes`; the requested line is scrolled to and marked; a source starting with a
   blank line keeps it in the rendered DOM, so the gutter and target line stay aligned; a theme change and
   reload re-render
-- [ ] measure WebKit render time for a 1 MB and a 4 MB file in a hosted test run and record the numbers
+- [x] measure WebKit render time for a 1 MB and a 4 MB file in a hosted test run and record the numbers
   here; lower `maxHighlightBytes` if 1 MB highlighted takes over ~300 ms
-- [ ] run the changed package suites and the hosted `HtmlOverlayRegistryTests`,
+  - measured, file write plus render to populated DOM: highlighted 1 MB 1.44 s, 512 KB 0.67 s, 256 KB
+    0.38 s, 128 KB 0.25 s; plain 4 MB 0.71 s, 1 MB 0.24 s, 256 KB 0.15 s. Highlighting adds about 0.23 s at
+    256 KB and 1.2 s at 1 MB, so the cap is 256 KB
+- [x] run the changed package suites and the hosted `HtmlOverlayRegistryTests`,
   `MarkdownPageRenderingTests`, `TextPageRenderingTests` and `MarkdownAssetsTests`; leak check - must pass
   before task 3
 

@@ -201,7 +201,7 @@ extension AppStore {
         switch source {
         case .file(let path, let grantRoot): return .file(path: path, grantRoot: grantRoot)
         case .url(let url): return .url(url.absoluteString)
-        case .replica, .image, .markdown: return nil
+        case .replica, .image, .markdown, .text: return nil
         }
     }
 }
