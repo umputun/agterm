@@ -319,13 +319,8 @@ extension ControlServer: ControlActions {
                 }
                 return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
-            // a bare `--cwd` joins the first workspace remembering that exact folder (`currentSession` mode only).
-            if options.workspace == nil, settingsModel.settings.usesRememberedFolder,
-               let cwd = options.cwd, let workspaceID = store.workspaceID(rememberingFolder: cwd) {
-                return makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
-            }
-            // id addressing (default `active`): the canonical prefix/active resolver.
-            let target = options.workspace ?? "active"
+            // id addressing (default: in `currentSession` mode the first workspace remembering `--cwd`, else `active`).
+            let target = options.workspace ?? remembering(options.cwd, in: store)?.uuidString ?? "active"
             return resolver.resolve(target, candidates: store.workspaces.map(\.id),
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)

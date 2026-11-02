@@ -958,6 +958,12 @@ final class ControlServer {
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
     }
 
+    /// The first workspace whose remembered folder is exactly `cwd`, only in the `currentSession` new-session mode.
+    func remembering(_ cwd: String?, in store: AppStore) -> UUID? {
+        guard settingsModel.settings.usesRememberedFolder, let cwd else { return nil }
+        return store.workspaceID(rememberingFolder: cwd)
+    }
+
     /// `value` trimmed of surrounding whitespace, or nil if absent or blank after trimming.
     func trimmed(_ value: String?) -> String? {
         guard let value else { return nil }
