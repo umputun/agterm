@@ -532,7 +532,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "no", label: "No", index: 1))
 
@@ -606,7 +606,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
 
@@ -617,7 +617,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         session.cancelPendingAsk()
 
@@ -628,7 +628,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         store.dismissReplicaAsk(PresentationAskRef(id: ask.id, owner: 4), forSession: session.id)
 
@@ -640,7 +640,7 @@ struct RemotePresentationStateTests {
     @Test func aDismissalNamingAnotherAskLeavesTheReplica() throws {
         let (store, session) = try attached()
         let ask = handedOver()
-        store.presentReplicaAsk(ask, forSession: session.id) { _ in }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { _ in })
 
         store.dismissReplicaAsk(PresentationAskRef(id: "other", owner: 4), forSession: session.id)
 
@@ -652,7 +652,7 @@ struct RemotePresentationStateTests {
         store.setRemoteConnection(.connected, forSession: session.id)
         let ask = handedOver()
         var sent: [PresentationFrame.Body] = []
-        store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) }
+        #expect(store.presentReplicaAsk(ask, forSession: session.id) { sent.append($0) })
 
         store.setRemoteConnection(.failed("exit 255"), forSession: session.id)
 
@@ -885,7 +885,7 @@ struct RemotePresentationStateTests {
             store.openOverlay(session.id, command: "top")
         } else {
             show(overlay(wait: true), in: store, session, closed: closed)
-            store.openPaneOverlay(session.id, pane: .right, command: "top")
+            #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
         }
 
         #expect(store.softCloseSession(session.id))
