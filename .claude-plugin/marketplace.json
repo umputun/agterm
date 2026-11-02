@@ -13,7 +13,7 @@
       "name": "agterm",
       "source": "./plugins/agterm",
       "description": "Drive agterm, a native macOS terminal, programmatically via its agtermctl CLI and local control socket.",
-      "version": "0.39.1",
+      "version": "0.40.0",
       "author": {
         "name": "Umputun"
       },

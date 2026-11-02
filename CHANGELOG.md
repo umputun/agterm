@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.40.0 - 2026-11-02
+
+### New Features
+
+- **Message bus between panes.** Each live pane has a mailbox for the current app run, so agents and scripts can pass text to each other without typing into another terminal. `agtermctl msg send TEXT --to SESSION:PANE`, repeatable or `--all [--workspace W]`, delivers to each recipient separately; `msg read [--ack] [--wait]` returns the oldest messages and `msg ack ID...` removes handled ones. The sender is the calling pane, from `AGTERM_SESSION_ID` and `AGTERM_PANE_ID` or `--as`. Closing the pane, its session, workspace or window, `session restart` and a respawn drop the mailbox, and nothing survives quitting the app. `tree` reports `pendingMessages` per pane, and a `message` event names the sender and recipient but never the text #847 @umputun
+- **Session info line.** `agtermctl session info TEXT` puts one line under a session's sidebar row for its current activity: an agent's step, a count, a progress note. `--markdown` allows bold, italic, code, palette colors and dim text, and `--hide-after SECONDS` clears the line unless it is set again. The line is not saved across restarts, a session attached from another Mac shows the origin's line, and `tree` reports `info`, `infoMarkdown` and `infoHideAfter`. Settings ▸ Interface ▸ Session info shows it always, in the flagged view only, or never #864 @umputun
+- **Markdown files open as a page.** ⌘-click on a `.md` or `.markdown` path in terminal output shows the file rendered in the terminal's theme over its session, with highlighted code blocks, task-list boxes and heading anchors, so a table of contents scrolls in place. Pictures from the file's own folder are embedded. The page loads nothing from the network, runs no script from the file, and turns every link other than http(s) and `#anchor` into plain text. `agtermctl session overlay open --markdown FILE` opens the same page #866 @umputun
+- **Image paths open as a picture.** ⌘-click on an image path a program prints, such as `/tmp/shot.png`, `~/x.png` or a `file://` link, shows the picture over its session in a panel shaped like the image. Any other local path except a markdown file reveals in Finder, where a bare path did nothing before. A pane attached from another Mac ignores bare paths, since they name files on that Mac. `agtermctl session overlay open --image FILE` is the control form #844 @umputun
+- **Attach a remote session with its companions.** File ▸ Attach Remote… and `agtermctl zmx attach HOST ID --companions` bring a session from another Mac together with all its companions, nested under it. A terminal companion attached alone joins its parent when exactly one row in the window is attached from that parent. If a companion cannot be attached, the rest stay and the error names the missing ones. `zmx tree` lists each top-level session's `companions` #849 @umputun
+- Settings ▸ Interface ▸ **Workspace icons** and **Session icons** are on by default; turning one off removes the leading icon from that kind of sidebar row to give names more room in a narrow sidebar. A hidden icon also hides the state it shows; a remote session's connection notice moves to the name's tooltip #865 @umputun
+- `session overlay open` and `session overlay resize` with `--width`/`--height` work on a session shown on another Mac: the overlay opens there sized in points, capped at 80% of the session. Before, the open was refused #850 @umputun
+- `container-overlays` cookbook recipe: overlay programs started inside a docker container run in that container, and its files open by their Mac paths #855 #860 @Rulexec
+- two more cookbook recipes. `end-of-task-offer` opens a Clear, Close session or Continue dialog when an agent clears its title-bar context at the end of a task. `named-companion` asks for a name, duplicates the session as a companion, names it and tints it #853 #846 @umputun
+
+### Bug Fixes
+
+- on macOS 27.2 a window dragged by the header could jump away from the pointer, mostly at a display edge #869 @menemy #856
+- a Live `session new --command X --wait` pane lost its output when the command exited, because the attach client reset the terminal before the hold prompt showed. The output and scrollback now stay, and a command that ends before its pane attaches no longer leaves a fresh shell in its place. A very short command can still lose its output and show `agterm: session is gone` #859 @umputun #857
+- with two split sessions in a window, an `ask` over a whole session could leave the resize cursor showing at the hidden session's divider until the app lost focus #858 @umputun
+- on a session attached from another Mac, an overlay program such as `glow -p` could show an empty overlay because the origin Mac found no `xterm-ghostty` terminfo entry. It now gets the one bundled with agterm #854 @umputun
+- Duplicate as Companion of a pane whose program carries its own session id in its arguments, such as codex with `AGTERM_SESSION_ID` set through `-c`, left the copy talking to the parent's panes. The copy's command now names its own session and panes #843 @umputun
+
 ## v0.39.1 - 2026-10-30
 
 ### Improved
