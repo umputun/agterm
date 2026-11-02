@@ -34,3 +34,11 @@ examine the CLI pid, and the spindump, which then also named the CLI with `-proc
 find process with pid or partial name` for that pid. Collectors start at 3 s and the CLI is killed at 5 s, so
 the spindump may have looked after the CLI was gone; the cause is not established. The CLI was dropped from
 the spindump so a lost CLI cannot cost the app snapshot; that does not guarantee the app stack next time.
+
+Run 41481808137 (PR #869 head `66b49472`) stalled one call later: `new-0` to `new-2` answered in 39 to 88 ms
+with three producers running, and `new-3` timed out after its CLI took 0.62 s to spawn. The spindump self-check
+on that runner produced a 1 MB report, yet all three in-flight collectors failed: the app `sample` timed out
+after 20 s, the CLI `sample` could not examine the CLI pid, and the app-only spindump timed out after 15 s and
+left an empty `spindump-04-new-3.txt`. A collector that works against a throwaway process and times out
+against the stalled app suggests the app or the runner resists inspection during the stall, rather than the
+collector's arguments being wrong; that is not established.
