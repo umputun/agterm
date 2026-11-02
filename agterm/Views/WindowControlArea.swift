@@ -8,9 +8,20 @@ import SwiftUI
 /// double-click handling never reaches it; the interactive header buttons render in front and keep their
 /// own clicks. `mouseDownCanMoveWindow` is off so our `mouseDown`, not AppKit's automatic move, sees the
 /// event and can tell a double-click apart from a drag.
-struct WindowControlArea: NSViewRepresentable {
-    func makeNSView(context _: Context) -> TitlebarControlView { TitlebarControlView() }
-    func updateNSView(_: TitlebarControlView, context _: Context) {}
+struct WindowControlArea: View {
+    var body: some View {
+        ControlLayer()
+            // SwiftUI leaves non-hit-testable content in the title-bar drag region and ignores
+            // `mouseDownCanMoveWindow` here, so without this shape the window server drags the window from the
+            // header itself, before our `mouseDown`. AppKit then never registers the start once `performDrag`
+            // follows, and every step re-fits the frame: the window jumps off the pointer at a display edge.
+            .background { Color.clear.contentShape(Rectangle()) }
+    }
+
+    private struct ControlLayer: NSViewRepresentable {
+        func makeNSView(context _: Context) -> TitlebarControlView { TitlebarControlView() }
+        func updateNSView(_: TitlebarControlView, context _: Context) {}
+    }
 
     final class TitlebarControlView: NSView {
         override var mouseDownCanMoveWindow: Bool { false }
