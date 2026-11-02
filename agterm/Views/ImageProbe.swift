@@ -29,32 +29,12 @@ struct ImageProbe: Sendable {
         }
     }
 
-    /// load reads the file and probes the bytes it read, so the sniffed type describes the data it returns.
-    static func load(path: String) -> Result<(ImageProbe, Data), Failure> {
-        read(path: path).flatMap { data in probe(data, path: path).map { ($0, data) } }
-    }
-
-    /// read returns the whole regular file at `path`, through the one descriptor it checked.
-    private static func read(path: String) -> Result<Data, Failure> {
-        let fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
-        guard fd >= 0 else { return .failure(.unreadable(path)) }
-        defer { close(fd) }
-        var info = stat()
-        guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_flags & UInt32(SF_DATALESS) == 0 else {
-            return .failure(.unreadable(path))
-        }
-        guard info.st_size <= ImagePage.maxBytes else { return .failure(.tooLarge(path)) }
-        var data = Data(count: Int(info.st_size))
-        var filled = 0
-        while filled < data.count {
-            let count = data.withUnsafeMutableBytes { buffer in
-                Darwin.read(fd, buffer.baseAddress! + filled, buffer.count - filled)
-            }
-            if count < 0, errno == EINTR { continue }
-            guard count > 0 else { break }
-            filled += count
-        }
-        return filled == data.count ? .success(data) : .failure(.unreadable(path))
+    /// load reads the file and probes the bytes it read, so the sniffed type describes the data it returns. A
+    /// file over `maxBytes`, `ImagePage.maxBytes` unless a caller has less room, is refused before a read.
+    static func load(path: String, maxBytes: Int = ImagePage.maxBytes) -> Result<(ImageProbe, Data), Failure> {
+        BoundedFile.read(path: path, maxBytes: maxBytes)
+            .mapError { $0 == .tooLarge ? .tooLarge(path) : .unreadable(path) }
+            .flatMap { data in probe(data, path: path).map { ($0, data) } }
     }
 
     private static func probe(_ data: Data, path: String) -> Result<ImageProbe, Failure> {
@@ -77,5 +57,50 @@ struct ImageProbe: Sendable {
     /// on slow or network storage must not stall every window while it is read.
     static func loadDetached(path: String) async -> Result<(ImageProbe, Data), Failure> {
         await Task.detached(priority: .userInitiated) { load(path: path) }.value
+    }
+}
+
+/// BoundedFile reads a file named by untrusted output through one descriptor and judges what that descriptor
+/// names: a symlink is measured at its target, and a FIFO, device, offloaded iCloud placeholder or file over
+/// the caller's cap is refused before a byte is read.
+enum BoundedFile {
+    enum Failure: Error, Sendable, Equatable {
+        case unreadable
+        case tooLarge
+    }
+
+    /// check opens `path` and judges it without reading, for a caller deciding only whether a page can open.
+    static func check(path: String, maxBytes: Int) -> Result<Void, Failure> {
+        withDescriptor(path: path, maxBytes: maxBytes) { _, _ in .success(()) }
+    }
+
+    /// read returns the whole regular file at `path`, through the one descriptor it checked.
+    static func read(path: String, maxBytes: Int) -> Result<Data, Failure> {
+        withDescriptor(path: path, maxBytes: maxBytes) { fd, size in
+            var data = Data(count: size)
+            var filled = 0
+            while filled < data.count {
+                let count = data.withUnsafeMutableBytes { buffer in
+                    Darwin.read(fd, buffer.baseAddress! + filled, buffer.count - filled)
+                }
+                if count < 0, errno == EINTR { continue }
+                guard count > 0 else { break }
+                filled += count
+            }
+            return filled == data.count ? .success(data) : .failure(.unreadable)
+        }
+    }
+
+    private static func withDescriptor<T>(path: String, maxBytes: Int,
+                                          _ body: (Int32, Int) -> Result<T, Failure>) -> Result<T, Failure> {
+        let fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        guard fd >= 0 else { return .failure(.unreadable) }
+        defer { close(fd) }
+        var info = stat()
+        guard fstat(fd, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_flags & UInt32(SF_DATALESS) == 0 else {
+            return .failure(.unreadable)
+        }
+        guard info.st_size <= maxBytes else { return .failure(.tooLarge) }
+        return body(fd, Int(info.st_size))
     }
 }

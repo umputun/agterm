@@ -152,6 +152,19 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--image", "/tmp/a.png", "--browse"],
         ["session", "overlay", "open", "--image", "/tmp/a.png", "--cwd", "/tmp"],
         ["session", "overlay", "open", "--image", "/tmp/a.png", "--width", "400"],
+        ["session", "overlay", "open", "revdiff", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--companion"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--block"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--wait"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--js"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--chromeless"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--persistent"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--browse"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--cwd", "/tmp"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))
@@ -166,6 +179,21 @@ struct OverlayCommandsTests {
         #expect(req.args?.cwd == nil)
         #expect(req.args?.sizePercent == nil)
         #expect(req.args?.follow == true)
+    }
+
+    @Test func markdownOpenSendsTheResolvedPathInItsOwnField() throws {
+        let req = try request(["session", "overlay", "open", "--markdown", "docs/../docs/r.md", "--size-percent", "95"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.markdownFile == URL(fileURLWithPath: cwd).appendingPathComponent("docs/r.md").standardizedFileURL.path)
+        #expect(req.args?.markdown == nil)
+        #expect(req.args?.image == nil)
+        #expect(req.args?.sizePercent == 95)
+        let data = try JSONEncoder().encode(req)
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == req)
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(json.contains(#""markdownFile":"#))
+        #expect(!json.contains(#""markdown":"#))
     }
 
     @Test func submitSendsTheValuePaneAndTarget() throws {

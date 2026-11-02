@@ -591,8 +591,8 @@ struct Session: ParsableCommand {
 
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(
-                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing a page with --html, --url or --image.")
-            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html, --url or --image.") var command: String?
+                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing a page with --html, --url, --image or --markdown.")
+            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html, --url, --image or --markdown.") var command: String?
             @Option(name: .long, help: "Show this local HTML file instead of running COMMAND.") var html: String?
             @Option(name: .long, help: """
                 Show this http or https URL instead of running COMMAND; links to its own origin load in place. \
@@ -604,6 +604,11 @@ struct Session: ParsableCommand {
                 fits the picture, up to 80% of the session; a larger picture is scaled down.
                 """)
             var image: String?
+            @Option(name: .long, help: """
+                Show this .md or .markdown file rendered with the terminal theme instead of running COMMAND; pictures \
+                in its own folder are shown, and a web link opens in the browser after a confirmation.
+                """)
+            var markdown: String?
             @Flag(name: .long, help: "With --html or --url, add back, forward, reload, open in browser, and Show in Finder or Copy Link buttons.")
             var navigation = false
             @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
@@ -648,11 +653,14 @@ struct Session: ParsableCommand {
                     throw ValidationError("--companion is full size: it takes no --pane, --size-percent, --width or --height")
                 }
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
-                if [command, html, url, image].compactMap({ $0 }).count != 1 {
-                    throw ValidationError("provide exactly one of COMMAND, --html, --url or --image")
+                if [command, html, url, image, markdown].compactMap({ $0 }).count != 1 {
+                    throw ValidationError("provide exactly one of COMMAND, --html, --url, --image or --markdown")
                 }
                 if image != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
                     throw ValidationError("--image takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
+                }
+                if markdown != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
+                    throw ValidationError("--markdown takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
                 }
                 if command == nil, wait || (url != nil && block) { throw ValidationError("a page takes no --wait, and a --url page no --block") }
                 if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
@@ -694,7 +702,8 @@ struct Session: ParsableCommand {
                                                                      navigation: navigation ? true : nil, url: url,
                                                                      javascript: javascript ? true : nil, chromeless: chromeless ? true : nil, persistent: persistent ? true : nil,
                                                                      browse: browse ? true : nil,
-                                                                     image: image.map(Overlay.absolutePath))))
+                                                                     image: image.map(Overlay.absolutePath),
+                                                                     markdownFile: markdown.map(Overlay.absolutePath))))
             }
 
             func run() throws {

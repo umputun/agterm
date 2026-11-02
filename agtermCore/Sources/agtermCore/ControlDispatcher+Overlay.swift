@@ -168,8 +168,14 @@ extension ControlDispatcher {
     static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
         if let image = args?.image {
-            guard command.isEmpty, args?.html == nil, args?.url == nil else { return reject(OverlayHtmlError.oneSource) }
+            guard command.isEmpty, args?.html == nil, args?.url == nil, args?.markdownFile == nil else {
+                return reject(OverlayHtmlError.oneSource)
+            }
             return imageContent(image, args: args)
+        }
+        if let markdown = args?.markdownFile {
+            guard command.isEmpty, args?.html == nil, args?.url == nil else { return reject(OverlayHtmlError.oneSource) }
+            return markdownContent(markdown, args: args)
         }
         switch (args?.html, args?.url) {
         case (nil, nil):
@@ -213,6 +219,18 @@ extension ControlDispatcher {
             return reject(OverlayHtmlError.imageType)
         }
         return .page(.image(path: url.path))
+    }
+
+    private static func markdownContent(_ path: String, args: ControlArgs?) -> OverlayContent {
+        let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
+        let flags = [args?.wait, args?.navigation, args?.javascript, args?.chromeless, args?.persistent, args?.browse]
+        if args?.cwd != nil || flags.contains(true) { return reject(OverlayHtmlError.markdownOptions) }
+        guard path.hasPrefix("/") else { return reject(OverlayHtmlError.markdownNotAbsolute) }
+        let url = URL(fileURLWithPath: path).standardizedFileURL
+        guard LinkPolicy.markdownExtensions.contains(url.pathExtension.lowercased()) else {
+            return reject(OverlayHtmlError.markdownType)
+        }
+        return .page(.markdown(path: url.path))
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on

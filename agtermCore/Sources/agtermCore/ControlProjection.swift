@@ -463,12 +463,13 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
 public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     /// pane is the pane role, omitted for the session-wide slot.
     public let pane: String?
-    /// file, url and image name the source; exactly one is set.
+    /// file, url, image and markdown name the source; exactly one is set.
     public let file: String?
     /// cwd is a file page's read grant, omitted when it has none.
     public let cwd: String?
     public let url: String?
     public let image: String?
+    public let markdown: String?
     /// state is `loading`, `loaded` or `failed`.
     public let state: String
     public let error: String?
@@ -502,7 +503,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let replica: Bool?
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, image: String? = nil,
-                state: String,
+                markdown: String? = nil, state: String,
                 error: String?, page: String? = nil, title: String? = nil, canGoBack: Bool? = nil,
                 canGoForward: Bool? = nil, navigation: Bool? = nil, javascript: Bool = false, chromeless: Bool = false,
                 zoom: Double? = nil, id: String? = nil, persistent: Bool = false, browse: Bool = false,
@@ -516,6 +517,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         self.cwd = cwd
         self.url = url
         self.image = image
+        self.markdown = markdown
         self.state = state
         self.error = error
         self.page = page
@@ -531,7 +533,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case pane, file, cwd, url, image, state, error, page, title, canGoBack, canGoForward, navigation, javascript
+        case pane, file, cwd, url, image, markdown, state, error, page, title, canGoBack, canGoForward, navigation, javascript
         case chromeless, persistent, browse, zoom, id, hidden, remote, replica
     }
 
@@ -542,6 +544,7 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
         cwd = try c.decodeIfPresent(String.self, forKey: .cwd)
         url = try c.decodeIfPresent(String.self, forKey: .url)
         image = try c.decodeIfPresent(String.self, forKey: .image)
+        markdown = try c.decodeIfPresent(String.self, forKey: .markdown)
         state = try c.decode(String.self, forKey: .state)
         error = try c.decodeIfPresent(String.self, forKey: .error)
         page = try c.decodeIfPresent(String.self, forKey: .page)

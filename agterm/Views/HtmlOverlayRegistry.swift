@@ -216,6 +216,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var onScreen = true
     private var theme: HtmlOverlayTheme
     private static let themeWorld = WKContentWorld.world(name: "agterm-theme")
+    private static let markdownWorld = WKContentWorld.world(name: "agterm-markdown")
     private var observations: [NSKeyValueObservation] = []
     // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
     // policy cancel of its redirect reports failed rather than leaving the page loading
@@ -228,9 +229,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
     private var closeRequested = false
-    // an image page reads its file off the main actor; a result is applied only while this still counts the
-    // load that started it, so a close or a newer reload drops a slow read's late result
-    private var imageLoad = 0
+    // an image or markdown page reads its file off the main actor; a result is applied only while this still
+    // counts the load that started it, so a close or a newer reload drops a slow read's late result
+    private var textLoad = 0
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
     private let revision: HtmlReplicaRevision
@@ -273,12 +274,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
         // themed panel behind it while authored backgrounds still paint. A URL page keeps the browser's
         // opaque canvas, since a web app styled against it would lose its background here.
-        if Self.themed(overlay.source, linked: replica != nil) || overlay.source.imagePath != nil {
+        if Self.styled(overlay.source, linked: replica != nil) || overlay.source.imagePath != nil {
             webView.setValue(false, forKey: "drawsBackground")
         }
         super.init()
         installScripts()
-        if themed {
+        if bridged {
             let handler = HtmlOverlayBridgeHandler()
             handler.page = self
             let controller = webView.configuration.userContentController
@@ -323,23 +324,29 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard theme != self.theme else { return }
         self.theme = theme
         installScripts()
-        if themed { reloadShown() }
+        if styled { reloadShown() }
     }
 
-    // one set, because removing user scripts removes them all: the theme, and on a file page the bridge adapter
+    // one set, because removing user scripts removes them all: the theme, the markdown renderer, and on a file
+    // page the bridge adapter
     private func installScripts() {
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: theme.script(themed: themed), injectionTime: .atDocumentStart,
+        controller.addUserScript(WKUserScript(source: theme.script(themed: styled), injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true, in: Self.themeWorld))
-        guard themed else { return }
+        guard styled else { return }
+        webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
+        if overlay.source.markdownPath != nil {
+            controller.addUserScript(WKUserScript(source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd,
+                                                  forMainFrameOnly: true, in: Self.markdownWorld))
+        }
+        guard bridged else { return }
         controller.addUserScript(WKUserScript(source: HtmlOverlayBridge.adapterScript, injectionTime: .atDocumentEnd,
                                               forMainFrameOnly: true, in: HtmlOverlayBridge.world))
         if overlay.javascript {
             controller.addUserScript(WKUserScript(source: HtmlOverlayBridge.helperScript, injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true, in: .page))
         }
-        webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
     }
 
     /// handleBridgeRequest runs one request the page sent and answers it through `reply` exactly once.
@@ -388,14 +395,19 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         return !named
     }
 
-    private var themed: Bool { Self.themed(overlay.source, linked: replica != nil) }
+    private var styled: Bool { Self.styled(overlay.source, linked: replica != nil) }
+    private var bridged: Bool { Self.bridged(overlay.source, linked: replica != nil) }
 
-    // a file page and a file page shown for another Mac wear the theme and get the bridge; a URL page neither
-    private static func themed(_ source: HtmlSource, linked: Bool) -> Bool {
+    private static func styled(_ source: HtmlSource, linked: Bool) -> Bool {
+        source.markdownPath != nil || bridged(source, linked: linked)
+    }
+
+    // only a page its author wrote drives the control API; a markdown file comes from untrusted output
+    private static func bridged(_ source: HtmlSource, linked: Bool) -> Bool {
         switch source {
         case .file: return true
         case .replica: return linked
-        case .url, .image: return false
+        case .url, .image, .markdown: return false
         }
     }
 
@@ -430,6 +442,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.goForward()
         case .browser:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
+            if case .markdown = overlay.source { return OverlayHtmlError.markdownInOverlay }
             guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
         case .finder:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
@@ -451,7 +464,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func close() {
-        imageLoad += 1
+        textLoad += 1
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
         observations.removeAll()
@@ -465,11 +478,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
-    // a file page without a grant and an image page are loaded from text: they sit at about:blank and cannot
-    // navigate, so the file they came from is both the current page and what the user is looking at
+    // a file page without a grant, an image page and a markdown page are loaded from text: they sit at
+    // about:blank and cannot navigate, so the file they came from is both the current page and what the user
+    // is looking at
     private var textLoaded: Bool {
         switch overlay.source {
-        case .file(_, nil), .image: return true
+        case .file(_, nil), .image, .markdown: return true
         default: return false
         }
     }
@@ -494,13 +508,27 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             }
             webView.load(URLRequest(url: url))
         case .image(let path):
-            imageLoad += 1
-            let load = imageLoad
+            textLoad += 1
+            let load = textLoad
             Task { @MainActor [weak self] in
                 let page = await Task.detached(priority: .userInitiated) {
                     ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) }
                 }.value
-                guard let self, imageLoad == load else { return }
+                guard let self, textLoad == load else { return }
+                switch page {
+                case .failure(let failure): fail(failure.description)
+                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
+                }
+            }
+        case .markdown(let path):
+            textLoad += 1
+            let load = textLoad
+            let style = MarkdownAssets.shared.style
+            Task { @MainActor [weak self] in
+                let page = await Task.detached(priority: .userInitiated) {
+                    MarkdownProbe.load(path: path).map { MarkdownPage.html(markdown: $0.markdown, images: $0.images, style: style) }
+                }.value
+                guard let self, textLoad == load else { return }
                 switch page {
                 case .failure(let failure): fail(failure.description)
                 case .success(let html): webView.loadHTMLString(html, baseURL: nil)
@@ -513,7 +541,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path):
+        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -571,7 +599,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path): return URL(fileURLWithPath: path)
+        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path): return URL(fileURLWithPath: path)
         case .url(let url): return url
         }
     }

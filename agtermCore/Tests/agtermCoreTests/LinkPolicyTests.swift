@@ -28,17 +28,17 @@ struct LinkPolicyTests {
     }
 
     /// A local `file://` reveals the HOST-STRIPPED, dot-normalized path — Finder never sees the original
-    /// authority — so every host form of `/tmp/x.md` resolves to the same plain `file:///tmp/x.md`.
+    /// authority — so every host form of `/tmp/x.txt` resolves to the same plain `file:///tmp/x.txt`.
     @Test(arguments: [
-        ("file:///tmp/x.md", "file:///tmp/x.md"),            // empty host
-        ("file:/tmp/x.md", "file:///tmp/x.md"),              // authority-less (single-slash) form → no host
-        ("file://localhost/tmp/x.md", "file:///tmp/x.md"),   // localhost — host stripped
-        ("file://myhost/tmp/x.md", "file:///tmp/x.md"),      // this machine's own name (GNU ls) — host stripped
-        ("file://MYHOST/tmp/x.md", "file:///tmp/x.md"),      // host match is case-insensitive
-        ("file://myhost./tmp/x.md", "file:///tmp/x.md"),     // trailing FQDN dot is stripped
-        ("FILE:///tmp/x.md", "file:///tmp/x.md"),            // scheme match is case-insensitive
-        ("file:///tmp/../tmp/x.md", "file:///tmp/x.md"),     // dot segments normalized away
-        ("file://myhost/tmp/a%20b.md", "file:///tmp/a%20b.md"),  // percent-encoded space survives the round-trip
+        ("file:///tmp/x.txt", "file:///tmp/x.txt"),            // empty host
+        ("file:/tmp/x.txt", "file:///tmp/x.txt"),              // authority-less (single-slash) form → no host
+        ("file://localhost/tmp/x.txt", "file:///tmp/x.txt"),   // localhost — host stripped
+        ("file://myhost/tmp/x.txt", "file:///tmp/x.txt"),      // this machine's own name (GNU ls) — host stripped
+        ("file://MYHOST/tmp/x.txt", "file:///tmp/x.txt"),      // host match is case-insensitive
+        ("file://myhost./tmp/x.txt", "file:///tmp/x.txt"),     // trailing FQDN dot is stripped
+        ("FILE:///tmp/x.txt", "file:///tmp/x.txt"),            // scheme match is case-insensitive
+        ("file:///tmp/../tmp/x.txt", "file:///tmp/x.txt"),     // dot segments normalized away
+        ("file://myhost/tmp/a%20b.txt", "file:///tmp/a%20b.txt"),  // percent-encoded space survives the round-trip
         ("file:///Applications/Some.app", "file:///Applications/Some.app"),  // revealed in Finder, NOT launched
     ])
     func localFileReveals(_ raw: String, _ expected: String) {
@@ -49,9 +49,9 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        "file:///net/server/share/x.md",         // /net (-hosts) auto-mount root
+        "file:///net/server/share/x.txt",         // /net (-hosts) auto-mount root
         "file:///Network/Servers/host/share",     // /Network auto-mount root
-        "file:///home/someone/x.md",              // /home (auto_home) auto-mount root
+        "file:///home/someone/x.txt",              // /home (auto_home) auto-mount root
         "file://localhost/net/server/share",      // local host but an auto-mount path
         "file:///tmp/../net/server/share",        // dot segments resolve INTO /net — must still ignore
         "file:///tmp/%2E%2E/net/server/share",    // percent-encoded `..` decodes BEFORE normalization — still ignore
@@ -59,7 +59,7 @@ struct LinkPolicyTests {
         "file:///net",                            // bare root (no child) — exercises the `lower == root` branch
         "file:///home",                           // bare root
         "file:///network",                        // bare root
-        "file:///System/Volumes/Data/home/someone/x.md",     // canonical Data path where auto_home really mounts
+        "file:///System/Volumes/Data/home/someone/x.txt",     // canonical Data path where auto_home really mounts
         "file:///System/Volumes/Data/net/server/share",      // canonical Data /net
         "file:///System/Volumes/Data/Network/Servers/host",  // canonical Data /Network/Servers
     ])
@@ -71,10 +71,10 @@ struct LinkPolicyTests {
     /// The last case is the boundary that keeps the Data denylist narrow: a normal file on the Data volume
     /// (`/System/Volumes/Data/Users/…`, where every real file lives) must reveal, not be treated as automount.
     @Test(arguments: [
-        ("file:///networkx/x.md", "file:///networkx/x.md"),
-        ("file:///nettools/x.md", "file:///nettools/x.md"),
-        ("file:///homebrew/x.md", "file:///homebrew/x.md"),
-        ("file:///System/Volumes/Data/Users/me/doc.md", "file:///System/Volumes/Data/Users/me/doc.md"),
+        ("file:///networkx/x.txt", "file:///networkx/x.txt"),
+        ("file:///nettools/x.txt", "file:///nettools/x.txt"),
+        ("file:///homebrew/x.txt", "file:///homebrew/x.txt"),
+        ("file:///System/Volumes/Data/Users/me/doc.txt", "file:///System/Volumes/Data/Users/me/doc.txt"),
     ])
     func autoMountLookalikesStillReveal(_ raw: String, _ expected: String) {
         guard case let .reveal(url) = LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) else {
@@ -92,14 +92,14 @@ struct LinkPolicyTests {
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         // the real leaf MUST exist, else `resolvingSymlinksInPath()` also returns the link path and the test
         // could not tell the lexical normalizer from a symlink-resolving regression.
-        try Data().write(to: target.appendingPathComponent("x.md"))
+        try Data().write(to: target.appendingPathComponent("x.txt"))
         try FileManager.default.createSymbolicLink(at: base.appendingPathComponent("link"), withDestinationURL: target)
         defer { try? FileManager.default.removeItem(at: base) }
-        let linkLeaf = base.appendingPathComponent("link").appendingPathComponent("x.md")
+        let linkLeaf = base.appendingPathComponent("link").appendingPathComponent("x.txt")
         guard case let .reveal(url) = LinkPolicy.disposition(for: linkLeaf.absoluteString, localHosts: Self.localHosts) else {
             Issue.record("expected .reveal for \(linkLeaf.absoluteString)"); return
         }
-        // reveal keeps the LINK path; a regression to resolvingSymlinksInPath() would yield .../target/x.md
+        // reveal keeps the LINK path; a regression to resolvingSymlinksInPath() would yield .../target/x.txt
         #expect(url.path(percentEncoded: false) == linkLeaf.path(percentEncoded: false))
     }
 
@@ -115,8 +115,8 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        "file://otherhost/tmp/x.md",             // non-local host → ignore (would trip a Finder network mount)
-        "file://remote.example.com/share/x.md",
+        "file://otherhost/tmp/x.txt",             // non-local host → ignore (would trip a Finder network mount)
+        "file://remote.example.com/share/x.txt",
     ])
     func nonLocalFileIgnored(_ raw: String) {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
@@ -135,8 +135,8 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        "file:////server/share/x.md",          // empty host, UNC-style path — remote target hidden in the path
-        "file://localhost//server/share/x.md",  // local host but UNC path — still a network target
+        "file:////server/share/x.txt",          // empty host, UNC-style path — remote target hidden in the path
+        "file://localhost//server/share/x.txt",  // local host but UNC path — still a network target
         "file://localhost/%2Fserver/share",     // encoded slash decodes to a leading // — still a UNC target
     ])
     func uncPathsIgnored(_ raw: String) {
@@ -166,12 +166,12 @@ struct LinkPolicyTests {
     }
 
     @Test(arguments: [
-        ("/tmp/notes.md", "/tmp/notes.md"),
+        ("/tmp/notes.txt", "/tmp/notes.txt"),
         ("/tmp/x.svg", "/tmp/x.svg"),
         ("/tmp/x.pdf", "/tmp/x.pdf"),
         ("/usr/bin", "/usr/bin"),
         ("/tmp/png", "/tmp/png"),
-        ("~/notes.md", "/Users/me/notes.md"),
+        ("~/notes.txt", "/Users/me/notes.txt"),
     ])
     func otherBarePathsReveal(_ raw: String, _ path: String) {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
@@ -209,6 +209,43 @@ struct LinkPolicyTests {
             == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
     }
 
+    @Test(arguments: [
+        ("/tmp/notes.md", "/tmp/notes.md"),
+        ("/tmp/README.MARKDOWN", "/tmp/README.MARKDOWN"),
+        ("~/plan.md", "/Users/me/plan.md"),
+        ("file:///tmp/a%20b.md", "/tmp/a b.md"),
+        ("file://localhost/tmp/x.markdown", "/tmp/x.markdown"),
+    ])
+    func localMarkdownPathsRenderAsMarkdown(_ raw: String, _ path: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
+            == .markdown(URL(fileURLWithPath: path, isDirectory: false)))
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func markdownOpensOnTheOwningSessionAtItsModeSize(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        let url = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
+        let percent = mode == .browser ? 95 : mode.overlaySizePercent
+        for raw in ["/tmp/notes.md", "file:///tmp/notes.md"] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin, localHosts: Self.localHosts, home: Self.home)
+                == .markdown(url, session: Self.session, sizePercent: percent))
+        }
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
+    func sessionlessOriginsRevealMarkdown(_ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.route(for: "/tmp/notes.md", mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
+            == .reveal(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)))
+    }
+
+    @Test(arguments: [(false, 95), (true, 75)] as [(Bool, Int?)])
+    func commandShiftOpensMarkdownAtTheBrowserSizeUnlessTheMouseIsCaptured(_ captured: Bool, _ percent: Int?) {
+        let origin = LinkPolicy.ClickOrigin.pane(Self.session)
+        let browser = LinkPolicy.wantsBrowser(modifiers: [.command, .shift], mode: .overlay75, origin: origin, mouseCaptured: captured)
+        let route = LinkPolicy.route(for: "/tmp/notes.md", mode: browser ? .browser : .overlay75, origin: origin,
+                                     localHosts: Self.localHosts, home: Self.home)
+        #expect(route == .markdown(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false), session: Self.session, sizePercent: percent))
+    }
+
     // a bare path in a pane attached from another Mac names a file on that Mac
     @Test func remotePaneIgnoresBarePathsAndRevealsFileLinks() throws {
         let origin = LinkPolicy.ClickOrigin.remotePane(Self.session)
@@ -216,8 +253,10 @@ struct LinkPolicyTests {
             LinkPolicy.route(for: raw, mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
         }
         #expect(route("/tmp/shot.png") == .ignore)
-        #expect(route("~/notes.md") == .ignore)
+        #expect(route("~/notes.txt") == .ignore)
         #expect(route("file:///tmp/shot.png") == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
+        #expect(route("/tmp/notes.md") == .ignore)
+        #expect(route("file:///tmp/notes.md") == .reveal(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)))
         let web = try #require(URL(string: "https://example.com/a"))
         #expect(route("https://example.com/a") == .overlay(web, session: Self.session, sizePercent: nil))
     }
@@ -240,12 +279,12 @@ struct LinkPolicyTests {
 
     /// Smoke test on the DEFAULT `localHosts` parameter: without injection the decision must reach
     /// `localHostNames`, so an empty-host / localhost file link still reveals (host-stripped).
-    @Test(arguments: ["file:///tmp/x.md", "file://localhost/tmp/x.md"])
+    @Test(arguments: ["file:///tmp/x.txt", "file://localhost/tmp/x.txt"])
     func defaultLocalHostsRevealLocalFiles(_ raw: String) {
         guard case let .reveal(url) = LinkPolicy.disposition(for: raw) else {
             Issue.record("expected .reveal for \(raw)"); return
         }
-        #expect(url.absoluteString == "file:///tmp/x.md")
+        #expect(url.absoluteString == "file:///tmp/x.txt")
     }
 
     // MARK: route (browser / overlay / reveal / ignore)
@@ -304,10 +343,10 @@ struct LinkPolicyTests {
 
     @Test(arguments: LinkOpenMode.allCases, origins)
     func fileLinksRevealAndOtherSchemesStayIgnoredInEveryMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
-        #expect(LinkPolicy.route(for: "file:///tmp/x.md", mode: mode, origin: origin, localHosts: Self.localHosts)
-            == .reveal(URL(fileURLWithPath: "/tmp/x.md", isDirectory: false)))
+        #expect(LinkPolicy.route(for: "file:///tmp/x.txt", mode: mode, origin: origin, localHosts: Self.localHosts)
+            == .reveal(URL(fileURLWithPath: "/tmp/x.txt", isDirectory: false)))
         #expect(LinkPolicy.route(for: "x-custom://run", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
-        #expect(LinkPolicy.route(for: "file://elsewhere/tmp/x.md", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
+        #expect(LinkPolicy.route(for: "file://elsewhere/tmp/x.txt", mode: mode, origin: origin, localHosts: Self.localHosts) == .ignore)
     }
 
     @Test(arguments: [LinkOpenMode.overlay, .overlay95, .overlay75, .overlay50],

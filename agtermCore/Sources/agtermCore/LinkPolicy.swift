@@ -16,18 +16,23 @@ public enum LinkPolicy {
     /// executable/handler.
     public static let permittedSchemes: Set<String> = ["http", "https", "mailto", "ftp"]
 
-    /// What a link click should do. Carries the target URL for `.open`/`.reveal`/`.image`.
+    /// LinkDisposition is the action for a clicked link.
     public enum LinkDisposition: Equatable {
         case open(URL)
         case reveal(URL)
         /// image is a local file with a `imageExtensions` extension, shown as a picture instead of revealed.
         case image(URL)
+        /// markdown is a local file with a `markdownExtensions` extension, rendered instead of revealed.
+        case markdown(URL)
         case ignore
     }
 
     /// The extensions a clicked local path shows as a picture. SVG is left out: it is a document that can
     /// carry script, not a bitmap.
     public static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp"]
+
+    /// markdownExtensions lists the local file extensions rendered as Markdown.
+    public static let markdownExtensions: Set<String> = ["md", "markdown"]
 
     /// Whether a web view of this app can load plain http from `host`. The app allows local networking
     /// only, and App Transport Security reads "local" off the host's SYNTAX, never off where it resolves:
@@ -69,6 +74,9 @@ public enum LinkPolicy {
         case overlay(URL, session: UUID, sizePercent: Int?)
         /// image shows a local picture over `session`, sized from the image; a refused open reveals it instead.
         case image(URL, session: UUID)
+        /// markdown renders a local markdown file over `session` at `sizePercent`, nil for full size; a refused
+        /// open reveals it instead.
+        case markdown(URL, session: UUID, sizePercent: Int?)
         case reveal(URL)
         case ignore
     }
@@ -140,8 +148,8 @@ public enum LinkPolicy {
         return "/" + out.joined(separator: "/")
     }
 
-    /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`
-    /// or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
+    /// disposition maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`,
+    /// `.markdown` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
     /// unparseable input → `.ignore`. A local path is a LOCAL `file://` link (empty host, or a host in
     /// `localHosts`), host-stripped so Finder never leans on the original authority, or a bare path
     /// (`isBarePath`) taken literally with `~/` expanded against `home`. Both are injected so the decision
@@ -166,8 +174,8 @@ public enum LinkPolicy {
         raw.hasPrefix("/") || raw.hasPrefix("~/")
     }
 
-    /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.reveal` for
-    /// anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
+    /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.markdown` for a
+    /// `markdownExtensions` one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
     /// resolve against the process directory), a UNC-style `//` path (a remote target the host check cannot
     /// see), or an auto-mount path. The automount check runs after LEXICAL `..` collapsing, so
     /// `/tmp/../net/x` cannot sneak through and the classifier never stats the path it is about to deny.
@@ -178,7 +186,9 @@ public enum LinkPolicy {
         let normalized = lexicallyNormalizedAbsolutePath(path)
         guard !isAutomountPath(normalized) else { return .ignore }
         let url = URL(fileURLWithPath: normalized, isDirectory: false)
-        return imageExtensions.contains(url.pathExtension.lowercased()) ? .image(url) : .reveal(url)
+        let ext = url.pathExtension.lowercased()
+        if imageExtensions.contains(ext) { return .image(url) }
+        return markdownExtensions.contains(ext) ? .markdown(url) : .reveal(url)
     }
 
     /// wantsBrowser reports whether a ⌘⇧ link click overrides the overlay setting and goes to the browser.
@@ -194,8 +204,10 @@ public enum LinkPolicy {
 
     /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
-    /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode.
-    /// A remote pane ignores bare paths and reveals `file://` images, since both name files on another Mac.
+    /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
+    /// markdown file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
+    /// A remote pane ignores bare paths and reveals `file://` pictures and markdown files, since both name files
+    /// on another Mac.
     /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
                              localHosts: Set<String> = localHostNames, home: String = NSHomeDirectory()) -> Route {
@@ -206,6 +218,12 @@ public enum LinkPolicy {
         case .image(let url):
             switch origin {
             case .pane(let session), .scratch(let session): return .image(url, session: session)
+            case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
+            }
+        case .markdown(let url):
+            switch origin {
+            case .pane(let session), .scratch(let session):
+                return .markdown(url, session: session, sizePercent: mode == .browser ? 95 : mode.overlaySizePercent)
             case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
             }
         case .open(let url):

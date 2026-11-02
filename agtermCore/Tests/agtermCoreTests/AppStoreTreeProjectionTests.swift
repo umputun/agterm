@@ -764,6 +764,24 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().workspaces[0].sessions[0].presentation?.mode == "presenter")
     }
 
+    @Test func aMarkdownPageProjectsOnlyItsMarkdownSource() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: 95) == nil)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions[0].htmlOverlays?.first)
+
+        #expect(node == ControlHtmlOverlayNode(pane: nil, markdown: "/tmp/notes/readme.md", state: "loading", error: nil,
+                                               id: page.id.uuidString))
+        let data = try JSONEncoder().encode(node)
+        #expect(try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: data) == node)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""markdown":"\/tmp\/notes\/readme.md""#))
+        let file = ControlHtmlOverlayNode(pane: nil, file: "/tmp/r.html", state: "loaded", error: nil)
+        #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("markdown"))
+    }
+
     @Test func htmlOverlaysProjectEachPageWithItsLoadState() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

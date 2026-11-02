@@ -54,6 +54,7 @@ targets:
           - "Resources/zmx"
           - "Resources/agent-status"
           - "Resources/hud"
+          - "Resources/markdown"
           # committed SOURCE for agterm's own bundled theme(s); setup.sh stages it
           # into Resources/ghostty/themes (above), so the source dir itself must not
           # be pulled into the project tree or the app bundle.
@@ -87,6 +88,11 @@ targets:
       # exec bit. Lands at Contents/Resources/hud — ControlServer.helperCommand() resolves it there and
       # shell-escapes it into the overlay command.
       - path: agterm/Resources/hud
+        type: folder
+        buildPhase: resources
+      # The markdown page renderer and stylesheet, with the vendored libraries' LICENSE files, which a group
+      # would drop for having no extension. Lands at Contents/Resources/markdown; MarkdownAssets reads it.
+      - path: agterm/Resources/markdown
         type: folder
         buildPhase: resources
       # Agent skill package (SKILL.md + reference.md + examples.md + cookbook.md + troubleshooting.md

@@ -12,6 +12,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         var revealed: [URL] = []
         var overlaid: [(URL, UUID, Int?)] = []
         var images: [(URL, UUID)] = []
+        var markdowns: [(URL, UUID, Int?)] = []
     }
 
     private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
@@ -25,6 +26,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
         LinkOpener.shared.image = { url, session, done in
             followed.images.append((url, session))
+            done(overlayOpens)
+        }
+        LinkOpener.shared.markdown = { url, session, percent, done in
+            followed.markdowns.append((url, session, percent))
             done(overlayOpens)
         }
         return followed
@@ -79,6 +84,29 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(refused.revealed, [url])
     }
 
+    func testAPaneMarkdownPathRendersAtItsModeSizeAndRevealsWhenItCannot() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let url = URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)
+
+        let shown = recordLinks(mode: .overlay75, overlayOpens: true)
+        pane.openLink("/tmp/notes.md", wantsBrowser: false)
+        XCTAssertEqual(shown.markdowns.map(\.0), [url])
+        XCTAssertEqual(shown.markdowns.map(\.1), [session.id])
+        XCTAssertEqual(shown.markdowns.map(\.2), [75])
+        XCTAssertTrue(shown.revealed.isEmpty)
+
+        let browser = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink("/tmp/notes.md", wantsBrowser: true)
+        XCTAssertEqual(browser.markdowns.map(\.2), [95])
+
+        let refused = recordLinks(mode: .overlay, overlayOpens: false)
+        pane.openLink("file:///tmp/notes.md", wantsBrowser: false)
+        XCTAssertEqual(refused.markdowns.count, 1)
+        XCTAssertEqual(refused.revealed, [url])
+    }
+
     func testARemotePaneIgnoresABarePath() {
         let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         let pane = bareSurface()
@@ -88,6 +116,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         pane.openLink("/tmp/shot.png", wantsBrowser: false)
         pane.openLink("/tmp/notes.md", wantsBrowser: false)
         XCTAssertTrue(followed.images.isEmpty)
+        XCTAssertTrue(followed.markdowns.isEmpty)
         XCTAssertTrue(followed.revealed.isEmpty)
     }
 
@@ -132,10 +161,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let overlay = recordLinks(mode: .overlay, overlayOpens: true)
         hud.openLink(web.absoluteString, wantsBrowser: false)
         pane.openLink(mail.absoluteString, wantsBrowser: false)
-        pane.openLink("file:///tmp/x.md", wantsBrowser: false)
+        pane.openLink("file:///tmp/x.txt", wantsBrowser: false)
         pane.openLink("x-custom://run", wantsBrowser: false)
         XCTAssertEqual(overlay.opened, [web, mail])
-        XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.md", isDirectory: false)])
+        XCTAssertEqual(overlay.revealed, [URL(fileURLWithPath: "/tmp/x.txt", isDirectory: false)])
         XCTAssertTrue(browser.overlaid.isEmpty && overlay.overlaid.isEmpty)
     }
 
