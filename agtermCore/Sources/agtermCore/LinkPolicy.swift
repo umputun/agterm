@@ -241,8 +241,8 @@ public enum LinkPolicy {
     }
 
     /// locations lists the files a link may name when only the filesystem can tell which: one ending in
-    /// `:line[:column]`, the literal path first so a file named with a colon still wins, or a relative one
-    /// joined to the pane's `cwd` before any scheme parse. Empty when `route(for:)` decides the link as typed.
+    /// `:line[:column]` or in sentence punctuation (`trimmedSpellings`), the literal path first so a file named
+    /// with a colon or a dot still wins, or a relative one joined to the pane's `cwd` before any scheme parse. Empty when `route(for:)` decides the link as typed.
     /// Every candidate passed `guardedLocalPath`, so a refused path is never stat'ed; a remote pane's paths
     /// name files on another Mac and offer none.
     public static func locations(for raw: String, origin: ClickOrigin, cwd: String?,
@@ -262,10 +262,34 @@ public enum LinkPolicy {
             return []
         }
         guard let literal = guardedLocalPath(path) else { return [] }
-        let suffix = lineSuffix(literal)
-        var found = relative || suffix != nil ? [LinkLocation(path: literal)] : []
-        if let suffix, let stripped = guardedLocalPath(suffix.path) { found.append(LinkLocation(path: stripped, line: suffix.line)) }
+        let spellings = [literal] + trimmedSpellings(path).compactMap(guardedLocalPath)
+        var found: [LinkLocation] = []
+        for spelling in spellings {
+            let suffix = lineSuffix(spelling)
+            if relative || suffix != nil || spellings.count > 1 { found.append(LinkLocation(path: spelling)) }
+            if let suffix, let stripped = guardedLocalPath(suffix.path) { found.append(LinkLocation(path: stripped, line: suffix.line)) }
+        }
         return found
+    }
+
+    /// trailingPunctuation ends a sentence after a printed path; libghostty's path rule keeps it in the link.
+    /// A comma or a closing bracket already ends the link, and a detected one never ends in a colon.
+    static let trailingPunctuation: Set<Character> = [".", "?", "!", ";"]
+
+    /// trimmedSpellings lists `path` with up to three trailing `trailingPunctuation` characters removed, one at
+    /// a time and longest first, so a name really ending in one still wins. It stops before leaving a last
+    /// component of punctuation alone, so `/x/..` never becomes `/x/.`. The cap bounds what a click on a long
+    /// run builds and stats.
+    static func trimmedSpellings(_ path: String) -> [String] {
+        var out: [String] = []
+        var rest = Substring(path)
+        while out.count < 3, let last = rest.last, trailingPunctuation.contains(last) {
+            rest = rest.dropLast()
+            let name = rest.reversed().prefix { $0 != "/" }
+            guard name.contains(where: { !trailingPunctuation.contains($0) }) else { break }
+            out.append(String(rest))
+        }
+        return out
     }
 
     /// relativePath joins a relative link to an absolute, control-free `cwd`. A first segment with a colon

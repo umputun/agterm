@@ -417,6 +417,45 @@ struct LinkPolicyTests {
         #expect(Self.locations("src/a.go", cwd: "/w") == [Self.loc("/w/src/a.go")])
     }
 
+    // regression: a path printed at the end of a sentence kept the period and never opened
+    @Test func sentencePunctuationAfterAPathNamesTheLiteralThenEachShorterSpelling() {
+        #expect(Self.locations("/tmp/review.md.") == [Self.loc("/tmp/review.md."), Self.loc("/tmp/review.md")])
+        #expect(Self.locations("/tmp/a.md?") == [Self.loc("/tmp/a.md?"), Self.loc("/tmp/a.md")])
+        #expect(Self.locations("/tmp/a.md;") == [Self.loc("/tmp/a.md;"), Self.loc("/tmp/a.md")])
+        #expect(Self.locations("/tmp/a.md?!") == [Self.loc("/tmp/a.md?!"), Self.loc("/tmp/a.md?"), Self.loc("/tmp/a.md")])
+        #expect(Self.locations("~/a.md.") == [Self.loc(Self.home + "/a.md."), Self.loc(Self.home + "/a.md")])
+        #expect(Self.locations("src/a.md.", cwd: "/w") == [Self.loc("/w/src/a.md."), Self.loc("/w/src/a.md")])
+        #expect(Self.locations("file:///tmp/a.md.") == [Self.loc("/tmp/a.md."), Self.loc("/tmp/a.md")])
+    }
+
+    @Test func aLocationEndingASentenceFindsTheFileAtItsLine() {
+        #expect(Self.locations("/a/b.swift:12.") == [Self.loc("/a/b.swift:12."), Self.loc("/a/b.swift:12"), Self.loc("/a/b.swift", 12)])
+        #expect(Self.locations("/a/b.swift.:12") == [Self.loc("/a/b.swift.:12"), Self.loc("/a/b.swift.", 12)])
+    }
+
+    @Test func atMostThreeTrailingPunctuationCharactersAreTrimmed() {
+        #expect(Self.locations("/tmp/a.md...") == [Self.loc("/tmp/a.md..."), Self.loc("/tmp/a.md.."), Self.loc("/tmp/a.md."),
+                                                   Self.loc("/tmp/a.md")])
+        #expect(!Self.locations("/tmp/a.md....").contains(Self.loc("/tmp/a.md")))
+        let long = "/tmp/a" + String(repeating: "!", count: 10_000)
+        #expect(Self.locations(long).count == 4)
+        #expect(Self.locations(long).last == Self.loc("/tmp/a" + String(repeating: "!", count: 9_997)))
+    }
+
+    @Test(arguments: ["/tmp/x/..", "/tmp/x/.", "/tmp/x/.!", "/tmp/...", "/tmp/?!", "/.", "/tmp/a,", "/tmp/a)", "/tmp/a:"])
+    func aNameOfPunctuationAloneOrOtherTrailingCharactersOffersNoShorterSpelling(_ raw: String) {
+        #expect(Self.locations(raw).isEmpty)
+    }
+
+    @Test(arguments: ["/net.", "/net/host/a.md.", "/Network.", "/home/me/a.md?", "//host/share/a.md.", "/tmp/../net/a.md."])
+    func aTrimmedSpellingInsideARefusedRootIsNeverOffered(_ raw: String) {
+        #expect(!Self.locations(raw).contains { LinkPolicy.isAutomountPath($0.path) || $0.path.hasPrefix("//") })
+    }
+
+    @Test func aRemotePaneOffersNoShorterSpelling() {
+        #expect(Self.locations("/tmp/a.md.", origin: .remotePane(Self.session)).isEmpty)
+    }
+
     @Test(arguments: ["/x/a.go", "/x/a.go:", "/x/a.go:0", "/x/a.go:-3", "/x/a.go:abc", "/x/a.go:4x",
                       "/x/a.go:99999999999999999999", "/x/:12"])
     func anAbsolutePathWithoutAValidLineNeedsNoLookup(_ raw: String) {

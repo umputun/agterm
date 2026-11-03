@@ -718,7 +718,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   on the far Mac and are ignored, while its scratch stays `.scratch` because that shell is local.
 - libghostty keeps a `:line[:column]` suffix in the path it hands over and resolves a relative path only when that
   exact path exists, so `./main.go:42` arrives raw. `LinkPolicy.locations` lists the candidates for such a link, the
-  literal path first so a file named with a colon wins, then the path without the suffix; a relative link is joined to
+  literal path first so a file named with a colon wins, then the path without the suffix. libghostty keeps a sentence's
+  trailing `.`, `?`, `!` or `;` too, so a path ending in one also lists up to three spellings with one character
+  removed at a time (`trimmedSpellings`), each split for a suffix the same way; a relative link is joined to
   the clicking pane's session cwd before any scheme parse, and a first segment with a colon is never a directory, so
   `http://localhost:3000` stays a web link. The scratch, quick and overlay terminals pass no cwd. Every candidate has
   passed `guardedLocalPath` (absolute, no `//`, no automount root) and a remote pane offers none, so a refused path
