@@ -80,18 +80,18 @@ Mail that is not from this recipe, such as a `msg send` from a script, is delive
 
 ## Limits
 
-**Installing the Claude hook makes every Claude Code pane in agterm wake on mail to it.** That includes `msg send --all` broadcasts, whose text starts a turn in each idle Claude pane. Each Claude pane keeps one waiter that asks agterm for mail about four times a second; the cost of many idle waiters has not been measured.
+**A chat message reaches only the other pane of the sender's split.** `say` addresses the pane beside the sender, so a chat never reaches, or wakes, an agent in any other session.
 
-**The hook takes the pane's mailbox.** Another program reading the same Claude pane's mailbox competes with it for each message.
+**The Claude hook runs in every Claude Code you start, not only in chat panes.** It is installed in `~/.claude/settings.json`, so each Claude Code pane in agterm watches its own mailbox. This matters only when something other than this recipe sends mail to those panes: a script's `msg send`, or a `msg send --all` broadcast. Such mail arrives marked as not from the chat, as described above, and starts a turn in an idle Claude pane, so a broadcast starts one in every idle Claude pane it reaches. If nothing else uses agterm's mailboxes, nothing changes. Each waiter checks its mailbox about four times a second; the cost of many idle ones has not been measured.
 
-**A Codex conversation is reachable only after its first prompt.** Codex runs its `SessionStart` hook, which registers the thread mail is handed to, on a conversation's first prompt rather than at launch. A Codex started without the READY prompt shows as `receiver: none` and its mail waits in the mailbox until you prompt it. After `/clear` it is worse: the old conversation's registration is still live, so mail goes to the old thread until the new conversation's first prompt replaces it.
+**Another program that consumes a Claude pane's mail competes with the hook.** One that removes messages with `msg read --ack` or `msg ack` can take a message before the hook sees it.
+
+**Codex can take mail only after its first prompt.** Codex registers a conversation on its first prompt, not at launch, which is why the launch line in *Setup* includes the READY prompt. A Codex started without one reports `receiver: none`, and its mail waits until you prompt it. After `/clear`, mail still goes to the cleared conversation until you give the new one a prompt, so give it one before the chat continues.
 
 **Never put a topic on an agent's command line.** Duplicate as Companion starts each pane's program again with the same command line, so `claude "chat with codex about the retry bug"` in a pane makes the copy start that chat too, unasked. Ask in the pane instead. The Codex launch line in *Setup* is safe to copy: its READY prompt carries no topic.
 
 **A failed hand-over to Codex may be incomplete.** agterm shows a banner for a hook that exits nonzero, and `agtermctl hooks list` keeps its last failure. The hand-over Codex's own start runs, and the Claude waiter, log to `codex-<pane>.log` and `claude-<pane>.log` in the script's state directory, `agterm-mailbox-chat-<uid>` under the system temp directory. Codex may already have accepted a message whose ack then failed, so read the Codex pane before retrying with `mailbox-chat.py deliver`, or the same message can arrive twice.
 
 **Unread mail is lost** when agterm quits, and when the receiving pane closes or its program is restarted: agterm keeps mailboxes in memory and drops one with its pane. A Claude Code turn interrupted with Esc reports no end, so its mail waits until the next turn completes.
-
-**A reply is not promised.** An agent can decline to answer a message that arrived perfectly well, and nothing reports that. If an exchange goes quiet, read the other pane.
 
 The recipe never types into a pane, starts, restarts or stops an agent, or closes anything. Remote panes are not supported.
