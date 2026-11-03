@@ -1,6 +1,6 @@
 ---
 worth: maybe
-where: agtermTests/SessionHostClientTests.swift:29
+where: agtermTests/SessionHostClientTests.swift:testTwoRacingClientsUseOneRoot
 added: 2026-09-20
 ---
 # a racing session-host client sometimes creates an app-rooted daemon

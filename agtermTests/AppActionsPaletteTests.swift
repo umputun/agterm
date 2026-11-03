@@ -74,6 +74,42 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
     }
 
+    func testMoveRowsMoveTheSessionSelectedWhenTheyRun() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(first.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.selectSession(second.id)
+        XCTAssertTrue(move.isEnabled())
+        move.run()
+
+        XCTAssertEqual(store.workspace(forSession: first.id)?.id, owner)
+        XCTAssertEqual(store.workspace(forSession: second.id)?.id, target.id)
+    }
+
+    func testAMoveRowGoesInertWhenTheSessionSelectedUnderItAlreadyLivesInItsTarget() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        let resident = try XCTUnwrap(store.addSession(toWorkspace: target.id, cwd: NSHomeDirectory()))
+        store.selectSession(first.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.selectSession(resident.id)
+        XCTAssertFalse(move.isEnabled())
+        store.selectSession(nil)
+        XCTAssertFalse(move.isEnabled())
+        move.run()
+
+        XCTAssertEqual(store.workspace(forSession: first.id)?.id, owner)
+        XCTAssertEqual(store.workspace(forSession: resident.id)?.id, target.id)
+    }
+
     // the palette's rows outlive a selection change made while it is open, so the target is read at run.
     func testTintRowsTintTheSessionSelectedWhenTheyRun() throws {
         let store = try XCTUnwrap(library.activeStore)

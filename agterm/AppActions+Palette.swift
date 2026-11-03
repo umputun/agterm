@@ -194,20 +194,35 @@ extension AppActions {
                 self?.openWindow(target)
             })
         }
-        // skip the session's OWN workspace, not `currentWorkspaceID` — a freshly created workspace is
-        // current while the selection still sits elsewhere, and it is a valid destination.
-        if let store, let sessionID = store.selectedSessionID,
-           let owner = store.workspace(forSession: sessionID)?.id {
-            for workspace in store.workspaces where workspace.id != owner {
-                let target = workspace.id
-                items.append(PaletteItem(id: "move-\(target)", title: "Move Session to \(workspace.name)") { [weak self] in
-                    self?.moveSession(sessionID, toWorkspace: target)
-                })
-            }
-        }
+        items.append(contentsOf: moveItems())
         items.append(contentsOf: tintItems())
         items.append(contentsOf: customCommandItems(badge: "custom"))
         return items
+    }
+
+    /// moveItems are "Move Session to <workspace>" for every workspace but the selected session's own. The
+    /// session is read when the row runs, since the selection can move under an open palette.
+    private func moveItems() -> [PaletteItem] {
+        // skip the session's OWN workspace, not `currentWorkspaceID`: a freshly created workspace is
+        // current while the selection still sits elsewhere, and it is a valid destination.
+        guard let store, let sessionID = store.selectedSessionID,
+              let owner = store.workspace(forSession: sessionID)?.id else { return [] }
+        return store.workspaces.filter { $0.id != owner }.map { workspace in
+            let target = workspace.id
+            let movable: (AppStore) -> UUID? = { store in
+                guard let id = store.selectedSessionID,
+                      let current = store.workspace(forSession: id)?.id, current != target else { return nil }
+                return id
+            }
+            return PaletteItem(id: "move-\(target)", title: "Move Session to \(workspace.name)",
+                               isEnabled: { [weak self, weak store] in
+                                   (self?.uiActionsEnabled ?? false) && store.flatMap(movable) != nil
+                               },
+                               run: { [weak self, weak store] in
+                                   guard let store, let id = movable(store) else { return }
+                                   self?.moveSession(id, toWorkspace: target)
+                               })
+        }
     }
 
     /// tintItems are "Tint Session: <color>" plus None for the active session, each keeping the session's
