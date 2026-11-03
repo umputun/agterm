@@ -2056,9 +2056,11 @@ opens, or with no mode print the current one. `browser` (default) hands the link
 `--size-percent 95`, `75` or `50`. The link still goes to the browser when
 it was ⌘⇧-clicked in a program that does not capture the mouse, when it was clicked in a HUD, a program overlay or the quick terminal, when a HUD is up on the session, when the
 session's window has a zoomed terminal, when the session-wide overlay slot is taken, when the saved
-browser store cannot be used, or when the overlay cannot be opened. A taken slot holding a hidden page an earlier
-click opened (`clicked` in `htmlOverlays`) is the exception: the click replaces that page and shows the new one, and a
-clicked picture, markdown or text file does the same. A plain `http` link uses the overlay
+browser store cannot be used, or when the overlay cannot be opened. The exception is a slot holding a page an earlier
+click opened (`clicked` in `htmlOverlays`) that was hidden on this Mac with ⇧⌘J or `session overlay hide`: the click
+replaces it and shows the new page, and a clicked picture, markdown or text file does the same. A page that is only out
+of sight under a newer pane overlay, or one the presenting Mac shows, is not replaced.
+A plain `http` link uses the overlay
 only for a host the page could load: an unqualified name such as `localhost`, a `.local` name, or an IP
 address; `http` to any other host name opens in the browser. `mailto`, `ftp` and `file` links are
 unaffected. The setting is the one in Settings > General > Open links in. App-global; refuses a target or

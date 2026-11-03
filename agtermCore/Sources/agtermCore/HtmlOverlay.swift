@@ -122,8 +122,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let persistent: Bool
     /// browse lets a URL page's main frame leave its original origin for any HTTP(S) site.
     public let browse: Bool
-    /// clicked marks a page a terminal click opened, which the next click may replace while it is hidden. Local:
-    /// presentation frames do not carry it.
+    /// clicked marks a page a terminal click opened, which `AppStore.releaseHiddenClickedPage` lets a later click
+    /// replace. Local: presentation frames do not carry it.
     public let clicked: Bool
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?

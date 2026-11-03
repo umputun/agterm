@@ -517,8 +517,9 @@ public struct ControlHtmlOverlayNode: Codable, Sendable, Equatable {
     public let remote: Bool?
     /// replica is true for a page shown here for the Mac that opened it, omitted otherwise.
     public let replica: Bool?
-    /// clicked is true for a page a terminal click opened, which the next click replaces while it is hidden;
-    /// omitted otherwise.
+    /// clicked is true for a page a terminal click opened, omitted otherwise. It names the origin only:
+    /// `AppStore.releaseHiddenClickedPage` decides whether a click replaces the page, and `hidden` here also
+    /// covers states it leaves alone.
     public let clicked: Bool?
 
     public init(pane: String?, file: String? = nil, cwd: String? = nil, url: String? = nil, image: String? = nil,

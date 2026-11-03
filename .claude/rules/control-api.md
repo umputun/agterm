@@ -703,8 +703,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   terminal never route to the overlay.
 - The four click paths mark their pages `HtmlOverlay.clicked` (read back as `htmlOverlays[].clicked`; the
   dispatcher never sets it, presentation frames never carry it), and a click replaces the session-wide page
-  only when it is hidden and marked: `AppStore.releaseHiddenClickedPage`, which also leaves a slot
-  `pageBelongsRemote` hands to the presenter. Each path releases after every check that could still refuse its
+  only when it is marked and its `overlayHidden` bit is set: `AppStore.releaseHiddenClickedPage`, which also leaves a
+  slot `pageBelongsRemote` hands to the presenter. The read-back's `hidden` is `overlayOutOfSight` and a remote page
+  keeps its marker, so `clicked` plus `hidden` does not by itself mean the next click replaces it. Each path releases after every check that could still refuse its
   open (the probe, the HUD and zoom recheck, the saved store for a web link), so a refused click keeps the old
   page. A shown page, a hidden program and any CLI page keep the browser fallback.
 - libghostty also detects plain paths and hands them over as typed: absolute, `~/`, or a relative path it
