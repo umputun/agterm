@@ -211,7 +211,8 @@ extension AppActions {
             let target = workspace.id
             let movable: (AppStore) -> UUID? = { store in
                 guard let id = store.selectedSessionID,
-                      let current = store.workspace(forSession: id)?.id, current != target else { return nil }
+                      let current = store.workspace(forSession: id)?.id, current != target,
+                      store.canMoveSessions([id], toWorkspace: target) else { return nil }
                 return id
             }
             return PaletteItem(id: "move-\(target)", title: "Move Session to \(workspace.name)",

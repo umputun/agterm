@@ -110,6 +110,34 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertEqual(store.workspace(forSession: resident.id)?.id, target.id)
     }
 
+    func testMoveRowsAreListedButInertForACompanion() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let child = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "child")).get()
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(child.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        XCTAssertFalse(move.isEnabled())
+        XCTAssertFalse(move.runIfEnabled())
+        XCTAssertEqual(store.workspace(forSession: child.id)?.id, owner)
+    }
+
+    func testAMoveRowGoesInertWhenItsTargetIsRemovedUnderIt() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(session.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.removeWorkspace(target.id)
+
+        XCTAssertFalse(move.isEnabled())
+        XCTAssertFalse(move.runIfEnabled())
+    }
+
     // the palette's rows outlive a selection change made while it is open, so the target is read at run.
     func testTintRowsTintTheSessionSelectedWhenTheyRun() throws {
         let store = try XCTUnwrap(library.activeStore)
