@@ -260,6 +260,23 @@ class CourierTest(StateTest):
         mc.Courier(SID, RIGHT).deliver()
         self.assertEqual([c[0] for c in fake.calls if c[1] == "queue"], ["/home/u/.npm/bin/codex"])
 
+    def test_codex_exit_mid_batch_leaves_the_rest_in_the_mailbox(self):
+        fake = self.use(FakeRun(mailboxes={f"{SID}:{RIGHT}": [{"id": "M1", "body": "a"}, {"id": "M2", "body": "b"}]}))
+        self.register_codex(RIGHT)
+        with mock.patch.object(mc, "pid_alive", side_effect=lambda pid: not fake.queued), \
+                self.assertRaisesRegex(mc.ChatError, "exited after 1 delivered"):
+            mc.Courier(SID, RIGHT).deliver()
+        self.assertEqual([m["id"] for m in fake.mailboxes[f"{SID}:{RIGHT}"]], ["M2"])
+
+    def test_codex_gone_by_the_time_the_lock_is_taken_gets_nothing(self):
+        fake = self.use(FakeRun(mailboxes={f"{SID}:{RIGHT}": [{"id": "M1", "body": "a"}]}))
+        self.register_codex(RIGHT)
+        alive = iter([True])
+        with mock.patch.object(mc, "pid_alive", side_effect=lambda pid: next(alive, False)), \
+                self.assertRaisesRegex(mc.ChatError, "exited before delivery"):
+            mc.Courier(SID, RIGHT).deliver()
+        self.assertEqual(fake.queued, [])
+
 
 class AgtermHookTest(StateTest):
     def hook(self, event, socket="/tmp/test.sock"):
@@ -343,7 +360,30 @@ class WaiterTest(StateTest):
         self.assertEqual(err.getvalue(), chat + "\n\n" + mc.render({"from": "S2:P9", "body": "ping"}) + "\n")
         self.assertEqual(fake.mailboxes[f"{SID}:{LEFT}"], [])
         self.assertTrue(w.busy())
-        self.assertFalse(w.listening())
+
+    def test_claude_reads_as_listening_through_a_mail_woken_turn(self):
+        # regression: the waiter's exit on wake made the peer report receiver none for that turn
+        self.use(FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": "x"}]}))
+        w = self.waiter()
+        with mock.patch("sys.stderr", io.StringIO()):
+            self.assertEqual(w.run("Stop", ""), mc.WAKE)
+        self.assertTrue(w.listening())
+        self.assertEqual(mc.receiver(SID, LEFT), "claude")
+
+    def test_listening_ends_with_the_recorded_claude(self):
+        w = self.waiter()
+        mc.write_json(w.claude_path, {"pid": 999999})
+        with mock.patch.object(mc, "pid_alive", side_effect=lambda pid: pid != 999999):
+            self.assertFalse(w.listening())
+
+    def test_every_hook_event_records_its_claude(self):
+        w = self.waiter()
+        with mock.patch.object(w, "serve", return_value=0):
+            for event in ("SessionStart", "UserPromptSubmit", "Stop"):
+                with self.subTest(event=event):
+                    mc.remove(w.claude_path)
+                    w.run(event, "")
+                    self.assertEqual(mc.read_json(w.claude_path), {"pid": w.parent})
 
     def test_busy_turn_holds_mail_until_it_ends(self):
         self.use(FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": "x"}]}))
@@ -373,11 +413,40 @@ class WaiterTest(StateTest):
             self.assertEqual(w.serve(), 0)
         self.assertEqual([m["id"] for m in fake.mailboxes[f"{SID}:{LEFT}"]], ["M1"])
 
-    def test_second_waiter_for_a_pane_steps_aside(self):
+    def test_second_waiter_for_the_same_claude_steps_aside(self):
         w = self.waiter()
         with open(w.lock_path, "a") as lock:
             mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
-            with mock.patch.object(w, "loop") as loop:
+            mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent})
+            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep") as sleep:
+                self.assertEqual(w.serve(), 0)
+        loop.assert_not_called()
+        sleep.assert_not_called()
+
+    def test_waiter_of_a_restarted_claude_waits_out_the_old_one(self):
+        w = self.waiter()
+        with open(w.lock_path, "a") as lock:
+            mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
+            mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent + 1})
+
+            def old_waiter_exits(_):
+                mc.remove(w.waiter_path)
+                mc.fcntl.flock(lock, mc.fcntl.LOCK_UN)
+
+            with mock.patch.object(w, "loop", return_value=0) as loop, \
+                    mock.patch.object(mc.time, "sleep", side_effect=old_waiter_exits):
+                self.assertEqual(w.serve(), 0)
+        loop.assert_called_once()
+        self.assertFalse(os.path.exists(w.waiter_path))
+
+    def test_waiter_gives_up_when_the_lock_never_frees(self):
+        w = self.waiter()
+        with open(w.lock_path, "a") as lock:
+            mc.fcntl.flock(lock, mc.fcntl.LOCK_EX | mc.fcntl.LOCK_NB)
+            mc.write_json(w.waiter_path, {"pid": 4242, "parent": w.parent + 1})
+            clock = iter(range(0, 1000, 10))
+            with mock.patch.object(w, "loop") as loop, mock.patch.object(mc.time, "sleep"), \
+                    mock.patch.object(mc.time, "monotonic", side_effect=lambda: next(clock)):
                 self.assertEqual(w.serve(), 0)
         loop.assert_not_called()
 
@@ -411,6 +480,8 @@ class CodexHookTest(StateTest):
         self.assertEqual(mc.read_json(mc.state_path(f"codex-{LEFT}.json")),
                          {"session": SID, "thread": "T7", "pid": 4242, "codex": "/opt/codex/bin/codex"})
         self.assertEqual(popen.call_args.args[0][-1], "deliver")
+        self.assertEqual(popen.call_args.kwargs["stdout"].name, mc.state_path(f"codex-{LEFT}.log"))
+        self.assertEqual(popen.call_args.kwargs["stderr"], mc.subprocess.STDOUT)
 
     def test_codex_exec_and_missing_thread_do_not_register(self):
         for event, pid, exec_run in (({"session_id": "T7"}, 4242, True), ({}, 4242, False), ({"session_id": "T7"}, None, False)):

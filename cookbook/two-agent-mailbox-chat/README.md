@@ -88,7 +88,7 @@ Mail that is not from this recipe, such as a `msg send` from a script, is delive
 
 **Never put a topic on an agent's command line.** Duplicate as Companion starts each pane's program again with the same command line, so `claude "chat with codex about the retry bug"` in a pane makes the copy start that chat too, unasked. Ask in the pane instead. The Codex launch line in *Setup* is safe to copy: its READY prompt carries no topic.
 
-**A failed hand-over to Codex may be incomplete.** agterm shows a banner for a hook that exits nonzero, and `agtermctl hooks list` keeps its last failure. Codex may already have accepted a message whose ack then failed, so read the Codex pane before retrying with `mailbox-chat.py deliver`, or the same message can arrive twice.
+**A failed hand-over to Codex may be incomplete.** agterm shows a banner for a hook that exits nonzero, and `agtermctl hooks list` keeps its last failure. The hand-over Codex's own start runs, and the Claude waiter, log to `codex-<pane>.log` and `claude-<pane>.log` in the script's state directory, `agterm-mailbox-chat-<uid>` under the system temp directory. Codex may already have accepted a message whose ack then failed, so read the Codex pane before retrying with `mailbox-chat.py deliver`, or the same message can arrive twice.
 
 **Unread mail is lost** when agterm quits, and when the receiving pane closes or its program is restarted: agterm keeps mailboxes in memory and drops one with its pane. A Claude Code turn interrupted with Esc reports no end, so its mail waits until the next turn completes.
 

@@ -2,9 +2,9 @@
 """Let two agents in one agterm split talk through agterm's pane mailboxes.
 
 `say` puts a message into the other pane's mailbox. A Claude Code receiver picks it up through an
-asyncRewake hook (`wait`); a Codex receiver has no hook that can wake an idle session, so `say`
-hands the mail to its thread with `codex queue` (`deliver`), using the thread its SessionStart hook
-registered (`codex-session-start`). Nothing is typed into either composer.
+asyncRewake hook (`claude-hook`). A Codex receiver is registered by its SessionStart hook
+(`codex-hook`), and agterm's `on message` hook (`agterm-hook`) hands its mail to that thread with
+`codex queue`. Nothing is typed into either composer.
 """
 
 from __future__ import annotations
@@ -191,6 +191,9 @@ class Waiter:
     BUSY_POLL_SECONDS = 1.0
     READ_ATTEMPTS = 3
     RETRY_SECONDS = 1.0
+    LOCK_POLL_SECONDS = 1.0
+    # a waiter whose Claude Code exited notices after its current read round, then frees the lock
+    TAKEOVER_SECONDS = WAIT_ROUND_SECONDS + 15
 
     def __init__(self, sid: str, pane: str) -> None:
         self.sid = sid
@@ -198,11 +201,13 @@ class Waiter:
         self.parent = os.getppid()
         self.lock_path = state_path(f"claude-{pane}.lock")
         self.busy_path = state_path(f"claude-{pane}.busy")
-        self.pid_path = state_path(f"claude-{pane}.json")
+        self.claude_path = state_path(f"claude-{pane}.json")
+        self.waiter_path = state_path(f"claude-{pane}.waiter")
         self.log_path = state_path(f"claude-{pane}.log")
 
     def listening(self) -> bool:
-        return pid_alive((read_json(self.pid_path) or {}).get("pid"))
+        """whether the Claude Code that last ran this pane's hook is alive, waiter running or not."""
+        return pid_alive((read_json(self.claude_path) or {}).get("pid"))
 
     def busy(self) -> bool:
         return os.path.exists(self.busy_path)
@@ -213,6 +218,7 @@ class Waiter:
 
     def run(self, event: str, source: str) -> int:
         try:
+            write_json(self.claude_path, {"pid": self.parent})
             if event == "UserPromptSubmit":
                 self.mark_busy()
                 return 0
@@ -233,15 +239,27 @@ class Waiter:
 
     def serve(self) -> int:
         with open(self.lock_path, "a") as lock:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError:
+            if not self.take_lock(lock):
                 return 0
-            write_json(self.pid_path, {"pid": os.getpid()})
+            write_json(self.waiter_path, {"pid": os.getpid(), "parent": self.parent})
             try:
                 return self.loop()
             finally:
-                remove(self.pid_path)
+                remove(self.waiter_path)
+
+    def take_lock(self, lock: Any) -> bool:
+        """the pane's waiter lock; False when a waiter for this same Claude Code already holds it."""
+        deadline = time.monotonic() + self.TAKEOVER_SECONDS
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return True
+            except OSError:
+                if (read_json(self.waiter_path) or {}).get("parent") == self.parent:
+                    return False
+                if time.monotonic() >= deadline:
+                    return False
+                time.sleep(self.LOCK_POLL_SECONDS)
 
     def loop(self) -> int:
         while os.getppid() == self.parent:
@@ -311,8 +329,11 @@ class Courier:
             raise ChatError(f"no running codex has registered pane {self.pane}")
         with open(state_path(f"codex-{self.pane}.lock"), "a") as lock:
             self.take_lock(lock)
-            # agterm's event hook runs with the app's PATH, which rarely holds an npm or nvm codex
-            return self.drain(reg["thread"], str(reg.get("codex") or "codex"))
+            # the codex may have exited or been replaced while another delivery held the lock
+            reg = self.registration()
+            if reg is None:
+                raise ChatError(f"the codex in pane {self.pane} exited before delivery")
+            return self.drain(reg)
 
     def take_lock(self, lock: Any) -> None:
         deadline = time.monotonic() + self.LOCK_SECONDS
@@ -325,8 +346,10 @@ class Courier:
                     raise ChatError(f"another delivery held the lock for {self.LOCK_SECONDS}s") from None
                 time.sleep(0.2)
 
-    def drain(self, thread: str, codex: str) -> int:
+    def drain(self, reg: dict[str, Any]) -> int:
         identity = f"{self.sid}:{self.pane}"
+        # agterm's event hook runs with the app's PATH, which rarely holds an npm or nvm codex
+        codex = str(reg.get("codex") or "codex")
         delivered = 0
         while True:
             out = agtermctl("msg", "read", "--json", "--as", identity)
@@ -334,7 +357,10 @@ class Courier:
             if not messages:
                 return delivered
             for m in messages:
-                res = run([codex, "queue", "--thread", thread, "--message", render(m)], timeout=60)
+                if not pid_alive(reg.get("pid")):
+                    raise ChatError(f"the codex in pane {self.pane} exited after {delivered} delivered; "
+                                    "the rest stays in the mailbox")
+                res = run([codex, "queue", "--thread", str(reg["thread"]), "--message", render(m)], timeout=60)
                 if res.returncode != 0:
                     detail = (res.stderr or res.stdout).strip()
                     raise ChatError(f"codex queue failed after {delivered} delivered: {detail}")
@@ -461,8 +487,9 @@ def codex_hook() -> int:
             return 0
         Courier(sid, pane).register(str(thread), pid, executable_path(pid))
         # detached, so codex's startup never waits on queue calls into its own thread
-        subprocess.Popen([sys.executable, os.path.abspath(__file__), "deliver"], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        with open(state_path(f"codex-{pane}.log"), "a") as log:
+            subprocess.Popen([sys.executable, os.path.abspath(__file__), "deliver"], stdin=subprocess.DEVNULL,
+                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
     except Exception:  # noqa: BLE001 - a hook failure must not disturb codex's start
         return 0
     return 0
