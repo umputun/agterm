@@ -1,13 +1,14 @@
 import AppKit
 import SwiftUI
 
-/// A transparent AppKit layer behind the custom titlebar's decorative regions (the title text and the
-/// empty spacers, which opt out of SwiftUI hit-testing) so the header behaves like a real title bar: a
+/// A SwiftUI layer behind the custom titlebar's decorative regions (the title text and the empty
+/// spacers, which opt out of SwiftUI hit-testing) so the header behaves like a real title bar: a
 /// single-click drag moves the window (`performDrag`), a double-click runs the user's configured
 /// title-bar action. The custom titlebar is SwiftUI, not AppKit's native title bar, so the OS
 /// double-click handling never reaches it; the interactive header buttons render in front and keep their
-/// own clicks. `mouseDownCanMoveWindow` is off so our `mouseDown`, not AppKit's automatic move, sees the
-/// event and can tell a double-click apart from a drag.
+/// own clicks. It wraps an AppKit view whose `mouseDown` must see every click to tell a double-click from
+/// a drag, so nothing else may start a move first: `mouseDownCanMoveWindow` is off, and a hit-testable
+/// shape keeps the header out of the window server's title-bar drag region, where that flag is ignored.
 struct WindowControlArea: View {
     var body: some View {
         ControlLayer()

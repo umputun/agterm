@@ -155,10 +155,12 @@ session drag are out of scope.
 - `window.zoom` uses `NSWindow.zoom`: visible-frame maximize, not native fullscreen. The control toggle
   requires an open window. Read back `isZoomed` on `window.list`.
 - `WindowControlArea` handles titlebar dragging and double-click because SwiftUI titlebar views do not
-  receive native handling. Set `mouseDownCanMoveWindow = false`; double-click reads live
-  `AppleActionOnDoubleClick`: Zoom/Fill zooms, Minimize miniaturizes, Do Nothing does nothing, and an absent
-  key defaults to Zoom. `AGTERM_UITEST_DOUBLECLICK_ACTION` overrides via environment because launch
-  arguments hit FB11763863. Decorative titlebar regions disable hit testing; buttons remain above them.
+  receive native handling. Keep `mouseDownCanMoveWindow = false` and the hit-testable background shape;
+  the flag alone does not exclude the header from the window server's title-bar drag region (#856).
+  Double-click reads live `AppleActionOnDoubleClick`: Zoom/Fill zooms, Minimize miniaturizes,
+  Do Nothing does nothing, and an absent key defaults to Zoom.
+  `AGTERM_UITEST_DOUBLECLICK_ACTION` overrides via environment because launch arguments hit FB11763863.
+  Decorative titlebar regions disable hit testing; buttons remain above them.
 - `window.fullscreen` uses `toggleFullScreen`, a distinct native Space. GUI surfaces are the palette,
   `BuiltinAction.toggleFullscreen` with Ctrl-Command-F through the key monitor, AppKit's own injected
   View menu item, and the green button. Control resolves an open ID; read back the `.fullScreen` style mask.
