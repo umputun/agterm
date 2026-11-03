@@ -33,11 +33,14 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let chromeless: Bool
     public let persistent: Bool
     public let browse: Bool
+    /// clicked marks a page opened by a terminal click (`HtmlOverlay.clicked`); the dispatcher never sets it.
+    public let clicked: Bool
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
-                points: OverlayPointSize = OverlayPointSize()) {
+                points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false) {
+        self.clicked = clicked
         self.command = command
         self.cwd = cwd
         self.wait = wait

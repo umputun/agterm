@@ -12,6 +12,7 @@ extension ControlServer {
             let loaded = await ImageProbe.loadDetached(path: path)
             guard let self, case .success(let (probe, _)) = loaded, canShowLinkOverlay(session: id),
                   let store = library.store(forSession: id) else { return completion(false) }
+            releaseHiddenClickedPage(session: id, persistent: false)
             completion(openImageOverlay(in: store, sessionID: id, path: path, probe: probe,
                                         options: Self.imageOptions(path: path)).ok)
         }
@@ -44,12 +45,12 @@ extension ControlServer {
                                       bounds: store.session(withID: id)?.hudPaneFrames.detail)
         let sized = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: ImagePage.basePercent,
                                                      backgroundColor: options.backgroundColor, follow: options.follow,
-                                                     page: options.page, points: points)
+                                                     page: options.page, points: points, clicked: options.clicked)
         return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: sized)
     }
 
     private static func imageOptions(path: String) -> ControlSessionOverlayOpenOptions {
         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
-                                         page: .image(path: path))
+                                         page: .image(path: path), clicked: true)
     }
 }

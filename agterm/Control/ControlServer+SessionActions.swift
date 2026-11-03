@@ -79,9 +79,10 @@ extension ControlServer: ControlActions {
     /// accept the page, closing the HUD for good in one case and showing nothing in the other.
     func openLinkOverlay(_ url: URL, session id: UUID, sizePercent: Int?) -> Bool {
         guard canShowLinkOverlay(session: id) else { return false }
+        releaseHiddenClickedPage(session: id, persistent: true)
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                        backgroundColor: nil, page: .url(url), navigation: true,
-                                                       javascript: true, persistent: true, browse: true)
+                                                       javascript: true, persistent: true, browse: true, clicked: true)
         return openSessionOverlay(id.uuidString, window: nil, options: options).ok
     }
 
@@ -99,7 +100,8 @@ extension ControlServer: ControlActions {
                          options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         let alreadyOpen = options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
+                                  clicked: options.clicked)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
             if case .file = page { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
