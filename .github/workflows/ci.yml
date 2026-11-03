@@ -48,7 +48,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
       - name: Read pinned zmx revision
@@ -74,6 +74,10 @@ jobs:
         run: brew install fish
       - name: Verify fish
         run: which fish && fish --version
+      # built outside the watchdog so a slow runner's compile cannot spend its budget; the test step reuses it
+      - name: swift build tests (with coverage)
+        working-directory: agtermCore
+        run: swift build --build-tests --enable-code-coverage
       - name: swift test (with coverage)
         working-directory: agtermCore
         run: ../scripts/watchdog.sh swift test --enable-code-coverage
