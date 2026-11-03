@@ -184,6 +184,28 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(missing.opened.isEmpty)
     }
 
+    func testAMarkdownPathEndingASentenceOpensTheFileWithoutThePeriod() async throws {
+        let session = Session(initialCwd: "/w")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let probe = ExistsProbe(["/tmp/review.md"])
+        LinkOpener.shared.exists = { probe.check($0) }
+
+        pane.openLink("/tmp/review.md.", intent: .normal)
+
+        try await waitUntil { !followed.markdowns.isEmpty }
+        XCTAssertEqual(followed.markdowns.map(\.0), [URL(fileURLWithPath: "/tmp/review.md", isDirectory: false)])
+        XCTAssertEqual(probe.paths, ["/tmp/review.md.", "/tmp/review.md"])
+        XCTAssertTrue(followed.revealed.isEmpty)
+
+        let missing = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink("/tmp/gone.md.", intent: .normal)
+        try await waitUntil { !missing.revealed.isEmpty }
+        XCTAssertEqual(missing.revealed, [URL(fileURLWithPath: "/tmp/gone.md.", isDirectory: false)])
+        XCTAssertTrue(missing.markdowns.isEmpty)
+    }
+
     func testShellMetacharactersInTheDirectoryAndPathStayFilesystemData() async throws {
         let session = Session(initialCwd: "/w;$(touch /tmp/agterm-pwned)`id`'q\"")
         let pane = bareSurface()

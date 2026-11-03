@@ -3344,6 +3344,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <strong style="color: #e6e1d7">reveals</strong> any other file in Finder instead of opening it. A location such as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">./main.go:42:7</span>, as compilers
               and test runners print it, opens the file at that line; a relative one is looked up in the pane's own directory.
+              A period, question mark, exclamation mark or semicolon ending a sentence after a path is dropped when only the
+              file without it exists.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌘⌥</span>-click reveals any local
               path in Finder instead, ⌘⌥⇧ while a program captures the mouse, and ⌘⌥-drag still selects a block. A rendered markdown
               file shows the pictures kept in its own folder and the alt text of any other, runs none of its own script, and
