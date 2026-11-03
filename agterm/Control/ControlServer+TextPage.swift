@@ -17,12 +17,12 @@ extension ControlServer {
         Task { @MainActor [weak self] in
             let checked = await TextProbe.checkDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id),
-                  let store = library.store(forSession: id), store.session(withID: id)?.overlayHidden(nil) != true else {
-                return completion(false)
-            }
+                  let store = library.store(forSession: id) else { return completion(false) }
+            releaseHiddenClickedPage(session: id, persistent: false)
+            guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let page = HtmlSource.text(path: path, line: link.line)
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: link.sizePercent,
-                                                           backgroundColor: nil, page: page)
+                                                           backgroundColor: nil, page: page, clicked: true)
             completion(openHtmlOverlay(in: store, sessionID: id, page: page, options: options).ok)
         }
     }

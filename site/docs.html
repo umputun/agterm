@@ -3328,6 +3328,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               The link also opens in the browser when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
               already has an overlay, or in the quick terminal. So does a plain http link to anything but a local
               address (localhost, a .local name, an IP address), which the overlay could not load.
+              A page an earlier click opened and you then hid with ⇧⌘J is the exception: the new link replaces it and
+              shows.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A ⌘-click on a local path — a plain one printed in the output, such as
@@ -3349,7 +3351,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               file shows the pictures kept in its own folder and the alt text of any other, runs none of its own script, and
               hands a web link to the browser only after asking. A text page runs nothing, loads nothing and links nowhere: a URL
               in a log stays text. A picture, markdown or text file clicked
-              from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too. In a session
+              from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too; a hidden page an
+              earlier click opened is replaced instead, as with a web link. In a session
               attached from another Mac, a plain path names a file on that Mac, so it is ignored. A terminal renders untrusted
               program output, so a link could point at a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.app</span> or

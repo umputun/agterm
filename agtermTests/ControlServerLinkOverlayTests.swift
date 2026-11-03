@@ -345,6 +345,122 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testALinkReplacesAHiddenPageAnEarlierClickOpenedAndShowsIt() async throws {
+        let (store, session) = try addSession()
+        let before = useBrowserProfile()
+        let first = try XCTUnwrap(URL(string: "http://127.0.0.1:1/pr/1"))
+        let second = try XCTUnwrap(URL(string: "http://127.0.0.1:1/pr/2"))
+        XCTAssertTrue(server.openLinkOverlay(first, session: session.id, sizePercent: nil))
+        let old = try XCTUnwrap(session.htmlOverlay)
+        XCTAssertTrue(old.clicked)
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+
+        XCTAssertTrue(server.openLinkOverlay(second, session: session.id, sizePercent: 75))
+
+        let page = try XCTUnwrap(session.htmlOverlay)
+        XCTAssertNotEqual(page.id, old.id)
+        XCTAssertEqual(page.source, .url(second))
+        XCTAssertTrue(page.clicked)
+        XCTAssertFalse(session.overlayHidden)
+        XCTAssertEqual(session.overlaySizePercent, 75)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: old.id)?.outcome, .dismissed)
+        store.closeOverlay(session.id)
+        try await TestBrowserStore.remove(BrowserProfile(directory: stateDir))
+        HtmlOverlayRegistry.shared.profile = before
+    }
+
+    func testALinkLeavesAHiddenPageNoClickOpened() async throws {
+        let (store, session) = try addSession()
+        let before = useBrowserProfile()
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:1/dashboard"))
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .url(url), navigation: true, javascript: true, persistent: true,
+                                                       browse: true)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options).ok)
+        let kept = try XCTUnwrap(session.htmlOverlay)
+        XCTAssertFalse(kept.clicked)
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+
+        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/pr/1")), session: session.id,
+                                              sizePercent: nil))
+
+        XCTAssertEqual(session.htmlOverlay?.id, kept.id)
+        XCTAssertTrue(session.overlayHidden)
+        store.closeOverlay(session.id)
+        try await TestBrowserStore.remove(BrowserProfile(directory: stateDir))
+        HtmlOverlayRegistry.shared.profile = before
+    }
+
+    func testALinkLeavesAHiddenClickedPageWhenTheSavedStoreIsUnusable() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+        let opened = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertTrue(opened)
+        let kept = try XCTUnwrap(session.htmlOverlay)
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+        let before = HtmlOverlayRegistry.shared.profile
+        defer { HtmlOverlayRegistry.shared.profile = before }
+        HtmlOverlayRegistry.shared.profile = nil
+
+        XCTAssertFalse(server.openLinkOverlay(try XCTUnwrap(URL(string: "http://127.0.0.1:1/")), session: session.id,
+                                              sizePercent: nil))
+
+        XCTAssertEqual(session.htmlOverlay?.id, kept.id)
+        XCTAssertTrue(session.overlayHidden)
+        store.closeOverlay(session.id)
+    }
+
+    func testEachClickedFileKindReplacesAHiddenClickedPage() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+        let source = stateDir.appendingPathComponent("main.go")
+        try Data("package main\n".utf8).write(to: source)
+        let picture = URL(fileURLWithPath: try writePNG(width: 40, height: 30))
+        let markdown = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertTrue(markdown)
+
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+        let text = await openText(source, line: 3, session: session.id, sizePercent: nil)
+        XCTAssertTrue(text)
+        XCTAssertEqual(session.htmlOverlay?.source, .text(path: source.path, line: 3))
+        XCTAssertEqual(session.htmlOverlay?.clicked, true)
+        XCTAssertFalse(session.overlayHidden)
+
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+        let image = await openImage(picture, session: session.id)
+        XCTAssertTrue(image)
+        XCTAssertEqual(session.htmlOverlay?.source, .image(path: picture.path))
+        XCTAssertEqual(session.htmlOverlay?.clicked, true)
+        XCTAssertFalse(session.overlayHidden)
+
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+        let again = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertTrue(again)
+        XCTAssertEqual(session.htmlOverlay?.source, .markdown(path: doc.path))
+        XCTAssertFalse(session.overlayHidden)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedFileThatCannotOpenLeavesTheHiddenClickedPage() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+        let opened = await openMarkdown(doc, session: session.id, sizePercent: nil)
+        XCTAssertTrue(opened)
+        let kept = try XCTUnwrap(session.htmlOverlay)
+        store.setOverlaysHidden(session.id, pane: nil, hidden: true)
+
+        let missing = await openMarkdown(stateDir.appendingPathComponent("missing.md"), session: session.id, sizePercent: nil)
+        let binary = stateDir.appendingPathComponent("blob.txt")
+        try Data([0x00, 0x01]).write(to: binary)
+        let unreadable = await openText(binary, line: nil, session: session.id, sizePercent: nil)
+
+        XCTAssertFalse(missing)
+        XCTAssertFalse(unreadable)
+        XCTAssertEqual(session.htmlOverlay?.id, kept.id)
+        XCTAssertTrue(session.overlayHidden)
+        store.closeOverlay(session.id)
+    }
+
     private func openText(_ url: URL, line: Int?, session id: UUID, sizePercent: Int?) async -> Bool {
         let link = LinkPolicy.TextLink(url: url, line: line, session: id, sizePercent: sizePercent)
         return await withCheckedContinuation { continuation in

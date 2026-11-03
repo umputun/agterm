@@ -181,7 +181,8 @@ extension AppStore {
                                       navigation: page.navigation ? true : nil, javascript: page.javascript,
                                       chromeless: page.chromeless, zoom: zoom, id: page.id.uuidString,
                                       persistent: page.persistent, browse: page.browse, hidden: hidden ? true : nil,
-                                      remote: remote ? true : nil, replica: page.replicaOf == nil ? nil : true)
+                                      remote: remote ? true : nil, replica: page.replicaOf == nil ? nil : true,
+                                      clicked: page.clicked ? true : nil)
     }
 
     private func htmlOverlay(_ sessionID: UUID, pane: OverlayPane?) -> Result<HtmlOverlay, HtmlOverlayCommandFailure> {

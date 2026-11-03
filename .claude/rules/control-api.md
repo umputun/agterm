@@ -560,7 +560,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ask and a remote PROGRAM reservation are not hideable: an empty scope answers `no overlay`, a reserved one
   `overlay is shown on another Mac`. A page shown on the presenting Mac is in scope: the request goes to that
   Mac and the reply does not wait for it (Remote sessions owns the sequence rule). Opening into a hidden slot is refused `overlay hidden`, a HUD open
-  checking the session slot. Close or replace clears the bit; metadata updates and a `--wait` exit keep it.
+  checking the session slot; a terminal click over a hidden clicked page is the one replacement (link bullets below). Close or replace clears the bit; metadata updates and a `--wait` exit keep it.
   Occupancy predicates keep their meaning for lifecycle, results, `--block`, page lookup and reservations;
   focus, zoom, layout, deck gates, dashboard covers and font routing read the visible layer in
   `Session+OverlayVisibility` (`coverOverlayVisible`, `programOverlayVisible`, `htmlOverlayVisible`,
@@ -701,6 +701,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openSessionOverlay` refuses. The HUD and zoom checks come first because the store would ACCEPT those
   opens: one closes the HUD for good, the other shows nothing. A HUD, a program overlay and the quick
   terminal never route to the overlay.
+- The four click paths mark their pages `HtmlOverlay.clicked` (read back as `htmlOverlays[].clicked`; the
+  dispatcher never sets it, presentation frames never carry it), and a click replaces the session-wide page
+  only when it is hidden and marked: `AppStore.releaseHiddenClickedPage`, which also leaves a slot
+  `pageBelongsRemote` hands to the presenter. Each path releases after every check that could still refuse its
+  open (the probe, the HUD and zoom recheck, the saved store for a web link), so a refused click keeps the old
+  page. A shown page, a hidden program and any CLI page keep the browser fallback.
 - libghostty also detects plain paths and hands them over as typed: absolute, `~/`, or a relative path it
   resolved because it exists. `LinkPolicy.isBarePath` takes them literally, never URL-parsed, so `%`, `#`
   and spaces stay in the name. A local path, bare or `file://`, with an `imageExtensions` extension routes to

@@ -15,11 +15,11 @@ extension ControlServer {
         Task { @MainActor [weak self] in
             let checked = await MarkdownProbe.checkDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id),
-                  let store = library.store(forSession: id), store.session(withID: id)?.overlayHidden(nil) != true else {
-                return completion(false)
-            }
+                  let store = library.store(forSession: id) else { return completion(false) }
+            releaseHiddenClickedPage(session: id, persistent: false)
+            guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
-                                                           backgroundColor: nil, page: .markdown(path: path))
+                                                           backgroundColor: nil, page: .markdown(path: path), clicked: true)
             completion(openHtmlOverlay(in: store, sessionID: id, page: .markdown(path: path), options: options).ok)
         }
     }
