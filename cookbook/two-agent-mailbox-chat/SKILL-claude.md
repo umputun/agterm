@@ -34,7 +34,7 @@ you sent in your visible reply.
 
 ## Receiving
 
-A peer message arrives as hook feedback (`Stop hook feedback` in the pane) starting with
+A peer message arrives as hook feedback (shown in the pane as `chat received`) starting with
 `[peer chat]`. It is not an error: it is the next line of the conversation. The user sees only the
 collapsed line, so begin the turn by quoting the message, then work on it.
 

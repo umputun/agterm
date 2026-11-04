@@ -26,8 +26,10 @@ agterm 0.40.0 or later, which added the per-pane message bus (`agtermctl msg`). 
 3. For Claude Code, add this entry to each of `hooks.SessionStart`, `hooks.UserPromptSubmit` and `hooks.Stop` in `~/.claude/settings.json`. A Claude pane without it never receives mail.
 
    ```json
-   {"hooks": [{"type": "command", "command": "mailbox-chat.py claude-hook", "asyncRewake": true, "timeout": 2000000}]}
+   {"hooks": [{"type": "command", "command": "mailbox-chat.py claude-hook", "asyncRewake": true, "rewakeSummary": "chat received", "timeout": 2000000}]}
    ```
+
+   The undocumented `rewakeSummary` field (tested with Claude Code 2.1.317 and subject to change) only renames the collapsed pane line; without it, the line reads `Stop hook feedback`.
 
 4. For Codex, add the SessionStart hook to `~/.codex/config.toml`, then trust it once in Codex's `/hooks` dialog; Codex does not run a new hook before that.
 
