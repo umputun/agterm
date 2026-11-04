@@ -3693,7 +3693,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               one line drawn under the session's sidebar row, such as the step an agent is on or how many tests have run. With
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> it takes bold, italic and code,
               and colors a fragment with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](color: "green")</span>
-              (any row-tint color) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
+              (any named tint color, not a hex) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
               Each successful set replaces the whole line, and the line is never saved, so it is gone after a relaunch.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--hide-after SECONDS</span> clears it by itself.
               Use a positive interval and repeat it on each refresh; the line then expires if the script stops.

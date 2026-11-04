@@ -856,8 +856,9 @@ error keeps those names for compatibility.
     characters or line breaks.
   - `--markdown` reads TEXT as inline markdown: `**bold**`, `*italic*`, `` `code` ``, a link (its label
     shows), `^[text](color: "NAME")` and `^[text](dim: true)`, which combine as
-    `^[text](color: "red", dim: true)`. NAME is `red`, `orange`, `yellow`, `green`, `blue`, `purple` or
-    `gray`, quoted; an unknown NAME is refused. An unknown attribute key is ignored and its text shows unstyled.
+    `^[text](color: "red", dim: true)`. NAME is one of the twelve `session tint` names
+    (`red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint`), quoted; an unknown NAME or a hex
+    is refused. An unknown attribute key is ignored and its text shows unstyled.
   - `--hide-after SECONDS` (0 to 86400, 0 for never) clears the line by itself. Every successful set with a
     positive `--hide-after` restarts that interval, even with identical text. A hook or loop reporting
     activity must pass a positive value and repeat it on each refresh, so a line from a process that died
