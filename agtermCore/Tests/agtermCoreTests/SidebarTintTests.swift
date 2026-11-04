@@ -56,10 +56,57 @@ struct SidebarTintTests {
         #expect(garbled == SidebarTint(color: .red, parts: [.icon]))
     }
 
-    @Test func decodeThrowsOnAnUnknownColor() {
+    @Test(arguments: ["maroon", "#12345", "#1234567", "#12345g"])
+    func decodeThrowsOnAnUnknownColor(color: String) {
         #expect(throws: DecodingError.self) {
-            try JSONDecoder().decode(SidebarTint.self, from: Data(#"{"color":"teal","on":["icon"]}"#.utf8))
+            try JSONDecoder().decode(SidebarTint.self, from: Data(#"{"color":"\#(color)","on":["icon"]}"#.utf8))
         }
+    }
+
+    @Test func paletteListsTheTwelveNamesInMenuOrder() {
+        #expect(TintColor.validNamesList == "red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint")
+    }
+
+    static let parsedValues: [(String, TintValue)] = [
+        ("red", .named(.red)),
+        ("Teal", .named(.teal)),
+        ("#3A7BD5", .hex("#3a7bd5")),
+        ("3a7bd5", .hex("#3a7bd5")),
+    ]
+
+    @Test(arguments: parsedValues)
+    func valueParsesANameOrANormalizedHex(_ tc: (String, TintValue)) {
+        #expect(TintValue(rawValue: tc.0) == tc.1)
+    }
+
+    @Test(arguments: ["", "maroon", "#3a7bd", "#3a7bd5ff", "#3a7bdz", "##3a7bd5"])
+    func valueRejectsAnythingElse(raw: String) {
+        #expect(TintValue(rawValue: raw) == nil)
+    }
+
+    @Test func valueRawIsTheNameOrTheHex() {
+        #expect(TintValue.named(.indigo).rawValue == "indigo")
+        #expect(TintValue.hex("#3a7bd5").rawValue == "#3a7bd5")
+    }
+
+    @Test func hexTintEncodesAsOneColorString() throws {
+        let tint = SidebarTint(color: .hex("#3a7bd5"), parts: [.name])
+        let data = try JSONEncoder().encode(tint)
+        #expect(String(decoding: data, as: UTF8.self).contains(##""color":"#3a7bd5""##))
+        #expect(try JSONDecoder().decode(SidebarTint.self, from: data) == tint)
+    }
+
+    @Test func namedTintKeepsItsSnapshotSpelling() throws {
+        let data = try JSONEncoder().encode(SidebarTint(color: .mint))
+        #expect(String(decoding: data, as: UTF8.self).contains(#""color":"mint""#))
+        #expect(SidebarTint(color: .mint) == SidebarTint(color: TintValue.named(.mint)))
+    }
+
+    @Test func recolorTakesAHexAndKeepsParts() {
+        let named = SidebarTint(color: .green, parts: [.name])
+        #expect(SidebarTint.recolor(named, to: .hex("#3a7bd5")) == SidebarTint(color: .hex("#3a7bd5"), parts: [.name]))
+        #expect(SidebarTint.recolor(SidebarTint(color: .hex("#3a7bd5"), parts: [.name]), to: .red)
+            == SidebarTint(color: .red, parts: [.name]))
     }
 
     @Test func updateResolvesAgainstTheCurrentTint() {
@@ -69,5 +116,7 @@ struct SidebarTintTests {
         #expect(ControlTintUpdate.set(.red, parts: [.icon, .name]).resolved(over: named)
             == SidebarTint(color: .red, parts: [.icon, .name]))
         #expect(ControlTintUpdate.clear.resolved(over: named) == nil)
+        #expect(ControlTintUpdate.set(TintValue.hex("#3a7bd5"), parts: nil).resolved(over: named)
+            == SidebarTint(color: .hex("#3a7bd5"), parts: [.name]))
     }
 }

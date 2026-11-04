@@ -174,7 +174,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// the `tree` workspace node's `collapsed`.
     public var collapsed: Bool?
     /// The tint color for `session.tint`/`workspace.tint` mode `set`, and the creation tint on `session.new`
-    /// and `workspace.new`; one of `TintColor`.
+    /// and `workspace.new`; a `TintColor` name or a `#rrggbb` hex (`TintValue`).
     public var tint: String?
     /// The row parts the tint colors (`icon`, `name`); omitted on a set keeps the stored parts, else icon.
     public var tintOn: [String]?

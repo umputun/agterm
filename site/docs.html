@@ -3698,7 +3698,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               one line drawn under the session's sidebar row, such as the step an agent is on or how many tests have run. With
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> it takes bold, italic and code,
               and colors a fragment with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](color: "green")</span>
-              (any row-tint color) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
+              (any named tint color, not a hex) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
               Each successful set replaces the whole line, and the line is never saved, so it is gone after a relaunch.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--hide-after SECONDS</span> clears it by itself.
               Use a positive interval and repeat it on each refresh; the line then expires if the script stops.
@@ -3732,11 +3732,15 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A <strong style="color: #e6e1d7">row tint</strong> tells sessions apart at a glance, red for production and green for
               development, say. Pick one from <strong style="color: #e6e1d7">Tint</strong> in a session or workspace row menu: None or one of
-              seven colors (red, orange, yellow, green, blue, purple, gray), which follow light and dark mode, then
+              twelve colors (red, orange, yellow, green, blue, purple, gray, teal, pink, brown, indigo, mint), which follow
+              light and dark mode, then
               <strong style="color: #e6e1d7">Show On</strong> Icon, Name, or Icon and Name. On a multi-row selection Show On is available
               only when every selected row is tinted. The command palette offers "Tint Session: Red" through "Tint
               Session: None" for the active session. A workspace tint colors only the workspace row, never the
-              sessions in it.
+              sessions in it. Any other color is a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span> hex through
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>; it stays the same in
+              light and dark mode, and the Tint submenu shows it as a checked Custom entry.
             </p>
             <div
               style="

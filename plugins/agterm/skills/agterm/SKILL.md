@@ -468,7 +468,8 @@ omitted when expanded).
   whole line, so pass every flag every time. A process reporting activity must pass a positive `--hide-after`
   and set the line again before it runs out, so the line goes away if the process dies. Not kept across a
   relaunch. Read back as the tree's `info`; details in reference.md.
-- `session tint <red|orange|yellow|green|blue|purple|gray|clear> [--on icon|name|icon,name]` and `workspace tint`
+- `session tint <COLOR|#rrggbb|clear> [--on icon|name|icon,name]` (COLOR: red, orange, yellow, green, blue,
+  purple, gray, teal, pink, brown, indigo, mint) and `workspace tint`
   (same arguments) - color a sidebar row so it stands out, e.g. red for production; a workspace tint colors only
   its own row. `session new`/`workspace new` take `--tint`/`--tint-on`. Read back as the tree node's `tint`/`tintOn`;
   details in reference.md.

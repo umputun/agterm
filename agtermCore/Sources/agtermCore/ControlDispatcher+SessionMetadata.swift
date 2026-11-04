@@ -99,9 +99,9 @@ extension ControlDispatcher {
         }
     }
 
-    private static func tintColor(_ raw: String) -> Result<TintColor, TintRejection> {
-        guard let color = TintColor(rawValue: raw.lowercased()) else {
-            return .failure(TintRejection(message: "invalid tint: \(raw) (\(TintColor.validNamesList))"))
+    private static func tintColor(_ raw: String) -> Result<TintValue, TintRejection> {
+        guard let color = TintValue(rawValue: raw) else {
+            return .failure(TintRejection(message: "invalid tint: \(raw) (\(TintValue.validValuesList))"))
         }
         return .success(color)
     }
