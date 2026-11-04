@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -177,6 +178,21 @@ final class ControlServerPageServeTests: XCTestCase {
         let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)
         XCTAssertTrue(response.ok, response.error ?? "")
         return try XCTUnwrap(response.result?.pageID.flatMap(UUID.init(uuidString:)))
+    }
+
+    private func openContent(_ fix: Fixture, _ page: HtmlSource) throws -> UUID {
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, page: page)
+        let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)
+        XCTAssertTrue(response.ok, response.error ?? "")
+        return try XCTUnwrap(response.result?.pageID.flatMap(UUID.init(uuidString:)))
+    }
+
+    private func png(width: Int, height: Int) throws -> Data {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
     }
 
     private func offMain<T: Sendable>(_ body: @escaping @Sendable () -> T) -> T? {
@@ -520,6 +536,125 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertTrue(fix.server.pendingPageClaims.isEmpty)
         XCTAssertNil(fix.server.pageServeStreams[page])
         XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .dismissed)
+    }
+
+    func testAnImagePageTravelsWithItsPixelsAndNoOriginSize() throws {
+        let fix = try fixture()
+        let shot = docs.appendingPathComponent("shot.png")
+        try png(width: 30, height: 20).write(to: shot)
+
+        _ = try openContent(fix, .image(path: shot.path))
+
+        let request = try XCTUnwrap(fix.presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last)
+        XCTAssertEqual(request.source, .image(path: shot.path, width: 30, height: 20))
+        XCTAssertNil(request.sizePercent)
+        XCTAssertEqual(request.points, OverlayPointSize())
+        XCTAssertFalse(fix.session.overlayActive)
+    }
+
+    func testContentPagesServeTheirFilesUnderTheirCaps() throws {
+        let fix = try fixture()
+        let shot = docs.appendingPathComponent("shot.png"), notes = docs.appendingPathComponent("notes.go")
+        try png(width: 8, height: 8).write(to: shot)
+        try Data("package main\n".utf8).write(to: notes)
+        _ = try openContent(fix, .image(path: shot.path))
+        let (imageClient, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        let image = offMain { () -> (String?, Data, String?) in
+            imageClient.send(.resource(id: 1, path: shot.path))
+            return imageClient.body(1)
+        }
+        XCTAssertTrue(fix.server.closeSessionOverlay(fix.session.id.uuidString, window: nil, pane: nil).ok)
+        _ = try openContent(fix, .text(path: notes.path, line: 1))
+        let (textClient, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let text = offMain { () -> [(String?, Data, String?)] in
+            textClient.send(.resource(id: 1, path: notes.path))
+            let own = textClient.body(1)
+            textClient.send(.resource(id: 2, path: shot.path))
+            return [own, textClient.body(2)]
+        }
+
+        XCTAssertEqual(image?.0, "image/png")
+        XCTAssertEqual(image?.1, try Data(contentsOf: shot))
+        let answers = try XCTUnwrap(text)
+        XCTAssertEqual(answers[0].1, Data("package main\n".utf8))
+        XCTAssertNil(answers[0].2)
+        XCTAssertEqual(answers[1].2, "file is outside the page's folder")
+    }
+
+    func testAMarkdownPageServesOnlyPicturesFromItsFolder() throws {
+        let fix = try fixture()
+        let readme = docs.appendingPathComponent("README.md")
+        try Data("# notes\n".utf8).write(to: readme)
+        try png(width: 4, height: 4).write(to: docs.appendingPathComponent("plot"))
+        var large = try png(width: 4, height: 4)
+        large.append(Data(count: 5 << 20))
+        try large.write(to: docs.appendingPathComponent("large.png"))
+        try Data("secret".utf8).write(to: docs.appendingPathComponent("notes.txt"))
+        try Data("<svg/>".utf8).write(to: docs.appendingPathComponent("fake.png"))
+        _ = try openContent(fix, .markdown(path: readme.path))
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let folder = docs.path
+        let served = offMain { () -> [String: (String?, Data, String?)] in
+            var answers: [String: (String?, Data, String?)] = [:]
+            for (id, name) in ["README.md", "plot", "large.png", "notes.txt", "fake.png"].enumerated() {
+                client.send(.resource(id: id + 1, path: folder + "/" + name))
+                answers[name] = client.body(id + 1)
+            }
+            return answers
+        }
+
+        let answers = try XCTUnwrap(served)
+        XCTAssertEqual(answers["README.md"]?.1, Data("# notes\n".utf8))
+        XCTAssertEqual(answers["plot"]?.0, "image/png")
+        XCTAssertNil(answers["large.png"]?.2)
+        XCTAssertEqual(answers["large.png"]?.1.count, large.count)
+        XCTAssertEqual(answers["notes.txt"]?.2, "not a png, jpg, gif or webp image")
+        XCTAssertEqual(answers["notes.txt"]?.1, Data())
+        XCTAssertEqual(answers["fake.png"]?.2, "not a png, jpg, gif or webp image")
+    }
+
+    func testAContentFileGrownPastItsCapOrReplacedByAFifoIsRefused() throws {
+        let fix = try fixture()
+        let notes = docs.appendingPathComponent("notes.go"), log = docs.appendingPathComponent("app.log")
+        try Data("x".utf8).write(to: notes)
+        try Data("y".utf8).write(to: log)
+        _ = try openContent(fix, .text(path: notes.path, line: nil))
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        try Data(count: TextPage.maxBytes + 1).write(to: notes)
+
+        let grown = offMain { () -> String? in
+            client.send(.resource(id: 1, path: notes.path))
+            return client.body(1).error
+        } ?? nil
+
+        XCTAssertEqual(grown, "file is too large for the page")
+        XCTAssertTrue(fix.server.closeSessionOverlay(fix.session.id.uuidString, window: nil, pane: nil).ok)
+        _ = try openContent(fix, .text(path: log.path, line: nil))
+        let (second, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        try FileManager.default.removeItem(at: log)
+        XCTAssertEqual(mkfifo(log.path, 0o600), 0)
+        let fifo = offMain { () -> String? in
+            second.send(.resource(id: 1, path: log.path))
+            return second.body(1).error
+        } ?? nil
+        XCTAssertEqual(fifo, "file cannot be read")
+    }
+
+    func testAContentPageHasNoBridge() throws {
+        let fix = try fixture()
+        let readme = docs.appendingPathComponent("README.md")
+        try Data("# notes\n".utf8).write(to: readme)
+        _ = try openContent(fix, .markdown(path: readme.path))
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let answer = offMain { () -> PageServeFrame? in
+            client.send(.bridge(id: 4, request: #"{"cmd":"tree"}"#))
+            return client.frame()
+        } ?? nil
+
+        XCTAssertEqual(answer, .failure(id: 4, error: "this page has no bridge"))
     }
 
     func testLosingTheHelperEndsOnlyThePage() throws {

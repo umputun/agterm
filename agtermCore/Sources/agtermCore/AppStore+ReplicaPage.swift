@@ -30,8 +30,11 @@ extension AppStore {
 
     static func replicaSource(_ source: PresentationPageSource) -> HtmlSource? {
         switch source {
-        case .file(let path, _): return .replica(path: path)
+        case .file(let path, _): return .replica(path: path, content: .html)
         case .url(let text): return HtmlSource.webURL(text).map(HtmlSource.url)
+        case .image(let path, let width, let height): return .replica(path: path, content: .image(width: width, height: height))
+        case .markdown(let path): return .replica(path: path, content: .markdown)
+        case .text(let path, let line): return .replica(path: path, content: .text(line: line))
         }
     }
 
@@ -88,9 +91,9 @@ extension AppStore {
 
     /// resizeReplicaPage applies the origin's size to a session-wide page; a pane page is always full-pane.
     public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?,
-                                  points: OverlayPointSize = OverlayPointSize()) {
-        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil else { return }
-        resizeOverlay(id, sizePercent: sizePercent, points: points)
+                                  points: OverlayPointSize = OverlayPointSize(), merge: Bool = false) {
+        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil, let session = session(withID: id) else { return }
+        resizeOverlay(id, sizePercent: sizePercent, points: merge ? session.overlayPoints.merging(points) : points)
     }
 
     /// replicaPageState is what the page `localID` shows now, as the origin reads it back, nil once it is gone.

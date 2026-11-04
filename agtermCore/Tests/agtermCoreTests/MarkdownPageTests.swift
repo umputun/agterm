@@ -88,6 +88,28 @@ struct MarkdownPageTests {
         #expect(found == [image("in.png", shot), image("img/shot.png", shot)])
     }
 
+    @Test func remoteReferencesIgnoreSymlinksOnThisMac() throws {
+        let fm = FileManager.default
+        let outside = fm.temporaryDirectory.appendingPathComponent("agterm-md-out-\(UUID().uuidString).png").path
+        try Data("x".utf8).write(to: URL(fileURLWithPath: outside))
+        defer { try? fm.removeItem(atPath: outside) }
+        try fm.createSymbolicLink(atPath: folder + "/out.png", withDestinationPath: outside)
+
+        let found = MarkdownPage.remoteImageReferences(in: "![o](out.png) ![m](img/missing.png) ![e](../up.png)", folder: folder)
+
+        #expect(found == [image("out.png", folder + "/out.png"), image("img/missing.png", folder + "/img/missing.png")])
+    }
+
+    @Test(arguments: [("a.png", "/f/a.png"), ("img/../b.png", "/f/b.png"), ("/f/c.png", "/f/c.png")] as [(String, String)])
+    func lexicalPathJoinsAndNormalizesInsideTheFolder(reference: String, expected: String) {
+        #expect(MarkdownPage.lexicalPath(reference, folder: "/f") == expected)
+    }
+
+    @Test(arguments: ["../a.png", "/etc/hosts", "~/a.png", "https://x.io/a.png", "", "."])
+    func lexicalPathRefusesWhatLeavesTheFolder(_ reference: String) {
+        #expect(MarkdownPage.lexicalPath(reference, folder: "/f") == nil)
+    }
+
     @Test func aSymlinkedFolderStillContainsItsOwnPictures() throws {
         let fm = FileManager.default
         let link = fm.temporaryDirectory.appendingPathComponent("agterm-md-link-\(UUID().uuidString)").path

@@ -8,11 +8,12 @@ public enum HtmlSource: Equatable, Sendable {
     case file(path: String, grantRoot: String?)
     /// url is a web page, pinned to its origin by the navigation policy.
     case url(URL)
-    /// replica is a file page another Mac opened, shown here from `agterm-page://<page id>/`: `path` is its
-    /// path on that Mac, whose own grant decides what else may be fetched.
-    case replica(path: String)
+    /// replica is a page another Mac opened, shown here from bytes fetched over its page channel: `path` is its
+    /// path on that Mac, whose own rules decide what else may be fetched, and `content` what kind of page it is.
+    /// It is never a path on this Mac, so nothing reads it from the local disk.
+    case replica(path: String, content: ReplicaContent)
     /// image is a picture shown on a page of its own, embedded in the page's HTML so the page gets no file
-    /// grant, theme or bridge. It never travels to another Mac.
+    /// grant, theme or bridge.
     case image(path: String)
     /// markdown is a markdown file the app renders with its pictures embedded: no file grant or bridge,
     /// but themed.
@@ -20,6 +21,24 @@ public enum HtmlSource: Equatable, Sendable {
     /// text is a source, config or log file shown read-only, scrolled to `line` when one is set: no file
     /// grant, bridge, link or navigation, but themed.
     case text(path: String, line: Int?)
+
+    /// kind is what the page shows, a replica counted as the kind its origin opened.
+    public var kind: HtmlPageKind {
+        switch self {
+        case .file: return .file
+        case .url: return .url
+        case .image: return .image
+        case .markdown: return .markdown
+        case .text: return .text
+        case .replica(_, let content):
+            switch content {
+            case .html: return .file
+            case .image: return .image
+            case .markdown: return .markdown
+            case .text: return .text
+            }
+        }
+    }
 
     /// imagePath is the picture an `.image` page shows, nil for every other source.
     public var imagePath: String? {
@@ -54,6 +73,20 @@ public enum HtmlSource: Equatable, Sendable {
         guard let url = webURL(text), let host = HtmlOrigin(url)?.host else { return false }
         return ["127.0.0.1", "::1", "localhost"].contains(host)
     }
+}
+
+/// ReplicaContent is the kind of page a replica's origin opened: an HTML file it loads as is, or a picture,
+/// markdown or text file this Mac builds a page from. An image carries its oriented pixel size for sizing.
+public enum ReplicaContent: Equatable, Sendable {
+    case html
+    case image(width: Int, height: Int)
+    case markdown
+    case text(line: Int?)
+}
+
+/// HtmlPageKind is what a page shows, independent of which Mac read its file.
+public enum HtmlPageKind: Equatable, Sendable {
+    case file, url, image, markdown, text
 }
 
 /// HtmlOrigin is a web page's origin: lowercase scheme and host plus the effective port, so an omitted
@@ -188,7 +221,8 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .replica(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, .html): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
         case .image(let path), .markdown(let path), .text(let path, _): return URL(fileURLWithPath: path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
@@ -302,7 +336,7 @@ public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
         // ahead of the shared exits: a text page shows only the document the app built, so not even a
         // user-activated web link or another about: address leaves it
-        if case .text = overlay.source {
+        if overlay.source.kind == .text {
             return action.target == .mainFrame && action.url.absoluteString == "about:blank" ? .allow : .cancel
         }
         let scheme = action.url.scheme?.lowercased()
@@ -314,14 +348,16 @@ public enum HtmlNavigationPolicy {
             if web { return action.userActivated ? .openExternal : .cancel }
             guard scheme == "file", let grantRoot else { return .cancel }
             return HtmlOverlay.contains(grantRoot, action.url.path) ? .allow : .cancel
-        case .replica:
+        case .replica(_, .html):
             if web { return action.userActivated ? .openExternal : .cancel }
             let own = action.url.host?.lowercased() == overlay.id.uuidString.lowercased()
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
-        case .image:
+        case .image, .replica(_, .image):
             return .cancel
-        case .markdown:
+        case .markdown, .replica(_, .markdown):
             return web && action.userActivated ? .openExternal : .cancel
+        case .replica(_, .text):
+            return .cancel
         case .text:
             return .cancel
         case .url(let original):

@@ -43,7 +43,7 @@ final class HtmlOverlayRegistry {
 
     /// page returns the live page for `overlay`, creating and loading its web view on first use.
     /// `backgroundColor` is the overlay's `--background-color`, which replaces the theme background.
-    /// `replica` is the way back to the Mac that opened a file page shown here for it.
+    /// `replica` is the way back to the Mac that opened a page shown here for it.
     func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil,
               replica: HtmlReplicaLink? = nil) -> HtmlOverlayPage {
         if let page = pages[overlay.id] { return page }
@@ -180,8 +180,8 @@ final class HtmlReplicaRevision {
     var value = 0
 }
 
-/// HtmlReplicaLink is how a file page shown for another Mac reaches that Mac: `fetch` its files, for the load
-/// `HtmlReplicaRevision` names, and `bridge` its requests, answered with the reply JSON text that Mac sent.
+/// HtmlReplicaLink is how a page shown for another Mac reaches that Mac: `fetch` its files, for the load
+/// `HtmlReplicaRevision` names, and `bridge` a file page's requests, answered with the reply JSON text that Mac sent.
 struct HtmlReplicaLink {
     /// ownPageCommandsLocal keeps a page's reload and navigation of itself on this Mac: a page companion's viewers each
     /// show their own copy, so those act on the copy that asked.
@@ -274,7 +274,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // WKWebView has no public switch for a transparent canvas; this key lets an unstyled page show the
         // themed panel behind it while authored backgrounds still paint. A URL page keeps the browser's
         // opaque canvas, since a web app styled against it would lose its background here.
-        if Self.styled(overlay.source, linked: replica != nil) || overlay.source.imagePath != nil {
+        if Self.styled(overlay.source, linked: replica != nil) || overlay.source.kind == .image {
             webView.setValue(false, forKey: "drawsBackground")
         }
         super.init()
@@ -336,11 +336,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                                               forMainFrameOnly: true, in: Self.themeWorld))
         guard styled else { return }
         webView.underPageBackgroundColor = NSColor(agtermHex: theme.background)
-        if overlay.source.markdownPath != nil {
+        if overlay.source.kind == .markdown {
             controller.addUserScript(WKUserScript(source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true, in: Self.markdownWorld))
         }
-        if overlay.source.textPath != nil {
+        if overlay.source.kind == .text {
             controller.addUserScript(WKUserScript(source: MarkdownAssets.shared.textScript, injectionTime: .atDocumentEnd,
                                                   forMainFrameOnly: true, in: Self.markdownWorld))
         }
@@ -403,14 +403,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var bridged: Bool { Self.bridged(overlay.source, linked: replica != nil) }
 
     private static func styled(_ source: HtmlSource, linked: Bool) -> Bool {
-        source.markdownPath != nil || source.textPath != nil || bridged(source, linked: linked)
+        source.kind == .markdown || source.kind == .text || bridged(source, linked: linked)
     }
 
     // only a page its author wrote drives the control API; a markdown or text file comes from untrusted output
     private static func bridged(_ source: HtmlSource, linked: Bool) -> Bool {
         switch source {
         case .file: return true
-        case .replica: return linked
+        case .replica(_, .html): return linked
+        case .replica: return false
         case .url, .image, .markdown, .text: return false
         }
     }
@@ -489,6 +490,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var textLoaded: Bool {
         switch overlay.source {
         case .file(_, nil), .image, .markdown, .text: return true
+        case .replica(_, let content): return content != .html
         default: return false
         }
     }
@@ -507,11 +509,22 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             } catch {
                 fail(error.localizedDescription)
             }
-        case .replica(let path):
+        case .replica(let path, .html):
             guard replica != nil, let url = HtmlPageSchemeHandler.url(pageID: id, path: path) else {
                 return fail(OverlayHtmlError.remoteFile)
             }
             webView.load(URLRequest(url: url))
+        case .replica(let path, let content):
+            guard replica != nil else { return fail(OverlayHtmlError.remoteFile) }
+            textLoad += 1
+            let load = textLoad
+            Task { @MainActor [weak self] in
+                guard let page = await self?.replicaContentPage(path: path, content: content), let self, textLoad == load else { return }
+                switch page {
+                case .failure(let failure): fail(failure.message)
+                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
+                }
+            }
         case .image(let path):
             textLoad += 1
             let load = textLoad
@@ -556,11 +569,84 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    private struct ReplicaContentFailure: Error {
+        let message: String
+    }
+
+    // the origin already judged these files, but the bytes are judged again here as a local file's would be, since
+    // a file can change between the origin's check and this fetch
+    private func replicaContentPage(path: String, content: ReplicaContent) async -> Result<String, ReplicaContentFailure> {
+        switch content {
+        case .html:
+            return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile))
+        case .image:
+            let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
+                                             local: (ImageProbe.Failure.tooLarge(path).description, ImageProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
+            return await Task.detached(priority: .userInitiated) {
+                ImageProbe.probe(data, path: path).map { ImagePage.html(data: data, mimeType: $0.mimeType) }
+                    .mapError { ReplicaContentFailure(message: $0.description) }
+            }.value
+        case .markdown:
+            let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
+                                             local: (MarkdownProbe.Failure.tooLarge(path).description, MarkdownProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
+            let style = MarkdownAssets.shared.style
+            let fetch: @Sendable (String, Int) async -> Data? = { [weak self] path, limit in
+                try? await self?.fetchReplica(path, limit: limit, local: ("", "")).get()
+            }
+            // parsing, probing, embedding and escaping run detached as the local page's do; only fetches hop back
+            return await Task.detached(priority: .userInitiated) {
+                guard let markdown = String(data: data, encoding: .utf8) else {
+                    return .failure(ReplicaContentFailure(message: MarkdownProbe.Failure.notText(path).description))
+                }
+                var embedding = MarkdownEmbedding()
+                let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
+                for image in MarkdownPage.remoteImageReferences(in: markdown, folder: folder) {
+                    guard let room = embedding.room(for: image) else { continue }
+                    let bytes = await fetch(image.path, room)
+                    embedding.add(image, bytes.flatMap { bytes in (try? ImageProbe.probe(bytes, path: image.path).get()).map { ($0, bytes) } })
+                }
+                return .success(MarkdownPage.html(markdown: markdown, images: embedding.embedded, style: style))
+            }.value
+        case .text(let line):
+            let fetched = await fetchReplica(path, limit: TextPage.maxBytes,
+                                             local: (TextProbe.Failure.tooLarge(path).description, TextProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
+            let style = MarkdownAssets.shared.textStyle
+            return await Task.detached(priority: .userInitiated) {
+                TextProbe.text(data, path: path)
+                    .map { TextPage.html(text: $0, language: TextPage.language(forFile: path), line: line, style: style) }
+                    .mapError { ReplicaContentFailure(message: $0.description) }
+            }.value
+        }
+    }
+
+    // reading stops once the bytes pass `limit`, and the dropped stream cancels the transfer on the origin; a refusal
+    // keeps the reason the origin gave, and `local` words every other failure as the local probe would
+    private func fetchReplica(_ path: String, limit: Int,
+                              local: (tooLarge: String, unreadable: String)) async -> Result<Data, ReplicaContentFailure> {
+        guard let replica else { return .failure(ReplicaContentFailure(message: local.unreadable)) }
+        var data = Data()
+        do {
+            let resource = try await replica.fetch(path, revision)
+            for try await chunk in resource.chunks {
+                data.append(chunk)
+                if data.count > limit { return .failure(ReplicaContentFailure(message: local.tooLarge)) }
+            }
+        } catch RemotePageChannel.Failure.refused(let reason) {
+            return .failure(ReplicaContentFailure(message: "\(reason): \(path)"))
+        } catch {
+            return .failure(ReplicaContentFailure(message: local.unreadable))
+        }
+        return .success(data)
+    }
+
     // a file page opens its own file, never one it navigated to; a URL page opens what it shows, which its
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _):
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -618,7 +704,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _):
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _):
             return URL(fileURLWithPath: path)
         case .url(let url): return url
         }

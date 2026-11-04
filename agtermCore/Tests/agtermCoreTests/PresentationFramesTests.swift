@@ -95,6 +95,18 @@ struct PresentationFramesTests {
             pane: nil, sizePercent: 70, points: OverlayPointSize(width: 900), follow: false))),
         PresentationFrame(gen: 1, rev: 47, body: .pageCommand(PresentationPageCommand(
             page: "p4", seq: 9, action: .resize, sizePercent: 70, points: OverlayPointSize(width: 800, height: 400)))),
+        PresentationFrame(gen: 1, rev: 48, body: .pageRequest(PresentationPage(
+            page: "p5", token: "t5", source: .image(path: "/tmp/shot.png", width: 1600, height: 900), identity: "shot.png",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: nil, follow: false))),
+        PresentationFrame(gen: 1, rev: 49, body: .pageRequest(PresentationPage(
+            page: "p6", token: "t6", source: .markdown(path: "/tmp/notes/README.md"), identity: "README.md",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: pane, sizePercent: nil, follow: true))),
+        PresentationFrame(gen: 1, rev: 50, body: .pageRequest(PresentationPage(
+            page: "p7", token: "t7", source: .text(path: "/tmp/src/main.go", line: 42), identity: "main.go",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 60, follow: false))),
     ]
 
     @Test(arguments: [
@@ -134,6 +146,19 @@ struct PresentationFramesTests {
         #expect(line.last == UInt8(ascii: "\n"))
         #expect(!line.dropLast().contains(UInt8(ascii: "\n")))
         #expect(try PresentationCodec.decode(line.dropLast()) == frame)
+    }
+
+    @Test func aResizeCarriesMergeOnlyWhenAsked() throws {
+        let plain = PresentationFrame(gen: 1, rev: 1, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 2, action: .resize, sizePercent: 95, points: OverlayPointSize(width: 600))))
+        let merged = PresentationFrame(gen: 1, rev: 2, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 3, action: .resize, sizePercent: 95, points: OverlayPointSize(height: 300), merge: true)))
+
+        let line = try PresentationCodec.encode(plain)
+
+        #expect(!String(decoding: line, as: UTF8.self).contains("merge"))
+        #expect(try PresentationCodec.decode(line.dropLast()) == plain)
+        #expect(try PresentationCodec.decode(try PresentationCodec.encode(merged).dropLast()) == merged)
     }
 
     @Test func pageStateBoundsThePagesOwnStrings() throws {

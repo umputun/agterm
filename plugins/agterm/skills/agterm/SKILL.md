@@ -811,8 +811,9 @@ agtermctl session overlay open --markdown /path/to/plan.md --size-percent 95 --t
 ```
 
 Pictures kept in the file's own folder show; other pictures show their alt text, raw HTML stays text, and a web
-link opens in the browser after the user confirms. The user gets the same view by ⌘-clicking the file's path, so
-printing the absolute path of a plan or report you wrote is often enough. Read back `markdown` in `htmlOverlays`.
+link opens in the browser after the user confirms. The user gets the same view by ⌘-clicking the file's path in a
+local pane, so printing the absolute path of a plan or report you wrote is often enough there; for a user watching
+from another Mac, open it with `--markdown`. Read back `markdown` in `htmlOverlays`.
 
 ## Showing a source file or log at a line
 
@@ -824,8 +825,9 @@ agtermctl session overlay open --text /path/to/main.go --line 42 --size-percent 
 
 It is highlighted when its name maps to a known language, up to 256 KB, and plain above; FILE is taken literally,
 never as `path:line`. The page runs nothing, loads nothing and has no links. Markdown, HTML and SVG are not text
-pages. The user gets the same view by ⌘-clicking a path or a `path:line` location in the output, and reveals any
-file in Finder with ⌘⌥-click. Read back `text` (`{file, language?, line?}`) in `htmlOverlays`.
+pages. The user gets the same view by ⌘-clicking a path or a `path:line` location in a local pane, and reveals any
+file in Finder with ⌘⌥-click; for a user watching from another Mac, open it with `--text`. Read back `text`
+(`{file, language?, line?}`) in `htmlOverlays`.
 
 ## Displaying an image inline
 
@@ -836,9 +838,11 @@ Show a png, jpg, gif or webp picture with `--image`; the panel takes the picture
 agtermctl session overlay open --image /tmp/shot.png --target "$AGTERM_SESSION_ID"
 ```
 
-The user can open the same view by ⌘-clicking a picture's path in the terminal, so printing the absolute
-path of an image you produced is often enough. When `--image` is rejected, by an older CLI as an unknown
-option or by an older app, fall back to the script below.
+The user can open the same view by ⌘-clicking a picture's path in a local pane, so printing the absolute
+path of an image you produced is often enough there. When the user watches your session from another Mac,
+a click on a printed path does nothing; open it with `--image`, which shows it on that Mac, as `--markdown`
+and `--text` pages do. When `--image` is rejected, by an older CLI as an unknown option, by an older app, or
+by a presenting Mac too old for these pages (`a viewer presents this session`), fall back to the script below.
 
 This skill also bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the
 image there via the kitty graphics protocol, which ghostty draws natively — no kitty binary and no

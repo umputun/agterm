@@ -146,6 +146,34 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "three\n" }
     }
 
+    func testATextReplicaRendersFetchedBytesAndRefetchesOnReloadAndThemeChange() async throws {
+        let url = pages.appendingPathComponent("main.go")
+        try "package one\n".write(to: url, atomically: true, encoding: .utf8)
+        let page = registry.page(for: openReplica(url.path, .text(line: 1)), store: store, replica: replicaLink())
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package one\n" }
+        let bridge = try await page.webView.evaluateJavaScript("typeof window.webkit?.messageHandlers?.agterm", in: nil,
+                                                               contentWorld: HtmlOverlayBridge.world)
+        XCTAssertEqual(bridge as? String, "undefined")
+
+        try "package two\n".write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertNil(registry.reload(page.id, target: .original, store: store))
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package two\n" }
+        page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
+        try await waitForVariable("--agterm-foreground", "#102030", in: page.webView)
+
+        try await waitFor("three fetches") { self.fetched.count == 3 }
+        XCTAssertEqual(fetched, [url.path, url.path, url.path])
+    }
+
+    func testABinaryReplicaReportsAFailure() async throws {
+        let url = pages.appendingPathComponent("bin.txt")
+        try Data([0x61, 0x00, 0x62]).write(to: url)
+        _ = registry.page(for: openReplica(url.path, .text(line: nil)), store: store, replica: replicaLink())
+
+        try await waitFor("failed") { self.current?.loadState == .failed }
+        XCTAssertEqual(current?.loadError, TextProbe.Failure.notText(url.path).description)
+    }
+
     func testAMissingOrBinaryFileReportsAFailure() async throws {
         let binary = pages.appendingPathComponent("bin.txt")
         try Data([0x61, 0x00, 0x62]).write(to: binary)

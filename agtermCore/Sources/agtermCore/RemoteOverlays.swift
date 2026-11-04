@@ -19,6 +19,9 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public var ended = false
     /// page is what the slot holds instead of a program; `job` is then the page id.
     public var page: RemotePage?
+    /// presenterSized marks a picture the presenter fitted itself, whose points only it knows, until a resize
+    /// replaces its size whole.
+    public var presenterSized = false
 
     public init(job: String, pane: OverlayPane?, owner: Int, sizePercent: Int?, wait: Bool = false,
                 ended: Bool = false, page: RemotePage? = nil) {
@@ -126,10 +129,12 @@ public struct RemoteOverlays: Equatable, Sendable {
         }
     }
 
-    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize()) {
+    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
+                         presenterSized: Bool = false) {
         guard let index = slots.firstIndex(where: { $0.job == job }) else { return }
         slots[index].sizePercent = sizePercent
         slots[index].points = points
+        slots[index].presenterSized = presenterSized
     }
 
     mutating func remove(job: String) { slots.removeAll { $0.job == job } }

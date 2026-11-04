@@ -43,7 +43,12 @@ left an empty `spindump-04-new-3.txt`. A collector that works against a throwawa
 against the stalled app suggests the app or the runner resists inspection during the stall, rather than the
 collector's arguments being wrong; that is not established.
 
-Run 41525711638 (PR #874 head `2b85193d`) stalled latest so far: `new-0` to `new-6` answered in 58 to 507 ms,
+Run 41525711638 (PR #874 head `2b85193d`) stalled later still: `new-0` to `new-6` answered in 58 to 507 ms,
 and `new-7` timed out. The spindump self-check produced a 1.3 MB report, yet every in-flight collector failed
 again: the app `sample` timed out after 20 s, the CLI `sample` could not examine the CLI pid, and the app-only
 spindump timed out after 15 s and left an empty `spindump-08-new-7.txt`. The re-run passed.
+
+Run 41899293201 (PR #891 head `e109e4f7`) stalled the same way: `new-0` to `new-6` answered in 69 to 638 ms,
+and `new-7` timed out after its CLI took 0.26 s to spawn. The spindump self-check produced a 1 MB report, yet
+every in-flight collector failed again: the app `sample` timed out after 20 s, the CLI `sample` could not
+examine the CLI pid, and the app-only spindump timed out after 15 s and left an empty `spindump-08-new-7.txt`.

@@ -49,7 +49,7 @@ struct AppStoreReplicaPageTests {
 
         let shown = try #require(session.htmlOverlay)
         #expect(session.htmlOverlayActive)
-        #expect(shown.source == .replica(path: "/docs/index.html"))
+        #expect(shown.source == .replica(path: "/docs/index.html", content: .html))
         #expect(shown.replicaOf == Self.origin)
         #expect(shown.id != Self.origin)
         #expect(shown.javascript && shown.navigation)
@@ -64,7 +64,34 @@ struct AppStoreReplicaPageTests {
 
         #expect(store.presentReplicaPage(page(.file(path: "/docs/index.html", grantRoot: nil)), forSession: session.id) == nil)
 
-        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html"))
+        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html", content: .html))
+    }
+
+    @Test(arguments: [
+        (PresentationPageSource.image(path: "/shots/a.png", width: 800, height: 600), ReplicaContent.image(width: 800, height: 600)),
+        (.markdown(path: "/docs/README.md"), .markdown),
+        (.text(path: "/src/main.go", line: 12), .text(line: 12)),
+    ])
+    func aContentPageIsShownAsAReplicaOfItsKind(source: PresentationPageSource, content: ReplicaContent) throws {
+        let (store, session) = try attached()
+
+        #expect(store.presentReplicaPage(page(source), forSession: session.id) == nil)
+
+        let shown = try #require(session.htmlOverlay)
+        guard case .replica(_, let kind) = shown.source else { Issue.record("not a replica: \(shown.source)"); return }
+        #expect(kind == content)
+        #expect(shown.replicaOf == Self.origin)
+    }
+
+    @Test func theTreeReportsAContentReplicaByItsKind() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(.text(path: "/src/main.go", line: 12)), forSession: session.id) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)
+
+        #expect(node.text == ControlTextOverlayNode(file: "/src/main.go", language: TextPage.language(forFile: "/src/main.go"), line: 12))
+        #expect(node.file == nil)
+        #expect(node.replica == true)
     }
 
     @Test func aUrlPageLoadsItsFullAddressHere() throws {
@@ -292,5 +319,18 @@ struct AppStoreReplicaPageTests {
 
         #expect(session.overlaySizePercent == 60)
         #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
+    }
+
+    @Test func aMergingResizeKeepsTheAxisItDoesNotNameAndAPlainOneReplacesIt() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 95, points: OverlayPointSize(width: 400, height: 300)), forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 600), merge: true)
+        #expect(session.overlayPoints == OverlayPointSize(width: 600, height: 300))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 500))
+        #expect(session.overlayPoints == OverlayPointSize(width: 500))
     }
 }

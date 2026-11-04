@@ -27,8 +27,9 @@ final class PageServeAdmission: Sendable {
     }
 }
 
-/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves the
-/// page's files from inside its grant and runs the page's bridge requests here, as a local page's would run.
+/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves a file
+/// page's files from inside its grant and runs its bridge requests here, as a local page's would run, and serves an
+/// image, markdown or text page the files its kind may read, with no bridge.
 /// The helper's connection closing, or sending what a helper never sends, ends the page; the presenter
 /// subscription is not touched.
 @MainActor
@@ -146,6 +147,21 @@ final class PageServeStream {
         let cancelled = { transfers.withLock { $0.cancelled.contains(id) } }
         let stop = { _ = sendWaiting(.failure(id: id, error: PageServeFrame.cancelled), owner) }
         guard !cancelled() else { return stop() }
+        if let resource = RemotePageResources.content(path, source: source) {
+            switch contentBody(resource) {
+            case .failure(let refusal):
+                _ = sendWaiting(.failure(id: id, error: refusal.message), owner)
+            case .success(let body):
+                guard sendWaiting(.head(id: id, mimeType: body.mimeType), owner) else { return }
+                for start in stride(from: 0, to: body.data.count, by: PageServeCodec.maxChunkBytes) {
+                    guard !cancelled() else { return stop() }
+                    let end = min(start + PageServeCodec.maxChunkBytes, body.data.count)
+                    guard sendWaiting(.chunk(id: id, data: body.data.subdata(in: start..<end)), owner) else { return }
+                }
+                _ = sendWaiting(.end(id: id), owner)
+            }
+            return
+        }
         guard let file = RemotePageResources.resolve(path, source: source) else {
             _ = sendWaiting(.failure(id: id, error: "file is outside the page's folder"), owner)
             return
@@ -188,6 +204,7 @@ final class PageServeStream {
     /// queued before its page closed or moved never runs against the old place.
     private func answer(id: Int, request: String) async -> PageServeFrame {
         if companion != nil, case .url = source { return .failure(id: id, error: "a URL page has no bridge") }
+        if [.image, .markdown, .text].contains(source.kind) { return .failure(id: id, error: "this page has no bridge") }
         guard let server, let place = companion.map(server.companionPagePlace) ?? server.remotePagePlace(page) else {
             return .failure(id: id, error: "page closed")
         }
@@ -216,6 +233,28 @@ final class PageServeStream {
             else { return false }
             return owner.sendWaiting(line)
         }
+    }
+
+    private struct ContentRefusal: Error {
+        let message: String
+    }
+
+    // a content page's file is read whole under its kind's cap through one checked descriptor, and a picture is
+    // sent only when its bytes carry a picture signature, so no other file in a markdown page's folder crosses
+    nonisolated private static func contentBody(
+        _ resource: RemotePageResources.ContentResource
+    ) -> Result<(mimeType: String, data: Data), ContentRefusal> {
+        let data: Data
+        switch BoundedFile.read(path: resource.path, maxBytes: resource.maxBytes) {
+        case .success(let read): data = read
+        case .failure(.tooLarge): return .failure(ContentRefusal(message: "file is too large for the page"))
+        case .failure(.unreadable): return .failure(ContentRefusal(message: "file cannot be read"))
+        }
+        guard resource.picture else { return .success(("text/plain; charset=utf-8", data)) }
+        guard let mimeType = ImagePage.mimeType(sniffing: data) else {
+            return .failure(ContentRefusal(message: "not a png, jpg, gif or webp image"))
+        }
+        return .success((mimeType, data))
     }
 
     nonisolated private static func mimeType(_ path: String) -> String {
@@ -307,7 +346,7 @@ extension ControlServer {
         store.receiveRemotePageFrame(body, forSession: sessionID)
     }
 
-    /// schedulePageClaimExpiry ends every file page whose channel was not claimed in time, once `seconds` passed.
+    /// schedulePageClaimExpiry ends every channel page whose channel was not claimed in time, once `seconds` passed.
     func schedulePageClaimExpiry(after seconds: TimeInterval) {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((seconds + 0.1) * 1_000_000_000))

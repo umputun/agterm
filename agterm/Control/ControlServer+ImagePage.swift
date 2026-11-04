@@ -36,17 +36,28 @@ extension ControlServer {
         if store.session(withID: id)?.overlayHidden(options.pane) == true {
             return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
         }
-        guard options.pane == nil, options.sizePercent == nil, options.points.isEmpty else {
-            return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: options)
+        let natural = probe.natural(scale: 1)
+        let pixels = ImagePixels(width: Int(natural.width), height: Int(natural.height))
+        // the presenting Mac sizes an unsized picture for its own screen, so it gets the pixels and no points
+        guard options.pane == nil, options.sizePercent == nil, options.points.isEmpty,
+              !store.pageBelongsRemote(id, pane: nil) else {
+            return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: options.with(imagePixels: pixels))
         }
-        let scale = library.windowID(forSession: id).flatMap(WindowRegistry.shared.backingScale)
-            ?? Double(NSScreen.main?.backingScaleFactor ?? 1)
-        let points = ImagePage.points(natural: probe.natural(scale: scale), zoom: HtmlOverlayRegistry.shared.zoom,
-                                      bounds: store.session(withID: id)?.hudPaneFrames.detail)
+        let points = imagePoints(in: store, sessionID: id, pixels: pixels)
         let sized = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: ImagePage.basePercent,
                                                      backgroundColor: options.backgroundColor, follow: options.follow,
                                                      page: options.page, points: points, clicked: options.clicked)
         return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: sized)
+    }
+
+    /// imagePoints sizes a picture of `pixels` for the session's detail area, at the density of the screen its
+    /// window is on; the origin sizes its own pages with it and the presenting Mac the pictures handed to it.
+    func imagePoints(in store: AppStore, sessionID id: UUID, pixels: ImagePixels) -> OverlayPointSize {
+        let scale = library.windowID(forSession: id).flatMap(WindowRegistry.shared.backingScale)
+            ?? Double(NSScreen.main?.backingScaleFactor ?? 1)
+        let natural = ImagePage.natural(pixelWidth: pixels.width, pixelHeight: pixels.height, orientation: 1, scale: scale)
+        return ImagePage.points(natural: natural, zoom: HtmlOverlayRegistry.shared.zoom,
+                                bounds: store.session(withID: id)?.hudPaneFrames.detail)
     }
 
     private static func imageOptions(path: String) -> ControlSessionOverlayOpenOptions {

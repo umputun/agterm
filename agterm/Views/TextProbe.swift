@@ -25,7 +25,12 @@ enum TextProbe {
     static func load(path: String) -> Result<String, Failure> {
         BoundedFile.read(path: path, maxBytes: TextPage.maxBytes)
             .mapError { $0 == .tooLarge ? .tooLarge(path) : .unreadable(path) }
-            .flatMap { data in TextPage.validate(data).map(Result.success) ?? .failure(.notText(path)) }
+            .flatMap { text($0, path: path) }
+    }
+
+    /// text validates bytes already in hand, a file fetched from another Mac included; `path` only names it.
+    static func text(_ data: Data, path: String) -> Result<String, Failure> {
+        TextPage.validate(data).map(Result.success) ?? .failure(.notText(path))
     }
 
     /// checkDetached runs `check` off the main actor, for a click: opening a file on slow storage can block.
