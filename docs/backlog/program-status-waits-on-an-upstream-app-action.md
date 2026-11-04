@@ -14,5 +14,6 @@ ignores `.program_status` and `include/ghostty.h` has no action for it. The term
 agterm carries no patch to the embedded libghostty for this
 (https://github.com/umputun/agterm/discussions/794). On a `GHOSTTY_REV` bump, check whether `ghostty.h`
 gained a program-status action and a way to answer the probe; until both exist there is nothing to build.
+At v1.4.0 (`83fb956`) neither exists and `stream_handler.zig` still ignores `.program_status`.
 It would not replace the hook adapters' nested-agent guard or clear a glyph after a hard kill; that gap
 is `agent-status-outlives-its-agent-at-the-prompt.md`.

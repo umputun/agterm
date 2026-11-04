@@ -5,7 +5,7 @@ digest form `.ghostty-build-stamp`; CI keys its GhosttyKit cache on both. A chan
 framework and resources. Never link a staged framework whose full stamp differs.
 
 `0001` backports the mailbox drain from [ghostty PR 14444](https://github.com/ghostty-org/ghostty/pull/14444)
-to `683d8db`. During surface teardown the main thread joins workers and waits for in-flight Metal
+to `83fb956` (v1.4.0). During surface teardown the main thread joins workers and waits for in-flight Metal
 frames. Both workers and frame completion callbacks can block posting to the app mailbox. A temporary
 consumer frees queue capacity until `renderer.deinit()` finishes, and preserves other surfaces' messages
 for the next app tick. The drain stops after a bounded final pass, filters messages from previous
