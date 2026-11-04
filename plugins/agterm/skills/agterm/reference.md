@@ -856,8 +856,9 @@ error keeps those names for compatibility.
     characters or line breaks.
   - `--markdown` reads TEXT as inline markdown: `**bold**`, `*italic*`, `` `code` ``, a link (its label
     shows), `^[text](color: "NAME")` and `^[text](dim: true)`, which combine as
-    `^[text](color: "red", dim: true)`. NAME is `red`, `orange`, `yellow`, `green`, `blue`, `purple` or
-    `gray`, quoted; an unknown NAME is refused. An unknown attribute key is ignored and its text shows unstyled.
+    `^[text](color: "red", dim: true)`. NAME is one of the twelve `session tint` names
+    (`red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint`), quoted; an unknown NAME or a hex
+    is refused. An unknown attribute key is ignored and its text shows unstyled.
   - `--hide-after SECONDS` (0 to 86400, 0 for never) clears the line by itself. Every successful set with a
     positive `--hide-after` restarts that interval, even with identical text. A hook or loop reporting
     activity must pass a positive value and repeat it on each refresh, so a line from a process that died
@@ -876,8 +877,11 @@ error keeps those names for compatibility.
   agtermctl session info --clear --target "$AGTERM_SESSION_ID"
   ```
 - `session tint <COLOR|clear> [--on PARTS] [--target] [--window W]` - color the session's sidebar row so it
-  stands out at a glance (red for production, green for dev). COLOR is `red|orange|yellow|green|blue|purple|gray`,
-  macOS system colors that follow light and dark. `--on` is `icon`, `name` or `icon,name`; omitted, a recolor keeps
+  stands out at a glance (red for production, green for dev). COLOR is
+  `red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint`, macOS system colors that follow light and
+  dark, or a `#rrggbb` hex (the `#` optional) for any other color, fixed in both modes and read back as lowercase
+  `#rrggbb`; the row menu shows a hex tint as a checked "Custom #rrggbb" entry. `session info` markup colors take
+  the names only. `--on` is `icon`, `name` or `icon,name`; omitted, a recolor keeps
   the row's placement and an untinted row starts on the icon. `clear` removes the tint and refuses `--on`; the
   socket form (`mode` `set|clear`, `tint`, `tintOn` array) refuses a clear carrying either. Returns the session
   id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac: an attached row does

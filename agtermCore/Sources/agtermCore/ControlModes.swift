@@ -275,8 +275,13 @@ public struct ControlSessionRestoreUpdate: Equatable, Sendable {
 /// ControlTintUpdate is a parsed `session.tint`/`workspace.tint` request: a color with optional parts, or a
 /// clear.
 public enum ControlTintUpdate: Equatable, Sendable {
-    case set(TintColor, parts: Set<TintPart>?)
+    case set(TintValue, parts: Set<TintPart>?)
     case clear
+
+    /// set builds a palette-name update.
+    public static func set(_ color: TintColor, parts: Set<TintPart>?) -> ControlTintUpdate {
+        .set(.named(color), parts: parts)
+    }
 
     /// resolved is the tint this update leaves on a row that has `current`: a set without parts keeps the
     /// row's own parts, starting at the icon.

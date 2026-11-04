@@ -46,6 +46,19 @@ struct AppStoreTintTests {
         #expect(named.tint == nil && plain.tint == nil)
     }
 
+    @Test func batchHexColorKeepsEachRowsPlacement() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let named = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let plain = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        store.setTint(SidebarTint(color: .green, parts: [.name]), forSession: named.id)
+
+        store.setTintColor(TintValue.hex("#3a7bd5"), forSessions: [named.id, plain.id])
+
+        #expect(named.tint == SidebarTint(color: .hex("#3a7bd5"), parts: [.name]))
+        #expect(plain.tint == SidebarTint(color: .hex("#3a7bd5"), parts: [.icon]))
+    }
+
     @Test func batchPlacementKeepsEachRowsColorAndSkipsUntintedRows() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
@@ -78,13 +91,13 @@ struct AppStoreTintTests {
         let work = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
         store.setTint(SidebarTint(color: .purple, parts: [.icon, .name]), forSession: session.id)
-        store.setTint(SidebarTint(color: .gray, parts: [.name]), forWorkspace: work.id)
+        store.setTint(SidebarTint(color: .hex("#3a7bd5"), parts: [.name]), forWorkspace: work.id)
 
         let reloaded = AppStore(persistence: persistence)
         reloaded.restore(from: persistence.load())
 
         #expect(reloaded.session(withID: session.id)?.tint == SidebarTint(color: .purple, parts: [.icon, .name]))
-        #expect(reloaded.workspaces.first { $0.id == work.id }?.tint == SidebarTint(color: .gray, parts: [.name]))
+        #expect(reloaded.workspaces.first { $0.id == work.id }?.tint == SidebarTint(color: .hex("#3a7bd5"), parts: [.name]))
     }
 
     @Test func duplicateDoesNotCopyTheTint() throws {
@@ -137,11 +150,11 @@ struct AppStoreTintTests {
         let tinted = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
         _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
         store.setTint(SidebarTint(color: .green, parts: [.name, .icon]), forSession: tinted.id)
-        store.setTint(SidebarTint(color: .yellow, parts: [.name]), forWorkspace: work.id)
+        store.setTint(SidebarTint(color: .hex("#3a7bd5"), parts: [.name]), forWorkspace: work.id)
 
         let node = try #require(store.controlTree().workspaces.first { $0.id == work.id.uuidString })
 
-        #expect(node.tint == "yellow")
+        #expect(node.tint == "#3a7bd5")
         #expect(node.tintOn == ["name"])
         #expect(node.sessions[0].tint == "green")
         #expect(node.sessions[0].tintOn == ["icon", "name"])

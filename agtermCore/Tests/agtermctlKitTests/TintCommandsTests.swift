@@ -44,7 +44,8 @@ struct TintCommandsTests {
     }
 
     @Test(arguments: [
-        (["session", "tint", "teal"], "tint must be one of: red|orange|yellow|green|blue|purple|gray, or clear"),
+        (["session", "tint", "maroon"], "tint must be one of: red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint, a #rrggbb color, or clear"),
+        (["session", "tint", "#3a7bd"], "tint must be one of: red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint, a #rrggbb color, or clear"),
         (["session", "tint", "clear", "--on", "icon"], "--on does not apply to clear"),
         (["session", "tint", "red", "--on", "icon,strip"], "--on must list icon and/or name, comma-separated"),
         (["workspace", "tint", "red", "--on", ""], "--on must list icon and/or name, comma-separated"),
@@ -59,6 +60,14 @@ struct TintCommandsTests {
         #expect(req.args?.tintOn == ["icon", "name"])
     }
 
+    @Test func tintTakesAHexForSetAndCreation() throws {
+        #expect(try request(["session", "tint", "#3A7BD5"]).args == ControlArgs(mode: "set", tint: "#3a7bd5"))
+        #expect(try request(["workspace", "tint", "3a7bd5", "--on", "name"]).args
+            == ControlArgs(mode: "set", tint: "3a7bd5", tintOn: ["name"]))
+        #expect(try request(["session", "new", "--tint", "#3a7bd5"]).args?.tint == "#3a7bd5")
+        #expect(try request(["workspace", "new", "--tint", "3A7BD5"]).args?.tint == "3a7bd5")
+    }
+
     @Test func workspaceNewCarriesTheCreationTint() throws {
         let req = try request(["workspace", "new", "prod", "--tint", "red"])
         #expect(req == ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "prod", tint: "red")))
@@ -66,7 +75,7 @@ struct TintCommandsTests {
 
     @Test(arguments: [
         (["session", "new", "--tint-on", "icon"], "--tint-on requires --tint"),
-        (["workspace", "new", "--tint", "teal"], "--tint must be one of: red|orange|yellow|green|blue|purple|gray"),
+        (["workspace", "new", "--tint", "maroon"], "--tint must be one of: red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint, or a #rrggbb color"),
         (["workspace", "new", "--tint", "red", "--tint-on", "both"], "--tint-on must list icon and/or name, comma-separated"),
     ])
     func creationTintRejectsBadInputAtParseTime(_ tc: ([String], String)) {
