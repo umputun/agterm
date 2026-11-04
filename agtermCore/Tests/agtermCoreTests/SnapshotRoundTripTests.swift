@@ -10,7 +10,7 @@ struct SnapshotRoundTripTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let local = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        let remote = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
 
         let snapshot = store.snapshot()
 
