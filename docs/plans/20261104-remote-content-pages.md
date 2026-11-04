@@ -205,23 +205,23 @@
 - Modify: `agterm/Views/ImageProbe.swift` (shared reader caps, if the cap constants move)
 - Modify: `agtermTests/ControlServerPageServeTests.swift`
 
-- [ ] `openImageOverlay`: when `pageBelongsRemote` says the presenter holds the slot, skip origin-side sizing and
+- [x] `openImageOverlay`: when `pageBelongsRemote` says the presenter holds the slot, skip origin-side sizing and
       pass the probed oriented pixel size in the open options
-- [ ] claim-expiry scheduling in `openHtmlOverlay` covers the content kinds
-- [ ] `PageServeStream.transfer`: open a content page's file through `BoundedFile` with that kind's cap and refuse
+- [x] claim-expiry scheduling in `openHtmlOverlay` covers the content kinds
+- [x] `PageServeStream.transfer`: open a content page's file through `BoundedFile` with that kind's cap and refuse
       a non-regular, offloaded or oversized file with a failure frame; `.file` pages stream as today. Caps: an image
       page's own file `ImagePage.maxBytes`; a text page's own file `TextPage.maxBytes`; a markdown page's own file
       `MarkdownPage.maxBytes`, and each of its pictures `MarkdownPage.maxImageBytes`
-- [ ] a markdown page's picture is served only when its bytes carry a picture signature
+- [x] a markdown page's picture is served only when its bytes carry a picture signature
       (`ImagePage.mimeType(sniffing:)`), checked on the origin before the first chunk; any other sibling, whatever
       its name, is refused, so no non-picture file inside the folder crosses the channel. The extension plays no
       part, matching the local probe
-- [ ] `PageServeStream.answer`: refuse every bridge request for a content page
-- [ ] tests: transfer serves an image, a markdown file and its picture, and a text file; refuses an oversized file,
+- [x] `PageServeStream.answer`: refuse every bridge request for a content page
+- [x] tests: transfer serves an image, a markdown file and its picture, and a text file; refuses an oversized file,
       a FIFO and a file outside the kind's rule; a bridge request on a content page is refused
-- [ ] tests: for a markdown page, a non-picture sibling is refused (one named `notes.txt` and one named `fake.png`),
+- [x] tests: for a markdown page, a non-picture sibling is refused (one named `notes.txt` and one named `fake.png`),
       a valid picture with no image suffix is served, and a picture over 4 MiB but under 32 MiB is served
-- [ ] run the targeted hosted tests (`-only-testing:agtermTests/ControlServerPageServeTests`) - must pass before
+- [x] run the targeted hosted tests (`-only-testing:agtermTests/ControlServerPageServeTests`) - must pass before
       task 3
 
 ### Task 3: Viewer app side - fetch, probe, build and size content replicas

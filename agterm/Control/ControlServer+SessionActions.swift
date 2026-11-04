@@ -104,7 +104,7 @@ extension ControlServer: ControlActions {
                                   clicked: options.clicked)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
-            if case .file = page { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
+            if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, pageID: overlay.id.uuidString))
         case .slotTaken: return ControlResponse(ok: false, error: alreadyOpen)
         case .paneMissing: return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)

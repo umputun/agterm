@@ -60,6 +60,15 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
         self.persistent = persistent
         self.browse = browse
     }
+
+    /// with returns these options carrying an image page's probed size.
+    public func with(imagePixels: ImagePixels) -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: command, cwd: cwd, wait: wait, sizePercent: sizePercent,
+                                         backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
+                                         navigation: navigation, javascript: javascript, chromeless: chromeless,
+                                         persistent: persistent, browse: browse, points: points, clicked: clicked,
+                                         imagePixels: imagePixels)
+    }
 }
 
 public struct ControlSessionBackgroundOptions: Equatable, Sendable {

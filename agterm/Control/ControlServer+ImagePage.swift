@@ -36,8 +36,12 @@ extension ControlServer {
         if store.session(withID: id)?.overlayHidden(options.pane) == true {
             return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
         }
-        guard options.pane == nil, options.sizePercent == nil, options.points.isEmpty else {
-            return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: options)
+        let natural = probe.natural(scale: 1)
+        let pixels = ImagePixels(width: Int(natural.width), height: Int(natural.height))
+        // the presenting Mac sizes an unsized picture for its own screen, so it gets the pixels and no points
+        guard options.pane == nil, options.sizePercent == nil, options.points.isEmpty,
+              !store.pageBelongsRemote(id, pane: nil) else {
+            return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: options.with(imagePixels: pixels))
         }
         let scale = library.windowID(forSession: id).flatMap(WindowRegistry.shared.backingScale)
             ?? Double(NSScreen.main?.backingScaleFactor ?? 1)
