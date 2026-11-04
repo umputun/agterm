@@ -113,7 +113,9 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
             let row = try item(color.rawValue.capitalized, in: menu)
             XCTAssertNotNil(row.image, "\(color) has no swatch")
             if #available(macOS 27, *) {
-                XCTAssertEqual(row.preferredImageVisibility, .visible, "\(color) swatch left to the system default")
+                XCTAssertTrue(row.responds(to: NSSelectorFromString("setPreferredImageVisibility:")))
+                XCTAssertEqual((row.value(forKey: "preferredImageVisibility") as? NSNumber)?.intValue, 1,
+                               "\(color) swatch left to the system default")
             }
         }
     }

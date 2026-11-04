@@ -50,11 +50,14 @@ extension WorkspaceSidebar.Coordinator {
         return tint
     }
 
-    /// colorItem is one swatched color row. macOS 27 hides menu item images by default, so the swatch asks to stay.
+    /// colorItem is one swatched color row. macOS 27 can hide menu item images by default, so the swatch asks to stay.
     private func colorItem(_ title: String, _ value: TintValue, checked: Bool, request: TintMenuRequest) -> NSMenuItem {
         let item = NSMenuItem(title: title, action: #selector(menuTint(_:)), keyEquivalent: "")
         item.image = Self.swatch(value)
-        if #available(macOS 27, *) { item.preferredImageVisibility = .visible }
+        // preferredImageVisibility is macOS 27 SDK API the CI toolchain cannot name, so it is set by key; 1 is .visible
+        if item.responds(to: NSSelectorFromString("setPreferredImageVisibility:")) {
+            item.setValue(1, forKey: "preferredImageVisibility")
+        }
         item.state = checked ? .on : .off
         item.target = self
         item.representedObject = request

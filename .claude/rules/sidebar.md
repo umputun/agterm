@@ -29,7 +29,8 @@ paths:
   indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only below the
   gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
 - macOS 27 hides `NSMenuItem` images under the default `preferredImageVisibility` (`.automatic`), which is
-  how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`.
+  how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`, by key
+  (`setValue(1, forKey: "preferredImageVisibility")`) while CI builds with the macOS 26 SDK, which lacks the property.
 
 ## Drag and row actions
 
