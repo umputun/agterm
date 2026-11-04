@@ -192,9 +192,10 @@ C-boundary concurrency before changing the bridge.
 
 ## Protect the live terminal
 
-- Never run a mutating `agtermctl` command on the default socket. It controls the user's live deployed
-  terminal. Read-only `tree` and `window list` are tolerable; writes require explicit isolated socket.
-  Never execute bundled recipes against the default instance.
+- Never run experimental or test `agtermctl` mutations (bundled recipes, probes, test scenarios) on the
+  default socket; it controls the user's live daily-driver terminal, so experiments go to an isolated socket.
+  A session's normal operations on itself (context, rename, status, notify, HUD, chat, its own companions)
+  are ordinary use.
 - Every delegated agent that might touch the app or CLI must receive verbatim:
   “never execute `agterm`/`agtermctl` against the default socket, never launch or quit the app, static
   reading only.”
