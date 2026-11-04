@@ -115,6 +115,11 @@ C-boundary concurrency before changing the bridge.
   connecting. Both runners recovered once Eugene allowed the pending authorization, with the same stale
   session host and the same `testmanagerd` still running, so neither needs a restart. SIP refuses
   `launchctl kickstart -k` on `testmanagerd`. [Unverified] which authorization that was.
+- A TCC-gated tool run from a shell in the live terminal (`screencapture`, XCUITest) can be denied after a
+  deploy replaces the app under a running `agterm-session-host`, even with an existing grant.
+  `codesign -v <pid>` reports the code on disk does not match, and tccd logs
+  `Failed to match existing code requirement`. Check both before calling a permission missing;
+  a Debug instance can capture its own view in-process instead.
 - For maintainer work, ask before splitting a touched long file and do not raise limits reflexively.
   Contributors need not refactor preexisting length; mention it without blocking or suggesting a limit bump.
 
