@@ -294,7 +294,7 @@
 ### Task 6: [Final] Update documentation
 - [x] update README.md only if its remote-session synopsis names the page kinds that travel (it names none: no change)
 - [x] update CLAUDE.md if a new pattern was discovered (none)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
