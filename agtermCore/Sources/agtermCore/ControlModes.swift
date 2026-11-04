@@ -75,6 +75,22 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
+/// Parsed density for `sidebar.density`; an omitted mode is `toggle`.
+public enum ControlSidebarDensityMode: Equatable, Sendable {
+    case standard
+    case compact
+    case toggle
+
+    public static func parse(_ mode: String?) -> ControlSidebarDensityMode? {
+        switch mode ?? "toggle" {
+        case SidebarDensity.standard.rawValue: return .standard
+        case SidebarDensity.compact.rawValue: return .compact
+        case "toggle": return .toggle
+        default: return nil
+        }
+    }
+}
+
 /// Parsed layout for `sidebar.flagged-layout`.
 public enum ControlFlaggedLayoutMode: Equatable, Sendable {
     case flat

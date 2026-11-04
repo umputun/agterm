@@ -134,6 +134,7 @@ public protocol ControlActions {
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func setFlaggedViewLayout(_ mode: ControlFlaggedLayoutMode) -> ControlResponse
+    func setSidebarDensity(_ mode: ControlSidebarDensityMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
     func setSidebarWidth(_ points: Double, window: String?) -> ControlResponse

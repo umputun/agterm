@@ -220,6 +220,13 @@ final class SettingsModel {
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     func setSidebarFontSize(_ value: Double?) { settings.sidebarFontSize = value; persistAndApply() }
+
+    /// Persist the sidebar row spacing; `standard` is the nil case. An unchanged value skips the write.
+    func setSidebarDensity(_ density: SidebarDensity) {
+        guard density != settings.effectiveSidebarDensity else { return }
+        settings.sidebarDensity = density == .standard ? nil : density.rawValue
+        persistAndApply()
+    }
     func setInterfaceFontSize(_ value: Double?) { settings.interfaceFontSize = value; persistAndApply() }
     func setQuickTerminalSizePercent(_ value: Int?) {
         settings.quickTerminalSizePercent = value
@@ -867,6 +874,7 @@ final class SettingsModel {
 
     private func applySidebarFontSize() {
         GhosttyApp.shared.setSidebarFontSize(settings.effectiveSidebarFontSize)
+        GhosttyApp.shared.setSidebarDensity(settings.effectiveSidebarDensity)
     }
 
     private func applyInterfaceFontSize() {

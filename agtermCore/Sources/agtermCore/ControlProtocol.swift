@@ -77,6 +77,7 @@ public enum Command: String, Codable, Sendable {
     case sidebar
     case sidebarMode = "sidebar.mode"
     case sidebarFlaggedLayout = "sidebar.flagged-layout"
+    case sidebarDensity = "sidebar.density"
     case sidebarExpand = "sidebar.expand"
     case sidebarCollapse = "sidebar.collapse"
     case sidebarWidth = "sidebar.width"
@@ -198,7 +199,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var select: Bool?
     /// Mode for `session.split` (`on|off|toggle`), `quick`/`surface.zoom` (`show|hide|toggle`),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
-    /// `sidebar.flagged-layout` (`flat|plain|tree|toggle`),
+    /// `sidebar.flagged-layout` (`flat|plain|tree|toggle`), `sidebar.density` (`default|compact|toggle`),
     /// `workspace.focus` (`on|off|toggle|add`), `workspace.filter`/`workspace.flag`/`window.minimize` (`on|off|toggle`),
     /// `session.background` (`image|text|color|clear`), `session.restore` (`set|none|clear` — pin
     /// `command`, pin nothing, or drop the pin), and `session.context` (`set|clear`).

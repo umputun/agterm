@@ -120,7 +120,8 @@ navigation walks every open window; `session go` stays in its window), `sidebarV
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
 (`tree` or `flagged` — the read side of `sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide —
 the read side of `browser links`), `sidebarFlaggedLayout` (`flat`, `plain` or `tree`, app-wide —
-the read side of `sidebar flagged-layout`), `flaggedOrder` (the window's flagged session ids in the flat list's
+the read side of `sidebar flagged-layout`), `sidebarDensity` (`default` or `compact`, app-wide — the read side of
+`sidebar density`), `flaggedOrder` (the window's flagged session ids in the flat list's
 saved order — the read side of `session flag move`, omitted when nothing is flagged), `sidebarWidth` (the sidebar divider position in
 points — the read side of `sidebar width`, on `tree` only), `workspaceFilter`, `quickVisible` (whether the
 quick terminal is shown — the read side of the write-only `quick` command; app-level, so every window
@@ -676,7 +677,9 @@ per app, so none of them take `--target`/`--window`/`--pane`; all three still ne
 `sidebar mode [tree|flagged|toggle]` (flip between the workspace tree and the flagged working set; read
 back from the tree's top-level `sidebarMode`) · `sidebar flagged-layout [flat|plain|tree|toggle]` (arrange the flagged
 view as one flat list, `plain` for the same list without workspace names, or nested under workspace rows; app-wide, no `--window`, echoes the resulting layout; read
-back from `sidebarFlaggedLayout`) · `sidebar expand [--window W]` (expand every workspace) ·
+back from `sidebarFlaggedLayout`) · `sidebar density [default|compact|toggle]` (sidebar row spacing, `compact` for
+shorter rows and a smaller indent; app-wide, no `--window`, echoes the result; read back from `sidebarDensity`) ·
+`sidebar expand [--window W]` (expand every workspace) ·
 `sidebar collapse [--window W]` (collapse all workspaces except the active one, which stays expanded) ·
 `sidebar width <points> [--window W]` (move the divider, clamped to 160...560pt; prints the stored width
 and reads back from the tree's top-level `sidebarWidth`).

@@ -302,6 +302,11 @@ paths:
   the section's bottom inset does not; `assertGeneralTabFits` in `SettingsUITests` scrolls the tab and
   requires the closing hint not to move.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
+- `sidebarDensity` is a raw `SidebarDensity` (`default`|`compact`), nil for the default, resolved by
+  `effectiveSidebarDensity` and mirrored to `GhosttyApp.sidebarDensity`; app-wide. `SidebarDensity` owns every
+  metric it changes, and [[sidebar]] owns how a mounted outline applies them. Its picker sits under Sidebar font
+  size in Appearance, which `testSidebarDensityPickerPersistsAndTheAppearanceTabFits` keeps from scrolling.
+  The control catalog carries it as `sidebar.density`.
 - `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
   `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while the key
   window's first responder is a `GhosttySurfaceView`, reselects on every source-change notification, and

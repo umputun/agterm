@@ -326,7 +326,8 @@ visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, t
 `sidebar mode`), `linkOpenMode` (`browser`, `overlay`, `overlay95`, `overlay75` or `overlay50`, app-wide, the read side of `browser links`),
 `sidebarFlaggedLayout` (`flat`, `plain` or `tree` — how the flagged view is arranged, the read side
 of `sidebar flagged-layout`; app-wide, so every window reports the same value, under the ordinary tree
-too), `flaggedOrder` (the window's flagged session ids in the flat list's saved order, the read side of
+too), `sidebarDensity` (`default` or `compact` — the sidebar row spacing, the read side of `sidebar density`;
+app-wide), `flaggedOrder` (the window's flagged session ids in the flat list's saved order, the read side of
 `session flag move`; omitted when nothing is flagged), `sidebarWidth` (the sidebar divider position in points, the read side of
 `sidebar width`, reported here and nowhere else), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
 the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
@@ -1731,6 +1732,12 @@ needed, and every window's flagged view follows at once. Setting it never enters
 moves the selection. Returns the resulting layout in `result.text`; read back as the tree's top-level
 `sidebarFlaggedLayout`, reported under the ordinary tree too. The tree layout shares each workspace's
 collapse state with the ordinary tree, ignores the focus filter, and keeps `workspace go` unavailable.
+
+`agtermctl sidebar density [default|compact|toggle]` — pick the sidebar row spacing. `compact` shortens rows
+and their indent; `default` restores the standard spacing. `toggle` is the default; an unknown density is an
+error. APP-WIDE, the same setting as Settings ▸ Appearance ▸ Sidebar density: no `--window`, no open window
+needed, and every window's sidebar follows at once. Returns the resulting density in `result.text`; read back
+as the tree's top-level `sidebarDensity`.
 
 `agtermctl sidebar expand [--window W]` — expand every workspace row in a window's sidebar tree.
 Defaults to the frontmost window; `--window` (id / prefix / `active`) targets any OPEN window, so a

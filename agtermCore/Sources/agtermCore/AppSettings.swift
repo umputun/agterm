@@ -20,6 +20,62 @@ public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case tree
 }
 
+/// SidebarDensity is the sidebar's row spacing: `standard` (raw "default") or `compact`, which tightens the
+/// row padding, indent and info-line gap. App-wide. Raw-stored, resolved by `effectiveSidebarDensity`.
+public enum SidebarDensity: String, Codable, Sendable, CaseIterable {
+    case standard = "default"
+    case compact
+
+    /// displayName is the Settings picker's label for the value.
+    public var displayName: String {
+        switch self {
+        case .standard: "Default"
+        case .compact: "Compact"
+        }
+    }
+
+    /// rowPadding is the vertical padding a row adds to its rounded font size.
+    public var rowPadding: Double {
+        switch self {
+        case .standard: 15
+        case .compact: 10
+        }
+    }
+
+    /// indentPerLevel is the outline's horizontal step per nesting level.
+    public var indentPerLevel: Double {
+        switch self {
+        case .standard: 14
+        case .compact: 10
+        }
+    }
+
+    /// titleLift raises the row name above the row's center. A centered text box leaves lowercase letters
+    /// visibly low, which the compact row's tighter selection exposes.
+    public var titleLift: Double {
+        switch self {
+        case .standard: 0
+        case .compact: 1
+        }
+    }
+
+    /// selectionInset is the gap between a selected row's highlight and its row edge, top and bottom.
+    public var selectionInset: Double {
+        switch self {
+        case .standard: 1.5
+        case .compact: 0.5
+        }
+    }
+
+    /// infoLineSpacing is how far an info line lifts into the title band, and the padding under it.
+    public var infoLineSpacing: Double {
+        switch self {
+        case .standard: 6
+        case .compact: 4
+        }
+    }
+}
+
 /// SessionInfoDisplay is where the sidebar draws a session's info line: in every sidebar view, only in the
 /// flagged view, or nowhere. It gates drawing alone; the line, its expiry and its read-back stay either way.
 /// App-wide. Raw-stored, resolved by `effectiveSessionInfoDisplay`.
@@ -417,6 +473,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// sessionInfoDisplay is the raw `SessionInfoDisplay` for the sidebar info line; nil = always. Resolved by
     /// `effectiveSessionInfoDisplay`.
     public var sessionInfoDisplay: String?
+    /// sidebarDensity is the raw `SidebarDensity`; nil = default. Resolved by `effectiveSidebarDensity`.
+    public var sidebarDensity: String?
     /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
     public var linkOpenMode: String?
     /// terminalInputSource is the keyboard input source id held while a terminal has the keyboard; nil = off.
@@ -456,8 +514,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
                 linkOpenMode: String? = nil, terminalInputSource: String? = nil,
-                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil, sessionInfoDisplay: String? = nil) {
+                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil, sessionInfoDisplay: String? = nil,
+                sidebarDensity: String? = nil) {
         self.sessionInfoDisplay = sessionInfoDisplay
+        self.sidebarDensity = sidebarDensity
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -665,10 +725,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
         Self.clampInterfaceFontSize(interfaceFontSize ?? Self.defaultInterfaceFontSize)
     }
 
-    /// The outline row height: the clamped point size plus a fixed 15pt of vertical padding, so the
-    /// default 13pt maps to a 28pt row. The row icon and status glyph keep their fixed sizes.
-    public static func sidebarRowHeight(fontSize: Double) -> Double {
-        clampSidebarFontSize(fontSize).rounded() + 15
+    /// The resolved sidebar density: the explicit `sidebarDensity` when a KNOWN raw value, else `standard`.
+    public var effectiveSidebarDensity: SidebarDensity {
+        sidebarDensity.flatMap(SidebarDensity.init(rawValue:)) ?? .standard
+    }
+
+    /// The outline row height: the clamped point size plus the density's vertical padding, so the default
+    /// 13pt maps to a 28pt row (23pt compact). The row icon and status glyph keep their fixed 16pt.
+    public static func sidebarRowHeight(fontSize: Double, density: SidebarDensity = .standard) -> Double {
+        clampSidebarFontSize(fontSize).rounded() + density.rowPadding
     }
 
     /// The theme name that renders for the given appearance, the dark slot falling back to `theme`. Used

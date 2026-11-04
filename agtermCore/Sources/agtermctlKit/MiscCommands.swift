@@ -689,7 +689,7 @@ struct ModalCommandRunner {
 struct Sidebar: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Sidebar visibility and view mode.",
-        subcommands: [Visibility.self, Mode.self, FlaggedLayout.self, Expand.self, Collapse.self, Width.self],
+        subcommands: [Visibility.self, Mode.self, FlaggedLayout.self, Density.self, Expand.self, Collapse.self, Width.self],
         defaultSubcommand: Visibility.self
     )
 
@@ -737,6 +737,24 @@ struct Sidebar: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: layout))
+        }
+    }
+
+    /// Sets every window's sidebar row spacing; app-wide, so no `--window`.
+    struct Density: RequestCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "density", abstract: "Sidebar density (default|compact|toggle).")
+        @Argument(help: "Density: default, compact, or toggle (default).") var density: String = "toggle"
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            guard ControlSidebarDensityMode.parse(density) != nil else {
+                throw ValidationError("density must be default, compact, or toggle")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sidebarDensity, args: ControlArgs(mode: density))
         }
     }
 
