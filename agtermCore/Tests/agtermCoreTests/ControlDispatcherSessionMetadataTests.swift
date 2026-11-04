@@ -162,7 +162,7 @@ struct ControlDispatcherSessionMetadataTests {
         ControlArgs(text: "x", mode: "set", hideAfter: 86_401),
         ControlArgs(text: "   ", mode: "set"),
         ControlArgs(text: "a\nb", mode: "set"),
-        ControlArgs(text: "^[a](color: \"pink\")", mode: "set", markdown: true),
+        ControlArgs(text: "^[a](color: \"maroon\")", mode: "set", markdown: true),
         ControlArgs(text: "^[a](color: red)", mode: "set", markdown: true),
         ControlArgs(text: String(repeating: "a", count: 513), mode: "set"),
     ])
@@ -634,6 +634,20 @@ struct ControlDispatcherSessionMetadataTests {
         ])
     }
 
+    @Test func tintSetAndCreationTakeANormalizedHex() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(cmd: .workspaceTint, args: ControlArgs(mode: "set", tint: "#3A7BD5")))
+        let created = await dispatcher.dispatch(ControlRequest(cmd: .sessionCompanionNew, args: ControlArgs(tint: "3a7bd5")))
+
+        #expect(set == ControlResponse(ok: true) && created == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .workspaceTint(target: nil, window: nil, .set(TintValue.hex("#3a7bd5"), parts: nil)),
+            .companionNew(target: nil, options: CompanionOptions(tint: SidebarTint(color: .hex("#3a7bd5"))), window: nil),
+        ])
+    }
+
     @Test func workspaceTintRoutesToTheWorkspaceAction() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -647,7 +661,8 @@ struct ControlDispatcherSessionMetadataTests {
 
     @Test(arguments: [
         (ControlArgs(mode: "set"), "session.tint set requires a color"),
-        (ControlArgs(mode: "set", tint: "teal"), "invalid tint: teal (red|orange|yellow|green|blue|purple|gray)"),
+        (ControlArgs(mode: "set", tint: "maroon"), "invalid tint: maroon (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
+        (ControlArgs(mode: "set", tint: "#3a7bd"), "invalid tint: #3a7bd (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
         (ControlArgs(mode: "set", tint: "red", tintOn: ["strip"]), "invalid tint placement: strip (icon,name)"),
         (ControlArgs(mode: "set", tint: "red", tintOn: []), "invalid tint placement:  (icon,name)"),
         (ControlArgs(mode: "clear", tint: "red"), "session.tint clear takes no color or placement"),
@@ -679,7 +694,7 @@ struct ControlDispatcherSessionMetadataTests {
 
     @Test(arguments: [
         (ControlArgs(tintOn: ["icon"]), "--tint-on requires --tint"),
-        (ControlArgs(tint: "teal"), "invalid tint: teal (red|orange|yellow|green|blue|purple|gray)"),
+        (ControlArgs(tint: "maroon"), "invalid tint: maroon (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
         (ControlArgs(tint: "red", tintOn: ["both"]), "invalid tint placement: both (icon,name)"),
     ])
     func creationRefusesABadTintBeforeCreatingAnything(_ tc: (ControlArgs, String)) async {

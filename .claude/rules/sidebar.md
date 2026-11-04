@@ -28,6 +28,8 @@ paths:
   reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27 and up, the
   indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only below the
   gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
+- macOS 27 hides `NSMenuItem` images under the default `preferredImageVisibility` (`.automatic`), which is
+  how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`.
 
 ## Drag and row actions
 

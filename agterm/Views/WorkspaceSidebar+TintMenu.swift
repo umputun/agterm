@@ -26,12 +26,11 @@ extension WorkspaceSidebar.Coordinator {
         none.representedObject = request(.color(nil))
         submenu.addItem(none)
         for color in TintColor.allCases {
-            let item = NSMenuItem(title: color.rawValue.capitalized, action: #selector(menuTint(_:)), keyEquivalent: "")
-            item.image = Self.swatch(color)
-            item.state = colors == [color] ? .on : .off
-            item.target = self
-            item.representedObject = request(.color(color))
-            submenu.addItem(item)
+            let value = TintValue.named(color)
+            submenu.addItem(colorItem(color.rawValue.capitalized, value, checked: colors == [value], request: request(.color(value))))
+        }
+        if colors.count == 1, case let .hex(hex)?? = colors.first {
+            submenu.addItem(colorItem("Custom \(hex)", .hex(hex), checked: true, request: request(.color(.hex(hex)))))
         }
         submenu.addItem(.separator())
         submenu.addItem(.sectionHeader(title: "Show On"))
@@ -51,6 +50,17 @@ extension WorkspaceSidebar.Coordinator {
         return tint
     }
 
+    /// colorItem is one swatched color row. macOS 27 hides menu item images by default, so the swatch asks to stay.
+    private func colorItem(_ title: String, _ value: TintValue, checked: Bool, request: TintMenuRequest) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: #selector(menuTint(_:)), keyEquivalent: "")
+        item.image = Self.swatch(value)
+        if #available(macOS 27, *) { item.preferredImageVisibility = .visible }
+        item.state = checked ? .on : .off
+        item.target = self
+        item.representedObject = request
+        return item
+    }
+
     @objc private func menuTint(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? TintMenuRequest else { return }
         if let workspaceID = request.workspaceID {
@@ -59,13 +69,14 @@ extension WorkspaceSidebar.Coordinator {
             return
         }
         switch request.choice {
-        case .color(let color): store.setTintColor(color, forSessions: request.sessionIDs)
+        case .color(let value?): store.setTintColor(value, forSessions: request.sessionIDs)
+        case .color(nil): store.setTintColor(nil, forSessions: request.sessionIDs)
         case .parts(let parts): store.setTintParts(parts, forSessions: request.sessionIDs)
         }
     }
 
     /// swatch draws at display time, so the dynamic system color follows the menu's appearance.
-    private static func swatch(_ color: TintColor) -> NSImage {
+    private static func swatch(_ color: TintValue) -> NSImage {
         NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
             NSColor.tint(color).setFill()
             NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
@@ -76,12 +87,12 @@ extension WorkspaceSidebar.Coordinator {
     /// TintMenuRequest carries one menu choice and the rows it was built for, so it acts on exactly those.
     private final class TintMenuRequest {
         enum Choice {
-            case color(TintColor?)
+            case color(TintValue?)
             case parts(Set<TintPart>)
 
             func applied(to current: SidebarTint?) -> SidebarTint? {
                 switch self {
-                case .color(let color): SidebarTint.recolor(current, to: color)
+                case .color(let value): value.map { SidebarTint.recolor(current, to: $0) }
                 case .parts(let parts): SidebarTint.place(current, on: parts)
                 }
             }

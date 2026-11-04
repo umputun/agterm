@@ -102,6 +102,55 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         XCTAssertNil(sessions[0].tint)
     }
 
+    func testEveryPaletteColorIsListedWithASwatch() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [nil])
+        buildSidebar(for: store)
+
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        for color in TintColor.allCases {
+            let row = try item(color.rawValue.capitalized, in: menu)
+            XCTAssertNotNil(row.image, "\(color) has no swatch")
+            if #available(macOS 27, *) {
+                XCTAssertEqual(row.preferredImageVisibility, .visible, "\(color) swatch left to the system default")
+            }
+        }
+    }
+
+    func testAHexTintShowsACheckedCustomEntryThatANameReplaces() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [SidebarTint(color: .hex("#3a7bd5"), parts: [.name])])
+        buildSidebar(for: store)
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        let custom = try item("Custom #3a7bd5", in: menu)
+        XCTAssertEqual(custom.state, .on)
+        XCTAssertNotNil(custom.image)
+        XCTAssertEqual(try item("None", in: menu).state, .off)
+        XCTAssertTrue(TintColor.allCases.allSatisfy { (try? item($0.rawValue.capitalized, in: menu).state) == .off })
+        XCTAssertEqual(try item("Name", in: menu).state, .on)
+
+        try perform("Mint", in: menu)
+
+        XCTAssertEqual(sessions[0].tint, SidebarTint(color: .mint, parts: [.name]))
+        XCTAssertNil(try tintMenu(onSession: sessions[0].id).items.first { $0.title.hasPrefix("Custom") })
+    }
+
+    func testAMixedBatchShowsNoCustomEntry() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [SidebarTint(color: .hex("#3a7bd5")), SidebarTint(color: .hex("#112233"))])
+        store.setSidebarSelection(sessions.map(\.id))
+        buildSidebar(for: store)
+
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        XCTAssertNil(menu.items.first { $0.title.hasPrefix("Custom") })
+        XCTAssertEqual(try item("None", in: menu).state, .off)
+        XCTAssertTrue(TintColor.allCases.allSatisfy { (try? item($0.rawValue.capitalized, in: menu).state) == .off })
+        XCTAssertEqual(try item("Icon", in: menu).state, .on)
+    }
+
     func testWorkspaceMenuTintsTheWorkspaceRowAlone() throws {
         let store = try XCTUnwrap(library.activeStore)
         let (workspaceID, sessions) = try seed(store, tints: [nil])
@@ -132,6 +181,12 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         coordinator.reconcile()
         tinted = try cell(forSession: sessions[0].id)
         XCTAssertEqual(tinted.textField?.textColor, NSColor.systemGreen)
+
+        store.setTint(SidebarTint(color: .hex("#3a7bd5"), parts: [.icon]), forSession: sessions[0].id)
+        coordinator.reconcile()
+        tinted = try cell(forSession: sessions[0].id)
+        XCTAssertEqual(tinted.imageView?.contentTintColor, NSColor(agtermHex: "#3a7bd5"))
+        XCTAssertEqual(tinted.imageView?.accessibilityValue() as? String, "#3a7bd5 tint")
 
         store.setTint(nil, forSession: sessions[0].id)
         coordinator.reconcile()

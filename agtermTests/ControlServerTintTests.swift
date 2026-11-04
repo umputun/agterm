@@ -55,6 +55,18 @@ final class ControlServerTintTests: XCTestCase {
         XCTAssertNil(store.session(withID: session.id)?.tint)
     }
 
+    func testSessionTintTakesAHexAndReadsItBack() throws {
+        let (store, session) = try addSession()
+
+        let response = server.setSessionTint(session.id.uuidString, window: nil,
+                                             update: .set(TintValue.hex("#3a7bd5"), parts: [.name]))
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(store.session(withID: session.id)?.tint, SidebarTint(color: .hex("#3a7bd5"), parts: [.name]))
+        let node = store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        XCTAssertEqual(node?.tint, "#3a7bd5")
+    }
+
     func testSessionTintReportsAnUnknownTarget() throws {
         _ = try addSession()
 

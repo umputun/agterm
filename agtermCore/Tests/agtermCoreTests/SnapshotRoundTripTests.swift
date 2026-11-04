@@ -309,7 +309,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func anUnknownTintColorDropsOnlyTheTint() throws {
-        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"teal","on":["name"]}}"#
+        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"maroon","on":["name"]}}"#
         let decodedSession = try JSONDecoder().decode(SessionSnapshot.self, from: Data(session.utf8))
         #expect(decodedSession.tint == nil)
         #expect(decodedSession.flagged == true)

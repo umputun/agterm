@@ -4,7 +4,7 @@ import agtermCore
 /// TintRequest builds the shared `session tint`/`workspace tint` wire form from the CLI spelling, where the
 /// one argument is either a color or `clear`.
 enum TintRequest {
-    static let colorHelp = "A color (\(TintColor.validNamesList)) or 'clear'."
+    static let colorHelp = "A color (\(TintColor.validNamesList)), a #rrggbb hex, or 'clear'."
     static let onHelp = "Where the color shows: icon, name, or icon,name. Omitted keeps the current placement, else icon."
 
     static func validate(_ value: String, on: String?) throws {
@@ -12,8 +12,8 @@ enum TintRequest {
             guard on == nil else { throw ValidationError("--on does not apply to clear") }
             return
         }
-        guard TintColor(rawValue: value.lowercased()) != nil else {
-            throw ValidationError("tint must be one of: \(TintColor.validNamesList), or clear")
+        guard TintValue(rawValue: value) != nil else {
+            throw ValidationError("tint must be one of: \(TintColor.validNamesList), a #rrggbb color, or clear")
         }
         try validateParts(on, flag: "--on")
     }
@@ -38,7 +38,7 @@ enum TintRequest {
 
 /// TintCreateOptions is the creation tint `session new` and `workspace new` share.
 struct TintCreateOptions: ParsableArguments {
-    @Option(name: .long, help: "Create it tinted this color (\(TintColor.validNamesList)).") var tint: String?
+    @Option(name: .long, help: "Create it tinted this color (\(TintColor.validNamesList), or a #rrggbb hex).") var tint: String?
     @Option(name: .customLong("tint-on"), help: "With --tint: icon, name, or icon,name (default icon).") var tintOn: String?
 
     func validate() throws {
@@ -46,8 +46,8 @@ struct TintCreateOptions: ParsableArguments {
             guard tintOn == nil else { throw ValidationError("--tint-on requires --tint") }
             return
         }
-        guard TintColor(rawValue: tint.lowercased()) != nil else {
-            throw ValidationError("--tint must be one of: \(TintColor.validNamesList)")
+        guard TintValue(rawValue: tint) != nil else {
+            throw ValidationError("--tint must be one of: \(TintColor.validNamesList), or a #rrggbb color")
         }
         try TintRequest.validateParts(tintOn, flag: "--tint-on")
     }

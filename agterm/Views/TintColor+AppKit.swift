@@ -12,6 +12,19 @@ extension NSColor {
         case .blue: .systemBlue
         case .purple: .systemPurple
         case .gray: .systemGray
+        case .teal: .systemTeal
+        case .pink: .systemPink
+        case .brown: .systemBrown
+        case .indigo: .systemIndigo
+        case .mint: .systemMint
+        }
+    }
+
+    /// tint resolves a name as above and a hex to its fixed sRGB color.
+    static func tint(_ value: TintValue) -> NSColor {
+        switch value {
+        case let .named(color): tint(color)
+        case let .hex(hex): NSColor(agtermHex: hex) ?? .labelColor
         }
     }
 }
