@@ -1005,6 +1005,15 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(pair.viewer.overlayPoints.isEmpty)
         XCTAssertEqual(viewerNode(pair)?.image, shot.path)
         XCTAssertFalse(pair.origin.overlayActive)
+        let fitted = pair.viewer.overlayPoints
+
+        let resized = pair.server.resizeSessionOverlay(pair.origin.id.uuidString, window: nil, sizePercent: nil,
+                                                       points: OverlayPointSize(width: 600))
+
+        XCTAssertTrue(resized.ok, resized.error ?? "")
+        waitUntil("the viewer takes the width") { pair.viewer.overlayPoints.width == 600 }
+        XCTAssertEqual(pair.viewer.overlayPoints.height, fitted.height)
+        XCTAssertNotNil(fitted.height)
     }
 
     func testATextPageHandedToTheViewerKeepsItsLineAndFailsOnceItsFileOutgrowsTheCap() throws {

@@ -84,6 +84,7 @@ extension AppStore {
         var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: hub.presenterGeneration(session: sessionID),
                                      sizePercent: reserved, page: page)
         slot.points = points
+        slot.presenterSized = reserved != size
         session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
         HtmlPageOutcomes.shared.register(overlay.id)
@@ -137,7 +138,8 @@ extension AppStore {
     /// sits there or the stream it was handed to is gone.
     @discardableResult
     public func sendRemotePageCommand(_ sessionID: UUID, pane: OverlayPane?, action: PresentationPageAction,
-                                      sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize()) -> Bool {
+                                      sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
+                                      merge: Bool? = nil) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil,
               let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
         var seq = 0
@@ -149,7 +151,7 @@ extension AppStore {
             }
         }
         return hub.sendToPresenter(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
-                                                                        sizePercent: sizePercent, points: points)),
+                                                                        sizePercent: sizePercent, points: points, merge: merge)),
                                    session: sessionID)
     }
 

@@ -320,4 +320,17 @@ struct AppStoreReplicaPageTests {
         #expect(session.overlaySizePercent == 60)
         #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
     }
+
+    @Test func aMergingResizeKeepsTheAxisItDoesNotNameAndAPlainOneReplacesIt() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 95, points: OverlayPointSize(width: 400, height: 300)), forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 600), merge: true)
+        #expect(session.overlayPoints == OverlayPointSize(width: 600, height: 300))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 500))
+        #expect(session.overlayPoints == OverlayPointSize(width: 500))
+    }
 }

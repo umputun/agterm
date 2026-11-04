@@ -592,7 +592,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   presenting Mac carries its points in the request and resize frames only to a presenter listing
   `overlay.points`, an older one getting the percent alone; the presenter caps them against its own detail
   bounds. `resizeRemoteOverlay(_:sizePercent:points:)` resolves a resize against `RemoteOverlaySlot` the way
-  `resizeOverlayInPoints` does locally and sends the whole result, because the presenter replaces its size.
+  `resizeOverlayInPoints` does locally and sends the whole result, because the presenter replaces its size. The
+  exception is a picture the presenter sized itself (`RemoteOverlaySlot.presenterSized`): a point-only resize sends
+  just its axes with `merge`, the presenter merges them into its fitted size, and any other resize ends that.
   The origin's tree reports `remoteOverlays[].sizePercent` only: the panel's points are known on the presenter.
 - `overlay.copy`/`overlay.text` read the COVERING surface, which `session.copy`/`session.text` cannot reach
   (#434) — those address the pane the overlay hides, so a selection made in the overlay reads as

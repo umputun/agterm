@@ -148,6 +148,19 @@ struct PresentationFramesTests {
         #expect(try PresentationCodec.decode(line.dropLast()) == frame)
     }
 
+    @Test func aResizeCarriesMergeOnlyWhenAsked() throws {
+        let plain = PresentationFrame(gen: 1, rev: 1, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 2, action: .resize, sizePercent: 95, points: OverlayPointSize(width: 600))))
+        let merged = PresentationFrame(gen: 1, rev: 2, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 3, action: .resize, sizePercent: 95, points: OverlayPointSize(height: 300), merge: true)))
+
+        let line = try PresentationCodec.encode(plain)
+
+        #expect(!String(decoding: line, as: UTF8.self).contains("merge"))
+        #expect(try PresentationCodec.decode(line.dropLast()) == plain)
+        #expect(try PresentationCodec.decode(try PresentationCodec.encode(merged).dropLast()) == merged)
+    }
+
     @Test func pageStateBoundsThePagesOwnStrings() throws {
         let long = String(repeating: "x", count: 100_000)
         let state = PresentationPageState(page: "p1", title: long, address: long, load: .failed, error: long, canGoBack: false,

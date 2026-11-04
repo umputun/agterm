@@ -91,9 +91,9 @@ extension AppStore {
 
     /// resizeReplicaPage applies the origin's size to a session-wide page; a pane page is always full-pane.
     public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?,
-                                  points: OverlayPointSize = OverlayPointSize()) {
-        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil else { return }
-        resizeOverlay(id, sizePercent: sizePercent, points: points)
+                                  points: OverlayPointSize = OverlayPointSize(), merge: Bool = false) {
+        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil, let session = session(withID: id) else { return }
+        resizeOverlay(id, sizePercent: sizePercent, points: merge ? session.overlayPoints.merging(points) : points)
     }
 
     /// replicaPageState is what the page `localID` shows now, as the origin reads it back, nil once it is gone.

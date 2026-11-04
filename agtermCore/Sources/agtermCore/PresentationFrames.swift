@@ -364,15 +364,19 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
     public var sizePercent: Int?
     public var width: Int?
     public var height: Int?
+    /// merge asks a resize to keep the axes it does not name, for a picture the presenter sized itself; nil, and
+    /// left out of the frame, for every other command, which replaces the size whole.
+    public var merge: Bool?
 
     public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil,
-                points: OverlayPointSize = OverlayPointSize()) {
+                points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil) {
         self.page = page
         self.seq = seq
         self.action = action
         self.sizePercent = sizePercent
         width = points.width
         height = points.height
+        self.merge = merge
     }
 
     public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }

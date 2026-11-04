@@ -129,6 +129,57 @@ struct AppStoreRemotePageTests {
         #expect(presenter.commands.last?.points == OverlayPointSize(width: 600))
     }
 
+    // a width-only resize replaced the presenter's fitted size, dropping the fitted height
+    @Test func pointResizesOfAPresenterSizedImageSendOnlyTheirAxesToMergeUntilASizeReplacesIt() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+        let resize = { (size: Int?, points: OverlayPointSize) -> PresentationPageCommand? in
+            #expect(self.store.resizeRemoteOverlay(session.id, sizePercent: size, points: points) == .sent)
+            return self.presenter.commands.last
+        }
+
+        let width = try #require(resize(nil, OverlayPointSize(width: 600)))
+        #expect(width.merge == true && width.points == OverlayPointSize(width: 600) && width.sizePercent == ImagePage.basePercent)
+        let height = try #require(resize(nil, OverlayPointSize(height: 300)))
+        #expect(height.merge == true && height.points == OverlayPointSize(height: 300))
+        #expect(session.remoteOverlays.slot(nil)?.points == OverlayPointSize(width: 600, height: 300))
+
+        let replaced = try #require(resize(60, OverlayPointSize(width: 500)))
+        #expect(replaced.merge == nil && replaced.sizePercent == 60 && replaced.points == OverlayPointSize(width: 500))
+        let after = try #require(resize(nil, OverlayPointSize(height: 200)))
+        #expect(after.merge == nil && after.points == OverlayPointSize(width: 500, height: 200))
+    }
+
+    @Test func aFullResizeEndsThePresenterSizing() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize()) == .sent)
+
+        #expect(presenter.commands.last?.merge == nil)
+        #expect(session.remoteOverlays.slot(nil)?.presenterSized == false)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .notFloating)
+    }
+
+    @Test func aSizedImageAndOtherPagesNeverAskToMerge() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 70, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .sent)
+
+        #expect(presenter.commands.last?.merge == nil)
+        #expect(presenter.commands.last?.sizePercent == 70)
+    }
+
     @Test(arguments: [
         (HtmlSource.image(path: "/tmp/a.png"), OverlayPane?.some(.left), Int?.none, Int?.none),
         (.image(path: "/tmp/a.png"), nil, 60, 60),

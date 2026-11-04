@@ -122,7 +122,8 @@ extension AppStore {
         }
     }
 
-    /// resizeRemoteOverlay sends the resolved size because the presenter replaces its state; nil means no remote slot.
+    /// resizeRemoteOverlay sends the resolved size because the presenter replaces its state, except a point resize of
+    /// a picture the presenter sized, which sends only its axes to merge; nil means no remote slot.
     public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?, points: OverlayPointSize) -> RemoteOverlayResize? {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(nil) else { return nil }
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
@@ -140,10 +141,13 @@ extension AppStore {
             size = current
             merged = slot.points.merging(points)
         }
-        session.remoteOverlays.resize(job: slot.job, sizePercent: size, points: merged)
-        let sent = presentablePoints(merged, session: sessionID)
+        // a picture the presenter fitted keeps its fitted axes there: a point resize sends only its own axes to merge,
+        // and any other resize replaces the size whole and ends that
+        let merge = slot.presenterSized && sizePercent == nil && !points.isEmpty
+        session.remoteOverlays.resize(job: slot.job, sizePercent: size, points: merged, presenterSized: merge)
+        let sent = presentablePoints(merge ? points : merged, session: sessionID)
         let delivered = slot.page != nil
-            ? sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size, points: sent)
+            ? sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size, points: sent, merge: merge ? true : nil)
             : hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size, points: sent)),
                                   session: sessionID)
         return delivered ? .sent : .viewerGone

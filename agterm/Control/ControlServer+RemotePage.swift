@@ -73,7 +73,7 @@ extension ControlServer {
         case .forward: refusal = registry.navigate(local, .forward)
         case .browser: refusal = registry.navigate(local, .browser)
         case .resize: store.resizeReplicaPage(command.page, forSession: id, sizePercent: command.sizePercent,
-                                              points: command.points)
+                                              points: command.points, merge: command.merge == true)
         }
         if let refusal {
             replicaLogger.notice("origin request \(command.action.rawValue, privacy: .public) not applied: \(refusal, privacy: .public)")
