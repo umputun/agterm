@@ -55,12 +55,13 @@ extension AppStore {
                                now: Date = Date()) -> RemotePageOpen {
         let pane = options.pane
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID), let session = session(withID: sessionID),
-              let source = Self.presentationSource(overlay.source) else { return .local }
+              let source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
+        if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
@@ -122,7 +123,7 @@ extension AppStore {
         for session in workspaces.flatMap(\.sessions) {
             for slot in session.remoteOverlays.slots {
                 guard let page = slot.page, !page.claimed, now > page.claimDeadline,
-                      case .file = page.overlay.source else { continue }
+                      page.overlay.source.kind != .url else { continue }
                 closeRemoteOverlay(session.id, pane: slot.pane)
             }
         }
@@ -151,8 +152,7 @@ extension AppStore {
     /// navigateRemotePage runs a toolbar navigation on the page in `pane`'s slot when the presenting Mac shows it.
     public func navigateRemotePage(_ sessionID: UUID, pane: OverlayPane?, navigation: HtmlNavigation) -> RemotePageCommand {
         guard let page = session(withID: sessionID)?.remoteOverlays.slot(pane)?.page else { return .local }
-        let file: Bool
-        if case .file = page.overlay.source { file = true } else { file = false }
+        let file = page.overlay.source.kind != .url
         switch navigation {
         case .back: return deliverRemotePageCommand(sessionID, pane: pane, action: .back)
         case .forward: return deliverRemotePageCommand(sessionID, pane: pane, action: .forward)
@@ -196,12 +196,23 @@ extension AppStore {
         session.remoteOverlays.slots.compactMap { slot in slot.page.map { (slot.pane, $0) } }
     }
 
-    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica.
-    public static func presentationSource(_ source: HtmlSource) -> PresentationPageSource? {
+    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica, and
+    /// for an image whose probed size is not given.
+    public static func presentationSource(_ source: HtmlSource, imagePixels: ImagePixels? = nil) -> PresentationPageSource? {
         switch source {
         case .file(let path, let grantRoot): return .file(path: path, grantRoot: grantRoot)
         case .url(let url): return .url(url.absoluteString)
-        case .replica, .image, .markdown, .text: return nil
+        case .image(let path): return imagePixels.map { .image(path: path, width: $0.width, height: $0.height) }
+        case .markdown(let path): return .markdown(path: path)
+        case .text(let path, let line): return .text(path: path, line: line)
+        case .replica: return nil
         }
+    }
+
+    /// pageBelongsRemote says the placement rule hands a page in `pane`'s slot of session `sessionID` to the
+    /// presenting Mac, false for an unknown session.
+    public func pageBelongsRemote(_ sessionID: UUID, pane: OverlayPane?) -> Bool {
+        guard let session = session(withID: sessionID) else { return false }
+        return pageBelongsRemote(session, pane: pane)
     }
 }

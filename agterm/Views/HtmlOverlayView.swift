@@ -134,7 +134,7 @@ struct HtmlOverlayView: View {
 
     private var sourceText: String {
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _): path
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _): path
         case .url(let url): url.absoluteString
         }
     }

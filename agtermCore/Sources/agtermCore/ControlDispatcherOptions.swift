@@ -35,12 +35,16 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let browse: Bool
     /// clicked marks a page opened by a terminal click (`HtmlOverlay.clicked`); the dispatcher never sets it.
     public let clicked: Bool
+    /// imagePixels is the probed size of an image page, which travels with it when the presenting Mac shows it.
+    /// The app sets it from its probe and the dispatcher never does; an image page without it is never handed over.
+    public let imagePixels: ImagePixels?
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
-                points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false) {
+                points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil) {
         self.clicked = clicked
+        self.imagePixels = imagePixels
         self.command = command
         self.cwd = cwd
         self.wait = wait

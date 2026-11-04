@@ -30,8 +30,11 @@ extension AppStore {
 
     static func replicaSource(_ source: PresentationPageSource) -> HtmlSource? {
         switch source {
-        case .file(let path, _): return .replica(path: path)
+        case .file(let path, _): return .replica(path: path, content: .html)
         case .url(let text): return HtmlSource.webURL(text).map(HtmlSource.url)
+        case .image(let path, let width, let height): return .replica(path: path, content: .image(width: width, height: height))
+        case .markdown(let path): return .replica(path: path, content: .markdown)
+        case .text(let path, let line): return .replica(path: path, content: .text(line: line))
         }
     }
 

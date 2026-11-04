@@ -170,27 +170,30 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationFramesTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTreeProjectionTests.swift`
 
-- [ ] add the three `PresentationPageSource` cases and `PresentationHub.pageContentKind`, listed in
+- [x] add the three `PresentationPageSource` cases and `PresentationHub.pageContentKind`, listed in
       `supportedKinds`
-- [ ] map `.image/.markdown/.text` in `presentationSource(_:imagePixels:)`, carry the image size through the open
+- [x] map `.image/.markdown/.text` in `presentationSource(_:imagePixels:)`, carry the image size through the open
       options, gate the content kinds on the capability in `openRemotePage`, and treat them like `.file` in claim
       expiry and the navigate refusals
-- [ ] add the public `pageBelongsRemote(_ sessionID:pane:)` wrapper beside the internal `Session` form
-- [ ] add `ReplicaContent` to `HtmlSource.replica`, map it in `replicaSource`, and update every `.replica`
+- [x] add the public `pageBelongsRemote(_ sessionID:pane:)` wrapper beside the internal `Session` form
+- [x] add `ReplicaContent` to `HtmlSource.replica`, map it in `replicaSource`, and update every `.replica`
       pattern that binds its payload (identity, projection, submit refusal) and every test building
       `.replica(path:)` (`AppStoreReplicaPageTests`, `HtmlOverlayTests`, `AppStoreRemotePageTests`)
-- [ ] keep the app target compiling: the switches over `PresentationPageSource` and `HtmlSource` handle the new
+- [x] keep the app target compiling: the switches over `PresentationPageSource` and `HtmlSource` handle the new
       cases by refusing them as today (`showReplicaPage` refuses a content page, the companion path refuses
       content kinds); Task 3 replaces the refusal in `showReplicaPage` with the real path
-- [ ] add the per-kind rules to `RemotePageResources.resolve` and split `MarkdownPage.lexicalPath` out of
+- [x] add the per-kind rules to `RemotePageResources.resolve` and split `MarkdownPage.lexicalPath` out of
       `localPath`
-- [ ] project content replicas on the viewer's tree as `image`/`markdown`/`text` with `replica: true`
-- [ ] tests: frame round-trip for each new case; `AppStoreRemotePageTests` flips the pinned refusal to a hand-over
+- [x] project content replicas on the viewer's tree as `image`/`markdown`/`text` with `replica: true`
+- [x] tests: frame round-trip for each new case; `AppStoreRemotePageTests` flips the pinned refusal to a hand-over
       for each kind when the presenter lists the capability, and keeps the refusal when it does not
-- [ ] tests: resolve admits an image's or text's own file and refuses a sibling; admits a markdown page's own file
+- [x] tests: resolve admits an image's or text's own file and refuses a sibling; admits a markdown page's own file
       and a picture in its folder; refuses `..`, an outward symlink and the folder itself; `lexicalPath` cases
-- [ ] tests: `replicaSource` per case, viewer tree projection, claim expiry of an unclaimed content page
-- [ ] run the touched suites with `cd agtermCore && swift test --filter` and build the app target - must pass before
+- [x] tests: the viewer's reference listing uses `lexicalPath` only, pinned by a fixture where the viewer-side path
+      is a symlink pointing outside the folder: the reference is still listed (the origin decides), so the
+      filesystem-resolving `localPath` cannot be reused by mistake
+- [x] tests: `replicaSource` per case, viewer tree projection, claim expiry of an unclaimed content page
+- [x] run the touched suites with `cd agtermCore && swift test --filter` and build the app target - must pass before
       task 2
 
 ### Task 2: Origin app side - sizing hand-off, bounded serving and bridge refusal
@@ -206,10 +209,18 @@
       pass the probed oriented pixel size in the open options
 - [ ] claim-expiry scheduling in `openHtmlOverlay` covers the content kinds
 - [ ] `PageServeStream.transfer`: open a content page's file through `BoundedFile` with that kind's cap and refuse
-      a non-regular, offloaded or oversized file with a failure frame; `.file` pages stream as today
+      a non-regular, offloaded or oversized file with a failure frame; `.file` pages stream as today. Caps: an image
+      page's own file `ImagePage.maxBytes`; a text page's own file `TextPage.maxBytes`; a markdown page's own file
+      `MarkdownPage.maxBytes`, and each of its pictures `MarkdownPage.maxImageBytes`
+- [ ] a markdown page's picture is served only when its bytes carry a picture signature
+      (`ImagePage.mimeType(sniffing:)`), checked on the origin before the first chunk; any other sibling, whatever
+      its name, is refused, so no non-picture file inside the folder crosses the channel. The extension plays no
+      part, matching the local probe
 - [ ] `PageServeStream.answer`: refuse every bridge request for a content page
 - [ ] tests: transfer serves an image, a markdown file and its picture, and a text file; refuses an oversized file,
       a FIFO and a file outside the kind's rule; a bridge request on a content page is refused
+- [ ] tests: for a markdown page, a non-picture sibling is refused (one named `notes.txt` and one named `fake.png`),
+      a valid picture with no image suffix is served, and a picture over 4 MiB but under 32 MiB is served
 - [ ] run the targeted hosted tests (`-only-testing:agtermTests/ControlServerPageServeTests`) - must pass before
       task 3
 
@@ -248,6 +259,9 @@
       an auto-sized image takes the viewer's bounds; a presenter without `page.content` keeps the refusal; a file
       grown past the cap after open fails the page on the viewer; an origin ⌘-click on an image in a followed
       session opens on the presenter
+- [ ] tests (`ControlServerRemotePresentationTests`): after a markdown page's first render, edit the origin file and
+      its picture, then reload original and current on the viewer; assert fresh transfers on the same page channel
+      (no second claim of the single-use token) and changed rendered content
 - [ ] run the targeted hosted tests - must pass before task 4
 
 ### Task 4: Agent skill, user docs and engineering rules

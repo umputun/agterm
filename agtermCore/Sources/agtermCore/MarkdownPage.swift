@@ -40,13 +40,24 @@ public enum MarkdownPage {
     /// markdown file's own folder, after symlinks on both sides are resolved; in document order, each
     /// reference once. A remote, a `data:` or an escaping reference is left out and renders as its alt text.
     public static func imageReferences(in markdown: String, folder: String) -> [Image] {
+        references(in: markdown) { localPath($0, folder: folder) }
+    }
+
+    /// remoteImageReferences lists the same references for a markdown file on another Mac, `folder` being its
+    /// folder there: the lexical check only, since symlinks on this Mac say nothing about that one, whose page
+    /// channel resolves them before it serves a picture.
+    public static func remoteImageReferences(in markdown: String, folder: String) -> [Image] {
+        references(in: markdown) { lexicalPath($0, folder: folder) }
+    }
+
+    private static func references(in markdown: String, path: (String) -> String?) -> [Image] {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
         guard let parsed = try? AttributedString(markdown: markdown, options: options) else { return [] }
         var found: [Image] = [], seen: Set<String> = []
         for run in parsed.runs {
             guard let url = run.imageURL else { continue }
             let reference = url.relativeString.removingPercentEncoding ?? url.relativeString
-            guard seen.insert(reference).inserted, let path = localPath(reference, folder: folder) else { continue }
+            guard seen.insert(reference).inserted, let path = path(reference) else { continue }
             found.append(Image(reference: reference, path: path))
         }
         return found
@@ -55,6 +66,14 @@ public enum MarkdownPage {
     /// localPath resolves one decoded reference against `folder`, nil unless it names a file inside it. The
     /// lexical check runs first, so a reference outside the folder is refused without touching the filesystem.
     static func localPath(_ reference: String, folder: String) -> String? {
+        guard let lexical = lexicalPath(reference, folder: folder) else { return nil }
+        let realRoot = real(LinkPolicy.lexicallyNormalizedAbsolutePath(folder)), file = real(lexical)
+        return file != realRoot && HtmlOverlay.contains(realRoot, file) ? file : nil
+    }
+
+    /// lexicalPath joins one decoded reference to `folder` and normalizes it without reading the filesystem,
+    /// nil unless the result lies strictly inside the folder: no `~`, no scheme, no `..` escape.
+    public static func lexicalPath(_ reference: String, folder: String) -> String? {
         guard folder.hasPrefix("/"), !reference.isEmpty else { return nil }
         let candidate: String
         if reference.hasPrefix("/") {
@@ -66,9 +85,7 @@ public enum MarkdownPage {
         }
         let root = LinkPolicy.lexicallyNormalizedAbsolutePath(folder)
         let lexical = LinkPolicy.lexicallyNormalizedAbsolutePath(candidate)
-        guard lexical != root, HtmlOverlay.contains(root, lexical) else { return nil }
-        let realRoot = real(root), file = real(lexical)
-        return file != realRoot && HtmlOverlay.contains(realRoot, file) ? file : nil
+        return lexical != root && HtmlOverlay.contains(root, lexical) ? lexical : nil
     }
 
     private static func hasScheme(_ reference: String) -> Bool {

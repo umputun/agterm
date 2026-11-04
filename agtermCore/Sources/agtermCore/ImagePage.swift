@@ -1,5 +1,17 @@
 import Foundation
 
+/// ImagePixels is a picture's size in pixels with its EXIF orientation applied, so a rotated photo reports
+/// the axes it is drawn with.
+public struct ImagePixels: Equatable, Sendable {
+    public let width: Int
+    public let height: Int
+
+    public init(width: Int, height: Int) {
+        self.width = width
+        self.height = height
+    }
+}
+
 /// ImagePage is the page an image overlay shows and the size it opens at. The natural size is one image
 /// pixel per pixel of the display the window is on, times the page zoom; that is a display convention, not
 /// the density the picture was made at. `points` turns it into the panel size the picture fills.

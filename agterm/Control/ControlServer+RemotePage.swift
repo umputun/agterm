@@ -26,6 +26,8 @@ extension ControlServer {
             argv = command
         case .url:
             if page.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() { return failure }
+        case .image, .markdown, .text:
+            return "this page cannot be shown here"
         }
         if let reason = store.presentReplicaPage(page, forSession: id) { return reason }
         guard let slot = store.replicaPage(page.page, forSession: id), let origin = slot.page.replicaOf else {

@@ -267,9 +267,30 @@ public struct PresentationOverlayChange: Codable, Equatable, Sendable {
 
 /// PresentationPageSource is a handed-over page's full source on the origin: a file the viewer fetches over the
 /// page channel, with the grant that bounds which files it may ask for, or a complete URL it loads itself.
+/// The image, markdown and text cases are pages the viewer builds itself from bytes it fetches over the channel;
+/// they go only to a presenter listing `PresentationHub.pageContentKind`, since an older one fails the whole
+/// stream on a case it cannot decode.
 public enum PresentationPageSource: Codable, Equatable, Sendable {
     case file(path: String, grantRoot: String?)
     case url(String)
+    /// image carries the picture's oriented pixel size, which the viewer turns into points for its own screen.
+    case image(path: String, width: Int, height: Int)
+    case markdown(path: String)
+    case text(path: String, line: Int?)
+
+    /// usesChannel says the viewer fetches this page over a page channel, which a single-use claim opens.
+    public var usesChannel: Bool {
+        if case .url = self { return false }
+        return true
+    }
+
+    /// isContent says this is a page the viewer builds from fetched bytes rather than loads as HTML.
+    public var isContent: Bool {
+        switch self {
+        case .file, .url: return false
+        case .image, .markdown, .text: return true
+        }
+    }
 }
 
 /// PresentationPage asks the presenter to show a page the origin opened. `page` is the origin's page id, which

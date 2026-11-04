@@ -45,7 +45,7 @@ public final class PresentationHub {
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
-                                        overlayPointsKind] + pageKinds
+                                        overlayPointsKind, pageContentKind] + pageKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -57,6 +57,8 @@ public final class PresentationHub {
     public static let askOtherKind = "ask.other"
     /// overlayPointsKind advertises point sizing without adding a frame kind.
     public static let overlayPointsKind = "overlay.points"
+    /// pageContentKind advertises the image, markdown and text page sources without adding a frame kind.
+    public static let pageContentKind = "page.content"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
