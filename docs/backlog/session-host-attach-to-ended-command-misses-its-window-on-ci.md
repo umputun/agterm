@@ -16,3 +16,11 @@ Open: a slow exit and a stuck one look the same at the 3 s mark. On a stall the 
 last `waitpid` result and errno, its `p_stat`, argv, whatever its PTY and exec-error pipe hold, the `zmx list`
 output and the host log, recorded before the kill. The next failure's report is where to start; collect
 stacks of the pane and host if it does not locate the phase.
+
+Run 41899293201 (PR #891 head `e109e4f7`) failed it again, 3.88 s in, with the stall report: `waitpid` 0,
+errno 0, `p_stat` SRUN after 3.06 s. The argv was the guard payload (`zmx attach <name> /bin/sh -c
+"printf ... 'agterm: session is gone'; exit 1"`), the exec-error pipe was empty, and the PTY held zmx's
+`session "<name>" created` plus its screen reset, but not the payload's message. `zmx list` showed no
+session under the name and the host log was empty. So the daemon zmx created for the payload was gone or
+never listed while the attach client kept running; whether the payload ran and its output was lost, or the
+attach never saw the daemon end, is not established.
