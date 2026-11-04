@@ -86,12 +86,18 @@ fi
 # project builds with the right one and keeps its own `zig` untouched. called only by the build that
 # needs it, so a zmx-only run never installs ghostty's compiler.
 zig_for() {
-  local formula="$1" zig
+  local formula="$1" want="${1#zig@}" zig ver
   zig="$(brew --prefix "$formula" 2>/dev/null || true)/bin/zig"
   if [[ ! -x "$zig" ]]; then
     echo "installing $formula..." >&2
-    brew install "$formula" >&2
-    zig="$(brew --prefix "$formula")/bin/zig"
+    brew install "$formula" >&2 || return 1
+    zig="$(brew --prefix "$formula")/bin/zig" || return 1
+  fi
+  # a versioned alias can still resolve to a stale rolling keg.
+  ver="$("$zig" version)" || return 1
+  if [[ "$ver" != "$want".* ]]; then
+    echo "error: $zig is zig $ver, need $want; run brew upgrade $formula" >&2
+    return 1
   fi
   printf '%s\n' "$zig"
 }
