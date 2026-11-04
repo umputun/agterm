@@ -17,17 +17,20 @@ extension ControlServer {
     /// showReplicaPage presents `page` for session `id`'s origin; nil when shown, otherwise the refusal reason.
     func showReplicaPage(_ page: PresentationPage, forSession id: UUID) -> String? {
         guard let store = library.store(forSession: id), let session = store.session(withID: id) else { return "no such session" }
+        var page = page
         var argv: [String]?
-        switch page.source {
-        case .file:
+        if page.source.usesChannel {
             guard let host = session.remoteHost, let command = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
                 return "the origin cannot be reached for this page"
             }
             argv = command
-        case .url:
-            if page.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() { return failure }
-        case .image, .markdown, .text:
-            return "this page cannot be shown here"
+        } else if page.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
+            return failure
+        }
+        // an unsized picture is sized here, for this Mac's screen, as the origin sizes its own
+        if case .image(_, let width, let height) = page.source, page.pane == nil, page.sizePercent == nil, page.points.isEmpty {
+            let points = imagePoints(in: store, sessionID: id, pixels: ImagePixels(width: width, height: height))
+            (page.sizePercent, page.width, page.height) = (ImagePage.basePercent, points.width, points.height)
         }
         if let reason = store.presentReplicaPage(page, forSession: id) { return reason }
         guard let slot = store.replicaPage(page.page, forSession: id), let origin = slot.page.replicaOf else {

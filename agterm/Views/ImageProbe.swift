@@ -37,7 +37,8 @@ struct ImageProbe: Sendable {
             .flatMap { data in probe(data, path: path).map { ($0, data) } }
     }
 
-    private static func probe(_ data: Data, path: String) -> Result<ImageProbe, Failure> {
+    /// probe judges bytes already in hand, a picture fetched from another Mac included; `path` only names it.
+    static func probe(_ data: Data, path: String) -> Result<ImageProbe, Failure> {
         guard let mime = ImagePage.mimeType(sniffing: data),
               let source = CGImageSourceCreateWithData(data as CFData, nil),
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

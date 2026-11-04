@@ -15,7 +15,7 @@ final class TextProbeTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    private func failure(_ result: Result<Void, TextProbe.Failure>) -> TextProbe.Failure? {
+    private func failure<T>(_ result: Result<T, TextProbe.Failure>) -> TextProbe.Failure? {
         if case .failure(let failure) = result { return failure }
         return nil
     }
@@ -67,6 +67,12 @@ final class TextProbeTests: XCTestCase {
 
         XCTAssertEqual(failure(TextProbe.check(path: nul.path)), .notText(nul.path))
         XCTAssertEqual(failure(TextProbe.check(path: invalid.path)), .notText(invalid.path))
+    }
+
+    func testBytesInHandAreJudgedLikeAFile() {
+        XCTAssertEqual(try? TextProbe.text(Data("let x = 1\n".utf8), path: "/o/a.swift").get(), "let x = 1\n")
+        XCTAssertEqual(failure(TextProbe.text(Data([0x61, 0x00, 0x62]), path: "/o/nul.txt")), .notText("/o/nul.txt"))
+        XCTAssertEqual(failure(TextProbe.text(Data([0xFF, 0xFE, 0x61]), path: "/o/bad.txt")), .notText("/o/bad.txt"))
     }
 
     func testTheDetachedCheckMatchesTheCheck() async throws {

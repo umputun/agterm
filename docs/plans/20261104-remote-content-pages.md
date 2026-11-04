@@ -237,32 +237,32 @@
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 - Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] `showReplicaPage` starts the page channel for the content kinds as it does for `.file`, replacing Task 1's
+- [x] `showReplicaPage` starts the page channel for the content kinds as it does for `.file`, replacing Task 1's
       refusal
-- [ ] byte-level probe entry points (`ImageProbe.probe(data:)`, `TextProbe.check`) and reader-driven markdown
+- [x] byte-level probe entry points (`ImageProbe.probe(data:)`, `TextProbe.check`) and reader-driven markdown
       embedding, with the local paths unchanged in behavior
-- [ ] `loadOriginal` builds content replicas from channel fetches with the shared `textLoad` counter, cancelling a
+- [x] `loadOriginal` builds content replicas from channel fetches with the shared `textLoad` counter, cancelling a
       fetch past its kind's cap; `bridged` false for all three, `styled` true for markdown and text only; toolbar
       and strip treat them as remote (no Finder, no Browser)
-- [ ] `installScripts`, `textLoaded` and the transparent-canvas check recognize content replicas as their local
+- [x] `installScripts`, `textLoaded` and the transparent-canvas check recognize content replicas as their local
       kind, so a replica markdown or text page gets its renderer and a reload or theme change rebuilds it
-- [ ] tests (`HtmlOverlayRegistryTests`): a replica markdown and text page install their renderer, an image replica
+- [x] tests (`HtmlOverlayRegistryTests`): a replica markdown and text page install their renderer, an image replica
       installs none and keeps the unstyled canvas, and reload and a theme change rebuild a replica page from a
       fresh fetch
-- [ ] size a session-wide image replica with no caller size on the viewer from the request's pixel size, its
+- [x] size a session-wide image replica with no caller size on the viewer from the request's pixel size, its
       window's backing scale and its detail bounds
-- [ ] tests: byte probes accept a valid PNG/JPEG and refuse a bad signature and an over-limit pixel header; text
+- [x] tests: byte probes accept a valid PNG/JPEG and refuse a bad signature and an over-limit pixel header; text
       check refuses invalid UTF-8 and NUL; markdown embedding through a fake reader honors the byte and pixel
       budgets and skips a picture the reader refuses
-- [ ] tests (`ControlServerRemotePresentationTests`): an image, a markdown page with a picture, and a text page with
+- [x] tests (`ControlServerRemotePresentationTests`): an image, a markdown page with a picture, and a text page with
       a line are handed to the presenter and render there; the viewer tree reports each kind with `replica: true`;
       an auto-sized image takes the viewer's bounds; a presenter without `page.content` keeps the refusal; a file
       grown past the cap after open fails the page on the viewer; an origin ⌘-click on an image in a followed
       session opens on the presenter
-- [ ] tests (`ControlServerRemotePresentationTests`): after a markdown page's first render, edit the origin file and
+- [x] tests (`ControlServerRemotePresentationTests`): after a markdown page's first render, edit the origin file and
       its picture, then reload original and current on the viewer; assert fresh transfers on the same page channel
       (no second claim of the single-use token) and changed rendered content
-- [ ] run the targeted hosted tests - must pass before task 4
+- [x] run the targeted hosted tests - must pass before task 4
 
 ### Task 4: Agent skill, user docs and engineering rules
 

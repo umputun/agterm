@@ -143,6 +143,25 @@ final class MarkdownProbeTests: XCTestCase {
         return failure.description
     }
 
+    func testAnEmbeddingFedFromAnyReaderKeepsOneCopyAndSpendsTheByteBudget() throws {
+        let png = try Data(contentsOf: URL(fileURLWithPath: try writePNG(name: "a.png")))
+        let probe = try XCTUnwrap(try? ImageProbe.probe(png, path: "/o/a.png").get())
+        let images = MarkdownPage.remoteImageReferences(in: "![a](a.png) ![s](./a.png) ![b](b.png)", folder: "/o")
+        XCTAssertEqual(images.map(\.path), ["/o/a.png", "/o/a.png", "/o/b.png"])
+        let (first, alias, refused) = (images[0], images[1], images[2])
+        var embedding = MarkdownEmbedding()
+
+        XCTAssertEqual(embedding.room(for: first), MarkdownPage.maxImageBytes)
+        embedding.add(first, (probe, png))
+        XCTAssertNil(embedding.room(for: alias))
+        XCTAssertEqual(embedding.room(for: refused), MarkdownPage.maxImageBytes - png.count)
+        embedding.add(refused, nil)
+        XCTAssertNil(embedding.room(for: refused))
+
+        XCTAssertEqual(embedding.embedded.uris.count, 1)
+        XCTAssertEqual(embedding.embedded.references, ["a.png": 0, "./a.png": 0])
+    }
+
     private func write(_ text: String, name: String) throws -> String {
         let url = dir.appendingPathComponent(name)
         try Data(text.utf8).write(to: url)

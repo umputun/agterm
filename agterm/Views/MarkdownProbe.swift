@@ -41,30 +41,50 @@ struct MarkdownProbe: Sendable {
     }
 
     private static func embed(_ references: [MarkdownPage.Image]) -> MarkdownPage.Embedded {
-        var embedded = MarkdownPage.Embedded(), read: [String: Int?] = [:]
-        var bytes = 0, pixels = 0
+        var embedding = MarkdownEmbedding()
         for image in references {
-            if let known = read[image.path] {
-                if let known { embedded.references[image.reference] = known }
-                continue
-            }
-            guard read.count < MarkdownPage.maxImages, bytes < MarkdownPage.maxImageBytes,
-                  pixels < MarkdownPage.maxImagePixels else { continue }
-            guard case .success(let (probe, data)) = ImageProbe.load(path: image.path, maxBytes: MarkdownPage.maxImageBytes - bytes),
-                  pixels + probe.pixelWidth * probe.pixelHeight <= MarkdownPage.maxImagePixels else {
-                read[image.path] = .some(nil)
-                continue
-            }
-            bytes += data.count
-            pixels += probe.pixelWidth * probe.pixelHeight
-            embedded.uris.append("data:\(probe.mimeType);base64,\(data.base64EncodedString())")
-            read[image.path] = embedded.uris.count - 1
-            embedded.references[image.reference] = embedded.uris.count - 1
+            guard let room = embedding.room(for: image) else { continue }
+            embedding.add(image, try? ImageProbe.load(path: image.path, maxBytes: room).get())
         }
-        return embedded
+        return embedding.embedded
     }
 
     private static func failure(failure: BoundedFile.Failure, path: String) -> Failure {
         failure == .tooLarge ? .tooLarge(path) : .unreadable(path)
+    }
+}
+
+/// MarkdownEmbedding collects the pictures one markdown page embeds under its file, byte and pixel budgets, whichever
+/// Mac the bytes were read on: each file once, and every reference naming it pointed at that one copy.
+struct MarkdownEmbedding {
+    private(set) var embedded = MarkdownPage.Embedded()
+    private var read: [String: Int?] = [:]
+    private var bytes = 0
+    private var pixels = 0
+
+    /// room is how many bytes reading `image` may take, nil when it needs no read: a file already read, whose
+    /// reference is recorded here, or a spent budget.
+    mutating func room(for image: MarkdownPage.Image) -> Int? {
+        if let known = read[image.path] {
+            if let known { embedded.references[image.reference] = known }
+            return nil
+        }
+        guard read.count < MarkdownPage.maxImages, bytes < MarkdownPage.maxImageBytes,
+              pixels < MarkdownPage.maxImagePixels else { return nil }
+        return MarkdownPage.maxImageBytes - bytes
+    }
+
+    /// add records what reading `image` gave: a probed picture still inside the pixel budget is embedded, and
+    /// anything else, a failed read included, leaves the reference to its alt text.
+    mutating func add(_ image: MarkdownPage.Image, _ picture: (ImageProbe, Data)?) {
+        guard let (probe, data) = picture, pixels + probe.pixelWidth * probe.pixelHeight <= MarkdownPage.maxImagePixels else {
+            read[image.path] = .some(nil)
+            return
+        }
+        bytes += data.count
+        pixels += probe.pixelWidth * probe.pixelHeight
+        embedded.uris.append("data:\(probe.mimeType);base64,\(data.base64EncodedString())")
+        read[image.path] = embedded.uris.count - 1
+        embedded.references[image.reference] = embedded.uris.count - 1
     }
 }

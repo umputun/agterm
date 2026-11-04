@@ -66,6 +66,23 @@ final class ImageProbeTests: XCTestCase {
         XCTAssertEqual(failure(path), ImageProbe.Failure.unreadable(path).description)
     }
 
+    func testBytesInHandAreJudgedLikeAFile() throws {
+        let png = try Data(contentsOf: URL(fileURLWithPath: try writePNG(width: 12, height: 7, name: "a.png")))
+        let probe = try XCTUnwrap(try? ImageProbe.probe(png, path: "/o/a.png").get())
+        XCTAssertEqual(probe.pixelWidth, 12)
+        XCTAssertEqual(probe.pixelHeight, 7)
+        guard case .failure(let markup) = ImageProbe.probe(Data("<svg/>".utf8), path: "/o/logo.png") else {
+            return XCTFail("markup accepted as a picture")
+        }
+        XCTAssertEqual(markup.description, "not a png, jpg, gif or webp image: /o/logo.png")
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 10_001, pixelsHigh: 10_000,
+                                                 bitsPerSample: 1, samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
+                                                 colorSpaceName: .deviceWhite, bytesPerRow: 0, bitsPerPixel: 0))
+        let huge = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        guard case .failure(let bomb) = ImageProbe.probe(huge, path: "/o/bomb.png") else { return XCTFail("bomb accepted") }
+        XCTAssertEqual(bomb.description, "image too large (over 100 megapixels): /o/bomb.png")
+    }
+
     private func failure(_ path: String) -> String? {
         guard case .failure(let failure) = ImageProbe.load(path: path) else { return nil }
         return failure.description

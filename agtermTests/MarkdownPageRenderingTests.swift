@@ -150,6 +150,21 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: page.webView) { $0 == "Three" }
     }
 
+    func testAMarkdownReplicaRendersWithItsFetchedPictureAndNoBridge() async throws {
+        let shot = try writePNG("shot.png", width: 40)
+        let doc = pages.appendingPathComponent("doc.md")
+        try "# Remote\n\n![s](shot.png) ![x](../outside.png)\n".write(to: doc, atomically: true, encoding: .utf8)
+
+        let page = registry.page(for: openReplica(doc.path, .markdown), store: store, replica: replicaLink())
+
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: page.webView) { $0 == "Remote" }
+        try await waitForScript("document.querySelectorAll('img[src^=\"data:image/png\"]').length", in: page.webView) { $0 == "1" }
+        XCTAssertEqual(fetched, [doc.path, shot])
+        let bridge = try await page.webView.evaluateJavaScript("typeof window.webkit?.messageHandlers?.agterm", in: nil,
+                                                               contentWorld: HtmlOverlayBridge.world)
+        XCTAssertEqual(bridge as? String, "undefined")
+    }
+
     func testAMarkdownPageStaysInItsOverlay() async throws {
         let overlay = try openMarkdown("doc.md", "# Doc\n")
         _ = registry.page(for: overlay, store: store)
