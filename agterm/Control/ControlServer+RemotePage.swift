@@ -5,7 +5,7 @@ import agtermCore
 private let replicaLogger = Logger(subsystem: "com.umputun.agterm", category: "RemotePage")
 
 /// ReplicaPageRecord is a page this Mac shows for an origin: whose stream it answers on, the origin's id, the
-/// channel a file page fetches through, and the last origin command it applied.
+/// channel a page other than a URL page fetches through, and the last origin command it applied.
 struct ReplicaPageRecord {
     let session: UUID
     let origin: UUID

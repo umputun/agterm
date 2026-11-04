@@ -27,8 +27,9 @@ final class PageServeAdmission: Sendable {
     }
 }
 
-/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves the
-/// page's files from inside its grant and runs the page's bridge requests here, as a local page's would run.
+/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves a file
+/// page's files from inside its grant and runs its bridge requests here, as a local page's would run, and serves an
+/// image, markdown or text page the files its kind may read, with no bridge.
 /// The helper's connection closing, or sending what a helper never sends, ends the page; the presenter
 /// subscription is not touched.
 @MainActor

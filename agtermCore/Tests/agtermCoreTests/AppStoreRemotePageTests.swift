@@ -111,6 +111,39 @@ struct AppStoreRemotePageTests {
         #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
     }
 
+    // an auto-sized image left its origin slot without a size, so the tree read it full and a point resize was refused
+    @Test func anAutoSizedImageReservesTheBasePercentAndTakesAPointResize() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        let request = try #require(presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.first)
+        #expect(request.sizePercent == nil)
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == ImagePage.basePercent)
+        #expect(store.remoteOverlayNodes(of: session)?.first?.sizePercent == ImagePage.basePercent)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .sent)
+        #expect(presenter.commands.last?.sizePercent == ImagePage.basePercent)
+        #expect(presenter.commands.last?.points == OverlayPointSize(width: 600))
+    }
+
+    @Test(arguments: [
+        (HtmlSource.image(path: "/tmp/a.png"), OverlayPane?.some(.left), Int?.none, Int?.none),
+        (.image(path: "/tmp/a.png"), nil, 60, 60),
+        (.markdown(path: "/tmp/a.md"), nil, nil, nil),
+    ])
+    func onlyAnUnsizedSessionWideImageTakesTheBasePercent(source: HtmlSource, pane: OverlayPane?, size: Int?, reserved: Int?) throws {
+        let (session, _) = try origin(split: true)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil,
+                                                       pane: pane, imagePixels: ImagePixels(width: 640, height: 480))
+
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: source), options: options, now: Self.start) == .opened)
+
+        #expect(session.remoteOverlays.slot(pane)?.sizePercent == reserved)
+    }
+
     @Test func pageBelongsRemoteAnswersBySessionID() throws {
         let (session, _) = try origin()
 

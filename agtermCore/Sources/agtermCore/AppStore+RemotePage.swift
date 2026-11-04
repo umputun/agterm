@@ -45,7 +45,7 @@ public struct RemotePageClaim: Equatable, Sendable {
 // MARK: - Pages handed to the viewer presenting a session, on the origin
 
 extension AppStore {
-    /// pageClaimWindow bounds how long a handed-over file page waits for its channel to be claimed.
+    /// pageClaimWindow bounds how long a handed-over page that fetches over a channel waits for it to be claimed.
     public static let pageClaimWindow: TimeInterval = 30
 
     /// openRemotePage hands a page to the viewer presenting `sessionID` under the program overlay placement rule:
@@ -77,8 +77,12 @@ extension AppStore {
         else { return .tooLarge }
         if pane == nil, session.hudActive { closeHud(sessionID) }
         let page = RemotePage(overlay: overlay, token: token, claimDeadline: now.addingTimeInterval(Self.pageClaimWindow))
+        // the presenter sizes an unsized picture itself as a floating panel at the base percent, so the slot records
+        // that percent: the tree then reads it floating and a point resize has a percent to keep
+        var reserved = size
+        if case .image = source, pane == nil, size == nil { reserved = ImagePage.basePercent }
         var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: hub.presenterGeneration(session: sessionID),
-                                     sizePercent: size, page: page)
+                                     sizePercent: reserved, page: page)
         slot.points = points
         session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
@@ -117,7 +121,7 @@ extension AppStore {
         return nil
     }
 
-    /// expireRemotePageClaims ends every file page whose channel was not claimed in time; a URL page loads on
+    /// expireRemotePageClaims ends every channel page whose channel was not claimed in time; a URL page loads on
     /// the presenter with no channel and never expires.
     public func expireRemotePageClaims(now: Date = Date()) {
         for session in workspaces.flatMap(\.sessions) {

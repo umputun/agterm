@@ -1021,6 +1021,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         try Data(count: TextPage.maxBytes + 1).write(to: main)
         XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: false).ok)
         waitUntil("the oversized file fails the page") { pair.viewer.htmlOverlay?.loadState == .failed }
+        XCTAssertEqual(pair.viewer.htmlOverlay?.loadError, "file is too large for the page: \(main.path)")
     }
 
     func testAPresenterWithoutContentPagesRefusesThemAndStillTakesAFilePage() throws {

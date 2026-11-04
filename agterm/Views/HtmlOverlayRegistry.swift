@@ -43,7 +43,7 @@ final class HtmlOverlayRegistry {
 
     /// page returns the live page for `overlay`, creating and loading its web view on first use.
     /// `backgroundColor` is the overlay's `--background-color`, which replaces the theme background.
-    /// `replica` is the way back to the Mac that opened a file page shown here for it.
+    /// `replica` is the way back to the Mac that opened a page shown here for it.
     func page(for overlay: HtmlOverlay, store: AppStore, backgroundColor: String? = nil,
               replica: HtmlReplicaLink? = nil) -> HtmlOverlayPage {
         if let page = pages[overlay.id] { return page }
@@ -180,8 +180,8 @@ final class HtmlReplicaRevision {
     var value = 0
 }
 
-/// HtmlReplicaLink is how a file page shown for another Mac reaches that Mac: `fetch` its files, for the load
-/// `HtmlReplicaRevision` names, and `bridge` its requests, answered with the reply JSON text that Mac sent.
+/// HtmlReplicaLink is how a page shown for another Mac reaches that Mac: `fetch` its files, for the load
+/// `HtmlReplicaRevision` names, and `bridge` a file page's requests, answered with the reply JSON text that Mac sent.
 struct HtmlReplicaLink {
     /// ownPageCommandsLocal keeps a page's reload and navigation of itself on this Mac: a page companion's viewers each
     /// show their own copy, so those act on the copy that asked.
@@ -580,24 +580,20 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .html:
             return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile))
         case .image:
-            let fetched = await fetchReplica(path, limit: ImagePage.maxBytes)
-            guard case .success(let data) = fetched else {
-                let failure: ImageProbe.Failure = fetched == .failure(.tooLarge) ? .tooLarge(path) : .unreadable(path)
-                return .failure(ReplicaContentFailure(message: failure.description))
-            }
+            let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
+                                             local: (ImageProbe.Failure.tooLarge(path).description, ImageProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             return await Task.detached(priority: .userInitiated) {
                 ImageProbe.probe(data, path: path).map { ImagePage.html(data: data, mimeType: $0.mimeType) }
                     .mapError { ReplicaContentFailure(message: $0.description) }
             }.value
         case .markdown:
-            let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes)
-            guard case .success(let data) = fetched else {
-                let failure: MarkdownProbe.Failure = fetched == .failure(.tooLarge) ? .tooLarge(path) : .unreadable(path)
-                return .failure(ReplicaContentFailure(message: failure.description))
-            }
+            let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
+                                             local: (MarkdownProbe.Failure.tooLarge(path).description, MarkdownProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             let style = MarkdownAssets.shared.style
             let fetch: @Sendable (String, Int) async -> Data? = { [weak self] path, limit in
-                try? await self?.fetchReplica(path, limit: limit).get()
+                try? await self?.fetchReplica(path, limit: limit, local: ("", "")).get()
             }
             // parsing, probing, embedding and escaping run detached as the local page's do; only fetches hop back
             return await Task.detached(priority: .userInitiated) {
@@ -614,11 +610,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 return .success(MarkdownPage.html(markdown: markdown, images: embedding.embedded, style: style))
             }.value
         case .text(let line):
-            let fetched = await fetchReplica(path, limit: TextPage.maxBytes)
-            guard case .success(let data) = fetched else {
-                let failure: TextProbe.Failure = fetched == .failure(.tooLarge) ? .tooLarge(path) : .unreadable(path)
-                return .failure(ReplicaContentFailure(message: failure.description))
-            }
+            let fetched = await fetchReplica(path, limit: TextPage.maxBytes,
+                                             local: (TextProbe.Failure.tooLarge(path).description, TextProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             let style = MarkdownAssets.shared.textStyle
             return await Task.detached(priority: .userInitiated) {
                 TextProbe.text(data, path: path)
@@ -628,21 +622,22 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
-    private enum ReplicaFetchFailure: Error, Equatable {
-        case unreadable, tooLarge
-    }
-
-    // reading stops once the bytes pass `limit`, and the dropped stream cancels the transfer on the origin
-    private func fetchReplica(_ path: String, limit: Int) async -> Result<Data, ReplicaFetchFailure> {
-        guard let replica, let resource = try? await replica.fetch(path, revision) else { return .failure(.unreadable) }
+    // reading stops once the bytes pass `limit`, and the dropped stream cancels the transfer on the origin; a refusal
+    // keeps the reason the origin gave, and `local` words every other failure as the local probe would
+    private func fetchReplica(_ path: String, limit: Int,
+                              local: (tooLarge: String, unreadable: String)) async -> Result<Data, ReplicaContentFailure> {
+        guard let replica else { return .failure(ReplicaContentFailure(message: local.unreadable)) }
         var data = Data()
         do {
+            let resource = try await replica.fetch(path, revision)
             for try await chunk in resource.chunks {
                 data.append(chunk)
-                if data.count > limit { return .failure(.tooLarge) }
+                if data.count > limit { return .failure(ReplicaContentFailure(message: local.tooLarge)) }
             }
+        } catch RemotePageChannel.Failure.refused(let reason) {
+            return .failure(ReplicaContentFailure(message: "\(reason): \(path)"))
         } catch {
-            return .failure(.unreadable)
+            return .failure(ReplicaContentFailure(message: local.unreadable))
         }
         return .success(data)
     }
