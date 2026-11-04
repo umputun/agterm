@@ -16,11 +16,11 @@ paths:
 
 ## Rendering
 
-- Nothing in agterm paints a surface. `src/apprt/embedded.zig` declares no `must_draw_from_app_thread`, so
-  `renderer/Thread.drawFrame` draws on the render thread instead of posting `redraw_surface`, the only
-  producer of `GHOSTTY_ACTION_RENDER`. The action is therefore unreachable on the embedded apprt and the
-  `action` switch drops it to `default`. If `GHOSTTY_REV` ever advances onto a libghostty that declares
-  that constant, panes stop painting until a RENDER arm calling `ghostty_surface_draw` comes back.
+- Nothing in agterm paints a surface. `GHOSTTY_ACTION_RENDER` comes only from `Surface.redraw`, which
+  answers the `.redraw` surface message, and only the OpenGL renderer's `Frame` posts that message. Metal
+  presents through its own layer, so the action is unreachable on macOS and the `action` switch drops it
+  to `default`. If a `GHOSTTY_REV` has Metal post `.redraw`, check that frames still present without an
+  apprt draw before leaving the action dropped.
 - The render thread is not the only painter: libghostty installs its own `CALayer` subclass as the surface
   view's layer, and its `display` calls a callback holding a raw `*Renderer`, so CoreAnimation draws on the
   main thread too. Before upstream `4b4a5b241109` nothing cleared that callback — `Metal.deinit` dropped
@@ -53,7 +53,7 @@ paths:
   (`ghostty_surface_draw`) because that sweep cleared `contents` and `refresh` merely queues a render.
 - A hidden pane also clears `needsDisplayOnBoundsChange` on libghostty's layer and restores it on
   reveal. Without that, a window resize makes CoreAnimation display every mounted hidden pane and
-  rebuild the chain the release just freed. At `683d8db`, `Metal.init` installs one `IOSurfaceLayer`
+  rebuild the chain the release just freed. At `83fb956`, `Metal.init` installs one `IOSurfaceLayer`
   for the surface renderer and sets the flag once; no later Ghostty path replaces the layer or
   rewrites the flag. A `GHOSTTY_REV` bump has to recheck both, and that the synchronous reveal draw
   still restores the intended visible-resize path.
