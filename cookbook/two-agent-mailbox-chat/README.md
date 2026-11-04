@@ -40,13 +40,19 @@ agterm 0.40.0 or later, which added the per-pane message bus (`agtermctl msg`). 
    command = "mailbox-chat.py codex-hook"
    ```
 
-5. For agterm, add this line to `hooks.conf` beside your `keymap.conf` (`~/.config/agterm/hooks.conf` by default), with the full path to the script, then run `agtermctl hooks reload`. It is what hands mail to Codex.
+5. For Codex, add this line to `~/.codex/rules/default.rules`, creating the file if needed, then restart Codex. Codex's default sandbox refuses the connection to agterm's socket that every send makes, and the rule runs only the `say --file` form outside it. Setting `network_access = true` under `[sandbox_workspace_write]` in `config.toml` also lets sends through, but it opens the network and agterm's whole control API to every command Codex runs.
+
+   ```
+   prefix_rule(pattern=["mailbox-chat.py", "say", "--file"], decision="allow")
+   ```
+
+6. For agterm, add this line to `hooks.conf` beside your `keymap.conf` (`~/.config/agterm/hooks.conf` by default), with the full path to the script, then run `agtermctl hooks reload`. It is what hands mail to Codex.
 
    ```
    on message /full/path/to/mailbox-chat.py agterm-hook
    ```
 
-6. Start Codex with `--no-daemon` and a first prompt that says nothing about any chat:
+7. Start Codex with `--no-daemon` and a first prompt that says nothing about any chat:
 
    ```sh
    codex --no-daemon "Answer with the single word READY."
@@ -60,7 +66,7 @@ If your `agtermctl` is not on `PATH` under that name, set `AGTERMCTL` to its ful
 
 Open a split and start one agent in each pane yourself, with no topic on its command line: Claude Code bare, Codex with the launch line from *Setup*. Wait until Codex has answered READY, and after a `/clear` in Codex give it any prompt first, before the chat starts. Then ask either agent to talk to the other: "chat with codex about the retry bug", "work with claude on this", "ask the other agent what it thinks". The skill's `description` lists the phrases it answers to. That agent sends the first message, and from there each reply arrives in the other pane on its own. Your part is reading both panes and stepping in when they need a decision that is yours.
 
-An agent sends with:
+Claude Code sends with:
 
 ```sh
 mailbox-chat.py say --stdin <<'MSG'
@@ -68,7 +74,9 @@ the message
 MSG
 ```
 
-It prints JSON: `sent` means the other pane's mailbox accepted the message, `receiver` is `claude`, `codex` or `none` for who serves that pane, `peerBusy` is true while a Claude receiver is mid-turn, and `error` means the mailbox refused it. `mailbox-chat.py status` reports the same receiver without sending. `mailbox-chat.py deliver` hands a Codex pane's waiting mail to it by hand; run it from a plain shell with that pane's `AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, never through Codex, whose sandbox refuses `codex queue`.
+Codex sends from a file instead, because its allow rule from *Setup* cannot match a heredoc, which Codex runs as a shell script. It writes the message to a file and then runs `mailbox-chat.py say --file /tmp/mailbox-chat-<name>.txt` as a plain command. The script reads only a regular file of up to 64 KiB and never deletes it, so Codex reuses one file for the whole chat.
+
+Either form prints JSON: `sent` means the other pane's mailbox accepted the message, `receiver` is `claude`, `codex` or `none` for who serves that pane, `peerBusy` is true while a Claude receiver is mid-turn, and `error` means the mailbox refused it. `mailbox-chat.py status` reports the same receiver without sending. `mailbox-chat.py deliver` hands a Codex pane's waiting mail to it by hand; run it from a plain shell with that pane's `AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, never through Codex, whose sandbox refuses `codex queue`.
 
 ## How it works
 
