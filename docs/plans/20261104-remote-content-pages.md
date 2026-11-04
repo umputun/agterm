@@ -284,16 +284,16 @@
 - [x] `ARCHITECTURE.md`: the remote page section lists the content kinds and where each check runs
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify every Overview item: three kinds via CLI, origin ⌘-click routes, attached-pane ⌘-click still ignored,
+- [x] verify every Overview item: three kinds via CLI, origin ⌘-click routes, attached-pane ⌘-click still ignored,
       older-presenter refusal, no bridge, viewer-side sizing and tree read-back
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint`
-- [ ] after the hosted run: `lsappinfo list | grep -A4 agterm.debug` and stop any leaked test process
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint`
+- [x] after the hosted run: `lsappinfo list | grep -A4 agterm.debug` and stop any leaked test process
 
 ### Task 6: [Final] Update documentation
-- [ ] update README.md only if its remote-session synopsis names the page kinds that travel
-- [ ] update CLAUDE.md if a new pattern was discovered
+- [x] update README.md only if its remote-session synopsis names the page kinds that travel (it names none: no change)
+- [x] update CLAUDE.md if a new pattern was discovered (none)
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
