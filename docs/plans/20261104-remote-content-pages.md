@@ -274,14 +274,14 @@
 - Modify: `.claude/rules/control-api.md`
 - Modify: `ARCHITECTURE.md`
 
-- [ ] SKILL.md image section: `--image` shows on the Mac presenting an attached session too; the ⌘-click hint
+- [x] SKILL.md image section: `--image` shows on the Mac presenting an attached session too; the ⌘-click hint
       applies only to a local pane; the `show-image.sh` fallback stays for an older CLI, app or presenter
-- [ ] `site/docs.html` and `site/commands.html`: the presented-session rule covers image, markdown and text pages,
+- [x] `site/docs.html` and `site/commands.html`: the presented-session rule covers image, markdown and text pages,
       with the older-presenter refusal; remove the "never on another Mac" statements
-- [ ] `control-api.md`: replace the "no remote form" sentences in the image, markdown and text bullets with the
+- [x] `control-api.md`: replace the "no remote form" sentences in the image, markdown and text bullets with the
       typed hand-over, the capability kind, the per-kind serving rules and the viewer-side sizing; name
       `pageContentKind` beside `overlay.points`
-- [ ] `ARCHITECTURE.md`: the remote page section lists the content kinds and where each check runs
+- [x] `ARCHITECTURE.md`: the remote page section lists the content kinds and where each check runs
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify every Overview item: three kinds via CLI, origin ⌘-click routes, attached-pane ⌘-click still ignored,

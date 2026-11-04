@@ -737,8 +737,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   twin: `overlay open --text` and Finder reveal are already reachable. `wantsBrowser` stays public for the
   agterm-linux fork's caller.
 - An image page (`HtmlSource.image`, `--image`) embeds the file as a data URI in an HTML string, so it gets no
-  file grant, theme or bridge, and `presentationSource` has no remote form for it, which makes a presented
-  session refuse it through `pageBelongsRemote`. `BoundedFile.read` opens the path once and judges that
+  file grant, theme or bridge; a presented session shows it on the presenting Mac as a content page (Remote
+  sessions). `BoundedFile.read` opens the path once and judges that
   descriptor (`fstat`): a symlink is measured at its target, and a non-regular file, an offloaded iCloud
   placeholder or one over 64 MB is refused before a byte is read. Only a PNG, JPEG, GIF or WebP signature
   (`ImagePage.mimeType(sniffing:)`) reaches ImageIO, and a header over `ImagePage.maxPixels` is refused, since
@@ -750,7 +750,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `hudPaneFrames.detail` at its window's backing scale; a later window resize does not refit. SVG is excluded
   because it is a document that can carry script.
 - A markdown page (`HtmlSource.markdown`, `--markdown`, wire `markdownFile` since `markdown` is the HUD's flag) is
-  built from text like an image page: no file grant, no bridge, no remote form, but it is themed. `MarkdownProbe`
+  built from text like an image page: no file grant, no bridge, but it is themed. `MarkdownProbe`
   reads the file through `BoundedFile` (the descriptor check `ImageProbe` shares) and embeds pictures that
   `MarkdownPage.imageReferences` contains in the file's folder after resolving symlinks, each canonical file once
   (`MarkdownPage.Embedded`), within a total byte and pixel budget. The renderer, bundled markdown-it and
@@ -1984,6 +1984,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one `end` or `failure` frame, a cancel included, and a bridge call in one `reply` or `failure`. The presenter's
   `RemotePageChannel` holds the same limits and frees a slot only on its request's terminal frame, and holds a
   chunk's inbound permit until WebKit takes it. Bridge replies reach the page as the raw JSON the origin sent.
+- An image, markdown or text page travels as a content page: a typed `PresentationPageSource` case, sent only to a
+  presenter listing `PresentationHub.pageContentKind`, since an older one fails its whole stream on a case it
+  cannot decode; without it the open keeps `OverlayHtmlError.presenter`. The origin still probes at open and sends
+  an image's oriented pixel size (`ImagePixels`); an auto-sized image carries no origin-computed points, the
+  presenter sizing it through `ControlServer.imagePoints`, while explicit sizing passes through as for any page. Over the same channel, `RemotePageResources.content` serves an image or text page
+  its own file and a markdown page its own file plus pictures its folder contains after resolving symlinks there,
+  each read whole through `BoundedFile` under its kind's cap, a picture sent only when its bytes carry a picture
+  signature; the bridge is refused. The presenter holds it as `HtmlSource.replica(path:content:)`, an origin path
+  no local read ever takes, judges the fetched bytes with the local probes, lists markdown pictures lexically
+  (`MarkdownPage.remoteImageReferences`) and builds the page off the main actor. Limit: an inward symlink alias
+  is a second file there, so aliases count separately toward the picture budgets and one can fall to alt text
+  sooner than locally. A markdown or text page companion of a remote parent stays refused.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,
   each reply meaning requested, not applied. `navigate browser` reaches it

@@ -1126,8 +1126,8 @@ error keeps those names for compatibility.
   directory. Refused: a path that is not a regular readable file (`unreadable image`), contents that are not
   png, jpg, gif or webp whatever the name (`not a png, jpg, gif or webp image`), and a file over 64 MB or a
   picture over 100 megapixels (`image too large`). The file is read synchronously, so one on slow or network
-  storage stalls the app until it is read. An image page is local-only: when placement would send the page to the Mac presenting
-  the session, the open is refused. Read back `image` in `htmlOverlays`.
+  storage stalls the app until it is read. On a session another Mac presents it opens there (Remote
+  sessions). Read back `image` in `htmlOverlays`.
 - `session overlay open --markdown FILE [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   - render a `.md` or `.markdown` file as a page in the terminal theme, the view a user's ⌘-click on its path opens
   (at the link-open size, 95% when links open in the browser). Code is highlighted, task lists show boxes, and
@@ -1138,7 +1138,7 @@ error keeps those names for compatibility.
   `--url`, `--image`, the page flags, `--cwd`, `--wait`, `--block` and `--companion`; a relative FILE resolves
   against the caller's directory. Refused: a path that is not a regular readable file (`unreadable markdown
   file`) and a file over 4 MB (`markdown file too large`). The wire field is `markdownFile`, apart from the
-  HUD's `markdown` flag. Local-only, like an image page. Read back `markdown` in `htmlOverlays`.
+  HUD's `markdown` flag. Opens on a presenting Mac like an image page. Read back `markdown` in `htmlOverlays`.
 - `session overlay open --text FILE [--line N] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   - show a source, config, text or log file read-only in the terminal theme, the view a user's ⌘-click on its
   path opens (at the link-open size, 95% when links open in the browser), with line numbers. Highlighted when the
@@ -1150,7 +1150,7 @@ error keeps those names for compatibility.
   `--companion`, and `--line` without `--text` or below 1. Refused: a file that is not a source, config, text or
   log file (markdown, HTML and SVG included), a path that is not a regular readable file (`unreadable text file`),
   a file over 4 MB (`text file too large`) and one that is not UTF-8 or holds a NUL byte (`not a UTF-8 text file`).
-  Wire fields `textFile` and `line`. Local-only, like an image page. Read back `text` in `htmlOverlays`:
+  Wire fields `textFile` and `line`. Opens on a presenting Mac like an image page. Read back `text` in `htmlOverlays`:
   `{file, language?, line?}`, the language its name maps to and the line it was opened at, not the line in view.
   The user's ⌘-click opens the same page on a path or a `path:line[:column]` location, a relative one looked up in
   the pane's directory, and ⌘⌥-click (⌘⌥⇧ under mouse capture) reveals any local path in Finder.
@@ -2364,6 +2364,11 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   page `file` names the origin path, a URL page keeps `url`, and refuses a socket `overlay submit` on it. A page the presenting Mac refuses still
   answered ok at open and ends `dismissed`. Losing the presenter ends the page `dismissed`, keeping an answer
   already submitted.
+- An image, markdown or text page (`--image`, `--markdown`, `--text`) follows the same rule. The presenting Mac
+  fetches the file over the same channel, the origin serving only that file, or a markdown file's pictures in its
+  own folder, under the same size limits, and shows the same page with no bridge; an image opened without a size
+  is sized for that Mac's screen. Its `htmlOverlays` lists `image`, `markdown` or `text` with `replica: true`.
+  A presenting Mac too old for these pages keeps the refusal (`a viewer presents this session`).
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
   and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
 - While the stream is not up the row's indicator says so and names the host. It retries on its own, at
