@@ -323,6 +323,32 @@ final class SettingsUITests: XCTestCase {
                       "selecting Normal should persist toolbarMode=normal to settings.json")
     }
 
+    func testSidebarDensityPickerPersistsAndTheAppearanceTabFits() throws {
+        let picker = settingsControl(tab: "Appearance", control: "settings-sidebar-density")
+        let last = app.sliders["settings-inactive-pane-mute"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5), "the Appearance tab's last control should exist")
+        let window = app.windows.containing(.any, identifier: "settings-sidebar-density").firstMatch
+        XCTAssertLessThanOrEqual(last.frame.maxY, window.frame.maxY, "the last control should be on screen")
+        let before = last.frame.minY
+        last.scroll(byDeltaX: 0, deltaY: -80)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCTAssertEqual(last.frame.minY, before, accuracy: 0.5, "the Appearance tab should not scroll")
+
+        picker.click()
+        let compact = app.menuItems["Compact"]
+        XCTAssertTrue(compact.waitForExistence(timeout: 5), "the density picker should offer Compact")
+        compact.click()
+        XCTAssertTrue(poll { self.settingsValue("sidebarDensity") == "compact" },
+                      "selecting Compact should persist sidebarDensity=compact to settings.json")
+
+        picker.click()
+        let standard = app.menuItems["Default"]
+        XCTAssertTrue(standard.waitForExistence(timeout: 5), "the density picker should offer Default")
+        standard.click()
+        XCTAssertTrue(poll { self.settingsValue("sidebarDensity") == nil },
+                      "the default density should remove sidebarDensity from settings.json")
+    }
+
     func testCursorStyleAndBlinkPickersPersist() throws {
         let picker = settingsControl(tab: "Appearance", control: "settings-cursor-style")
 

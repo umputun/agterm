@@ -432,6 +432,14 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree(paneForeground: { _ in nil }, flaggedLayout: .flat).sidebarFlaggedLayout == "flat")
     }
 
+    @Test func controlTreeReportsThePassedSidebarDensityInEitherSidebarMode() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarDensity == nil)
+        #expect(store.controlTree(paneForeground: { _ in nil }, sidebarDensity: .compact).sidebarDensity == "compact")
+        store.setSidebarMode(.flagged)
+        #expect(store.controlTree(paneForeground: { _ in nil }, sidebarDensity: .standard).sidebarDensity == "default")
+    }
+
     @Test func controlTreeReportsTheSavedFlaggedOrderAndOmitsItWhenNothingIsFlagged() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

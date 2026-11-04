@@ -32,9 +32,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // flush below the titlebar; a custom row height restores the roomy size .plain's .default shrinks
         // to ~17px.
         outline.rowSizeStyle = .custom
-        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize)
+        let density = GhosttyApp.shared.sidebarDensity
+        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize, density: density)
         outline.floatsGroupRows = false
-        outline.indentationPerLevel = 14
+        outline.indentationPerLevel = density.indentPerLevel
         outline.autosaveExpandedItems = false
         outline.target = context.coordinator
         outline.action = #selector(Coordinator.handleSingleClick(_:))
@@ -195,9 +196,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// reconcile reloads only the rows whose content changed. An absent key ≠ any real content.
         private var lastRowContent: [UUID: RowContent] = [:]
 
-        /// The sidebar font size last applied (row height + row fonts). `.agtermAppearanceChanged` fires for
-        /// every settings change, so `appearanceChanged` compares against this and rebuilds only on a change.
+        /// The sidebar font size and density last applied (row height, indent, row fonts).
+        /// `.agtermAppearanceChanged` fires for every settings change, so `appearanceChanged` compares against
+        /// these and rebuilds only on a change.
         private var lastSidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+        private var lastSidebarDensity: SidebarDensity = .standard
 
         /// Centered hint floating over the empty outline in flagged mode; hidden otherwise.
         private weak var emptyState: NSStackView?
@@ -212,6 +215,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // seed from the live mirror (SettingsModel applies the persisted size before any sidebar is
             // built) so the first appearanceChanged doesn't rebuild for no change.
             lastSidebarFontSize = GhosttyApp.shared.sidebarFontSize
+            lastSidebarDensity = GhosttyApp.shared.sidebarDensity
             renameController.onRenameEnded = { [weak self] node in
                 guard let self, !renameController.isEditing, !renameController.isCommitting else { return }
                 if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
@@ -285,7 +289,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         @objc private func appearanceChanged() {
-            applySidebarFontSizeIfChanged()
+            applySidebarMetricsIfChanged()
             refreshSelectionAppearance()
             applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile reloads those rows.
@@ -304,14 +308,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             reapplyStatusGlyphs()
         }
 
-        /// Re-apply the row height + fonts when the sidebar font-size setting changed. The size is not part
-        /// of `reconcile`'s per-row content diff, so it needs an explicit row-height update plus a full
-        /// `rebuildAndReload` to re-run the cell builder, guarded on the tracked value.
-        private func applySidebarFontSizeIfChanged() {
+        /// Re-apply the row height, indent and fonts when the sidebar font size or density changed. Neither is
+        /// part of `reconcile`'s per-row content diff, so they need explicit outline updates plus a full
+        /// `rebuildAndReload` to re-run the cell builder, guarded on the tracked values.
+        private func applySidebarMetricsIfChanged() {
             let size = GhosttyApp.shared.sidebarFontSize
-            guard size != lastSidebarFontSize else { return }
+            let density = GhosttyApp.shared.sidebarDensity
+            guard size != lastSidebarFontSize || density != lastSidebarDensity else { return }
             lastSidebarFontSize = size
-            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size)
+            lastSidebarDensity = density
+            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size, density: density)
+            outlineView?.indentationPerLevel = density.indentPerLevel
             rebuildAndReload()
         }
 

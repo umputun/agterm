@@ -127,6 +127,13 @@ struct AppearanceSettingsView: View {
                 }
                 .accessibilityIdentifier("settings-sidebar-font-size")
 
+                Picker("Sidebar density", selection: sidebarDensity) {
+                    ForEach(SidebarDensity.allCases, id: \.self) { density in
+                        Text(density.displayName).tag(density)
+                    }
+                }
+                .accessibilityIdentifier("settings-sidebar-density")
+
                 Stepper(value: interfaceFontSize, in: AppSettings.interfaceFontSizeRange, step: 1) {
                     Text("Palette and switcher font size: \(Int(model.settings.effectiveInterfaceFontSize))")
                 }
@@ -169,6 +176,10 @@ struct AppearanceSettingsView: View {
     private var sidebarFontSize: Binding<Double> {
         Binding(get: { model.settings.effectiveSidebarFontSize },
                 set: { model.setSidebarFontSize($0 == AppSettings.defaultSidebarFontSize ? nil : $0) })
+    }
+
+    private var sidebarDensity: Binding<SidebarDensity> {
+        Binding(get: { model.settings.effectiveSidebarDensity }, set: { model.setSidebarDensity($0) })
     }
 
     /// The palette, picker and session-switcher text size.

@@ -711,6 +711,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// is dormant. The read side of `sidebar.flagged-layout` and a term of the workspace-row visibility
     /// predicate on `ControlWorkspaceNode.focused`.
     public let sidebarFlaggedLayout: String?
+    /// sidebarDensity is the app-wide row spacing, `SidebarDensity.rawValue` (`default` | `compact`), the same on
+    /// every window's `tree`. The read side of `sidebar.density`.
+    public let sidebarDensity: String?
     /// flaggedOrder is the window's saved flagged order as session ids, the flat and plain rows' order and the
     /// read side of `session.flag move`; omitted when nothing is flagged.
     public let flaggedOrder: [String]?
@@ -779,8 +782,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil, pickPending: String? = nil, askPending: String? = nil,
                 app: AppIdentity? = nil, liveReset: ControlLiveResetReadback? = nil,
-                indexUnsaved: Bool? = nil, linkOpenMode: String? = nil) {
+                indexUnsaved: Bool? = nil, linkOpenMode: String? = nil, sidebarDensity: String? = nil) {
         self.workspaces = workspaces
+        self.sidebarDensity = sidebarDensity
         self.linkOpenMode = linkOpenMode
         self.liveReset = liveReset
         self.indexUnsaved = indexUnsaved

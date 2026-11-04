@@ -183,7 +183,9 @@ final class SidebarInfoRowTests: XCTestCase {
     }
 
     private var plainHeight: CGFloat { AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize) }
-    private var infoHeight: CGFloat { SidebarInfoMetrics.rowHeight(base: GhosttyApp.shared.sidebarFontSize) }
+    private var infoHeight: CGFloat {
+        SidebarInfoMetrics.rowHeight(base: GhosttyApp.shared.sidebarFontSize, density: GhosttyApp.shared.sidebarDensity)
+    }
 
     private func info(_ source: String, markdown: Bool = false) throws -> SessionInfo {
         try SessionInfo.make(source: source, markdown: markdown, hideAfter: 0).get()

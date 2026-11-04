@@ -136,6 +136,8 @@ final class GhosttyApp {
     /// The sidebar row-text point size. The sidebar Coordinator reads it for each row's font and the derived
     /// row height (via `AppSettings.sidebarRowHeight`); settings-mirrored like `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+    /// The sidebar row spacing; the Coordinator reads it with `sidebarFontSize`. Settings-mirrored.
+    private(set) var sidebarDensity: SidebarDensity = .standard
     /// The sizes the palette/picker and session switcher derive from the separate `interfaceFontSize`,
     /// resolved once per settings change rather than per row.
     private(set) var interfaceMetrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
@@ -313,6 +315,10 @@ final class GhosttyApp {
         // 9...20, but a hand-edited settings.json must not draw a giant font in the clamped row
         // (sidebarRowHeight clamps its own copy).
         sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
+    }
+
+    func setSidebarDensity(_ density: SidebarDensity) {
+        sidebarDensity = density
     }
 
     /// `InterfaceMetrics` clamps its own input, so a hand-edited out-of-range value lands in range here too.

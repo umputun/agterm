@@ -179,7 +179,7 @@ renumbering. Do not reintroduce a count anywhere.
   `ask.open`, `ask.result`, `ask.cancel`
 - `quick`, `quick.type`, `quick.text`
 - `msg.send`, `msg.read`, `msg.ack`
-- `sidebar`, `sidebar.mode`, `sidebar.flagged-layout`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`,
+- `sidebar`, `sidebar.mode`, `sidebar.flagged-layout`, `sidebar.density`, `sidebar.expand`, `sidebar.collapse`, `sidebar.width`,
   `notify`
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
@@ -1366,6 +1366,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlServer.buildTree` passes the `GhosttyApp` mirror the sidebars render from. The legacy
   `controlTree(foreground:)` overload reports nil, meaning the host supplied none. An outside
   `ControlActions` conformer gets the unsupported-host default.
+- `sidebar.density default|compact|toggle` follows the same app-wide contract through
+  `SettingsModel.setSidebarDensity`; `toggle` flips between the two, and the read-back is top-level `sidebarDensity`.
 - `sidebar.expand` and `.collapse` target optional open window, post object-scoped store notifications, and
   no-op under the flat flagged list. Collapse preserves/scrolls active workspace. GUI forms are frontmost only.
 - `sidebar.width <points>` targets an optional open window, unlike frontmost-only `sidebar`/`sidebar.mode`:

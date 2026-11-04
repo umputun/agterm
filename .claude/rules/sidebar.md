@@ -17,6 +17,11 @@ paths:
 - `WorkspaceSidebar` is an AppKit `NSOutlineView`, chosen over SwiftUI `List` for native
   cross-workspace drag-and-drop. Its `@MainActor` Coordinator caches reference-type `SidebarNode`s so
   reloads retain identity, expansion, and selection.
+- `SidebarDensity` ([[settings]]) sets row padding, indent, info-line spacing, the name's lift and the selection
+  inset. Rows sit edge to edge, so the padding is the only gap between items and the selection pill shrinks with
+  the row. A density change re-applies `rowHeight` and `indentationPerLevel` and rebuilds; cells are reused, so
+  `viewFor` resets `titleCenter` and `SidebarInfoCellView.apply` resets `infoTop` on every configure.
+  `SidebarDensityTests` switches a mounted outline both ways.
 - macOS 27 reserves a wider leading strip than the disclosure triangle occupies, stranding the row icon
   mid-gap. `SidebarOutlineView.frameOfCell` trims the surplus, gated on that version; its doc comment owns
   the reasoning. Leave `frameOfOutlineCell` alone: the triangle keeps its place and `handleSingleClick`

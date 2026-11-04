@@ -27,10 +27,11 @@ extension WorkspaceSidebar.Coordinator {
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         let base = GhosttyApp.shared.sidebarFontSize
+        let density = GhosttyApp.shared.sidebarDensity
         guard let node = item as? SidebarNode, node.kind == .session, sessionInfo(forSession: node.id) != nil else {
-            return AppSettings.sidebarRowHeight(fontSize: base)
+            return AppSettings.sidebarRowHeight(fontSize: base, density: density)
         }
-        return SidebarInfoMetrics.rowHeight(base: base)
+        return SidebarInfoMetrics.rowHeight(base: base, density: density)
     }
 
     /// sessionInfo is the info line a session row shows, shared by the height, the cell builder and the row diff.
@@ -61,6 +62,7 @@ extension WorkspaceSidebar.Coordinator {
         let cell = (outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarCellView) ?? makeCell(identifier: identifier)
 
         let field = cell.textField!
+        cell.titleCenter?.constant = -GhosttyApp.shared.sidebarDensity.titleLift
         field.delegate = renameController
         // a reused cell may carry editing state from a prior rename; reset to label
         field.isEditable = false
@@ -115,7 +117,10 @@ extension WorkspaceSidebar.Coordinator {
             cell.notice = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
             cell.tint = session?.tint
-            if let info { (cell as? SidebarInfoCellView)?.apply(spans: info, base: GhosttyApp.shared.sidebarFontSize) }
+            if let info {
+                (cell as? SidebarInfoCellView)?.apply(spans: info, base: GhosttyApp.shared.sidebarFontSize,
+                                                      density: GhosttyApp.shared.sidebarDensity)
+            }
         }
         // text/icon colors track the terminal theme, a selected row the selection foreground, and a row
         // tint overrides the parts it colors. This build-time pass is a first guess: row(forItem:) can
@@ -193,7 +198,8 @@ extension WorkspaceSidebar.Coordinator {
         let band = NSLayoutGuide()
         cell.addLayoutGuide(band)
         let bandHeight = band.heightAnchor.constraint(
-            equalToConstant: AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize))
+            equalToConstant: AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize,
+                                                          density: GhosttyApp.shared.sidebarDensity))
         infoCell?.titleBandHeight = bandHeight
         let center = infoCell == nil ? cell.centerYAnchor : band.centerYAnchor
 
@@ -221,6 +227,8 @@ extension WorkspaceSidebar.Coordinator {
         cell.textField = field
         let iconGap = field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: SidebarCellView.iconGap)
         cell.iconGapConstraint = iconGap
+        let titleCenter = field.centerYAnchor.constraint(equalTo: center, constant: -GhosttyApp.shared.sidebarDensity.titleLift)
+        cell.titleCenter = titleCenter
 
         let statusIcon = cell.statusIcon
         statusIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -240,7 +248,7 @@ extension WorkspaceSidebar.Coordinator {
             iconWidth,
             icon.heightAnchor.constraint(equalToConstant: 16),
             iconGap,
-            field.centerYAnchor.constraint(equalTo: center),
+            titleCenter,
             // chain: name (flex) | [+ button for workspace] | status icon | badge (trailing).
             // the status icon and badge hug their content, so the name truncates first and both stay whole.
             statusIcon.trailingAnchor.constraint(equalTo: badge.leadingAnchor),
@@ -302,10 +310,13 @@ extension WorkspaceSidebar.Coordinator {
             info.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             info.setAccessibilityIdentifier("session-info")
             cell.addSubview(info)
+            let infoTop = info.topAnchor.constraint(equalTo: band.bottomAnchor,
+                                                    constant: -GhosttyApp.shared.sidebarDensity.infoLineSpacing)
+            infoCell.infoTop = infoTop
             constraints += [
                 info.leadingAnchor.constraint(equalTo: field.leadingAnchor),
                 info.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
-                info.topAnchor.constraint(equalTo: band.bottomAnchor, constant: -SidebarInfoMetrics.lift),
+                infoTop,
             ]
         }
 
