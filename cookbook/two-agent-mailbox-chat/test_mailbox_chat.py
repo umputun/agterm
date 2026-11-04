@@ -270,7 +270,7 @@ class SayTest(StateTest):
         Path(binary).write_bytes(b"\xff\xfe")
         missing = os.path.join(self.tmp.name, "missing.txt")
         for path, want in ((oversized, "limit"), (fifo, "not a regular file"), (self.tmp.name, "not a regular file"),
-                           (binary, "utf-8"), (missing, "No such file")):
+                           (binary, "utf-8"), (missing, "No such file"), ("", "No such file")):
             with self.subTest(path=os.path.basename(path)):
                 fake = self.use(FakeRun())
                 code, result = self.say_file(path)

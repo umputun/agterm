@@ -561,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         return agterm_hook()
     try:
         if args.cmd == "say":
-            result = say(read_message_file(args.file) if args.file else sys.stdin.read())
+            result = say(read_message_file(args.file) if args.file is not None else sys.stdin.read())
         elif args.cmd == "status":
             result = status()
         else:
