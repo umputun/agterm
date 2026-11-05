@@ -27,7 +27,7 @@ let package = Package(
         .executableTarget(name: "agtermctl", dependencies: ["agtermctlKit"]),
         // debug-only fixture: it imports agtermctlKit @testable, and release builds name their products.
         .executableTarget(name: "session-wait-watchdog-probe", dependencies: ["agtermctlKit"]),
-        .testTarget(name: "agtermctlKitTests", dependencies: ["agtermctlKit", "session-wait-watchdog-probe"]),
+        .testTarget(name: "agtermctlKitTests", dependencies: ["agtermctlKit", "agtermctl", "session-wait-watchdog-probe"]),
     ],
     swiftLanguageModes: [.v6]
 )

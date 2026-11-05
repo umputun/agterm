@@ -32,7 +32,15 @@
     }
     return `<span class="agterm-alt">${alt || md.utils.escapeHtml(key)}</span>`;
   };
-  page.innerHTML = md.render(source.textContent);
+  // markdown-it knows no frontmatter: its closing `---` would turn the yaml into a setext heading
+  let text = source.textContent, front = '';
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (fm) {
+    const yaml = md.options.highlight(fm[1], 'yaml') || md.utils.escapeHtml(fm[1]);
+    front = `<pre class="agterm-frontmatter"><code class="language-yaml">${yaml}</code></pre>`;
+    text = text.slice(fm[0].length);
+  }
+  page.innerHTML = front + md.render(text);
   source.remove();
   for (const img of page.querySelectorAll('img[data-agterm-image]')) {
     img.src = uris[Number(img.dataset.agtermImage)];

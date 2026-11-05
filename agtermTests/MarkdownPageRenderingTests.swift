@@ -18,6 +18,36 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(rendered as? String, "1|1|done,open")
     }
 
+    // regression: the closing `---` turned the yaml lines into a setext heading under a rule
+    func testLeadingFrontmatterRendersAsAYamlBlock() async throws {
+        let source = "---\nname: chat\ndescription: 'a <b> peer''s chat'\n---\n# Chat\n\nbody\n\n---\n\nafter\n\n```\ncode\n```\n"
+        let page = registry.page(for: try openMarkdown("doc.md", source), store: store)
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: page.webView) { $0 == "Chat" }
+
+        let rendered = try await page.webView.evaluateJavaScript("""
+            [document.querySelectorAll('h2').length, document.querySelectorAll('hr').length,
+             document.querySelector('#agterm-page > :first-child').matches('pre.agterm-frontmatter'),
+             document.querySelector('pre.agterm-frontmatter code.language-yaml').textContent,
+             document.querySelectorAll('pre.agterm-frontmatter .hljs-attr').length > 0,
+             document.querySelectorAll('b').length,
+             getComputedStyle(document.querySelector('pre.agterm-frontmatter')).whiteSpace,
+             getComputedStyle(document.querySelector('pre:not(.agterm-frontmatter)')).whiteSpace].join('|')
+            """)
+        XCTAssertEqual(rendered as? String, "0|1|true|name: chat\ndescription: 'a <b> peer''s chat'|true|0|pre-wrap|pre")
+    }
+
+    // regression: the parser dropped the newline after a <pre> holder, so a rule on line two read as frontmatter
+    func testARuleAfterALeadingBlankLineIsNotFrontmatter() async throws {
+        let page = registry.page(for: try openMarkdown("doc.md", "\n---\n## Heading\n\nbody\n---\n"), store: store)
+        try await waitForScript("document.querySelector('#agterm-page > *') ? 'ready' : ''", in: page.webView) { $0 == "ready" }
+
+        let rendered = try await page.webView.evaluateJavaScript("""
+            [document.querySelectorAll('pre.agterm-frontmatter').length, document.querySelectorAll('hr').length,
+             [...document.querySelectorAll('h2')].map(h => h.textContent).join(',')].join('|')
+            """)
+        XCTAssertEqual(rendered as? String, "0|1|Heading,body")
+    }
+
     func testAMarkdownPageRendersThemedWithCodeAndTasksAndGetsNoBridge() async throws {
         let page = registry.page(for: try openMarkdown("doc.md", "# Title\n\n- [x] done\n- [ ] open\n\n```swift\nlet x = 1\n```\n"),
                                  store: store)
