@@ -361,6 +361,31 @@ class WaiterTest(StateTest):
         self.assertEqual(fake.mailboxes[f"{SID}:{LEFT}"], [])
         self.assertTrue(w.busy())
 
+    def test_failed_feedback_write_leaves_mail_unacked(self):
+        # regression: the waiter acked before writing, so a closed hook pipe lost the message
+        class Broken(io.StringIO):
+            def __init__(self, fail):
+                super().__init__()
+                self.fail = fail
+
+            def write(self, s):
+                if self.fail == "write":
+                    raise BrokenPipeError("pipe closed")
+                return super().write(s)
+
+            def flush(self):
+                if self.fail == "flush":
+                    raise BrokenPipeError("pipe closed")
+
+        for fail in ("write", "flush"):
+            with self.subTest(fail=fail):
+                fake = self.use(FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": mc.compose("hello")}]}))
+                w = self.waiter()
+                with mock.patch("sys.stderr", Broken(fail)):
+                    self.assertEqual(w.run("Stop", ""), 0)
+                self.assertEqual([m["id"] for m in fake.mailboxes[f"{SID}:{LEFT}"]], ["M1"])
+                self.assertFalse(w.busy())
+
     def test_claude_reads_as_listening_through_a_mail_woken_turn(self):
         # regression: the waiter's exit on wake made the peer report receiver none for that turn
         self.use(FakeRun(mailboxes={f"{SID}:{LEFT}": [{"id": "M1", "body": "x"}]}))
@@ -476,7 +501,7 @@ class CodexHookTest(StateTest):
         return popen
 
     def test_interactive_codex_registers_and_delivers(self):
-        popen = self.hook({"session_id": "T7"})
+        popen = self.hook({"session_id": "T7", "transcript_path": "/r/T7.jsonl"})
         self.assertEqual(mc.read_json(mc.state_path(f"codex-{LEFT}.json")),
                          {"session": SID, "thread": "T7", "pid": 4242, "codex": "/opt/codex/bin/codex"})
         self.assertEqual(popen.call_args.args[0][-1], "deliver")
@@ -484,11 +509,23 @@ class CodexHookTest(StateTest):
         self.assertEqual(popen.call_args.kwargs["stderr"], mc.subprocess.STDOUT)
 
     def test_codex_exec_and_missing_thread_do_not_register(self):
-        for event, pid, exec_run in (({"session_id": "T7"}, 4242, True), ({}, 4242, False), ({"session_id": "T7"}, None, False)):
+        started = {"session_id": "T7", "transcript_path": "/r/T7.jsonl"}
+        for event, pid, exec_run in ((started, 4242, True), ({}, 4242, False), (started, None, False)):
             with self.subTest(event=event, pid=pid, exec_run=exec_run):
                 popen = self.hook(event, pid, exec_run)
                 self.assertIsNone(mc.read_json(mc.state_path(f"codex-{LEFT}.json")))
                 popen.assert_not_called()
+
+    def test_start_without_transcript_keeps_the_registered_thread(self):
+        # regression: codex's background memory session starts with no transcript and took the pane's thread
+        self.hook({"session_id": "T7", "transcript_path": "/r/T7.jsonl"})
+        for transcript in (None, ""):
+            with self.subTest(transcript=transcript):
+                popen = self.hook({"session_id": "MEM", "transcript_path": transcript})
+                self.assertEqual(mc.read_json(mc.state_path(f"codex-{LEFT}.json"))["thread"], "T7")
+                popen.assert_not_called()
+        self.hook({"session_id": "T8", "transcript_path": "/r/T8.jsonl"})
+        self.assertEqual(mc.read_json(mc.state_path(f"codex-{LEFT}.json"))["thread"], "T8")
 
     def test_codex_subcommand_skips_global_options(self):
         cases = [(["codex"], ""), (["codex", "--no-daemon"], ""), (["codex", "-m", "gpt", "exec", "x"], "exec"),
