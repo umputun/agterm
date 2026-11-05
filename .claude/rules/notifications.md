@@ -86,9 +86,16 @@ paths:
 - Default states share `circle.fill` and differ by tint. Discussion #277 rejected marked circles because
   their interior marks are illegible at row size. `AgentStatus.symbolName(override:configured:)` resolves
   per-call shape, configured status shape, then `circle`; require both arguments so omitted settings fail
-  compilation. The fixed useful set is `circle`, `square`, `triangle`, `diamond`, `capsule`, `star`.
-  `hexagon`/`octagon`/`pentagon`/`seal` resemble circle, `app` duplicates square, and `rhombus` duplicates
-  diamond at this size. Raw values form `"<raw>.fill"` and `displayName` is the shared picker label.
+  compilation. The set is `circle`, `square`, `triangle`, `triangle-down`, `play`, `diamond`, `capsule`,
+  `seal`, `star`, `bolt`, `bell`. `seal` reads close to circle and `bell` is also the titlebar
+  Attention glyph; both are kept deliberately. `hexagon`/`octagon`/
+  `pentagon` resemble circle, `app` duplicates square, `rhombus` duplicates diamond, and `drop` draws
+  visibly larger than the rest at this size.
+  A raw value is the public name and is never renamed once released; `symbolName` maps it to the symbol,
+  `"<raw>.fill"` except `triangle-down`'s `arrowtriangle.down.fill`, and `displayName` is the picker label.
+  A viewer older than this set throws on a shape it does not know, so `PresentationHub` clears
+  any shape outside `StatusShape.original` for a subscriber that does not advertise `status.shapes`.
+  A shape added later needs the same gate under a new kind.
   Keep `ControlArgs.shape`, website command docs, and agent skill lists synchronized; CLI and dispatcher
   validation derive from `validNamesList`/`validNamesPhrase`.
 - `GhosttyApp.statusColor(for:override:)` similarly resolves per-call `#rrggbb`, configured status color,

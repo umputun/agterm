@@ -724,7 +724,7 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
 
         let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","shape":"hexagon"}}"#)
         XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown shape should fail: \(bad)")
-        XCTAssertEqual(bad["error"] as? String, "invalid shape: hexagon (circle|square|triangle|diamond|capsule|star)",
+        XCTAssertEqual(bad["error"] as? String, "invalid shape: hexagon (circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell)",
                        "should report the accepted shapes: \(bad)")
         node = try sessionNode(id: seeded)
         XCTAssertEqual(node["status"] as? String, "blocked", "an invalid shape must leave the status unchanged")
