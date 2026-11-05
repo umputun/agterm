@@ -225,9 +225,13 @@
 - [x] run targeted tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
-- [ ] verify every Overview requirement, including the 2 MB byte cap and the waiting state
-- [ ] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
+- [x] verify every Overview requirement, including the 2 MB byte cap and the waiting state
+- [x] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
+      ⚠️ lint first failed on cyclomatic complexity in `Open.validate()` and `overlayContent`; the new checks moved into
+      `validateLog()` and `textOnlyRefusal(_:)`; hosted gate 1772 tests, 2 skipped, 0 failures
+      ⚠️ the UI test's first run never brought the app to the foreground and hung in teardown; tccd logged
+      `IDENTITY_ATTRIBUTION` for a stale `agterm-session-host` (CLAUDE.md's known case); the capped retry passed in 10 s
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
 
 ### Task 6: [Final] Update documentation
 - [ ] `site/docs.html` local-path paragraph: log mode, follow, pause, tail limit

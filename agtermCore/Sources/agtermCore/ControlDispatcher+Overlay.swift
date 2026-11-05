@@ -176,12 +176,17 @@ extension ControlDispatcher {
         return nil
     }
 
+    // the options only a text page takes, refused ahead of any source so a request with no text file is answered
+    private static func textOnlyRefusal(_ args: ControlArgs?) -> String? {
+        guard args?.textFile == nil else { return nil }
+        if args?.line != nil { return OverlayHtmlError.lineWithoutText }
+        if args?.tail != nil || args?.followFile == true { return OverlayHtmlError.tailWithoutText }
+        return nil
+    }
+
     static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
-        if args?.line != nil, args?.textFile == nil { return reject(OverlayHtmlError.lineWithoutText) }
-        if args?.tail != nil || args?.followFile == true, args?.textFile == nil {
-            return reject(OverlayHtmlError.tailWithoutText)
-        }
+        if let error = textOnlyRefusal(args) { return reject(error) }
         if let image = args?.image {
             guard command.isEmpty, args?.html == nil, args?.url == nil, args?.markdownFile == nil, args?.textFile == nil else {
                 return reject(OverlayHtmlError.oneSource)

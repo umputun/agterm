@@ -661,6 +661,15 @@ struct Session: ParsableCommand {
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
+            private func validateLog() throws {
+                guard tail != nil || followFile else { return }
+                if text == nil { throw ValidationError("--tail and --follow-file require --text") }
+                if line != nil { throw ValidationError("--tail and --follow-file cannot be combined with --line") }
+                if let tail, !(1...TextPage.maxTail).contains(tail) {
+                    throw ValidationError("--tail must be 1...\(TextPage.maxTail)")
+                }
+            }
+
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
@@ -674,13 +683,7 @@ struct Session: ParsableCommand {
                 }
                 if line != nil, text == nil { throw ValidationError("--line requires --text") }
                 if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
-                if tail != nil || followFile, text == nil { throw ValidationError("--tail and --follow-file require --text") }
-                if tail != nil || followFile, line != nil {
-                    throw ValidationError("--tail and --follow-file cannot be combined with --line")
-                }
-                if let tail, !(1...TextPage.maxTail).contains(tail) {
-                    throw ValidationError("--tail must be 1...\(TextPage.maxTail)")
-                }
+                try validateLog()
                 if image != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
                     throw ValidationError("--image takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
                 }
