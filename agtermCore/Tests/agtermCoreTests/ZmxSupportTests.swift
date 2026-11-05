@@ -411,9 +411,85 @@ struct ZmxSupportTests {
     }
 
     @Test(arguments: [
+        ("/opt/homebrew/bin/fish --login", "/opt/homebrew/bin/fish"),
+        ("/bin/zsh", "/bin/zsh"),
+        ("direct:/bin/zsh -l", "/bin/zsh"),
+        ("shell:/usr/local/bin/fish -il", "/usr/local/bin/fish"),
+        ("/bin/zsh --login --interactive", "/bin/zsh"),
+        ("fish --login", nil),
+        ("/opt/homebrew/bin/fish -C 'echo hi'", nil),
+        ("/bin/bash -l", nil),
+        ("/usr/bin/env fish", nil),
+        ("/opt/homebrew/bin/tmux new", nil),
+        ("", nil),
+    ] as [(String, String?)])
+    func commandShellAcceptsOnlyAnAbsoluteZshOrFishWithLiveFlags(command: String, expected: String?) {
+        #expect(ZmxSupport.commandShell(fromCommand: command) == expected)
+    }
+
+    @Test func commandShellReplacesAnUnsupportedPasswordDatabaseShell() throws {
+        let resources = try makeFishResources(withMarker: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+        let inputs = ZmxSupport.Inputs(
+            zmxExecutablePath: "/bin/echo", passwordDatabaseShell: "/bin/bash", resourcesDirectory: resources.path,
+            stateDirectory: "/tmp/agterm-state", paneIdentity: UUID(), baseEnvironment: [:], inheritedZdotdir: nil,
+            commandShell: "/opt/homebrew/bin/fish"
+        )
+
+        let configuration = try #require(ZmxSupport.configuration(for: inputs).value)
+
+        #expect(configuration.environment["SHELL"] == "/opt/homebrew/bin/fish")
+        #expect(configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] != nil)
+        #expect(configuration.commandShell == "/opt/homebrew/bin/fish")
+    }
+
+    @Test func loginShellConfigurationCarriesNoCommandShell() throws {
+        let resources = try makeResources(withLoader: true)
+        defer { try? FileManager.default.removeItem(at: resources) }
+
+        let configuration = try #require(ZmxSupport.configuration(for: makeInputs(resources: resources)).value)
+
+        #expect(configuration.commandShell == nil)
+    }
+
+    @Test(arguments: [nil, "/bundle/host"] as [String?])
+    func zshCommandShellIsReexportedAheadOfTheAttach(host: String?) {
+        let configuration = ZmxSupport.Configuration(
+            executablePath: "/bundle/zmx", environment: ["SHELL": "/opt/homebrew/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
+            daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: host,
+            commandShell: "/opt/homebrew/bin/zsh"
+        )
+        var attach = ["/bundle/zmx", "attach", "agterm-pane"]
+        if let host { attach = [host, "client", "agterm-pane", "--"] + attach }
+
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, denylist: []) ==
+                CommandRestore.shellQuotedLine(["/usr/bin/env", "SHELL=/opt/homebrew/bin/zsh"] + attach))
+    }
+
+    @Test(arguments: [nil, "/bundle/host"] as [String?])
+    func fishCommandShellJoinsTheXDGWrapper(host: String?) {
+        let configuration = ZmxSupport.Configuration(
+            executablePath: "/bin/zmx",
+            environment: ["SHELL": "/opt/homebrew/bin/fish", "GHOSTTY_SHELL_INTEGRATION_XDG_DIR": "/bundle resources/fish"],
+            daemonName: "agterm-pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: host,
+            commandShell: "/opt/homebrew/bin/fish"
+        )
+        let durable = "printf durable"
+        let script = ZmxReplayScript.renderFish(commandLine: durable, integrationRoot: "/bundle resources/fish",
+                                                shell: "/opt/homebrew/bin/fish")
+        var attach = ["/bin/zmx", "attach", "agterm-pane", "/opt/homebrew/bin/fish", "-lic", script]
+        if let host { attach = [host, "client", "agterm-pane", "--"] + attach }
+
+        #expect(ZmxSupport.attachCommand(configuration, replaying: nil, creationCommand: durable, denylist: []) ==
+                CommandRestore.shellQuotedLine(["/usr/bin/env", "SHELL=/opt/homebrew/bin/fish", "/bin/sh", "-c",
+                                                ZmxSupport.fishXDGDataDirectoriesScript, "sh", "/bundle resources/fish"]
+                                               + attach))
+    }
+
+    @Test(arguments: [
         (ZmxSupport.Rejection.executablePathNotAbsolute, "the zmx executable path is not absolute"),
         (ZmxSupport.Rejection.executableUnavailable, "the zmx executable is unavailable"),
-        (ZmxSupport.Rejection.unsupportedLoginShell, "the password-database login shell is not zsh or fish"),
+        (ZmxSupport.Rejection.unsupportedLoginShell, "the password-database login shell is not zsh or fish, and ghostty `command` names neither"),
         (ZmxSupport.Rejection.missingZshIntegration, "the bundled zsh integration is unavailable"),
         (ZmxSupport.Rejection.missingFishIntegration, "the bundled fish integration is unavailable"),
     ])

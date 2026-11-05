@@ -112,8 +112,8 @@ Check these in order:
 
 - **Restart after selecting Live sessions.** The restore mode is fixed when agterm starts. Changing
   **Settings ▸ General ▸ Restore sessions** affects the next process, not sessions already open.
-- **Read the eligibility reason in Settings.** Live mode requires zsh or fish as the macOS login shell and the
-  bundled zmx and shell-integration resources (`ZDOTDIR` for zsh, `XDG_DATA_DIRS` for fish). If the launch
+- **Read the eligibility reason in Settings.** Live mode requires zsh or fish as the macOS login shell (or as the
+  absolute path in agterm's ghostty.conf `command`, which Live reads only at launch) and the bundled zmx and shell-integration resources (`ZDOTDIR` for zsh, `XDG_DATA_DIRS` for fish). If the launch
   cannot use live mode, every pane starts as an ordinary shell.
 - **Inspect actual backing with `tree --json`.** Primary and split surfaces report `backedByZmx`; the session
   field is true only when every existing primary or split is backed. The sidebar deliberately has no zmx

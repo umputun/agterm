@@ -162,7 +162,8 @@ you open overlays / type into whatever the user has selected, not your own sessi
 - **Fresh shells** restores the saved windows, workspaces, sessions, directories, and split layout with new shells.
 - **Re-run commands** starts each captured foreground command again. It does not reconnect to the old process.
 - **Live sessions** runs every primary and split pane through zmx and reattaches to the same process. It requires
-  zsh or fish as the macOS login shell. Scratch, overlay, and quick terminals stay temporary.
+  zsh or fish as the macOS login shell, or as the absolute path in agterm's ghostty.conf `command`, which then
+  replaces the login shell in Live panes. Scratch, overlay, and quick terminals stay temporary.
 
 Upgrading: with Live sessions already active, install the new version, quit agterm and open it again. Local
 primary and split panes reattach to the same processes and no reset is needed. `agtermctl version` adds an

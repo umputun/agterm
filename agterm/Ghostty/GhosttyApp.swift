@@ -106,6 +106,9 @@ final class GhosttyApp {
     var requestedRestoreMode: RestoreMode { restoreLaunchDecision.requested }
     var launchRestoreMode: RestoreMode { restoreLaunchDecision.active }
     var liveRestoreUnavailableReason: String? { restoreLaunchDecision.liveUnavailableReason }
+    /// The Live pane shell ghostty `command` names, latched with the restore decision it feeds. A running
+    /// daemon keeps the shell it started with, so a reload switching it would mislabel those panes.
+    let liveCommandShell: String?
     var restoreRunningCommand: Bool { launchRestoreMode == .rerun }
     static func capturesForegroundOnExit(mode: RestoreMode) -> Bool { mode == .rerun || mode == .live }
     /// Whether the window title bar shows the attention bell icon; off by default. The title bar reads it via
@@ -167,9 +170,12 @@ final class GhosttyApp {
     private init() {
         let resolvedResources = Self.resolveResources()
         let initialSettings = Self.settingsStore().load()
+        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
+        let commandShell = Self.resolveLiveCommandShell(configInputs)
         let restoreDecision = initialSettings.effectiveRestoreMode.launchDecision(
-            liveUnavailableReason: ZmxLaunch.liveUnavailableReason())
+            liveUnavailableReason: ZmxLaunch.liveUnavailableReason(commandShell: commandShell))
         restoreLaunchDecision = restoreDecision
+        liveCommandShell = commandShell
         resourcesDir = resolvedResources
         let booted = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS
         // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
@@ -180,7 +186,6 @@ final class GhosttyApp {
             logger.error("ghostty_init failed")
             return
         }
-        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
             return
@@ -500,17 +505,8 @@ final class GhosttyApp {
     /// followed, so a `selection-*` behind one is missed.
     private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
                                                isDark: Bool) -> (NSColor?, NSColor?) {
-        var sources: [String] = []
-        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
-            sources.append(defaults.path)
-        }
-        if inheritGlobalConfig {
-            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
-        }
-        sources.append(ghosttyConfigPath)
-        sources.append(settingsConfigURL.path)
-
-        let config = sources.flatMap(keyValues(ofFileAt:))
+        let config = configSources(ghosttyConfigPath: ghosttyConfigPath, inheritGlobalConfig: inheritGlobalConfig)
+            .flatMap(keyValues(ofFileAt:))
         let themeName = GhosttyConfigText.lastSetting(of: "theme", in: config) { $0 }.over(.unset) ?? ""
         // the settings conf carries the raw dual `theme = light:,dark:` (ghostty picks the terminal side
         // itself), so pick the appearance side.
@@ -527,6 +523,34 @@ final class GhosttyApp {
                 .over(GhosttyConfigText.lastSetting(of: key, in: theme, parse: parseHexColor))
         }
         return (color("selection-background"), color("selection-foreground"))
+    }
+
+    /// configSources lists the files `loadConfig` reads before its `config-file` includes, in its order.
+    private static func configSources(ghosttyConfigPath: String, inheritGlobalConfig: Bool) -> [String] {
+        var sources: [String] = []
+        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
+            sources.append(defaults.path)
+        }
+        if inheritGlobalConfig {
+            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
+        }
+        sources.append(ghosttyConfigPath)
+        sources.append(settingsConfigURL.path)
+        return sources
+    }
+
+    /// resolveLiveCommandShell reads ghostty `command` from every config source and include, then
+    /// classifies the final raw value: an earlier supported one must not outlive a later unsupported one.
+    private static func resolveLiveCommandShell(_ inputs: ConfigInputs) -> String? {
+        let sources = configSources(ghosttyConfigPath: inputs.scopedURL.path,
+                                    inheritGlobalConfig: inputs.inheritGlobalConfig)
+        let pairs = GhosttyConfigText.keyValues(loading: sources, home: NSHomeDirectory()) {
+            try? String(contentsOfFile: $0, encoding: .utf8)
+        }
+        guard case .value(let command) = GhosttyConfigText.lastSetting(of: "command", in: pairs, parse: { $0 }) else {
+            return nil
+        }
+        return ZmxSupport.commandShell(fromCommand: command)
     }
 
     /// keyValues reads a config file's pairs; a missing or unreadable file yields none.

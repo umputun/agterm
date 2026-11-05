@@ -64,4 +64,47 @@ struct GhosttyConfigTextTests {
                                                     theme: GhosttyConfigText.Setting<String>, expected: String?) {
         #expect(explicit.over(theme) == expected)
     }
+
+    private static func commands(loading paths: [String], files: [String: String]) -> [String] {
+        GhosttyConfigText.keyValues(loading: paths, home: "/home/me") { files[$0] }
+            .filter { $0.key == "command" }.map(\.value)
+    }
+
+    @Test func includesLoadAfterEverySourceInQueueOrder() {
+        let files = [
+            "/cfg/a.conf": "config-file = inc/one.conf\ncommand = a",
+            "/cfg/b.conf": "command = b\nconfig-file = /abs/two.conf",
+            "/cfg/inc/one.conf": "command = one\nconfig-file = nested.conf",
+            "/abs/two.conf": "command = two",
+            "/cfg/inc/nested.conf": "command = nested",
+        ]
+        #expect(Self.commands(loading: ["/cfg/a.conf", "/cfg/b.conf"], files: files) == ["a", "b", "one", "two", "nested"])
+    }
+
+    @Test func includePathsHonorOptionalMarkerQuotesAndHome() {
+        let files = [
+            "/cfg/main.conf": "config-file = ?\"spaced name.conf\"\nconfig-file = ~/extra.conf\nconfig-file = ?missing.conf",
+            "/cfg/spaced name.conf": "command = spaced",
+            "/home/me/extra.conf": "command = home",
+        ]
+        #expect(Self.commands(loading: ["/cfg/main.conf"], files: files) == ["spaced", "home"])
+    }
+
+    @Test func emptyConfigFileClearsTheQueuedIncludes() {
+        let files = [
+            "/cfg/a.conf": "config-file = dropped.conf",
+            "/cfg/b.conf": "config-file =\nconfig-file = kept.conf",
+            "/cfg/dropped.conf": "command = dropped",
+            "/cfg/kept.conf": "command = kept",
+        ]
+        #expect(Self.commands(loading: ["/cfg/a.conf", "/cfg/b.conf"], files: files) == ["kept"])
+    }
+
+    @Test func anIncludeCycleLoadsEachIncludeOnce() {
+        let files = [
+            "/cfg/main.conf": "config-file = loop.conf",
+            "/cfg/loop.conf": "command = loop\nconfig-file = loop.conf",
+        ]
+        #expect(Self.commands(loading: ["/cfg/main.conf"], files: files) == ["loop"])
+    }
 }
