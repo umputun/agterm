@@ -36,6 +36,18 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(rendered as? String, "0|1|true|name: chat\ndescription: 'a <b> peer''s chat'|true|0|pre-wrap|pre")
     }
 
+    // regression: the parser dropped the newline after a <pre> holder, so a rule on line two read as frontmatter
+    func testARuleAfterALeadingBlankLineIsNotFrontmatter() async throws {
+        let page = registry.page(for: try openMarkdown("doc.md", "\n---\n## Heading\n\nbody\n---\n"), store: store)
+        try await waitForScript("document.querySelector('#agterm-page > *') ? 'ready' : ''", in: page.webView) { $0 == "ready" }
+
+        let rendered = try await page.webView.evaluateJavaScript("""
+            [document.querySelectorAll('pre.agterm-frontmatter').length, document.querySelectorAll('hr').length,
+             [...document.querySelectorAll('h2')].map(h => h.textContent).join(',')].join('|')
+            """)
+        XCTAssertEqual(rendered as? String, "0|1|Heading,body")
+    }
+
     func testAMarkdownPageRendersThemedWithCodeAndTasksAndGetsNoBridge() async throws {
         let page = registry.page(for: try openMarkdown("doc.md", "# Title\n\n- [x] done\n- [ ] open\n\n```swift\nlet x = 1\n```\n"),
                                  store: store)
