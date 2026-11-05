@@ -238,7 +238,7 @@
 - [x] `site/commands.html`: `--tail`, `--follow-file`, `overlay follow`, the new read-back fields
 - [x] `plugins/agterm/skills/agterm/` SKILL.md trigger and section pointer, reference.md entry
 - [x] `.claude/rules/control-api.md` text page bullet and catalog entry for `session.overlay.follow`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ### ➕ Task 7: Search on text and log pages
 
@@ -347,6 +347,8 @@ page adds no other chords. An open page already takes keyboard focus when it bec
 ### ➕ Task 8: Verify and document search
 - [x] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
 - [x] `site/docs.html`, `site/commands.html`, the skill and `.claude/rules/control-api.md` for page search
+- [x] ➕ revmux round 02 over the branch: 4/4 sources, 5 minor findings and none gating; all fixed (typed and control
+      query reconciliation, CR line breaks, requested-tail check, refusal wording), so no further round
 
 ## Post-Completion
 **Manual verification**:
