@@ -270,10 +270,12 @@ class Waiter:
             if self.busy():
                 time.sleep(self.BUSY_POLL_SECONDS)
                 continue
+            # write before the ack: a pipe Claude closed fails here and leaves the mail in the mailbox
+            sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
+            sys.stderr.flush()
             agtermctl("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
             # the turn this starts is Stop-hook feedback, which fires no UserPromptSubmit
             self.mark_busy()
-            sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
             return WAKE
         return 0
 
@@ -480,10 +482,14 @@ def codex_hook() -> int:
     if not sid or not pane:
         return 0
     try:
-        thread = hook_event().get("session_id")
+        event = hook_event()
+        thread = event.get("session_id")
+        # codex's background memory session starts with no transcript, and codex queue cannot reach it
+        if not thread or not event.get("transcript_path"):
+            return 0
         pid = find_codex_pid(os.getppid())
         # a nested `codex exec` fires SessionStart too and would take over the pane's thread
-        if not thread or pid is None or is_codex_exec(pid):
+        if pid is None or is_codex_exec(pid):
             return 0
         Courier(sid, pane).register(str(thread), pid, executable_path(pid))
         # detached, so codex's startup never waits on queue calls into its own thread

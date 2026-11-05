@@ -29,7 +29,7 @@ starts listening only after the user gives it a first prompt). An `error` means 
 refused the message; report it and never resend blind.
 
 The send is a collapsed tool call the user may not expand, so also write a one-line summary of what
-you sent in your visible reply.
+you sent in your visible reply, the whole line in italics so it stands apart from your own text.
 
 ## Receiving
 
