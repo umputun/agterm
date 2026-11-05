@@ -101,7 +101,7 @@ extension ControlServer: ControlActions {
         let alreadyOpen = options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
                                   chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
-                                  clicked: options.clicked)
+                                  clicked: options.clicked, textLog: options.textLog)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
             if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }

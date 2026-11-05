@@ -162,14 +162,14 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`, `ControlDispatcherOverlayTests.swift`,
   the `AppStore` html overlay tree tests; `agtermCore/Tests/agtermctlKitTests/OverlayCommandsTests.swift`
 
-- [ ] add `tail` and `followFile`; validate in `overlayContent` and `textContent`; carry `TextLog` to the model
-- [ ] add `session.overlay.follow` with mode and `--pane`, dispatcher-first, routed to the store setter
-- [ ] project the log fields in `htmlOverlayNode`, omitted when nil
-- [ ] CLI `overlay open --tail N --follow-file` and `overlay follow on|off|toggle [--pane]`; help names the
+- [x] add `tail` and `followFile`; validate in `overlayContent` and `textContent`; carry `TextLog` to the model
+- [x] add `session.overlay.follow` with mode and `--pane`, dispatcher-first, routed to the store setter
+- [x] project the log fields in `htmlOverlayNode`, omitted when nil
+- [x] CLI `overlay open --tail N --follow-file` and `overlay follow on|off|toggle [--pane]`; help names the
       difference from `--follow`
-- [ ] write protocol round-trip, nil-omission and population tests; dispatcher success and refusal tests for
+- [x] write protocol round-trip, nil-omission and population tests; dispatcher success and refusal tests for
       each rule, including `--tail`/`--follow-file` with no `--text` and with `--image`/`--markdown`; CLI parse tests
-- [ ] run `swift test --filter 'ControlProtocolTests|ControlDispatcherOverlayTests|OverlayCommandsTests|HtmlOverlayTests'`
+- [x] run `swift test --filter 'ControlProtocolTests|ControlDispatcherOverlayTests|OverlayCommandsTests|HtmlOverlayTests'`
       - must pass before task 3
 
 ### Task 3: Log page in the app: tail read, follower, page bar and scroll pause

@@ -895,4 +895,29 @@ struct HtmlOverlayTests {
 
         #expect(session.htmlOverlay?.logState == nil)
     }
+
+    @Test func aLogPageNodeReportsItsLimitAndLiveState() throws {
+        let (store, session, _) = try logStore()
+        let page = logPage(follow: true)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextLogReport(page.id, TextLogReport(lines: 7, clipped: true, waiting: false, unreadable: true))
+
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text == ControlTextOverlayNode(file: "/tmp/app.log", language: nil, line: nil, tail: 50, following: true,
+                                               lines: 7, clipped: true, waiting: false, unreadable: true))
+    }
+
+    @Test func aPlainTextPageNodeOmitsTheLogFields() throws {
+        let (store, session, _) = try logStore()
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: 3))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = try #require(String(data: try JSONEncoder().encode(node), encoding: .utf8))
+
+        for field in ["tail", "following", "lines", "clipped", "waiting", "unreadable"] {
+            #expect(!json.contains("\"\(field)\""))
+        }
+    }
 }

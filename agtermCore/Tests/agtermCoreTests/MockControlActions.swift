@@ -101,6 +101,7 @@ final class MockControlActions: ControlActions {
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayVisibility(target: String?, window: String?, pane: OverlayPane?, mode: OverlayVisibilityMode)
+        case overlayFollow(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
@@ -728,6 +729,12 @@ final class MockControlActions: ControlActions {
                                      mode: OverlayVisibilityMode) -> ControlResponse {
         calls.append(.overlayVisibility(target: target, window: window, pane: pane, mode: mode))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "hidden"))
+    }
+
+    func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayFollow(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "following"))
     }
 
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {

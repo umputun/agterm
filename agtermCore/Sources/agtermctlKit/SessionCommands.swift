@@ -564,7 +564,7 @@ struct Session: ParsableCommand {
     struct Overlay: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
-            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Resize.self, Reload.self, Navigate.self,
+            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Follow.self, Resize.self, Reload.self, Navigate.self,
                           Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self, PageAttach.self]
         )
 
@@ -615,6 +615,16 @@ struct Session: ParsableCommand {
                 """)
             var text: String?
             @Option(name: .long, help: "With --text, open scrolled to line N (from 1) and mark it.") var line: Int?
+            @Option(name: .long, help: """
+                With --text, show only the file's last N lines (1...\(TextPage.maxTail)), read from its end so a log of any \
+                size opens.
+                """)
+            var tail: Int?
+            @Flag(name: .customLong("follow-file"), help: """
+                With --text, follow the file's end as it grows, with the last \(TextPage.defaultTail) lines unless --tail \
+                says otherwise. Not --follow, which selects the session.
+                """)
+            var followFile = false
             @Flag(name: .long, help: "With --html or --url, add back, forward, reload, open in browser, and Show in Finder or Copy Link buttons.")
             var navigation = false
             @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
@@ -664,6 +674,13 @@ struct Session: ParsableCommand {
                 }
                 if line != nil, text == nil { throw ValidationError("--line requires --text") }
                 if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
+                if tail != nil || followFile, text == nil { throw ValidationError("--tail and --follow-file require --text") }
+                if tail != nil || followFile, line != nil {
+                    throw ValidationError("--tail and --follow-file cannot be combined with --line")
+                }
+                if let tail, !(1...TextPage.maxTail).contains(tail) {
+                    throw ValidationError("--tail must be 1...\(TextPage.maxTail)")
+                }
                 if image != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
                     throw ValidationError("--image takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
                 }
@@ -715,7 +732,8 @@ struct Session: ParsableCommand {
                                                                      browse: browse ? true : nil,
                                                                      image: image.map(Overlay.absolutePath),
                                                                      markdownFile: markdown.map(Overlay.absolutePath),
-                                                                     textFile: text.map(Overlay.absolutePath), line: line)))
+                                                                     textFile: text.map(Overlay.absolutePath), line: line,
+                                                                     tail: tail, followFile: followFile ? true : nil)))
             }
 
             func run() throws {

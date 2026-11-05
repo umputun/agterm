@@ -26,4 +26,18 @@ extension ControlServer {
             completion(openHtmlOverlay(in: store, sessionID: id, page: page, options: options).ok)
         }
     }
+
+    /// setSessionOverlayFollow applies `mode` to the log page in the addressed slot; `result.text` is `following` or
+    /// `paused`.
+    func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            switch store.setTextLogFollowing(id, pane: pane, mode: mode) {
+            case .failure(let failure):
+                return ControlResponse(ok: false, error: failure.message)
+            case .success(let following):
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: following ? "following" : "paused"))
+            }
+        }
+    }
 }

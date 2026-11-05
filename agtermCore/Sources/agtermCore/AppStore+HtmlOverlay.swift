@@ -229,7 +229,11 @@ extension AppStore {
         case .image(let path), .replica(let path, .image): image = path
         case .markdown(let path), .replica(let path, .markdown): markdown = path
         case .text(let path, let line), .replica(let path, .text(let line)):
-            text = ControlTextOverlayNode(file: path, language: TextPage.language(forFile: path), line: line)
+            let log = page.logState
+            text = ControlTextOverlayNode(file: path, language: TextPage.language(forFile: path), line: line,
+                                          tail: page.textLog?.tail, following: log?.following, lines: log?.report.lines,
+                                          clipped: log?.report.clipped, waiting: log?.report.waiting,
+                                          unreadable: log?.report.unreadable)
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, text: text,
                                       state: page.loadState.rawValue,
