@@ -110,4 +110,15 @@ struct TextPageTests {
 
         #expect(html.contains(#"<div id="agterm-text" hidden data-log data-following="false">a</div>"#))
     }
+
+    @Test func aPausedLogPageCarriesItsAnchorAndAPlainPageNever() {
+        let paused = TextPage.html(text: "a", language: nil, line: nil, style: "", log: TextLogState(following: false), anchor: 240.5)
+        let plain = TextPage.html(text: "a", language: nil, line: nil, style: "", anchor: 240.5)
+        let infinite = TextPage.html(text: "a", language: nil, line: nil, style: "", log: TextLogState(following: false),
+                                     anchor: .infinity)
+
+        #expect(paused.contains(#"data-anchor="240.5""#))
+        #expect(!plain.contains("data-anchor"))
+        #expect(!infinite.contains("data-anchor"))
+    }
 }

@@ -28,6 +28,26 @@ final class TextProbeTests: XCTestCase {
         XCTAssertNoThrow(try TextProbe.check(path: path).get())
     }
 
+    func testALogOverTheWholeFileCapPassesTheLogCheckAndLoadsItsEnd() throws {
+        let url = dir.appendingPathComponent("big.log")
+        let line = String(repeating: "x", count: 99) + "\n"
+        try Data(String(repeating: line, count: (TextPage.maxBytes / 100) + 10).utf8).write(to: url)
+
+        XCTAssertEqual(failure(TextProbe.check(path: url.path)), .tooLarge(url.path))
+        XCTAssertNoThrow(try TextProbe.checkLog(path: url.path).get())
+        let read = try XCTUnwrap(TextProbe.loadLog(path: url.path, tail: 3).get())
+        XCTAssertEqual(read.snapshot, LogTail.Snapshot(text: line + line + line, lines: 3, clipped: false))
+    }
+
+    func testABinaryOrMissingLogFailsTheLogCheck() throws {
+        let binary = dir.appendingPathComponent("core.log").path
+        try Data([0x61, 0x00, 0x62]).write(to: URL(fileURLWithPath: binary))
+        let missing = dir.appendingPathComponent("gone.log").path
+
+        XCTAssertEqual(failure(TextProbe.checkLog(path: binary)), .notText(binary))
+        XCTAssertEqual(failure(TextProbe.checkLog(path: missing)), .unreadable(missing))
+    }
+
     func testAFifoADirectoryAndAMissingFileAreUnreadable() throws {
         let fifo = dir.appendingPathComponent("pipe.log").path
         XCTAssertEqual(mkfifo(fifo, 0o600), 0)

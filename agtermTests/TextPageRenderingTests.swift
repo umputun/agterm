@@ -204,6 +204,28 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         }
     }
 
+    private func openLog(_ text: String, follow: Bool = true, tail: Int = 500, name: String = "app.log") throws -> (HtmlOverlay, URL) {
+        let url = pages.appendingPathComponent(name)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let overlay = HtmlOverlay(source: .text(path: url.path, line: nil), textLog: TextLog(tail: tail, follow: follow))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return (overlay, url)
+    }
+
+    private func append(_ text: String, to url: URL) throws {
+        let handle = try FileHandle(forWritingTo: url)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(text.utf8))
+        try handle.close()
+    }
+
+    private func inRenderer(_ script: String, _ view: WKWebView) async throws -> Any? {
+        try await view.evaluateJavaScript(script, in: nil, contentWorld: Self.rendererWorld)
+    }
+
+    private static let manyLines = (1...200).map { "line \($0)" }.joined(separator: "\n") + "\n"
+    private static let bar = "document.querySelector('.agterm-logbar')?.textContent ?? ''"
+
     private func openText(_ name: String, _ text: String, line: Int? = nil) throws -> HtmlOverlay {
         let url = pages.appendingPathComponent(name)
         try text.write(to: url, atomically: true, encoding: .utf8)
@@ -214,5 +236,222 @@ final class TextPageRenderingTests: HtmlPageTestCase {
 
     private func json(_ text: String) throws -> String {
         String(decoding: try JSONEncoder().encode(text), as: UTF8.self)
+    }
+
+    func testALogPageShowsItsBarNoGutterAndItsEnd() async throws {
+        let (overlay, _) = try openLog(Self.manyLines)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        let dom = try await page.webView.evaluateJavaScript("""
+            [document.querySelector('.agterm-logbar').textContent, document.querySelectorAll('.agterm-gutter').length,
+             Math.abs(document.scrollingElement.scrollTop + document.scrollingElement.clientHeight
+                      - document.scrollingElement.scrollHeight) < 5].join('|')
+            """)
+        XCTAssertEqual(dom as? String, "Follow: onlast 200 lines|0|true")
+        XCTAssertEqual(current?.logState?.report.lines, 200)
+    }
+
+    func testAPlainTextPageGetsNoBar() async throws {
+        let page = registry.page(for: try openText("notes.log", "a\n"), store: store)
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "a\n" }
+
+        let bars = try await page.webView.evaluateJavaScript("document.querySelectorAll('.agterm-logbar').length")
+        XCTAssertEqual(bars as? Int, 0)
+    }
+
+    func testAnAppendReachesTheFollowingPageAndAnUnchangedFilePushesNothing() async throws {
+        let (overlay, url) = try openLog("a\n")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("last 1 lines") }
+        _ = try await inRenderer("""
+            const original = window.agtermTextUpdate;
+            window.pushes = 0;
+            window.agtermTextUpdate = (...args) => { window.pushes += 1; return original(...args); };
+            true;
+            """, page.webView)
+        try await Task.sleep(for: .milliseconds(2500))
+        let idle = try await inRenderer("window.pushes", page.webView)
+        XCTAssertEqual(idle as? Int, 0)
+
+        try append("b\n", to: url)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "a\nb\n" }
+        XCTAssertEqual(current?.logState?.report.lines, 2)
+    }
+
+    func testAUserScrollUpPausesAndResumeFollowsAgain() async throws {
+        let (overlay, _) = try openLog(Self.manyLines)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        _ = try await inRenderer("""
+            window.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 }));
+            document.scrollingElement.scrollTop = 0;
+            true;
+            """, page.webView)
+        try await waitFor("pause reaches the model") { self.current?.logState?.following == false }
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+
+        _ = try await inRenderer("document.querySelector('.agterm-logbar button').click(); true", page.webView)
+        try await waitFor("resume reaches the model") { self.current?.logState?.following == true }
+    }
+
+    func testAProgrammaticScrollNeverPauses() async throws {
+        let (overlay, _) = try openLog(Self.manyLines)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 0", page.webView)
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(current?.logState?.following, true)
+    }
+
+    func testAFollowChangeFromTheModelRedrawsTheBar() async throws {
+        let (overlay, _) = try openLog("a\n")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        XCTAssertEqual(store.setTextLogFollowing(session.id, pane: nil, mode: .off), .success(false))
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+
+        XCTAssertEqual(store.setTextLogFollowing(session.id, pane: nil, mode: .on), .success(true))
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+    }
+
+    func testAFollowChangeBeforeThePageExistsIsWhatItOpensWith() async throws {
+        let (overlay, _) = try openLog("a\n")
+        XCTAssertEqual(store.setTextLogFollowing(session.id, pane: nil, mode: .off), .success(false))
+
+        let page = registry.page(for: try XCTUnwrap(current), store: store)
+
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+        XCTAssertEqual(overlay.id, current?.id)
+    }
+
+    func testAThemeChangeKeepsThePausedTextAndItsScrollPosition() async throws {
+        let (overlay, url) = try openLog(Self.manyLines)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+        _ = try await inRenderer("""
+            window.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 }));
+            document.scrollingElement.scrollTop = 600;
+            true;
+            """, page.webView)
+        try await waitFor("pause reaches the model") { self.current?.logState?.following == false }
+        page.apply(try XCTUnwrap(current))
+        try await Task.sleep(for: .milliseconds(400))
+        try append("added\n", to: url)
+
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+        let dom = try await page.webView.evaluateJavaScript("""
+            [document.querySelector('pre code').textContent.includes('added'), Math.round(document.scrollingElement.scrollTop)].join('|')
+            """)
+        XCTAssertEqual(dom as? String, "false|600")
+    }
+
+    func testAnExplicitReloadReadsTheFileAgainAndKeepsFollowingOff() async throws {
+        let (overlay, url) = try openLog("a\n", follow: false, tail: 10)
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "a\n" }
+        try append("b\n", to: url)
+
+        XCTAssertNil(store.reloadHtmlOverlay(session.id, pane: nil))
+        page.apply(try XCTUnwrap(current))
+
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "a\nb\n" }
+        XCTAssertEqual(current?.logState?.following, false)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+    }
+
+    func testARebuiltFollowingPageCatchesUpWithAnAppendDuringTheRebuild() async throws {
+        let (overlay, url) = try openLog("a\n")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+        try append("during rebuild\n", to: url)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) {
+            $0 == "a\nduring rebuild\n"
+        }
+        XCTAssertEqual(current?.logState?.report.lines, 2)
+    }
+
+    func testAGrowingHighlightedFileTurnsPlainPastTheHighlightCap() async throws {
+        let (overlay, url) = try openLog("{\"a\": 1}\n", tail: TextPage.maxTail, name: "events.json")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript("document.querySelectorAll('pre code span').length", in: page.webView) { $0 != "0" }
+
+        let row = "{\"key\": \"" + String(repeating: "v", count: 90) + "\"}\n"
+        try append(String(repeating: row, count: TextPage.maxHighlightBytes / row.utf8.count + 10) + "{\"last\": 2}\n", to: url)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent.endsWith('{\"last\": 2}\\n')", in: page.webView) {
+            $0 == "true"
+        }
+        let spans = try await page.webView.evaluateJavaScript("document.querySelectorAll('pre code span').length")
+        XCTAssertEqual(spans as? Int, 0)
+    }
+
+    func testAHeldScrollbarDragPastTheIntentWindowStillResumes() async throws {
+        let (overlay, _) = try openLog(Self.manyLines, follow: false)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 0; true", page.webView)
+
+        _ = try await inRenderer("window.dispatchEvent(new PointerEvent('pointerdown')); true", page.webView)
+        try await Task.sleep(for: .milliseconds(900))
+        _ = try await inRenderer("document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight; true", page.webView)
+
+        try await waitFor("the drag to the bottom resumes following") { self.current?.logState?.following == true }
+    }
+
+    // regression: a first read that failed after the open was accepted left a failed page the restored file never repaired
+    func testALogGoneBeforeThePageIsBuiltWaitsAndRecoversWhenItReturns() async throws {
+        let (overlay, url) = try openLog("a\n")
+        try FileManager.default.removeItem(at: url)
+
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("waiting for file") }
+        try "back\n".write(to: url, atomically: true, encoding: .utf8)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "back\n" }
+        try await waitForScript(Self.bar, in: page.webView) { !$0.contains("waiting for file") }
+        XCTAssertEqual(current?.loadState, .loaded)
+        XCTAssertEqual(current?.logState?.report, TextLogReport(lines: 1))
+    }
+
+    func testTheScrollHandlerIgnoresAnythingButItsReport() async throws {
+        let (overlay, _) = try openLog("a\n")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        _ = try await inRenderer("""
+            window.webkit.messageHandlers.agtermLogScroll.postMessage({ following: 'no' });
+            window.webkit.messageHandlers.agtermLogScroll.postMessage(['following', false]);
+            window.webkit.messageHandlers.agtermLogScroll.postMessage('pause');
+            true;
+            """, page.webView)
+        try await Task.sleep(for: .milliseconds(300))
+
+        XCTAssertEqual(current?.logState?.following, true)
+        let inPage = try await page.webView.evaluateJavaScript("typeof window.webkit?.messageHandlers?.agtermLogScroll")
+        XCTAssertEqual(inPage as? String, "undefined")
     }
 }

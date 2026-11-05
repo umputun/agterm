@@ -2,10 +2,18 @@ import Foundation
 import agtermCore
 
 extension ControlServer {
-    /// textFileRefusal reads and validates the file on the calling thread, nil when the page can open.
-    func textFileRefusal(_ path: String) -> ControlResponse? {
-        guard case .failure(let failure) = TextProbe.check(path: path) else { return nil }
+    /// textFileRefusal reads and validates the file on the calling thread, nil when the page can open; a log page reads
+    /// only the file's end, so its size is never refused.
+    func textFileRefusal(_ path: String, log: Bool) -> ControlResponse? {
+        guard case .failure(let failure) = log ? TextProbe.checkLog(path: path) : TextProbe.check(path: path) else { return nil }
         return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
+    }
+
+    /// textLogRefusal refuses a log page the placement rule hands to the presenting Mac, nil otherwise: that Mac would
+    /// get the text page without its log state, so it is refused rather than changed.
+    func textLogRefusal(in store: AppStore, sessionID id: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {
+        guard options.textLog != nil, store.pageBelongsRemote(id, pane: options.pane) else { return nil }
+        return ControlResponse(ok: false, error: OverlayHtmlError.logRemote)
     }
 
     /// openTextLink reads and validates the file off the main actor, then rechecks eligibility, since the session

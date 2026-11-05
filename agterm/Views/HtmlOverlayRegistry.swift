@@ -216,7 +216,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var onScreen = true
     private var theme: HtmlOverlayTheme
     private static let themeWorld = WKContentWorld.world(name: "agterm-theme")
-    private static let markdownWorld = WKContentWorld.world(name: "agterm-markdown")
+    static let markdownWorld = WKContentWorld.world(name: "agterm-markdown")
     private var observations: [NSKeyValueObservation] = []
     // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
     // policy cancel of its redirect reports failed rather than leaving the page loading
@@ -232,6 +232,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // an image, markdown or text page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
+    private var logFollower: LogFollower?
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
     private let revision: HtmlReplicaRevision
@@ -314,6 +315,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.observe(\.canGoBack) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
             webView.observe(\.canGoForward) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
         ]
+        logFollower = LogFollower.make(for: overlay, webView: webView, store: store, world: Self.markdownWorld)
         loadOriginal()
     }
 
@@ -324,6 +326,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard theme != self.theme else { return }
         self.theme = theme
         installScripts()
+        if let logFollower { return logFollower.loadDocument(fresh: false) }
         if styled { reloadShown() }
     }
 
@@ -420,6 +423,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// the page asked for while its session was hidden.
     func apply(_ overlay: HtmlOverlay) {
         self.overlay = overlay
+        logFollower?.setFollowing(overlay.logState?.following ?? false)
         closeIfRequested()
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
@@ -466,11 +470,13 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// goes with it.
     func setOnScreen(_ onScreen: Bool) {
         self.onScreen = onScreen
+        logFollower?.onScreen = onScreen
         if !onScreen { endPrompt() }
     }
 
     func close() {
         textLoad += 1
+        logFollower?.stop()
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
         observations.removeAll()
@@ -553,6 +559,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
             }
         case .text(let path, let line):
+            if let logFollower { return logFollower.loadDocument(fresh: true) }
             textLoad += 1
             let load = textLoad
             let style = MarkdownAssets.shared.textStyle

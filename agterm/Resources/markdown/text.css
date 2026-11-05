@@ -8,3 +8,13 @@
   position: absolute; left: 0; right: 0; height: 20px; pointer-events: none;
   background: color-mix(in srgb, var(--agterm-color-11, #d9b45a) 22%, transparent);
 }
+.agterm-logbar {
+  position: sticky; top: 0; left: 0; z-index: 1; display: flex; gap: 12px; align-items: center; width: 100vw;
+  padding: 4px 16px; font: 12px/20px var(--mono); color: var(--muted);
+  background: var(--agterm-background, Canvas); border-bottom: 1px solid var(--rule);
+}
+.agterm-logbar button {
+  font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0 8px; cursor: pointer;
+}
+.agterm-logbar button.agterm-paused { color: var(--agterm-color-11, #d9b45a); }

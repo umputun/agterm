@@ -183,16 +183,16 @@
 - Modify: `agtermTests/ImageProbeTests.swift`, `agtermTests/TextProbeTests.swift`, `agtermTests/TextPageRenderingTests.swift`,
   `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] `BoundedFile.readTail` and a `TextProbe` log check that refuses non-regular, offloaded and binary files and
+- [x] `BoundedFile.readTail` and a `TextProbe` log check that refuses non-regular, offloaded and binary files and
       never refuses for size
-- [ ] build the initial log page from a tail snapshot; a missing file at open is refused like today; a control
+- [x] build the initial log page from a tail snapshot; a missing file at open is refused like today; a control
       open with `--tail` or `--follow-file` is refused with `log page is not shown on another Mac` when
       `store.pageBelongsRemote(id, pane:)` is true
-- [ ] `LogFollower` per Technical Details: own generation, cache and anchor, tick gates, nil-snapshot state,
+- [x] `LogFollower` per Technical Details: own generation, cache and anchor, tick gates, nil-snapshot state,
       theme reload and remount from the cache, an explicit reload from a fresh read, reports to `setTextLogState`
-- [ ] `text.js` log mode: bar, `agtermTextUpdate`, `agtermTextSetFollowing`, pin to bottom while following,
+- [x] `text.js` log mode: bar, `agtermTextUpdate`, `agtermTextSetFollowing`, pin to bottom while following,
       `{following}` on user scroll transitions; the narrow handler for log pages only, writing the model
-- [ ] write tests: `ImageProbeTests` (`readTail` offset, `fromFileStart`, FIFO, dataless, symlink, stamp);
+- [x] write tests: `ImageProbeTests` (`readTail` offset, `fromFileStart`, FIFO, dataless, symlink, stamp);
       `TextProbeTests` (over 4 MB accepted, binary refused); `LogFollowerTests` with `tick()` (append, truncate,
       rename and recreate, missing then reappearing, unreadable append, pause drops a read in flight, follow off
       before the first document still renders, unchanged stamp skips, a soft-closed page stops, close stops);
@@ -200,9 +200,14 @@
       follow set before realization, theme reload keeps the paused snapshot and anchor, one-shot tail then append
       then explicit reload shows the new text with following still false, handler rejects other
       messages, non-log text page unchanged, presented-session refusal)
-- [ ] write targeted UI tests: open `--text --tail --follow-file`, append, read back `lines` and `following`;
+- [x] write targeted UI tests: open `--text --tail --follow-file`, append, read back `lines` and `following`;
       `overlay follow off` then `on`
-- [ ] run the targeted hosted and UI tests - must pass before task 4
+- [x] run the targeted hosted and UI tests - must pass before task 4
+      ⚠️ hosted classes pass (LogFollower 11, ControlServerTextPage 5, TextPageRendering 23, ImageProbe 12,
+      TextProbe 9); the UI test compiles and runs in Task 5, since XCUITest needs Eugene's go-ahead
+      ➕ the presented-session refusal lives in `ControlServer+TextPage.swift` (`textLogRefusal`) and its tests in
+      a new `agtermTests/ControlServerTextPageTests.swift`: `ControlServerSessionActionsTests.swift` sits at the
+      2000-line test limit
 
 ### Task 4: Click routing for .log and .out
 

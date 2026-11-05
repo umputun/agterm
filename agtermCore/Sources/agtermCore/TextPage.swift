@@ -63,8 +63,10 @@ public enum TextPage {
     /// and target line as attributes, and `style`, the app's own stylesheet. The language is dropped over
     /// `maxHighlightBytes`, so the renderer shows that text plain. The policy loads nothing at all. The holder
     /// is a `div`: the parser drops a newline right after `<pre>`, which would shift every line number.
-    /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter.
-    public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil) -> String {
+    /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter; `anchor`
+    /// is the scroll offset a paused log page reopens at.
+    public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
+                            anchor: Double? = nil) -> String {
         var attributes = ""
         if let language, text.utf8.count <= maxHighlightBytes {
             attributes += " data-language=\"\(MarkdownPage.escaped(language))\""
@@ -74,6 +76,7 @@ public enum TextPage {
             if log.report.clipped { attributes += " data-clipped" }
             if log.report.waiting { attributes += " data-waiting" }
             if log.report.unreadable { attributes += " data-unreadable" }
+            if let anchor, anchor.isFinite { attributes += " data-anchor=\"\(anchor)\"" }
         } else if let line {
             attributes += " data-line=\"\(line)\""
         }

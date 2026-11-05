@@ -881,6 +881,7 @@ public enum OverlayHtmlError {
     public static let lineNotPositive = "session.overlay.open: --line must be 1 or more"
     public static let tailWithoutText = "session.overlay.open: --tail and --follow-file require --text"
     public static let tailWithLine = "session.overlay.open: --tail and --follow-file cannot be combined with --line"
+    public static let logRemote = "session.overlay.open: a log page is not shown on another Mac"
     public static let tailRange = "session.overlay.open: --tail must be 1...\(TextPage.maxTail)"
     public static let companionNeedsPage = "a page companion needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
