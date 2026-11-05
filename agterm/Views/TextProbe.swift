@@ -46,9 +46,10 @@ enum TextProbe {
         let stamp: BoundedFile.FileStamp
     }
 
-    /// checkLog reads the end of a log the way its page will, so a binary or unreadable file is refused at any size.
-    static func checkLog(path: String) -> Result<Void, Failure> {
-        loadLog(path: path, tail: TextPage.defaultTail).flatMap { $0?.snapshot == nil ? .failure(.notText(path)) : .success(()) }
+    /// checkLog reads the last `tail` lines of a log the way its page will, so a binary or unreadable file is refused at
+    /// any size, and only for the lines the page shows.
+    static func checkLog(path: String, tail: Int = TextPage.defaultTail) -> Result<Void, Failure> {
+        loadLog(path: path, tail: tail).flatMap { $0?.snapshot == nil ? .failure(.notText(path)) : .success(()) }
     }
 
     /// loadLog reads the last `tail` lines of `path` within `TextPage.maxTailBytes`; nil when the file still has

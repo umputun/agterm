@@ -948,10 +948,12 @@ struct HtmlOverlayTests {
         store.setTextSearch(page.id, query: "ab")
         let set = events.count
 
-        store.setTextSearchReport(page.id, revision: 1, matches: 9, current: 4)
+        store.setTextSearchReport(page.id, revision: 1, query: "a", matches: 9, current: 4)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab"))
+        store.setTextSearchReport(page.id, revision: 2, query: "abc", matches: 7, current: 2)
         #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab"))
 
-        store.setTextSearchReport(page.id, revision: 2, matches: 3, current: 1)
+        store.setTextSearchReport(page.id, revision: 2, query: "ab", matches: 3, current: 1)
         #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab", matches: 3, current: 1))
         #expect(events.count == set)
     }
@@ -963,7 +965,7 @@ struct HtmlOverlayTests {
         store.setTextSearch(page.id, query: "a")
         store.setTextSearch(page.id, query: "")
 
-        store.setTextSearchReport(page.id, revision: 2, matches: 1, current: 1)
+        store.setTextSearchReport(page.id, revision: 2, query: "a", matches: 1, current: 1)
 
         #expect(session.htmlOverlay?.textSearch == nil)
     }
@@ -1000,7 +1002,7 @@ struct HtmlOverlayTests {
         let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
         store.setTextSearch(page.id, query: "main()")
-        store.setTextSearchReport(page.id, revision: 1, matches: 4, current: 2)
+        store.setTextSearchReport(page.id, revision: 1, query: "main()", matches: 4, current: 2)
 
         let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
 

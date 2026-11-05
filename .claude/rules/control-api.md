@@ -786,8 +786,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   emitting nothing. A query set before the view exists runs when it loads and survives rebuilds; a step is a one-shot
   push to the loaded page, refused `page not loaded` before it, and answers `N of M`. The page's own field writes the
   same model, and the bridge marks the revisions that field produced, so their pushes never overwrite its typing.
-  Refused `no text page` for any other occupant, a replica included, and `remote page` for a slot `pageBelongsRemote`
-  hands to the presenter. Read back `htmlOverlays[].text.search`, omitted with no query.
+  An empty slot and a program keep the slot lookup's own refusals; any other page, a replica included, is refused
+  `no text page`, and a slot `pageBelongsRemote` hands to the presenter `remote page`. Read back `htmlOverlays[].text.search`, omitted with no query.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any

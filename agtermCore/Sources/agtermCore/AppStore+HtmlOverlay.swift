@@ -244,11 +244,11 @@ extension AppStore {
         return revision
     }
 
-    /// setTextSearchReport records the page's matches and current match for `revision`, dropped when the query has
-    /// changed since. Never emitted, like `setTextLogReport`.
-    public func setTextSearchReport(_ id: UUID, revision: Int, matches: Int, current: Int) {
+    /// setTextSearchReport records the page's matches and current match for `query` at `revision`, dropped when either
+    /// is not the model's, so counts never land under another query. Never emitted, like `setTextLogReport`.
+    public func setTextSearchReport(_ id: UUID, revision: Int, query: String, matches: Int, current: Int) {
         updateHtmlOverlay(id) {
-            guard $0.searchRevision == revision, var search = $0.textSearch else { return }
+            guard $0.searchRevision == revision, var search = $0.textSearch, search.query == query else { return }
             search.matches = matches
             search.current = current
             if search != $0.textSearch { $0.textSearch = search }

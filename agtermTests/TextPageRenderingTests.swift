@@ -811,6 +811,46 @@ extension TextPageRenderingTests {
         XCTAssertEqual(current?.textSearch?.query, "a")
     }
 
+    // regression: a control query between a keystroke and its echo left the field on one query and the model on another
+    func testATypedEchoAfterAControlQueryBringsFieldModelAndCountsTogether() async throws {
+        let (page, window) = try shown(try openText("notes.txt", "abc foo\nabc\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0 == "abc foo\nabc\n" }
+        store.setTextSearch(page.id, query: "foo")
+        let control = try XCTUnwrap(current?.searchRevision)
+
+        _ = try await inRenderer("""
+            const field = document.querySelector('.agterm-search input');
+            field.value = 'abc'; field.dispatchEvent(new Event('input'));
+            agtermTextSearchSet('foo', \(control), false); true;
+            """, page.webView)
+        try await waitFor("the typed query reaches the model") { self.current?.textSearch?.query == "abc" }
+        page.apply(try XCTUnwrap(current))
+
+        try await waitFor("the model's counts for the typed query") { self.current?.textSearch?.matches == 2 }
+        let field = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').value")
+        XCTAssertEqual(field as? String, "abc")
+        try await waitForScript(Self.count, in: page.webView) { $0.hasSuffix("of 2") }
+    }
+
+    // regression: CRs kept in pushed text but dropped from the highlighted DOM threw inside the highlight window
+    func testAHighlightedCRLFLogKeepsSearchingAndFollowingThroughAnAppend() async throws {
+        let (overlay, url) = try openLog("{\"a\": 1}\r\n{\"a\": 2}\r\n", name: "events.json")
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript("document.querySelectorAll('pre code span').length", in: page.webView) { $0 != "0" }
+        try search("a", on: page)
+        try await waitForScript(Self.count, in: page.webView) { $0 == "2 of 2" }
+
+        try append("{\"a\": 3}\r\n", to: url)
+
+        try await waitForScript(Self.code, in: page.webView) { $0 == "{\"a\": 1}\n{\"a\": 2}\n{\"a\": 3}\n" }
+        try await waitForScript(Self.count, in: page.webView) { $0 == "2 of 3" }
+        let bottom = try await page.webView.evaluateJavaScript(Self.atBottom)
+        XCTAssertEqual(bottom as? Bool, true)
+        XCTAssertEqual(current?.logState?.following, true)
+    }
+
     func testAThemeRebuildKeepsAPlainPageWhereItWas() async throws {
         let text = (1...400).map { $0 == 380 ? "needle \($0)" : "line \($0)" }.joined(separator: "\n") + "\n"
         let (page, window) = try shown(try openText("long.txt", text))

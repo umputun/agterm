@@ -293,6 +293,22 @@ final class LogFollowerTests: XCTestCase {
                        LogFollower.Shift(dropped: 3))
     }
 
+    func testAShiftCountsCRLFAndALoneCRAsOneBreakEach() {
+        let lone = LogTail.Snapshot(text: "a\rb\nc\n", lines: 2, clipped: false, startOffset: 0)
+        let crlf = LogTail.Snapshot(text: "a\r\nb\n", lines: 2, clipped: false, startOffset: 0)
+        let progress = LogTail.Snapshot(text: "a\rb\rc", lines: 1, clipped: false, startOffset: 0)
+        let after = { (start: Int) in LogTail.Snapshot(text: "z\n", lines: 1, clipped: false, startOffset: start) }
+
+        XCTAssertEqual(LogFollower.shift(from: lone, stamp: stamp(size: 6), to: after(2), stamp: stamp(size: 8)),
+                       LogFollower.Shift(dropped: 1))
+        XCTAssertEqual(LogFollower.shift(from: crlf, stamp: stamp(size: 5), to: after(3), stamp: stamp(size: 7)),
+                       LogFollower.Shift(dropped: 1))
+        XCTAssertEqual(LogFollower.shift(from: crlf, stamp: stamp(size: 5), to: after(2), stamp: stamp(size: 7)),
+                       LogFollower.Shift(dropped: 0, cut: true))
+        XCTAssertEqual(LogFollower.shift(from: progress, stamp: stamp(size: 5), to: after(9), stamp: stamp(size: 11)),
+                       LogFollower.Shift(dropped: 3))
+    }
+
     func testAShiftCallsAnotherFileOrAShrunkOneAReplacement() {
         let old = LogTail.Snapshot(text: "a\nb\n", lines: 2, clipped: false, startOffset: 10)
         let new = LogTail.Snapshot(text: "c\n", lines: 1, clipped: false, startOffset: 0)

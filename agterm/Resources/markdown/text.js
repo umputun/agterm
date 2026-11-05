@@ -113,6 +113,8 @@
     let offsets = new Int32Array(0);
     let lengths = new Int32Array(0);
     let current = -1;
+    // queries this document's field sent and has not seen echoed yet, oldest first
+    let pending = [];
     let windowStart = -1;
     let nodes = [];
     let starts = new Int32Array(0);
@@ -194,7 +196,7 @@
       previous.disabled = next.disabled = offsets.length === 0;
       close.disabled = query === '';
     };
-    const report = () => send({ report: { revision, matches: offsets.length, current: offsets.length ? current + 1 : 0 } });
+    const report = () => send({ report: { revision, query, matches: offsets.length, current: offsets.length ? current + 1 : 0 } });
 
     // the match is brought into view only when it is not already shown below the bar
     const reveal = () => {
@@ -243,7 +245,10 @@
 
     const setQuery = (value, own) => {
       query = value;
-      if (own) send({ search: value });
+      if (own) {
+        pending.push(value);
+        send({ search: value });
+      }
       run(true);
     };
     field.addEventListener('input', () => setQuery(field.value, true));
@@ -317,15 +322,18 @@
         draw();
         if (query) report();
       },
-      // a revision the field typed is an echo: it never touches the field, and reports only once the page's query
-      // is that revision's, so counts for later typing never land under an older revision
+      // an echo of a query still pending here never touches the field, since later typing is on its way; anything
+      // else, a control set or the echo of typing this document never saw, makes the page take the model's query
       set(value, from, typed) {
         if (from < revision) return;
         revision = from;
-        if (typed) {
+        const at = typed ? pending.indexOf(value) : -1;
+        if (at >= 0) {
+          pending = pending.slice(at + 1);
           if (value === query) report();
           return;
         }
+        pending = [];
         if (value !== query) {
           field.value = value;
           setQuery(value, false);
@@ -400,7 +408,9 @@
     }, { passive: true });
     toggle.addEventListener('click', () => setFollowing(!following));
 
-    window.agtermTextUpdate = (value, clipped, waiting, unreadable, lang, shift) => {
+    window.agtermTextUpdate = (raw, clipped, waiting, unreadable, lang, shift) => {
+      // line breaks as the parser left them in the first document, which LogFollower.shift counts the same way
+      const value = raw.replace(/\r\n?/g, '\n');
       render(value, lang);
       state = { clipped, waiting, unreadable };
       finder.update(value, shift || { dropped: 0, cut: false, replaced: false });

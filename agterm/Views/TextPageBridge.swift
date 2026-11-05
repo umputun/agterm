@@ -125,9 +125,10 @@ final class TextPageBridge {
     }
 
     private func report(_ body: [String: Any]) {
-        guard let revision = (body["revision"] as? NSNumber)?.intValue, let matches = (body["matches"] as? NSNumber)?.intValue,
-              let current = (body["current"] as? NSNumber)?.intValue else { return }
-        store?.setTextSearchReport(pageID, revision: revision, matches: matches, current: current)
+        guard let revision = (body["revision"] as? NSNumber)?.intValue, let query = body["query"] as? String,
+              let matches = (body["matches"] as? NSNumber)?.intValue, let current = (body["current"] as? NSNumber)?.intValue
+        else { return }
+        store?.setTextSearchReport(pageID, revision: revision, query: query, matches: matches, current: current)
     }
 
     private func typed(_ query: String) {

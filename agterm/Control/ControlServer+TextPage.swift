@@ -4,8 +4,9 @@ import agtermCore
 extension ControlServer {
     /// textFileRefusal reads and validates the file on the calling thread, nil when the page can open; a log page reads
     /// only the file's end, so its size is never refused.
-    func textFileRefusal(_ path: String, log: Bool) -> ControlResponse? {
-        guard case .failure(let failure) = log ? TextProbe.checkLog(path: path) : TextProbe.check(path: path) else { return nil }
+    func textFileRefusal(_ path: String, log: TextLog?) -> ControlResponse? {
+        let checked = log.map { TextProbe.checkLog(path: path, tail: $0.tail) } ?? TextProbe.check(path: path)
+        guard case .failure(let failure) = checked else { return nil }
         return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
     }
 

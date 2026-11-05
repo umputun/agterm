@@ -40,6 +40,14 @@ final class TextProbeTests: XCTestCase {
         XCTAssertEqual(read.snapshot, LogTail.Snapshot(text: line + line + line, lines: 3, clipped: false, startOffset: size - 300))
     }
 
+    func testTheLogCheckReadsOnlyTheRequestedTail() throws {
+        let url = dir.appendingPathComponent("mixed.log")
+        try Data(Array("bad".utf8) + [0] + Array("line\ngood\n".utf8)).write(to: url)
+
+        XCTAssertNoThrow(try TextProbe.checkLog(path: url.path, tail: 1).get())
+        XCTAssertEqual(failure(TextProbe.checkLog(path: url.path, tail: 2)), .notText(url.path))
+    }
+
     func testABinaryOrMissingLogFailsTheLogCheck() throws {
         let binary = dir.appendingPathComponent("core.log").path
         try Data([0x61, 0x00, 0x62]).write(to: URL(fileURLWithPath: binary))

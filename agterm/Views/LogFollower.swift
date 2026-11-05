@@ -207,9 +207,27 @@ final class LogFollower {
               newStamp.size >= oldStamp.size, new.startOffset >= old.startOffset else { return Shift(replaced: true) }
         let bytes = Array(old.text.utf8)
         let gone = min(new.startOffset - old.startOffset, bytes.count)
-        let dropped = bytes[..<gone].reduce(0) { $1 == 0x0A ? $0 + 1 : $0 }
-        let cut = gone > 0 && bytes[gone - 1] != 0x0A && gone < bytes.count
-        return Shift(dropped: gone == bytes.count ? max(dropped, old.lines) : dropped, cut: cut)
+        guard gone < bytes.count else {
+            let unterminated = bytes.last.map { $0 != lineFeed && $0 != carriageReturn } ?? false
+            return Shift(dropped: lineBreaks(bytes, before: bytes.count) + (unterminated ? 1 : 0))
+        }
+        return Shift(dropped: lineBreaks(bytes, before: gone), cut: gone > 0 && !breakEnds(bytes, at: gone))
+    }
+
+    private static let lineFeed: UInt8 = 0x0A
+    private static let carriageReturn: UInt8 = 0x0D
+
+    // LF, CRLF and a lone CR are each one break, as the page counts lines once it normalizes them
+    private static func lineBreaks(_ bytes: [UInt8], before end: Int) -> Int {
+        (0..<end).reduce(0) { $0 + (bytes[$1] == lineFeed || isLoneCR(bytes, $1) ? 1 : 0) }
+    }
+
+    private static func breakEnds(_ bytes: [UInt8], at index: Int) -> Bool {
+        bytes[index - 1] == lineFeed || isLoneCR(bytes, index - 1)
+    }
+
+    private static func isLoneCR(_ bytes: [UInt8], _ index: Int) -> Bool {
+        bytes[index] == carriageReturn && (index + 1 == bytes.count || bytes[index + 1] != lineFeed)
     }
 
     func updateLoop() {

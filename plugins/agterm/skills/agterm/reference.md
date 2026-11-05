@@ -1176,8 +1176,9 @@ error keeps those names for compatibility.
   case-insensitive plain text, every match highlighted. Exactly one of a query and a step. A step moves to the
   next or previous match, wrapping, pauses a following log page, and returns `result.text` as `N of M`; it is
   refused `no search query: set one first` without a query and `page not loaded` before the page exists, while a
-  query set then runs when it loads. Refuses every other occupant, a page shown for another Mac included, with
-  `no text page`, and a slot handed to the presenting Mac with `remote page: search it on the Mac that shows it`.
+  query set then runs when it loads. An empty slot answers `no overlay`, a program `the overlay is not an html page`,
+  any other page, one shown for another Mac included, `no text page`, and a slot handed to the presenting Mac
+  `remote page: search it on the Mac that shows it`.
   Wire `text` and `to` (`next`, `prev`, `close`). Read back `htmlOverlays[].text.search`: `{query, matches,
   current}`, current from 1 and 0 with no match, omitted with no query. The page's own field (`/` or ⌘F, `n`/`N`,
   Esc) sets the same query.
