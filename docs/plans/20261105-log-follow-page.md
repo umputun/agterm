@@ -137,15 +137,19 @@
   `AppStore+HtmlOverlay.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/TextPageTests.swift`, `HtmlOverlayTests.swift`
 
-- [ ] add `LogTail.snapshot` and `LogTail.Snapshot` per Technical Details
-- [ ] add the `TextPage` log constants, `isLog(file:)` and the log options of `html(...)`
-- [ ] add `TextLog`, `TextLogState`, `HtmlOverlay.textLog`/`logState`, the open option, and the two store setters
-- [ ] write `LogTailTests` table cases: file start vs mid-file, window starting on a line boundary, partial first
+- [x] add `LogTail.snapshot` and `LogTail.Snapshot` per Technical Details
+- [x] add the `TextPage` log constants, `isLog(file:)` and the log options of `html(...)`
+- [x] add `TextLog`, `TextLogState`, `HtmlOverlay.textLog`/`logState`, the open option, and the store setters
+      ➕ three setters: `setTextLogFollowing(session:pane:mode:)` for the command, `setTextLogFollowing(id:following:)`
+      for the page's scroll report (event on change), `setTextLogReport(id:)` for ticks (no event), so a tick can
+      never overwrite a following change; `TextLogFollowFailure` is a new type so the fork's switches over
+      `HtmlOverlayCommandFailure` keep compiling
+- [x] write `LogTailTests` table cases: file start vs mid-file, window starting on a line boundary, partial first
       line, no LF in window, a line longer than the window ending in LF at its last byte, trailing partial UTF-8
       scalar, final line without LF, more than `maxLines`, CRLF line count, empty data, NUL, invalid UTF-8
-- [ ] extend `TextPageTests` (isLog, html attributes, no gutter in log mode) and `HtmlOverlayTests` (setters:
+- [x] extend `TextPageTests` (isLog, html attributes, no gutter in log mode) and `HtmlOverlayTests` (setters:
       refusal for non-log pages, write-on-change, event only on a follow transition)
-- [ ] run `swift test --filter 'LogTailTests|TextPageTests|HtmlOverlayTests'` - must pass before task 2
+- [x] run `swift test --filter 'LogTailTests|TextPageTests|HtmlOverlayTests'` - must pass before task 2
 
 ### Task 2: Control protocol, dispatcher, CLI and read-back
 

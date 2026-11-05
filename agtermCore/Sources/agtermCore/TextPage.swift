@@ -8,6 +8,12 @@ public enum TextPage {
     /// maxHighlightBytes bounds the text the page highlights; a larger file renders plain. Highlighting
     /// measured about 0.23 s over plain at 256 KB in WebKit, and 1.2 s at 1 MB.
     public static let maxHighlightBytes = 256 << 10
+    /// defaultTail is how many lines a log page keeps when the request names none; maxTail bounds a request.
+    public static let defaultTail = 5_000
+    public static let maxTail = 100_000
+    /// maxTailBytes bounds what a log page reads from the file's end, so one huge line cannot pull in the file.
+    public static let maxTailBytes = 2 << 20
+    private static let logExtensions: Set<String> = ["log", "out"]
 
     private static let languages: [String: String] = [
         "swift": "swift", "go": "go", "py": "python", "rb": "ruby", "rs": "rust",
@@ -42,6 +48,11 @@ public enum TextPage {
             || plainBasenames.contains(name)
     }
 
+    /// isLog says whether a plain click on `path` opens it as a log page, following its end.
+    public static func isLog(file path: String) -> Bool {
+        logExtensions.contains(((path as NSString).lastPathComponent as NSString).pathExtension.lowercased())
+    }
+
     /// validate returns the file's text, nil when it is not valid UTF-8 or holds a NUL, which marks a binary.
     public static func validate(_ data: Data) -> String? {
         guard !data.contains(0) else { return nil }
@@ -52,12 +63,20 @@ public enum TextPage {
     /// and target line as attributes, and `style`, the app's own stylesheet. The language is dropped over
     /// `maxHighlightBytes`, so the renderer shows that text plain. The policy loads nothing at all. The holder
     /// is a `div`: the parser drops a newline right after `<pre>`, which would shift every line number.
-    public static func html(text: String, language: String?, line: Int?, style: String) -> String {
+    /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter.
+    public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil) -> String {
         var attributes = ""
         if let language, text.utf8.count <= maxHighlightBytes {
             attributes += " data-language=\"\(MarkdownPage.escaped(language))\""
         }
-        if let line { attributes += " data-line=\"\(line)\"" }
+        if let log {
+            attributes += " data-log data-following=\"\(log.following)\""
+            if log.report.clipped { attributes += " data-clipped" }
+            if log.report.waiting { attributes += " data-waiting" }
+            if log.report.unreadable { attributes += " data-unreadable" }
+        } else if let line {
+            attributes += " data-line=\"\(line)\""
+        }
         return """
         <!doctype html><html><head><meta charset="utf-8">\
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">\

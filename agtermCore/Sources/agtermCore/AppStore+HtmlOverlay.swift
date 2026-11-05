@@ -36,6 +36,20 @@ extension HtmlOverlayCommandFailure {
     }
 }
 
+/// TextLogFollowFailure is why `AppStore.setTextLogFollowing` refused.
+public enum TextLogFollowFailure: Error, Equatable, Sendable {
+    case page(HtmlOverlayCommandFailure)
+    case notLog
+
+    /// message is the control error for this refusal.
+    public var message: String {
+        switch self {
+        case .page(let failure): return failure.message
+        case .notLog: return "no log page"
+        }
+    }
+}
+
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
@@ -130,6 +144,48 @@ extension AppStore {
     /// setHtmlPage records what the web view now shows, as `setHtmlLoadState` does.
     public func setHtmlPage(_ id: UUID, _ info: HtmlPageInfo?) {
         updateHtmlOverlay(id) { $0.current = info }
+    }
+
+    /// setTextLogFollowing applies `mode` to the log page in the slot `pane` addresses and returns whether it now
+    /// follows. A change emits `tree.changed`.
+    public func setTextLogFollowing(_ sessionID: UUID, pane: OverlayPane?,
+                                    mode: ControlToggleMode) -> Result<Bool, TextLogFollowFailure> {
+        let page: HtmlOverlay
+        switch htmlOverlay(sessionID, pane: pane) {
+        case .success(let found): page = found
+        case .failure(let failure): return .failure(.page(failure))
+        }
+        if page.replicaOf != nil { return .failure(.page(.replica)) }
+        guard let state = page.logState else { return .failure(.notLog) }
+        let following: Bool
+        switch mode {
+        case .on: following = true
+        case .off: following = false
+        case .toggle: following = !state.following
+        }
+        setTextLogFollowing(page.id, following: following)
+        return .success(following)
+    }
+
+    /// setTextLogFollowing records whether log page `id` follows its file, as the page reported it after a scroll,
+    /// wherever its slot now is. A change emits `tree.changed`; a page that is not a log page is left alone.
+    public func setTextLogFollowing(_ id: UUID, following: Bool) {
+        var changed = false
+        updateHtmlOverlay(id) {
+            guard $0.logState != nil, $0.logState?.following != following else { return }
+            $0.logState?.following = following
+            changed = true
+        }
+        if changed { scheduleTreeChanged() }
+    }
+
+    /// setTextLogReport records what the app last read for log page `id`. Written only on a change and never
+    /// emitted, so a follower's ticks wake no hook.
+    public func setTextLogReport(_ id: UUID, _ report: TextLogReport) {
+        updateHtmlOverlay(id) {
+            guard $0.logState != nil, $0.logState?.report != report else { return }
+            $0.logState?.report = report
+        }
     }
 
     /// htmlOverlaySlot finds the slot holding page `id` in a visible session, nil once the page left it.

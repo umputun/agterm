@@ -90,4 +90,24 @@ struct TextPageTests {
         #expect(TextPage.validate(Data([0xFF, 0xFE, 0x61])) == nil)
         #expect(TextPage.validate(Data([0x61, 0xC3])) == nil)
     }
+
+    @Test(arguments: [("a.log", true), ("/x/y/APP.LOG", true), ("a.out", true), ("a.txt", false), ("a.log.gz", false),
+                      ("/x/log", false), ("a.swift", false)])
+    func onlyLogAndOutFilesAreLogs(path: String, isLog: Bool) {
+        #expect(TextPage.isLog(file: path) == isLog)
+    }
+
+    @Test func aLogPageCarriesItsStateInsteadOfALine() {
+        let log = TextLogState(following: true, report: TextLogReport(lines: 2, clipped: true, waiting: true, unreadable: true))
+        let html = TextPage.html(text: "a\nb\n", language: nil, line: 7, style: "", log: log)
+
+        #expect(html.contains(#"<div id="agterm-text" hidden data-log data-following="true" data-clipped data-waiting data-unreadable>"#))
+        #expect(!html.contains("data-line"))
+    }
+
+    @Test func aPausedLogPageOmitsTheUnsetFlags() {
+        let html = TextPage.html(text: "a", language: nil, line: nil, style: "", log: TextLogState(following: false))
+
+        #expect(html.contains(#"<div id="agterm-text" hidden data-log data-following="false">a</div>"#))
+    }
 }

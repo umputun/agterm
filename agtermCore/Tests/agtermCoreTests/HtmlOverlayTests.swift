@@ -797,4 +797,102 @@ struct HtmlOverlayTests {
         #expect(theme.foreground == "#1e1e1e")
         #expect(!theme.stylesheet(themed: true).contains("display"))
     }
+
+    private final class TreeEvents {
+        var count = 0
+    }
+
+    private func logStore() throws -> (store: AppStore, session: Session, events: TreeEvents) {
+        let events = TreeEvents()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir),
+                             controlEventSink: { if $0.kind == .treeChanged { events.count += 1 } }, paneFinalizer: nil)
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        return (store, session, events)
+    }
+
+    private func logPage(follow: Bool = true) -> HtmlOverlay {
+        HtmlOverlay(source: .text(path: "/tmp/app.log", line: nil), textLog: TextLog(tail: 50, follow: follow))
+    }
+
+    @Test func aLogPageStartsWithTheRequestedFollowStateAndOtherPagesHaveNone() {
+        #expect(logPage(follow: true).logState == TextLogState(following: true))
+        #expect(logPage(follow: false).logState == TextLogState(following: false))
+        #expect(HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil)).logState == nil)
+    }
+
+    @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
+    func followModeSetsTheLogPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
+        let (store, session, events) = try logStore()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: logPage(follow: from), sizePercent: nil) == nil)
+        let opened = events.count
+
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: mode) == .success(to))
+
+        #expect(session.htmlOverlay?.logState?.following == to)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func followModeThatChangesNothingEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: logPage(follow: true), sizePercent: nil) == nil)
+        let opened = events.count
+
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .success(true))
+
+        #expect(events.count == opened)
+    }
+
+    @Test func followModeRefusesEverythingButALogPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.page(.noOverlay)))
+        #expect(store.setTextLogFollowing(UUID(), pane: nil, mode: .on) == .failure(.page(.unknownSession)))
+
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.notLog))
+        #expect(TextLogFollowFailure.notLog.message == "no log page")
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
+    }
+
+    @Test func aScrollReportedFollowChangeEmitsOnlyWhenItChanges() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage(follow: true)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextLogFollowing(page.id, following: false)
+        store.setTextLogFollowing(page.id, following: false)
+
+        #expect(session.htmlOverlay?.logState?.following == false)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func aReportIsWrittenWithNoEventAndKeepsFollowing() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage(follow: false)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+        let report = TextLogReport(lines: 12, clipped: true, waiting: false, unreadable: true)
+
+        store.setTextLogReport(page.id, report)
+
+        #expect(session.htmlOverlay?.logState == TextLogState(following: false, report: report))
+        #expect(events.count == opened)
+    }
+
+    @Test func aReportForAPageThatIsNotALogPageIsIgnored() throws {
+        let (store, session, _) = try logStore()
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+
+        store.setTextLogReport(text.id, TextLogReport(lines: 3))
+        store.setTextLogFollowing(text.id, following: true)
+
+        #expect(session.htmlOverlay?.logState == nil)
+    }
 }
