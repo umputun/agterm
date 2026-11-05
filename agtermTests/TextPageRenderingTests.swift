@@ -463,6 +463,29 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(current?.logState?.following, false)
     }
 
+    func testTheBarSpansTheVisibleWidthWhenThePageScrollsSideways() async throws {
+        let wide = (1...50).map { "line \($0) " + String(repeating: "w", count: 400) }.joined(separator: "\n") + "\n"
+        let (overlay, _) = try openLog(wide)
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        let span = try await page.webView.evaluateJavaScript("""
+            (() => {
+              document.scrollingElement.scrollLeft = 300;
+              const bar = document.querySelector('.agterm-bar').getBoundingClientRect();
+              return [document.scrollingElement.scrollLeft, Math.round(bar.left), Math.round(bar.right),
+                      document.documentElement.clientWidth, document.querySelector('.agterm-bar').offsetHeight,
+                      Math.round(document.querySelector('#agterm-page').getBoundingClientRect().top + document.scrollingElement.scrollTop)].join('|');
+            })()
+            """) as? String
+        let parts = try XCTUnwrap(span).split(separator: "|").map { Int($0) ?? -1 }
+
+        XCTAssertEqual(parts[0], 300, span ?? "")
+        XCTAssertEqual([parts[1], parts[2]], [0, parts[3]], span ?? "")
+        XCTAssertEqual(parts[5], parts[4], span ?? "")
+    }
+
     func testTheScrollHandlerIgnoresAnythingButItsReport() async throws {
         let (overlay, _) = try openLog("a\n")
         let page = registry.page(for: overlay, store: store)
