@@ -216,7 +216,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var onScreen = true
     private var theme: HtmlOverlayTheme
     private static let themeWorld = WKContentWorld.world(name: "agterm-theme")
-    static let markdownWorld = WKContentWorld.world(name: "agterm-markdown")
+    private static let markdownWorld = WKContentWorld.world(name: "agterm-markdown")
     private var observations: [NSKeyValueObservation] = []
     // a main-frame load in flight, explicit or started by the page; it must end loaded or failed, so a
     // policy cancel of its redirect reports failed rather than leaving the page loading

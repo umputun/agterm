@@ -89,6 +89,8 @@ final class LogFollower {
     /// resume ticks at once.
     func setFollowing(_ value: Bool) {
         guard value != following else { return }
+        // a pause from control or the model freezes the view where it is, not where an earlier scroll left it
+        if !value { anchor = nil }
         applyFollowing(value)
         if !documentPending {
             webView?.callAsyncJavaScript("agtermTextSetFollowing(following)", arguments: ["following": value], in: nil, in: world)
@@ -158,19 +160,21 @@ final class LogFollower {
         case .success(nil):
             return
         case .success(let read?):
+            // a binary end keeps its stamp, so the next tick skips an unchanged file instead of reading it again
             stamp = read.stamp
-            snapshot = read.snapshot
-            publish(TextLogReport(lines: read.snapshot.lines, clipped: read.snapshot.clipped), push: true)
-        case .failure(let failure):
-            stamp = nil
-            var next = report
-            if case .notText = failure {
+            guard let shown = read.snapshot else {
+                var next = report
                 next.unreadable = true
                 next.waiting = false
-            } else {
-                next.waiting = true
-                next.unreadable = false
+                return publish(next, push: next != report)
             }
+            snapshot = shown
+            publish(TextLogReport(lines: shown.lines, clipped: shown.clipped), push: true)
+        case .failure:
+            stamp = nil
+            var next = report
+            next.waiting = true
+            next.unreadable = false
             publish(next, push: next != report)
         }
     }

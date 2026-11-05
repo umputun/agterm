@@ -71,7 +71,13 @@
       info.textContent = notes.join(' · ');
     };
     const atBottom = () => scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4;
-    const toBottom = () => { scroller.scrollTop = scroller.scrollHeight; };
+    // the vertical position last seen, kept across programmatic moves, so a horizontal scroll never reads as vertical
+    let lastTop = scroller.scrollTop;
+    const scrollTo = (top) => {
+      scroller.scrollTop = top;
+      lastTop = scroller.scrollTop;
+    };
+    const toBottom = () => scrollTo(scroller.scrollHeight);
     const send = (body) => {
       try { window.webkit.messageHandlers.agtermLogScroll.postMessage(body); } catch (_) {}
     };
@@ -87,7 +93,9 @@
     ['pointerup', 'pointercancel'].forEach((kind) => window.addEventListener(kind, () => { held = false; noteIntent(); }, { passive: true }));
     let settle = 0;
     window.addEventListener('scroll', () => {
-      if (!held && Date.now() - intent > 600) return;
+      const vertical = scroller.scrollTop !== lastTop;
+      lastTop = scroller.scrollTop;
+      if (!vertical || (!held && Date.now() - intent > 600)) return;
       const bottom = atBottom();
       if (following !== bottom) {
         following = bottom;
@@ -121,7 +129,7 @@
     drawBar();
     const anchor = Number(source.dataset.anchor);
     if (!following && Number.isFinite(anchor)) {
-      scroller.scrollTop = anchor;
+      scrollTo(anchor);
     } else {
       toBottom();
     }

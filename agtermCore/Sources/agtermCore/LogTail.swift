@@ -22,7 +22,7 @@ public enum LogTail {
     /// begins one byte before its window, so a window opening on a line boundary keeps that line; the partial
     /// line ahead of the first LF is dropped, unless nothing follows that LF, when the one line longer than the
     /// window is kept from its first whole character and marked clipped. An unfinished character at the end
-    /// is left for the next read. nil for a NUL byte or invalid UTF-8, which mark binary data.
+    /// is left for the next read. nil for a NUL byte or invalid UTF-8 in the kept lines, which mark binary data.
     public static func snapshot(_ data: Data, fromFileStart: Bool, maxLines: Int) -> Snapshot? {
         var bytes = [UInt8](data)
         var clipped = false
@@ -35,7 +35,9 @@ public enum LogTail {
             }
         }
         bytes.removeLast(unfinishedTail(bytes))
-        guard !bytes.contains(0) else { return nil }
+        // a writer still at its old offset after copytruncate leaves a hole of NUL bytes ahead of the new text
+        let hole = bytes.prefix { $0 == 0 }.count
+        if hole > 0, hole < bytes.count { bytes.removeFirst(hole) }
 
         let feeds = bytes.indices.filter { bytes[$0] == lineFeed }
         let total = feeds.count + (bytes.last.map { $0 == lineFeed ? 0 : 1 } ?? 0)
@@ -45,7 +47,7 @@ public enum LogTail {
             bytes = drop <= feeds.count ? Array(bytes[(feeds[drop - 1] + 1)...]) : []
             clipped = false
         }
-        guard let text = String(bytes: bytes, encoding: .utf8) else { return nil }
+        guard !bytes.contains(0), let text = String(bytes: bytes, encoding: .utf8) else { return nil }
         return Snapshot(text: text, lines: min(total, keep), clipped: clipped)
     }
 

@@ -437,6 +437,30 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(current?.logState?.report, TextLogReport(lines: 1))
     }
 
+    // regression: a horizontal scroll at the bottom of a paused page resumed following
+    func testAHorizontalScrollOnAPausedPageAtTheBottomKeepsItPaused() async throws {
+        let wide = (1...200).map { "line \($0) " + String(repeating: "w", count: 400) }.joined(separator: "\n") + "\n"
+        let (overlay, url) = try openLog(wide)
+        let page = registry.page(for: overlay, store: store)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+        try append("pinned\n", to: url)
+        try await waitForScript("document.querySelector('pre code')?.textContent.endsWith('pinned\\n')", in: page.webView) { $0 == "true" }
+        XCTAssertEqual(store.setTextLogFollowing(session.id, pane: nil, mode: .off), .success(false))
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
+
+        _ = try await inRenderer("""
+            window.dispatchEvent(new WheelEvent('wheel', { deltaX: 200 }));
+            document.scrollingElement.scrollLeft = 300;
+            true;
+            """, page.webView)
+        try await Task.sleep(for: .milliseconds(400))
+
+        XCTAssertEqual(current?.logState?.following, false)
+    }
+
     func testTheScrollHandlerIgnoresAnythingButItsReport() async throws {
         let (overlay, _) = try openLog("a\n")
         let page = registry.page(for: overlay, store: store)

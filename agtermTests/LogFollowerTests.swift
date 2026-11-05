@@ -165,6 +165,47 @@ final class LogFollowerTests: XCTestCase {
         XCTAssertEqual(follower.snapshot?.text, "a\n")
     }
 
+    // regression: a log whose end turned binary lost its stamp and was read in full on every tick
+    func testAnUnchangedBinaryEndIsCheckedWithoutReadingIt() async throws {
+        let skipped = OSAllocatedUnfairLock(initialState: 0)
+        let follower = follower { path, tail, stamp in
+            let result = TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp)
+            if case .success(nil) = result { skipped.withLock { $0 += 1 } }
+            return result
+        }
+        await follower.tick()
+        try append("b\u{0}\n")
+        await follower.tick()
+
+        await follower.tick()
+
+        XCTAssertEqual(skipped.withLock { $0 }, 1)
+        XCTAssertEqual(follower.snapshot?.text, "a\n")
+        XCTAssertEqual(report, TextLogReport(lines: 1, unreadable: true))
+    }
+
+    // regression: a pause from control kept the offset of an earlier user scroll, so a rebuild jumped there
+    func testAPauseFromTheModelDropsAnEarlierScrollOffset() {
+        let follower = follower(following: true)
+        follower.stop()
+        follower.scrolled(following: false, top: 120)
+        follower.scrolled(following: true, top: 900)
+
+        follower.setFollowing(false)
+
+        XCTAssertNil(follower.anchor)
+    }
+
+    func testAPauseByScrollKeepsItsOffsetWhenTheModelEchoesIt() {
+        let follower = follower(following: true)
+        follower.stop()
+
+        follower.scrolled(following: false, top: 320)
+        follower.setFollowing(false)
+
+        XCTAssertEqual(follower.anchor, 320)
+    }
+
     func testARebuildHoldsTicksUntilTheRendererIsReady() async throws {
         let follower = follower()
         await follower.tick()
