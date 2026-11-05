@@ -240,6 +240,114 @@
 - [x] `.claude/rules/control-api.md` text page bullet and catalog entry for `session.overlay.follow`
 - [ ] move this plan to `docs/plans/completed/`
 
+### ➕ Task 7: Search on text and log pages
+
+Added on Eugene's request after the first review round. Decisions he made: the search field lives in the page's
+own bar, on its right side; every text page gets the bar (a static page shows search only, a log page the follow
+controls on the left and search on the right); a jump to the next or previous match pauses following, while typing
+a query does not; the control API gets its own command, separate from `session.search`, which searches a terminal.
+Every page control has a key (less-style letters, plus ⌘F); follow stays a page key, not a keymap action, and the
+page adds no other chords. An open page already takes keyboard focus when it becomes the active layer.
+
+**Matching and highlight:**
+- case-insensitive plain text, found in the code element's whole `textContent`, so a query crossing highlight.js
+  spans (`main()` over `<span>main</span>()`) matches; never the gutter, the bar or the field
+- matches do not overlap and run left to right; next and previous wrap; no matches shows `0 of 0` and current 0
+- every match is counted as an offset in one typed array, so navigation reaches all of them; painting uses the CSS
+  Custom Highlight API (`CSS.highlights` with `Range`s mapped from offsets to text nodes), which changes no DOM and
+  leaves the highlight.js markup alone; at most 5,000 ranges are painted, a window around the current match that
+  moves with it, the current one in a second highlight
+- WebKit before macOS 14.2 has no `CSS.highlights`: there the counter and jumps work and nothing is painted
+
+**Keys** (page has focus; letters act only outside the field):
+- `/` or ⌘F focuses the field; Enter / Shift-Enter in it and `n` / `N` step next / previous; Escape clears the
+  query and leaves the field
+- log page only: `F` toggles follow, `G` or End goes to the bottom and follows, `g` or Home goes to the top and pauses
+- one rule for ⌘F: what is on top owns it, and the terminal behind a cover never opens or closes its search;
+  `AppActions.coverTakesSearch` runs before the close branch, whatever holds first responder: the quick terminal
+  holding the keys, or `Session.visibleCover` (any shown page or program overlay over the focused pane, full or
+  floating); a text page focuses its field, every other cover does nothing; with no cover, ⌘F is terminal search
+  as today (Eugene widened this from text pages to every cover; the floating exemption dated from #113 and kept
+  the bar visible without asking which layer owns the keys)
+
+**Follow interaction:**
+- a jump (key, button or control) pauses first, posts the pause, then moves through `scrollTo`, which records the
+  new position, so the scroll handler sees no user move and cannot resume follow even when the match is at the
+  bottom
+- typing re-runs the search and never pauses: on a page that is not following the current match becomes the first
+  one at or below the view's top and is scrolled to; on a following page it becomes the last match and nothing moves
+- the current match is anchored as (line index, occurrence within the line); a log update carries `dropped`, the
+  lines evicted from the front since the page's last text, and `replaced` when the file was truncated or rotated;
+  the page shifts the anchor by `dropped`, and resets it (as typing would) when the line was evicted, no longer has
+  that occurrence, or the file was replaced; `dropped` comes from a new `LogTail.Snapshot.startOffset` (the file
+  offset of the first kept byte) compared with the previous one on the same file, counting newlines in the cached
+  text, so nothing is read beyond the tail; a new start inside an old line (a clipped first line whose window
+  advanced) also sets `cut`, and an anchor on that cut line resets, since its earlier occurrences are gone
+- `startOffset` needs the read offset: `BoundedFile.readTail` returns the offset its window starts at,
+  `TextProbe.loadLog` passes it to `LogTail.snapshot`, which adds only the bytes it drops at the front; trimming an
+  unfinished UTF-8 tail never moves it
+
+**Control API and page plumbing:**
+- `session.overlay.search TEXT | --to next|prev | --close [--pane left|right]`: exactly one of the three; refused
+  `no text page` for any other occupant, a replica page included, and `remote page` for a text page that belongs
+  to a presenter (`pageBelongsRemote`), since presentation state carries no search
+- the model holds `HtmlOverlay.textSearch {query, revision, matches, current}`; setting or closing the query bumps
+  `revision` and clears the counts; the page reports `{revision, matches, current}` and the host-free setter drops a
+  report whose revision is not the model's, so an old report never overwrites a new query
+- a query set before the page exists runs when it loads; a rebuild (theme, ready) re-applies query and current
+  without scrolling or pausing; `--to` is a one-shot push to the realized page, refused `page not loaded` before it
+  exists, so a jump runs exactly once and never replays on a rebuild; the push carries the model's query and
+  revision, and a page holding an older revision applies it before it moves
+- the page side moves into a shared `TextPageBridge` for every local text page, static or log: the message handler
+  (`ready`, scroll, search reports), the pending-document gate and the JS pushes; `LogFollower` keeps the file
+  reading and uses the bridge; the registry's log hook lines become bridge hook lines, so its length stays the same
+- a replica text page on the viewer gets the field and keys from `text.js`, with nothing reported or read back
+- read back `htmlOverlays[].text.search {query, matches, current}`, omitted with no query
+- CLI `agtermctl session overlay search TEXT | --next | --prev | --close [--pane]`
+
+**Files:**
+- Modify: `agtermCore/Sources/agtermCore/HtmlOverlay.swift`, `AppStore+HtmlOverlay.swift`, `ControlProtocol.swift`,
+  `ControlDispatcher+Overlay.swift`, `ControlDispatcher.swift`, `ControlProjection.swift`, `ControlActions*.swift`,
+  `LogTail.swift`, `TextPage.swift`
+- Create: `agtermCore/Sources/agtermctlKit/Session+OverlaySearch.swift`, `agterm/Views/TextPageBridge.swift`
+- Modify: `agterm/Views/LogFollower.swift`, `agterm/Views/TextProbe.swift`, `agterm/Views/ImageProbe.swift`
+  (`BoundedFile.readTail` offset), `agterm/Views/HtmlOverlayRegistry.swift` (hook lines only),
+  `agterm/Resources/markdown/text.js`, `text.css`, `agterm/AppActions.swift` (⌘F),
+  `agterm/Control/ControlServer+TextPage.swift`, `agterm/Control/ControlServer.swift`
+- Tests: `LogTailTests`, `TextPageTests`, `HtmlOverlayTests`, `ControlProtocolTests`, `ControlDispatcherOverlayTests`,
+  `OverlayCommandsTests`, `TextPageRenderingTests`, `LogFollowerTests`, `ControlServerTextPageTests`, one targeted
+  UI test for ⌘F and the page keys
+
+- [x] `LogTail.Snapshot.startOffset`; model, revisioned report setter, protocol, dispatcher refusals, projection, CLI
+- [x] `TextPageBridge` for static and log pages; `LogFollower` moved onto it; `dropped` / `replaced` on updates
+- [x] `text.js`: bar on every text page, field on the right, whole-text matching, highlight window, counter, wrap
+- [x] page keys, jump-pauses-first, typing rules, anchor shift and reset
+- [x] ⌘F routing in `toggleSearch` ahead of the terminal-search branch
+- [x] host-free tests: validation and refusals (`remote page`, replica, other occupants), stale-revision report
+      dropped, read-back and nil omission, `startOffset` across eviction, a clipped first line and a trimmed UTF-8
+      tail
+- [x] WebKit tests: a cross-token match, overlapping and wrapping, a hostile query staying text, clear leaving the
+      highlight.js markup intact, the paint window past 5,000, Next to the last line staying paused after its scroll
+      event, typing during a following append keeping focus and follow, an evicting append shifting the anchor,
+      repeated lines and several matches on one line, the selected line evicted, a replaced file, a clipped first
+      line whose window advanced, a rebuild keeping query and current, `--to` before load refused, a query change
+      followed at once by `--to next` stepping through the new query, every page key
+- [x] hosted tests for `coverTakesSearch`: floating text, markdown and program covers take ⌘F; no cover, a hidden
+      page and a pane page on the other pane do not (a HUD is excluded by `visibleCover` itself)
+- [x] UI test: ⌘F over a floating text page focuses the page's field and leaves an open terminal search alone; over
+      a pane page on the other pane of a split it opens the focused pane's terminal search
+      ⚠️ written; two runs stopped at launch with the app stuck `Running Background` while the screen was locked
+      (`IOConsoleLocked` true); both passed after unlock (12.9 s and 8.7 s)
+- [x] ➕ look set by Eugene in a Debug instance: the find box matches `TerminalSearchBar` (magnifier, 120pt field, fixed
+      76pt counter slot in its wording, chevrons, an X disabled with no query, aligned with the strip's close button),
+      and the terminal bar takes the same fixed counter slot and field width; the bar never wraps, and the "last N
+      lines" note is gone
+- [x] run the targeted tests - must pass before task 8
+
+### ➕ Task 8: Verify and document search
+- [ ] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
+- [ ] `site/docs.html`, `site/commands.html`, the skill and `.claude/rules/control-api.md` for page search
+
 ## Post-Completion
 **Manual verification**:
 - a log rotated by `newsyslog` (rename and recreate) and one truncated by copytruncate keep following

@@ -64,8 +64,38 @@ struct LogTailTests {
 
     @Test(arguments: cases)
     func snapshotKeepsTheLastWholeLines(_ testCase: Case) {
-        let snapshot = LogTail.snapshot(Data(testCase.bytes), fromFileStart: testCase.fromFileStart, maxLines: testCase.maxLines)
+        let snapshot = LogTail.snapshot(Data(testCase.bytes), offset: testCase.fromFileStart ? 0 : 100, maxLines: testCase.maxLines)
 
-        #expect(snapshot == testCase.expected)
+        #expect(snapshot.map { LogTail.Snapshot(text: $0.text, lines: $0.lines, clipped: $0.clipped) } == testCase.expected)
+    }
+
+    struct OffsetCase: Sendable, CustomTestStringConvertible {
+        let name: String
+        let bytes: [UInt8]
+        let offset: Int
+        let maxLines: Int
+        let start: Int
+
+        var testDescription: String { name }
+    }
+
+    static let offsetCases: [OffsetCase] = [
+        OffsetCase(name: "whole file starts at zero", bytes: Array("a\nb\n".utf8), offset: 0, maxLines: 10, start: 0),
+        OffsetCase(name: "the partial first line is past the start", bytes: Array("xx\na\nb\n".utf8), offset: 40, maxLines: 10, start: 43),
+        OffsetCase(name: "a window on a line boundary starts after the byte before it", bytes: Array("\na\n".utf8), offset: 40,
+                   maxLines: 10, start: 41),
+        OffsetCase(name: "the line cap moves the start", bytes: Array("1\n2\n3\n".utf8), offset: 0, maxLines: 1, start: 4),
+        OffsetCase(name: "a clipped line starts at its first whole character", bytes: [0xA9] + Array("é line".utf8), offset: 40,
+                   maxLines: 10, start: 41),
+        OffsetCase(name: "a trimmed unfinished character leaves the start alone", bytes: Array("xx\na\nb".utf8) + [0xC3], offset: 40,
+                   maxLines: 10, start: 43),
+        OffsetCase(name: "a dropped NUL hole moves the start", bytes: [0, 0] + Array("new\n".utf8), offset: 0, maxLines: 10, start: 2),
+    ]
+
+    @Test(arguments: offsetCases)
+    func startOffsetIsTheFilePositionOfTheFirstShownByte(_ testCase: OffsetCase) throws {
+        let snapshot = try #require(LogTail.snapshot(Data(testCase.bytes), offset: testCase.offset, maxLines: testCase.maxLines))
+
+        #expect(snapshot.startOffset == testCase.start)
     }
 }

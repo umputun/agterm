@@ -987,4 +987,39 @@ struct ControlDispatcherOverlayTests {
         #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)
     }
+
+    @Test(arguments: [
+        (ControlArgs(text: "main()"), TextSearchRequest.query("main()")),
+        (ControlArgs(to: "next"), .next),
+        (ControlArgs(to: "prev"), .previous),
+        (ControlArgs(to: "close"), .close),
+    ])
+    func overlaySearchRoutesItsRequestAndPane(_ args: ControlArgs, _ search: TextSearchRequest) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var withPane = args
+        withPane.pane = "right"
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlaySearch, target: "session", args: withPane))
+
+        #expect(response?.result?.text == "1 of 2")
+        #expect(actions.calls == [.overlaySearch(target: "session", window: nil, pane: .right, request: search)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(), OverlayHtmlError.searchRequest),
+        (ControlArgs(text: "a", to: "next"), OverlayHtmlError.searchTextWithStep),
+        (ControlArgs(text: ""), "session.overlay.search: text must not be empty"),
+        (ControlArgs(to: "up"), "invalid overlay search direction: up"),
+        (ControlArgs(text: "a", pane: "middle"), PaneOverlayError.invalidPane),
+    ])
+    func overlaySearchRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlaySearch, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
 }

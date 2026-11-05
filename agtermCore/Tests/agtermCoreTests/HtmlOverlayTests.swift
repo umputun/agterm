@@ -916,8 +916,94 @@ struct HtmlOverlayTests {
         let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
         let json = try #require(String(data: try JSONEncoder().encode(node), encoding: .utf8))
 
-        for field in ["tail", "following", "lines", "clipped", "waiting", "unreadable"] {
+        for field in ["tail", "following", "lines", "clipped", "waiting", "unreadable", "search"] {
             #expect(!json.contains("\"\(field)\""))
         }
+    }
+
+    @Test func aQuerySetOrClosedBumpsTheRevisionAndEmitsOnlyOnAChange() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextSearch(page.id, query: "error")
+        store.setTextSearch(page.id, query: "error")
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "error"))
+        #expect(session.htmlOverlay?.searchRevision == 1)
+        #expect(events.count == opened + 1)
+
+        store.setTextSearch(page.id, query: "")
+        store.setTextSearch(page.id, query: "")
+        #expect(session.htmlOverlay?.textSearch == nil)
+        #expect(session.htmlOverlay?.searchRevision == 2)
+        #expect(events.count == opened + 2)
+    }
+
+    @Test func aReportIsKeptOnlyForTheCurrentRevisionAndEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "a")
+        store.setTextSearch(page.id, query: "ab")
+        let set = events.count
+
+        store.setTextSearchReport(page.id, revision: 1, matches: 9, current: 4)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab"))
+
+        store.setTextSearchReport(page.id, revision: 2, matches: 3, current: 1)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab", matches: 3, current: 1))
+        #expect(events.count == set)
+    }
+
+    @Test func aClosedSearchDropsALateReport() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "a")
+        store.setTextSearch(page.id, query: "")
+
+        store.setTextSearchReport(page.id, revision: 2, matches: 1, current: 1)
+
+        #expect(session.htmlOverlay?.textSearch == nil)
+    }
+
+    @Test func aSearchAddressesOnlyALocalTextPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
+        #expect(store.textSearchPage(UUID(), pane: nil) == .failure(.page(.unknownSession)))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        store.setTextSearch(markdown.id, query: "a")
+        #expect(session.htmlOverlay?.textSearch == nil)
+        #expect(store.closeOverlay(session.id))
+
+        let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.closeOverlay(session.id))
+
+        let log = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: log, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil).map(\.id) == .success(log.id))
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.notHtml)))
+        #expect(TextSearchFailure.notText.message == "no text page")
+    }
+
+    @Test func aTextPageNodeReportsItsSearch() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "main()")
+        store.setTextSearchReport(page.id, revision: 1, matches: 4, current: 2)
+
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.search == ControlTextSearchNode(query: "main()", matches: 4, current: 2))
     }
 }

@@ -149,6 +149,20 @@ public struct TextLogState: Equatable, Sendable {
     }
 }
 
+/// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
+/// with no match.
+public struct TextSearch: Equatable, Sendable {
+    public let query: String
+    public var matches: Int
+    public var current: Int
+
+    public init(query: String, matches: Int = 0, current: Int = 0) {
+        self.query = query
+        self.matches = matches
+        self.current = current
+    }
+}
+
 /// HtmlZoom is the page-zoom ladder the font-size commands walk on an HTML page, one factor for every page.
 public enum HtmlZoom {
     static let steps: [Double] = [0.5, 0.75, 0.85, 1, 1.15, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -201,6 +215,10 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
     public let textLog: TextLog?
     public var logState: TextLogState?
+    /// textSearch is a text page's search, nil with none; searchRevision changes with every query set or closed, and a
+    /// page report naming another revision is dropped.
+    public internal(set) var textSearch: TextSearch?
+    public internal(set) var searchRevision = 0
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load

@@ -59,15 +59,35 @@ public enum TextPage {
         return String(data: data, encoding: .utf8)
     }
 
+    /// SearchState is the search a built page starts with: the model's query and revision, and the match it showed
+    /// last, from 1 and 0 for none.
+    public struct SearchState: Equatable, Sendable {
+        public let query: String
+        public let revision: Int
+        public let current: Int
+
+        public init(query: String, revision: Int, current: Int) {
+            self.query = query
+            self.revision = revision
+            self.current = current
+        }
+    }
+
     /// html is the document the renderer fills: the text as the content of a hidden element, the language
     /// and target line as attributes, and `style`, the app's own stylesheet. The language is dropped over
     /// `maxHighlightBytes`, so the renderer shows that text plain. The policy loads nothing at all. The holder
     /// is a `div`: the parser drops a newline right after `<pre>`, which would shift every line number.
     /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter; `anchor`
-    /// is the scroll offset a paused log page reopens at.
+    /// is the scroll offset a rebuilt page reopens at, a paused log page's or a plain page's.
     public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
-                            anchor: Double? = nil) -> String {
+                            anchor: Double? = nil, search: SearchState? = nil) -> String {
         var attributes = ""
+        if let search {
+            attributes += " data-revision=\"\(search.revision)\""
+            if !search.query.isEmpty {
+                attributes += " data-query=\"\(MarkdownPage.escaped(search.query))\" data-current=\"\(search.current)\""
+            }
+        }
         if let language, text.utf8.count <= maxHighlightBytes {
             attributes += " data-language=\"\(MarkdownPage.escaped(language))\""
         }
@@ -76,10 +96,10 @@ public enum TextPage {
             if log.report.clipped { attributes += " data-clipped" }
             if log.report.waiting { attributes += " data-waiting" }
             if log.report.unreadable { attributes += " data-unreadable" }
-            if let anchor, anchor.isFinite { attributes += " data-anchor=\"\(anchor)\"" }
         } else if let line {
             attributes += " data-line=\"\(line)\""
         }
+        if let anchor, anchor.isFinite { attributes += " data-anchor=\"\(anchor)\"" }
         return """
         <!doctype html><html><head><meta charset="utf-8">\
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">\

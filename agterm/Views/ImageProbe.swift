@@ -80,10 +80,10 @@ enum BoundedFile {
         let modifiedNanoseconds: Int
     }
 
-    /// TailRead is the end of a file: its bytes, whether they start at the file's first byte, and its stamp.
+    /// TailRead is the end of a file: its bytes, the file offset they start at, and its stamp.
     struct TailRead: Sendable, Equatable {
         let data: Data
-        let fromFileStart: Bool
+        let offset: Int
         let stamp: FileStamp
     }
 
@@ -110,7 +110,7 @@ enum BoundedFile {
             if stamp == unchangedFrom { return .success(nil) }
             let offset = max(0, size - maxBytes - 1)
             guard let data = readFully(fd, offset: offset, count: size - offset) else { return .failure(.unreadable) }
-            return .success(TailRead(data: data, fromFileStart: offset == 0, stamp: stamp))
+            return .success(TailRead(data: data, offset: offset, stamp: stamp))
         }
     }
 

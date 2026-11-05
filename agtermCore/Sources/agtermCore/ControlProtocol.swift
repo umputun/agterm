@@ -69,6 +69,7 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayShow = "session.overlay.show"
     case sessionOverlayToggle = "session.overlay.toggle"
     case sessionOverlayFollow = "session.overlay.follow"
+    case sessionOverlaySearch = "session.overlay.search"
     case sessionHudOpen = "session.hud.open"
     case sessionHudUpdate = "session.hud.update"
     case sessionHudClose = "session.hud.close"
@@ -883,6 +884,8 @@ public enum OverlayHtmlError {
     public static let tailWithLine = "session.overlay.open: --tail and --follow-file cannot be combined with --line"
     public static let logRemote = "session.overlay.open: a log page is not shown on another Mac"
     public static let tailRange = "session.overlay.open: --tail must be 1...\(TextPage.maxTail)"
+    public static let searchRequest = "session.overlay.search needs text, --next, --prev or --close"
+    public static let searchTextWithStep = "session.overlay.search: text cannot be combined with --next, --prev or --close"
     public static let companionNeedsPage = "a page companion needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"

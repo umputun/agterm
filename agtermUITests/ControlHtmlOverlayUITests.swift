@@ -99,6 +99,42 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
     }
 
+    func testCommandFOverAFloatingTextPageSearchesThePageAndLeavesTheTerminalSearch() throws {
+        let id = try activeSessionID()
+        app.activate()
+        app.typeKey("f", modifierFlags: .command)
+        XCTAssertTrue(app.textFields["search-field"].waitForExistence(timeout: 10), "⌘F with no page opens the terminal search")
+        let file = pageDir.appendingPathComponent("notes.txt")
+        try "alpha\nbeta\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","sizePercent":60}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "text open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "loaded" })
+
+        app.typeKey("f", modifierFlags: .command)
+        app.typeKey("b", modifierFlags: [])
+
+        XCTAssertTrue(pollPage(id: id) { ($0["text"] as? [String: Any]).flatMap { $0["search"] as? [String: Any] }?["query"] as? String == "b" },
+                      "⌘F over the page focuses its field, so the typed letter becomes the page's query")
+        XCTAssertTrue(app.textFields["search-field"].exists, "the terminal search behind the page stays open")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false))
+    }
+
+    func testCommandFWithAPageOverTheOtherPaneSearchesTheFocusedTerminal() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        let file = pageDir.appendingPathComponent("notes.txt")
+        try "alpha\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","pane":"left"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "pane text open should succeed: \(open)")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"right"}}"#)["ok"] as? Bool, true)
+
+        app.activate()
+        app.typeKey("f", modifierFlags: .command)
+
+        XCTAssertTrue(app.textFields["search-field"].waitForExistence(timeout: 10), "the focused right pane opens its terminal search")
+    }
+
     func testWithoutNavigationThePageShowsItsSourceAndACloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)

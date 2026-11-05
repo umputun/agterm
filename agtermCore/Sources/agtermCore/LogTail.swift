@@ -2,31 +2,33 @@ import Foundation
 
 /// LogTail turns the bytes read from a log's end into the text a log page shows.
 public enum LogTail {
-    /// Snapshot is the shown text, its line count, and whether its first line is the clipped end of a line
-    /// longer than the read window.
+    /// Snapshot is the shown text, its line count, whether its first line is the clipped end of a line longer
+    /// than the read window, and `startOffset`, the file offset of the text's first byte.
     public struct Snapshot: Equatable, Sendable {
         public let text: String
         public let lines: Int
         public let clipped: Bool
+        public let startOffset: Int
 
-        public init(text: String, lines: Int, clipped: Bool) {
+        public init(text: String, lines: Int, clipped: Bool, startOffset: Int = 0) {
             self.text = text
             self.lines = lines
             self.clipped = clipped
+            self.startOffset = startOffset
         }
     }
 
     private static let lineFeed: UInt8 = 0x0A
 
-    /// snapshot keeps the last `maxLines` whole lines of `data`. A read that did not start at the file's start
-    /// begins one byte before its window, so a window opening on a line boundary keeps that line; the partial
+    /// snapshot keeps the last `maxLines` whole lines of `data`, read from file offset `offset`. A read that did not
+    /// start at the file's start begins one byte before its window, so a window opening on a line boundary keeps that line; the partial
     /// line ahead of the first LF is dropped, unless nothing follows that LF, when the one line longer than the
     /// window is kept from its first whole character and marked clipped. An unfinished character at the end
     /// is left for the next read. nil for a NUL byte or invalid UTF-8 in the kept lines, which mark binary data.
-    public static func snapshot(_ data: Data, fromFileStart: Bool, maxLines: Int) -> Snapshot? {
+    public static func snapshot(_ data: Data, offset: Int, maxLines: Int) -> Snapshot? {
         var bytes = [UInt8](data)
         var clipped = false
-        if !fromFileStart, !bytes.isEmpty {
+        if offset > 0, !bytes.isEmpty {
             if let feed = bytes.firstIndex(of: lineFeed), feed < bytes.count - 1 {
                 bytes.removeFirst(feed + 1)
             } else {
@@ -34,7 +36,8 @@ public enum LogTail {
                 clipped = !bytes.isEmpty
             }
         }
-        bytes.removeLast(unfinishedTail(bytes))
+        let unfinished = unfinishedTail(bytes)
+        bytes.removeLast(unfinished)
         // a writer still at its old offset after copytruncate leaves a hole of NUL bytes ahead of the new text
         let hole = bytes.prefix { $0 == 0 }.count
         if hole > 0, hole < bytes.count { bytes.removeFirst(hole) }
@@ -48,7 +51,9 @@ public enum LogTail {
             clipped = false
         }
         guard !bytes.contains(0), let text = String(bytes: bytes, encoding: .utf8) else { return nil }
-        return Snapshot(text: text, lines: min(total, keep), clipped: clipped)
+        // the unfinished character is the only cut at the end, so every other missing byte was cut at the front
+        let start = offset + data.count - unfinished - bytes.count
+        return Snapshot(text: text, lines: min(total, keep), clipped: clipped, startOffset: start)
     }
 
     private static func isContinuation(_ byte: UInt8) -> Bool { byte & 0xC0 == 0x80 }

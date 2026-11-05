@@ -111,14 +111,32 @@ struct TextPageTests {
         #expect(html.contains(#"<div id="agterm-text" hidden data-log data-following="false">a</div>"#))
     }
 
-    @Test func aPausedLogPageCarriesItsAnchorAndAPlainPageNever() {
+    @Test func aRebuiltPageCarriesOnlyAFiniteAnchor() {
         let paused = TextPage.html(text: "a", language: nil, line: nil, style: "", log: TextLogState(following: false), anchor: 240.5)
-        let plain = TextPage.html(text: "a", language: nil, line: nil, style: "", anchor: 240.5)
+        let plain = TextPage.html(text: "a", language: nil, line: 3, style: "", anchor: 80)
         let infinite = TextPage.html(text: "a", language: nil, line: nil, style: "", log: TextLogState(following: false),
                                      anchor: .infinity)
+        let none = TextPage.html(text: "a", language: nil, line: nil, style: "")
 
         #expect(paused.contains(#"data-anchor="240.5""#))
-        #expect(!plain.contains("data-anchor"))
+        #expect(plain.contains(#"data-line="3" data-anchor="80.0""#))
         #expect(!infinite.contains("data-anchor"))
+        #expect(!none.contains("data-anchor"))
+    }
+
+    @Test func aPageCarriesItsSearchWithTheQueryEscaped() {
+        let html = TextPage.html(text: "a", language: nil, line: nil, style: "",
+                                 search: TextPage.SearchState(query: #""><x>"#, revision: 4, current: 2))
+
+        #expect(html.contains(#"<div id="agterm-text" hidden data-revision="4" data-query="&quot;&gt;&lt;x&gt;" data-current="2">"#))
+    }
+
+    @Test func aClosedSearchCarriesOnlyItsRevision() {
+        let closed = TextPage.html(text: "a", language: nil, line: nil, style: "",
+                                   search: TextPage.SearchState(query: "", revision: 5, current: 0))
+        let none = TextPage.html(text: "a", language: nil, line: nil, style: "")
+
+        #expect(closed.contains(#"<div id="agterm-text" hidden data-revision="5">"#))
+        #expect(!none.contains("data-revision"))
     }
 }

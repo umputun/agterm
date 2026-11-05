@@ -127,4 +127,50 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertEqual(server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
                        "no log page")
     }
+
+    func testSearchSetsAndClosesTheQueryOnTheModelAndItsReadBack() async throws {
+        let (_, session) = try addSession()
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let set = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("two"))
+
+        XCTAssertEqual(set, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString)))
+        XCTAssertEqual(session.htmlOverlay?.textSearch, TextSearch(query: "two"))
+        XCTAssertEqual(try treeSearch(session), ControlTextSearchNode(query: "two", matches: 0, current: 0))
+
+        let closed = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .close)
+        XCTAssertTrue(closed.ok)
+        XCTAssertNil(session.htmlOverlay?.textSearch)
+        XCTAssertNil(try treeSearch(session))
+    }
+
+    private func treeSearch(_ session: Session) throws -> ControlTextSearchNode? {
+        let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
+        let node = try XCTUnwrap(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+        return node.htmlOverlays?.first?.text?.search
+    }
+
+    func testAStepNeedsAQueryAndALoadedPage() async throws {
+        let (_, session) = try addSession()
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let noQuery = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .next)
+        XCTAssertEqual(noQuery.error, TextSearchFailure.noQuery.message)
+
+        _ = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("one"))
+        let notLoaded = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .previous)
+        XCTAssertEqual(notLoaded.error, TextSearchFailure.notLoaded.message)
+    }
+
+    func testSearchRefusesAnEmptySlotAndAPresentedPage() async throws {
+        let (_, session) = try addSession()
+        let empty = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("a"))
+        XCTAssertEqual(empty.error, OverlayHtmlError.noOverlay)
+
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let remote = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("a"))
+        XCTAssertEqual(remote.error, TextSearchFailure.remote.message)
+    }
 }

@@ -47,7 +47,7 @@ final class ImageProbeTests: XCTestCase {
         let read = try XCTUnwrap(BoundedFile.readTail(path: path, maxBytes: 64).get())
 
         XCTAssertEqual(read.data, Data("one\ntwo\n".utf8))
-        XCTAssertTrue(read.fromFileStart)
+        XCTAssertEqual(read.offset, 0)
         XCTAssertEqual(read.stamp.size, 8)
     }
 
@@ -58,7 +58,7 @@ final class ImageProbeTests: XCTestCase {
         let read = try XCTUnwrap(BoundedFile.readTail(path: path, maxBytes: 4).get())
 
         XCTAssertEqual(read.data, Data("bcdef".utf8))
-        XCTAssertFalse(read.fromFileStart)
+        XCTAssertEqual(read.offset, 11)
     }
 
     func testATailIgnoresTheWholeFileCapAndMeasuresASymlinkAtItsTarget() throws {

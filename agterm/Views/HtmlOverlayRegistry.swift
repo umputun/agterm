@@ -232,7 +232,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // an image, markdown or text page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
-    private var logFollower: LogFollower?
+    private(set) var textPage: TextPageBridge?
     private let storageFailure: String?
     private let replica: HtmlReplicaLink?
     private let revision: HtmlReplicaRevision
@@ -315,7 +315,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             webView.observe(\.canGoBack) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
             webView.observe(\.canGoForward) { [weak self] _, _ in Task { @MainActor in self?.reportPage() } },
         ]
-        logFollower = LogFollower.make(for: overlay, webView: webView, store: store, world: Self.markdownWorld)
+        textPage = TextPageBridge.make(for: overlay, webView: webView, store: store, world: Self.markdownWorld) { [weak self] in self?.fail($0) }
         loadOriginal()
     }
 
@@ -326,7 +326,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard theme != self.theme else { return }
         self.theme = theme
         installScripts()
-        if let logFollower { return logFollower.loadDocument(fresh: false) }
+        if let textPage { return textPage.loadDocument(fresh: false) }
         if styled { reloadShown() }
     }
 
@@ -423,7 +423,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// the page asked for while its session was hidden.
     func apply(_ overlay: HtmlOverlay) {
         self.overlay = overlay
-        logFollower?.setFollowing(overlay.logState?.following ?? false)
+        textPage?.apply(overlay)
         closeIfRequested()
         guard overlay.reloadRevision != appliedRevision else { return }
         appliedRevision = overlay.reloadRevision
@@ -466,17 +466,23 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         sharing.copy(browserURL.absoluteString)
     }
 
+    /// focusSearch moves the keyboard into a text page's search field, a replica's included.
+    func focusSearch() {
+        webView.window?.makeFirstResponder(webView)
+        webView.callAsyncJavaScript("agtermTextFocusSearch()", arguments: [:], in: nil, in: Self.markdownWorld)
+    }
+
     /// setOnScreen takes whether the page is shown; a page out of sight asks nothing, and its pending prompt
     /// goes with it.
     func setOnScreen(_ onScreen: Bool) {
         self.onScreen = onScreen
-        logFollower?.onScreen = onScreen
+        textPage?.onScreen = onScreen
         if !onScreen { endPrompt() }
     }
 
     func close() {
         textLoad += 1
-        logFollower?.stop()
+        textPage?.stop()
         endPrompt()
         webView.configuration.userContentController.removeAllScriptMessageHandlers()
         observations.removeAll()
@@ -558,21 +564,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 case .success(let html): webView.loadHTMLString(html, baseURL: nil)
                 }
             }
-        case .text(let path, let line):
-            if let logFollower { return logFollower.loadDocument(fresh: true) }
-            textLoad += 1
-            let load = textLoad
-            let style = MarkdownAssets.shared.textStyle
-            Task { @MainActor [weak self] in
-                let page = await Task.detached(priority: .userInitiated) {
-                    TextProbe.load(path: path).map { TextPage.html(text: $0, language: TextPage.language(forFile: path), line: line, style: style) }
-                }.value
-                guard let self, textLoad == load else { return }
-                switch page {
-                case .failure(let failure): fail(failure.description)
-                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
-                }
-            }
+        case .text:
+            textPage?.loadDocument(fresh: true)
         }
     }
 

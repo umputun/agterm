@@ -36,7 +36,8 @@ final class TextProbeTests: XCTestCase {
         XCTAssertEqual(failure(TextProbe.check(path: url.path)), .tooLarge(url.path))
         XCTAssertNoThrow(try TextProbe.checkLog(path: url.path).get())
         let read = try XCTUnwrap(TextProbe.loadLog(path: url.path, tail: 3).get())
-        XCTAssertEqual(read.snapshot, LogTail.Snapshot(text: line + line + line, lines: 3, clipped: false))
+        let size = ((TextPage.maxBytes / 100) + 10) * 100
+        XCTAssertEqual(read.snapshot, LogTail.Snapshot(text: line + line + line, lines: 3, clipped: false, startOffset: size - 300))
     }
 
     func testABinaryOrMissingLogFailsTheLogCheck() throws {

@@ -57,7 +57,7 @@ enum TextProbe {
         BoundedFile.readTail(path: path, maxBytes: TextPage.maxTailBytes, unchangedFrom: unchangedFrom)
             .mapError { _ in .unreadable(path) }
             .map { read in
-                read.map { LogRead(snapshot: LogTail.snapshot($0.data, fromFileStart: $0.fromFileStart, maxLines: tail), stamp: $0.stamp) }
+                read.map { LogRead(snapshot: LogTail.snapshot($0.data, offset: $0.offset, maxLines: tail), stamp: $0.stamp) }
             }
     }
 

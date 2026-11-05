@@ -50,6 +50,35 @@ public enum TextLogFollowFailure: Error, Equatable, Sendable {
     }
 }
 
+/// TextSearchRequest is one `session.overlay.search` request: set a query, step to the next or previous match, or
+/// close the search.
+public enum TextSearchRequest: Equatable, Sendable {
+    case query(String)
+    case next
+    case previous
+    case close
+}
+
+/// TextSearchFailure is why a page search request was refused.
+public enum TextSearchFailure: Error, Equatable, Sendable {
+    case page(HtmlOverlayCommandFailure)
+    case notText
+    case remote
+    case notLoaded
+    case noQuery
+
+    /// message is the control error for this refusal.
+    public var message: String {
+        switch self {
+        case .page(let failure): return failure.message
+        case .notText: return "no text page"
+        case .remote: return "remote page: search it on the Mac that shows it"
+        case .notLoaded: return "page not loaded"
+        case .noQuery: return "no search query: set one first"
+        }
+    }
+}
+
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
@@ -188,6 +217,44 @@ extension AppStore {
         }
     }
 
+    /// textSearchPage finds the local text page in the slot `pane` addresses, for a search request. A slot the placement
+    /// rule hands to the presenting Mac is refused, since presentation state carries no search.
+    public func textSearchPage(_ sessionID: UUID, pane: OverlayPane?) -> Result<HtmlOverlay, TextSearchFailure> {
+        if pageBelongsRemote(sessionID, pane: pane) { return .failure(.remote) }
+        switch htmlOverlay(sessionID, pane: pane) {
+        case .failure(let failure): return .failure(.page(failure))
+        case .success(let page):
+            guard case .text = page.source else { return .failure(.notText) }
+            return .success(page)
+        }
+    }
+
+    /// setTextSearch sets text page `id`'s query, an empty one closing the search, from control or the page's own
+    /// field. A change bumps `searchRevision`, clears the report, emits `tree.changed` and returns the new revision;
+    /// nil for no change or a page that is not a text page.
+    @discardableResult public func setTextSearch(_ id: UUID, query: String) -> Int? {
+        var revision: Int?
+        updateHtmlOverlay(id) {
+            guard case .text = $0.source, ($0.textSearch?.query ?? "") != query else { return }
+            $0.searchRevision += 1
+            $0.textSearch = query.isEmpty ? nil : TextSearch(query: query)
+            revision = $0.searchRevision
+        }
+        if revision != nil { scheduleTreeChanged() }
+        return revision
+    }
+
+    /// setTextSearchReport records the page's matches and current match for `revision`, dropped when the query has
+    /// changed since. Never emitted, like `setTextLogReport`.
+    public func setTextSearchReport(_ id: UUID, revision: Int, matches: Int, current: Int) {
+        updateHtmlOverlay(id) {
+            guard $0.searchRevision == revision, var search = $0.textSearch else { return }
+            search.matches = matches
+            search.current = current
+            if search != $0.textSearch { $0.textSearch = search }
+        }
+    }
+
     /// htmlOverlaySlot finds the slot holding page `id` in a visible session, nil once the page left it.
     public func htmlOverlaySlot(_ id: UUID) -> (session: Session, pane: OverlayPane?)? {
         for session in workspaces.flatMap(\.sessions) {
@@ -233,7 +300,10 @@ extension AppStore {
             text = ControlTextOverlayNode(file: path, language: TextPage.language(forFile: path), line: line,
                                           tail: page.textLog?.tail, following: log?.following, lines: log?.report.lines,
                                           clipped: log?.report.clipped, waiting: log?.report.waiting,
-                                          unreadable: log?.report.unreadable)
+                                          unreadable: log?.report.unreadable,
+                                          search: page.textSearch.map {
+                                              ControlTextSearchNode(query: $0.query, matches: $0.matches, current: $0.current)
+                                          })
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, text: text,
                                       state: page.loadState.rawValue,

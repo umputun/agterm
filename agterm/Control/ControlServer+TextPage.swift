@@ -51,4 +51,39 @@ extension ControlServer {
             }
         }
     }
+
+    /// searchSessionOverlay sets or closes the query in the model, which reaches the page whenever it exists; a step
+    /// goes to the loaded page once and answers `N of M`.
+    func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                              request: TextSearchRequest) async -> ControlResponse {
+        let store: AppStore, id: UUID
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        let page: HtmlOverlay
+        switch store.textSearchPage(id, pane: pane) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found): page = found
+        }
+        let forward: Bool
+        switch request {
+        case .query(let query):
+            store.setTextSearch(page.id, query: query)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        case .close:
+            store.setTextSearch(page.id, query: "")
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        case .next: forward = true
+        case .previous: forward = false
+        }
+        guard let query = page.textSearch?.query else { return ControlResponse(ok: false, error: TextSearchFailure.noQuery.message) }
+        guard let bridge = HtmlOverlayRegistry.shared.existing(page.id)?.textPage else {
+            return ControlResponse(ok: false, error: TextSearchFailure.notLoaded.message)
+        }
+        switch await bridge.step(forward: forward, query: query, revision: page.searchRevision) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found): return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: "\(found.current) of \(found.matches)"))
+        }
+    }
 }

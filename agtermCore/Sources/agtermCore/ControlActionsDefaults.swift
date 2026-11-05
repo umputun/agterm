@@ -58,6 +58,11 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.follow"))
     }
 
+    func searchSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?,
+                              request _: TextSearchRequest) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.search"))
+    }
+
     // outcomes live in agtermCore, so every host answers the read the same way and owes no conformance
     func htmlPageResult(_ pageID: UUID) -> ControlResponse {
         HtmlPageOutcomes.shared.response(for: pageID)

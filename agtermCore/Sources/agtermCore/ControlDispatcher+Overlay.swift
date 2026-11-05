@@ -299,4 +299,30 @@ extension ControlDispatcher {
                                                                                             lines: lines))
         }
     }
+
+    /// dispatchSessionOverlaySearch takes exactly one of a query and a `to` step.
+    func dispatchSessionOverlaySearch(_ request: ControlRequest) async -> ControlResponse {
+        let search: TextSearchRequest
+        switch (request.args?.text, request.args?.to) {
+        case (nil, nil):
+            return ControlResponse(ok: false, error: OverlayHtmlError.searchRequest)
+        case (.some, .some):
+            return ControlResponse(ok: false, error: OverlayHtmlError.searchTextWithStep)
+        case (let text?, nil):
+            guard !text.isEmpty else { return ControlResponse(ok: false, error: "session.overlay.search: text must not be empty") }
+            search = .query(text)
+        case (nil, let to?):
+            switch to {
+            case "next": search = .next
+            case "prev": search = .previous
+            case "close": search = .close
+            default: return ControlResponse(ok: false, error: "invalid overlay search direction: \(to)")
+            }
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.searchSessionOverlay(request.target, window: request.args?.window, pane: pane, request: search)
+        }
+    }
 }

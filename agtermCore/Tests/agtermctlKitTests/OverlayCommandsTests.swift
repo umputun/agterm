@@ -256,6 +256,29 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "follow", "on", "--pane", "scratch"]))
     }
 
+    @Test(arguments: [
+        (["main()"], "main()" as String?, nil as String?),
+        (["--next"], nil as String?, "next" as String?),
+        (["--prev"], nil as String?, "prev" as String?),
+        (["--close"], nil as String?, "close" as String?),
+    ])
+    func searchSendsItsQueryOrStepPaneAndTarget(_ extra: [String], _ text: String?, _ to: String?) throws {
+        let req = try request(["session", "overlay", "search"] + extra + ["--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlaySearch)
+        #expect(req.target == "s")
+        #expect(req.args?.text == text)
+        #expect(req.args?.to == to)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func searchRefusesAMissingOrMixedRequest() {
+        #expect(rejects(["session", "overlay", "search"]))
+        #expect(rejects(["session", "overlay", "search", ""]))
+        #expect(rejects(["session", "overlay", "search", "a", "--next"]))
+        #expect(rejects(["session", "overlay", "search", "--next", "--prev"]))
+        #expect(rejects(["session", "overlay", "search", "a", "--pane", "scratch"]))
+    }
+
     @Test func openHelpTellsFollowFileFromFollow() {
         let open = Session.Overlay.Open.helpMessage(columns: 400)
         #expect(open.contains("--follow-file"))

@@ -27,6 +27,9 @@ struct ControlProtocolTests {
         let follow = ControlRequest(cmd: .sessionOverlayFollow, args: ControlArgs(mode: "off", pane: "left"))
         #expect(try roundTrip(follow) == follow)
         #expect(Command.sessionOverlayFollow.rawValue == "session.overlay.follow")
+        let search = ControlRequest(cmd: .sessionOverlaySearch, args: ControlArgs(text: "main()", pane: "right"))
+        #expect(try roundTrip(search) == search)
+        #expect(Command.sessionOverlaySearch.rawValue == "session.overlay.search")
 
         let plain = String(data: try JSONEncoder().encode(ControlArgs(textFile: "/tmp/a.txt")), encoding: .utf8) ?? ""
         #expect(!plain.contains("tail"))
