@@ -22,15 +22,18 @@ extension ControlServer {
         let id = link.session
         guard canShowLinkOverlay(session: id) else { return completion(false) }
         let path = link.url.path(percentEncoded: false)
+        // a page the presenting Mac is handed stays the static text page it already shows there
+        let log = link.opensAsLog && library.store(forSession: id)?.pageBelongsRemote(id, pane: nil) == false
         Task { @MainActor [weak self] in
-            let checked = await TextProbe.checkDetached(path: path)
+            let checked = log ? await TextProbe.checkLogDetached(path: path) : await TextProbe.checkDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id),
                   let store = library.store(forSession: id) else { return completion(false) }
             releaseHiddenClickedPage(session: id, persistent: false)
             guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let page = HtmlSource.text(path: path, line: link.line)
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: link.sizePercent,
-                                                           backgroundColor: nil, page: page, clicked: true)
+                                                           backgroundColor: nil, page: page, clicked: true,
+                                                           textLog: log ? TextLog(tail: TextPage.defaultTail, follow: true) : nil)
             completion(openHtmlOverlay(in: store, sessionID: id, page: page, options: options).ok)
         }
     }

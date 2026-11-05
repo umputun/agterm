@@ -215,14 +215,14 @@
 - Modify: `agtermCore/Sources/agtermCore/LinkPolicy.swift`, `agterm/Control/ControlServer+TextPage.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`, `agtermTests/ControlServerLinkOverlayTests.swift`
 
-- [ ] a plain click on a `TextPage.isLog` path opens log mode with `defaultTail` and follow on, unless
+- [x] a plain click on a `TextPage.isLog` path opens log mode with `defaultTail` and follow on, unless
       `store.pageBelongsRemote(id, pane: nil)`, which keeps today's static page; a `:line` click keeps the static
       page; every other text file is unchanged
-- [ ] a log larger than `TextPage.maxBytes` opens in log mode instead of being revealed
-- [ ] write `LinkPolicyTests` cases for `.log`, `.out`, `.log:42`, `.txt`
-- [ ] write `ControlServerLinkOverlayTests` cases: log click opens log mode, `:line` static, large log opens,
+- [x] a log larger than `TextPage.maxBytes` opens in log mode instead of being revealed
+- [x] write `LinkPolicyTests` cases for `.log`, `.out`, `.log:42`, `.txt`
+- [x] write `ControlServerLinkOverlayTests` cases: log click opens log mode, `:line` static, large log opens,
       presented-session click opens the static page
-- [ ] run targeted tests - must pass before task 5
+- [x] run targeted tests - must pass before task 5
 
 ### Task 5: Verify acceptance criteria
 - [ ] verify every Overview requirement, including the 2 MB byte cap and the waiting state

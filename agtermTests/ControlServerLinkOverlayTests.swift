@@ -283,6 +283,84 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertNil(session.htmlOverlay)
     }
 
+    func testAClickedLogOpensAsAFollowingLogPageAndItsLocationAsTheStaticPage() async throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let log = stateDir.appendingPathComponent("app.out")
+        try Data("one\ntwo\nthree\n".utf8).write(to: log)
+
+        let plain = await openText(log, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertTrue(plain)
+        XCTAssertEqual(session.htmlOverlay?.textLog, TextLog(tail: TextPage.defaultTail, follow: true))
+        XCTAssertEqual(session.htmlOverlay?.clicked, true)
+        store.closeOverlay(session.id)
+
+        let located = await openText(log, line: 2, session: session.id, sizePercent: nil)
+        XCTAssertTrue(located)
+        XCTAssertEqual(session.htmlOverlay?.source, .text(path: log.path, line: 2))
+        XCTAssertNil(session.htmlOverlay?.textLog)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedLogOverTheWholeFileCapOpensWhileOtherTextIsRefused() async throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let line = String(repeating: "x", count: 99) + "\n"
+        let body = Data(String(repeating: line, count: TextPage.maxBytes / 100 + 10).utf8)
+        let log = stateDir.appendingPathComponent("big.log")
+        let text = stateDir.appendingPathComponent("big.txt")
+        try body.write(to: log)
+        try body.write(to: text)
+
+        let refused = await openText(text, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertFalse(refused)
+        let opened = await openText(log, line: nil, session: session.id, sizePercent: nil)
+        XCTAssertTrue(opened)
+        XCTAssertNotNil(session.htmlOverlay?.textLog)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedLogInAPresentedSessionGoesToTheViewerAsTheStaticPage() async throws {
+        let (_, session) = try addSession()
+        try present(session)
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let log = stateDir.appendingPathComponent("app.log")
+        try Data("one\n".utf8).write(to: log)
+
+        let opened = await openText(log, line: nil, session: session.id, sizePercent: nil)
+
+        XCTAssertTrue(opened)
+        XCTAssertNil(session.htmlOverlay)
+        XCTAssertNotNil(session.remoteOverlays.slot(nil)?.page)
+    }
+
+    private final class PresenterSink: PresentationSink {
+        var generation = 0
+        var opened = false
+
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if !opened { generation = frame.gen }
+            opened = true
+            return true
+        }
+
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    private func present(_ session: Session) throws {
+        for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) {
+            ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: pane)
+            _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: pane)
+        }
+        server.attachPresentationHub()
+        let sink = PresenterSink()
+        let kinds = PresentationHub.pageKinds + [PresentationHub.pageContentKind]
+        let id = try server.presentationHub.subscribe(
+            session: session.id, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter), sink: sink
+        ) { PresentationSnapshot(status: nil, hud: nil) }
+        server.presentationHub.receive(PresentationFrame(gen: sink.generation, rev: 0, body: .presenterAcquire), from: id)
+    }
+
     func testAClickedTextFileOpensAtItsLineAndSizeWithoutSelectingIt() async throws {
         let (store, session) = try addSession()
         let other = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))

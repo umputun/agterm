@@ -566,4 +566,13 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.Route.overlay(web, session: session, sizePercent: nil).localFile == nil)
         #expect(LinkPolicy.Route.ignore.localFile == nil)
     }
+
+    @Test(arguments: [("/x/app.log", nil, true), ("/x/run.OUT", nil, true), ("/x/app.log", 42, false), ("/x/notes.txt", nil, false),
+                      ("/x/a.go", nil, false)] as [(String, Int?, Bool)])
+    func onlyAPlainClickOnALogOpensAsALogPage(_ path: String, _ line: Int?, _ expected: Bool) {
+        let link = LinkPolicy.TextLink(url: URL(fileURLWithPath: path, isDirectory: false), line: line, session: Self.session,
+                                       sizePercent: nil)
+
+        #expect(link.opensAsLog == expected)
+    }
 }
