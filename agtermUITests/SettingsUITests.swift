@@ -240,10 +240,12 @@ final class SettingsUITests: XCTestCase {
         picker.click()
         let triangle = app.menuItems["Triangle"]
         XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
-        for shape in ["Circle", "Square", "Diamond", "Capsule", "Star"] {
+        let shapes = ["Circle", "Square", "Triangle", "Down Triangle", "Play", "Diamond", "Capsule", "Seal", "Star",
+                      "Bolt", "Bell"]
+        for shape in shapes {
             XCTAssertTrue(app.menuItems[shape].exists, "the shape picker should offer '\(shape)'")
         }
-        XCTAssertEqual(picker.menuItems.count, 6, "the six shapes should be the whole option list")
+        XCTAssertEqual(picker.menuItems.count, shapes.count, "every shape should be in the option list, and nothing else")
         XCTAssertFalse(app.menuItems["Default"].exists, "the shape picker should no longer offer a 'Default' entry")
         app.typeKey(.escape, modifierFlags: []) // leave the popup closed, the option list picks nothing
     }

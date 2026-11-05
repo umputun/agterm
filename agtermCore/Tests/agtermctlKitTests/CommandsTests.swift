@@ -680,7 +680,7 @@ struct CommandsTests {
     @Test func sessionStatusRejectsUnknownShape() {
         // pin the exact allCases-derived message so an unrelated parse failure can't pass for it.
         #expect(validationMessage(["session", "status", "blocked", "--shape", "hexagon"])
-            == "shape must be one of: circle, square, triangle, diamond, capsule, star")
+            == "shape must be one of: circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell")
     }
 
     @Test func sessionStatusShapeHelpListsEveryShape() {

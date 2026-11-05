@@ -41,11 +41,31 @@ public final class PresentationHub {
             self.sink = sink
             lastAck = now
         }
+
+        @MainActor func decodable(_ body: PresentationFrame.Body) -> PresentationFrame.Body {
+            guard !kinds.contains(PresentationHub.statusShapesKind) else { return body }
+            switch body {
+            case .status(let status):
+                return .status(status.map(Self.withOriginalShape))
+            case .snapshot(var snapshot):
+                snapshot.status = snapshot.status.map(Self.withOriginalShape)
+                return .snapshot(snapshot)
+            default:
+                return body
+            }
+        }
+
+        private static func withOriginalShape(_ status: PresentationStatus) -> PresentationStatus {
+            guard let shape = status.shape, !StatusShape.original.contains(shape) else { return status }
+            var status = status
+            status.shape = nil
+            return status
+        }
     }
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
-                                        overlayPointsKind, pageContentKind] + pageKinds
+                                        overlayPointsKind, pageContentKind, statusShapesKind] + pageKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -59,6 +79,8 @@ public final class PresentationHub {
     public static let overlayPointsKind = "overlay.points"
     /// pageContentKind advertises the image, markdown and text page sources without adding a frame kind.
     public static let pageContentKind = "page.content"
+    /// statusShapesKind advertises the expanded status-shape set.
+    public static let statusShapesKind = "status.shapes"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
@@ -187,7 +209,7 @@ public final class PresentationHub {
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
         guard let subscriber = subscribers[id] else { return false }
-        let frame = PresentationFrame(gen: subscriber.generation, rev: subscriber.revision, body: body)
+        let frame = PresentationFrame(gen: subscriber.generation, rev: subscriber.revision, body: subscriber.decodable(body))
         guard subscriber.sink.offer(frame) else {
             drop(id, reason: .stalled)
             return false

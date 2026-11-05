@@ -428,7 +428,7 @@ private struct NotificationsSettingsView: View {
 private struct AgentStatusSettingsView: View {
     /// Gap between a glyph row's color well and its shape picker.
     private static let controlSpacing: CGFloat = 8
-    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the six
+    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the
     /// silhouettes differ by a few points, so without a fixed column the color wells jog between rows. Snug
     /// enough to read as spacing, not a hole, with room above the widest silhouette's button.
     private static let shapePickerWidth: CGFloat = 80

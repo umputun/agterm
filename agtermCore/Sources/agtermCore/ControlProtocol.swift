@@ -224,7 +224,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// place.
     public var textColor: String?
     /// The per-call glyph-SILHOUETTE override for `session.status`: a `StatusShape` raw value
-    /// (`circle|square|triangle|diamond|capsule|star`), dispatcher-validated. Rides the ephemeral indicator,
+    /// (`StatusShape.validNamesList`), dispatcher-validated. Rides the ephemeral indicator,
     /// lasting until the next `session.status` without a shape; nil = the Settings shape, else a circle.
     public var shape: String?
     /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.

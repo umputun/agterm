@@ -1215,7 +1215,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The accept loop still waits: `handleConnection` runs inline and parks on `runBlocking`, so a cold lookup
   delays later commands. That is the price of answering `unknown sound` in the response, not an oversight.
   Lookups use their own serial queue, never `playQueue`, so one slow name cannot hold up playback.
-- Validate color and shape before mutation. Shapes are circle, square, triangle, diamond, capsule, star;
+- Validate color and shape before mutation. [[notifications]] owns the shape set;
   derive validation/help from `StatusShape.allCases`. Idle accepts but does not render shape.
   AppKit and SwiftUI resolve through shared color/symbol helpers.
 - `ControlEventPayload` and `EventFormatter.human` must include every override; human status prints color
