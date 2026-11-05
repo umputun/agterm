@@ -72,6 +72,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [container-overlays](container-overlays/) | open program, page and URL overlays from inside a docker container | 0.39.0, docker, python3 |
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
+| [image-path-gallery](image-path-gallery/) | show the image paths on a pane's screen in a gallery, copied from the session's host when attached | 0.36.0, perl, ssh |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 | [remote-image-paste](remote-image-paste/) | copy a screenshot to a remote session's Mac so ctrl+v there pastes it | 0.31.0 |
