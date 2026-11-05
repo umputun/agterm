@@ -234,10 +234,10 @@
 - [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
 
 ### Task 6: [Final] Update documentation
-- [ ] `site/docs.html` local-path paragraph: log mode, follow, pause, tail limit
-- [ ] `site/commands.html`: `--tail`, `--follow-file`, `overlay follow`, the new read-back fields
-- [ ] `plugins/agterm/skills/agterm/` SKILL.md trigger and section pointer, reference.md entry
-- [ ] `.claude/rules/control-api.md` text page bullet and catalog entry for `session.overlay.follow`
+- [x] `site/docs.html` local-path paragraph: log mode, follow, pause, tail limit
+- [x] `site/commands.html`: `--tail`, `--follow-file`, `overlay follow`, the new read-back fields
+- [x] `plugins/agterm/skills/agterm/` SKILL.md trigger and section pointer, reference.md entry
+- [x] `.claude/rules/control-api.md` text page bullet and catalog entry for `session.overlay.follow`
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

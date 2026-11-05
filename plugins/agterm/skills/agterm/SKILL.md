@@ -16,7 +16,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
-  show an image inline, show this markdown file rendered, show this source file or log at a line, show this HTML page or artifact, make an HTML page or explainer for this and show
+  show an image inline, show this markdown file rendered, show this source file or log at a line, tail or follow this log file, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
@@ -830,6 +830,19 @@ never as `path:line`. The page runs nothing, loads nothing and has no links. Mar
 pages. The user gets the same view by ⌘-clicking a path or a `path:line` location in a local pane, and reveals any
 file in Finder with ⌘⌥-click; for a user watching from another Mac, open it with `--text`. Read back `text`
 (`{file, language?, line?}`) in `htmlOverlays`.
+
+To watch a log, open its end and follow it as it grows:
+
+```bash
+agtermctl session overlay open --text /path/to/app.log --follow-file --size-percent 95 --target "$AGTERM_SESSION_ID"
+agtermctl session overlay follow off --target "$AGTERM_SESSION_ID"   # pause; on resumes, toggle flips
+```
+
+`--follow-file` shows the last 5,000 lines, read from the end so a log of any size opens; `--tail N` sets the count
+(1 to 100,000) and alone shows them once without following. It is not `--follow`, which selects the session. A
+⌘-click on a `.log` or `.out` path opens the same following page; `app.log:120` still opens the plain page at that
+line. The user pauses by scrolling up and resumes at the bottom or with Resume. Read back `text.tail`, `following`,
+`lines`, `clipped`, `waiting` (file missing) and `unreadable`. A log page is refused on a session another Mac presents.
 
 ## Displaying an image inline
 
