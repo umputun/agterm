@@ -1160,7 +1160,7 @@ error keeps those names for compatibility.
   the pane's directory, and ⌘⌥-click (⌘⌥⇧ under mouse capture) reveals any local path in Finder.
   `--tail N` (1 to 100,000) makes it a log page: the file's last N lines, read from its end within 2 MB, so no file is
   refused for size. `--follow-file` follows the end as it grows, with 5,000 lines unless `--tail` says otherwise; it is
-  not `--follow`, which selects the session. The page has a follow bar and no line numbers; a user scroll up pauses,
+  not `--follow`, which selects the session. The page has a bar with follow and search and no line numbers; a user scroll up pauses,
   the bottom or Resume follows again. A rotated, truncated or recreated file is picked up by the next check, a missing
   one shows waiting, and binary data keeps the last text marked unreadable. Both refuse `--line` and need `--text`.
   A log page is refused on a session another Mac presents (`a log page is not shown on another Mac`). Wire fields
@@ -1171,6 +1171,16 @@ error keeps those names for compatibility.
   - follow a log page's end, pause it, or toggle, as its bar does; refuses every other overlay, a plain text page
   with `no log page`. Returns
   `result.text`, `following` or `paused`; read back `htmlOverlays[].text.following`.
+- `session overlay search TEXT | --next | --prev | --close [--pane left|right] [--target] [--window W]`
+  - search the text or log page in the addressed slot, never the terminal under it (that is `session search`):
+  case-insensitive plain text, every match highlighted. Exactly one of a query and a step. A step moves to the
+  next or previous match, wrapping, pauses a following log page, and returns `result.text` as `N of M`; it is
+  refused `no search query: set one first` without a query and `page not loaded` before the page exists, while a
+  query set then runs when it loads. Refuses every other occupant, a page shown for another Mac included, with
+  `no text page`, and a slot handed to the presenting Mac with `remote page: search it on the Mac that shows it`.
+  Wire `text` and `to` (`next`, `prev`, `close`). Read back `htmlOverlays[].text.search`: `{query, matches,
+  current}`, current from 1 and 0 with no match, omitted with no query. The page's own field (`/` or ⌘F, `n`/`N`,
+  Esc) sets the same query.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,

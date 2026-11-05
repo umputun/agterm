@@ -345,8 +345,8 @@ page adds no other chords. An open page already takes keyboard focus when it bec
 - [x] run the targeted tests - must pass before task 8
 
 ### ➕ Task 8: Verify and document search
-- [ ] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
-- [ ] `site/docs.html`, `site/commands.html`, the skill and `.claude/rules/control-api.md` for page search
+- [x] `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
+- [x] `site/docs.html`, `site/commands.html`, the skill and `.claude/rules/control-api.md` for page search
 
 ## Post-Completion
 **Manual verification**:
