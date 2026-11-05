@@ -184,7 +184,7 @@ final class ZmxLaunchTests: XCTestCase {
             commandShell: nil,
             isUITestLaunch: false,
             allowDebugOverride: true),
-            "the password-database login shell is not zsh or fish, and ghostty `command` names neither")
+            "the password-database login shell is not zsh or fish, and the ghostty command setting names neither")
     }
 
     func testBashLoginShellIsEligibleWithAFishCommandShell() throws {

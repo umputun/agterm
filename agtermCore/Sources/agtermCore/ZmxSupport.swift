@@ -86,7 +86,7 @@ public enum ZmxSupport {
             switch self {
             case .executablePathNotAbsolute: "the zmx executable path is not absolute"
             case .executableUnavailable: "the zmx executable is unavailable"
-            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish, and ghostty `command` names neither"
+            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish, and the ghostty command setting names neither"
             case .missingZshIntegration: "the bundled zsh integration is unavailable"
             case .missingFishIntegration: "the bundled fish integration is unavailable"
             }

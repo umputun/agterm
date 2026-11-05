@@ -3987,8 +3987,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
               offers <strong style="color: #e6e1d7">Fresh shells</strong>, <strong style="color: #e6e1d7">Re-run commands</strong>,
               or <strong style="color: #e6e1d7">Live sessions</strong>. The choice is frozen for the process, so changing it takes
               effect after restarting agterm. Live mode requires zsh or fish as the macOS login shell; an unsupported shell or missing zmx
-              resource falls back to fresh shells, with the reason shown in Settings. When <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
-              in agterm's ghostty.conf is an absolute zsh or fish path with only login or interactive flags, such as
+              resource falls back to fresh shells, with the reason shown in Settings. When the last <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
+              in the config chain agterm loads (ghostty.conf, the global config when inherited, and their
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">config-file</span> includes) is an absolute zsh or fish path with only login or interactive flags, such as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command = /opt/homebrew/bin/fish --login</span>,
               Live panes start that shell instead, even when the login shell is not zsh or fish. Live ignores any
               other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>. It is read at launch,

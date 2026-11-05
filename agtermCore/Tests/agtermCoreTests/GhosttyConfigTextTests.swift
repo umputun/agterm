@@ -107,4 +107,28 @@ struct GhosttyConfigTextTests {
         ]
         #expect(Self.commands(loading: ["/cfg/main.conf"], files: files) == ["loop"])
     }
+
+    @Test func keyValuesSplitsCRLFLines() {
+        #expect(Self.pairs("# comment\r\ncommand = /bin/zsh\r\ntheme = x\r\n") == ["command=/bin/zsh", "theme=x"])
+    }
+
+    @Test func aNestedIncludeResolvesFromTheSymlinkTargetDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "agterm-config-include-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scoped = root.appending(path: "scoped"), dotfiles = root.appending(path: "dotfiles")
+        try FileManager.default.createDirectory(at: scoped, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dotfiles, withIntermediateDirectories: true)
+        try "config-file = shell.conf".write(to: scoped.appending(path: "ghostty.conf"), atomically: true, encoding: .utf8)
+        try "config-file = fish.conf".write(to: dotfiles.appending(path: "shell.conf"), atomically: true, encoding: .utf8)
+        try "command = target".write(to: dotfiles.appending(path: "fish.conf"), atomically: true, encoding: .utf8)
+        try "command = alias".write(to: scoped.appending(path: "fish.conf"), atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: scoped.appending(path: "shell.conf"),
+                                                   withDestinationURL: dotfiles.appending(path: "shell.conf"))
+
+        let pairs = GhosttyConfigText.keyValues(loading: [scoped.appending(path: "ghostty.conf").path], home: "/home/me") {
+            try? String(contentsOfFile: $0, encoding: .utf8)
+        }
+
+        #expect(pairs.filter { $0.key == "command" }.map(\.value) == ["target"])
+    }
 }

@@ -489,7 +489,7 @@ struct ZmxSupportTests {
     @Test(arguments: [
         (ZmxSupport.Rejection.executablePathNotAbsolute, "the zmx executable path is not absolute"),
         (ZmxSupport.Rejection.executableUnavailable, "the zmx executable is unavailable"),
-        (ZmxSupport.Rejection.unsupportedLoginShell, "the password-database login shell is not zsh or fish, and ghostty `command` names neither"),
+        (ZmxSupport.Rejection.unsupportedLoginShell, "the password-database login shell is not zsh or fish, and the ghostty command setting names neither"),
         (ZmxSupport.Rejection.missingZshIntegration, "the bundled zsh integration is unavailable"),
         (ZmxSupport.Rejection.missingFishIntegration, "the bundled fish integration is unavailable"),
     ])

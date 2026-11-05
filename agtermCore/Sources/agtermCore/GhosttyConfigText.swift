@@ -24,9 +24,9 @@ public enum GhosttyConfigText {
     }
 
     /// keyValues parses config text into `key = value` pairs in file order, skipping blank and `#` lines and
-    /// unquoting each value.
+    /// unquoting each value. CRLF is one `Character`, so lines split on any newline rather than on LF.
     public static func keyValues(in text: String) -> [(key: String, value: String)] {
-        text.split(separator: "\n").compactMap { raw in
+        text.split(whereSeparator: \.isNewline).compactMap { raw in
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { return nil }
             let key = line[..<eq].trimmingCharacters(in: .whitespaces)
@@ -67,10 +67,14 @@ public enum GhosttyConfigText {
         return pairs
     }
 
+    /// includePath resolves an existing relative include through its symlinks, as ghostty's `realPathFile`
+    /// does, so the includes it names resolve against the target's directory.
     private static func includePath(_ raw: String, base: String, home: String) -> String {
         if raw.hasPrefix("~/") { return (home as NSString).appendingPathComponent(String(raw.dropFirst(2))) }
         if (raw as NSString).isAbsolutePath { return raw }
-        return URL(fileURLWithPath: base, isDirectory: true).appending(path: raw).standardizedFileURL.path
+        let joined = URL(fileURLWithPath: base, isDirectory: true).appending(path: raw).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: joined.path) else { return joined.path }
+        return joined.resolvingSymlinksInPath().path
     }
 
     /// unquoted strips one pair of surrounding double quotes, without unescaping.
