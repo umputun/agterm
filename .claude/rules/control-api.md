@@ -173,7 +173,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.hud.open`, `.hud.update`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -769,6 +769,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   basename map up to `maxHighlightBytes`, is the only `innerHTML` it assigns. Markdown, HTML and SVG are not text
   pages. `--text` is taken literally, never suffix-parsed; read back `htmlOverlays[].text` with the file, the mapped
   language and the requested line.
+- A log page is a text page with `HtmlOverlay.textLog` (`--tail`, `--follow-file`, wire `tail`/`followFile`, or a plain
+  click on a `TextPage.isLog` file). The request and the live `logState` ride the model, not `HtmlSource`, so
+  `presentationSource`, replicas and the fork's `.text` matches are untouched, and the CLI can change following before a
+  view exists. `TextPageBridge` owns the page side of every local text page, so `HtmlOverlayRegistry.swift` keeps only
+  hook lines; its `LogFollower` reads a log page's file: one `fstat` per second while following and on screen, a
+  `LogTail` snapshot only when the stamp moved, its own read sequence and pause epoch (never `textLoad`), and a
+  document build that holds ticks until `text.js` reports ready.
+  `setTextLogFollowing` emits `tree.changed`, `setTextLogReport` never, so ticks wake no hook.
+  `textLogRefusal` refuses a log page `pageBelongsRemote` hands to the presenter, whose page would lose its state;
+  a clicked log there opens as the plain page. `session.overlay.follow` sets following and answers `following` or
+  `paused`; it is not `--follow`, which selects.
+- A text page searches itself (`session.overlay.search TEXT | --to next|prev|close`), separate from `session.search`,
+  which searches a terminal. The query lives on the model (`HtmlOverlay.textSearch`) with a `searchRevision` every set
+  or close bumps; the page reports matches and current under that revision and `setTextSearchReport` drops any other,
+  emitting nothing. A query set before the view exists runs when it loads and survives rebuilds; a step is a one-shot
+  push to the loaded page, refused `page not loaded` before it, and answers `N of M`. The page's own field writes the
+  same model, and the bridge marks the revisions that field produced, so their pushes never overwrite its typing.
+  An empty slot and a program keep the slot lookup's own refusals; any other page, a replica included, is refused
+  `no text page`, and a slot `pageBelongsRemote` hands to the presenter `remote page`. Read back `htmlOverlays[].text.search`, omitted with no query.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any

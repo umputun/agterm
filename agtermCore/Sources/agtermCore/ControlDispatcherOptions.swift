@@ -38,11 +38,15 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     /// imagePixels is the probed size of an image page, which travels with it when the presenting Mac shows it.
     /// The app sets it from its probe and the dispatcher never does; an image page without it is never handed over.
     public let imagePixels: ImagePixels?
+    /// textLog makes a text page a log page (`--tail`, `--follow-file`).
+    public let textLog: TextLog?
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
-                points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil) {
+                points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil,
+                textLog: TextLog? = nil) {
+        self.textLog = textLog
         self.clicked = clicked
         self.imagePixels = imagePixels
         self.command = command
@@ -67,7 +71,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
                                          navigation: navigation, javascript: javascript, chromeless: chromeless,
                                          persistent: persistent, browse: browse, points: points, clicked: clicked,
-                                         imagePixels: imagePixels)
+                                         imagePixels: imagePixels, textLog: textLog)
     }
 }
 

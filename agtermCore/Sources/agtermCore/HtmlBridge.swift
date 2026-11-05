@@ -54,7 +54,8 @@ public enum HtmlBridge {
     // resize included: a pane page's own request then meets the pane refusal instead of resizing the session's
     private static let ownOverlay: Set<Command> = [.sessionOverlayClose, .sessionOverlayReload, .sessionOverlayResize,
                                                    .sessionOverlayNavigate, .sessionOverlaySubmit,
-                                                   .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle]
+                                                   .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
+                                                   .sessionOverlayFollow, .sessionOverlaySearch]
     // these take their window as `target`, not as `args.window`
     private static let windowTargeted: Set<Command> = [.windowClose, .windowSelect, .windowRename, .windowDelete,
                                                        .windowResize, .windowMove, .windowZoom, .windowFullscreen,

@@ -34,6 +34,7 @@ extension ControlDispatcher {
             if !points.isEmpty, request.args?.sizePercent == nil {
                 return ControlResponse(ok: false, error: OverlayPointError.needsPercent)
             }
+            let textLog = page?.textPath == nil ? nil : Self.textLog(request.args)
             return actions.openSessionOverlay(request.target, window: request.args?.window,
                                               options: ControlSessionOverlayOpenOptions(
                                                 command: command,
@@ -49,7 +50,8 @@ extension ControlDispatcher {
                                                 chromeless: request.args?.chromeless ?? false,
                                                 persistent: request.args?.persistent ?? false,
                                                 browse: request.args?.browse ?? false,
-                                                points: points
+                                                points: points,
+                                                textLog: textLog
                                               ))
         case .sessionOverlayReload:
             switch parseOverlayPane(request.args?.pane) {
@@ -126,6 +128,15 @@ extension ControlDispatcher {
             }
         case .sessionOverlayText:
             return dispatchSessionOverlayText(request)
+        case .sessionOverlayFollow:
+            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false, error: "invalid overlay follow mode: \(request.args?.mode ?? "toggle")")
+            }
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
+            }
         case .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             let mode: OverlayVisibilityMode = request.cmd == .sessionOverlayHide ? .hide
                 : (request.cmd == .sessionOverlayShow ? .show : .toggle)
@@ -165,9 +176,17 @@ extension ControlDispatcher {
         return nil
     }
 
+    // the options only a text page takes, refused ahead of any source so a request with no text file is answered
+    private static func textOnlyRefusal(_ args: ControlArgs?) -> String? {
+        guard args?.textFile == nil else { return nil }
+        if args?.line != nil { return OverlayHtmlError.lineWithoutText }
+        if args?.tail != nil || args?.followFile == true { return OverlayHtmlError.tailWithoutText }
+        return nil
+    }
+
     static func overlayContent(command: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
-        if args?.line != nil, args?.textFile == nil { return reject(OverlayHtmlError.lineWithoutText) }
+        if let error = textOnlyRefusal(args) { return reject(error) }
         if let image = args?.image {
             guard command.isEmpty, args?.html == nil, args?.url == nil, args?.markdownFile == nil, args?.textFile == nil else {
                 return reject(OverlayHtmlError.oneSource)
@@ -246,9 +265,18 @@ extension ControlDispatcher {
         if args?.cwd != nil || flags.contains(true) { return reject(OverlayHtmlError.textOptions) }
         guard path.hasPrefix("/") else { return reject(OverlayHtmlError.textNotAbsolute) }
         if let line = args?.line, line < 1 { return reject(OverlayHtmlError.lineNotPositive) }
+        if args?.tail != nil || args?.followFile == true, args?.line != nil { return reject(OverlayHtmlError.tailWithLine) }
+        if let tail = args?.tail, !(1...TextPage.maxTail).contains(tail) { return reject(OverlayHtmlError.tailRange) }
         let url = URL(fileURLWithPath: path).standardizedFileURL
         guard TextPage.isEligible(file: url.path) else { return reject(OverlayHtmlError.textType) }
         return .page(.text(path: url.path, line: args?.line))
+    }
+
+    // a validated text request's log options: a tail alone shows it once, follow-file follows it
+    private static func textLog(_ args: ControlArgs?) -> TextLog? {
+        let follow = args?.followFile == true
+        guard args?.tail != nil || follow else { return nil }
+        return TextLog(tail: args?.tail ?? TextPage.defaultTail, follow: follow)
     }
 
     /// The extent is checked before the pane, so the same flags produce the same first error here and on
@@ -269,6 +297,32 @@ extension ControlDispatcher {
                                                   options: ControlSessionOverlayTextOptions(pane: pane,
                                                                                             all: all,
                                                                                             lines: lines))
+        }
+    }
+
+    /// dispatchSessionOverlaySearch takes exactly one of a query and a `to` step.
+    func dispatchSessionOverlaySearch(_ request: ControlRequest) async -> ControlResponse {
+        let search: TextSearchRequest
+        switch (request.args?.text, request.args?.to) {
+        case (nil, nil):
+            return ControlResponse(ok: false, error: OverlayHtmlError.searchRequest)
+        case (.some, .some):
+            return ControlResponse(ok: false, error: OverlayHtmlError.searchTextWithStep)
+        case (let text?, nil):
+            guard !text.isEmpty else { return ControlResponse(ok: false, error: "session.overlay.search: text must not be empty") }
+            search = .query(text)
+        case (nil, let to?):
+            switch to {
+            case "next": search = .next
+            case "prev": search = .previous
+            case "close": search = .close
+            default: return ControlResponse(ok: false, error: "invalid overlay search direction: \(to)")
+            }
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.searchSessionOverlay(request.target, window: request.args?.window, pane: pane, request: search)
         }
     }
 }

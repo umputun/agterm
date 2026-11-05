@@ -111,6 +111,58 @@ struct HtmlOrigin: Equatable {
     }
 }
 
+/// TextLog is a text page's request to show only a log's last `tail` lines, following its end when `follow` is set.
+public struct TextLog: Equatable, Sendable {
+    public let tail: Int
+    public let follow: Bool
+
+    public init(tail: Int, follow: Bool) {
+        self.tail = tail
+        self.follow = follow
+    }
+}
+
+/// TextLogReport is what the app last read for a log page: the lines shown, a clipped first line, a file that is
+/// missing (`waiting`) or turned binary (`unreadable`, the last good text still shown).
+public struct TextLogReport: Equatable, Sendable {
+    public var lines = 0
+    public var clipped = false
+    public var waiting = false
+    public var unreadable = false
+
+    public init(lines: Int = 0, clipped: Bool = false, waiting: Bool = false, unreadable: Bool = false) {
+        self.lines = lines
+        self.clipped = clipped
+        self.waiting = waiting
+        self.unreadable = unreadable
+    }
+}
+
+/// TextLogState is a log page's live state: whether it follows the file, and the app's last report.
+public struct TextLogState: Equatable, Sendable {
+    public var following: Bool
+    public var report: TextLogReport
+
+    public init(following: Bool, report: TextLogReport = TextLogReport()) {
+        self.following = following
+        self.report = report
+    }
+}
+
+/// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
+/// with no match.
+public struct TextSearch: Equatable, Sendable {
+    public let query: String
+    public var matches: Int
+    public var current: Int
+
+    public init(query: String, matches: Int = 0, current: Int = 0) {
+        self.query = query
+        self.matches = matches
+        self.current = current
+    }
+}
+
 /// HtmlZoom is the page-zoom ladder the font-size commands walk on an HTML page, one factor for every page.
 public enum HtmlZoom {
     static let steps: [Double] = [0.5, 0.75, 0.85, 1, 1.15, 1.25, 1.5, 1.75, 2, 2.5, 3]
@@ -160,6 +212,13 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let clicked: Bool
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?
+    /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
+    public let textLog: TextLog?
+    public var logState: TextLogState?
+    /// textSearch is a text page's search, nil with none; searchRevision changes with every query set or closed, and a
+    /// page report naming another revision is dropped.
+    public internal(set) var textSearch: TextSearch?
+    public internal(set) var searchRevision = 0
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
@@ -172,8 +231,10 @@ public struct HtmlOverlay: Equatable, Sendable {
 
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
                 persistent: Bool = false, browse: Bool = false, clicked: Bool = false, id: UUID = UUID(),
-                replicaOf: UUID? = nil) {
+                replicaOf: UUID? = nil, textLog: TextLog? = nil) {
         self.id = id
+        self.textLog = textLog
+        logState = textLog.map { TextLogState(following: $0.follow) }
         self.clicked = clicked
         self.replicaOf = replicaOf
         self.source = source

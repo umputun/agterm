@@ -903,49 +903,33 @@ final class AppActions {
 
     // MARK: - Search (on the surface that opened it)
 
-    /// The search-capable target. A covering SCRATCH wins FIRST, so ⌘F over a scratch never opens the bar on
-    /// the hidden pane beneath — even with key-window focus off the surface (e.g. the sidebar), where
-    /// `focusedSurface()` would fall back to the hidden `activeSurface`. Else the focused surface IFF
-    /// searchable, else the active session's focused pane. Full overlay and quick terminal are unsearchable
-    /// (blocked by `coverHidesActiveSession`); a FLOATING overlay leaves the pane visible, so it targets it.
+    /// searchTarget is the surface ⌘F searches once no cover owns the key (`coverTakesSearch`): the scratch first, so
+    /// its bar never opens on the hidden pane beneath even with focus off the surface, as on the sidebar, where
+    /// `focusedSurface()` falls back to the hidden `activeSurface`; else the focused surface when searchable, else
+    /// the active session's focused pane.
     private func searchTarget() -> GhosttySurfaceView? {
-        if let session = store?.activeSession, session.scratchActive, !session.coverOverlayVisible {
+        if let session = store?.activeSession, session.scratchActive {
             return session.topmostSurface as? GhosttySurfaceView
         }
-        // the focused pane hidden under its OWN overlay has no searchable target: the overlay is unsearchable
-        // and returning the pane would strand the bar over it. The sibling pane keeps its own ⌘F once focused.
-        // AFTER the scratch rung on purpose: the scratch covers the pane overlays too, and it IS searchable.
-        if store?.activeSession?.focusedOverlayPane != nil { return nil }
         if let view = focusedSurface(), view.isSearchable { return view }
         return store?.activeSession?.activeSurface as? GhosttySurfaceView
     }
 
-    /// Whether a SESSION-WIDE cover BLOCKS ⌘F — the frontmost quick terminal or the active session's FULL
-    /// overlay, neither searchable, so the bar would strand over a hidden pane. The scratch IS searchable, so
-    /// it never blocks and ⌘F opens the bar over it; the ⌘F-again CLOSE runs regardless. A covering PANE
-    /// overlay is NOT a term here — `searchTarget` owns that rung, in the one order that gets the
-    /// scratch-above-a-pane-overlay case right; duplicating it here would block ⌘F on the searchable scratch.
-    private var coverHidesActiveSession: Bool {
-        if quickTerminal.holdsKey { return true }
-        guard let session = store?.activeSession else { return false }
-        // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
-        return session.fullOverlayVisible
-    }
-
     /// Toggle the search bar for the active session; shared by the Find menu item, the palette, and ⌘F.
+    /// A cover on top takes ⌘F first (`coverTakesSearch`), so the terminal behind it never opens or closes its bar.
     /// CLOSE: `end_search` DIRECTLY to the pinned `searchSurface` (the surface that opened search) so the END
     /// callback clears the fields and refocuses — never a re-resolved target or a `start_search` round-trip,
     /// which on a split with focus moved to the OTHER pane puts that pane into search mode while
-    /// `onSearchStart` closes only the pinned owner, stranding it. OPEN: no-op with no searchable surface or
-    /// behind a cover, else `start_search` on the search target, whose `onSearchStart` opens and pins the bar.
+    /// `onSearchStart` closes only the pinned owner, stranding it. OPEN: `start_search` on the search target,
+    /// whose `onSearchStart` opens and pins the bar.
     func toggleSearch() {
         guard !pickActive(for: library.activeWindowID) else { return }
+        if coverTakesSearch() { return }
         if store?.activeSession?.searchActive == true {
             (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.endSearch()
             return
         }
-        guard !terminalZoomActive else { return }
-        guard let target = searchTarget(), !coverHidesActiveSession else { return }
+        guard !terminalZoomActive, let target = searchTarget() else { return }
         target.startSearch()
     }
 

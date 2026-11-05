@@ -68,6 +68,8 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayHide = "session.overlay.hide"
     case sessionOverlayShow = "session.overlay.show"
     case sessionOverlayToggle = "session.overlay.toggle"
+    case sessionOverlayFollow = "session.overlay.follow"
+    case sessionOverlaySearch = "session.overlay.search"
     case sessionHudOpen = "session.hud.open"
     case sessionHudUpdate = "session.hud.update"
     case sessionHudClose = "session.hud.close"
@@ -449,6 +451,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var textFile: String?
     /// line is the line, from 1, a `textFile` page opens scrolled to and marks.
     public var line: Int?
+    /// tail makes a `textFile` page a log page showing its last N lines; followFile makes it follow the file's
+    /// end, with `TextPage.defaultTail` lines when no tail is given.
+    public var tail: Int?
+    public var followFile: Bool?
     /// value is the answer `session.overlay.submit` hands back from a page, empty being a real answer, or
     /// the initial text of an `ask.open` input field.
     public var value: String?
@@ -491,6 +497,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 html: String? = nil, current: Bool? = nil, navigation: Bool? = nil, url: String? = nil,
                 javascript: Bool? = nil, value: String? = nil, page: String? = nil, chromeless: Bool? = nil,
                 persistent: Bool? = nil, browse: Bool? = nil, image: String? = nil, markdownFile: String? = nil, textFile: String? = nil, line: Int? = nil,
+                tail: Int? = nil, followFile: Bool? = nil,
                 cancelButton: String? = nil, input: String? = nil,
                 placeholder: String? = nil, choices: [ControlAskChoice]? = nil, multiple: Bool? = nil,
                 checked: [String]? = nil, other: String? = nil, undoable: Bool? = nil,
@@ -588,6 +595,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.markdownFile = markdownFile
         self.textFile = textFile
         self.line = line
+        self.tail = tail
+        self.followFile = followFile
         self.cancelButton = cancelButton
         self.input = input
         self.placeholder = placeholder
@@ -871,6 +880,12 @@ public enum OverlayHtmlError {
     public static let textType = "session.overlay.open: --text must be a source, config, text or log file"
     public static let lineWithoutText = "session.overlay.open: --line requires --text"
     public static let lineNotPositive = "session.overlay.open: --line must be 1 or more"
+    public static let tailWithoutText = "session.overlay.open: --tail and --follow-file require --text"
+    public static let tailWithLine = "session.overlay.open: --tail and --follow-file cannot be combined with --line"
+    public static let logRemote = "session.overlay.open: a log page is not shown on another Mac"
+    public static let tailRange = "session.overlay.open: --tail must be 1...\(TextPage.maxTail)"
+    public static let searchRequest = "session.overlay.search needs text, --next, --prev or --close"
+    public static let searchTextWithStep = "session.overlay.search: text cannot be combined with --next, --prev or --close"
     public static let companionNeedsPage = "a page companion needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"

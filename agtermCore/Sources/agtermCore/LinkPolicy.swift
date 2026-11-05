@@ -54,6 +54,9 @@ public enum LinkPolicy {
             self.session = session
             self.sizePercent = sizePercent
         }
+        /// opensAsLog says whether the click opens a log page following the file: a plain click on a `.log` or `.out`
+        /// file, never a `path:line` location, which keeps the static page at that line.
+        public var opensAsLog: Bool { line == nil && TextPage.isLog(file: url.path) }
     }
 
     /// The extensions a clicked local path shows as a picture. SVG is left out: it is a document that can

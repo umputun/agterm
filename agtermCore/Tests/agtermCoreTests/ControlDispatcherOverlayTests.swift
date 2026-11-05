@@ -673,6 +673,16 @@ struct ControlDispatcherOverlayTests {
         (ControlArgs(line: 4), OverlayHtmlError.lineWithoutText),
         (ControlArgs(command: "cat", line: 4), OverlayHtmlError.lineWithoutText),
         (ControlArgs(markdownFile: "/tmp/r.md", line: 4), OverlayHtmlError.lineWithoutText),
+        (ControlArgs(tail: 10), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(followFile: true), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(command: "cat", tail: 10), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(image: "/tmp/a.png", followFile: true), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(markdownFile: "/tmp/r.md", tail: 10), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(html: "/tmp/r.html", followFile: true), OverlayHtmlError.tailWithoutText),
+        (ControlArgs(textFile: "/tmp/a.log", line: 3, tail: 10), OverlayHtmlError.tailWithLine),
+        (ControlArgs(textFile: "/tmp/a.log", line: 3, followFile: true), OverlayHtmlError.tailWithLine),
+        (ControlArgs(textFile: "/tmp/a.log", tail: 0), OverlayHtmlError.tailRange),
+        (ControlArgs(textFile: "/tmp/a.log", tail: TextPage.maxTail + 1), OverlayHtmlError.tailRange),
     ])
     func textOpenRejectsInvalidInputsBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
         let actions = MockControlActions()
@@ -921,5 +931,95 @@ struct ControlDispatcherOverlayTests {
     ])
     func visibilityFailuresMapToTheirMessages(_ failure: OverlayVisibilityFailure, _ message: String) {
         #expect(failure.message == message)
+    }
+
+    @Test(arguments: [
+        (ControlArgs(textFile: "/tmp/app.log", tail: 50), TextLog(tail: 50, follow: false)),
+        (ControlArgs(textFile: "/tmp/app.log", followFile: true), TextLog(tail: TextPage.defaultTail, follow: true)),
+        (ControlArgs(textFile: "/tmp/app.log", tail: TextPage.maxTail, followFile: true), TextLog(tail: TextPage.maxTail, follow: true)),
+        (ControlArgs(textFile: "/tmp/app.log", followFile: false), nil),
+    ] as [(ControlArgs, TextLog?)])
+    func textOpenCarriesTheLogRequest(_ args: ControlArgs, _ log: TextLog?) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayOpen, target: "session", args: args))
+
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                          backgroundColor: nil, page: .text(path: "/tmp/app.log", line: nil),
+                                                          textLog: log))
+        ])
+    }
+
+    @Test(arguments: [("on", ControlToggleMode.on), ("off", .off), ("toggle", .toggle)])
+    func overlayFollowRoutesItsModeAndPane(_ raw: String, _ mode: ControlToggleMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayFollow, target: "session",
+                                                                args: ControlArgs(mode: raw, pane: "right")))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.overlayFollow(target: "session", window: nil, pane: .right, mode: mode)])
+    }
+
+    @Test func overlayFollowDefaultsToToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayFollow, target: "session"))
+
+        #expect(actions.calls == [.overlayFollow(target: "session", window: nil, pane: nil, mode: .toggle)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(mode: "maybe"), "invalid overlay follow mode: maybe"),
+        (ControlArgs(mode: "on", pane: "middle"), PaneOverlayError.invalidPane),
+    ])
+    func overlayFollowRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayFollow, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: [
+        (ControlArgs(text: "main()"), TextSearchRequest.query("main()")),
+        (ControlArgs(to: "next"), .next),
+        (ControlArgs(to: "prev"), .previous),
+        (ControlArgs(to: "close"), .close),
+    ])
+    func overlaySearchRoutesItsRequestAndPane(_ args: ControlArgs, _ search: TextSearchRequest) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var withPane = args
+        withPane.pane = "right"
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlaySearch, target: "session", args: withPane))
+
+        #expect(response?.result?.text == "1 of 2")
+        #expect(actions.calls == [.overlaySearch(target: "session", window: nil, pane: .right, request: search)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(), OverlayHtmlError.searchRequest),
+        (ControlArgs(text: "a", to: "next"), OverlayHtmlError.searchTextWithStep),
+        (ControlArgs(text: ""), "session.overlay.search: text must not be empty"),
+        (ControlArgs(to: "up"), "invalid overlay search direction: up"),
+        (ControlArgs(text: "a", pane: "middle"), PaneOverlayError.invalidPane),
+    ])
+    func overlaySearchRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlaySearch, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
     }
 }

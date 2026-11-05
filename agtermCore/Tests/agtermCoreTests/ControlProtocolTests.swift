@@ -21,6 +21,21 @@ struct ControlProtocolTests {
         return try JSONDecoder().decode(ControlResponse.self, from: data)
     }
 
+    @Test func logPageArgumentsRoundTripAndAreOmittedWhenUnset() throws {
+        let open = ControlRequest(cmd: .sessionOverlayOpen, args: ControlArgs(textFile: "/tmp/a.log", tail: 50, followFile: true))
+        #expect(try roundTrip(open) == open)
+        let follow = ControlRequest(cmd: .sessionOverlayFollow, args: ControlArgs(mode: "off", pane: "left"))
+        #expect(try roundTrip(follow) == follow)
+        #expect(Command.sessionOverlayFollow.rawValue == "session.overlay.follow")
+        let search = ControlRequest(cmd: .sessionOverlaySearch, args: ControlArgs(text: "main()", pane: "right"))
+        #expect(try roundTrip(search) == search)
+        #expect(Command.sessionOverlaySearch.rawValue == "session.overlay.search")
+
+        let plain = String(data: try JSONEncoder().encode(ControlArgs(textFile: "/tmp/a.txt")), encoding: .utf8) ?? ""
+        #expect(!plain.contains("tail"))
+        #expect(!plain.contains("followFile"))
+    }
+
     @Test func treeRequestRoundTrips() throws {
         let request = ControlRequest(cmd: .tree)
         #expect(try roundTrip(request) == request)

@@ -3352,6 +3352,22 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <strong style="color: #e6e1d7">reveals</strong> any other file in Finder instead of opening it. A location such as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">./main.go:42:7</span>, as compilers
               and test runners print it, opens the file at that line; a relative one is looked up in the pane's own directory.
+              A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.log</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.out</span> file opens as a log page
+              instead: its last 5,000 lines, read from its end so a log of any size opens, following the file as it grows. A
+              bar shows whether it follows; scroll up to pause, and scroll back to the bottom or
+              press Resume to follow again. A rotated or truncated log is picked up, and a missing one shows waiting until it
+              returns. A location such as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">app.log:120</span>
+              still opens the plain page at that line. Every text page has a find box like the terminal's: ⌘F or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/</span> focuses it, Return and
+              Shift-Return or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">n</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">N</span> step through the
+              matches, and Esc clears it. A step pauses a following log, so the match stays in view. On a log page
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">F</span> toggles follow,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">G</span> or End goes to the
+              bottom and follows, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">g</span>
+              or Home goes to the top. ⌘F always searches what is on top: over any page or overlay it never reaches the
+              terminal behind it.
               A period, question mark, exclamation mark or semicolon ending a sentence after a path is dropped when only the
               file without it exists.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌘⌥</span>-click reveals any local
