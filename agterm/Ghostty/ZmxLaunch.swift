@@ -15,6 +15,7 @@ enum ZmxLaunch {
         let bundleURL: URL
         let environment: [String: String]
         let passwordDatabaseShell: String?
+        let commandShell: String?
         let allowDebugOverride: Bool
     }
 
@@ -59,12 +60,13 @@ enum ZmxLaunch {
         bundleURL: URL = Bundle.main.bundleURL,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         passwordDatabaseShell: String? = passwordDatabaseLoginShell(),
+        commandShell: String?,
         isUITestLaunch: Bool = ContentView.isUITestLaunch,
         allowDebugOverride: Bool = allowDebugOverride
     ) -> String? {
         if isUITestLaunch, environment[uiTestOptInKey] != "1" { return uiTestBypassReason }
         let runtime = Runtime(bundleURL: bundleURL, environment: environment,
-                              passwordDatabaseShell: passwordDatabaseShell,
+                              passwordDatabaseShell: passwordDatabaseShell, commandShell: commandShell,
                               allowDebugOverride: allowDebugOverride)
         return switch configurationResult(runtime: runtime,
                                           paneIdentity: UUID(), baseEnvironment: [:]) {
@@ -82,6 +84,7 @@ enum ZmxLaunch {
         let runtime = Runtime(bundleURL: Bundle.main.bundleURL,
                               environment: ProcessInfo.processInfo.environment,
                               passwordDatabaseShell: passwordDatabaseLoginShell(),
+                              commandShell: GhosttyApp.shared.liveCommandShell,
                               allowDebugOverride: allowDebugOverride)
         let result = configurationResult(runtime: runtime, paneIdentity: paneIdentity, baseEnvironment: base,
                                          lead: lead)
@@ -145,7 +148,8 @@ enum ZmxLaunch {
             inheritedZdotdir: runtime.environment["ZDOTDIR"],
             sessionHostExecutablePath: sessionHostExecutablePath(bundleURL: runtime.bundleURL, environment: runtime.environment,
                                                                   allowDebugOverride: runtime.allowDebugOverride),
-            lead: lead
+            lead: lead,
+            commandShell: runtime.commandShell
         ))
     }
 }

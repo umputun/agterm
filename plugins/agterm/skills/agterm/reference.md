@@ -472,7 +472,7 @@ buys nothing. A caller with no tree uses `version`.
   default — no `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
   (`/opt/homebrew/bin/htop`). All of that describes Fresh shells and Re-run commands. In Live sessions
-  mode the command is instead a create-only zmx payload the user's login shell runs, so
+  mode the command is instead a create-only zmx payload the pane's Live shell runs, so
   the line uses that shell's syntax (zsh or fish), shell operators are interpreted, and the `PATH` is that shell's rather than the launchd default.
   `--wait` (only with `--command`, else an error) HOLDS the session open after the command exits —
   showing libghostty's press-any-key prompt with the final output intact instead of closing immediately —
