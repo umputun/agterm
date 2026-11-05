@@ -9,6 +9,14 @@ C-boundary concurrency before changing the bridge.
 
 - For nonstandard or risky UI requests, first explain the AppKit/SwiftUI cost and offer the standard
   alternative. Proceed if the user still prefers the custom behavior.
+- Design every UI behavior to be consistent and unsurprising: a key or gesture does one thing for what the user
+  is looking at and never reaches a layer hidden behind the visible one.
+  A rule whose exceptions depend on state the user cannot see on screen is a defect: propose the single rule,
+  and ask before adding a case.
+  Existing behavior next to the change that breaks this rule is a defect to fix with it, not a pre-existing one:
+  name it with its fix as a question, never as out of scope.
+  A control that already exists elsewhere in the app (a search bar, a button, a picker) looks and behaves the same
+  in the new place: reuse its component, and show the user the rendered result before writing tests.
 - Judge any change that can leave a long-standing visual artifact by what the user is left looking at,
   never by whether the mechanism is sound. A panel, badge, marker or overlay that outlives the thing it
   describes is a defect however correct the code that posted it. Give it a way to clear itself, and put
