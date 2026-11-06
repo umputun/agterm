@@ -5,8 +5,10 @@ added: 2026-10-30
 ---
 # CI teardown smoke test stalls on `session new` before any close
 
-The `Surface teardown under mailbox pressure` step's spam-8 case has timed out on the third
-`agtermctl session new` (`spam-8-2`) in CI, with two title producers running and no session closed yet:
+The `Surface teardown under mailbox pressure` step's spam-8 case times out in CI on one `agtermctl session
+new` before any session is closed: `new-2` in the first sightings, later `new-3`, `new-5` and `new-7`, so with
+two to seven title producers already running. Each producer writes titles in an unthrottled loop, and the
+runner is a 3-vCPU VM; whether they starve the app and the collectors is open (see the last section).
 
 - run 41121304109, attempts 1 and 2 (PR #844 head `87d74a7d`): `new-0` and `new-1` answered in 33 and
   46 ms, `new-2` got no reply within 5 s. The app `sample` itself timed out after 20 s and the CLI
@@ -52,3 +54,15 @@ Run 41899293201 (PR #891 head `e109e4f7`) stalled the same way: `new-0` to `new-
 and `new-7` timed out after its CLI took 0.26 s to spawn. The spindump self-check produced a 1 MB report, yet
 every in-flight collector failed again: the app `sample` timed out after 20 s, the CLI `sample` could not
 examine the CLI pid, and the app-only spindump timed out after 15 s and left an empty `spindump-08-new-7.txt`.
+
+Two master runs stalled on `new-5`: 41719380918 (`1ff85c6`, 2026-11-03) and 41905113022 (`78cf140`,
+2026-11-04). `new-4` took 0.85 s in both, and every in-flight collector failed as before. In 41719380918 the
+spindump self-check against a throwaway process also timed out, so the runner itself resisted inspection then.
+That is nine failed runs, ten attempts, and no stack.
+
+A stalled call now also records `ps` CPU per process, the app's thread states (`ps -M`) and `vm.loadavg`,
+none of which needs a task port. High aggregate CPU with runnable producers would support starvation; a low
+snapshot would not rule it out, since `pcpu` is a decaying average. A concurrent `agtermctl version` is
+useless here: `ControlServer.acceptLoop` serves one connection at a time, so it queues behind the stuck call.
+If starvation shows, throttling the producers is a test change, and whether it still loads the mailbox
+enough to catch the #844 regression has to be checked.

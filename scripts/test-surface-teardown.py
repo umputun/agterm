@@ -16,6 +16,7 @@ CALL_LIMIT = 5
 SLOW_CALL = 3
 SAMPLE_LIMIT = 20
 SPINDUMP_LIMIT = 15
+SNAPSHOT_LIMIT = 10
 
 
 def app_pids():
@@ -46,7 +47,7 @@ def stop_test_app(pid):
 class Collector:
     """A stack collector run in the background, stopped `limit` seconds after it starts and reaped by finish."""
 
-    def __init__(self, label, argv, path, limit, privileged=False):
+    def __init__(self, label, argv, path, limit, privileged=False, stdout=False):
         self.label, self.limit, self.privileged = label, limit, privileged
         self.error = None
         self.expired = False
@@ -54,9 +55,9 @@ class Collector:
         self.cleaned = threading.Event()
         self.stderr = Path(f"{path}.err")
         try:
-            with self.stderr.open("w") as err:
+            with self.stderr.open("w") as err, (Path(path).open("w") if stdout else open(os.devnull, "w")) as out:
                 # its own process group, so a hard stop reaches a child sudo started, not only sudo itself
-                self.proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=err, start_new_session=True)
+                self.proc = subprocess.Popen(argv, stdout=out, stderr=err, start_new_session=True)
         except OSError as exc:
             self.proc, self.error = None, str(exc)
             return
@@ -107,7 +108,8 @@ class Collector:
         # a TERM can end the launcher while expire is still killing the group, so wait for its cleanup too
         cleaned = self.cleaned.wait(timeout=20) if self.expired else True
         detail = self.stderr.read_text().strip()
-        self.stderr.unlink()
+        if not detail:
+            self.stderr.unlink()
         if not cleaned:
             return f"{self.label} timed out after {self.limit} seconds; cleanup did not finish within 20 s"
         if self.proc.poll() is None:
@@ -130,6 +132,17 @@ def spindump(app_pid, path):
     argv = ["sudo", "-n", "/usr/sbin/spindump", str(app_pid), "1", "10", "-onlyTarget",
             "-noProcessingWhileSampling", "-timelimit", "10", "-o", str(path)]
     return Collector("spindump", argv, path, SPINDUMP_LIMIT, privileged=True)
+
+
+def snapshots(app_pid, case_dir, suffix):
+    """Process and load context that needs no task port, for a stall `sample` and spindump cannot attach to."""
+    probes = {
+        "ps": ["ps", "-axo", "pid,ppid,stat,pcpu,etime,comm"],
+        "threads": ["ps", "-M", "-p", str(app_pid)],
+        "loadavg": ["sysctl", "-n", "vm.loadavg"],
+    }
+    return [(label, Collector(label, argv, case_dir / f"{label}-{suffix}.txt", SNAPSHOT_LIMIT, stdout=True))
+            for label, argv in probes.items()]
 
 
 def check_spindump(evidence):
@@ -215,6 +228,8 @@ def run_case(app, evidence, count, busy):
             for side, target in (("app", pid), ("cli", proc.pid)):
                 samplers.append((entry, side, sampler(target, case_dir / f"sample-{index:02d}-{op}-{side}.txt")))
             samplers.append((entry, "spindump", spindump(pid, case_dir / f"spindump-{index:02d}-{op}.txt")))
+            for label, collector in snapshots(pid, case_dir, f"{index:02d}-{op}"):
+                samplers.append((entry, label, collector))
             try:
                 out, err = proc.communicate(timeout=max(0, begin + CALL_LIMIT - time.monotonic()))
             except subprocess.TimeoutExpired:
