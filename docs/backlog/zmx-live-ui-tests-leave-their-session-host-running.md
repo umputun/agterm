@@ -1,5 +1,5 @@
 ---
-worth: maybe
+worth: no
 where: agtermUITests/ZmxLiveUITests.swift:tearDown
 added: 2026-11-01
 ---
@@ -22,5 +22,8 @@ host's own request without `ClientConnector.ensureRunning()`, which could start 
 plus a way for the app to run it at tearDown, such as a custom command seeded in the test's keymap. It
 should require `.stopped`, bound the wait for the exit, and keep reap and stop errors. `handleStop` refuses
 a row without a live leader, so if daemons are ever kept after their command ends
-(`fast-live-command-loses-output-in-host-handoff.md`), they have to be reaped first. Undecided whether
-a production entry point that only tests call is worth it.
+(`fast-live-command-loses-output-in-host-handoff.md`), they have to be reaped first.
+
+Not worth it: that entry point ships in the bundled helper and only tests would call it, and the
+project keeps no production code that exists only to serve tests. A leaked test host stays a manual
+cleanup by pid, which the `lsappinfo` check after a hosted or UI test run already catches.
