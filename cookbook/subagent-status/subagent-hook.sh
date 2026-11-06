@@ -35,11 +35,20 @@ agent_pid=
 previous=
 p=$PPID
 for _ in 1 2 3 4 5 6 7 8; do
-  line=$(ps -o ppid=,comm= -p "$p" 2>/dev/null) || break
+  line=$(ps -o ppid=,command= -p "$p" 2>/dev/null) || break
   line=${line#"${line%%[![:space:]]*}"}
   [ -n "$line" ] || break
-  name=${line#* }
+  command=${line#* }
+  name=${command%% *}
   name=${name##*/}
+  # an npm-installed claude runs as `node .../claude`, so a runtime's first argument names the agent
+  case "$name" in
+    node | bun | deno)
+      hosted=${command#* }
+      hosted=${hosted%% *}
+      is_agent "${hosted##*/}" && name=${hosted##*/}
+      ;;
+  esac
   if is_agent "$name"; then
     if [ "$name" != "$previous" ]; then
       [ -n "$agent_pid" ] && exit 0
@@ -122,6 +131,7 @@ case "$mode" in
     ;;
   start)
     record_agent_pid
+    [ -n "$agent_pid" ] && write_file "$dir/$agent.pid" "$agent_pid"
     write_file "$dir/$agent.status" running
     parent=$(field transcript_path)
     [ -n "$parent" ] && write_file "$dir/$agent.transcript" "${parent%.jsonl}/subagents/agent-$agent.jsonl"

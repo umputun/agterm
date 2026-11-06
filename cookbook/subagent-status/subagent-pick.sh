@@ -11,7 +11,7 @@ script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)
 
 # no subagents is an answer, not a failure: say so over the session and exit 0, or agterm reports a failed command
 nothing_to_pick() {
-  "$AGTERMCTL" session hud "${1:-No subagents in this conversation}" --hide-after 3 --target "$AGTERM_SESSION_ID" \
+  "$AGTERMCTL" session hud "No subagents in this conversation" --hide-after 3 --target "$AGTERM_SESSION_ID" \
     >/dev/null 2>&1
   exit 0
 }
@@ -21,13 +21,19 @@ dir=$(conversation_dir "$conversation")
 [ -n "$conversation" ] && [ -d "$dir" ] || nothing_to_pick
 
 # a session has one overlay slot, and a live viewer.pid marks it as a transcript this picker opened;
-# viewer.agent names whose, so the list leaves out the one already on screen
+# viewer.agent names whose, so the list leaves out the one already on screen unless it is the only one. A HUD
+# saying there is nothing else is refused over the running viewer, so a one-item picker is the answer instead
 viewer_pid_file=$session_dir/viewer.pid
 viewer_agent_file=$session_dir/viewer.agent
 viewer_pid=$(read_file "$viewer_pid_file")
 shown=
 if [ -n "$viewer_pid" ] && kill -0 "$viewer_pid" 2>/dev/null; then
   shown=$(read_file "$viewer_agent_file")
+  others=0
+  for status_file in "$dir"/*.status; do
+    [ -f "$status_file" ] && [ "$status_file" != "$dir/$shown.status" ] && others=$((others + 1))
+  done
+  [ "$others" -gt 0 ] || shown=
 else
   viewer_pid=
 fi
@@ -49,7 +55,7 @@ for status_file in "$dir"/*.status; do
   id=${status_file##*/}
   id=${id%.status}
   [ "$id" = "$shown" ] && continue
-  status=$(read_file "$status_file")
+  status=$(status_of "$dir/$id")
   transcript=$(read_file "$dir/$id.transcript")
   label=$(description_of "$transcript")
   label=${label:-$id}
@@ -63,10 +69,7 @@ for status_file in "$dir"/*.status; do
   items+="${items:+,}{\"id\":$(json_string "$id"),\"label\":$(json_string "$label"),"
   items+="\"subtitle\":$(json_string "${subtitle:-starting}"),\"status\":\"$glyph\"}"
 done
-if [ -z "$items" ]; then
-  [ -n "$shown" ] && nothing_to_pick "No other subagents in this conversation"
-  nothing_to_pick
-fi
+[ -n "$items" ] || nothing_to_pick
 
 result=$(printf '[%s]' "$items" | "$AGTERMCTL" pick --prompt "Subagent transcript") || exit 0
 id=$(plutil -extract id raw -o - - <<<"$result" 2>/dev/null)
@@ -75,7 +78,7 @@ id=$(plutil -extract id raw -o - - <<<"$result" 2>/dev/null)
 transcript=$(read_file "$dir/$id.transcript")
 title=$(description_of "$transcript")
 follow=
-[ "$(read_file "$dir/$id.status")" = running ] && follow=--follow
+[ "$(status_of "$dir/$id")" = running ] && follow=--follow
 # replace a transcript this picker opened, never another program's overlay
 [ -n "$viewer_pid" ] && "$AGTERMCTL" session overlay close --target "$AGTERM_SESSION_ID" >/dev/null 2>&1
 write_file "$viewer_agent_file" "$id"
