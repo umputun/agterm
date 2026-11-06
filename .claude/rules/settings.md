@@ -310,7 +310,8 @@ paths:
   The control catalog carries it as `sidebar.density`.
 - `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
   `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while the key
-  window's first responder is a `GhosttySurfaceView`, reselects on every source-change notification, and
+  window's first responder is a live `GhosttySurfaceView` or sits inside an `HtmlOverlayWebView`, page form
+  fields included, reselects on every source-change notification, and
   restores the earlier source when that stops being true and in `applicationWillTerminate`.
   It keys on key-window and responder changes, never app activation, because the quick terminal takes key
   while agterm stays inactive. The source-change notification is delivered to an inactive app (measured
