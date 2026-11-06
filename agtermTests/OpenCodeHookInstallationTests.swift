@@ -40,6 +40,20 @@ final class OpenCodeHookInstallationTests: XCTestCase {
                                          plugin: "agterm-status.js", other: "agterm-v2/tui.js")
     }
 
+    func testCapturedEnvironmentInstallsWithoutProbingAgain() async throws {
+        let counter = directory.appendingPathComponent("probe-count")
+        let rc = home.appendingPathComponent(".zshrc")
+        let startup = try String(contentsOf: rc, encoding: .utf8)
+        try (startup + "printf x >> \(CommandRestore.shellQuotedLine([counter.path]))\n")
+            .write(to: rc, atomically: true, encoding: .utf8)
+        let command = directory.appendingPathComponent("bin/opencode")
+        try "#!/bin/sh\nprintf '2.0.12\\n'\n".write(to: command, atomically: true, encoding: .utf8)
+        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
+        let outcome = try AgentHooksInstaller.installOpenCodePlugin(home: home, scriptDirectory: scripts, probe: probe)
+        XCTAssertEqual(outcome, .installed(.v2, path: v2Path))
+        XCTAssertEqual(try String(contentsOf: counter, encoding: .utf8), "x")
+    }
+
     func testUnknownVersionCanInstallV2() async throws {
         try await assertFallbackInstalls(.v2, button: "OpenCode v2",
                                           plugin: "agterm-v2/tui.js", other: "agterm-status.js")

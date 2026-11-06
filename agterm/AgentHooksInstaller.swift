@@ -14,7 +14,6 @@ import agtermCore
 @MainActor
 enum AgentHooksInstaller {
     private struct InstallError: Error { let message: String }
-    private static var isRunning = false
 
     /// The bundled `Contents/Resources/agent-status`, nil when the build skipped bundling (a bare
     /// `swift build`).
@@ -87,6 +86,7 @@ enum AgentHooksInstaller {
     private struct InstallOutcome {
         let settingsSkipped: Bool
         let codex: CodexResult
+        let codexHome: String?
         let pi: PiResult
         let opencode: OpenCodeResult
 
@@ -97,34 +97,35 @@ enum AgentHooksInstaller {
 
     /// Run the install and show a result alert.
     static func run() {
-        guard !isRunning else { return }
-        isRunning = true
-        Task {
-            defer { isRunning = false }
-            do {
-                let outcome = try await install()
-                present(style: outcome.isWarning ? .warning : .informational,
-                        title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                        text: successText(outcome),
-                        docs: outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
-            } catch let error as InstallError {
-                present(style: .warning, title: "Install Failed", text: error.message)
-            } catch {
-                present(style: .warning, title: "Install Failed", text: error.localizedDescription)
-            }
+        Task { await AgentInstallers.run(skill: false, hooks: true) }
+    }
+
+    static func run(probe: OpenCodeEnvironmentProbe.Result?) async {
+        do {
+            let outcome = try install(probe: probe)
+            present(style: outcome.isWarning ? .warning : .informational,
+                    title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
+                    text: successText(outcome),
+                    docs: outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
+        } catch let error as InstallError {
+            present(style: .warning, title: "Install Failed", text: error.message)
+        } catch {
+            present(style: .warning, title: "Install Failed", text: error.localizedDescription)
         }
     }
 
     // every step runs regardless of an earlier one's outcome; each reports its own result.
-    private static func install() async throws -> InstallOutcome {
+    private static func install(probe: OpenCodeEnvironmentProbe.Result?) throws -> InstallOutcome {
         try copyBundledFolder()
         try bakeAgtermctlPath()
         let settingsSkipped = try mergeClaudeSettings()
         try appendShellRC()
-        let codex = try mergeCodexConfig()
+        let codex = try mergeCodexConfig(codexDirectory: URL(fileURLWithPath: probe?.codexHome
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex").path))
         let pi = try installPiExtension()
-        let opencode = try await installOpenCodePlugin()
-        return InstallOutcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, opencode: opencode)
+        let opencode = try installOpenCodePlugin(home: FileManager.default.homeDirectoryForCurrentUser,
+                                                scriptDirectory: destinationFolder, probe: probe)
+        return InstallOutcome(settingsSkipped: settingsSkipped, codex: codex, codexHome: probe?.codexHome, pi: pi, opencode: opencode)
     }
 
     private static func copyBundledFolder() throws {
@@ -283,10 +284,14 @@ enum AgentHooksInstaller {
         scriptDirectory: URL = destinationFolder,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) async throws -> OpenCodeResult {
+        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
+        return try installOpenCodePlugin(home: home, scriptDirectory: scriptDirectory, probe: probe)
+    }
+
+    static func installOpenCodePlugin(home: URL, scriptDirectory: URL, probe: OpenCodeEnvironmentProbe.Result?) throws -> OpenCodeResult {
         let fm = FileManager.default
         let legacyDirectory = URL(fileURLWithPath: AgentHooksInstall.opencodePluginPath(home: home.path))
             .deletingLastPathComponent().deletingLastPathComponent().path
-        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
         var detected = probe?.version
         // no probe result and no default config: neither chooser answer could install anything
         if probe == nil, !fm.fileExists(atPath: legacyDirectory) { return .noOpenCode(directory: legacyDirectory) }
@@ -361,20 +366,19 @@ enum AgentHooksInstaller {
         return nil
     }
 
-    // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when anything changes.
-    // gated on ~/.codex existing so a non-Codex home isn't seeded with a config.toml. the host-free
+    // merge into the selected Codex root, writing a .bak first when anything changes.
+    // gated on that root existing so a non-Codex home isn't seeded with a config.toml. the host-free
     // `AgentHooksInstall.mergeCodexConfig` PARSES the file and decides the outcome; this only reads/writes.
-    private static func mergeCodexConfig() throws -> CodexResult {
-        let codexDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
-        guard FileManager.default.fileExists(atPath: codexDir.path) else { return .noCodex }
-        let config = codexDir.appendingPathComponent("config.toml")
+    static func mergeCodexConfig(codexDirectory: URL, scriptDirectory: URL = destinationFolder) throws -> CodexResult {
+        guard FileManager.default.fileExists(atPath: codexDirectory.path) else { return .noCodex }
+        let config = codexDirectory.appendingPathComponent("config.toml")
         let existing: String?
         do {
             existing = try readExistingConfig(at: config)
         } catch {
             return .unreadable // unreadable: leave it untouched rather than clobber it
         }
-        switch AgentHooksInstall.mergeCodexConfig(existing: existing ?? "", scriptDir: destinationFolder.path) {
+        switch AgentHooksInstall.mergeCodexConfig(existing: existing ?? "", scriptDir: scriptDirectory.path) {
         case .unchanged:
             return .alreadyConfigured
         case .hooksExist:
@@ -404,7 +408,7 @@ enum AgentHooksInstaller {
         return """
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
-        \(codexText(outcome.codex))
+        \(codexText(outcome.codex, codexHome: outcome.codexHome))
         \(piText(outcome.pi))
         \(opencodeText(outcome.opencode))
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
@@ -417,22 +421,23 @@ enum AgentHooksInstaller {
     // itself to fit `informativeText` with no scroll and no cap, so the hooks block's long `command =` lines
     // wrapped several times each and grew the window past the bottom of a laptop screen (#430). Sentence
     // count is not the constraint — the two manual-merge cases send the user to the docs instead.
-    static func codexText(_ codex: CodexResult) -> String {
+    static func codexText(_ codex: CodexResult, codexHome: String? = nil) -> String {
+        let directory = codexHome ?? "~/.codex"
         let approve = "Run /hooks in Codex to review and approve them before they take effect."
         let manual = "See the Add Codex hooks by hand section of the agterm docs for the block to add, then run /hooks in Codex."
         switch codex {
         case .merged:
-            return "Codex lifecycle hooks merged into ~/.codex/config.toml (any old codex-notify.sh notify line was removed). " + approve
+            return "Codex lifecycle hooks merged into \(directory)/config.toml (any old codex-notify.sh notify line was removed). " + approve
         case .alreadyConfigured:
-            return "Codex lifecycle hooks are already present in ~/.codex/config.toml. " + approve
+            return "Codex lifecycle hooks are already present in \(directory)/config.toml. " + approve
         case .hooksExist:
-            return "Your ~/.codex/config.toml already defines its own hooks, so agterm left it untouched. " + manual
+            return "Your \(directory)/config.toml already defines its own hooks, so agterm left it untouched. " + manual
         case .unparseable:
-            return "Your ~/.codex/config.toml isn't valid TOML, so agterm left it untouched. Fix it and run this again. " + manual
+            return "Your \(directory)/config.toml isn't valid TOML, so agterm left it untouched. Fix it and run this again. " + manual
         case .unreadable:
-            return "Your ~/.codex/config.toml exists but couldn't be read, so agterm left it untouched."
+            return "Your \(directory)/config.toml exists but couldn't be read, so agterm left it untouched."
         case .noCodex:
-            return "No ~/.codex found, so Codex hooks were skipped. Install Codex, then run this again."
+            return "No \(directory) found, so Codex hooks were skipped. Install Codex, then run this again."
         }
     }
 

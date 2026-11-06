@@ -134,6 +134,22 @@ struct SkillInstallTests {
         #expect(t == [.init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm")])
     }
 
+    @Test func customCodexRootLeavesClaudeAndLegacyHelperUnchanged() {
+        let custom = SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true, codexHome: "/custom/codex home")
+        #expect(custom == [
+            .init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm"),
+            .init(agent: "Codex", skillDirectory: "/custom/codex home/skills/agterm"),
+        ])
+        #expect(SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true)
+                == SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true, codexHome: "/h/.codex"))
+        #expect(SkillInstall.skillDirectory(home: "/h", base: ".codex") == "/h/.codex/skills/agterm")
+    }
+
+    @Test func missingCustomCodexDoesNotSelectTheDefaultRoot() {
+        #expect(SkillInstall.installTargets(home: "/h", claudeExists: false, codexExists: false, codexHome: "/missing")
+                == [.init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm")])
+    }
+
     @Test func mayOverwriteWhenDirectoryAbsent() {
         #expect(SkillInstall.mayOverwrite(directoryExists: false, existingSKILL: nil) == true)
     }
