@@ -49,6 +49,9 @@ session drag are out of scope.
   arming a Live reset. It does not recover a crash with no later write: a valid index that names no
   entry for a window still short-circuits bootstrap past the orphan scan, which stays index-loss only
   because scanning after a clean load can resurrect a window whose snapshot removal failed.
+- A failed `windows/<id>.json` write sets that store's `AppStore.snapshotUnsaved`, reported by its
+  window's tree and cleared by the next snapshot write that lands. The failure logs through `NSLog`:
+  `agtermCore` imports no `os`, since the agterm-linux fork builds it on Linux.
 - Bootstrap never throws. Load a valid index; otherwise recover every UUID-named per-window file before
   considering legacy migration or an empty seed. Recovered files are appended before `loadStore`, named
   `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open with a

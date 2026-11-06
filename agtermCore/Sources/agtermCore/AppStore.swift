@@ -143,6 +143,8 @@ public final class AppStore {
     @ObservationIgnored let persistence: PersistenceStore
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
+    /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
+    @ObservationIgnored var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
@@ -430,7 +432,8 @@ public final class AppStore {
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
                            pickPending: pickPending(), askPending: askPending(), app: app, liveReset: liveReset,
-                           indexUnsaved: indexUnsaved ? true : nil, linkOpenMode: linkOpenMode?.rawValue,
+                           indexUnsaved: indexUnsaved ? true : nil, snapshotUnsaved: snapshotUnsaved ? true : nil,
+                           linkOpenMode: linkOpenMode?.rawValue,
                            sidebarDensity: sidebarDensity?.rawValue)
     }
 
