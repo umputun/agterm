@@ -66,3 +66,11 @@ snapshot would not rule it out, since `pcpu` is a decaying average. A concurrent
 useless here: `ControlServer.acceptLoop` serves one connection at a time, so it queues behind the stuck call.
 If starvation shows, throttling the producers is a test change, and whether it still loads the mailbox
 enough to catch the #844 regression has to be checked.
+
+Run 42292892846 (master `aa1201e5`, 2026-11-06) is the first stall with that capture: `new-0` and `new-1`
+answered in 41 and 38 ms, and `new-2` timed out. `ps-03-new-2.txt` shows the app at
+183% CPU, the three producer pythons at 95% together, and `vm.loadavg` at 24.3 on the 3-vCPU runner. The
+capture is late: `new-2` had run 9.9 s and its CLI was already defunct, `pcpu` is a decaying average and
+the load average spans minutes, so this shows heavy app CPU under title load without placing it in the
+5 s window. The app `sample` and spindump failed again; spindump finished sampling and stalled while
+processing symbols. What blocked the call is still open.
