@@ -291,6 +291,18 @@ against the folder itself, rather than a replacement such as `eza`. A privacy de
 `Operation not permitted` and ordinary permission bits as `Permission denied`, and some replacements print
 the same wording for both.
 
+## A dropped screenshot reaches a Live pane but cannot be read
+
+Dropping the macOS screenshot thumbnail into a Live pane inserts the path of its temporary copy under
+`TemporaryItems/NSIRD_screencaptureui_*`, but a tool that opens the file fails. Claude Code drops the image
+without a message, and `head -c 8 <path>` in the same pane reports `Operation not permitted`.
+
+In the reported case ([#903](https://github.com/umputun/agterm/issues/903)) agterm had no Full Disk Access,
+and the `com.apple.TCC` log showed nothing at the denial. Granting agterm Full Disk Access made the same read
+of the same file from the same pane succeed at once, with no restart, and dropped screenshots reached Claude
+Code again. The [folder-access section](#a-command-cannot-read-downloads-desktop-or-documents) covers what
+that grant gives away.
+
 ## An Accessibility permission you granted stops working after an update
 
 A tool that needs Accessibility is denied in a session, while agterm's toggle in System Settings ▸ Privacy

@@ -246,6 +246,12 @@ not permitted` for the privacy denial, `Permission denied` for ordinary permissi
 replacements print the same wording for both. Needing the grant is macOS policy, not an agterm bug: do not
 file it.
 
+### "a dropped screenshot reaches a Live pane but cannot be read"
+
+The pane gets the thumbnail's `TemporaryItems/NSIRD_screencaptureui_*` path, but opening it fails with
+`Operation not permitted` and Claude Code drops the image silently. In the reported case Full Disk Access fixed
+it without a restart; see the [screenshot read diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#a-dropped-screenshot-reaches-a-live-pane-but-cannot-be-read).
+
 ### "agterm would like to access data from other apps, over and over"
 
 Use `agtermctl tree --json` to read `liveAttribution` and `splitLiveAttribution`; see the
