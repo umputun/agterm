@@ -3,7 +3,7 @@ worth: maybe
 where: agtermCore/Tests/SessionHostRuntimeTests/SessionHostServerTests.swift:paneAttachAfterTheCreatedCommandEndedStartsNoShell
 added: 2026-11-02
 ---
-# session host attach to an ended command missed its 3 s window once on CI, cause unknown
+# session host attach to an ended command misses its 3 s window on CI, cause unknown
 
 `paneAttachAfterTheCreatedCommandEndedStartsNoShell` failed in run 41408692761 (PR #864 head `560228b4`) with
 `the pane's attach to an ended command kept running`: the pane's `zmx attach`, which carries the
