@@ -861,9 +861,10 @@ struct AppSettingsTests {
     }
 
     @Test(arguments: [(InterfaceElement.sessionIcons, "Session icons", InterfaceElement.workspaceIcons),
-                      (.workspaceIcons, "Workspace icons", .sessionIcons)])
-    func rowIconElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
-                                                              other: InterfaceElement) {
+                      (.workspaceIcons, "Workspace icons", .sessionIcons),
+                      (.workspaceChevrons, "Workspace chevrons", .workspaceIcons)])
+    func rowElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
+                                                          other: InterfaceElement) {
         #expect(element.section == .sidebar)
         #expect(element.displayName == name)
         #expect(!element.hiddenByDefault)
@@ -938,7 +939,8 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+                            .workspaceChevrons])
         #expect(!titleBar.isEmpty)
     }
 

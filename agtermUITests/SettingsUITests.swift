@@ -402,6 +402,8 @@ final class SettingsUITests: XCTestCase {
         XCTAssertLessThanOrEqual(size.frame.maxY, window.frame.maxY, "the quick-terminal Size should be on screen")
         let multiWindow = app.descendants(matching: .any).matching(identifier: "settings-auto-hide-inactive-sidebars").firstMatch
         XCTAssertTrue(multiWindow.exists && multiWindow.isHittable, "the multi-window toggle still renders inside the Sidebar section")
+        let chevrons = app.descendants(matching: .any).matching(identifier: "settings-interface-workspaceChevrons").firstMatch
+        XCTAssertTrue(chevrons.exists && chevrons.isHittable, "the workspace chevrons toggle renders in the Sidebar grid")
         let before = size.frame.minY
         size.scroll(byDeltaX: 0, deltaY: -80)
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))

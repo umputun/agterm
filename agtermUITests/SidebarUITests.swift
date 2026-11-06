@@ -165,6 +165,43 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "the disclosure triangle should collapse regardless of the setting")
     }
 
+    func testHiddenChevronsLeaveTheRowClickToggle() throws {
+        let ws = try relaunch(settings: ["hiddenInterfaceElements": ["workspaceChevrons"]])
+        XCTAssertFalse(app.disclosureTriangles.firstMatch.waitForExistence(timeout: 2), "the workspace chevron should be hidden")
+
+        ws.click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 5), "a row click should collapse the workspace")
+        ws.click()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 5), "a second row click should expand it again")
+    }
+
+    func testHiddenChevronsWithRowClickOffFoldThroughTheRowMenu() throws {
+        let ws = try relaunch(settings: ["hiddenInterfaceElements": ["workspaceChevrons"], "workspaceRowClickExpands": false])
+
+        ws.click()
+        XCTAssertFalse(pollSessionRowCount(0, timeout: 3), "a row click must not collapse the workspace while the setting is off")
+
+        ws.rightClick()
+        let collapse = app.menus.menuItems["Collapse Workspace"].firstMatch
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5), "the row menu should offer Collapse Workspace")
+        collapse.click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 5), "the row menu should collapse the workspace")
+    }
+
+    private func relaunch(settings: [String: Any]) throws -> XCUIElement {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session should be visible")
+        app.terminate()
+        try JSONSerialization.data(withJSONObject: settings).write(to: stateDir.appendingPathComponent("settings.json"))
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 20), "workspace 1 should restore")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the session row should be visible after relaunch")
+        return ws
+    }
+
     // the `persistAndApply()` mirror leg: the seeded-file test above covers only the launch-time one, so
     // without this a missing live mirror would leave the toggle needing a relaunch and the suite green.
     func testWorkspaceRowClickStopsTogglingAfterLiveSettingsFlip() throws {
