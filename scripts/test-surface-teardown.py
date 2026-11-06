@@ -130,8 +130,32 @@ def spindump(app_pid, path):
     """A passive app snapshot; `sample` has timed out on a stalled app in CI. The CLI is left out because a
     spindump fails whole when one named pid cannot be found, and the CLI is killed 2 s after collectors start."""
     argv = ["sudo", "-n", "/usr/sbin/spindump", str(app_pid), "1", "10", "-onlyTarget",
-            "-noProcessingWhileSampling", "-timelimit", "10", "-o", str(path)]
+            "-noProcessingWhileSampling", "-noIPC", "-timelimit", "10", "-o", str(path)]
     return Collector("spindump", argv, path, SPINDUMP_LIMIT, privileged=True)
+
+
+def keep_stuck_stackshots(case_dir, since):
+    """Copies the raw stackshot a stuck spindump saves under /var/tmp, readable later with `spindump -i`.
+    Returns the failures, so a lost stackshot is recorded rather than raised over the case's own error."""
+    failures = []
+    for shot in Path("/var/tmp").glob("spindump-stuck-stackshot.*.buf"):
+        try:
+            if shot.stat().st_mtime < since:
+                continue
+        except OSError as exc:
+            failures.append(f"{shot.name}: {exc}")
+            continue
+        target = case_dir / shot.name
+        for argv in (["sudo", "-n", "cp", str(shot), str(target)], ["sudo", "-n", "chmod", "a+r", str(target)]):
+            try:
+                done = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)
+            except (subprocess.SubprocessError, OSError) as exc:
+                failures.append(f"{shot.name}: {argv[2]}: {exc}")
+                break
+            if done.returncode:
+                failures.append(f"{shot.name}: {argv[2]} exit {done.returncode}: {done.stderr.strip()}")
+                break
+    return failures
 
 
 def snapshots(app_pid, case_dir, suffix):
@@ -181,6 +205,7 @@ def run_case(app, evidence, count, busy):
         " sys.stdout.flush()\n"
     )
     origin = time.monotonic()
+    started = time.time()
     result = {"status": "running", "timeline": {}, "calls": []}
     samplers = []
 
@@ -280,13 +305,18 @@ def run_case(app, evidence, count, busy):
             samplers.append((result, "app", sampler(pid, case_dir / "sample.txt")))
         raise
     finally:
-        for owner, side, collector in samplers:
-            failure = collector.finish()
-            if failure:
-                owner.setdefault("sample_errors", {})[side] = failure
-        if samplers:
-            save()
-        stop_test_app(pid)
+        try:
+            for owner, side, collector in samplers:
+                failure = collector.finish()
+                if failure:
+                    owner.setdefault("sample_errors", {})[side] = failure
+            if samplers:
+                stackshot_errors = keep_stuck_stackshots(case_dir, started)
+                if stackshot_errors:
+                    result["stackshot_errors"] = stackshot_errors
+                save()
+        finally:
+            stop_test_app(pid)
 
 
 def main():
