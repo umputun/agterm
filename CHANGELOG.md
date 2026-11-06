@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.41.0 - 2026-11-06
+
+### New Features
+
+- **Text files and `path:line` locations open as a page.** ⌘-click on a source, config, text or log file in terminal output shows it read-only in the terminal's theme, with line numbers and syntax highlighting. A location such as `./main.go:42:7` from compiler or grep output opens the file scrolled to that line and marks it, and a relative path resolves against the pane's directory. Reveal in Finder moves to ⌘⌥-click, which reveals any clicked local path. `agtermctl session overlay open --text FILE [--line N]` opens the same page #874 @umputun
+- **Log pages follow the file.** A click on a `.log` or `.out` path opens the text page on up to the last 5,000 lines within a 2 MB read and follows the file's end as it grows, through rotation and truncation. A `path:line` click, and a log on a session another Mac presents, open the static page. Scrolling up pauses following; `F` toggles it, `G` or End jumps to the bottom and `g` or Home to the top. `session overlay open --text FILE --tail N --follow-file` and `session overlay follow on|off|toggle` are the control forms #899 @umputun
+- **Search in text pages.** Every text and log page has a find box like the terminal's. `/` or ⌘F focuses it, `n`/`N` or Return/Shift-Return step through the matches, Esc clears. ⌘F now goes to what is on top, a visible page, an overlay or the quick terminal, never to the terminal behind it. `session overlay search TEXT | --next | --prev | --close` drives it #899 @umputun
+- **Compact sidebar.** Settings ▸ Appearance ▸ Sidebar density picks Default or Compact, and Compact trims row padding and indent so more rows fit. `agtermctl sidebar density default|compact|toggle` sets it and `tree` reports `sidebarDensity` #884 @umputun
+- **More tint colors.** Teal, pink, brown, indigo and mint join the sidebar tint palette, and `session tint`, `workspace tint` and `--tint` also take any `#rrggbb` hex. A row tinted with a hex shows a checked "Custom #rrggbb" entry in its menu #890 @umputun
+- **Five more status shapes.** Triangle-down, play, seal, bolt and bell join the agent-status shapes, in Settings and through `session status --shape`. A Mac on 0.40.0 or older that attached the session draws its own Settings shape for them #898 @umputun
+- Settings ▸ Interface ▸ Sidebar ▸ **Workspace chevrons** is on by default. Turning it off removes the collapse chevron from workspace rows to give names more width, and the workspace row menu gains Collapse Workspace and Expand Workspace #909 @umputun
+- image, markdown and text pages opened on a session another Mac presents now show on that Mac, as HTML pages already did. Before, `session overlay open --image`, `--markdown` and `--text` on such a session were refused. A text page shown there stays static, without log follow or control-driven search #891 @umputun
+- Live panes start the zsh or fish named in ghostty.conf `command`, so `command = /opt/homebrew/bin/fish --login` gives fish in Live mode as it already did with fresh shells. Before, Live always started the macOS login shell. A pane whose daemon is already running keeps its shell until Agterm ▸ Reset Live Sessions… #895 @umputun
+- `tree` reports `snapshotUnsaved: true` on a window whose state saves keep failing, until the next save succeeds #900 @umputun
+- `two-agent-mailbox-chat` cookbook recipe: two agents in a split, Claude Code or Codex in any pairing, talk through pane mailboxes instead of typing into each other's composer. It is the recommended replacement for `two-agent-chat` #876 #888 #896 @umputun #885
+- `claude-git-info` cookbook recipe: each Claude Code session's info line shows the branch, changed-file count and commits ahead and behind for the repo it works in #872 @umputun
+- `image-path-gallery` cookbook recipe: one chord shows the image paths on a pane's screen as a thumbnail gallery, copying them from the host first in an attached session #893 @wildsurfer
+- `subagent-status` cookbook recipe: a Claude Code session's info line counts its running and finished subagents, the row stays active until the last one finishes, and a custom command pages any subagent's transcript over the session #906 #908 @bubakanov
+
+### Improved
+
+- libghostty moves to ghostty v1.4.0, which brings upstream's fixed-memory trims and pauses the display link while idle #883 @umputun
+
+### Bug Fixes
+
+- with Open links in set to an overlay, a ⌘-click over a page that an earlier click opened and then hid went to the browser, and the hidden page stayed out of sight. The click now replaces the hidden page and shows the new one #880 @umputun
+- a clicked path that ends a sentence, such as `/tmp/review.md.`, revealed in Finder instead of opening, because the trailing punctuation stayed on the path #881 @umputun
+- a markdown file with YAML frontmatter, such as any `SKILL.md`, showed a rule and one giant heading. The frontmatter now shows as a YAML code block above the body #897 @umputun
+- Settings ▸ Key Mapping ▸ Lock in terminals let the earlier keyboard layout come back while an HTML overlay page had the keyboard. The lock now holds there too #904 @umputun
+- the palette's Move Session rows moved the session that was selected when the palette opened, so a selection change under the open palette moved the wrong session #879 @umputun
+- on macOS 27 the sidebar Tint submenu drew no color swatches #890 @umputun
+
 ## v0.40.0 - 2026-11-02
 
 ### New Features
