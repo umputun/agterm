@@ -56,12 +56,10 @@ final class AppActions {
     /// for a banner-clicked session whose window had closed. Nil before the scene `.task` runs.
     var openWindow: ((WindowInfo.ID) -> Void)?
 
-    /// The settings model, holding the parsed keymap whose custom commands feed the action palette. It and
-    /// `customCommandRunner` are built AFTER `actions` in `agtermApp.init`, so both are wired from the scene
-    /// `.task` rather than passed to `init(library:)` — an init-order break. Nil until that `.task` runs.
+    /// settingsModel is wired during app initialization, before commands are evaluated.
     var settingsModel: SettingsModel?
 
-    /// The custom-command runner the palette's custom items invoke. Wired in the scene `.task` like `settingsModel`.
+    /// customCommandRunner runs the palette's custom commands; wired in the scene `.task`.
     var customCommandRunner: CustomCommandRunner?
 
     /// The command-palette controller, so "Select Theme…" and the View menu item can open the `.themes`
