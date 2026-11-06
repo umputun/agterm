@@ -235,6 +235,54 @@ class SayTest(StateTest):
             self.assertEqual(mc.main(["say", "--stdin"]), 1)
         self.assertIn("mailbox full", json.loads(out.getvalue())["error"])
 
+    def say_file(self, path):
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out):
+            code = mc.main(["say", "--file", path])
+        return code, json.loads(out.getvalue())
+
+    def test_say_file_sends_its_text_and_keeps_the_file(self):
+        fake = self.use(FakeRun())
+        path = os.path.join(self.tmp.name, "msg.txt")
+        Path(path).write_text("from a file\n", encoding="utf-8")
+        code, result = self.say_file(path)
+        self.assertEqual(code, 0)
+        self.assertEqual(result["receiver"], "none")
+        self.assertEqual(fake.sent, [(f"{SID}:{RIGHT}", mc.compose("from a file"))])
+        self.assertTrue(os.path.exists(path))
+
+    def test_say_file_keeps_the_file_when_the_send_is_refused(self):
+        self.use(lambda args, timeout=30, stdin=None: done(out=json.dumps(SPLIT)) if args[1:3] == ["tree", "--json"]
+                 else done(1, err="mailbox full"))
+        path = os.path.join(self.tmp.name, "msg.txt")
+        Path(path).write_text("hello", encoding="utf-8")
+        code, result = self.say_file(path)
+        self.assertEqual(code, 1)
+        self.assertIn("mailbox full", result["error"])
+        self.assertTrue(os.path.exists(path))
+
+    def test_say_file_refuses_unreadable_input_without_sending(self):
+        oversized = os.path.join(self.tmp.name, "big.txt")
+        Path(oversized).write_bytes(b"x" * (mc.BODY_LIMIT + 1))
+        fifo = os.path.join(self.tmp.name, "fifo")
+        os.mkfifo(fifo)
+        binary = os.path.join(self.tmp.name, "bin")
+        Path(binary).write_bytes(b"\xff\xfe")
+        missing = os.path.join(self.tmp.name, "missing.txt")
+        for path, want in ((oversized, "limit"), (fifo, "not a regular file"), (self.tmp.name, "not a regular file"),
+                           (binary, "utf-8"), (missing, "No such file"), ("", "No such file")):
+            with self.subTest(path=os.path.basename(path)):
+                fake = self.use(FakeRun())
+                code, result = self.say_file(path)
+                self.assertEqual(code, 1)
+                self.assertIn(want, result["error"])
+                self.assertEqual(fake.sent, [])
+
+    def test_say_takes_exactly_one_input(self):
+        for argv in (["say"], ["say", "--stdin", "--file", "x"]):
+            with self.subTest(argv=argv), mock.patch("sys.stderr", io.StringIO()), self.assertRaises(SystemExit):
+                mc.main(argv)
+
     def test_status_reports_peer_receiver(self):
         self.use(FakeRun())
         self.listen_claude(RIGHT)
