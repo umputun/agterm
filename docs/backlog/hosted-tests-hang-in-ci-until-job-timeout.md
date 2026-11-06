@@ -16,7 +16,8 @@ reported test failure, stack, or process state, so each run says only which test
 
 The last-started tests differ; the logs do not locate the hang. The cause is open.
 
-The hosted step now runs `scripts/test-app.sh` under `scripts/watchdog.sh` at 900s, with `WATCHDOG_RUNNER`
-naming this checkout's DerivedData test host, which xcodebuild launches outside the command's tree. On a
+The hosted job now compiles with `xcodebuild build-for-testing` first and runs `test-without-building` under
+`scripts/watchdog.sh` at 600s, with `WATCHDOG_RUNNER` naming this checkout's DerivedData test host, which
+xcodebuild launches outside the command's tree. On a
 hang it samples that host and the command's tree, kills both, and uploads `hosted-test-hang` with the
 xcresult under `build/DerivedData/Logs/Test`. The next hang's artifact is where to start.
