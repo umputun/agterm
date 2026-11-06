@@ -200,9 +200,9 @@ final class ControlServerLinkOverlayTests: XCTestCase {
                 command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, page: .markdown(path: path)))
         }
 
-        XCTAssertEqual(open(missing), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.unreadable(missing))"))
-        XCTAssertEqual(open(fifo), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.unreadable(fifo))"))
-        XCTAssertEqual(open(big.path), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownProbe.Failure.tooLarge(big.path))"))
+        XCTAssertEqual(open(missing), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownFile.Failure.unreadable(missing))"))
+        XCTAssertEqual(open(fifo), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownFile.Failure.unreadable(fifo))"))
+        XCTAssertEqual(open(big.path), ControlResponse(ok: false, error: "session.overlay.open: \(MarkdownFile.Failure.tooLarge(big.path))"))
         XCTAssertNil(session.htmlOverlay)
 
         XCTAssertTrue(open(doc.path).ok)

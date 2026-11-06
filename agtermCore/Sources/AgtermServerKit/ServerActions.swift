@@ -9,13 +9,32 @@ public final class ServerActions: ControlActions {
     let catalog: CatalogRoot
     let identity: AppIdentity
     let panes: ServerPanes
+    let streams: ServerStreams
+    var hudAutoHide: [UUID: HudTimer] = [:]
 
     init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes) {
         self.store = store
         self.catalog = catalog
         self.identity = identity
         self.panes = panes
+        streams = ServerStreams(store: store, catalogID: catalog.id)
+        streams.dispatch = { [weak self] request in
+            await self?.serve(request) ?? ControlResponse(ok: false, error: "agterm-server is stopping")
+        }
+        wireAskOwners()
     }
+
+    /// serve refuses a command the server does not serve, then dispatches the rest: the socket's requests and a
+    /// handed-over page's bridge requests alike.
+    func serve(_ request: ControlRequest) async -> ControlResponse {
+        if let refusal = ServerCommandPolicy.refusal(request.cmd) { return ControlResponse(ok: false, error: refusal) }
+        return await ControlDispatcher(actions: self).dispatch(request)
+            ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
+    }
+
+    public func claimOverlayJob(_ job: String) -> ControlResponse { streams.claimJobStream(job) }
+
+    public func claimPageServe(_ token: String) -> ControlResponse { streams.claimPageStream(token) }
 
     public func controlTree(window: String?) -> ControlResponse {
         if let refusal = windowRefusal(window) { return refusal }

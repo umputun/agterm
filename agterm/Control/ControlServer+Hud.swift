@@ -94,7 +94,7 @@ extension ControlServer {
             }
             let paneIdentity: UUID?
             let pane: OverlayPane?
-            switch self.resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+            switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                             requireVisible: true, invalidPaneError: "hud pane must be left or right") {
             case .resolved(let identity, let targetPane):
                 paneIdentity = identity
@@ -151,7 +151,7 @@ extension ControlServer {
             let previousForcedWidth = session.hudResizedWidthPercent
             let paneIdentity: UUID?
             let pane: OverlayPane?
-            switch self.resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+            switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                             requireVisible: false, invalidPaneError: "hud pane must be left or right") {
             case .resolved(let identity, let targetPane):
                 paneIdentity = identity

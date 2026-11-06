@@ -156,11 +156,12 @@ final class ControlServerCompanionPageTests: XCTestCase {
     func testASoftClosedPageStillAnswersForItsOwnWindow() throws {
         let page = try filePage()
         let window = try XCTUnwrap(server.library.windowID(for: store))
-        let serving = CompanionPageServing(claim: UUID(), session: page.id, page: try XCTUnwrap(page.htmlOverlay?.id))
+        let attachment = PageServeStream.Attachment(claim: UUID(), session: page.id)
+        let overlay = try XCTUnwrap(page.htmlOverlay?.id)
 
         XCTAssertTrue(store.softCloseSession(page.id))
 
-        XCTAssertEqual(server.companionPagePlace(serving)?.window, window)
+        XCTAssertEqual(server.pageAttachmentPlace(attachment, page: overlay)?.window, window)
     }
 
     func testOnlyAPageSessionIsHandedOutAndALoopbackPageIsNot() throws {

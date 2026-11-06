@@ -28,6 +28,29 @@ struct ServerScratch {
     func remove() { try? FileManager.default.removeItem(atPath: root) }
 }
 
+// a blocking socket read on the shared pool starves the server's own handler tasks, and Linux sizes that pool by CPUs
+func offPool<T: Sendable>(_ body: @escaping @Sendable () -> T) async -> T {
+    await withCheckedContinuation { continuation in Thread { continuation.resume(returning: body()) }.start() }
+}
+
+// a socket the server already closed raises SIGPIPE on a plain write, which ends the whole test process
+func sendNoSignal(_ fd: Int32, _ data: Data) throws {
+    let sent = data.withUnsafeBytes { buffer in
+        #if canImport(Darwin)
+        var on: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        return send(fd, buffer.baseAddress, data.count, 0)
+        #else
+        return send(fd, buffer.baseAddress, data.count, Int32(MSG_NOSIGNAL))
+        #endif
+    }
+    guard sent == data.count else { throw UnixSocket.Failure.system("send: \(String(cString: strerror(errno)))") }
+}
+
+func offPool<T: Sendable>(_ body: @escaping @Sendable () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in Thread { continuation.resume(with: Result { try body() }) }.start() }
+}
+
 // written from a child: a write descriptor held here leaks into another test's spawn, and Linux refuses the exec (ETXTBSY)
 func writeExecutable(_ path: String, _ script: String) throws {
     let output = try ServerProcess.run(["/bin/sh", "-c", "cat >\"$0\" && chmod 755 \"$0\"", path], environment: [:],
@@ -40,7 +63,7 @@ func send(_ request: ControlRequest, to path: String) throws -> ControlResponse 
     defer { close(fd) }
     var line = try JSONEncoder().encode(request)
     line.append(UInt8(ascii: "\n"))
-    _ = line.withUnsafeBytes { write(fd, $0.baseAddress, line.count) }
+    try sendNoSignal(fd, line)
     var reply = Data()
     var byte: UInt8 = 0
     while read(fd, &byte, 1) == 1, byte != UInt8(ascii: "\n") { reply.append(byte) }
@@ -127,6 +150,7 @@ final class ServerHarness {
         }, headless: true)
         CatalogRoot.seedWorkspace(in: store)
         actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes)
+        actions.streams.presentationHelloDeadline = 60
     }
 
     deinit {

@@ -236,35 +236,7 @@ extension ControlServer: ControlActions {
 
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id) else {
-                return ControlResponse(ok: false, error: "no such session")
-            }
-            if session.remoteOverlays.slot(pane)?.page != nil {
-                return ControlResponse(ok: false, error: OverlayHtmlError.noResult)
-            }
-            if let slot = session.remoteOverlays.slot(pane), !slot.ended {
-                return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
-            }
-            if session.htmlCovers(pane) {
-                return ControlResponse(ok: false, error: OverlayHtmlError.noResult)
-            }
-            let (running, exitCode) = pane.map { (session.paneOverlay($0) != nil, session.paneOverlayExitCode($0)) }
-                ?? (session.programOverlayActive, session.overlayExitCode)
-            if running {
-                return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
-            }
-            if exitCode == nil, let failure = session.remoteOverlays.failure(pane) {
-                return ControlResponse(ok: false, error: OverlayResultError.ended(failure))
-            }
-            // a HUD opened after a program clears its result, so one recorded here is a remote job's that
-            // ended under a HUD; the painter itself never reports a status
-            if exitCode == nil, pane == nil, session.hudActive {
-                return ControlResponse(ok: false, error: OverlayHudError.noResult)
-            }
-            guard let code = exitCode else {
-                return ControlResponse(ok: false, error: OverlayResultError.noResult)
-            }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, exitCode: code))
+            store.session(withID: id)?.overlayResult(pane: pane) ?? ControlResponse(ok: false, error: "no such session")
         }
     }
 

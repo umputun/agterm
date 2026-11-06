@@ -55,13 +55,10 @@ final class ServerPanes {
                                                  withIntermediateDirectories: true)
         // removed before the daemon exists, so a record a previous daemon of this identity left cannot end it
         try? FileManager.default.removeItem(atPath: record)
-        var environment = baseEnvironment.merging(SurfaceEnvironment.session(
-            sessionID: session.id, windowID: catalogID, workspaceID: start.workspace, socketPath: configuration.socketPath,
-            programVersion: programVersion, pane: start.pane, paneToken: identity.uuidString)) { _, pane in pane }
-        environment["AGTERM_STATE_DIR"] = configuration.stateDirectory
+        var environment = baseEnvironment.merging(agtermEnvironment(session: session.id, workspace: start.workspace,
+                                                                    pane: start.pane, paneToken: identity.uuidString)) { _, pane in pane }
         environment["TERM"] = TerminfoInstall.entry
         environment["COLORTERM"] = "truecolor"
-        if let terminfo = terminfoDirectory { environment["TERMINFO"] = terminfo }
         environment["ZMX_DIR"] = configuration.zmxSocketDirectory
         environment["ZMX_SESSION"] = ""
         environment["ZMX_SESSION_PREFIX"] = ""
@@ -95,6 +92,18 @@ final class ServerPanes {
         for name in identities.map(ZmxSupport.daemonName(for:)) where !runner.kill(name) {
             FileHandle.standardError.write(Data("agterm-server: could not end daemon \(name)\n".utf8))
         }
+    }
+
+    /// agtermEnvironment is what a program started for `session` sees of this server: its identities, the state
+    /// directory `agtermctl` resolves the socket from, and the shipped terminfo, which an ssh-started overlay
+    /// helper would otherwise lack.
+    func agtermEnvironment(session: UUID, workspace: UUID?, pane: StatusPane? = nil, paneToken: String? = nil) -> [String: String] {
+        var environment = SurfaceEnvironment.session(sessionID: session, windowID: catalogID, workspaceID: workspace,
+                                                     socketPath: configuration.socketPath, programVersion: programVersion,
+                                                     pane: pane, paneToken: paneToken)
+        environment["AGTERM_STATE_DIR"] = configuration.stateDirectory
+        if let terminfo = terminfoDirectory { environment["TERMINFO"] = terminfo }
+        return environment
     }
 
     /// terminfoDirectory is the shipped `xterm-ghostty` entry's directory, nil when the resources lack it.

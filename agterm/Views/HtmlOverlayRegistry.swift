@@ -582,7 +582,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             return .failure(ReplicaContentFailure(message: OverlayHtmlError.remoteFile))
         case .image:
             let fetched = await fetchReplica(path, limit: ImagePage.maxBytes,
-                                             local: (ImageProbe.Failure.tooLarge(path).description, ImageProbe.Failure.unreadable(path).description))
+                                             local: (ImageFile.Failure.tooLarge(path).description, ImageFile.Failure.unreadable(path).description))
             guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             return await Task.detached(priority: .userInitiated) {
                 ImageProbe.probe(data, path: path).map { ImagePage.html(data: data, mimeType: $0.mimeType) }
@@ -590,7 +590,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             }.value
         case .markdown:
             let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
-                                             local: (MarkdownProbe.Failure.tooLarge(path).description, MarkdownProbe.Failure.unreadable(path).description))
+                                             local: (MarkdownFile.Failure.tooLarge(path).description, MarkdownFile.Failure.unreadable(path).description))
             guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
             let fetch: @Sendable (String, Int) async -> Data? = { [weak self] path, limit in
                 try? await self?.fetchReplica(path, limit: limit, local: ("", "")).get()

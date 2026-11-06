@@ -428,7 +428,7 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         _ = registry.page(for: overlay, store: store)
 
         try await waitFor("failed") { self.current?.loadState == .failed }
-        XCTAssertEqual(current?.loadError, MarkdownProbe.Failure.unreadable(overlay.source.markdownPath ?? "").description)
+        XCTAssertEqual(current?.loadError, MarkdownFile.Failure.unreadable(overlay.source.markdownPath ?? "").description)
     }
 
     private var markdownScript: WKUserScript {

@@ -10,6 +10,8 @@ final class PaneObserver {
     let store: AppStore
     let panes: ServerPanes
     let cwd: (Int32) -> String?
+    /// onRespawn hears that a parent's pane runs a fresh shell under the same daemon name.
+    var onRespawn: ((_ session: UUID, _ daemon: String) -> Void)?
     private var loop: Task<Void, Never>?
 
     init(store: AppStore, panes: ServerPanes, cwd: @escaping (Int32) -> String? = ProcCwd.foreground) {
@@ -86,10 +88,12 @@ final class PaneObserver {
             }
             guard store.closePrimaryPane(session.id, alreadyFinalized: session.paneIdentity) == .respawned else { return }
             let workspace = store.sessionLocation(ofSession: session.id)?.workspace
-            if panes.start(.init(identity: session.paneIdentity, session: session, workspace: workspace, pane: .left,
-                                 directory: session.effectiveCwd)) != nil {
+            guard panes.start(.init(identity: session.paneIdentity, session: session, workspace: workspace, pane: .left,
+                                    directory: session.effectiveCwd)) == nil else {
                 store.markSessionEnded(session.id)
+                return
             }
+            onRespawn?(session.id, ZmxSupport.daemonName(for: session.paneIdentity))
             return
         }
         if primaryGone {

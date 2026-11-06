@@ -16,7 +16,6 @@ extension ServerActions {
     public func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse { unserved("setWorkspaceExpansion") }
     public func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse { unserved("setSessionFlag") }
     public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse { unserved("markSessionSeen") }
-    public func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) async -> ControlResponse { unserved("setSessionStatus") }
     public func setSessionRestore(_ target: String?, window: String?, update: ControlSessionRestoreUpdate) -> ControlResponse { unserved("setSessionRestore") }
     public func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse { unserved("scratchSession") }
     public func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse { unserved("focusSessionPane") }
@@ -28,7 +27,6 @@ extension ServerActions {
     public func reloadKeymap() -> ControlResponse { unserved("reloadKeymap") }
     public func listKeymap() -> ControlResponse { unserved("listKeymap") }
     public func reloadGhosttyConfig() -> ControlResponse { unserved("reloadGhosttyConfig") }
-    public func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse { unserved("sendNotification") }
     public func setTheme(args: ControlArgs?) -> ControlResponse { unserved("setTheme") }
     public func listThemes() -> ControlResponse { unserved("listThemes") }
     public func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse { unserved("setSidebarVisibility") }
@@ -42,15 +40,8 @@ extension ServerActions {
     public func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse { unserved("pasteSession") }
     public func selectAllSession(_ target: String?, window: String?) -> ControlResponse { unserved("selectAllSession") }
     public func searchSession(_ target: String?, window: String?, text: String?, to: String?) async -> ControlResponse { unserved("searchSession") }
-    public func openSessionOverlay(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse { unserved("openSessionOverlay") }
-    public func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse { unserved("closeSessionOverlay") }
-    public func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse { unserved("resizeSessionOverlay") }
-    public func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse { unserved("sessionOverlayResult") }
     public func copySessionOverlaySelection(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse { unserved("copySessionOverlaySelection") }
     public func readSessionOverlayText(_ target: String?, window: String?, options: ControlSessionOverlayTextOptions) -> ControlResponse { unserved("readSessionOverlayText") }
-    public func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse { unserved("openHud") }
-    public func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse { unserved("updateHud") }
-    public func closeHud(_ target: String?, window: String?) -> ControlResponse { unserved("closeHud") }
     public func setSessionBackground(_ target: String?, window: String?, options: ControlSessionBackgroundOptions) -> ControlResponse { unserved("setSessionBackground") }
     public func windowNew(name: String?, minimized: Bool) async -> ControlResponse { unserved("windowNew") }
     public func windowSelect(_ target: String?) async -> ControlResponse { unserved("windowSelect") }

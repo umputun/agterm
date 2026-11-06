@@ -35,6 +35,7 @@ public final class AgtermServer {
         self.lock = lock
         actions = ServerActions(store: store, catalog: catalog, identity: identity, panes: panes)
         observer = PaneObserver(store: store, panes: panes)
+        observer.onRespawn = { [weak actions] session, daemon in actions?.streams.noteRespawn(session: session, daemon: daemon) }
     }
 
     /// start takes the state directory, loads the catalog and the saved store and serves the control socket. A
@@ -72,10 +73,14 @@ public final class AgtermServer {
 
         let server = AgtermServer(configuration: configuration, store: store, catalog: catalog, identity: identity,
                                   panes: panes, lock: lock)
-        let socket = ServerControlSocket(path: configuration.socketPath) { [weak server] request in
+        let socket = ServerControlSocket(path: configuration.socketPath, handler: { [weak server] request in
             guard let server else { return ControlResponse(ok: false, error: "agterm-server is stopping") }
             return await server.handle(request)
-        }
+        }, adopter: { [weak server] conn, request, response, written in
+            ServerControlSocket.runBlocking { @MainActor in
+                server?.actions.streams.adopt(conn, request: request, response: response, written: written) ?? false
+            }
+        })
         server.adopt(runner)
         try socket.start()
         server.socket = socket
@@ -98,18 +103,14 @@ public final class AgtermServer {
 
     var zmx: any ZmxRunner { actions.panes.runner }
 
-    /// handle refuses a command the server does not serve, then dispatches the rest.
-    func handle(_ request: ControlRequest) async -> ControlResponse {
-        if let refusal = ServerCommandPolicy.refusal(request.cmd) { return ControlResponse(ok: false, error: refusal) }
-        return await ControlDispatcher(actions: actions).dispatch(request)
-            ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
-    }
+    func handle(_ request: ControlRequest) async -> ControlResponse { await actions.serve(request) }
 
     /// stop closes the socket, saves the store and gives up the state directory.
     public func stop() {
         guard lock != nil else { return }
         observer.stop()
         socket?.stop()
+        actions.streams.shutdown()
         socket = nil
         store.save()
         lock = nil

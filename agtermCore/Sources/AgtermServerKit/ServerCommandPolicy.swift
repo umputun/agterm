@@ -9,7 +9,11 @@ public enum ServerCommandPolicy {
         .sessionNew, .sessionRename, .sessionClose, .sessionMove, .sessionSplit, .sessionSplitClose, .sessionSwap,
         .sessionCompanionNew, .sessionText, .sessionType,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
-        .pickOpen, .pickResult, .pickCancel,
+        .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
+        .zmxTree, .zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe,
+        .sessionStatus, .sessionContext, .notify, .sessionHudOpen, .sessionHudUpdate, .sessionHudClose,
+        .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
+        .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

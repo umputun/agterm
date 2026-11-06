@@ -40,7 +40,7 @@ extension ControlServer {
                   DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true else {
                 return ControlResponse(ok: false, error: "session not visible")
             }
-            switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+            switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                         requireVisible: true, invalidPaneError: "ask pane must be left or right") {
             case let .resolved(identity, pane):
                 anchor = AskAnchor(sessionID: sessionID, pane: pane, paneIdentity: identity)
@@ -73,7 +73,7 @@ extension ControlServer {
         }
         let identity: UUID?
         let pane: OverlayPane?
-        switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+        switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                     requireVisible: true, invalidPaneError: "ask pane must be left or right") {
         case let .resolved(resolvedIdentity, resolvedPane):
             identity = resolvedIdentity
@@ -98,7 +98,7 @@ extension ControlServer {
               let session = store.session(withID: sessionID), let windowID = library.windowID(for: store) else {
             return nil
         }
-        switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+        switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                     requireVisible: false, invalidPaneError: "ask pane must be left or right") {
         case let .resolved(identity, pane):
             guard let opened = store.presentAskRemotely(ask, in: session, paneIdentity: identity, window: windowID) else {

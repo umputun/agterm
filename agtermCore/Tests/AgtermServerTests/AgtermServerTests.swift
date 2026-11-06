@@ -13,9 +13,9 @@ struct AgtermServerTests {
         let server = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
         defer { server.stop() }
 
-        let reply = try await Task.detached { [path = server.configuration.socketPath] in
+        let reply = try await offPool { [path = server.configuration.socketPath] in
             try send(ControlRequest(cmd: .version), to: path)
-        }.value
+        }
 
         #expect(reply.ok)
         #expect(reply.result?.headless == true)
@@ -27,9 +27,9 @@ struct AgtermServerTests {
         let server = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
         defer { server.stop() }
 
-        let reply = try await Task.detached { [path = server.configuration.socketPath] in
+        let reply = try await offPool { [path = server.configuration.socketPath] in
             try send(ControlRequest(cmd: .windowNew), to: path)
-        }.value
+        }
 
         #expect(reply == ControlResponse(ok: false, error: HeadlessCommandPolicy.physicalWindowRefusal(.windowNew)))
     }

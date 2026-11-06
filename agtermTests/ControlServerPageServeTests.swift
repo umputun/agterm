@@ -1,7 +1,7 @@
 import AppKit
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class ControlServerPageServeTests: XCTestCase {
@@ -356,7 +356,8 @@ final class ControlServerPageServeTests: XCTestCase {
         clients.append(peer)
         let owner = ControlStreamOwner(descriptor: pair[0], limits: ControlServer.pageServeLimits)
         let stream = PageServeStream(page: UUID(), source: .file(path: docs.appendingPathComponent("index.html").path,
-                                                                 grantRoot: docs.path), owner: owner, server: fix.server)
+                                                                 grantRoot: docs.path), owner: owner, host: fix.server,
+                                     mimeType: { ControlServer.pageMimeType($0) }, attachment: nil)
         owner.start(onLine: { _ in }, onClose: {})
         defer { stream.shutdown() }
         XCTAssertTrue(stream.bridgeSlots.tryAcquire())

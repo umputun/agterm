@@ -40,6 +40,31 @@ extension AppStore {
         }
     }
 
+    /// openHeadlessHud reserves the HUD slot with its spec alone, for a store whose presenter draws and measures the
+    /// panel (agterm-server): no helper command, body file or measured size, so the tree reports no geometry for it.
+    /// A live HUD is replaced, and a running program refuses, as `openHud`, including one handed to the presenter.
+    @discardableResult public func openHeadlessHud(_ sessionID: UUID, spec: HudSpec, paneIdentity: UUID? = nil) -> Bool {
+        guard let session = session(withID: sessionID), session.remoteOverlays.slot(nil) == nil else { return false }
+        if session.hudActive { closeOverlay(sessionID) }
+        guard !session.overlayActive else { return false }
+        session.overlayExitCode = nil
+        session.remoteOverlays.clearFailure(nil)
+        session.overlaySlotGeneration += 1
+        session.hudSpec = spec
+        session.hudPaneIdentity = paneIdentity
+        session.overlayActive = true
+        scheduleTreeChanged()
+        return true
+    }
+
+    /// updateHeadlessHud replaces a headless HUD's spec, keeping the fields the open fixed; false with no HUD up.
+    @discardableResult public func updateHeadlessHud(_ sessionID: UUID, spec: HudSpec, paneIdentity: UUID? = nil) -> Bool {
+        guard let session = session(withID: sessionID), let live = session.hudSpec, session.hudActive else { return false }
+        session.hudSpec = spec.holdingCreationFields(of: live)
+        session.hudPaneIdentity = paneIdentity
+        return true
+    }
+
     /// Publishes the session's live HUD to attached viewers. Called once its body is on disk, never before:
     /// a rejected open or update must not reach a viewer as a panel the origin is not showing.
     public func publishHud(forSession id: UUID, expiresAt: Date?, now: Date = Date()) {

@@ -378,17 +378,17 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agtermCore/Sources/agtermCore/CommandPath.swift`
 - Create/modify: tests in `AgtermServerTests` and `agtermCoreTests`
 
-- [ ] server `ControlActions` producing session effects: status, context, HUD, notify, ask, pick, overlay open
+- [x] server `ControlActions` producing session effects: status, context, HUD, notify, ask, pick, overlay open
       (program and every page kind) and their follow-ups (close, resize, reload, cancel, result), feeding the hub
-- [ ] serve `zmx tree`, `zmx present`, overlay job claim/run and page serve from the server through the same core
+- [x] serve `zmx tree`, `zmx present`, overlay job claim/run and page serve from the server through the same core
       engines the Mac uses; page bridge requests dispatch through the control dispatcher, not the GUI registry
-- [ ] image, markdown and text pages and HTML/URL pages from a headless origin reach the presenter
-- [ ] add `~/.local/bin` to the far-side PATH the Mac's ssh commands prepend, after the existing entries
-- [ ] today's per-session `zmx attach` from the Mac to an `agterm-server` session works unchanged: the Task 1 gate
+- [x] image, markdown and text pages and HTML/URL pages from a headless origin reach the presenter
+- [x] add `~/.local/bin` to the far-side PATH the Mac's ssh commands prepend, after the existing entries
+- [x] today's per-session `zmx attach` from the Mac to an `agterm-server` session works unchanged: the Task 1 gate
       run against `scripts/server-container.sh`, results, failures and unsupported kinds (image/markdown/text pages,
       pick, loopback URLs) recorded in `docs/remote-linux-gate.md`; a protocol incompatibility found here is fixed
       in core in this task
-- [ ] tests: presentation snapshot and deltas from a headless store, job claim once, page fetch and bridge, PATH
+- [x] tests: presentation snapshot and deltas from a headless store, job claim once, page fetch and bridge, PATH
       composition; ➕ (moved from Task 4) a program overlay with `TERMINFO` unset and no system `xterm-ghostty`
       entry still resolves it; hosted `agtermTests` for the changed `ControlServer+PageServe`, `+Presentation` and
       `+OverlayJobs` paths (`-only-testing`)

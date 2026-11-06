@@ -2,9 +2,16 @@ import Foundation
 import agtermCore
 
 /// ServerControlSocket serves agterm-server's control socket: one newline-delimited request and one reply per
-/// connection, handled inline on a single accept thread, as the Mac app serves its own.
+/// connection, handled inline on a single accept thread, as the Mac app serves its own. A streaming command's
+/// connection goes on to the adopter once its reply is written.
 public final class ServerControlSocket: @unchecked Sendable {
     public typealias Handler = @Sendable (ControlRequest) async -> ControlResponse
+    /// Adopter is handed a streaming command's connection with its reply and whether the reply was written; true
+    /// means it now owns the descriptor.
+    public typealias Adopter = @Sendable (_ conn: Int32, _ request: ControlRequest, _ response: ControlResponse,
+                                          _ written: Bool) -> Bool
+
+    static let streamingCommands: Set<Command> = [.zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe]
 
     static let readTimeoutSeconds = 5
     static let writeTimeoutSeconds = 5
@@ -13,12 +20,14 @@ public final class ServerControlSocket: @unchecked Sendable {
 
     private let path: String
     private let handler: Handler
+    private let adopter: Adopter?
     private let lock = NSLock()
     private var loop: ControlAcceptLoop?
 
-    public init(path: String, handler: @escaping Handler) {
+    public init(path: String, handler: @escaping Handler, adopter: Adopter? = nil) {
         self.path = path
         self.handler = handler
+        self.adopter = adopter
     }
 
     /// start binds the socket, mode 0600, and starts accepting. The caller holds the state-directory lock, which
@@ -31,9 +40,9 @@ public final class ServerControlSocket: @unchecked Sendable {
             throw UnixSocket.Failure.system("accept loop setup failed: \(String(cString: strerror(errno)))")
         }
         lock.withLock { self.loop = loop }
-        let handler = handler
+        let handler = handler, adopter = adopter
         let thread = Thread {
-            while let conn = loop.next() { Self.serve(conn, handler: handler) }
+            while let conn = loop.next() { Self.serve(conn, handler: handler, adopter: adopter) }
             loop.finish()
         }
         thread.name = "agterm-server.control.accept"
@@ -51,8 +60,9 @@ public final class ServerControlSocket: @unchecked Sendable {
         unlink(path)
     }
 
-    static func serve(_ conn: Int32, handler: @escaping Handler) {
-        defer { close(conn) }
+    static func serve(_ conn: Int32, handler: @escaping Handler, adopter: Adopter? = nil) {
+        var handedOff = false
+        defer { if !handedOff { close(conn) } }
         #if canImport(Darwin)
         var noSigPipe: Int32 = 1
         setsockopt(conn, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
@@ -73,7 +83,9 @@ public final class ServerControlSocket: @unchecked Sendable {
             _ = write(conn, ControlResponse(ok: false, error: ControlWire.invalidRequestMessage(error)))
             return
         }
-        _ = write(conn, runBlocking { await handler(request) })
+        let response = runBlocking { await handler(request) }
+        let written = write(conn, response)
+        if streamingCommands.contains(request.cmd), let adopter { handedOff = adopter(conn, request, response, written) }
     }
 
     /// readLine reads up to the first newline; nil on EOF before any byte, a read error, the size cap or the

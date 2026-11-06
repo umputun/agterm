@@ -15,6 +15,26 @@ struct RemoteSessionTests {
         #expect(argv.count == 8)
     }
 
+    @Test func theFarSidePathReachesACLIInstalledUnderTheUsersHome() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-path-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let bin = home.appendingPathComponent(".local/bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try "#!/bin/sh\n".writeExecutable(to: bin.appendingPathComponent("agterm-path-probe"))
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", RemoteSession.cliPathPrefix + "; command -v agterm-path-probe; printf '%s' \"$PATH\""]
+        process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin"]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+
+        let lines = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).split(separator: "\n")
+        #expect(lines.first.map(String.init) == bin.appendingPathComponent("agterm-path-probe").path)
+        #expect(lines.last.map(String.init) == "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin:\(home.path)/.local/bin")
+    }
+
     @Test func presentIsNonInteractiveAndRunsTheBridgeForThatSession() throws {
         let argv = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C")
 

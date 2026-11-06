@@ -51,6 +51,21 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         (try? String(contentsOfFile: ControlServer.bodyFile(for: session.id), encoding: .utf8)) ?? ""
     }
 
+    func testZmxPresentThroughTheDispatcherAcceptsOnlyALiveBackedSession() async throws {
+        let fix = try fixture()
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let request = ControlRequest(cmd: .zmxPresent, target: session.id.uuidString)
+
+        session.daemonBackedPanes.insert(session.paneIdentity)
+        let backed = await ControlDispatcher(actions: fix.server).dispatch(request)
+        session.daemonBackedPanes.removeAll()
+        let plain = await ControlDispatcher(actions: fix.server).dispatch(request)
+
+        XCTAssertEqual(backed, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString)))
+        XCTAssertEqual(plain, ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it"))
+    }
+
     func testAMirroredHudIsWrittenToThePanelAndMarkedAsTheBridges() throws {
         let fix = try fixture()
 

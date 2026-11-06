@@ -146,11 +146,19 @@ launch() {
     [[ -n "$APP_PID" ]] || sleep 1
   done
   [[ -n "$APP_PID" ]] || die "no new instance on $STATE appeared; nothing was stopped"
-  until [[ -S "$SOCK" ]]; do
-    (( SECONDS < end )) || die "no control socket at $SOCK 10s after launch"
+  # the socket binds from the window scene, which a launch that cannot take focus never renders until activated;
+  # a stopped instance leaves its socket file, so only an answer counts
+  local activated=""
+  until ctl tree --json >/dev/null 2>&1; do
+    if (( SECONDS >= end )) && [[ -z "$activated" ]]; then
+      # shellcheck disable=SC2086
+      env $vars open --env "AGTERM_STATE_DIR=$STATE" "$APP" 2>/dev/null
+      activated=1
+      end=$((SECONDS + 10))
+    fi
+    (( SECONDS < end )) || die "no answering control socket at $SOCK 10s after activating the instance"
     sleep 1
   done
-  ctl tree --json >/dev/null || die "control socket at $SOCK does not answer"
 }
 
 stop_app() {
@@ -276,8 +284,8 @@ check overlay-closed "$LOCAL" '.overlay == false'
 PAGE="/tmp/agterm-gate-$RANDOM.html"
 rctl_shell "printf '<h1>gate</h1>\\n' > $PAGE" >/dev/null
 rctl session overlay open --html "$PAGE" --target "$SESSION" >/dev/null
-page_id="$(origin_node | jq -r '[.htmlOverlays[]? | select(.remote == true) | .id][0] // empty')"
-detach_during detach-page "[.htmlOverlays[]? | select(.replica == true and .id == \"$page_id\")] | length == 1"
+# a replica runs under a page id of the presenting Mac's own, so it is matched by the origin's file
+detach_during detach-page "[.htmlOverlays[]? | select(.replica == true and .file == \"$PAGE\")] | length == 1"
 rctl session overlay close --target "$SESSION" >/dev/null 2>&1 || true
 
 start_remote "$STATE/detach-ask.out" "$(remote_line agtermctl ask "gate detach ask" --button ok=OK --target "$SESSION")"

@@ -10,21 +10,35 @@ extension AppStore {
     /// cancel and teardown path that already ends an ask here ends this one too and tells the presenter.
     public func presentAskRemotely(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
                                    window: WindowInfo.ID) -> Bool? {
+        switch openRemoteAsk(ask, in: session, paneIdentity: paneIdentity, window: window) {
+        case .opened: true
+        case .slotTaken: false
+        case .notPresented, .formUnsupported, .otherUnsupported, .tooLarge: nil
+        }
+    }
+
+    /// openRemoteAsk is `presentAskRemotely` with the reason an ask stayed unsent, for a host that cannot draw it
+    /// locally and has to tell its caller why.
+    public func openRemoteAsk(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
+                              window: WindowInfo.ID) -> RemoteAskOpening {
         guard let hub = presentationHub, hub.hasPresenter(session: session.id),
-              presentsRemotely(session, paneIdentity: paneIdentity) else { return nil }
+              presentsRemotely(session, paneIdentity: paneIdentity) else { return .notPresented }
         let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
         if request.needsFormSupport {
-            guard hub.presenterSupports(PresentationHub.askFormKind, session: session.id), request.fitsFrames() else { return nil }
+            guard hub.presenterSupports(PresentationHub.askFormKind, session: session.id) else { return .formUnsupported }
+            guard request.fitsFrames() else { return .tooLarge }
         }
-        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session.id) { return nil }
-        guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return false }
+        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session.id) {
+            return .otherUnsupported
+        }
+        guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return .slotTaken }
         AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
         session.onRemoteAskEnded = { [weak hub, id = session.id] askID in
             hub?.sendToPresenter(.askDismiss(PresentationAskRef(id: askID, owner: owner)), session: id)
         }
         hub.sendToPresenter(.askRequest(request), session: session.id)
-        return true
+        return .opened
     }
 
     /// Applies the presenter's answer. Refused unless it is for the ask this session is presenting under that
@@ -71,4 +85,14 @@ extension AppStore {
         guard let session = session(withID: id), let ask = session.askPending else { return }
         session.resolveAsk(id: ask.id, ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
     }
+}
+
+/// RemoteAskOpening is what became of an ask handed to a session's presenter.
+public enum RemoteAskOpening: Equatable, Sendable {
+    case opened
+    case slotTaken
+    case notPresented
+    case formUnsupported
+    case otherUnsupported
+    case tooLarge
 }

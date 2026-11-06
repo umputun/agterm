@@ -23,7 +23,7 @@ final class MarkdownProbeTests: XCTestCase {
 
         XCTAssertEqual(probe.markdown, "# Title\n\ntext\n")
         XCTAssertEqual(probe.images, MarkdownPage.Embedded())
-        XCTAssertNoThrow(try MarkdownProbe.check(path: path).get())
+        XCTAssertNoThrow(try MarkdownFile.check(path: path).get())
     }
 
     func testAFifoAMissingFileAndNonUTF8AreRefused() throws {
@@ -33,10 +33,10 @@ final class MarkdownProbeTests: XCTestCase {
         let binary = dir.appendingPathComponent("bin.md")
         try Data([0xFF, 0xFE, 0x00, 0xC3]).write(to: binary)
 
-        XCTAssertEqual(failure(fifo), MarkdownProbe.Failure.unreadable(fifo).description)
-        XCTAssertEqual(failure(missing), MarkdownProbe.Failure.unreadable(missing).description)
-        XCTAssertEqual(failure(binary.path), MarkdownProbe.Failure.notText(binary.path).description)
-        guard case .failure = MarkdownProbe.check(path: fifo) else { return XCTFail("a fifo passed the check") }
+        XCTAssertEqual(failure(fifo), MarkdownFile.Failure.unreadable(fifo).description)
+        XCTAssertEqual(failure(missing), MarkdownFile.Failure.unreadable(missing).description)
+        XCTAssertEqual(failure(binary.path), MarkdownFile.Failure.notText(binary.path).description)
+        guard case .failure = MarkdownFile.check(path: fifo) else { return XCTFail("a fifo passed the check") }
     }
 
     func testAnOversizedFileIsRefusedByTheCheckAndTheLoad() throws {
@@ -46,8 +46,8 @@ final class MarkdownProbeTests: XCTestCase {
         try handle.truncate(atOffset: UInt64(MarkdownPage.maxBytes + 1))
         try handle.close()
 
-        XCTAssertEqual(failure(big.path), MarkdownProbe.Failure.tooLarge(big.path).description)
-        guard case .failure(.tooLarge) = MarkdownProbe.check(path: big.path) else { return XCTFail("the check passed") }
+        XCTAssertEqual(failure(big.path), MarkdownFile.Failure.tooLarge(big.path).description)
+        guard case .failure(.tooLarge) = MarkdownFile.check(path: big.path) else { return XCTFail("the check passed") }
     }
 
     func testAPictureInTheFolderIsEmbeddedOnceForEachReference() throws {
