@@ -32,7 +32,7 @@ chmod +x ~/.config/agterm/subagent-status/*.sh
 chmod -x ~/.config/agterm/subagent-status/subagent-common.sh
 ```
 
-`subagent-common.sh` is sourced by the other scripts, never run. Its variables have defaults and can be exported from `~/.claude/settings.json`'s `env` block:
+`subagent-common.sh` is sourced by the other scripts, never run. Its variables have defaults and can be exported from `~/.claude/settings.json`'s `env` block. That block reaches the hooks but not the chord, which agterm runs, so set `AGTERMCTL` and `AGT_SUBAGENT_STATE` on the keymap line too (shown below), or the picker reads another state directory and finds no subagents:
 
 | variable | default | what it is |
 |---|---|---|
@@ -81,6 +81,8 @@ Add the chord to `keymap.conf` and run `agtermctl keymap reload`:
 command "Subagents" ctrl+a>s ~/.config/agterm/subagent-status/subagent-pick.sh {AGT_SESSION_ID}
 ```
 
+With either variable changed, the line names it before the script, for example `AGT_SUBAGENT_STATE=~/state/subagents ~/.config/agterm/subagent-status/subagent-pick.sh {AGT_SESSION_ID}`.
+
 To remove: delete the seven entries from `settings.json`, run Help ▸ Install Agent Status Hooks… once to restore the stock `Stop`, delete the `keymap.conf` line, then the state and recipe directories.
 
 ## Usage
@@ -91,11 +93,11 @@ Press the chord in that session to pick a subagent, or pick **Subagents** from N
 
 ## How it works
 
-Claude Code fires `SubagentStart` and `SubagentStop` with the subagent's `agent_id` and the parent's `session_id`, and a subagent's own tool calls reach `PreToolUse` with the same `agent_id`; the parent's calls carry none, so the `activity` mode ignores them. Claude Code also runs helper agents of its own, which fire `SubagentStop` and tool hooks without ever firing `SubagentStart`; only an id that started is counted, so they never show. A worker agent that another agent starts inside the session, such as `claude -p` from a tool call, inherits the session's `AGTERM_SESSION_ID`; the hook walks its own process ancestry, as the hooks package's Claude adapter does, and stays silent when a second agent sits above the `claude` that fired it, so a worker never takes over the line or clears it on exit. Each fact goes in its own file under `<state>/conversations/<conversation>/`, apart from the agterm session, because `--resume` can bring a conversation back in another session; the session's own directory holds only which conversation it shows and the pids. Each file is written to a temporary name and renamed, so parallel subagents finishing together never rewrite one file.
+Claude Code fires `SubagentStart` and `SubagentStop` with the subagent's `agent_id` and the parent's `session_id`, and a subagent's own tool calls reach `PreToolUse` with the same `agent_id`; the parent's calls carry none, so the `activity` mode ignores them. Claude Code also runs helper agents of its own, which fire `SubagentStop` and tool hooks without ever firing `SubagentStart`; only an id that started is counted, so they never show. A worker agent that another agent starts inside the session, such as `claude -p` from a tool call, inherits the session's `AGTERM_SESSION_ID`; the hook walks its own process ancestry, as the hooks package's Claude adapter does and reading a runtime's first argument so an npm-installed `claude` under `node` counts, and stays silent when a second agent sits above the `claude` that fired it, so a worker never takes over the line or clears it on exit. Each fact goes in its own file under `<state>/conversations/<conversation>/`, apart from the agterm session, because `--resume` can bring a conversation back in another session; the session's own directory holds only which conversation it shows and the pids. Each file is written to a temporary name and renamed, so parallel subagents finishing together never rewrite one file.
 
 Each start and stop sets the line at once. A start also launches one background refresher per session, which sets the line again every ten seconds with a thirty-second `--hide-after`, because `session info` expects its caller to refresh before the timeout. The refresher stops on its own: when no subagent runs, it sets the final line with the one-minute linger and exits; when the `claude` process it recorded is gone, or no hook has fired for half an hour, it clears the line and exits. A killed agent therefore leaves no line behind.
 
-The turn-end hold is two markers. `Stop` with a subagent still running writes `turn-ended` instead of posting `completed`; `SubagentStop` that leaves nothing running finds the marker and posts `completed --auto-reset`. `UserPromptSubmit` removes the marker, so a new prompt is never followed by a stale `completed`.
+The turn-end hold is two markers. `Stop` with a subagent still running writes `turn-ended` instead of posting `completed`; `SubagentStop` that leaves nothing running finds the marker and posts `completed --auto-reset`. `UserPromptSubmit` removes the marker, so a new prompt is never followed by a stale `completed`. A `claude` killed mid-run never sends `SubagentStop`, so each start records the `claude` pid beside the status, and a running subagent whose `claude` is gone counts as finished in the line, the hold and the picker; resuming that conversation therefore never leaves the row active.
 
 The transcript path is `<parent transcript without .jsonl>/subagents/agent-<id>.jsonl`, and the description comes from the `.meta.json` beside it. `transcript-view.sh` renders the JSONL through JavaScript for Automation into two files and pages both with `less`.
 
@@ -106,4 +108,6 @@ The transcript path is `<parent transcript without .jsonl>/subagents/agent-<id>.
 - Only Claude Code. Codex sends similar payloads, but its rollouts and its shared daemon need different handling; `transcript-view.sh` already reads Codex rollouts.
 - Subagents that ran before the recipe was installed, or while agterm was not running, are not in the state and do not show after `--resume`.
 - The line is one summary, not one row per subagent; the picker is where each one is listed.
+- The line belongs to the session, not to a pane. A second Claude Code in the session's split or scratch pane takes over the line and the picker, and the one that ran a hook last wins.
+- Any other caller of `session info` on the same session, such as `claude-git-info`, overwrites, and is overwritten by, this recipe.
 - The state directory holds transcript paths, which name the directories you work in, and is created 0700. Each Claude Code start removes sessions and conversations untouched for 30 days, so resuming an older conversation shows none of its earlier subagents.

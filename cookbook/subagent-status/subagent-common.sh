@@ -6,6 +6,7 @@
 #   $AGT_SUBAGENT_STATE/<agterm session>/current                   the conversation the session shows
 #   $AGT_SUBAGENT_STATE/<agterm session>/agent.pid                 the claude process, the refresher's stop condition
 #   $AGT_SUBAGENT_STATE/conversations/<conversation>/<id>.status   running | completed
+#   ...                                             /<id>.pid      the claude process that started it
 #   ...                                             /<id>.activity the tool call it ran last
 #   ...                                             /<id>.transcript its JSONL
 #   ...                                             /turn-ended    the parent's turn ended with subagents still running
@@ -37,11 +38,23 @@ post_status() {
   fi
 }
 
+# status_of DIR/ID prints a subagent's status. A claude killed mid-run never sends its SubagentStop, so a
+# running subagent whose claude is gone counts as finished
+status_of() {
+  local status pid
+  status=$(read_file "$1.status")
+  if [ "$status" = running ]; then
+    pid=$(read_file "$1.pid")
+    [ -z "$pid" ] || kill -0 "$pid" 2>/dev/null || status=completed
+  fi
+  printf '%s' "$status"
+}
+
 # count_status DIR STATUS
 count_status() {
   local n=0 f
   for f in "$1"/*.status; do
-    [ -f "$f" ] && [ "$(read_file "$f")" = "$2" ] && n=$((n + 1))
+    [ -f "$f" ] && [ "$(status_of "${f%.status}")" = "$2" ] && n=$((n + 1))
   done
   printf '%s' "$n"
 }
@@ -51,7 +64,7 @@ latest_activity() {
   local newest=
   for f in "$1"/*.activity; do
     [ -f "$f" ] || continue
-    [ "$(read_file "${f%.activity}.status")" = running ] || continue
+    [ "$(status_of "${f%.activity}")" = running ] || continue
     [ -z "$newest" ] || [ "$f" -nt "$newest" ] && newest=$f
   done
   [ -n "$newest" ] && read_file "$newest"
