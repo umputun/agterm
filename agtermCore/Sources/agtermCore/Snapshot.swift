@@ -210,6 +210,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var collapsed: Bool?
     /// page is a page row's page; nil is a terminal, so a snapshot written before page rows restores unchanged.
     public var page: PageSnapshot?
+    /// ended is written only when true; see `Session.ended`.
+    public var ended: Bool?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,
                 customName: String?, cwd: String, isSplit: Bool? = nil, hasSplit: Bool? = nil,
@@ -221,9 +223,10 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
                 context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil,
-                parentID: UUID? = nil, collapsed: Bool? = nil, page: PageSnapshot? = nil) {
+                parentID: UUID? = nil, collapsed: Bool? = nil, page: PageSnapshot? = nil, ended: Bool? = nil) {
         self.id = id
         self.page = page
+        self.ended = ended
         self.parentID = parentID
         self.collapsed = collapsed
         self.paneIdentity = paneIdentity
@@ -257,7 +260,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
-        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed, page
+        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed, page, ended
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -301,6 +304,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         } catch {
             page = PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason))
         }
+        ended = (try? c.decodeIfPresent(Bool.self, forKey: .ended)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil

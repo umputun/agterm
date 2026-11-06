@@ -424,8 +424,7 @@ struct ZmxReplayScriptTests {
     }
 
     private func makeExecutable(_ url: URL, contents: String) throws {
-        try contents.write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
+        try contents.writeExecutable(to: url, mode: 0o700)
     }
 
     private func makeArgumentProbe(_ url: URL) throws {

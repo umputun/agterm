@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "agtermCore", targets: ["agtermCore"]),
         .library(name: "AgtermResponsibility", targets: ["AgtermResponsibility"]),
         .executable(name: "agtermctl", targets: ["agtermctl"]),
+        .executable(name: "agterm-server", targets: ["agterm-server"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
@@ -28,6 +29,12 @@ let package = Package(
         // debug-only fixture: it imports agtermctlKit @testable, and release builds name their products.
         .executableTarget(name: "session-wait-watchdog-probe", dependencies: ["agtermctlKit"]),
         .testTarget(name: "agtermctlKitTests", dependencies: ["agtermctlKit", "agtermctl", "session-wait-watchdog-probe"]),
+        .target(name: "AgtermServerKit", dependencies: ["agtermCore"]),
+        .executableTarget(
+            name: "agterm-server",
+            dependencies: ["AgtermServerKit", "agtermCore", .product(name: "ArgumentParser", package: "swift-argument-parser")]
+        ),
+        .testTarget(name: "AgtermServerTests", dependencies: ["AgtermServerKit"]),
     ],
     swiftLanguageModes: [.v6]
 )

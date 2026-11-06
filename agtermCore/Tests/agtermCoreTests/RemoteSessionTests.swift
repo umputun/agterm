@@ -594,7 +594,6 @@ private struct FakeRemote {
 
     private func write(name: String, script: String) throws {
         let url = root.appendingPathComponent(name)
-        try ("#!/bin/sh\n" + script + "\n").write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        try ("#!/bin/sh\n" + script + "\n").writeExecutable(to: url)
     }
 }

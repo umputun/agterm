@@ -160,10 +160,39 @@ jobs:
     container: swift:6.3.2-noble
     steps:
       - uses: actions/checkout@v7
-      - name: Install jq, zsh and tcsh
+      - name: Install jq, zsh, fish and tcsh
         # jq: the codex status hook reads its JSON with it where plutil does not exist; the shells: tests run
-        # scripts under each login shell the remote commands must survive
-        run: apt-get update && apt-get install -y --no-install-recommends jq zsh tcsh
+        # scripts under each login shell the remote commands must survive, and server panes run zsh, fish and bash
+        run: apt-get update && apt-get install -y --no-install-recommends jq zsh fish tcsh xz-utils curl ca-certificates
+      - name: Read the pinned zmx and ghostty revisions
+        id: zmx
+        run: |
+          echo "rev=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
+          echo "ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)" >> "$GITHUB_OUTPUT"
+      - name: Cache the Linux shell integration
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/linux/ghostty
+            build/linux/.shell-integration-stamp
+          key: shell-integration-linux-v1-${{ steps.zmx.outputs.ghostty }}
+      - name: Stage the Linux shell integration
+        # the zsh, fish and bash integration agterm-server panes load, from ghostty's source at the pin
+        run: scripts/setup-zmx-linux.sh --shell-integration
+      - name: Cache the Linux zmx
+        id: zmx-cache
+        uses: actions/cache@v6
+        with:
+          path: build/linux/x86_64
+          key: zmx-linux-v1-${{ steps.zmx.outputs.rev }}-x86_64-${{ hashFiles('scripts/zmx-patches/**/*.patch') }}
+      - name: Build the Linux zmx
+        # the musl zmx agterm-server runs; AgtermServerTests drive real daemons with it
+        if: steps.zmx-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz | tar -xJ -C /opt
+          AGTERM_ZMX_ZIG=/opt/zig-x86_64-linux-0.16.0/zig AGTERM_ZMX_TARGET=x86_64-linux-musl \
+            AGTERM_ZMX_STAGE_DIR=build/linux/x86_64/zmx AGTERM_ZMX_STAMP_FILE=build/linux/x86_64/.zmx-build-stamp \
+            scripts/setup.sh --zmx-only
       - name: Create the test user
         # root passes the permission checks several tests rely on failing
         run: |
@@ -174,7 +203,8 @@ jobs:
         run: runuser --user agterm-test -- env HOME=/home/agterm-test swift build --build-tests
       - name: swift test
         working-directory: agtermCore
-        run: runuser --user agterm-test -- env HOME=/home/agterm-test swift test --skip-build
+        # the server's real-daemon suite and the fish cases fail rather than skip without zmx or fish
+        run: runuser --user agterm-test -- env HOME=/home/agterm-test AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1 swift test --skip-build
 
   build:
     name: Build app

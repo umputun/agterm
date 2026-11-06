@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 
 /// ControlAcceptLoop owns a listening socket for exactly as long as one accept loop uses it. A descriptor the
@@ -7,8 +6,8 @@ import Foundation
 /// loop, and the loop closes the listener itself through `finish()`, after which the number can be reused.
 /// `shutdown` cannot be the wake: on a listening Unix socket it fails with ENOTCONN and leaves `accept`
 /// parked, so the loop waits in `poll` on the listener and a wake pipe, and the listener is nonblocking.
-final class ControlAcceptLoop: @unchecked Sendable {
-    let listenFD: Int32
+public final class ControlAcceptLoop: @unchecked Sendable {
+    public let listenFD: Int32
     private let wakeRead: Int32
     private let wakeWrite: Int32
     private let lock = NSLock()
@@ -16,7 +15,7 @@ final class ControlAcceptLoop: @unchecked Sendable {
     private var finished = false
 
     /// init takes ownership of a bound, listening `listenFD`; nil when the wake pipe cannot be made.
-    init?(listenFD: Int32) {
+    public init?(listenFD: Int32) {
         var pipeFDs: [Int32] = [-1, -1]
         guard pipe(&pipeFDs) == 0 else { return nil }
         for fd in [listenFD, pipeFDs[0], pipeFDs[1]] {
@@ -29,7 +28,7 @@ final class ControlAcceptLoop: @unchecked Sendable {
     }
 
     /// stop asks the loop to end and wakes it; it closes nothing, so it may run on any thread.
-    func stop() {
+    public func stop() {
         lock.lock()
         defer { lock.unlock() }
         stopped = true
@@ -46,7 +45,7 @@ final class ControlAcceptLoop: @unchecked Sendable {
 
     /// next waits for the next connection and returns it as a blocking socket, or nil once the loop must end:
     /// after `stop()`, or on an error the listener cannot recover from.
-    func next() -> Int32? {
+    public func next() -> Int32? {
         while true {
             if isStopped { return nil }
             var fds = [pollfd(fd: listenFD, events: Int16(POLLIN), revents: 0),
@@ -81,7 +80,7 @@ final class ControlAcceptLoop: @unchecked Sendable {
     }
 
     /// finish closes the listener and the wake pipe; only the loop calls it, once `next()` returned nil.
-    func finish() {
+    public func finish() {
         lock.lock()
         defer { lock.unlock() }
         guard !finished else { return }

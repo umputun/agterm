@@ -292,9 +292,19 @@ public enum ZmxSupport {
     }
 
     public static func socketDirectory(forStateDirectory stateDirectory: String) -> String {
+        "/tmp/agterm-zmx-\(stateHash(stateDirectory))"
+    }
+
+    /// socketDirectory under `runtimeDirectory` is agterm-server's: `XDG_RUNTIME_DIR` is kept for a lingering
+    /// user, while a distribution's tmp cleanup can empty `/tmp` under a live daemon.
+    public static func socketDirectory(forStateDirectory stateDirectory: String, runtimeDirectory: String) -> String {
+        (runtimeDirectory as NSString).appendingPathComponent("agterm-zmx-\(stateHash(stateDirectory))")
+    }
+
+    private static func stateHash(_ stateDirectory: String) -> String {
         let canonical = URL(fileURLWithPath: stateDirectory, isDirectory: true)
             .standardizedFileURL.resolvingSymlinksInPath().path
-        return "/tmp/agterm-zmx-\(stableHash(canonical))"
+        return stableHash(canonical)
     }
 
     public static func daemonName(for paneIdentity: UUID) -> String {

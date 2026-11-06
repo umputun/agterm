@@ -228,8 +228,7 @@ struct OverlayRunJobTests {
         try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: bin) }
         let tool = (bin as NSString).appendingPathComponent("agterm-fixture-tool")
-        try "#!/bin/sh\nexit 0\n".write(toFile: tool, atomically: true, encoding: .utf8)
-        chmod(tool, 0o755)
+        try "#!/bin/sh\nexit 0\n".writeExecutable(to: URL(fileURLWithPath: tool))
         let session = UUID()
         let environment = SurfaceEnvironment.session(sessionID: session, windowID: nil, workspaceID: nil,
                                                      socketPath: "/tmp/origin.sock", programVersion: "9.9.9")

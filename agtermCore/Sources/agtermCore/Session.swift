@@ -81,6 +81,9 @@ public final class Session: Identifiable {
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
+    /// ended marks a headless origin's session left with no live pane after a daemon was lost, kept in the catalog
+    /// until `session.close` removes it; a Mac never sets it.
+    public var ended = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
     /// parentID names this session's top-level parent; conversion and reopen may update it.

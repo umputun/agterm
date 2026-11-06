@@ -91,7 +91,10 @@ fi
 zig_for() {
   local formula="$1" want="${1#zig@}" zig ver
   zig="$(brew --prefix "$formula" 2>/dev/null || true)/bin/zig"
-  if [[ ! -x "$zig" ]]; then
+  # a Linux CI job has no Homebrew; it names the zig it unpacked, held to the same version check
+  if [[ "$formula" == "$ZMX_ZIG_FORMULA" && -n "${AGTERM_ZMX_ZIG:-}" ]]; then
+    zig="$AGTERM_ZMX_ZIG"
+  elif [[ ! -x "$zig" ]]; then
     echo "installing $formula..." >&2
     brew install "$formula" >&2 || return 1
     zig="$(brew --prefix "$formula")/bin/zig" || return 1

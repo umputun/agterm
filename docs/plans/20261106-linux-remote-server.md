@@ -114,7 +114,7 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
     streams an epoch/revision-numbered snapshot and deltas of the whole catalog. It is the single source the
     remote window reconciles from; a reply never mutates the mirror directly.
   - Session effects keep using today's per-session presentation stream unchanged.
-- **Sessions with no surface.** On the server a pane is a detached zmx daemon (`zmx run NAME -d COMMAND`) recorded in
+- **Sessions with no surface.** On the server a pane is a detached zmx daemon (`zmx attach --detached NAME [COMMAND]`, patch 0005) recorded in
   the model with its stable pane identity; attachability, `--pane-id` resolution and swap read that state, never a
   surface. The Mac attaches each pane with today's `zmx attach` over ssh.
 - **Presentation without a local client.** A headless origin delegates asks, pick, pages and program overlays to its
@@ -324,34 +324,43 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agtermCore/Sources/agtermCore/ZmxSupport.swift` (Linux socket directory, server shell configuration)
 - Modify: `.github/workflows/ci.yml` (real-zmx lifecycle run on the Linux job)
 - Create: `agtermCore/Tests/AgtermServerTests/`
+- ➕ Create: `agtermCore/Sources/agtermCore/ControlAcceptLoop.swift`, `UnixSocket.swift` (moved from the app with their tests)
+- ➕ Modify: `agtermCore/Sources/agtermCore/Session.swift`, `Snapshot.swift`, `ControlProjection.swift`, `AppStore+Snapshot.swift`, `AppStore+Panes.swift` (`ended`)
+- ➕ Modify: `agtermCore/Sources/agtermCore/TerminfoInstall.swift` (Linux lookup)
+- ➕ Create: `scripts/zmx-patches/0005-detached-create.patch`; modify `scripts/zmx-patches/README.md`, `check.py`, `scripts/setup.sh` (`AGTERM_ZMX_ZIG`)
+- ➕ Create: `scripts/server-container.sh`; modify `scripts/setup-zmx-linux.sh` (`--shell-integration` from ghostty's source at the pin), `.claude/rules/ci.md`
+- ➕ Create: `agtermCore/Tests/agtermCoreTests/TestExecutable.swift`, `agtermCore/Tests/agtermctlKitTests/TestExecutable.swift` (scripts written from a child process)
 
-- [ ] `agterm-server` executable: main-actor run loop, state dir lock, durable catalog id, `AppStore` restored from
+- [x] `agterm-server` executable: main-actor run loop, state dir lock, durable catalog id, `AppStore` restored from
       and saved to the server state dir
-- [ ] Linux control socket server on the shared framing (stream ownership, backpressure), with the Mac's
+- [x] Linux control socket server on the shared framing (stream ownership, backpressure), with the Mac's
       `ControlStreamOwner` moved onto the same framing; only server-supported commands accepted, the rest refused
-- [ ] `ControlActions` for the server: `session.new`, split on/off/close, swap, rename, close, workspace create,
+- [x] `ControlActions` for the server: `session.new`, split on/off/close, swap, rename, close, workspace create,
       rename, delete and move, companions, `session text`/`type` through zmx; each provisions or ends detached zmx
-      daemons (`zmx run NAME -d`) with the session environment
-- [ ] process placement: under a systemd user manager each daemon starts in its own transient scope, outside the
+      daemons (`zmx attach --detached NAME`, patch 0005) with the session environment
+- [x] process placement: under a systemd user manager each daemon starts in its own transient scope, outside the
       server unit's cgroup; the server never runs the zero-client reap
-- [ ] shells: zsh, fish and bash login shells with ghostty's shell integration from the Task 2 artifact; other
+- [x] shells: zsh, fish and bash login shells with ghostty's shell integration from the Task 2 artifact; other
       shells refused with a message naming the supported ones; Mac Live-mode shell rule unchanged
-- [ ] Linux zmx socket directory under `$XDG_RUNTIME_DIR`; Mac resolution unchanged
-- [ ] terminfo: `TerminfoInstall` finds the server's shipped `xterm-ghostty` entry on Linux, and panes and program
+- [x] Linux zmx socket directory under `$XDG_RUNTIME_DIR`; Mac resolution unchanged
+- [x] terminfo: `TerminfoInstall` finds the server's shipped `xterm-ghostty` entry on Linux, and panes and program
       overlays whose `TERM` names it get `TERMINFO` pointing at it
-- [ ] continuous daemon observation replacing the renderer's callbacks: a primary or split shell that exits ends
+- [x] continuous daemon observation replacing the renderer's callbacks: a primary or split shell that exits ends
       its pane (a live split is promoted, a parent with companions respawns as on the Mac), a daemon that vanishes
       while running ends that pane only (a live split is promoted), and a session left with no live pane stays in
       the catalog as `ended`, removed only by `session.close` on it; each
       pane's cwd is read from `/proc/<pid>/cwd` of its foreground process so split and new session inherit it
-- [ ] restart reconciliation: a restarted server adopts surviving daemons from the catalog, marks missing ones
+- [x] restart reconciliation: a restarted server adopts surviving daemons from the catalog, marks missing ones
       ended, and never reaps a live pane
-- [ ] `scripts/server-container.sh`: builds the Linux `agterm-server`, `agtermctl`, zmx and shell integration from
+- [x] `scripts/server-container.sh`: builds the Linux `agterm-server`, `agtermctl`, zmx and shell integration from
       this tree into a local container with sshd, key auth and a systemd user manager with linger, starts or stops
       it, and prints the ssh host; every later task's container checks use it
-- [ ] Linux CI: the Linux job builds the musl zmx and runs the `AgtermServerTests` lifecycle suite against a real
+- [x] Linux CI: the Linux job builds the musl zmx and runs the `AgtermServerTests` lifecycle suite against a real
       daemon (`AGTERM_REQUIRE_ZMX=1`), mirroring the macOS job
-- [ ] tests: lifecycle of each command against a fake zmx runner and against a real daemon; natural primary and
+- [x] ➕ `session.move` served before Task 6, which needs a receipt for every structural command
+- [x] ➕ Linux `ServerProcess` children get only stdin, stdout and stderr (a daemon inherited every other open descriptor for life)
+- [x] ➕ test scripts are written from a child process: a write descriptor held by the test process reached a concurrent spawn and Linux refused the exec (ETXTBSY), which the server suite's spawns made frequent
+- [x] tests: lifecycle of each command against a fake zmx runner and against a real daemon; natural primary and
       split exit, missing daemon while running, cd then split/new-session cwd, all with no Mac connected; restart
       adoption; zsh, fish and bash panes and a refused shell; socket directory per platform; `TerminfoInstall`
       Linux lookup and the pane environment's `TERMINFO` (the program-overlay case moves to Task 5); refusal of

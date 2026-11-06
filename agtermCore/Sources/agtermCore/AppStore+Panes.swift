@@ -364,6 +364,16 @@ extension AppStore {
         return session.splitPaneIdentity.map(session.daemonBackedPanes.contains) ?? false
     }
 
+    /// markSessionEnded keeps a headless session whose last live pane's daemon was lost, rather than closing it:
+    /// the row stays as ended until `session.close` removes it.
+    public func markSessionEnded(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), !session.ended else { return }
+        session.ended = true
+        session.daemonBackedPanes.removeAll()
+        scheduleTreeChanged()
+        save()
+    }
+
     /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane
     /// split is live, BOTH `surface` and `splitSurface` set. Otherwise this was the session's last pane —
     /// promoted into the primary slot (`splitSurface == nil`) while keeping the split pane's `onExit`, so its

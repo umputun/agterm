@@ -32,7 +32,7 @@ struct ClaudeStatusHookTests {
         let calls = dir.appendingPathComponent("calls")
         let wrapper = dir.appendingPathComponent("status-wrapper")
         let spawner = dir.appendingPathComponent("spawn-chain.sh")
-        try "#!/bin/bash\nprintf '%s\\n' \"$*\" >> '\(calls.path)'\n".write(to: wrapper, atomically: true, encoding: .utf8)
+        try "#!/bin/bash\nprintf '%s\\n' \"$*\" >> '\(calls.path)'\n".writeExecutable(to: wrapper)
         // each level re-enters this script with one fewer name. The subshell is what makes the level a
         // separate process: `exec -a` replaces its own process, so without the fork the whole chain would
         // collapse onto one pid, and the trailing `exit` keeps bash from optimizing that fork away.
@@ -54,9 +54,7 @@ struct ClaudeStatusHookTests {
           *)   ( exec -a "$first" /bin/bash "$0" ${rest[@]+"${rest[@]}"} -- "$@" ) ;;
         esac
         exit $?
-        """.write(to: spawner, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wrapper.path)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: spawner.path)
+        """.writeExecutable(to: spawner)
         // a hosted level needs the spawner under the agent's own name, so the walk reads it as argv[1]
         for level in chain where level.contains(":") {
             try fm.copyItem(at: spawner, to: dir.appendingPathComponent(String(level.split(separator: ":")[1])))

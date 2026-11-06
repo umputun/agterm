@@ -309,15 +309,23 @@ private struct Fixture {
         return dir.path
     }
 
-    /// The bundle shape the installed CLI resolves into: `Contents/MacOS/agtermctl` beside
-    /// `Contents/Resources/terminfo`.
+    /// The shape the installed CLI resolves into: `Contents/MacOS/agtermctl` beside `Contents/Resources/terminfo`,
+    /// and on Linux agterm-server's install, `agtermctl` beside `resources/terminfo`.
     func bundle(layout: String) throws -> (client: String, terminfo: String) {
+        #if os(Linux)
+        let install = root.appendingPathComponent("agterm-server")
+        try FileManager.default.createDirectory(at: install, withIntermediateDirectories: true)
+        let server = install.appendingPathComponent("agtermctl")
+        try Data().write(to: server)
+        return (server.path, try database(name: "agterm-server/resources/terminfo", layout: layout))
+        #else
         let contents = root.appendingPathComponent("agterm.app/Contents")
         try FileManager.default.createDirectory(at: contents.appendingPathComponent("MacOS"), withIntermediateDirectories: true)
         let client = contents.appendingPathComponent("MacOS/agtermctl")
         try Data().write(to: client)
         let terminfo = try database(name: "agterm.app/Contents/Resources/terminfo", layout: layout)
         return (client.path, terminfo)
+        #endif
     }
 
     /// A database the real `tic` compiled from `source`, so the real `infocmp` has something to dump.
@@ -437,8 +445,7 @@ private struct Fixture {
 
     @discardableResult
     private func script(at file: URL, body: String) throws -> String {
-        try "#!/bin/sh\n\(body)\n".write(to: file, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        try "#!/bin/sh\n\(body)\n".writeExecutable(to: file)
         return file.path
     }
 }

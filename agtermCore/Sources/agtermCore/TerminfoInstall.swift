@@ -56,9 +56,14 @@ public enum TerminfoInstall {
     static func candidateDirectories(clientPath: String?, environment: [String: String]) -> [String] {
         var candidates: [String] = []
         if let clientPath {
-            let macOS = (clientPath as NSString).deletingLastPathComponent
-            let contents = (macOS as NSString).deletingLastPathComponent
+            let directory = (clientPath as NSString).deletingLastPathComponent
+            #if os(Linux)
+            // agterm-server's install keeps its resources beside the CLI
+            candidates.append((directory as NSString).appendingPathComponent("resources/terminfo"))
+            #else
+            let contents = (directory as NSString).deletingLastPathComponent
             candidates.append((contents as NSString).appendingPathComponent("Resources/terminfo"))
+            #endif
         }
         if let env = environment["TERMINFO"], !env.isEmpty {
             candidates.append(env)
