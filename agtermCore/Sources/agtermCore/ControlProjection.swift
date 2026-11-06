@@ -802,8 +802,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// indexUnsaved is true while the last `windows.json` write failed, omitted otherwise. App-global like
     /// `app`.
     public let indexUnsaved: Bool?
-    /// snapshotUnsaved is true while the last write of this window's `windows/<id>.json` failed, omitted
-    /// otherwise. Per window, unlike `indexUnsaved`.
+    /// snapshotUnsaved is true after this window's AppStore save fails until its next successful save,
+    /// omitted otherwise. Per window, unlike `indexUnsaved`.
     public let snapshotUnsaved: Bool?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
