@@ -21,6 +21,22 @@
   `/tmp/agterm-linux-origin-review.md`, `/tmp/agterm-headless-origin-review.md` and
   `/tmp/agterm-remote-window-review.md` (scratch files, not kept). The decisions below are the agreed result.
 
+## Decisions carried from the draft
+Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
+
+| Draft decision | Here | Why |
+|---|---|---|
+| agterm behavior stays in agterm's Swift handlers | changed | the server runs the same Swift core rules itself |
+| server tool in Go with SQLite | dropped | Swift on `agtermCore`; one catalog store, no second authority |
+| one owner per session, last attach wins | dropped | several Macs per catalog is out of this release |
+| remote rows mixed into local windows | changed | a remote window per host decides where actions go |
+| close asks: keep running or end | kept | Detach (default) / Terminate sheet, per-Mac detach |
+| unplaced sessions only through a connect picker; agent sessions never auto-placed | changed | the window mirrors the catalog, as a local `session new` shows its row; the Detached Sessions picker restores hidden ones |
+| confirmed-gone row stays as `Ended on HOST`; unreachable is `Disconnected`, never `Ended` | kept | see "Ended sessions" in Solution Overview |
+| offline presentation calls return `queued` | changed | status/context/HUD ride the snapshot; asks, pick, pages and jobs wait with a deadline |
+| offline notify dropped | kept | no stale banners on wake |
+| no always-running coordinator | dropped | the server is a long-running service observing its daemons |
+
 ## Context (from discovery)
 - Shared core, already Linux-built by the agterm-linux fork's CI (`swift test` on ubuntu-24.04, Swift 6.3.2):
   `agtermCore/Package.swift` (products `agtermCore`, `agtermctl`, `agterm-session-host`), `AppStore*.swift`,
@@ -111,8 +127,21 @@
 - **Disconnected window.** Keeps the last sidebar and screens in memory, marked Disconnected; local navigation and
   window actions work; server mutations are disabled and never queued; there is no local fallback. A cold-reopened
   remote window shows Connecting until it has authoritative state and never seeds a local shell.
-- **Close.** Closing the remote window detaches. Closing a session or workspace in it ends it on the server for every
-  viewer, after the normal close confirmation, with no undo grace and no Reopen Closed entry in this release.
+- **Close detaches by default.** Closing the remote window detaches its view. Closing a session, companion group or
+  workspace in it opens a sheet naming the host: **Detach** (default button) keeps every pane and scratch running on
+  the server and hides the row on this Mac; **Terminate** ends it on the server for every viewer; **Cancel**. The
+  sheet says that running program overlays close either way, since they live only as long as their ssh terminal.
+  Detached ids are this Mac's view state, persisted with the remote window entry, so detaching works while
+  disconnected and never touches the server. A "Detached Sessions" picker in the remote window brings one back.
+  Terminate has no undo grace and no Reopen Closed entry in this release.
+- **Ended sessions.** A pane whose shell exits normally closes as it does locally. A pane whose daemon the server
+  confirms gone without that exit (killed, crashed, host rebooted) is treated like any lost pane: a live split is
+  promoted and keeps running. Only when no live pane is left does the session stay in the catalog as `ended`, its
+  row where it is, marked `Ended on HOST`, with its last screen readable on a Mac that still holds it, until the
+  user closes it. Closing skips the sheet only when nothing in the affected group still runs, and then removes the
+  ended records on the server; an ended parent with live companions gets the normal Detach/Terminate sheet, so
+  closing an Ended row never silently ends running work. An unreachable server or an incomplete answer is
+  `Disconnected`, never `Ended`.
 - **Stays local in a remote window:** settings, theme, keymap, the quick terminal, app-global maintenance, and custom
   commands. A custom command's session operations route to the server through `agtermctl`; its shell body runs on
   the Mac.
@@ -301,8 +330,9 @@
       overlays whose `TERM` names it get `TERMINFO` pointing at it
 - [ ] continuous daemon observation replacing the renderer's callbacks: a primary or split shell that exits ends
       its pane (a live split is promoted, a parent with companions respawns as on the Mac), a daemon that vanishes
-      while running is marked ended, and each pane's cwd is read from `/proc/<pid>/cwd` of its foreground process
-      so split and new session inherit it
+      while running ends that pane only (a live split is promoted), and a session left with no live pane stays in
+      the catalog as `ended`, removed only by `session.close` on it; each
+      pane's cwd is read from `/proc/<pid>/cwd` of its foreground process so split and new session inherit it
 - [ ] restart reconciliation: a restarted server adopts surviving daemons from the catalog, marks missing ones
       ended, and never reaps a live pane
 - [ ] `scripts/server-container.sh`: builds the Linux `agterm-server`, `agtermctl`, zmx and shell integration from
@@ -387,6 +417,10 @@
       sessions and panes, attaches each pane with `zmx attach`, keeps local view state, and never starts a local
       shell for a pane whose attach is starting or failed
 - [ ] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
+- [ ] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
+      screen readable when this Mac held it (a relaunched Mac shows the row without a screen); closing it skips the
+      sheet and removes the ended records only when nothing in the affected group runs, and otherwise opens the
+      Detach/Terminate sheet; Disconnected never turns a row into Ended
 - [ ] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
       layout are ignored for its rows; per-session attach rows keep today's handling
 - [ ] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
@@ -407,7 +441,10 @@
       state transitions, no local seed on cold reopen, `window.remote.open` dedup and read-back; an older
       presentation snapshot delivered after a newer catalog split, swap and removal changes nothing; refusal of an
       origin without a catalog version; in the container with stock sshd (`MaxSessions 10`), opening and
-      reconnecting a 20-session catalog after a dropped link brings back every pane and stream
+      reconnecting a 20-session catalog after a dropped link brings back every pane and stream; a killed daemon
+      leaving an Ended row with its screen, a killed primary with a live split promoting the split instead, an
+      ended parent with live companions getting the sheet on close, a normal shell exit closing the row, an
+      unreachable server staying Disconnected, and closing an inert Ended row removing the record
 
 ### Task 8: Structural actions routed to the server
 
@@ -427,15 +464,36 @@
       restart, never from a snapshot, and left visibly unknown when the table no longer holds it; ssh runs off the
       main thread
 - [ ] mutations disabled while Disconnected; drag between a remote and a local window refused
-- [ ] session close in a remote window: normal confirmation naming the host, ends it on the server, no undo grace,
-      no Reopen Closed entry; app quit never finalizes server state
+- [ ] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
+      the host, Detach the default button; Terminate ends it on the server, scoped from the full catalog including
+      detached children, with no undo grace and no Reopen Closed entry; app quit never finalizes server state
+- [ ] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
+      those panes' and scratch's attach clients and releases their presenter, so pending work follows the
+      no-Mac-connected rules; running program overlays close as their ssh terminal ends; it works while
+      Disconnected and sends nothing to the server
+- [ ] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
+      a detached parent is hidden with it; a detached session that becomes `ended` stays hidden, and an id is pruned
+      from the set only when its record is removed from the catalog; nothing detached is ever relaunched
+- [ ] "Detached Sessions" picker in the remote window (File menu and palette) lists the detached sessions and
+      workspaces whose records still exist, ended ones marked as ended; it reattaches a live one, and offers an
+      ended one only for record cleanup under the Ended close rule
+- [ ] control coverage: new commands `session.detach` and `session.reattach` (and `workspace.detach`/
+      `workspace.reattach`) for remote-window rows only, refused elsewhere, with dispatcher, `ControlActions` defaults
+      and `agtermctl session detach|reattach`; `session.close` keeps its terminating meaning everywhere, so recipes
+      such as `close-tab-when-done` and agents on the server are unchanged; `tree` lists the remote window's detached
+      ids
 - [ ] the local control API targets a remote window's sessions through the same seam, and `tree` reports
       per-session pending state
 - [ ] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
       delta before reply, lost reply settled by lookup, an unchanged snapshot followed by delayed execution (fenced),
       a delayed command crossing a server restart, a create that commits, drops its reply and survives a restart
-      (settled as applied by lookup), and a receipt from a newer epoch; disabled-while-disconnected; close path; control API read-back; UI tests
-      in `agtermUITests` for new session, split, rename and close against `scripts/server-container.sh`, run with
+      (settled as applied by lookup), and a receipt from a newer epoch; disabled-while-disconnected; the sheet's
+      Detach, Terminate and Cancel paths for a session, a group and a workspace (including an empty one); detach
+      while Disconnected; detached state across Mac relaunch, natural exit, respawn and a new companion; a detached
+      session that becomes ended staying hidden through a Mac relaunch and listed as ended in the picker, pruned only
+      when its record is removed; Terminate reaching detached children; `session.detach` refused on a
+      local session and `session.close` still terminating; control API read-back; UI tests in `agtermUITests` for
+      new session, split, rename, detach, reattach and terminate against `scripts/server-container.sh`, run with
       `-only-testing` and skipped when no server host is configured
 
 ### Task 9: Server scratch and custom commands in a remote window
@@ -539,7 +597,8 @@
 ### Task 13: Update documentation
 - [ ] `site/docs.html`: a Remote server section (install, open a remote window, what runs where, disconnect, close)
       and the scratch/custom-command rules in a remote window
-- [ ] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, pick `--session`,
+- [ ] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, `session detach|reattach`
+      and `workspace detach|reattach`, pick `--session`,
       ask/pick `--timeout`, the new `tree` fields, and which commands a server refuses
 - [ ] `site/index.html`: the remote server as a major feature
 - [ ] `.claude/rules/control-api.md` (catalog protocol, receipts, pending interactions, headless presenter rule,
