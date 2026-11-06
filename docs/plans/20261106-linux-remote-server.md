@@ -223,24 +223,25 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 
 ## Implementation Steps
 
-### Task 1: Mac-to-Linux attach gate against agterm-linux
+### Task 1: Mac-to-Linux attach gate script
+
+⚠️ Scope change (Eugene, 2026-11-06): no agterm-linux container. The GTK app is not the server, and Task 5 runs this
+gate against `agterm-server`, the origin that ships. Task 1 writes the script and the doc; the run moves to Task 5.
 
 **Files:**
 - Create: `scripts/linux-origin-gate.sh`
 - Create: `docs/remote-linux-gate.md`
 
-- [ ] the script launches the Debug instance with a short `/tmp` `AGTERM_STATE_DIR` it creates itself, including
+- [x] the script launches the Debug instance with a short `/tmp` `AGTERM_STATE_DIR` it creates itself, including
       the `windows` marker, and refuses to run when that variable is unset or names the live state dir
-- [ ] build a local Linux container (arm64, sshd, key auth) running agterm-linux at a pinned commit in Live mode
-      under a headless compositor with software GL, with its patched zmx and `agtermctl` on the ssh PATH
-- [ ] attach to one of its sessions from an isolated Debug instance over real ssh (`zmx attach HOST ID
-      --companions`): confirm presentation `connected`, status, context, HUD, ask, program overlay with `--block`,
-      HTML file page and group attach
-- [ ] detach during an ask, a page and a running program, reconnect, and relaunch the Debug instance; record what
-      each does
-- [ ] record results, failures and unsupported kinds (image/markdown/text pages, pick, loopback URLs) in
-      `docs/remote-linux-gate.md`; a protocol incompatibility found here is fixed in core before Task 3
-- [ ] stop the container and the Debug instance by pid and confirm with `lsappinfo` that nothing lingers
+- [x] the script takes the ssh host of a Linux origin and drives the gate scenario against it: attach to one of its
+      sessions over real ssh (`zmx attach HOST ID --companions`), presentation `connected`, status, context, HUD,
+      ask, program overlay with `--block`, HTML file page and group attach; then detach during an ask, a page and a
+      running program, reconnect, and relaunch the Debug instance
+- [x] `docs/remote-linux-gate.md`: how to run the gate, what each step checks, and a results section Task 5 fills
+- [x] the script stops the Debug instance by pid and confirms with `lsappinfo` that nothing lingers
+- [x] tests: `shellcheck` clean; the refusal paths (unset state dir, live state dir) exercised; the full run is
+      Task 5's
 
 ### Task 2: Linux build foundation
 
@@ -254,9 +255,15 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Create: `scripts/setup-zmx-linux.sh`
 - Modify: `scripts/zmx-patches/README.md`
 - Modify: `agtermCore/Tests/agtermctlKitTests/OverlayRunJobTests.swift`
+- Modify: `agterm/Resources/agent-status/agterm-codex-status.sh` (portable replacement for `/usr/bin/plutil`)
+- Modify: test sources with unconditional Darwin use (`SessionWaitCommandsTests.swift`, `StreamBridgeTests.swift`,
+  `CodexStatusHookTests.swift` and any other the Linux build reports)
 
 - [ ] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
       handoff in `OverlayRunJob`, and any other Darwin-only call the build reports
+- [ ] ➕ (moved from Task 12) portable JSON extraction in `agterm-codex-status.sh` replacing `/usr/bin/plutil`, since
+      `CodexStatusHookTests` runs in the core suite the Linux job must pass
+- [ ] ➕ test sources build on Linux: unconditional `import Darwin` and `SO_NOSIGPIPE` in tests get platform branches
 - [ ] add a Linux CI job (ubuntu-24.04, pinned Swift 6.3.x, its own `timeout-minutes`) running `swift build` and
       `swift test` for the package, wired into the existing change filters
 - [ ] build the patched zmx for `aarch64-linux-musl` and `x86_64-linux-musl` from the same `ZMX_REV` and patches,
@@ -342,9 +349,9 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
       daemon (`AGTERM_REQUIRE_ZMX=1`), mirroring the macOS job
 - [ ] tests: lifecycle of each command against a fake zmx runner and against a real daemon; natural primary and
       split exit, missing daemon while running, cd then split/new-session cwd, all with no Mac connected; restart
-      adoption; zsh, fish and bash panes and a refused shell; socket directory per platform; a program overlay with
-      `TERMINFO` unset and no system `xterm-ghostty` entry still resolves it; refusal of unsupported
-      commands; framing on both platforms; in the container, a live pane survives `systemctl --user restart` and a
+      adoption; zsh, fish and bash panes and a refused shell; socket directory per platform; `TerminfoInstall`
+      Linux lookup and the pane environment's `TERMINFO` (the program-overlay case moves to Task 5); refusal of
+      unsupported commands; framing on both platforms; in the container, a live pane survives `systemctl --user restart` and a
       killed server process
 
 ### Task 5: Server presentation, jobs and pages
@@ -365,9 +372,12 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - [ ] image, markdown and text pages and HTML/URL pages from a headless origin reach the presenter
 - [ ] add `~/.local/bin` to the far-side PATH the Mac's ssh commands prepend, after the existing entries
 - [ ] today's per-session `zmx attach` from the Mac to an `agterm-server` session works unchanged: the Task 1 gate
-      re-run against `scripts/server-container.sh`
+      run against `scripts/server-container.sh`, results, failures and unsupported kinds (image/markdown/text pages,
+      pick, loopback URLs) recorded in `docs/remote-linux-gate.md`; a protocol incompatibility found here is fixed
+      in core in this task
 - [ ] tests: presentation snapshot and deltas from a headless store, job claim once, page fetch and bridge, PATH
-      composition; hosted `agtermTests` for the changed `ControlServer+PageServe`, `+Presentation` and
+      composition; ➕ (moved from Task 4) a program overlay with `TERMINFO` unset and no system `xterm-ghostty`
+      entry still resolves it; hosted `agtermTests` for the changed `ControlServer+PageServe`, `+Presentation` and
       `+OverlayJobs` paths (`-only-testing`)
 
 ### Task 6: Catalog subscription
@@ -418,9 +428,8 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
       shell for a pane whose attach is starting or failed
 - [ ] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
 - [ ] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
-      screen readable when this Mac held it (a relaunched Mac shows the row without a screen); closing it skips the
-      sheet and removes the ended records only when nothing in the affected group runs, and otherwise opens the
-      Detach/Terminate sheet; Disconnected never turns a row into Ended
+      screen readable when this Mac held it (a relaunched Mac shows the row without a screen); Disconnected never
+      turns a row into Ended; closing an Ended row is Task 8's, which owns close routing and the sheet
 - [ ] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
       layout are ignored for its rows; per-session attach rows keep today's handling
 - [ ] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
@@ -442,9 +451,8 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
       presentation snapshot delivered after a newer catalog split, swap and removal changes nothing; refusal of an
       origin without a catalog version; in the container with stock sshd (`MaxSessions 10`), opening and
       reconnecting a 20-session catalog after a dropped link brings back every pane and stream; a killed daemon
-      leaving an Ended row with its screen, a killed primary with a live split promoting the split instead, an
-      ended parent with live companions getting the sheet on close, a normal shell exit closing the row, an
-      unreachable server staying Disconnected, and closing an inert Ended row removing the record
+      leaving an Ended row with its screen, a killed primary with a live split promoting the split instead, a normal
+      shell exit closing the row, and an unreachable server staying Disconnected
 
 ### Task 8: Structural actions routed to the server
 
@@ -467,10 +475,12 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - [ ] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
       the host, Detach the default button; Terminate ends it on the server, scoped from the full catalog including
       detached children, with no undo grace and no Reopen Closed entry; app quit never finalizes server state
+- [ ] ➕ (moved from Task 7) closing an Ended row skips the sheet and removes the ended records only when nothing in
+      the affected group runs, and otherwise opens the Detach/Terminate sheet
 - [ ] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
-      those panes' and scratch's attach clients and releases their presenter, so pending work follows the
-      no-Mac-connected rules; running program overlays close as their ssh terminal ends; it works while
-      Disconnected and sends nothing to the server
+      those panes' attach clients and releases their presenter; running program overlays close as their ssh
+      terminal ends; it works while Disconnected and sends nothing to the server (detaching scratch is verified in
+      Task 9, pending work following the no-Mac-connected rules in Task 10)
 - [ ] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
       a detached parent is hidden with it; a detached session that becomes `ended` stays hidden, and an id is pruned
       from the set only when its record is removed from the catalog; nothing detached is ever relaunched
@@ -491,7 +501,9 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
       Detach, Terminate and Cancel paths for a session, a group and a workspace (including an empty one); detach
       while Disconnected; detached state across Mac relaunch, natural exit, respawn and a new companion; a detached
       session that becomes ended staying hidden through a Mac relaunch and listed as ended in the picker, pruned only
-      when its record is removed; Terminate reaching detached children; `session.detach` refused on a
+      when its record is removed; Terminate reaching detached children; ➕ (moved from Task 7) an ended parent
+      with live companions getting the sheet on close and closing an inert Ended row removing the record;
+      `session.detach` refused on a
       local session and `session.close` still terminating; control API read-back; UI tests in `agtermUITests` for
       new session, split, rename, detach, reattach and terminate against `scripts/server-container.sh`, run with
       `-only-testing` and skipped when no server host is configured
@@ -513,7 +525,8 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - [ ] custom commands keep running on the Mac; `AGT_*` tokens in a remote window name the server session and host,
       and their `agtermctl` session operations reach the server through the seam
 - [ ] tests: scratch survives hide and window detach, ends on shell exit, session close and server restart, and a
-      restart leaves non-scratch daemons running;
+      restart leaves non-scratch daemons running; ➕ (moved from Task 8) `session.detach` stops the scratch's attach
+      client and the scratch daemon keeps running;
       `session.scratch` routing and read-back; custom command token values in a remote window
 
 ### Task 10: Pending interactions with no Mac connected
@@ -546,7 +559,8 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - [ ] tests: each state transition, generation rejection, deadline expiry and `--timeout` validation, restart
       cancellation, an old presenter's helper claiming while unpresented and after a re-offer (both refused),
       presenter loss racing a successful claim, an old presenter left without pending offers, a chunked pending snapshot applied only at
-      commit, `tree` read-back; hosted `agtermTests` for the changed `ControlServer+RemotePresentation` path
+      commit, `tree` read-back; ➕ (moved from Task 8) an ask open when its session is detached returns to pending
+      and is offered to the next presenter; hosted `agtermTests` for the changed `ControlServer+RemotePresentation` path
       (`-only-testing`)
 
 ### Task 11: Localhost URL pages through an ssh forward
@@ -570,7 +584,6 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 
 **Files:**
 - Create: `scripts/install-server.sh`
-- Modify: `agterm/Resources/agent-status/agterm-codex-status.sh` (portable replacement for `/usr/bin/plutil`)
 - Modify: `agtermCore/Sources/AgtermServerKit/` (`agterm-server install-hooks`)
 - Modify: `agtermCore/Sources/agtermCore/` (portable part of the app's `AgentHooksInstaller` hoisted here)
 - Modify: `agtermCore/Package.swift` (hook scripts and the agent skill as resources of the server product)
@@ -610,7 +623,8 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - [ ] every Overview requirement works end to end against the container server through an isolated Debug instance:
       new session, split, swap, rename, close, companions, status, context, HUD, ask, pick, program overlay, all
       page kinds, localhost URL page, scratch, disconnect and reconnect, server restart, Mac relaunch
-- [ ] per-session attach to a Mac and to agterm-linux behaves exactly as before
+- [ ] per-session attach to a Mac behaves exactly as before (agterm-linux attach is left to its maintainer; see
+      External)
 - [ ] on the final tree, once each: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, the
       Linux build and test, and the new `agtermUITests` classes with `-only-testing` against
       `scripts/server-container.sh`
