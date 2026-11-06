@@ -8,7 +8,7 @@ import SwiftUI
 /// carries the per-window plumbing: persisting/restoring the frame, reporting frontmost (key/main) and close
 /// (`willClose`) to the `WindowLibrary`, and registering the `NSWindow` in `WindowRegistry`.
 struct WindowAccessor: NSViewRepresentable {
-    /// The OS window title, written on every change.
+    /// The OS window title; rapid changes are coalesced, see setTitle.
     let titleToken: String
     let windowID: WindowInfo.ID
     let library: WindowLibrary

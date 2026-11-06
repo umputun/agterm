@@ -55,6 +55,29 @@ final class WindowAccessorTests: XCTestCase {
                        "the appearance notification must still run the blend, or the sentinel proves nothing")
     }
 
+    func testRapidTitleChangesAreCoalescedIntoOneTrailingWrite() throws {
+        let probe = try attachedProbe()
+        drain()
+        window.titlebarSeparatorStyle = .line
+        drain()
+        XCTAssertEqual(window.titlebarSeparatorStyle, .line,
+                       "the attach blends must have drained here, or the assertions below measure them")
+
+        probe.setTitle("a")
+        XCTAssertEqual(window.title, "a", "the first change after a quiet interval must land at once")
+
+        probe.setTitle("b")
+        probe.setTitle("c")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertEqual(window.title, "a", "changes within the interval must wait for the trailing write")
+
+        let deadline = Date().addingTimeInterval(2)
+        while window.title != "c", Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertEqual(window.title, "c", "the trailing write must carry the latest title")
+    }
+
     func testATitleSetBeforeAttachIsAppliedOnAttach() throws {
         let store = try XCTUnwrap(library.activeStore)
         let probe = WindowAccessor.TitleProbeView(windowID: try XCTUnwrap(library.activeWindowID),
