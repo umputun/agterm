@@ -52,7 +52,11 @@ final class GhosttyCallbacks: @unchecked Sendable {
                 return true
             }
             // a static `title` in the user's config stands in for every title a program sets
-            DispatchQueue.main.async { view.applyTitle(GhosttyApp.shared.staticTitle ?? title) }
+            guard view.titleAdmission.withLock({ $0.admit(title) }) else { return true }
+            DispatchQueue.main.async {
+                view.titleAdmission.withLock { $0.complete() }
+                view.applyTitle(GhosttyApp.shared.staticTitle ?? title)
+            }
             return true
         case GHOSTTY_ACTION_CELL_SIZE:
             // the cell pixel size changed (cmd +/- font size, or DPI): a trigger only — the view reads the
