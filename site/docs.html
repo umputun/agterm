@@ -1432,7 +1432,7 @@
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
               A program in any session can raise a desktop notification (via OSC 9 / 777, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
-              as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace); clicking the
+              as a macOS banner and an unseen-count badge on the sidebar row, and the workspace row shows the total of its sessions, collapsed or expanded; clicking the
               banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge — or
               clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
               so an orchestrator driving a session over the socket can acknowledge it without pulling focus
