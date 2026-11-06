@@ -1679,7 +1679,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - `zmx.tree` lists another Mac's attachable sessions and `zmx.attach` opens one of them here. `zmx.attach`
   imports one session, its split included, and `zmx.attach.group` a top-level session with its companions;
-  whole-workspace teleport is out of scope (`docs/backlog/remote-workspace-attach.md`), and several remote
+  whole-workspace teleport is out of scope, and several remote
   rows may sit side by side.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
