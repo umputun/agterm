@@ -12,12 +12,13 @@ itself is the result even when code comes out of it.
 
 ## Sending
 
-Write the message to `/tmp/mailbox-chat-<name>.txt` with `apply_patch`, picking one `<name>` of
-your own for the whole chat and overwriting the file for every message. Then send it as a separate
-command, exactly in this form:
+Write the message to `/tmp/mailbox-chat-<pane>.txt` with `apply_patch`, where `<pane>` is this
+pane's `AGTERM_PANE_ID`: read it once with `echo "$AGTERM_PANE_ID"` and write the value into the
+path literally, here and in the send. Overwrite the file for every message. Then send it as a
+separate command, exactly in this form:
 
 ```bash
-mailbox-chat.py say --file /tmp/mailbox-chat-<name>.txt
+mailbox-chat.py say --file /tmp/mailbox-chat-<pane>.txt
 ```
 
 Use a literal path with no heredoc, redirection, variable or wrapper: the recipe's allow rule

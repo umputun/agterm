@@ -40,9 +40,10 @@ agterm 0.40.0 or later, which added the per-pane message bus (`agtermctl msg`). 
    command = "mailbox-chat.py codex-hook"
    ```
 
-5. For Codex, add this line to `~/.codex/rules/default.rules`, creating the file if needed, then restart Codex. Codex's default sandbox refuses the connection to agterm's socket that every send makes, and the rule runs only the `say --file` form outside it. Setting `network_access = true` under `[sandbox_workspace_write]` in `config.toml` also lets sends through, but it opens the network and agterm's whole control API to every command Codex runs.
+5. For Codex, add these two lines to `~/.codex/rules/default.rules`, creating the file if needed, with the full path of the copy from step 1, then restart Codex. Codex's default sandbox refuses the connection to agterm's socket that every send makes, and the rule runs only the `say --file` form of that copy outside it. Without the `host_executable` line Codex matches the rule by file name alone, so a `mailbox-chat.py` it writes into the workspace or `/tmp` would run outside the sandbox too. Setting `network_access = true` under `[sandbox_workspace_write]` in `config.toml` also lets sends through, but it opens the network and agterm's whole control API to every command Codex runs.
 
    ```
+   host_executable(name="mailbox-chat.py", paths=["/full/path/to/mailbox-chat.py"])
    prefix_rule(pattern=["mailbox-chat.py", "say", "--file"], decision="allow")
    ```
 
@@ -74,7 +75,7 @@ the message
 MSG
 ```
 
-Codex sends from a file instead, because its allow rule from *Setup* cannot match a heredoc, which Codex runs as a shell script. It writes the message to a file and then runs `mailbox-chat.py say --file /tmp/mailbox-chat-<name>.txt` as a plain command. The script reads only a regular file of up to 64 KiB and never deletes it, so Codex reuses one file for the whole chat.
+Codex sends from a file instead, because its allow rule from *Setup* cannot match a heredoc, which Codex runs as a shell script. It writes the message to a file named after its pane's `AGTERM_PANE_ID` and then runs `mailbox-chat.py say --file /tmp/mailbox-chat-<pane>.txt` as a plain command. The script reads only a regular file of up to 64 KiB and never deletes it, so Codex reuses one file for the whole chat.
 
 Either form prints JSON: `sent` means the other pane's mailbox accepted the message, `receiver` is `claude`, `codex` or `none` for who serves that pane, `peerBusy` is true while a Claude receiver is mid-turn, and `error` means the mailbox refused it. `mailbox-chat.py status` reports the same receiver without sending. `mailbox-chat.py deliver` hands a Codex pane's waiting mail to it by hand; run it from a plain shell with that pane's `AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, never through Codex, whose sandbox refuses `codex queue`.
 
