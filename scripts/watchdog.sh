@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # run a command; past WATCHDOG_SECONDS, save its process tree's diagnostics and kill it (exit 124).
+# WATCHDOG_RUNNER is a pgrep -f pattern for the process holding the test stacks, sampled first. An
+# xcodebuild test host is launched outside the command's tree, so it is found only this way, and a set
+# pattern is also killed with the tree: it must name only this run's process.
 set -uo pipefail
 
 deadline=${WATCHDOG_SECONDS:-600}
 budget=${WATCHDOG_DIAG_SECONDS:-120}
 out=${DIAG_DIR:-watchdog-diagnostics}
+runner=${WATCHDOG_RUNNER:-swiftpm-testing}
 
 "$@" &
 pid=$!
@@ -26,8 +30,15 @@ kill_tree() {
   kill -KILL $1 2>/dev/null
 }
 
+# the default runner sits inside the tree, so only an explicit pattern adds processes to it
+targets() {
+  echo "$pid"
+  descendants "$pid"
+  if [ -n "${WATCHDOG_RUNNER:-}" ]; then pgrep -f "$runner"; fi
+}
+
 # a cancelled job must not leave the tree running
-trap 'kill_tree "$(echo "$pid"; descendants "$pid")"; exit 143' TERM INT
+trap 'kill_tree "$(targets)"; exit 143' TERM INT
 
 diag_end=0
 
@@ -47,7 +58,7 @@ diagnose() {
   mkdir -p "$out"
   ps -axo pid,ppid,pgid,stat,etime,command > "$out/ps-all.txt"
   # the test runner first: it holds the stuck test's stack
-  for p in $(pgrep -f swiftpm-testing); do
+  for p in $(pgrep -f "$runner"); do
     capped 20 "$out/sample-$p.log" sample "$p" 2 -file "$out/sample-$p.txt" || return
   done
   for p in $tree; do
@@ -64,7 +75,7 @@ elapsed=0
 while kill -0 "$pid" 2>/dev/null; do
   if ((elapsed >= deadline)); then
     echo "watchdog: '$*' still running after ${deadline}s, writing diagnostics to $out" >&2
-    tree=$(echo "$pid"; descendants "$pid")
+    tree=$(targets)
     diagnose "$tree"
     kill_tree "$tree"
     exit 124

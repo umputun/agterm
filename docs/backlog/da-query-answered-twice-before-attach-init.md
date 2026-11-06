@@ -17,11 +17,12 @@ Symptom: `SessionHostServerTests.realHostStartupReplyAndClientlessControl` fails
 `swift test --filter SessionHostRuntimeTests`. Its clientless DA2 probe reads `ESC[?62;22c`, the leftover
 DA1 reply, at `controlMatches`.
 
-The host cannot tell whether zmx already answered, so the fix belongs in zmx: a new
-`scripts/zmx-patches/0003` that drops a query the daemon answered itself from the broadcast, passes every
+The host cannot tell whether zmx already answered, so the fix belongs in zmx: a new patch at the next free
+number in `scripts/zmx-patches` that drops a query the daemon answered itself from the broadcast, passes every
 other byte, and shares matching with reply generation, keeping the existing split-query behavior. Zig
 regression in `loop.zig`: a connected client without `Init` gets one daemon reply and no forwarded query;
 after `Init`, the query is forwarded and the daemon does not reply. Deferred because the patch rebuilds
 zmx for everyone and its new build id flags every existing Live session as predating the last Live
-sessions update. The race also exists upstream for any terminal client, so it may be worth reporting to
-neurosnap/zmx.
+sessions update. Take it with the `ZMX_REV` bump that `move-zmx-to-zig-0-17-to-drop-float-h-shim.md`
+needs, so both share one migration, and check first whether the new upstream tree still has the race.
+The race also exists upstream for any terminal client, so it may be worth reporting to neurosnap/zmx.

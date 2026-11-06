@@ -224,6 +224,19 @@ struct ControlProtocolTests {
         #expect(try JSONDecoder().decode(ControlTree.self, from: absentData).askPending == nil)
     }
 
+    @Test func controlTreeSnapshotUnsavedRoundTripsAndOmitsWhenNil() throws {
+        let populated = ControlTree(workspaces: [], snapshotUnsaved: true)
+        let data = try JSONEncoder().encode(populated)
+        let fields = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(fields["snapshotUnsaved"] as? Bool == true)
+        #expect(try JSONDecoder().decode(ControlTree.self, from: data) == populated)
+
+        let absentData = try JSONEncoder().encode(ControlTree(workspaces: []))
+        let absent = try #require(try JSONSerialization.jsonObject(with: absentData) as? [String: Any])
+        #expect(absent["snapshotUnsaved"] == nil)
+        #expect(try JSONDecoder().decode(ControlTree.self, from: Data(#"{"workspaces":[]}"#.utf8)).snapshotUnsaved == nil)
+    }
+
     @Test func controlArgsDistinguishesEmptyItemsFromAbsentItems() throws {
         let empty = String(decoding: try JSONEncoder().encode(ControlArgs(items: [])), as: UTF8.self)
         let absent = String(decoding: try JSONEncoder().encode(ControlArgs(allowCustom: true)), as: UTF8.self)

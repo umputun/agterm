@@ -648,11 +648,13 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> (which agterm is serving this socket —
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span>, plus
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commit</span> when the build recorded one; the same value
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl version</span> returns), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">indexUnsaved</span> (true while the last write of the window index failed, omitted otherwise).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl version</span> returns),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">indexUnsaved</span> (true while the last write of the window index failed, omitted otherwise), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">snapshotUnsaved</span> (true while the last save of this window's sessions failed, omitted otherwise).
                 All are read-only, and all but
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">indexUnsaved</span> are projections of live GUI state.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">indexUnsaved</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">snapshotUnsaved</span> are projections of live GUI state.
               </p>
             </div>
           </section>

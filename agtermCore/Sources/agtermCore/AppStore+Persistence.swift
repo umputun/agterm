@@ -16,9 +16,11 @@ extension AppStore {
         saveDebouncer.cancel()
         do {
             try persistence.save(snapshot())
+            snapshotUnsaved = false
             snapshotDidSave?()
             return true
         } catch {
+            snapshotUnsaved = true
             log("save failed: \(error)")
             return false
         }

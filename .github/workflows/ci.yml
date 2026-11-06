@@ -271,7 +271,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
       - name: Read pinned helper revisions
@@ -310,11 +310,39 @@ jobs:
         run: brew install fish
       - name: Verify fish
         run: which fish && fish --version
+      # staged and compiled outside the watchdog so a cache miss or a slow build cannot spend its budget
+      - name: Stage libghostty and zmx
+        run: scripts/setup.sh
+      - name: Build hosted tests
+        run: |
+          xcodegen generate
+          xcodebuild build-for-testing \
+            -project agterm.xcodeproj \
+            -scheme agtermTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData
       # xcodebuild hands the test host only TEST_RUNNER_-prefixed variables, prefix stripped.
       - name: Application-hosted unit tests
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH: "1"
-        run: scripts/test-app.sh
+          WATCHDOG_SECONDS: "600"
+          WATCHDOG_RUNNER: '^${{ github.workspace }}/build/DerivedData/Build/Products/Debug/agterm\.app/Contents/MacOS/agterm( |$)'
+          DIAG_DIR: ${{ github.workspace }}/hosted-test-hang
+        run: |
+          scripts/watchdog.sh xcodebuild test-without-building \
+            -project agterm.xcodeproj \
+            -scheme agtermTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath build/DerivedData
+      - name: upload hosted hang diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-test-hang
+          path: |
+            hosted-test-hang
+            build/DerivedData/Logs/Test
+          if-no-files-found: ignore
       - name: Plain fish login shell seam
         env:
           TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL: "1"

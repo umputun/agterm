@@ -802,6 +802,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// indexUnsaved is true while the last `windows.json` write failed, omitted otherwise. App-global like
     /// `app`.
     public let indexUnsaved: Bool?
+    /// snapshotUnsaved is true after this window's AppStore save fails until its next successful save,
+    /// omitted otherwise. Per window, unlike `indexUnsaved`.
+    public let snapshotUnsaved: Bool?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 attentionIncludesActive: Bool? = nil, attentionNavigationAcrossWindows: Bool? = nil,
@@ -812,8 +815,10 @@ public struct ControlTree: Codable, Sendable, Equatable {
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil, pickPending: String? = nil, askPending: String? = nil,
                 app: AppIdentity? = nil, liveReset: ControlLiveResetReadback? = nil,
-                indexUnsaved: Bool? = nil, linkOpenMode: String? = nil, sidebarDensity: String? = nil) {
+                indexUnsaved: Bool? = nil, snapshotUnsaved: Bool? = nil, linkOpenMode: String? = nil,
+                sidebarDensity: String? = nil) {
         self.workspaces = workspaces
+        self.snapshotUnsaved = snapshotUnsaved
         self.sidebarDensity = sidebarDensity
         self.linkOpenMode = linkOpenMode
         self.liveReset = liveReset

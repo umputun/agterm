@@ -5,8 +5,9 @@ added: 2026-10-18
 ---
 # replay wrapper strands a payload suspended with Ctrl-Z
 
-A Live pane created with `session new --command`, `session restart --command`, or a missing-daemon replay
-runs `<shell> -lic '<payload>; <rearm>; exec <shell> -il'`. When the user presses Ctrl-Z in the payload
+A Live pane created by `session restart --command` or a missing-daemon replay runs
+`<shell> -lic '<payload>; <rearm>; exec <shell> -il'`. A `session new --command` pane no longer does: it
+ends with its command through `ZmxReplayScript.renderEnding`, and its Ctrl-Z behavior is unmeasured. When the user presses Ctrl-Z in the payload
 (nvim, claude, less), the wrapper does not wait for the stopped job: it rearms and execs the final shell
 in the same pid. The payload stays stopped as that shell's child, `jobs` in the new prompt shows nothing,
 `fg` has nothing to resume, and the program dies on SIGHUP when the pane's shell exits.

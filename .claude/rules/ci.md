@@ -36,8 +36,12 @@ paths:
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
   `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
   `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
-  `hosted` runs Debug `scripts/test-app.sh` and needs nothing from `build`; it builds the bundled helpers
-  itself. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
+  `hosted` runs the Debug tests `scripts/test-app.sh` runs and needs nothing from `build`; it builds the
+  bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
+  cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the
+  watchdog, at 600s, with `WATCHDOG_RUNNER` naming the DerivedData test host, which xcodebuild launches
+  outside the command's process tree. The `hosted-test-hang` artifact adds the xcresult under
+  `build/DerivedData/Logs/Test`. The 35-minute job cap mirrors `test`'s. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
   enable testability in the notarized Release app.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
