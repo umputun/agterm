@@ -151,6 +151,31 @@ jobs:
       - name: swiftlint (strict)
         run: swiftlint lint --strict
 
+  linux:
+    name: Linux core tests
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container: swift:6.3.2-noble
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install jq, zsh and tcsh
+        # jq: the codex status hook reads its JSON with it where plutil does not exist; the shells: tests run
+        # scripts under each login shell the remote commands must survive
+        run: apt-get update && apt-get install -y --no-install-recommends jq zsh tcsh
+      - name: Create the test user
+        # root passes the permission checks several tests rely on failing
+        run: |
+          useradd --create-home agterm-test
+          chown -R agterm-test "$GITHUB_WORKSPACE"
+      - name: swift build
+        working-directory: agtermCore
+        run: runuser --user agterm-test -- env HOME=/home/agterm-test swift build --build-tests
+      - name: swift test
+        working-directory: agtermCore
+        run: runuser --user agterm-test -- env HOME=/home/agterm-test swift test --skip-build
+
   build:
     name: Build app
     needs: changes

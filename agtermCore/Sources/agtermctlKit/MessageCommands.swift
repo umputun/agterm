@@ -166,7 +166,7 @@ extension Msg {
             let watchdog = timeout.map { seconds in
                 SessionWaitWatchdog(seconds: seconds) {
                     Self.reportTimeout()
-                    Darwin.exit(Self.timeoutExitCode)
+                    Foundation.exit(Self.timeoutExitCode)
                 }
             }
             defer { watchdog?.cancel() }

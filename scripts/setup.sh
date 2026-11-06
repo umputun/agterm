@@ -21,6 +21,9 @@ ZMX_REPO="https://github.com/neurosnap/zmx"
 ZMX_REV="8bab1f0173b07e79835ea372d749af3dbf0d0842"  # v0.8.1, 2026-09-05; SessionHostRuntime/DeviceAttributeResponder.swift copies its DA replies
 # zig defaults to the builder's OS version and CPU; ship the app's arm64/macOS 14 baseline.
 ZMX_TARGET="aarch64-macos.14.0"
+# setup-zmx-linux.sh builds the same pin for a Linux target into its own stage dir and stamp. Unquoted, so
+# CI's `^ZMX_TARGET="` read of the line above matches it alone.
+ZMX_TARGET=${AGTERM_ZMX_TARGET:-$ZMX_TARGET}
 # pin minor lines because the unversioned zig formula rolls; zmx stays on 0.16 independently.
 GHOSTTY_ZIG_FORMULA="zig@0.17"
 ZMX_ZIG_FORMULA="zig@0.16"
@@ -32,8 +35,8 @@ STAMP_FILE=".ghostty-build-stamp"
 GHOSTTY_PATCH_DIR="scripts/ghostty-patches"
 GHOSTTY_PATCH_DIGEST="$(cat "$GHOSTTY_PATCH_DIR"/*.patch | shasum -a 256 | cut -c1-16)"
 GHOSTTY_STAMP="$GHOSTTY_REV $GHOSTTY_PATCH_DIGEST"
-ZMX_STAGE_DIR="agterm/Resources/zmx"
-ZMX_STAMP_FILE=".zmx-build-stamp"
+ZMX_STAGE_DIR="${AGTERM_ZMX_STAGE_DIR:-agterm/Resources/zmx}"
+ZMX_STAMP_FILE="${AGTERM_ZMX_STAMP_FILE:-.zmx-build-stamp}"
 # applied in name order over the plain pin; scripts/zmx-patches/README.md says what each one is for.
 # The stamp carries their digest, so editing a patch rebuilds zmx exactly as a ZMX_REV change does.
 ZMX_PATCH_DIR="scripts/zmx-patches"

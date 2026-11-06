@@ -1,4 +1,8 @@
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 import Testing
 @testable import agtermCore
@@ -463,7 +467,8 @@ struct ZmxReplayScriptTests {
         try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: inTerminal ? "/usr/bin/script" : executable)
-        process.arguments = (inTerminal ? ["-q", "/dev/null", executable] : []) + ["--no-config", "-lic", script]
+        let fishArguments = ["--no-config", "-lic", script]
+        process.arguments = inTerminal ? Self.scriptArguments([executable] + fishArguments) : fishArguments
         if inTerminal { process.standardInput = FileHandle.nullDevice }
         var processEnvironment = ProcessInfo.processInfo.environment
         processEnvironment.removeValue(forKey: "XDG_DATA_DIRS")
@@ -516,11 +521,19 @@ struct ZmxReplayScriptTests {
         case failed(status: Int32, standardError: String)
     }
 
+    private static func scriptArguments(_ argv: [String]) -> [String] {
+        #if canImport(Darwin)
+        ["-q", "/dev/null"] + argv
+        #else
+        ["-q", "-e", "-c", CommandRestore.shellQuotedLine(argv), "/dev/null"]
+        #endif
+    }
+
     /// Runs `zsh -lic` under `script(1)` so zsh has a terminal and job control, as in a pane.
     private func runZshInTerminal(script: String, environment overrides: [String: String]) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
-        process.arguments = ["-q", "/dev/null", "/bin/zsh", "-lic", script]
+        process.arguments = Self.scriptArguments(["/bin/zsh", "-lic", script])
         process.environment = ProcessInfo.processInfo.environment.merging(overrides) { _, new in new }
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = Pipe()

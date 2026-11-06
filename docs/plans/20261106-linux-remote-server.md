@@ -258,24 +258,33 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/Resources/agent-status/agterm-codex-status.sh` (portable replacement for `/usr/bin/plutil`)
 - Modify: test sources with unconditional Darwin use (`SessionWaitCommandsTests.swift`, `StreamBridgeTests.swift`,
   `CodexStatusHookTests.swift` and any other the Linux build reports)
+- ➕ Create: `agtermCore/Sources/agtermCore/PortableMarkdown.swift` (the Linux session-info, HUD-visibility and
+  image-reference paths, behind `#if canImport(Markdown)`)
+- ➕ Modify: `scripts/setup.sh` (zmx target, stage dir and stamp overridable for the Linux build)
+- ⚠️ The swift-markdown manifest line is Eugene's decision (a new dependency); until it lands the Linux build
+  compiles but the session-info, HUD-visibility and image-reference tests fail there, so the CI job stays red
 
 - [ ] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
       handoff in `OverlayRunJob`, and any other Darwin-only call the build reports
-- [ ] ➕ (moved from Task 12) portable JSON extraction in `agterm-codex-status.sh` replacing `/usr/bin/plutil`, since
+      ⚠️ builds on Linux; 32 Markdown-dependent tests fail there until the swift-markdown line lands (Eugene's
+      decision). With it added to a scratch copy all 5039 tests pass.
+- [x] ➕ (moved from Task 12) portable JSON extraction in `agterm-codex-status.sh` replacing `/usr/bin/plutil`, since
       `CodexStatusHookTests` runs in the core suite the Linux job must pass
-- [ ] ➕ test sources build on Linux: unconditional `import Darwin` and `SO_NOSIGPIPE` in tests get platform branches
-- [ ] add a Linux CI job (ubuntu-24.04, pinned Swift 6.3.x, its own `timeout-minutes`) running `swift build` and
+- [x] ➕ test sources build on Linux: unconditional `import Darwin` and `SO_NOSIGPIPE` in tests get platform branches
+- [x] add a Linux CI job (ubuntu-24.04, pinned Swift 6.3.x, its own `timeout-minutes`) running `swift build` and
       `swift test` for the package, wired into the existing change filters
-- [ ] build the patched zmx for `aarch64-linux-musl` and `x86_64-linux-musl` from the same `ZMX_REV` and patches,
+- [x] build the patched zmx for `aarch64-linux-musl` and `x86_64-linux-musl` from the same `ZMX_REV` and patches,
       with its own stamp
-- [ ] stage ghostty's shell-integration directory (zsh, fish, bash) and its `xterm-ghostty` terminfo entry at
+- [x] stage ghostty's shell-integration directory (zsh, fish, bash) and its `xterm-ghostty` terminfo entry at
       `GHOSTTY_REV` as Linux artifacts, with the same stamp rule
-- [ ] probe the static Linux SDK (musl) with the existing package (`agtermctl`); record whether Foundation use builds
+- [x] probe the static Linux SDK (musl) with the existing package (`agtermctl`); record whether Foundation use builds
       there, which decides packaging in Task 12
-- [ ] Linux CLI rendezvous: `BasicOptions.socketPath` resolves the Linux default when neither `--socket` nor
+- [x] Linux CLI rendezvous: `BasicOptions.socketPath` resolves the Linux default when neither `--socket` nor
       `AGTERM_STATE_DIR` is set; Mac resolution unchanged
 - [ ] tests: `OverlayRunJob` spawn handoff on both platforms; socket path resolution per platform and precedence;
       Linux CI green on the unchanged suite
+      ⚠️ the spawn and socket-path tests exist and pass on both platforms; Linux CI green waits on the same
+      swift-markdown decision
 
 ### Task 3: Windowless core contracts
 
@@ -589,6 +598,10 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agtermCore/Package.swift` (hook scripts and the agent skill as resources of the server product)
 - Create: tests for the hook change and the server-side install
 
+- ➕ Task 2 probe result (swift 6.3.2 static-linux-0.1.0 SDK, aarch64 musl): Foundation, `agtermCore` and the
+  swift-markdown/cmark dependency build; `agtermctlKit` fails only where its Linux branches name `Glibc`
+  (`Glibc.send`, `Glibc.accept`/`connect`) or use Glibc's enum-typed `SOCK_STREAM`, which musl's `Musl` module
+  spells as a plain `Int32`. A static build is viable once those take a `Musl` branch.
 - [ ] packaging from the Task 2 probe: a static musl build of `agterm-server` and `agtermctl`, or a bundled Swift
       runtime when the probe failed
 - [ ] install `agterm-server`, the Linux `agtermctl`, zmx, ghostty's shell integration and terminfo entry, the hook

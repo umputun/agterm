@@ -967,9 +967,10 @@ public final class WindowLibrary {
 
     /// Window files on disk that the index does not list. A stale index short-circuits recovery, so these
     /// are real panes whose daemons would otherwise read as unclaimed. Nil when the directory itself could
-    /// not be read, which is not the same answer as "no stray files".
+    /// not be read, which is not the same answer as "no stray files"; Linux lists a non-directory as empty.
     private func strayWindowFileIDs(indexed: Set<UUID>) -> [UUID]? {
-        guard let contents = try? FileManager.default.contentsOfDirectory(at: windowsDirectory,
+        guard (try? windowsDirectory.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true,
+              let contents = try? FileManager.default.contentsOfDirectory(at: windowsDirectory,
                                                                           includingPropertiesForKeys: nil) else {
             return nil
         }

@@ -299,19 +299,23 @@ struct HudTests {
         #expect(spec.sizePercent == nil)
     }
 
+    #if canImport(Darwin)
     @Test func aMarkdownBodyCarriesItsBlockWidthAndEncodedRows() {
         let body = HudLayout.renderedBody(for: HudSpec(message: "**hi** there", markdown: true),
                                           grid: (columns: 20, rows: 5), ownerPid: 4242)
 
         #expect(body == "20 5 0 4242 0.5 - 8\n\u{1B}[1mhi\u{1B}[22m there\n")
     }
+    #endif
 
+    #if canImport(Darwin)
     @Test func aMarkdownLinkAddsNoWidthBeyondItsVisibleText() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "[ab](http://x)", markdown: true), grid: (columns: 40, rows: 5))
 
         #expect(body.blockWidth == 2)
         #expect(body.lines == ["\u{1B}]8;;http://x\u{1B}\\\u{1B}[4mab\u{1B}[24m\u{1B}]8;;\u{1B}\\"])
     }
+    #endif
 
     // regression: the height was measured at the caller's raw percent while the panel took the clamped one
     @Test(arguments: [100, 5]) func aMarkdownMessageIsMeasuredAtTheClampedWidthItIsPaintedAt(percent: Int) {
@@ -328,6 +332,7 @@ struct HudTests {
         #expect(grid.rows - body.lines.count - HudLayout.verticalPadding * 2 <= 1)
     }
 
+    #if canImport(Darwin)
     @Test func aSpinningMarkdownBodyIndentsEveryRowAfterTheFirstByTheGutter() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "- a\n- bb", spinner: .bar, markdown: true),
                                           grid: (columns: 20, rows: 6))
@@ -335,7 +340,9 @@ struct HudTests {
         #expect(body.lines == ["• a", "  • bb"])
         #expect(body.blockWidth == 4 + HudLayout.spinnerWidth)
     }
+    #endif
 
+    #if canImport(Darwin)
     @Test func aMarkdownBodyWrapsAtTheGridLessItsPaddingAndCountsWhatDoesNotFit() {
         let message = (1...10).map { "- item \($0)" }.joined(separator: "\n")
 
@@ -344,14 +351,18 @@ struct HudTests {
         #expect(body.lines == ["• ite", "  m 1", "\u{1B}[2m… 19\u{1B}[22m…"])
         #expect(body.blockWidth == 5)
     }
+    #endif
 
+    #if canImport(Darwin)
     @Test func aMarkdownTableWiderThanThePanelIsStillClipped() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "| abcdef |\n|---|\n| x |", markdown: true),
                                           grid: (columns: 10, rows: 9))
 
         #expect(body.lines.first == "┌────…")
     }
+    #endif
 
+    #if canImport(Darwin)
     @Test func aMarkdownMessageIsMeasuredAndWrappedAtTheWidthThePaneAllows() {
         let pane = PaneMetrics(cellWidth: 8, cellHeight: 18, paneWidth: 400, paneHeight: 800)
         let spec = HudSpec(message: "aaaa bbbb cccc dddd eeee ffff gggg [the link](http://x) hhhh iiii jjjj", markdown: true)
@@ -365,6 +376,7 @@ struct HudTests {
                                "\u{1B}]8;;http://x\u{1B}\\\u{1B}[4mthe link\u{1B}]8;;\u{1B}\\\u{1B}[24m hhhh iiii jjjj"])
         #expect(grid.rows == body.lines.count + HudLayout.verticalPadding * 2)
     }
+    #endif
 
     @Test func aOneRowSpinningMarkdownBodyShowsOnlyTheMarker() {
         let body = HudLayout.markdownBody(for: HudSpec(message: "a\n\nb", spinner: .bar, markdown: true),
@@ -585,7 +597,9 @@ struct HudTests {
         #expect(HudLayout.box(for: HudSpec(message: "one line", frame: false)).rows == 1)
         #expect(size.heightPoints == 48.0)
         #expect(grid.rows == 2)
+        #if canImport(Darwin)
         #expect(HudLayout.markdownBody(for: spec, grid: grid).lines == ["• a", "• b"])
+        #endif
     }
 
     @Test(arguments: [(400.0, 66.0), (800.0, 66.0), (1600.0, 66.0)])

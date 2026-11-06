@@ -29,13 +29,12 @@ struct BasicOptions: ParsableArguments, ConnectionOptions {
     var json = false
 
     /// Resolve the socket path, in precedence order: `--socket` → `<AGTERM_STATE_DIR>/agterm.sock` →
-    /// `<$HOME>/Library/Application Support/agterm/agterm.sock` → `/tmp/agterm/agterm.sock`. `env` is
-    /// injectable so the precedence is unit-testable; production passes the process environment.
+    /// `<ControlResolve.defaultStateDirectory>/agterm.sock`. `env` is injectable so the precedence is
+    /// unit-testable; production passes the process environment.
     func socketPath(env: [String: String] = ProcessInfo.processInfo.environment) -> String {
         if let socket { return socket }
-        let appSupport = (env["HOME"].map { ($0 as NSString).appendingPathComponent("Library/Application Support/agterm") })
-            ?? "/tmp/agterm"
-        return ControlResolve.socketPath(stateDir: env["AGTERM_STATE_DIR"], appSupport: appSupport)
+        return ControlResolve.socketPath(stateDir: env["AGTERM_STATE_DIR"],
+                                         appSupport: ControlResolve.defaultStateDirectory(environment: env))
     }
 }
 

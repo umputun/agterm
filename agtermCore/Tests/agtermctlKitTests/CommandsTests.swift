@@ -1815,11 +1815,43 @@ struct CommandsTests {
         #expect(command.options.socketPath(env: env) == "/tmp/state/agterm.sock")
     }
 
+    #if os(Linux)
+    @Test func socketPathFallsBackToHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x"]
+        #expect(command.options.socketPath(env: env) == "/home/x/.local/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathUsesAbsoluteXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/var/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathIgnoresRelativeXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x", "XDG_STATE_HOME": "state"]
+        #expect(command.options.socketPath(env: env) == "/home/x/.local/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathStateDirOverXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["AGTERM_STATE_DIR": "/tmp/state", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/tmp/state/agterm.sock")
+    }
+    #else
     @Test func socketPathFallsBackToHome() throws {
         let command = try Tree.parse([])
         let env = ["HOME": "/Users/x"]
         #expect(command.options.socketPath(env: env) == "/Users/x/Library/Application Support/agterm/agterm.sock")
     }
+
+    @Test func socketPathIgnoresXdgStateHomeOnMac() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/Users/x", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/Users/x/Library/Application Support/agterm/agterm.sock")
+    }
+    #endif
 
     @Test func socketPathFallsBackToTmpWithoutHome() throws {
         let command = try Tree.parse([])

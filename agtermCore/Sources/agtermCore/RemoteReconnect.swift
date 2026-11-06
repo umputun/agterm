@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// The retry schedule every remote link shares. A laptop asleep for the night should not be retried every
 /// thirty seconds, and should never be given up on either.

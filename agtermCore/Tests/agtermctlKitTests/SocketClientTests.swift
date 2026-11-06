@@ -1328,6 +1328,7 @@ struct SocketClientTests {
         #expect(!String(decoding: run.out, as: UTF8.self).contains("client"))
     }
 
+    #if canImport(Darwin)
     @Test func refusedConnectWithAHeldOwnershipLockReportsThePresentOwner() throws {
         let socket = try RefusedSocket()
         defer { socket.stop() }
@@ -1338,6 +1339,7 @@ struct SocketClientTests {
         #expect(error.description.contains("the socket owner is present but not accepting connections"))
         #expect(error.description.contains("Connection refused"))
     }
+    #endif
 
     @Test func refusedConnectWithAnUnheldOwnershipLockDoesNotClaimTheAppIsGone() throws {
         let socket = try RefusedSocket()
@@ -1360,6 +1362,7 @@ struct SocketClientTests {
         #expect(error.connectErrno == ECONNREFUSED)
     }
 
+    #if canImport(Darwin)
     @Test func aMissingSocketWithAHeldOwnershipLockReportsThePresentOwner() throws {
         let path = NSTemporaryDirectory() + "agterm-unbound-\(UUID().uuidString.prefix(8)).sock"
         let lockPath = ControlResolve.ownershipLockPath(forSocket: path)
@@ -1372,6 +1375,7 @@ struct SocketClientTests {
         #expect(error.description.contains("the socket owner is present but not accepting connections"))
         #expect(error.description.contains("No such file or directory"))
     }
+    #endif
 
     @Test func aMissingSocketWithNoOwnershipLockStaysUncertainAndKeepsItsErrno() throws {
         let path = NSTemporaryDirectory() + "agterm-absent-\(UUID().uuidString.prefix(8)).sock"
@@ -1401,7 +1405,7 @@ private final class RefusedSocket {
 
     init() throws {
         path = NSTemporaryDirectory() + "agterm-refused-\(UUID().uuidString.prefix(8)).sock"
-        fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        fd = socket(AF_UNIX, unixStreamType, 0)
         guard fd >= 0 else { throw SocketClientError("refused socket() failed") }
         unlink(path)
         var addr = sockaddr_un()
@@ -1733,12 +1737,14 @@ private final class ScriptedStubServer: @unchecked Sendable {
     }
 }
 
+#if canImport(Darwin)
+let unixStreamType = SOCK_STREAM
+#else
+let unixStreamType = Int32(SOCK_STREAM.rawValue)
+#endif
+
 private func systemSocket() -> Int32 {
-    #if canImport(Darwin)
-    return socket(AF_UNIX, SOCK_STREAM, 0)
-    #else
-    return socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
-    #endif
+    socket(AF_UNIX, unixStreamType, 0)
 }
 
 private func systemAccept(_ fd: Int32) -> Int32 {

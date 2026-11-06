@@ -30,8 +30,13 @@ paths:
   A prior `swift build --build-tests --enable-code-coverage` step compiles outside it, so compile time on a
   slow runner does not count against the 600s; `swift test` with the same flag reuses that build. The
   35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.
-  `coverage`, the only Swift-gated Linux job, downloads it for best-effort Coveralls.
+  `coverage` downloads it for best-effort Coveralls.
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
+- `linux` builds and tests `agtermCore` in the `swift:6.3.2-noble` container on ubuntu-24.04, the
+  toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
+  JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
+  permission checks several tests expect to fail. Darwin-only behavior keeps its tests behind
+  `#if canImport(Darwin)` beside the code; everything else runs on both platforms.
 - `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
   `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and

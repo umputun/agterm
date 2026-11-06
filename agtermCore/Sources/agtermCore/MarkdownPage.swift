@@ -87,16 +87,27 @@ public enum MarkdownPage {
     }
 
     private static func references(in markdown: String, path: (String) -> String?) -> [Image] {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        guard let parsed = try? AttributedString(markdown: markdown, options: options) else { return [] }
         var found: [Image] = [], seen: Set<String> = []
-        for run in parsed.runs {
-            guard let url = run.imageURL else { continue }
-            let reference = url.relativeString.removingPercentEncoding ?? url.relativeString
+        for source in imageSources(in: markdown) {
+            let reference = source.removingPercentEncoding ?? source
             guard seen.insert(reference).inserted, let path = path(reference) else { continue }
             found.append(Image(reference: reference, path: path))
         }
         return found
+    }
+
+    /// imageSources lists every picture reference in document order, as the parser hands it over. Off Darwin it
+    /// needs swift-markdown, and without it a page embeds no pictures.
+    private static func imageSources(in markdown: String) -> [String] {
+        #if canImport(Darwin)
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        guard let parsed = try? AttributedString(markdown: markdown, options: options) else { return [] }
+        return parsed.runs.compactMap { $0.imageURL?.relativeString }
+        #elseif canImport(Markdown)
+        return MarkdownImageCollector.sources(in: markdown)
+        #else
+        return []
+        #endif
     }
 
     /// localPath resolves one decoded reference against `folder`, nil unless it names a file inside it. The

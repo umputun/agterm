@@ -14,9 +14,11 @@ struct OverlayRunJobTests {
 
         init() {
             var pair: [Int32] = [-1, -1]
-            socketpair(AF_UNIX, SOCK_STREAM, 0, &pair)
+            socketpair(AF_UNIX, unixStreamType, 0, &pair)
+            #if canImport(Darwin)
             var noSigPipe: Int32 = 1
             for fd in pair { setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size)) }
+            #endif
             helper = pair[0]
             origin = pair[1]
         }
@@ -151,6 +153,23 @@ struct OverlayRunJobTests {
         close(origin.origin)
 
         #expect(runner.run(claimed, baseEnvironment: Self.base) == 5)
+    }
+
+    @Test func aSuspendedSpawnRunsNothingUntilContinued() throws {
+        let marker = NSTemporaryDirectory() + "agterm-suspended-\(UUID().uuidString)"
+        defer { unlink(marker) }
+        let environment = Self.base.merging(["AGTERM_OVL_CMD": "echo ran > '\(marker)'"]) { _, new in new }
+
+        let pid = try OverlayJobRunner.spawn(environment: environment, cwd: "/", suspended: true)
+        Thread.sleep(forTimeInterval: 0.3)
+        #expect(!FileManager.default.fileExists(atPath: marker))
+        kill(pid, SIGCONT)
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) < 0, errno == EINTR {}
+
+        #expect(status & 0x7f == 0)
+        #expect((status >> 8) & 0xff == 0)
+        #expect((try? String(contentsOfFile: marker, encoding: .utf8)) == "ran\n")
     }
 
     @Test func theProgramDoesNotInheritTheAppConnection() throws {

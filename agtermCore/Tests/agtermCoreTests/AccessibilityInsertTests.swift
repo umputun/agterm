@@ -22,8 +22,11 @@ struct AccessibilityInsertTests {
     // `contains("\n") || contains("\r")` predicate reported false and the payload skipped the
     // bracketed-paste branch — the raw CR reached the pty and the line ran.
     @Test func crlfRoutesToPaste() {
+        #if canImport(Darwin)
+        // darwin Foundation's substring search is the one that compares clusters; Linux's matches scalars
         #expect("ls -la\r\n".contains("\n") == false, "CRLF is one cluster, equal to neither \\n nor \\r")
         #expect("ls -la\r\n".contains("\r") == false)
+        #endif
         #expect(AccessibilityInsert.needsPasteRouting("ls -la\r\n"))
         #expect(AccessibilityInsert.needsPasteRouting("one\r\ntwo"))
     }

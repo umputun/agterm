@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// Which client of a pane's zmx daemon owns the pty size. Only the leader's grid is applied, so every
 /// other client draws output laid out for a grid it does not have. `scripts/zmx-patches/README.md`

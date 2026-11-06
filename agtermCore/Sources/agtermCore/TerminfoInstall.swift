@@ -155,7 +155,9 @@ public enum TerminfoInstall {
     /// password and host-key prompts from the controlling tty, and a background group doing that is
     /// stopped by SIGTTIN, leaving the CLI waiting on a child that can never answer. Spawned this way the
     /// child stays in the caller's foreground group and the prompt works.
+    /// Off Darwin it refuses: installing pushes a Mac's terminfo to a remote host, and the Linux build is a server.
     private static func install(argv: [String], source: Data, environment: [String: String]) throws -> Outcome {
+        #if canImport(Darwin)
         var fds: [Int32] = [-1, -1]
         // pipe reports through errno, unlike the posix_spawn calls that return the code itself
         guard pipe(&fds) == 0 else { throw Failure.spawnFailed(operation: "pipe", errno: errno) }
@@ -220,8 +222,12 @@ public enum TerminfoInstall {
         }
         let signal = status & 0x7f
         return signal == 0 ? .exited((status >> 8) & 0xff) : .signaled(signal)
+        #else
+        throw Failure.spawnFailed(operation: "terminfo install", errno: ENOTSUP)
+        #endif
     }
 
+    #if canImport(Darwin)
     private static func check(_ result: Int32, _ operation: String) throws {
         guard result == 0 else { throw Failure.spawnFailed(operation: operation, errno: result) }
     }
@@ -235,4 +241,5 @@ public enum TerminfoInstall {
         strings.append(nil)
         return strings
     }
+    #endif
 }
