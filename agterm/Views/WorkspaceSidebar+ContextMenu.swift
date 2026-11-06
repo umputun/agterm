@@ -173,6 +173,12 @@ extension WorkspaceSidebar.Coordinator {
             openSession.target = self
             openSession.representedObject = node
             menu.addItem(openSession)
+            // the one per-row fold that survives a hidden chevron with row click turned off.
+            let fold = NSMenuItem(title: outline.isItemExpanded(node) ? "Collapse Workspace" : "Expand Workspace",
+                                  action: #selector(menuToggleWorkspaceExpansion(_:)), keyEquivalent: "")
+            fold.target = self
+            fold.representedObject = node
+            menu.addItem(fold)
             // the focus items are their own group: they filter what the tree shows, unlike the create items
             // above and the destructive one below.
             menu.addItem(.separator())
@@ -222,6 +228,12 @@ extension WorkspaceSidebar.Coordinator {
             self.sessionIDs = sessionIDs
             self.targetID = targetID
         }
+    }
+
+    @objc private func menuToggleWorkspaceExpansion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode, let outline = outlineView,
+              outline.row(forItem: node) >= 0 else { return }
+        toggleExpansion(of: node, in: outline)
     }
 
     @objc private func menuRename(_ sender: NSMenuItem) {

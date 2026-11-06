@@ -151,6 +151,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case workspaceAddSession
     case workspaceIcons
     case sessionIcons
+    case workspaceChevrons
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
@@ -158,7 +159,8 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     /// The surface this element lives on; the title bar for everything not listed as sidebar.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons:
+        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+             .workspaceChevrons:
             return .sidebar
         default: return .titleBar
         }
@@ -190,6 +192,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .workspaceAddSession: return "Workspace add-session"
         case .sessionIcons: return "Session icons"
         case .workspaceIcons: return "Workspace icons"
+        case .workspaceChevrons: return "Workspace chevrons"
         }
     }
 
@@ -220,6 +223,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .workspaceAddSession: return "plus"
         case .sessionIcons: return "terminal"
         case .workspaceIcons: return "square.grid.2x2"
+        case .workspaceChevrons: return "chevron.right"
         }
     }
 
