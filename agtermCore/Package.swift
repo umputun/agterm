@@ -32,6 +32,12 @@ let package = Package(
     swiftLanguageModes: [.v6]
 )
 
+#if os(Linux)
+// Foundation's attributed Markdown parser is Darwin only; agterm-server parses with swift-markdown instead
+package.dependencies.append(.package(url: "https://github.com/swiftlang/swift-markdown", exact: "0.8.0"))
+package.targets[0].dependencies.append(.product(name: "Markdown", package: "swift-markdown"))
+#endif
+
 #if os(macOS)
 package.products.append(.executable(name: "agterm-session-host", targets: ["agterm-session-host"]))
 package.targets += [

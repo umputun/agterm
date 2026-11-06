@@ -261,13 +261,10 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - ➕ Create: `agtermCore/Sources/agtermCore/PortableMarkdown.swift` (the Linux session-info, HUD-visibility and
   image-reference paths, behind `#if canImport(Markdown)`)
 - ➕ Modify: `scripts/setup.sh` (zmx target, stage dir and stamp overridable for the Linux build)
-- ⚠️ The swift-markdown manifest line is Eugene's decision (a new dependency); until it lands the Linux build
-  compiles but the session-info, HUD-visibility and image-reference tests fail there, so the CI job stays red
+- ➕ Modify: `agtermCore/Package.swift` (swift-markdown 0.8.0, Linux only; Eugene approved the dependency)
 
-- [ ] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
+- [x] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
       handoff in `OverlayRunJob`, and any other Darwin-only call the build reports
-      ⚠️ builds on Linux; 32 Markdown-dependent tests fail there until the swift-markdown line lands (Eugene's
-      decision). With it added to a scratch copy all 5039 tests pass.
 - [x] ➕ (moved from Task 12) portable JSON extraction in `agterm-codex-status.sh` replacing `/usr/bin/plutil`, since
       `CodexStatusHookTests` runs in the core suite the Linux job must pass
 - [x] ➕ test sources build on Linux: unconditional `import Darwin` and `SO_NOSIGPIPE` in tests get platform branches
@@ -281,10 +278,8 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
       there, which decides packaging in Task 12
 - [x] Linux CLI rendezvous: `BasicOptions.socketPath` resolves the Linux default when neither `--socket` nor
       `AGTERM_STATE_DIR` is set; Mac resolution unchanged
-- [ ] tests: `OverlayRunJob` spawn handoff on both platforms; socket path resolution per platform and precedence;
+- [x] tests: `OverlayRunJob` spawn handoff on both platforms; socket path resolution per platform and precedence;
       Linux CI green on the unchanged suite
-      ⚠️ the spawn and socket-path tests exist and pass on both platforms; Linux CI green waits on the same
-      swift-markdown decision
 
 ### Task 3: Windowless core contracts
 
