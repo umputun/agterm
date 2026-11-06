@@ -361,6 +361,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     nonisolated let releaseIntent = OSAllocatedUnfairLock(initialState: LinkPolicy.ClickIntent.normal)
     var linkPressDragged = false
 
+    // admitted by the off-main SET_TITLE callback, completed by the main block it queues.
+    nonisolated let titleAdmission = OSAllocatedUnfairLock(initialState: TitleAdmission())
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:],
          backedByZmx: Bool = false) {

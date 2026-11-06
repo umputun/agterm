@@ -74,3 +74,21 @@ capture is late: `new-2` had run 9.9 s and its CLI was already defunct, `pcpu` i
 the load average spans minutes, so this shows heavy app CPU under title load without placing it in the
 5 s window. The app `sample` and spindump failed again; spindump finished sampling and stalled while
 processing symbols. What blocked the call is still open.
+
+Run 42302198754 (PR #910 head `f593d7b2`, 2026-11-06) stalled at `new-5`: `new-0` to `new-4` in 56 to 357 ms.
+The `ps` capture lists six producers, the sixth started about 3 s after the others, so `new-5` reached the main
+thread and created its surface late; its reply still missed the 7 s the script waited. Both app collectors
+logged `Sampling completed, processing symbols...`: they attach, and lose the report while symbolicating.
+Spindump's stuck notice suggested `-noIPC` and saved a raw stackshot under `/var/tmp`. The step now passes
+`-noIPC` and copies such a stackshot into the case folder (`spindump -i` reads it), recording copy failures as
+`stackshot_errors`.
+
+Every OSC title is one message: the pinned libghostty does not dedupe, and `App.drainMailbox` loops
+`while (mailbox.pop())` inside `ghostty_app_tick` on the main thread, while each SET_TITLE callback queued
+another main block. Measured locally on a Release build with a throwaway probe, eight producers on the 20-core
+Mac: about 280k titles/s, ticks taking 60-95% of the main thread with single ticks up to 135 ms, and up to
+34k title blocks waiting on main. Calls made after 2 s of flooding still answered in 48-78 ms, so the local
+run shows pressure, not the stall. `TitleAdmission` now skips a title while an identical one from the same pane
+is still queued: in the same run titles reaching main fell from 1.68M to 290k, the peak backlog from 34k to 11,
+tick time from 179 to 116 ms per 250 ms window, and late `session new` to 22-35 ms. The ticks themselves
+remain, so whether this removes the CI stall is unproven; the next stall's stackshot is the evidence to read.
