@@ -232,10 +232,12 @@ final class SidebarRowIndentTests: XCTestCase {
             store.setSidebarMode(.flagged)
             coordinator.reconcile()
             XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try row(of: session.id)).minX, 0, "\(layout)")
+            XCTAssertEqual(scroll.contentInsets.left, 6, "\(layout): the margin follows the dropped strip, not the setting")
 
             store.setSidebarMode(.tree)
             coordinator.reconcile()
             XCTAssertEqual(try layoutSnapshot(), tree, "\(layout): the ordinary tree keeps its strip")
+            XCTAssertEqual(scroll.contentInsets.left, 8, "\(layout)")
         }
     }
 

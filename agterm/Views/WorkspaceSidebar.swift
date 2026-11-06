@@ -285,12 +285,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// (agterm/Resources/ghostty-defaults.conf; a user window-padding override in ghostty.conf is not
         /// tracked): window-padding-x = 8 is the left margin; the top is a 2px nudge, not the full
         /// window-padding-y = 6, because the row already centers its content in a ~28px row. `.plain` adds
-        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode. Hidden chevrons
-        /// narrow the left margin, which would otherwise put the row icon 10pt in.
+        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode. Without the
+        /// disclosure strip the left margin narrows, which would otherwise put the row icon 10pt in.
         func applySidebarContentInset(_ scroll: NSScrollView?) {
             guard let scroll else { return }
+            let reserves = (outlineView as? SidebarOutlineView)?.reservesDisclosureColumn ?? true
             scroll.automaticallyAdjustsContentInsets = false
-            scroll.contentInsets = NSEdgeInsets(top: 2, left: chevronsHidden ? 6 : 8, bottom: 0, right: 0)
+            scroll.contentInsets = NSEdgeInsets(top: 2, left: reserves ? 8 : 6, bottom: 0, right: 0)
         }
 
         @objc private func appearanceChanged() {
@@ -549,6 +550,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastShape = currentShape()
             snapshotRowContent()
             (outline as? SidebarOutlineView)?.reservesDisclosureColumn = rendersWorkspaceRows && !chevronsHidden
+            applySidebarContentInset(outline.enclosingScrollView)
 
             // flat flagged list: non-expandable session rows; no workspace nodes, so they leave the cache.
             if !rendersWorkspaceRows {

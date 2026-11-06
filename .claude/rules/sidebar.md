@@ -32,8 +32,8 @@ paths:
 - `reservesDisclosureColumn` drops that strip on every version while `InterfaceElement.workspaceChevrons` is
   hidden and in the flat and plain flagged lists, which never draw a level-0 triangle. Level-0 triangles then get
   an empty frame and a companion parent's ends at its content; never hide one through
-  `shouldShowOutlineCellForItem`, which makes AppKit refuse to collapse that item. Hidden chevrons also narrow
-  the scroll view's left inset from 8 to 6. Every workspace row menu offers Collapse/Expand Workspace through the
+  `shouldShowOutlineCellForItem`, which makes AppKit refuse to collapse that item. A dropped strip also narrows
+  the scroll view's left inset from 8 to 6, keyed on the flag, never the setting. Every workspace row menu offers Collapse/Expand Workspace through the
   row click's `toggleExpansion`, so a hidden chevron with row click off still leaves a mouse fold.
 - macOS 27 hides `NSMenuItem` images under the default `preferredImageVisibility` (`.automatic`), which is
   how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`, by key
