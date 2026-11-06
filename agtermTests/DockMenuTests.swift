@@ -221,6 +221,18 @@ final class DockMenuTests: XCTestCase {
                        "the shared cap drops older MRU entries")
     }
 
+    func testACompanionDockEntryNamesItsParent() throws {
+        let store = try activeStore()
+        let workspaceID = try XCTUnwrap(store.currentWorkspaceID)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: workspaceID, cwd: "/tmp", name: "api"))
+        _ = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "logs")).get()
+        store.selectSession(parent.id)
+
+        let recent = try submenu("Recent Sessions", in: dockMenu())
+
+        XCTAssertTrue(recent.items.contains { $0.title == "api › logs — workspace 1" }, "\(recent.items.map(\.title))")
+    }
+
     func testAttentionOrderingAndRecentNilSenderInvocationRevealTaggedPane() throws {
         let store = try activeStore()
         let workspaceID = try XCTUnwrap(store.currentWorkspaceID)

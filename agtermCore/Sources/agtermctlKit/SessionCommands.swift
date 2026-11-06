@@ -18,8 +18,9 @@ struct Session: ParsableCommand {
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
-                      Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self,
-                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self]
+                      Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self, Info.self, Tint.self,
+                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self, Wait.self,
+                      Collapse.self, Expand.self]
     )
 
     struct New: RequestCommand {
@@ -34,10 +35,15 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
         @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
+        @Option(name: .long, help: "Create a companion of this session (id/prefix/active), placed under it in the sidebar; a companion target means its parent.") var parent: String?
+        @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
+            if parent != nil, workspace != nil || workspaceName != nil || createWorkspace || after != nil || before != nil {
+                throw ValidationError("--parent takes no --workspace, --workspace-name, --create-workspace, --after or --before")
+            }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -56,25 +62,49 @@ struct Session: ParsableCommand {
             }
         }
 
+        func run() throws {
+            guard parent != nil else { return try defaultRun() }
+            try runCompanionRequest(makeRequest(), options: options, echoID: true)
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionNew, args: options.withWindow(
+            if let parent {
+                return ControlRequest(cmd: .sessionCompanionNew, target: parent, args: options.withWindow(tint.apply(to:
+                    ControlArgs(name: name, cwd: cwd, noSelect: noSelect ? true : nil, command: command,
+                                wait: wait ? true : nil))))
+            }
+            return ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before)))
+                            command: command, wait: wait ? true : nil, after: after, before: before))))
         }
     }
 
-    /// No options: the target session names both the destination workspace and the cwd, so a duplicate is
-    /// fully described by `--target` (the GUI half is the sidebar row's "Duplicate").
+    /// The target session names the destination workspace and the cwd, so a plain duplicate is fully described by
+    /// `--target` (the GUI half is the sidebar row's "Duplicate"); `--companion` is "Duplicate as Companion".
     struct Duplicate: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Duplicate a session: a fresh shell in its directory, placed right after it.")
+        @Flag(name: .long, help: "Create a companion copying the session's split layout and starting another copy of each pane's program.")
+        var companion = false
+        @Flag(name: .long, help: "With --companion: create it without selecting or focusing it.")
+        var noSelect = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
+        func validate() throws {
+            if noSelect, !companion { throw ValidationError("--no-select needs --companion") }
+        }
+
+        func run() throws {
+            guard companion else { return try defaultRun() }
+            try runCompanionRequest(makeRequest(), options: options, echoID: true)
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionDuplicate, target: target.target, args: options.withWindow())
+            ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
+                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil))
         }
     }
 
@@ -534,8 +564,9 @@ struct Session: ParsableCommand {
     struct Overlay: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "Open, read, resize, or close an ephemeral overlay terminal on a session.",
-            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Resize.self, Reload.self, Navigate.self,
-                          Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self]
+            subcommands: [Open.self, Close.self, Hide.self, Show.self, Toggle.self, Follow.self, Search.self, Resize.self,
+                          Reload.self, Navigate.self,
+                          Result.self, Submit.self, Copy.self, Text.self, RunJob.self, PageServe.self, PageAttach.self]
         )
 
         static let widthHelp: ArgumentHelp = "Panel content width in points, in place of --size-percent's width (at most 80% of the session)."
@@ -561,14 +592,40 @@ struct Session: ParsableCommand {
 
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(
-                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing a page with --html or --url.")
-            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html or --url.") var command: String?
+                abstract: "Open an overlay running COMMAND (it closes when COMMAND exits), or showing a page with --html, --url, --image, --markdown or --text.")
+            @Argument(help: "Program to run in the overlay (e.g. revdiff); omit with --html, --url, --image, --markdown or --text.") var command: String?
             @Option(name: .long, help: "Show this local HTML file instead of running COMMAND.") var html: String?
             @Option(name: .long, help: """
                 Show this http or https URL instead of running COMMAND; links to its own origin load in place. \
                 localhost means the Mac running agterm.
                 """)
             var url: String?
+            @Option(name: .long, help: """
+                Show this png, jpg, gif or webp picture instead of running COMMAND. Without --size-percent the panel \
+                fits the picture, up to 80% of the session; a larger picture is scaled down.
+                """)
+            var image: String?
+            @Option(name: .long, help: """
+                Show this .md or .markdown file rendered with the terminal theme instead of running COMMAND; pictures \
+                in its own folder are shown, and a web link opens in the browser after a confirmation.
+                """)
+            var markdown: String?
+            @Option(name: .long, help: """
+                Show this source, config, text or log file read-only with the terminal theme instead of running COMMAND, \
+                highlighted when its language is known; FILE is taken literally, never as path:line.
+                """)
+            var text: String?
+            @Option(name: .long, help: "With --text, open scrolled to line N (from 1) and mark it.") var line: Int?
+            @Option(name: .long, help: """
+                With --text, show only the file's last N lines (1...\(TextPage.maxTail)), read from its end so a log of any \
+                size opens.
+                """)
+            var tail: Int?
+            @Flag(name: .customLong("follow-file"), help: """
+                With --text, follow the file's end as it grows, with the last \(TextPage.defaultTail) lines unless --tail \
+                says otherwise. Not --follow, which selects the session.
+                """)
+            var followFile = false
             @Flag(name: .long, help: "With --html or --url, add back, forward, reload, open in browser, and Show in Finder or Copy Link buttons.")
             var navigation = false
             @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
@@ -586,6 +643,11 @@ struct Session: ParsableCommand {
             var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
             @Flag(name: .long, help: Open.blockHelp) var block = false
+            @Flag(name: .long, help: """
+                Open the --html/--url page as a page companion under the target session: a sidebar row of its own, \
+                full size, that closes with its page. Refuses --pane, --size-percent, --width and --height.
+                """)
+            var companion = false
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: Overlay.widthHelp) var width: Int?
@@ -600,12 +662,37 @@ struct Session: ParsableCommand {
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
+            private func validateLog() throws {
+                guard tail != nil || followFile else { return }
+                if text == nil { throw ValidationError("--tail and --follow-file require --text") }
+                if line != nil { throw ValidationError("--tail and --follow-file cannot be combined with --line") }
+                if let tail, !(1...TextPage.maxTail).contains(tail) {
+                    throw ValidationError("--tail must be 1...\(TextPage.maxTail)")
+                }
+            }
+
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
+                if companion, html == nil && url == nil { throw ValidationError("--companion requires --html or --url") }
+                if companion, pane != nil || sizePercent != nil || width != nil || height != nil {
+                    throw ValidationError("--companion is full size: it takes no --pane, --size-percent, --width or --height")
+                }
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
-                if [command, html, url].compactMap({ $0 }).count != 1 {
-                    throw ValidationError("provide exactly one of COMMAND, --html or --url")
+                if [command, html, url, image, markdown, text].compactMap({ $0 }).count != 1 {
+                    throw ValidationError("provide exactly one of COMMAND, --html, --url, --image, --markdown or --text")
+                }
+                if line != nil, text == nil { throw ValidationError("--line requires --text") }
+                if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
+                try validateLog()
+                if image != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
+                    throw ValidationError("--image takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
+                }
+                if markdown != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
+                    throw ValidationError("--markdown takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
+                }
+                if text != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
+                    throw ValidationError("--text takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
                 }
                 if command == nil, wait || (url != nil && block) { throw ValidationError("a page takes no --wait, and a --url page no --block") }
                 if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
@@ -637,7 +724,7 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
+                ControlRequest(cmd: companion ? .sessionCompanionPage : .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
@@ -646,12 +733,21 @@ struct Session: ParsableCommand {
                                                                      html: html.map(Overlay.absolutePath),
                                                                      navigation: navigation ? true : nil, url: url,
                                                                      javascript: javascript ? true : nil, chromeless: chromeless ? true : nil, persistent: persistent ? true : nil,
-                                                                     browse: browse ? true : nil)))
+                                                                     browse: browse ? true : nil,
+                                                                     image: image.map(Overlay.absolutePath),
+                                                                     markdownFile: markdown.map(Overlay.absolutePath),
+                                                                     textFile: text.map(Overlay.absolutePath), line: line,
+                                                                     tail: tail, followFile: followFile ? true : nil)))
             }
 
             func run() throws {
+                if companion, !block { return try runCompanionRequest(makeRequest(), options: options, echoID: true) }
                 guard block else { try defaultRun(); return }
-                if html != nil { return try HtmlPageRunner(json: options.json, send: SocketClient(path: options.socketPath()).send).block(makeRequest()) }
+                if html != nil {
+                    let send = SocketClient(path: options.socketPath()).send
+                    return try HtmlPageRunner(json: options.json, send: companion ? companionSend(send, json: options.json) : send)
+                        .block(makeRequest())
+                }
                 let client = SocketClient(path: options.socketPath())
                 // open via the same `makeRequest()` as the non-block path: in block mode `validate()` guarantees
                 // `!wait`, so its `wait` is nil, and the floating `--size-percent` rides that single source

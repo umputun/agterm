@@ -10,6 +10,8 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let owner: Int
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
+    /// points retains requested overrides even when an older presenter ignores them.
+    public var points = OverlayPointSize()
     /// Whether the viewer's surface stays up after the program ends (`--wait`), which keeps the slot held
     /// until that surface is closed.
     public var wait = false
@@ -17,6 +19,9 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public var ended = false
     /// page is what the slot holds instead of a program; `job` is then the page id.
     public var page: RemotePage?
+    /// presenterSized marks a picture the presenter fitted itself, whose points only it knows, until a resize
+    /// replaces its size whole.
+    public var presenterSized = false
 
     public init(job: String, pane: OverlayPane?, owner: Int, sizePercent: Int?, wait: Bool = false,
                 ended: Bool = false, page: RemotePage? = nil) {
@@ -124,9 +129,12 @@ public struct RemoteOverlays: Equatable, Sendable {
         }
     }
 
-    mutating func resize(job: String, sizePercent: Int?) {
+    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
+                         presenterSized: Bool = false) {
         guard let index = slots.firstIndex(where: { $0.job == job }) else { return }
         slots[index].sizePercent = sizePercent
+        slots[index].points = points
+        slots[index].presenterSized = presenterSized
     }
 
     mutating func remove(job: String) { slots.removeAll { $0.job == job } }

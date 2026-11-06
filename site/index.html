@@ -40,7 +40,7 @@
     <meta name="theme-color" content="#191d20" />
     <link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="stylesheet" href="/style.css?v=2" />
+    <link rel="stylesheet" href="/style.css?v=3" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -54,7 +54,7 @@
         "author": { "@type": "Person", "name": "Umputun", "url": "https://github.com/umputun" },
         "codeRepository": "https://github.com/umputun/agterm",
         "downloadUrl": "https://github.com/umputun/agterm/releases",
-        "softwareVersion": "0.38.1"
+        "softwareVersion": "0.41.0"
       }
     </script>
   </head>
@@ -505,8 +505,8 @@
               A surface built for flow
             </h3>
             <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-              Split a session, drop a scratch terminal over it, or run a program in a floating overlay without disturbing the
-              session beneath. Jump anywhere with a fuzzy palette; flip through recents with Ctrl-Tab.
+              Split a session, pin companions under it, drop a scratch terminal over it, or run a program in a floating overlay
+              without disturbing the session beneath. Jump anywhere with a fuzzy palette; flip through recents with Ctrl-Tab.
             </p>
           </div>
 
@@ -622,7 +622,7 @@
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0">
               Quit, update, or relaunch agterm while your primary and split panes keep running, an agent mid-turn included. The
               next launch reattaches to those processes with their text and TUI state. Choose it under Settings ▸ General ▸ Restore
-              sessions; it takes effect after restarting agterm and needs zsh or fish as the macOS login shell.
+              sessions; it takes effect after restarting agterm and needs zsh or fish as the macOS login shell or as the ghostty <code style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 0.92em">command</code>.
               <a href="/docs#restore" style="color: #6d82f3">Restore modes</a>
             </p>
           </div>
@@ -691,8 +691,8 @@
           One session, many surfaces.
         </h2>
         <p style="font-size: 18px; line-height: 1.55; color: #bfbab0; max-width: 60ch; margin: 0 0 44px">
-          A session is never just one shell. Split it, drop a terminal over it, or float a program on top — every extra surface is
-          always a keystroke away and stays alive when hidden, so nothing you started ever gets lost.
+          A session is never just one shell. Split it, pin companions under it, drop a terminal over it, or float a program on top
+          — every extra surface is always a keystroke away and stays alive when hidden, so nothing you started ever gets lost.
         </p>
 
         <div class="surfaces-grid">
@@ -860,7 +860,40 @@
             </p>
           </div>
 
-        <!-- windows callout: shares row 2 with the Dashboard card -->
+          <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; padding: 26px">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px">
+              <span
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 12.5px;
+                  color: #e6e1d7;
+                  border: 1px solid rgba(255, 255, 255, 0.16);
+                  background: rgba(255, 255, 255, 0.04);
+                  padding: 3px 8px;
+                  border-radius: 6px;
+                  line-height: 1;
+                "
+                >↳</span
+              >
+              <h3
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-weight: 700;
+                  font-size: 17px;
+                  margin: 0;
+                  letter-spacing: -0.01em;
+                "
+              >
+                Companions
+              </h3>
+            </div>
+            <p style="font-size: 14.5px; line-height: 1.6; color: #949ba4; margin: 0">
+              Pin a log tail, a watcher, a second shell or an HTML page under a session in the sidebar. Companions move, fold and
+              close with it; Duplicate as Companion copies its split layout and reruns each pane's program. Remote sessions too.
+            </p>
+          </div>
+
+        <!-- windows callout: shares row 2 with the Dashboard and Companions cards -->
         <div
           class="surfaces-wide"
           style="

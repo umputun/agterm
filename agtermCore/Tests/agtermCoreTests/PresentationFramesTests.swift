@@ -52,6 +52,10 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 28, body: .context("PR #517")),
         PresentationFrame(gen: 1, rev: 29, body: .context(nil)),
         PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: "PR #517"))),
+        PresentationFrame(gen: 1, rev: 30, body: .info(PresentationInfo(source: "**3** agents", markdown: true, hideAfter: 30))),
+        PresentationFrame(gen: 1, rev: 30, body: .info(nil)),
+        PresentationFrame(gen: 1, rev: 30, body: .snapshot(PresentationSnapshot(
+            status: nil, hud: nil, info: PresentationInfo(source: "idle", markdown: false, hideAfter: 0)))),
         PresentationFrame(gen: 1, rev: 31, body: .sound(PresentationSound(name: "Glass"))),
         PresentationFrame(gen: 1, rev: 32, body: .sound(PresentationSound(name: nil))),
         PresentationFrame(gen: 1, rev: 33, body: .askRequest(PresentationAsk(
@@ -80,7 +84,53 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 43, body: .pageState(PresentationPageState(
             page: "p1", title: "Review", address: "/Users/u/docs/b.html", load: .loaded, error: nil, canGoBack: true,
             canGoForward: false, hidden: true, appliedSeq: 8))),
+        PresentationFrame(gen: 1, rev: 44, body: .overlayRequest(PresentationOverlay(
+            job: "j2", pane: nil, sizePercent: 60, points: OverlayPointSize(width: 640, height: 240), backgroundColor: nil,
+            follow: false, wait: false))),
+        PresentationFrame(gen: 1, rev: 45, body: .overlayResize(PresentationOverlayChange(
+            job: "j2", sizePercent: 60, points: OverlayPointSize(height: 300)))),
+        PresentationFrame(gen: 1, rev: 46, body: .pageRequest(PresentationPage(
+            page: "p4", token: "t4", source: .url("https://example.com/"), identity: "https://example.com",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 70, points: OverlayPointSize(width: 900), follow: false))),
+        PresentationFrame(gen: 1, rev: 47, body: .pageCommand(PresentationPageCommand(
+            page: "p4", seq: 9, action: .resize, sizePercent: 70, points: OverlayPointSize(width: 800, height: 400)))),
+        PresentationFrame(gen: 1, rev: 48, body: .pageRequest(PresentationPage(
+            page: "p5", token: "t5", source: .image(path: "/tmp/shot.png", width: 1600, height: 900), identity: "shot.png",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: nil, follow: false))),
+        PresentationFrame(gen: 1, rev: 49, body: .pageRequest(PresentationPage(
+            page: "p6", token: "t6", source: .markdown(path: "/tmp/notes/README.md"), identity: "README.md",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: pane, sizePercent: nil, follow: true))),
+        PresentationFrame(gen: 1, rev: 50, body: .pageRequest(PresentationPage(
+            page: "p7", token: "t7", source: .text(path: "/tmp/src/main.go", line: 42), identity: "main.go",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 60, follow: false))),
     ]
+
+    @Test(arguments: [
+        #"{"kind":"overlay.request","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":60,"follow":false,"wait":false}}"#,
+        #"{"kind":"overlay.resize","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":40}}"#,
+        #"{"kind":"page.request","gen":1,"rev":1,"page":{"page":"p1","token":"t1","source":{"url":{"_0":"https://example.com/"}},"#
+            + #""identity":"https://example.com","chromeless":false,"javascript":false,"navigation":false,"browse":false,"#
+            + #""persistent":false,"sizePercent":70,"follow":false}}"#,
+        #"{"kind":"page.command","gen":1,"rev":1,"page":{"page":"p1","seq":2,"action":"resize","sizePercent":50}}"#,
+    ])
+    func aSizedFrameFromAnOriginWithoutPointSizesDecodesWithNone(_ text: String) throws {
+        let points: OverlayPointSize
+        switch try PresentationCodec.decode(Data(text.utf8)).body {
+        case .overlayRequest(let overlay): points = overlay.points
+        case .overlayResize(let change): points = change.points
+        case .pageRequest(let page): points = page.points
+        case .pageCommand(let command): points = command.points
+        default: throw DecodedOtherKind()
+        }
+
+        #expect(points.isEmpty)
+    }
+
+    private struct DecodedOtherKind: Error {}
 
     @Test func aChoiceRequestFromAnOriginWithoutTheOtherRowDecodesWithNone() throws {
         let choices = try JSONDecoder().decode(AskChoiceForm.self, from: Data(#"{"choices":[{"id":"a","label":"A"}],"multiple":false,"checked":[]}"#.utf8))
@@ -96,6 +146,19 @@ struct PresentationFramesTests {
         #expect(line.last == UInt8(ascii: "\n"))
         #expect(!line.dropLast().contains(UInt8(ascii: "\n")))
         #expect(try PresentationCodec.decode(line.dropLast()) == frame)
+    }
+
+    @Test func aResizeCarriesMergeOnlyWhenAsked() throws {
+        let plain = PresentationFrame(gen: 1, rev: 1, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 2, action: .resize, sizePercent: 95, points: OverlayPointSize(width: 600))))
+        let merged = PresentationFrame(gen: 1, rev: 2, body: .pageCommand(PresentationPageCommand(
+            page: "p1", seq: 3, action: .resize, sizePercent: 95, points: OverlayPointSize(height: 300), merge: true)))
+
+        let line = try PresentationCodec.encode(plain)
+
+        #expect(!String(decoding: line, as: UTF8.self).contains("merge"))
+        #expect(try PresentationCodec.decode(line.dropLast()) == plain)
+        #expect(try PresentationCodec.decode(try PresentationCodec.encode(merged).dropLast()) == merged)
     }
 
     @Test func pageStateBoundsThePagesOwnStrings() throws {
@@ -122,6 +185,15 @@ struct PresentationFramesTests {
 
         #expect(try PresentationCodec.decode(line) == PresentationFrame(
             gen: 1, rev: 1, body: .snapshot(PresentationSnapshot(status: nil, hud: nil, context: nil))))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutInfoDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.info == nil)
     }
 
     @Test func anOversizeLineIsRefusedBeforeDecoding() {

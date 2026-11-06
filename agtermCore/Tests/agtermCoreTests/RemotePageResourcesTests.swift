@@ -37,6 +37,36 @@ struct RemotePageResourcesTests {
         #expect(RemotePageResources.resolve(docs + "/img/a.png", source: source) == nil)
     }
 
+    @Test func anImageOrTextPageServesOnlyItsOwnFile() {
+        let image = HtmlSource.image(path: docs + "/img/a.png")
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: image)
+            == .init(path: docs + "/img/a.png", maxBytes: ImagePage.maxBytes, picture: true))
+        #expect(RemotePageResources.content(docs + "/index.html", source: image) == nil)
+        let text = HtmlSource.text(path: docs + "/index.html", line: 4)
+        #expect(RemotePageResources.content(docs + "/index.html", source: text)
+            == .init(path: docs + "/index.html", maxBytes: TextPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: text) == nil)
+    }
+
+    @Test func aMarkdownPageServesItsOwnFileAndPicturesInItsFolder() {
+        let markdown = HtmlSource.markdown(path: docs + "/index.html")
+        #expect(RemotePageResources.content(docs + "/index.html", source: markdown)
+            == .init(path: docs + "/index.html", maxBytes: MarkdownPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: markdown)
+            == .init(path: docs + "/img/a.png", maxBytes: MarkdownPage.maxImageBytes, picture: true))
+    }
+
+    @Test(arguments: ["/docs/../secret.txt", "/docs/out.txt", "/secret.txt", "/docs", "/docs/img/../../secret.txt"])
+    func aMarkdownPageRefusesEscapes(_ relative: String) {
+        #expect(RemotePageResources.content(root + relative, source: .markdown(path: docs + "/index.html")) == nil)
+    }
+
+    @Test func aFilePageIsNeverServedAsContentNorAContentPageAsAFile() {
+        let file = HtmlSource.file(path: docs + "/index.html", grantRoot: docs)
+        #expect(RemotePageResources.content(docs + "/index.html", source: file) == nil)
+        #expect(RemotePageResources.resolve(docs + "/index.html", source: .markdown(path: docs + "/index.html")) == nil)
+    }
+
     @Test func aRelativePathOrAUrlPageServesNothing() throws {
         let file = HtmlSource.file(path: docs + "/index.html", grantRoot: docs)
         #expect(RemotePageResources.resolve("docs/index.html", source: file) == nil)

@@ -680,7 +680,7 @@ struct CommandsTests {
     @Test func sessionStatusRejectsUnknownShape() {
         // pin the exact allCases-derived message so an unrelated parse failure can't pass for it.
         #expect(validationMessage(["session", "status", "blocked", "--shape", "hexagon"])
-            == "shape must be one of: circle, square, triangle, diamond, capsule, star")
+            == "shape must be one of: circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell")
     }
 
     @Test func sessionStatusShapeHelpListsEveryShape() {
@@ -1594,77 +1594,6 @@ struct CommandsTests {
 
     @Test func dashboardRejectsInfiniteFontSize() {
         #expect(validationMessage(["dashboard", "s1", "--font-size=inf"]) == "--font-size must be a positive number")
-    }
-
-    @Test func sidebarDefaultsToggle() throws {
-        #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
-    }
-
-    @Test func sidebarHide() throws {
-        #expect(try request(["sidebar", "hide"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")))
-    }
-
-    @Test func sidebarModeDefaultsToggle() throws {
-        #expect(try request(["sidebar", "mode"]) == ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: "toggle")))
-    }
-
-    @Test func sidebarModeFlagged() throws {
-        #expect(try request(["sidebar", "mode", "flagged"]) == ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: "flagged")))
-    }
-
-    @Test func sidebarFlaggedLayoutDefaultsToggle() throws {
-        #expect(try request(["sidebar", "flagged-layout"])
-            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: "toggle")))
-    }
-
-    @Test(arguments: ["flat", "plain", "tree"]) func sidebarFlaggedLayoutNamesALayout(_ layout: String) throws {
-        #expect(try request(["sidebar", "flagged-layout", layout])
-            == ControlRequest(cmd: .sidebarFlaggedLayout, args: ControlArgs(mode: layout)))
-    }
-
-    @Test func sidebarFlaggedLayoutRejectsBadLayoutAndAWindowTarget() {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "flagged-layout", "grid"]) }
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "flagged-layout", "tree", "--window", "w"]) }
-    }
-
-    @Test func sidebarModeRejectsBadMode() {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "mode", "sideways"]) }
-    }
-
-    @Test func sidebarExpand() throws {
-        #expect(try request(["sidebar", "expand"]) == ControlRequest(cmd: .sidebarExpand))
-    }
-
-    @Test func sidebarCollapse() throws {
-        #expect(try request(["sidebar", "collapse"]) == ControlRequest(cmd: .sidebarCollapse))
-    }
-
-    @Test func sidebarExpandWithWindow() throws {
-        #expect(try request(["sidebar", "expand", "--window", "abc"]) ==
-            ControlRequest(cmd: .sidebarExpand, args: ControlArgs(window: "abc")))
-    }
-
-    @Test func sidebarCollapseWithWindow() throws {
-        #expect(try request(["sidebar", "collapse", "--window", "abc"]) ==
-            ControlRequest(cmd: .sidebarCollapse, args: ControlArgs(window: "abc")))
-    }
-
-    @Test func sidebarWidth() throws {
-        #expect(try request(["sidebar", "width", "271.3"]) ==
-            ControlRequest(cmd: .sidebarWidth, args: ControlArgs(sidebarWidth: 271.3)))
-    }
-
-    @Test func sidebarWidthWithWindow() throws {
-        #expect(try request(["sidebar", "width", "300", "--window", "abc"]) ==
-            ControlRequest(cmd: .sidebarWidth, args: ControlArgs(window: "abc", sidebarWidth: 300)))
-    }
-
-    @Test func sidebarWidthRejectsNonNumericPoints() {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "width", "wide"]) }
-    }
-
-    @Test func sidebarWidthRejectsNonFinitePoints() {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "width", "nan"]) }
     }
 
     @Test func sessionFlagDefaultsToggle() throws {

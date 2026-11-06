@@ -61,6 +61,29 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
     }
 
+    /// One ssh invocation running the far side's `agtermctl` with `arguments` plus `--json`, so the reply is the
+    /// server's own response line. Arguments carry user text, so the outer layer is quoted for any login shell.
+    public static func controlCommand(host: String, arguments: [String], connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"])
+        let remote = ["/bin/sh", "-c", chain].map(accountShellQuoted).joined(separator: " ")
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+    }
+
+    /// accountShellQuoted quotes `value` as one word that sh, zsh, tcsh and fish all read alike: an apostrophe or
+    /// a backslash goes outside the quotes, escaped, since fish treats both specially inside single quotes.
+    static func accountShellQuoted(_ value: String) -> String {
+        var quoted = "'"
+        for character in value {
+            switch character {
+            case "'": quoted += "'\\''"
+            case "\\": quoted += "'\\\\'"
+            default: quoted.append(character)
+            }
+        }
+        return quoted + "'"
+    }
+
     /// sshd runs a remote command with `/usr/bin:/bin:/usr/sbin:/sbin` and a non-interactive shell reads no
     /// profile, so an installed CLI is otherwise not found and every command exits 127. `CommandPath` owns
     /// where it can live; APPENDED, so a user's own `agtermctl` earlier on PATH still wins.

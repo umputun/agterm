@@ -66,8 +66,8 @@ struct TerminalZoomTests {
         store.toggleSplit(session.id)
         session.splitSurface = SpySurface()
         session.splitFocused = true
-        #expect(store.openOverlay(session.id, command: "less"))
         #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        #expect(store.openOverlay(session.id, command: "less"))
         #expect(TerminalZoomController.resolveTarget(store: store) == .session(session.id, .overlay))
 
         session.setOverlayHidden(true, slot: nil)

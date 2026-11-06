@@ -392,6 +392,45 @@ struct ControlDispatcherZmxTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func aGroupAttachReachesTheGroupActionWhoseDefaultRefusesByName() async throws {
+        let actions = MockControlActions()
+        let response = try #require(await dispatch(ControlRequest(cmd: .zmxAttachGroup, target: " s1 ",
+            args: ControlArgs(host: "buildbox", window: "other")), actions))
+        #expect(!response.ok)
+        #expect(response.error == "zmx.attach.group is not supported on this platform")
+        #expect(actions.calls.isEmpty, "a host without group attach must not fall back to a one-row attach")
+    }
+
+    @Test(arguments: [
+        (nil as String?, nil as String?, "zmx.attach.group requires a host"),
+        ("s1", nil, "zmx.attach.group requires a host"),
+        (nil, "buildbox", "zmx.attach.group requires a remote session"),
+        ("s1\u{1B}[31m", "buildbox", "invalid remote session"),
+    ])
+    func aGroupAttachIsValidatedLikeAPlainOne(_ target: String?, _ host: String?, _ error: String) async {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .zmxAttachGroup, target: target, args: ControlArgs(host: host)))
+
+        #expect(response?.error == error)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func theGroupReceiptSurvivesTheWire() throws {
+        let group = ControlRemoteGroup(membershipKnown: false, companions: [
+            ControlRemoteGroupMember(origin: "c1", id: "L1"),
+            ControlRemoteGroupMember(origin: "c2", error: "unavailable on buildbox"),
+        ])
+        let response = ControlResponse(ok: false, result: ControlResult(id: "P", remoteGroup: group), error: "kept build")
+
+        let decoded = try JSONDecoder().decode(ControlResponse.self, from: JSONEncoder().encode(response))
+
+        #expect(decoded == response)
+        let raw = try #require(String(data: JSONEncoder().encode(ControlRemoteGroupMember(origin: "c1", id: "L1")), encoding: .utf8))
+        #expect(!raw.contains("error"), "an attached member carries no error key")
+    }
+
     @Test func theUnsupportedRefusalNamesTheCommand() {
         // agtermCore is a library the agterm-linux fork consumes, so every Mac-only ControlActions
         // requirement ships a default returning this rather than breaking that build

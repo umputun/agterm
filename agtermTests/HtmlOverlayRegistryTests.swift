@@ -138,37 +138,7 @@ private struct MountedPage: View {
 }
 
 @MainActor
-private final class FakeBrowser: HtmlBrowser {
-    var prompts: [URL] = []
-    var answers: [(Bool) -> Void] = []
-    var dismissals = 0
-    var opened: [URL] = []
-    var available = true
-
-    func confirm(_ url: URL, over _: NSView, _ done: @escaping (Bool) -> Void) -> (() -> Void)? {
-        prompts.append(url)
-        answers.append(done)
-        return { self.dismissals += 1 }
-    }
-
-    func open(_ url: URL) -> Bool {
-        guard available else { return false }
-        opened.append(url)
-        return true
-    }
-}
-
-@MainActor
-private final class FakeSharing: HtmlSharing {
-    var revealed: [URL] = []
-    var copied: [String] = []
-
-    func reveal(_ url: URL) { revealed.append(url) }
-    func copy(_ text: String) { copied.append(text) }
-}
-
-@MainActor
-final class HtmlOverlayRegistryTests: XCTestCase {
+final class HtmlOverlayRegistryTests: HtmlPageTestCase {
     private final class StubSurface: PaneRoleMutableSurface {
         let paneToken: String
         init(_ token: String) { paneToken = token }
@@ -178,27 +148,12 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         func setPaneRole(_: SwappablePaneRole) {}
     }
 
-    private var directory: URL!
-    private var pages: URL!
     private var servers: [LoopbackServer] = []
     private var profiles: [BrowserProfile] = []
     private var removal: (@MainActor (WKWebsiteDataStore) async -> Void)!
-    private var store: AppStore!
-    private var session: Session!
-    private let registry = HtmlOverlayRegistry.shared
-    private let browser = FakeBrowser()
-    private let sharing = FakeSharing()
 
     override func setUp() async throws {
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-html-reg-\(UUID().uuidString)")
-        pages = directory.appendingPathComponent("pages")
-        try FileManager.default.createDirectory(at: pages, withIntermediateDirectories: true)
-        store = AppStore(persistence: PersistenceStore(directory: directory.appendingPathComponent("state")))
-        let workspace = store.addWorkspace(name: "work")
-        session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
-        registry.install()
-        registry.browser = browser
-        registry.sharing = sharing
+        try await super.setUp()
         removal = registry.removeWebsiteData
         useProfile("profile")
         try write("a.html", #"<title>A</title><script src="s.js"></script><a href="b.html">b</a>"#)
@@ -208,15 +163,13 @@ final class HtmlOverlayRegistryTests: XCTestCase {
 
     override func tearDown() async throws {
         servers.forEach { $0.stop() }
-        registry.browser = SystemBrowser()
-        registry.sharing = SystemHtmlSharing()
-        registry.setZoom(1)
-        registry.dispatch = nil
-        store.closeSession(session.id)
+        try await super.tearDown()
+    }
+
+    override func afterSessionClose() async throws {
         registry.removeWebsiteData = removal
         for profile in profiles { try await TestBrowserStore.remove(profile) }
         profiles = []
-        try? FileManager.default.removeItem(at: directory)
     }
 
     func testAPageIsCreatedOncePerIdentityAndReleasedByTheModel() throws {
@@ -900,6 +853,46 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         XCTAssertEqual(background, "#000000")
     }
 
+    // regression: reload --current reloaded the about:blank document instead of the picture
+    func testAnImagePageShowsThePictureAndReloadsItFromTheFile() async throws {
+        let path = try writePNG("shot.png", width: 30)
+        let overlay = HtmlOverlay(source: .image(path: path))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+
+        _ = try writePNG("shot.png", width: 40)
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "40" }
+    }
+
+    func testAnImageReplicaShowsTheFetchedPictureUnthemedOnAClearCanvas() async throws {
+        let path = try writePNG("shot.png", width: 30)
+        let page = registry.page(for: openReplica(path, .image(width: 30, height: 10)), store: store, replica: replicaLink())
+
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "30" }
+        XCTAssertEqual(page.webView.value(forKey: "drawsBackground") as? Bool, false)
+        XCTAssertEqual(page.webView.configuration.userContentController.userScripts.count, 1, "the theme script alone")
+        XCTAssertEqual(fetched, [path])
+
+        _ = try writePNG("shot.png", width: 40)
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+        try await waitForScript("document.images[0] ? String(document.images[0].naturalWidth) : ''", in: page.webView) { $0 == "40" }
+    }
+
+    func testAnImageReadFinishingAfterCloseIsDropped() async throws {
+        let overlay = HtmlOverlay(source: .image(path: try writePNG("late.png", width: 30)))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        let page = registry.page(for: overlay, store: store)
+
+        page.close()
+        try await Task.sleep(for: .milliseconds(500))
+
+        XCTAssertNil(page.webView.url)
+        store.closeOverlay(session.id)
+    }
+
     func testAUrlPageKeepsTheBrowserCanvasThroughAThemeChange() async throws {
         let port = try await serve(.ipv4(.loopback), ["/": .init(body: "<title>app</title><body style=\"color: #333\"><p>app text</p></body>")])
         let page = registry.page(for: try openURL("http://127.0.0.1:\(port)/"), store: store)
@@ -1580,16 +1573,6 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         return recorded
     }
 
-    private func waitForScript(_ script: String, in view: WKWebView, _ matches: @escaping (String) -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(10)
-        while true {
-            let value = try await view.evaluateJavaScript("String(\(script))") as? String ?? ""
-            if matches(value) { return }
-            guard Date() < deadline else { return XCTFail("\(script) never matched, last: \(value)") }
-            try await Task.sleep(for: .milliseconds(50))
-        }
-    }
-
     private func present(_ view: NSView) throws -> NSWindow {
         let window = try host(view)
         window.makeKeyAndOrderFront(nil)
@@ -1633,8 +1616,6 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         try await waitFor("title \(title)") { view.title == title }
     }
 
-    private var current: HtmlOverlay? { session.htmlOverlay ?? session.paneOverlay(.left)?.html }
-
     private func snapshotPixel(file: String) async throws -> NSColor {
         let page = registry.page(for: try open(file: file), store: store)
         let window = try host(page.webView)
@@ -1643,34 +1624,12 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         return try await bottomPixel(page.webView)
     }
 
-    private func host(_ view: NSView) throws -> NSWindow {
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
-                              backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        view.frame = try XCTUnwrap(window.contentView).bounds
-        window.contentView?.addSubview(view)
-        return window
-    }
-
     private func bottomPixel(_ view: WKWebView) async throws -> NSColor {
         let image = try await view.takeSnapshot(configuration: nil)
         let rep = try XCTUnwrap(image.representations.first as? NSBitmapImageRep
             ?? image.cgImage(forProposedRect: nil, context: nil, hints: nil).map(NSBitmapImageRep.init(cgImage:)))
         let color = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide / 2, y: rep.pixelsHigh - 10))
         return color.usingColorSpace(.sRGB) ?? color
-    }
-
-    private func variable(_ name: String, in view: WKWebView) async throws -> String? {
-        let value = try await view.evaluateJavaScript("getComputedStyle(document.documentElement).getPropertyValue('\(name)').trim()")
-        return value as? String
-    }
-
-    private func waitForVariable(_ name: String, _ expected: String, in view: WKWebView) async throws {
-        let deadline = Date().addingTimeInterval(10)
-        while try await variable(name, in: view) != expected {
-            guard Date() < deadline else { return XCTFail("\(name) never became \(expected)") }
-            try await Task.sleep(for: .milliseconds(50))
-        }
     }
 
     private func scriptEffects(_ view: WKWebView) async throws -> String? {
@@ -1751,13 +1710,13 @@ final class HtmlOverlayRegistryTests: XCTestCase {
         return try await server.start()
     }
 
-    private func waitFor(_ what: String, timeout: TimeInterval = 10, _ condition: @escaping () -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
-            guard Date() < deadline else {
-                return XCTFail("\(what) not reached within \(timeout)s: \(String(describing: current))")
-            }
-            try await Task.sleep(for: .milliseconds(50))
-        }
+    func testOnlyAReloadOrNavigationWithNoTargetIsThePagesOwn() {
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload"]))
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.navigate", "args": ["to": "back"]]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "target": "other"]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "args": ["window": "w1"]]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.navigate", "args": ["targets": ["a"], "to": "back"]]))
+        XCTAssertTrue(HtmlOverlayPage.addressesOwnPage(["cmd": "session.overlay.reload", "target": NSNull()]))
+        XCTAssertFalse(HtmlOverlayPage.addressesOwnPage(["cmd": "session.rename", "args": ["name": "x"]]))
     }
 }

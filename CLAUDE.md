@@ -9,6 +9,14 @@ C-boundary concurrency before changing the bridge.
 
 - For nonstandard or risky UI requests, first explain the AppKit/SwiftUI cost and offer the standard
   alternative. Proceed if the user still prefers the custom behavior.
+- Design every UI behavior to be consistent and unsurprising: a key or gesture does one thing for what the user
+  is looking at and never reaches a layer hidden behind the visible one.
+  A rule whose exceptions depend on state the user cannot see on screen is a defect: propose the single rule,
+  and ask before adding a case.
+  Existing behavior next to the change that breaks this rule is a defect to fix with it, not a pre-existing one:
+  name it with its fix as a question, never as out of scope.
+  A control that already exists elsewhere in the app (a search bar, a button, a picker) looks and behaves the same
+  in the new place: reuse its component, and show the user the rendered result before writing tests.
 - Judge any change that can leave a long-standing visual artifact by what the user is left looking at,
   never by whether the mechanism is sound. A panel, badge, marker or overlay that outlives the thing it
   describes is a defect however correct the code that posted it. Give it a way to clear itself, and put
@@ -20,6 +28,9 @@ C-boundary concurrency before changing the bridge.
 - For each hideable titlebar/sidebar element, ask whether it should join host-free `InterfaceElement` and
   Settings > Interface. Never add that preference without approval.
   A control enabled there stays visible and is disabled when it cannot act; never show or hide it by state.
+- The HTML overlay displays HTML over a session; it is not a browser. Following links, history and back are the
+  browser's job, so link features that turn the overlay into one are declined.
+  What a mouse-capturing program does with a click is that program's, not agterm's.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.
   It also points "can you add X" requests to Discussions ▸ Ideas instead of issues.
@@ -39,6 +50,11 @@ C-boundary concurrency before changing the bridge.
   Set only a short `/tmp` `AGTERM_STATE_DIR` so app and inherited CLI derive the same socket.
   Prepend the Debug app's `Contents/MacOS` to PATH for custom commands; login shells may restore the
   deployed CLI, so manual commands should use the Debug binary's full path.
+- `open -n` passes the caller's environment to the app, including inherited `CLAUDE*` markers and
+  live-terminal `AGTERM_*`/`GHOSTTY_*` variables; a `claude` started in that instance warns that transcript
+  saving is off.
+  Launch through `env -u NAME ...` naming every such variable, which drops `AGTERM_STATE_DIR` too, so pass
+  the isolated one back with `open -n --env AGTERM_STATE_DIR=...`; verify with `ps eww -p <pid>`.
 - A fresh isolated state dir reads as a first launch and opens the welcome alert.
   `mkdir -p "$AGTERM_STATE_DIR/windows"` before launching to skip it: `FirstRunWelcome.hasPriorState`
   looks for `settings.json`, `workspaces.json`, or `windows` before the app writes anything.
@@ -70,7 +86,8 @@ C-boundary concurrency before changing the bridge.
 - Xcodegen creates the app project; Xcode 26 builds it. Call `xcodegen`, `xcodebuild`, and `swift`
   directly through repository scripts; `mise` is unused.
 - Swift 6 `agtermCore` uses complete concurrency checking and has no Xcode/libghostty dependency.
-- `scripts/setup.sh` builds pinned libghostty and zmx with Homebrew `zig@0.16` and Xcode's Metal Toolchain.
+- `scripts/setup.sh` builds pinned libghostty with Homebrew `zig@0.17`, zmx with `zig@0.16`, and Xcode's
+  Metal Toolchain.
   It is idempotent after artifacts exist. zmx is the plain upstream pin plus `scripts/zmx-patches/`,
   whose README says what each patch is for and how to regenerate one.
 - Commands:
@@ -106,6 +123,11 @@ C-boundary concurrency before changing the bridge.
   connecting. Both runners recovered once Eugene allowed the pending authorization, with the same stale
   session host and the same `testmanagerd` still running, so neither needs a restart. SIP refuses
   `launchctl kickstart -k` on `testmanagerd`. [Unverified] which authorization that was.
+- A TCC-gated tool run from a shell in the live terminal (`screencapture`, XCUITest) can be denied after a
+  deploy replaces the app under a running `agterm-session-host`, even with an existing grant.
+  `codesign -v <pid>` reports the code on disk does not match, and tccd logs
+  `Failed to match existing code requirement`. Check both before calling a permission missing;
+  a Debug instance can capture its own view in-process instead.
 - For maintainer work, ask before splitting a touched long file and do not raise limits reflexively.
   Contributors need not refactor preexisting length; mention it without blocking or suggesting a limit bump.
 
@@ -118,7 +140,8 @@ C-boundary concurrency before changing the bridge.
   use absolute targets for resources. Each stamp makes its staged artifacts count as current. They remain
   untracked and disappear with worktree removal.
 - Symlink an artifact set only while the main checkout's matching stamp equals what the worktree's
-  `setup.sh` would write for that set: the revision for ghostty, and `ZMX_REV`, `ZMX_TARGET` and the
+  `setup.sh` would write for that set: `GHOSTTY_REV` and the digest of
+  `scripts/ghostty-patches/*.patch` for ghostty, and `ZMX_REV`, `ZMX_TARGET` and the
   digest of `scripts/zmx-patches/*.patch` and `scripts/zmx-patches/ghostty/*.patch` for zmx, so a target
   or a patch change invalidates a set whose revision still matches. When either differs, remove that
   set's artifact and stamp links before setup runs and let it build locally. `setup.sh` writes stamps
@@ -177,9 +200,10 @@ C-boundary concurrency before changing the bridge.
 
 ## Protect the live terminal
 
-- Never run a mutating `agtermctl` command on the default socket. It controls the user's live deployed
-  terminal. Read-only `tree` and `window list` are tolerable; writes require explicit isolated socket.
-  Never execute bundled recipes against the default instance.
+- Never run experimental or test `agtermctl` mutations (bundled recipes, probes, test scenarios) on the
+  default socket; it controls the user's live daily-driver terminal, so experiments go to an isolated socket.
+  A session's normal operations on itself (context, rename, status, notify, HUD, chat, its own companions)
+  are ordinary use.
 - Every delegated agent that might touch the app or CLI must receive verbatim:
   “never execute `agterm`/`agtermctl` against the default socket, never launch or quit the app, static
   reading only.”
@@ -211,14 +235,17 @@ C-boundary concurrency before changing the bridge.
 ## GhosttyKit
 
 - `scripts/setup.sh` builds upstream `ghostty-org/ghostty` at `GHOSTTY_REV` using
-  `zig build -Demit-xcframework=true -Dxcframework-target=native`. No fork or disposable daily build is used.
-- `GHOSTTY_REV` is `683d8db` (2026-08-25), a plain reproducibility pin carrying upstream's hidden-surface
-  GPU release.
+  `zig build -Demit-xcframework=true -Dxcframework-target=native`, after applying
+  `scripts/ghostty-patches/*.patch`. That directory documents the teardown backport and its removal.
+- `GHOSTTY_REV` is `83fb956` (v1.4.0, 2026-10-27), a plain reproducibility pin carrying upstream's
+  hidden-surface GPU release.
   It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size
   increase; upstream fixed that and the case was re-verified by hand before the bump. Re-test the
   font-increase case when moving it, and check `minimum_zig_version` in `build.zig.zon` against
-  `ZIG_FORMULA`. The 0.15 to 0.16 jump came with the `0ba6250` bump, not this one.
-- `.ghostty-build-stamp` records the rev the staged artifacts came from and is what decides a rebuild.
+  `GHOSTTY_ZIG_FORMULA`. zmx has its own `ZMX_ZIG_FORMULA`, so a ghostty compiler jump leaves zmx's
+  stamp and caches valid.
+- `.ghostty-build-stamp` records the revision and patch digest the staged artifacts came from
+  and is what decides a rebuild.
   Presence alone would serve an xcframework built from a different rev silently, so a `GHOSTTY_REV`
   change costs everyone exactly one libghostty rebuild and nobody keeps a stale core by accident.
 - Setup stages the xcframework and `zig-out/share/{ghostty,terminfo}`. All are ignored build artifacts.
@@ -306,6 +333,8 @@ C-boundary concurrency before changing the bridge.
   Edge cases, minor bugs, and other small findings never block the PR: approve and merge, leaving a note
   for the contributor. That note is where a recipe finding ends: never file it in `docs/backlog/`, which
   is for code the project owns, and never edit a recipe's prose unprompted.
+- A recipe's Limits list only what the recipe causes or cannot do, never general agent behavior.
+  State what the recipe guarantees before a side effect, so the side effect never reads as misrouting.
 - agterm runs only on macOS, so POSIX portability is never a finding by itself. A shellcheck SC3xxx on a
   recipe is a CI lint gate, not a runtime defect: `/bin/sh` there is bash 3.2 and `printf %q` works.
   Never propose a bash shebang as the fix; the mac shell is zsh, and CI's `.zsh` path is `zsh -n`.

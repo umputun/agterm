@@ -22,6 +22,17 @@ extension AppStore {
         if previous != session.effectiveContext { scheduleTreeChanged() }
     }
 
+    /// applyRemoteInfo records the origin's info line, kept even while a local line hides it; one that does not
+    /// parse here reads as none.
+    public func applyRemoteInfo(_ info: PresentationInfo?, forSession id: UUID) {
+        guard let session = session(withID: id), session.remotePresentation != nil else { return }
+        let previous = session.effectiveInfo
+        session.mirroredInfo = info.flatMap {
+            try? SessionInfo.make(source: $0.source, markdown: $0.markdown, hideAfter: $0.hideAfter).get()
+        }
+        if previous != session.effectiveInfo { scheduleTreeChanged() }
+    }
+
     /// Applies the origin's status, nil for idle. Bypasses `applyControlStatus`: that rule arbitrates
     /// between panes writing locally, and would refuse a clear the origin already accepted.
     public func applyRemoteStatus(_ status: PresentationStatus?, forSession id: UUID) {
@@ -55,6 +66,7 @@ extension AppStore {
         if state.connection != connection { session.remoteConnectionRevision += 1 }
         guard state.connection == .connected, connection != .connected else { return }
         applyRemoteContext(nil, forSession: id)
+        applyRemoteInfo(nil, forSession: id)
         if state.statusBridged { setAgentIndicator(AgentIndicator(), forSession: id) }
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
@@ -77,6 +89,7 @@ extension AppStore {
             pane = role
         } else {
             guard openOverlay(id, command: command, wait: overlay.wait, sizePercent: overlay.sizePercent,
+                              points: overlay.points,
                               backgroundColor: overlay.backgroundColor) else { return false }
         }
         session.setOverlayReplica(OverlayReplica(job: overlay.job), pane: pane)
@@ -97,7 +110,7 @@ extension AppStore {
 
     public func resizeReplicaOverlay(_ change: PresentationOverlayChange, forSession id: UUID) {
         guard session(withID: id)?.overlayReplica?.job == change.job else { return }
-        resizeOverlay(id, sizePercent: change.sizePercent)
+        resizeOverlay(id, sizePercent: change.sizePercent, points: change.points)
     }
 
     /// A replica's job ssh ended and `--wait` holds its surface. Cut off from its stream, nothing could close

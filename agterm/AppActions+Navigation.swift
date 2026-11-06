@@ -72,7 +72,7 @@ extension AppActions {
 
     /// Step to the next/previous session needing attention (`blocked`/`completed`, plus `active` under
     /// `AppStore.attentionIncludesActive`), wrapping and skipping idle, through `navigateSession` shared with
-    /// the palette and `session.go next-attention|prev-attention`.
+    /// `session.go next-attention|prev-attention`, or `WindowLibrary.attentionStep` across windows.
     /// Notes user activity like plain nav, then `revealActiveBlockedPane` focuses the split/scratch pane that
     /// SET the status. Unlike plain nav this DOES reveal on a selection no-op, and only the
     /// `?? activeSession?.agentIndicator` fallback makes it: `attentionTarget` EXCLUDES the current session,
@@ -80,16 +80,30 @@ extension AppActions {
     /// Without the fallback the reveal degrades to plain `focusActiveSession` and ⌃⌥↑/↓ stops landing on that
     /// session's tagged pane — constant for an agent, since a pane-scoped block is not cleared by typing in
     /// the OTHER pane. Keep it.
-    func selectNextAttentionSession() {
+    /// Under `attentionNavigationAcrossWindows` the target comes from `WindowLibrary.attentionStep`, skipping
+    /// covered windows. A target in another window goes through `selectAttention` one tick later, as
+    /// `paletteAttention` does, so the raise never competes with an action palette's dismissal.
+    func selectNextAttentionSession() { stepAttention(forward: true) }
+    func selectPreviousAttentionSession() { stepAttention(forward: false) }
+
+    private func stepAttention(forward: Bool) {
         guard uiActionsEnabled else { return }
         store?.noteUserActivity()
-        let indicator = store?.navigateSession(.nextAttention) ?? store?.activeSession?.agentIndicator
-        revealActiveBlockedPane(captured: indicator)
-    }
-    func selectPreviousAttentionSession() {
-        guard uiActionsEnabled else { return }
-        store?.noteUserActivity()
-        let indicator = store?.navigateSession(.previousAttention) ?? store?.activeSession?.agentIndicator
-        revealActiveBlockedPane(captured: indicator)
+        guard store?.attentionNavigationAcrossWindows == true, let source = library.activeWindowID else {
+            let indicator = store?.navigateSession(forward ? .nextAttention : .previousAttention)
+            revealActiveBlockedPane(captured: indicator ?? store?.activeSession?.agentIndicator)
+            return
+        }
+        guard let target = library.attentionStep(from: source, forward: forward, eligible: { uiActionsEnabled(for: $0) }) else {
+            revealActiveBlockedPane(captured: store?.activeSession?.agentIndicator)
+            return
+        }
+        guard target.windowID != source else {
+            revealActiveBlockedPane(captured: store?.selectSession(target.sessionID))
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.selectAttention(windowID: target.windowID, sessionID: target.sessionID)
+        }
     }
 }

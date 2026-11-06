@@ -37,6 +37,104 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the page")
     }
 
+    func testAMarkdownFileRendersAndTheTreeNamesItsSource() throws {
+        let id = try activeSessionID()
+        let doc = pageDir.appendingPathComponent("notes.md")
+        try "# Rendered Heading\n\nsome *text*\n".write(to: doc, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"markdownFile":"\#(doc.path)"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "markdown open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) {
+            ($0["markdown"] as? String)?.hasSuffix("/notes.md") == true && $0["file"] == nil && $0["state"] as? String == "loaded"
+        }, "the tree should name the markdown source")
+        XCTAssertTrue(app.webViews.staticTexts["Rendered Heading"].waitForExistence(timeout: 10), "the markdown should render")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "notes.md")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
+    }
+
+    func testATextFileRendersAtItsLineAndTheTreeNamesItsSource() throws {
+        let id = try activeSessionID()
+        let file = pageDir.appendingPathComponent("main.go")
+        try "package main\n\n// Rendered Text Line\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","line":3}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "text open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) {
+            let text = $0["text"] as? [String: Any]
+            return (text?["file"] as? String)?.hasSuffix("/main.go") == true && text?["language"] as? String == "go"
+                && text?["line"] as? Int == 3 && $0["file"] == nil && $0["state"] as? String == "loaded"
+        }, "the tree should name the text source, its language and line")
+        let rendered = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Rendered Text Line", "Rendered Text Line")
+        XCTAssertTrue(app.webViews.staticTexts.matching(rendered).firstMatch.waitForExistence(timeout: 10), "the text should render")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "main.go")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
+    }
+
+    func testALogPageFollowsAppendsAndFollowTogglesThroughControl() throws {
+        let id = try activeSessionID()
+        let file = pageDir.appendingPathComponent("app.log")
+        try "first log line\nsecond log line\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","tail":50,"followFile":true}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "log open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) {
+            let text = $0["text"] as? [String: Any]
+            return text?["tail"] as? Int == 50 && text?["following"] as? Bool == true && text?["lines"] as? Int == 2
+        }, "the tree should report the log page's limit, follow state and lines")
+
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("third log line\n".utf8))
+        try handle.close()
+        XCTAssertTrue(pollPage(id: id) { ($0["text"] as? [String: Any])?["lines"] as? Int == 3 }, "the appended line should be read")
+        let appended = NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "third log line", "third log line")
+        XCTAssertTrue(app.webViews.staticTexts.matching(appended).firstMatch.waitForExistence(timeout: 10), "the appended line should show")
+
+        let off = try sendCommand(#"{"cmd":"session.overlay.follow","target":"\#(id)","args":{"mode":"off"}}"#)
+        XCTAssertEqual((off["result"] as? [String: Any])?["text"] as? String, "paused", "\(off)")
+        XCTAssertTrue(pollPage(id: id) { ($0["text"] as? [String: Any])?["following"] as? Bool == false })
+        let on = try sendCommand(#"{"cmd":"session.overlay.follow","target":"\#(id)","args":{"mode":"on"}}"#)
+        XCTAssertEqual((on["result"] as? [String: Any])?["text"] as? String, "following", "\(on)")
+        XCTAssertTrue(pollPage(id: id) { ($0["text"] as? [String: Any])?["following"] as? Bool == true })
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
+    }
+
+    func testCommandFOverAFloatingTextPageSearchesThePageAndLeavesTheTerminalSearch() throws {
+        let id = try activeSessionID()
+        app.activate()
+        app.typeKey("f", modifierFlags: .command)
+        XCTAssertTrue(app.textFields["search-field"].waitForExistence(timeout: 10), "⌘F with no page opens the terminal search")
+        let file = pageDir.appendingPathComponent("notes.txt")
+        try "alpha\nbeta\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","sizePercent":60}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "text open should succeed: \(open)")
+        XCTAssertTrue(pollPage(id: id) { $0["state"] as? String == "loaded" })
+
+        app.typeKey("f", modifierFlags: .command)
+        app.typeKey("b", modifierFlags: [])
+
+        XCTAssertTrue(pollPage(id: id) { ($0["text"] as? [String: Any]).flatMap { $0["search"] as? [String: Any] }?["query"] as? String == "b" },
+                      "⌘F over the page focuses its field, so the typed letter becomes the page's query")
+        XCTAssertTrue(app.textFields["search-field"].exists, "the terminal search behind the page stays open")
+        app.buttons["htmlOverlay.close"].click()
+        XCTAssertTrue(pollOverlay(id: id, expected: false))
+    }
+
+    func testCommandFWithAPageOverTheOtherPaneSearchesTheFocusedTerminal() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        let file = pageDir.appendingPathComponent("notes.txt")
+        try "alpha\n".write(to: file, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"textFile":"\#(file.path)","pane":"left"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "pane text open should succeed: \(open)")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"right"}}"#)["ok"] as? Bool, true)
+
+        app.activate()
+        app.typeKey("f", modifierFlags: .command)
+
+        XCTAssertTrue(app.textFields["search-field"].waitForExistence(timeout: 10), "the focused right pane opens its terminal search")
+    }
+
     func testWithoutNavigationThePageShowsItsSourceAndACloseButton() throws {
         let id = try activeSessionID()
         XCTAssertEqual(try sendCommand(openRequest(id))["ok"] as? Bool, true)

@@ -8,13 +8,17 @@ import agtermCore
 /// `sidebar.expand`/`sidebar.collapse` arms live in `ControlServer+AppCommands.swift`.
 extension ControlServer {
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse {
+        createWorkspace(window: window, name: name, collapsed: collapsed, tint: nil)
+    }
+
+    func createWorkspace(window: String?, name: String?, collapsed: Bool, tint: SidebarTint?) -> ControlResponse {
         // `collapsed` seeds the workspace closed so a script can fill it with `session.new --no-select`
         // without it opening, and for the same reason keeps it OUT of the focus set — widening a script's
         // marked set would contradict the flag. a plain create keeps the auto-reveal, matching the GUI's New
         // Workspace button: a foreground create must not land invisibly behind an applied filter.
         resolver.resolvePlacementStore(window) { store in
             let name = trimmed(name) ?? store.defaultWorkspaceName
-            let workspace = store.addWorkspace(name: name, collapsed: collapsed, revealNewWorkspace: !collapsed)
+            let workspace = store.addWorkspace(name: name, collapsed: collapsed, revealNewWorkspace: !collapsed, tint: tint)
             return ControlResponse(ok: true, result: ControlResult(id: workspace.id.uuidString))
         }
     }

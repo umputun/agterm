@@ -223,12 +223,15 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertTrue(HudLinkClick.consumes(try mouse(.leftMouseUp, [], at: onBar)))
     }
 
-    func testOnlyAPlainCommandLeftPressIsALinkClick() throws {
+    func testOnlyACommandOrCommandOptionLeftPressIsALinkClick() throws {
         XCTAssertTrue(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, .command)))
         XCTAssertTrue(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .capsLock])))
+        XCTAssertTrue(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .option])), "the reveal chord")
         XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, .option)))
         XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .shift])))
-        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .option])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .option, .shift])))
+        XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.leftMouseDown, [.command, .control])))
         XCTAssertFalse(HudLinkClick.isLinkClick(try mouse(.rightMouseDown, .command)))
     }
 

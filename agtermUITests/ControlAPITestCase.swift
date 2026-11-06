@@ -28,7 +28,7 @@ extension XCTestCase {
 class ControlAPITestCase: XCTestCase {
     var app: XCUIApplication!
     private(set) var stateDir: URL!
-    private var socketPath: String!
+    private(set) var socketPath: String!
     private(set) var markerDir: URL!
 
     override func setUp() async throws {

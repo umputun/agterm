@@ -62,6 +62,33 @@ context=$(printf '%s' "$tree" | jq -r --arg sid "$AGTERM_SESSION_ID" \
      | if ($m | length) == 0 then "\u0001" else ($m[0].context // "") end' 2>/dev/null) || exit 0
 [ "$context" != "$(printf '\001')" ] || exit 0
 
+# the named-companion recipe leaves a marker holding the parent's name for a companion created without
+# one. a name that no longer matches it was renamed already, by the model or by hand.
+rename_note=""
+marker="$HOME/.cache/agterm/companion-names/$AGTERM_SESSION_ID"
+if [ -f "$marker" ]; then
+    name=$(printf '%s' "$tree" | jq -r --arg sid "$AGTERM_SESSION_ID" \
+        '[.result.tree.workspaces[]?.sessions[]? | select(.id == $sid)][0].name // ""' 2>/dev/null)
+    if [ "$name" != "$(cat "$marker" 2>/dev/null)" ]; then
+        rm -f "$marker"
+    elif [ -n "$context" ]; then
+        rename_note="now to a short form of the context above (of the new one, if you replace it this turn)"
+    else
+        rename_note="to a short form of the context when you set it"
+    fi
+fi
+
+print_rename_note() {
+    [ -n "$rename_note" ] || return 0
+    cat <<EOF
+
+COMPANION NAME: this session is a companion still named after its parent. Rename it
+$rename_note, 25 characters at most, in its own foreground Bash call:
+
+  agtermctl session rename 'short name' --target $AGTERM_SESSION_ID
+EOF
+}
+
 if [ -z "$context" ]; then
     cat <<EOF
 SESSION CONTEXT (agterm title bar) is not set.
@@ -77,6 +104,7 @@ rename bug with the review tool". A bare ticket number says nothing to someone g
 session name is already shown beside it, so do not repeat the project or repo either. Write it when
 you know what the task is, not before - a turn that never gets there simply leaves it unset.
 EOF
+    print_rename_note
     exit 0
 fi
 
@@ -96,3 +124,4 @@ the ticket stays open for someone else - clear it now:
 
   agtermctl session context --clear --target $AGTERM_SESSION_ID
 EOF
+print_rename_note

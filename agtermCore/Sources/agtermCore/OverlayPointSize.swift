@@ -61,7 +61,8 @@ extension Session {
 /// OverlayPointResizeFailure is why `AppStore.resizeOverlayInPoints` refused point sizes.
 public enum OverlayPointResizeFailure: Equatable, Sendable {
     case noOverlay
-    /// remote: the slot is shown on another Mac, or this one shows another Mac's overlay.
+    /// remote: this Mac shows another Mac's overlay, or the slot is handed to the presenter, which
+    /// `resizeRemoteOverlay(_:sizePercent:points:)` resizes instead.
     case remote
     /// hud: a HUD measures its own height.
     case hud

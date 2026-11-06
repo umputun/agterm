@@ -11,6 +11,15 @@ public enum ZmxReplayScript {
                inheritedZdotdir: inheritedZdotdir, shell: shell)
     }
 
+    /// renderEnding runs a creation command without returning to a login shell.
+    public static func renderEnding(commandLine: String) -> String {
+        "'builtin' 'eval' -- \(quoted(commandLine))"
+    }
+
+    public static func renderFishEnding(commandLine: String) -> String {
+        "builtin status job-control full; builtin eval \(fishQuoted(commandLine))"
+    }
+
     public static func renderFish(argv: [String], integrationRoot: String, shell: String) -> String {
         renderFish(statement: argv.map(fishQuoted).joined(separator: " "), integrationRoot: integrationRoot, shell: shell)
     }

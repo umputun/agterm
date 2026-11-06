@@ -44,7 +44,8 @@ final class ControlServerSessionCloseTests: XCTestCase {
 
         let response = await close(session.id.uuidString, undoable: true)
 
-        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, undoable: true)))
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, undoable: true,
+                                                                                 closed: [session.id.uuidString])))
         XCTAssertNil(store.session(withID: session.id))
         XCTAssertTrue(store.undoPendingClose())
         XCTAssertTrue(store.session(withID: session.id) === session)
@@ -56,7 +57,8 @@ final class ControlServerSessionCloseTests: XCTestCase {
 
         let response = await close(session.id.uuidString, undoable: true)
 
-        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, undoable: false)))
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, undoable: false,
+                                                                                 closed: [session.id.uuidString])))
         XCTAssertNil(store.session(withID: session.id))
         XCTAssertNil(store.pendingCloseSession(withID: session.id))
     }
@@ -66,7 +68,7 @@ final class ControlServerSessionCloseTests: XCTestCase {
 
         let response = await close(session.id.uuidString)
 
-        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString)))
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, closed: [session.id.uuidString])))
         XCTAssertNil(store.session(withID: session.id))
         XCTAssertNil(store.pendingCloseSession(withID: session.id))
     }
@@ -77,7 +79,7 @@ final class ControlServerSessionCloseTests: XCTestCase {
 
         let response = await close(id, targets: [id, id], undoable: true)
 
-        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: id, undoable: true)))
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: id, undoable: true, closed: [id])))
         XCTAssertTrue(store.pendingCloseSession(withID: session.id) === session)
     }
 
@@ -91,8 +93,10 @@ final class ControlServerSessionCloseTests: XCTestCase {
         settingsModel.setCloseGraceUndoEnabled(false)
         let hard = await close(third.id.uuidString, targets: [third.id.uuidString, fourth.id.uuidString], undoable: true)
 
-        XCTAssertEqual(soft, ControlResponse(ok: true, result: ControlResult(affected: 2, undoable: true)))
-        XCTAssertEqual(hard, ControlResponse(ok: true, result: ControlResult(affected: 2, undoable: false)))
+        XCTAssertEqual(soft, ControlResponse(ok: true, result: ControlResult(affected: 2, undoable: true,
+                                                                             closed: [first.id.uuidString, second.id.uuidString])))
+        XCTAssertEqual(hard, ControlResponse(ok: true, result: ControlResult(affected: 2, undoable: false,
+                                                                             closed: [third.id.uuidString, fourth.id.uuidString])))
         XCTAssertNil(store.session(withID: third.id))
         XCTAssertNil(store.session(withID: fourth.id))
         XCTAssertNil(store.pendingCloseSession(withID: third.id))

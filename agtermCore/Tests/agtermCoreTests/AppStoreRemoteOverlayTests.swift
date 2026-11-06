@@ -94,7 +94,8 @@ struct AppStoreRemoteOverlayTests {
         #expect(second == .slotTaken)
     }
 
-    private func origin(presented: Bool = true, split: Bool = false) throws -> (Session, PresentationHub.SubscriberID?) {
+    private func origin(presented: Bool = true, split: Bool = false,
+                        kinds: [String] = []) throws -> (Session, PresentationHub.SubscriberID?) {
         store.presentationHub = hub
         store.overlayJobs = jobs
         jobs.onFinished = { [store] in store.finishRemoteOverlay($0) }
@@ -105,16 +106,17 @@ struct AppStoreRemoteOverlayTests {
         setLead(.follower, pane: session.paneIdentity)
         if let pane = session.splitPaneIdentity { setLead(.follower, pane: pane) }
         guard presented else { return (session, nil) }
-        let hello = PresentationHello(version: 1, kinds: [], mode: .presenter)
+        let hello = PresentationHello(version: 1, kinds: kinds, mode: .presenter)
         let id = try hub.subscribe(session: session.id, hello: hello, sink: presenter) { PresentationSnapshot(status: nil, hud: nil) }
         hub.receive(PresentationFrame(gen: presenter.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
         return (session, id)
     }
 
-    private func open(_ session: Session, pane: OverlayPane? = nil, size: Int? = nil, wait: Bool = false) -> RemoteOverlayOpen {
+    private func open(_ session: Session, pane: OverlayPane? = nil, size: Int? = nil, wait: Bool = false,
+                      points: OverlayPointSize = OverlayPointSize()) -> RemoteOverlayOpen {
         store.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
-            command: "revdiff", cwd: nil, wait: wait, sizePercent: size, backgroundColor: "#102030", follow: true, pane: pane),
-                                context: Self.context)
+            command: "revdiff", cwd: nil, wait: wait, sizePercent: size, backgroundColor: "#102030", follow: true, pane: pane,
+            points: points), context: Self.context)
     }
 
     private func job(of result: RemoteOverlayOpen) throws -> String {
@@ -216,17 +218,90 @@ struct AppStoreRemoteOverlayTests {
         #expect(session.remoteOverlays.slots.isEmpty)
     }
 
-    @Test func pointSizesAreRefusedBeforeAnythingIsReserved() throws {
+    @Test(arguments: [true, false])
+    func pointSizesReachOnlyAPresenterThatTakesThem(supported: Bool) throws {
+        let (session, _) = try origin(kinds: supported ? [PresentationHub.overlayPointsKind] : [])
+        let points = OverlayPointSize(width: 640, height: 240)
+
+        let job = try job(of: open(session, size: 60, points: points))
+
+        #expect(presenter.bodies.last == .overlayRequest(PresentationOverlay(
+            job: job, pane: nil, sizePercent: 60, points: supported ? points : OverlayPointSize(), backgroundColor: "#102030",
+            follow: true, wait: false)))
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == 60)
+        #expect(session.remoteOverlays.slot(nil)?.points == points)
+    }
+
+    struct PointResize: Sendable, CustomTestStringConvertible {
+        let name: String
+        let percent: Int?
+        let points: OverlayPointSize
+        let wantPercent: Int?
+        let wantPoints: OverlayPointSize
+        var testDescription: String { name }
+    }
+
+    nonisolated static let pointResizes = [
+        PointResize(name: "points alone merge and keep the percent", percent: nil, points: OverlayPointSize(height: 300),
+                    wantPercent: 60, wantPoints: OverlayPointSize(width: 640, height: 300)),
+        PointResize(name: "a percent with points replaces them", percent: 40, points: OverlayPointSize(height: 200),
+                    wantPercent: 40, wantPoints: OverlayPointSize(height: 200)),
+        PointResize(name: "a bare percent clears them", percent: 40, points: OverlayPointSize(),
+                    wantPercent: 40, wantPoints: OverlayPointSize()),
+        PointResize(name: "full clears them", percent: nil, points: OverlayPointSize(),
+                    wantPercent: nil, wantPoints: OverlayPointSize()),
+    ]
+
+    @Test(arguments: pointResizes)
+    func aResizeIsResolvedAgainstTheSlotAndSentWhole(_ resize: PointResize) throws {
+        let (session, _) = try origin(kinds: [PresentationHub.overlayPointsKind])
+        let job = try job(of: open(session, size: 60, points: OverlayPointSize(width: 640, height: 240)))
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: resize.percent, points: resize.points) == .sent)
+
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == resize.wantPercent)
+        #expect(session.remoteOverlays.slot(nil)?.points == resize.wantPoints)
+        #expect(presenter.bodies.last == .overlayResize(PresentationOverlayChange(
+            job: job, sizePercent: resize.wantPercent, points: resize.wantPoints)))
+    }
+
+    @Test(arguments: [(RemoteOverlayResize.sent, nil as String?), (.viewerGone, OverlayResultError.viewerGone),
+                      (.notFloating, OverlayPointError.notFloating)])
+    func aRefusedRemoteResizeNamesItsError(result: RemoteOverlayResize, error: String?) {
+        #expect(result.error == error)
+    }
+
+    @Test func anOlderPresenterGetsAPointResizeAsItsPercentAlone() throws {
         let (session, _) = try origin()
+        let job = try job(of: open(session, size: 60, points: OverlayPointSize(width: 640)))
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(height: 300)) == .sent)
+
+        #expect(session.remoteOverlays.slot(nil)?.points == OverlayPointSize(width: 640, height: 300))
+        #expect(presenter.bodies.last == .overlayResize(PresentationOverlayChange(job: job, sizePercent: 60)))
+    }
+
+    @Test func pointsAloneCannotResizeAFullRemoteOverlay() throws {
+        let (session, _) = try origin(kinds: [PresentationHub.overlayPointsKind])
+        _ = try job(of: open(session))
         let sent = presenter.frames.count
 
-        let result = store.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
-            command: "revdiff", cwd: nil, wait: false, sizePercent: 60, backgroundColor: nil,
-            points: OverlayPointSize(height: 240)), context: Self.context)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(height: 300)) == .notFloating)
 
-        #expect(result == .pointsUnsupported)
-        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == nil)
         #expect(presenter.frames.count == sent)
+    }
+
+    @Test func aPointResizeAfterThePresenterChangedReportsTheViewerGone() throws {
+        let (session, id) = try origin(kinds: [PresentationHub.overlayPointsKind])
+        let job = try job(of: open(session, size: 60))
+        _ = jobs.claim(job) {}
+        jobs.started(job)
+        hub.unsubscribe(try #require(id))
+        _ = try presentAgain(session)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(height: 300)) == .viewerGone)
+        #expect(session.remoteOverlays.slot(nil)?.points == OverlayPointSize())
     }
 
     @Test func aSlotShownOnThePresenterTakesNoPointSizes() throws {

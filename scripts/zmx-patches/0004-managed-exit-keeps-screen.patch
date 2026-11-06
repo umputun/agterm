@@ -1,0 +1,32 @@
+diff -ruN zmx-orig/src/main.zig zmx/src/main.zig
+--- zmx-orig/src/main.zig
++++ zmx/src/main.zig
+@@ -13,6 +13,7 @@
+ const signal = @import("signal.zig");
+ const Cfg = @import("cfg.zig");
+ const loop = @import("loop.zig");
++const role = @import("role.zig");
+ const Client = loop.Client;
+ const Daemon = loop.Daemon;
+ const version = build_options.version;
+@@ -1636,13 +1637,19 @@
+ 
+     // RIS, OSC 10/11/12
+     const restore_seq = "\x1bc\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
++    // A managed terminal keeps the session's last screen up after the client
++    // exits, which RIS would erase. Turn off the input reports a program may
++    // have left on and leave the screen alone.
++    const managed_exit_seq = "\x1b[0m\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1004l\x1b[?2004l" ++
++        "\x1b[?2031l\x1b[?2048l\x1b]110\x1b\\\x1b]111\x1b\\\x1b]112\x1b\\";
++    const exit_seq = if (role.nonceFromEnv() != null) managed_exit_seq else restore_seq;
+ 
+     defer {
+         if (stdin_is_tty) {
+             _ = cross.c.tcsetattr(lib_posix.STDIN_FILENO, cross.c.TCSAFLUSH, &orig_termios);
+         }
+         // Reset terminal modes on detach
+-        _ = lib_posix.write(lib_posix.STDOUT_FILENO, restore_seq) catch {};
++        _ = lib_posix.write(lib_posix.STDOUT_FILENO, exit_seq) catch {};
+     }
+ 
+     if (stdin_is_tty) {

@@ -26,6 +26,8 @@ public struct RemotePresentationEffects {
     public var sound: @MainActor (PresentationSound) -> Void
     public var connection: @MainActor (RemotePresentationConnection) -> Void
     public var context: @MainActor (String?) -> Void
+    /// info carries the origin's sidebar info line, nil for none; a snapshot sends it too.
+    public var info: @MainActor (PresentationInfo?) -> Void
     public var layout: @MainActor (PresentationLayout) -> Void
     public var mode: @MainActor (PresentationMode) -> Void
     /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
@@ -39,6 +41,8 @@ public struct RemotePresentationEffects {
     public var pageRequest: @MainActor (PresentationPage) -> String?
     public var pageClose: @MainActor (PresentationPageChange) -> Void
     public var pageCommand: @MainActor (PresentationPageCommand) -> Void
+    /// respawns reports the origin's respawn counts; true for a snapshot, which a first attach takes as its baseline.
+    public var respawns: @MainActor (PresentationRespawns, Bool) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -47,6 +51,7 @@ public struct RemotePresentationEffects {
                 notify: @escaping @MainActor (PresentationNotify) -> Void,
                 connection: @escaping @MainActor (RemotePresentationConnection) -> Void,
                 context: @escaping @MainActor (String?) -> Void = { _ in },
+                info: @escaping @MainActor (PresentationInfo?) -> Void = { _ in },
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
                 askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
@@ -58,6 +63,7 @@ public struct RemotePresentationEffects {
                 pageRequest: @escaping @MainActor (PresentationPage) -> String? = { _ in RemotePresentationClient.pagesUnsupported },
                 pageClose: @escaping @MainActor (PresentationPageChange) -> Void = { _ in },
                 pageCommand: @escaping @MainActor (PresentationPageCommand) -> Void = { _ in },
+                respawns: @escaping @MainActor (PresentationRespawns, Bool) -> Void = { _, _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -66,6 +72,7 @@ public struct RemotePresentationEffects {
         self.sound = sound
         self.connection = connection
         self.context = context
+        self.info = info
         self.layout = layout
         self.mode = mode
         self.askRequest = askRequest
@@ -76,6 +83,7 @@ public struct RemotePresentationEffects {
         self.pageRequest = pageRequest
         self.pageClose = pageClose
         self.pageCommand = pageCommand
+        self.respawns = respawns
         self.warn = warn
     }
 }
@@ -208,8 +216,11 @@ public final class RemotePresentationClient {
             effects.snapshotStatus(snapshot.status)
             effects.hud(snapshot.hud)
             effects.context(snapshot.context)
+            effects.info(snapshot.info)
+            if let respawns = snapshot.respawns { effects.respawns(respawns, true) }
         case .status(let status): effects.status(status)
         case .context(let context): effects.context(context)
+        case .info(let info): effects.info(info)
         case .layout(let layout): applyLayout(layout)
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
@@ -232,6 +243,7 @@ public final class RemotePresentationClient {
             }
         case .pageClose(let change): effects.pageClose(change)
         case .pageCommand(let command): effects.pageCommand(command)
+        case .respawn(let respawns): effects.respawns(respawns, false)
         case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .overlayRejected, .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState:
             break

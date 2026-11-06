@@ -122,6 +122,9 @@ extension WindowContentView {
         .padding(.trailing, 14)
     }
 
+    /// Whether title-bar tooltips may show: an ask's click catcher covers the whole window, title bar included.
+    var titlebarTipsShown: Bool { pick.pendingAsk == nil }
+
     /// The 1px themed separator between two title-bar button groups.
     private var titlebarDivider: some View {
         Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
@@ -134,7 +137,7 @@ extension WindowContentView {
         } label: {
             Label("Toggle Sidebar", systemImage: InterfaceElement.sidebarToggle.symbolName!)
         }
-        .help(helpHint("Toggle Sidebar", .toggleSidebar))
+        .toolTip(helpHint("Toggle Sidebar", .toggleSidebar), isShown: titlebarTipsShown)
         .accessibilityIdentifier("sidebar-toggle-button")
     }
 
@@ -167,7 +170,8 @@ extension WindowContentView {
         } label: {
             Label("Split", systemImage: symbol)
         }
-        .help(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), shortcutAction))
+        .toolTip(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), shortcutAction),
+                 isShown: titlebarTipsShown)
         .disabled(store.activeSession == nil)
         .accessibilityValue(a11y)
         .accessibilityIdentifier("split-toggle")
@@ -182,7 +186,8 @@ extension WindowContentView {
         } label: {
             Label("Scratch", systemImage: active ? "rectangle.inset.filled" : InterfaceElement.scratch.symbolName!)
         }
-        .help(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
+        .toolTip(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch),
+                 isShown: titlebarTipsShown)
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("scratch-toggle")
     }
@@ -200,7 +205,7 @@ extension WindowContentView {
         } label: {
             Label("Overlays", systemImage: anyHidden ? "rectangle.on.rectangle.slash" : InterfaceElement.overlayToggle.symbolName!)
         }
-        .help(helpHint(anyShown ? "Hide Overlays" : "Show Overlays", .toggleOverlay))
+        .toolTip(helpHint(anyShown ? "Hide Overlays" : "Show Overlays", .toggleOverlay), isShown: titlebarTipsShown)
         // this window's own covers, the set `PaletteContext.modalActive` holds for the frontmost window
         .disabled(slots.isEmpty || pick.modalPending || terminalZoom.target != nil || dashboard.isOpen)
         .accessibilityLabel(anyShown ? "Hide Overlays" : "Show Overlays")
@@ -216,7 +221,7 @@ extension WindowContentView {
         } label: {
             Label("Quick Terminal", systemImage: InterfaceElement.quickTerminal.symbolName!)
         }
-        .help(helpHint("Quick Terminal", .quickTerminal))
+        .toolTip(helpHint("Quick Terminal", .quickTerminal), isShown: titlebarTipsShown)
         .disabled(pick.modalPending)
         .accessibilityIdentifier("quick-terminal-toggle")
     }

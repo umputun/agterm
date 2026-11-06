@@ -58,7 +58,9 @@ extension LaunchSeedProvider {
                                                    denylist: policy.denylist,
                                                    suppressed: policy.suppressedDaemons.contains(configuration.daemonName))
             else { preconditionFailure("wrapped zmx disposition has no surface seed") }
-            return LaunchSeed(command: seed.command, initialInput: seed.initialInput, waitAfterCommand: false)
+            // --wait stays with the pane across reattachment and captured replay
+            return LaunchSeed(command: seed.command, initialInput: seed.initialInput,
+                              waitAfterCommand: requestedWait(session: session, pane: pane))
         case .ordinary:
             let capture = session.takePendingForegroundCommand(pane: pane)
             let plan = CommandRestore.restorePlan(.init(

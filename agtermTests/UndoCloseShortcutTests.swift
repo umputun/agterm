@@ -1,4 +1,5 @@
 import AppKit
+import WebKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -118,5 +119,23 @@ final class UndoCloseShortcutTests: XCTestCase {
         let unbound = try shortcut(keymap: "map ctrl+a>z undo_close\n")
         XCTAssertFalse(unbound.matchesUndoCloseChord(try XCTUnwrap(BuiltinAction.undoClose.defaultChord)))
         XCTAssertFalse(unbound.matchesUndoCloseChord(Chord(mods: [.control], key: "a")))
+    }
+
+    // MARK: which focus keeps the chord for its own undo
+
+    func testTextFieldAndFocusedPageKeepTheChord() {
+        let webView = HtmlOverlayWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let inner = NSView()
+        webView.addSubview(inner)
+
+        XCTAssertTrue(UndoCloseShortcut.yieldsChord(to: NSTextView()))
+        XCTAssertTrue(UndoCloseShortcut.yieldsChord(to: webView))
+        XCTAssertTrue(UndoCloseShortcut.yieldsChord(to: inner))
+    }
+
+    func testTerminalAndChromeFocusLeaveTheChordToUndoClose() {
+        XCTAssertFalse(UndoCloseShortcut.yieldsChord(to: nil))
+        XCTAssertFalse(UndoCloseShortcut.yieldsChord(to: NSView()))
+        XCTAssertFalse(UndoCloseShortcut.yieldsChord(to: GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())))
     }
 }

@@ -27,11 +27,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// Most-recently-selected session ids, front = current, so the Ctrl-Tab switcher's order survives a
     /// relaunch. Restore drops ids no longer in the tree; nil = selection only.
     public var sessionRecency: [UUID]?
+    /// flaggedOrder is the flagged working set's saved order (`AppStore.flaggedOrder`); nil restores in tree
+    /// order.
+    public var flaggedOrder: [UUID]?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
                 workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
                 sidebarMode: SidebarMode? = nil, focusedWorkspaceIDs: [UUID]? = nil, focusEnabled: Bool? = nil,
-                sessionRecency: [UUID]? = nil) {
+                sessionRecency: [UUID]? = nil, flaggedOrder: [UUID]? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
@@ -41,11 +44,12 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.focusedWorkspaceIDs = focusedWorkspaceIDs
         self.focusEnabled = focusEnabled
         self.sessionRecency = sessionRecency
+        self.flaggedOrder = flaggedOrder
     }
 
     enum CodingKeys: String, CodingKey {
         case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
-        case focusedWorkspaceIDs, focusEnabled, sessionRecency
+        case focusedWorkspaceIDs, focusEnabled, sessionRecency, flaggedOrder
     }
 
     /// The legacy single-workspace focus key from before the focus SET existed. Its own key type with no
@@ -98,6 +102,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             focusEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .focusEnabled)) ?? nil
         }
         sessionRecency = (try? c.decodeIfPresent([UUID].self, forKey: .sessionRecency)) ?? nil
+        flaggedOrder = (try? c.decodeIfPresent([UUID].self, forKey: .flaggedOrder)) ?? nil
     }
 }
 
@@ -109,16 +114,20 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     /// The INVERSE of `isExpanded`, so missing → expanded (the default) and only a collapsed workspace
     /// writes it — an all-expanded tree serializes byte-identically to a legacy snapshot.
     public var collapsed: Bool?
+    /// The workspace row's tint; nil = none, and absent from the file so an untinted tree stays unchanged.
+    public var tint: SidebarTint?
 
-    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil) {
+    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil,
+                tint: SidebarTint? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.collapsed = collapsed
+        self.tint = tint
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, sessions, collapsed
+        case id, name, sessions, collapsed, tint
     }
 
     /// Custom decode so `collapsed` is LOSSY, matching the other two snapshot types: the synthesized
@@ -130,6 +139,7 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
         name = try c.decode(String.self, forKey: .name)
         sessions = try c.decode([SessionSnapshot].self, forKey: .sessions)
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
+        tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
     }
 }
 
@@ -162,6 +172,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// What the session is FOR (`session.context`), shown in the title bar; nil = none set. Survives a
     /// relaunch by design — it states durable purpose, so nothing expires it but an explicit clear.
     public var context: String?
+    /// The sidebar row's tint (`session.tint`); nil = none.
+    public var tint: SidebarTint?
     /// The main pane's foreground command (full argv) as of the last clean quit or the last
     /// `restore.capture`, re-run on restore in `rerun` launch mode. nil at a shell prompt, or in another
     /// mode, which gates every capture site.
@@ -190,6 +202,12 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var restoreCommand: String?
     /// The split (right) pane's restore-command override, the split analogue of `restoreCommand`.
     public var splitRestoreCommand: String?
+    /// `Session.lastSelectedAt` as epoch seconds; nil when no selection timestamp has been recorded.
+    public var lastSelectedAt: Double?
+    /// parentID is the parent's id for a companion.
+    public var parentID: UUID?
+    /// collapsed is written only when true, so an unfolded tree matches a legacy snapshot.
+    public var collapsed: Bool?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,
                 customName: String?, cwd: String, isSplit: Bool? = nil, hasSplit: Bool? = nil,
@@ -200,8 +218,11 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 splitInitialCommand: String? = nil, splitCommandWait: Bool? = nil,
                 backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
-                context: String? = nil) {
+                context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil,
+                parentID: UUID? = nil, collapsed: Bool? = nil) {
         self.id = id
+        self.parentID = parentID
+        self.collapsed = collapsed
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
         self.customName = customName
@@ -224,6 +245,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.restoreCommand = restoreCommand
         self.splitRestoreCommand = splitRestoreCommand
         self.context = context
+        self.lastSelectedAt = lastSelectedAt
+        self.tint = tint
     }
 
     enum CodingKeys: String, CodingKey {
@@ -231,7 +254,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
-        case restoreCommand, splitRestoreCommand, context
+        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -265,6 +288,10 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         paneBackgrounds = (try? c.decodeIfPresent(PaneBackgrounds.self, forKey: .paneBackgrounds)) ?? nil
         restoreCommand = (try? c.decodeIfPresent(String.self, forKey: .restoreCommand)) ?? nil
         splitRestoreCommand = (try? c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)) ?? nil
+        lastSelectedAt = (try? c.decodeIfPresent(Double.self, forKey: .lastSelectedAt)) ?? nil
+        tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
+        parentID = (try? c.decodeIfPresent(UUID.self, forKey: .parentID)) ?? nil
+        collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil

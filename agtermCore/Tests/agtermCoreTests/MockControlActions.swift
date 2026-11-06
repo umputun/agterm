@@ -30,9 +30,18 @@ final class MockControlActions: ControlActions {
         case workspaceFocus(target: String?, window: String?, ControlWorkspaceFocusMode)
         case workspaceFilter(window: String?, ControlToggleMode)
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
+        case sessionExpansion(target: String?, window: String?, expanded: Bool)
+        case companionNew(target: String?, options: CompanionOptions, window: String?)
+        case companionPage(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
+        case companionDuplicate(target: String?, window: String?, select: Bool)
+        case companionPageAttach(target: String?, window: String?)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
+        case flaggedMove(target: String?, window: String?, anchor: String, FlaggedOrderPlacement)
         case sessionContext(target: String?, window: String?, context: String?)
+        case sessionInfo(target: String?, window: String?, info: SessionInfo?)
+        case sessionTint(target: String?, window: String?, ControlTintUpdate)
+        case workspaceTint(target: String?, window: String?, ControlTintUpdate)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
@@ -77,6 +86,7 @@ final class MockControlActions: ControlActions {
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
         case flaggedViewLayout(ControlFlaggedLayoutMode)
+        case sidebarDensity(ControlSidebarDensityMode)
         case expand(window: String?)
         case collapse(window: String?)
         case sidebarWidth(points: Double, window: String?)
@@ -91,6 +101,8 @@ final class MockControlActions: ControlActions {
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayVisibility(target: String?, window: String?, pane: OverlayPane?, mode: OverlayVisibilityMode)
+        case overlayFollow(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
+        case overlaySearch(target: String?, window: String?, pane: OverlayPane?, request: TextSearchRequest)
         case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
@@ -146,6 +158,7 @@ final class MockControlActions: ControlActions {
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextFlaggedViewLayoutResponse = ControlResponse(ok: true)
+    var nextSidebarDensityResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
     var nextCollapseResponse = ControlResponse(ok: true)
     var nextSidebarWidthResponse = ControlResponse(ok: true)
@@ -324,6 +337,31 @@ final class MockControlActions: ControlActions {
         return nextWorkspaceFilterResponse
     }
 
+    func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.companionPageAttach(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) -> ControlResponse {
+        calls.append(.companionDuplicate(target: target, window: window, select: select))
+        return ControlResponse(ok: true)
+    }
+
+    func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        calls.append(.companionPage(target: target, window: window, options: options))
+        return ControlResponse(ok: true)
+    }
+
+    func createCompanion(_ target: String?, options: CompanionOptions, window: String?) -> ControlResponse {
+        calls.append(.companionNew(target: target, options: options, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
+        calls.append(.sessionExpansion(target: target, window: window, expanded: expanded))
+        return ControlResponse(ok: true)
+    }
+
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
         calls.append(.workspaceExpansion(target: target, window: window, expanded: expanded))
         return ControlResponse(ok: true)
@@ -339,8 +377,29 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
+    func moveFlaggedSession(_ target: String?, window: String?, anchor: String,
+                            placement: FlaggedOrderPlacement) -> ControlResponse {
+        calls.append(.flaggedMove(target: target, window: window, anchor: anchor, placement))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
+        calls.append(.sessionTint(target: target, window: window, update))
+        return ControlResponse(ok: true)
+    }
+
+    func setWorkspaceTint(_ target: String?, window: String?, update: ControlTintUpdate) -> ControlResponse {
+        calls.append(.workspaceTint(target: target, window: window, update))
+        return ControlResponse(ok: true)
+    }
+
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {
         calls.append(.sessionContext(target: target, window: window, context: context))
+        return ControlResponse(ok: true)
+    }
+
+    func setSessionInfo(_ target: String?, window: String?, info: SessionInfo?) -> ControlResponse {
+        calls.append(.sessionInfo(target: target, window: window, info: info))
         return ControlResponse(ok: true)
     }
 
@@ -583,6 +642,11 @@ final class MockControlActions: ControlActions {
         return nextFlaggedViewLayoutResponse
     }
 
+    func setSidebarDensity(_ mode: ControlSidebarDensityMode) -> ControlResponse {
+        calls.append(.sidebarDensity(mode))
+        return nextSidebarDensityResponse
+    }
+
     func expandSidebar(window: String?) -> ControlResponse {
         calls.append(.expand(window: window))
         return nextExpandResponse
@@ -666,6 +730,18 @@ final class MockControlActions: ControlActions {
                                      mode: OverlayVisibilityMode) -> ControlResponse {
         calls.append(.overlayVisibility(target: target, window: window, pane: pane, mode: mode))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "hidden"))
+    }
+
+    func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayFollow(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "following"))
+    }
+
+    func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                              request: TextSearchRequest) async -> ControlResponse {
+        calls.append(.overlaySearch(target: target, window: window, pane: pane, request: request))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "1 of 2"))
     }
 
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
@@ -840,5 +916,44 @@ final class MockControlActions: ControlActions {
     func captureRestoreCommands() -> ControlResponse {
         calls.append(.restoreCapture)
         return nextRestoreCaptureResponse
+    }
+
+    struct Queued: Equatable {
+        let id: String
+        let from: String?
+        let recipients: [MessageRecipient]
+    }
+
+    struct Scope: Equatable {
+        let workspace: String?
+        let window: String?
+    }
+
+    var messagePanes: [MessageAddress: MessageRecipient] = [:]
+    var broadcastPanes: [MessageRecipient] = []
+    var queuedMessages: [Queued] = []
+    var broadcastScopes: [Scope] = []
+    /// messagesUnsupported answers what the `ControlActions` default answers, for a host without the bus.
+    var messagesUnsupported = false
+
+    func resolveMessagePane(_ address: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
+        if messagesUnsupported { return .failure(.unsupported) }
+        guard let recipient = messagePanes[address] else {
+            let pane = switch address.pane {
+            case .id(let id): id.uuidString
+            case .role(let role): role.rawValue
+            }
+            return .failure(MessagePaneError("pane not found: \(address.session):\(pane)"))
+        }
+        return .success(recipient)
+    }
+
+    func messagePanes(workspace: String?, window: String?) -> Result<[MessageRecipient], MessagePaneError> {
+        broadcastScopes.append(Scope(workspace: workspace, window: window))
+        return .success(broadcastPanes)
+    }
+
+    func messageQueued(_ messageID: UUID, from: String?, to recipients: [MessageRecipient]) {
+        queuedMessages.append(Queued(id: messageID.uuidString, from: from, recipients: recipients))
     }
 }

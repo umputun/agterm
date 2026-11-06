@@ -32,9 +32,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // flush below the titlebar; a custom row height restores the roomy size .plain's .default shrinks
         // to ~17px.
         outline.rowSizeStyle = .custom
-        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize)
+        let density = GhosttyApp.shared.sidebarDensity
+        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize, density: density)
         outline.floatsGroupRows = false
-        outline.indentationPerLevel = 14
+        outline.indentationPerLevel = density.indentPerLevel
         outline.autosaveExpandedItems = false
         outline.target = context.coordinator
         outline.action = #selector(Coordinator.handleSingleClick(_:))
@@ -99,15 +100,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // (GhosttyApp.notificationBadgeEnabled) is NOT observable and drives a re-reconcile via
         // .agtermAppearanceChanged, like toolbarMode.
         _ = store.workspaces.map {
-            ($0.id, $0.name, $0.unseenCount, $0.sessions.map {
+            ($0.id, $0.name, $0.unseenCount, $0.tint, $0.sessions.map {
                 ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
-                 $0.remoteConnection)
+                 $0.remoteConnection, $0.tint, $0.effectiveInfo)
             })
         }
         _ = store.selectedSessionID
         _ = store.sidebarSelectionIDs
         // sidebarMode flips the whole data source (tree ↔ flagged view), so a mode change must rebuild.
         _ = store.sidebarMode
+        _ = store.flaggedOrder // the flat and plain rows follow it; a control move changes nothing else read here
         // the marked set restricts the tree to its members while the filter is on; BOTH fields are read so
         // a membership change or a filter flip takes the rebuild branch.
         _ = store.focusedWorkspaceIDs
@@ -128,7 +130,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Root workspace nodes in store order, rebuilt from the store on each reload from cached instances.
         private var roots: [SidebarNode] = []
         /// Cache of node instances keyed by id, so identity is stable across reloads.
-        private var nodeCache: [UUID: SidebarNode] = [:]
+        var nodeCache: [UUID: SidebarNode] = [:]
         /// Guards `syncSelection` against re-entering the store via the selection-change callback it fires.
         private var applyingSelection = false
         /// Last session id whose row was revealed (expanded owner + scrolled into view). Gates the intrusive
@@ -156,6 +158,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private var expandedWorkspaceIDs = Set<UUID>() {
             didSet { store.noteSidebarExpansion(expandedWorkspaceIDs) }
         }
+        /// Parents whose companion rows are open, tracked like `expandedWorkspaceIDs`: a suppressed reveal
+        /// opens a folded parent without touching `Session.isExpanded`.
+        var expandedParentIDs = Set<UUID>()
         /// Set true around PROGRAMMATIC `expandItem`/`collapseItem` (the launch/rebuild re-apply, the
         /// `syncSelection` reveal, the focus force-expand): the didExpand/DidCollapse callbacks still update
         /// the visual `expandedWorkspaceIDs` but SKIP the persist write-back, so a view-only reveal never
@@ -191,9 +196,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// reconcile reloads only the rows whose content changed. An absent key ≠ any real content.
         private var lastRowContent: [UUID: RowContent] = [:]
 
-        /// The sidebar font size last applied (row height + row fonts). `.agtermAppearanceChanged` fires for
-        /// every settings change, so `appearanceChanged` compares against this and rebuilds only on a change.
+        /// The sidebar font size, density and chevron visibility last applied (row height, indent, row fonts,
+        /// leading strip). `.agtermAppearanceChanged` fires for every settings change, so `appearanceChanged`
+        /// compares against these and rebuilds only on a change.
         private var lastSidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+        private var lastSidebarDensity: SidebarDensity = .standard
+        private var lastChevronsHidden = false
+
+        private var chevronsHidden: Bool { GhosttyApp.shared.hiddenInterfaceElements.contains(.workspaceChevrons) }
 
         /// Centered hint floating over the empty outline in flagged mode; hidden otherwise.
         private weak var emptyState: NSStackView?
@@ -208,11 +218,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // seed from the live mirror (SettingsModel applies the persisted size before any sidebar is
             // built) so the first appearanceChanged doesn't rebuild for no change.
             lastSidebarFontSize = GhosttyApp.shared.sidebarFontSize
+            lastSidebarDensity = GhosttyApp.shared.sidebarDensity
+            lastChevronsHidden = chevronsHidden
             renameController.onRenameEnded = { [weak self] node in
                 guard let self, !renameController.isEditing, !renameController.isCommitting else { return }
                 if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
                     outline.reloadItem(node)
                 }
+                // row updates were skipped while the editor was open, and a cancel changes no model value to retrigger them
+                reconcile()
+                syncSelection()
                 focusActiveTerminal()
             }
             // the menu/palette can't reach the inline editor directly, so they post a notification. Scoped
@@ -232,6 +247,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // the per-workspace collapse/expand poke (workspace.collapse/expand) is store-scoped the same way.
             NotificationCenter.default.addObserver(self, selector: #selector(setWorkspaceExpandedNotified(_:)),
                                                    name: .agtermSetWorkspaceExpanded, object: store)
+            NotificationCenter.default.addObserver(self, selector: #selector(setSessionExpandedNotified(_:)),
+                                                   name: .agtermSetSessionExpanded, object: store)
             // a theme change (new terminal foreground) re-tints the visible rows in place.
             NotificationCenter.default.addObserver(self, selector: #selector(appearanceChanged),
                                                    name: .agtermAppearanceChanged, object: nil)
@@ -268,15 +285,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// (agterm/Resources/ghostty-defaults.conf; a user window-padding override in ghostty.conf is not
         /// tracked): window-padding-x = 8 is the left margin; the top is a 2px nudge, not the full
         /// window-padding-y = 6, because the row already centers its content in a ~28px row. `.plain` adds
-        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode.
+        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode. Without the
+        /// disclosure strip the left margin narrows, which would otherwise put the row icon 10pt in.
         func applySidebarContentInset(_ scroll: NSScrollView?) {
             guard let scroll else { return }
+            let reserves = (outlineView as? SidebarOutlineView)?.reservesDisclosureColumn ?? true
             scroll.automaticallyAdjustsContentInsets = false
-            scroll.contentInsets = NSEdgeInsets(top: 2, left: 8, bottom: 0, right: 0)
+            scroll.contentInsets = NSEdgeInsets(top: 2, left: reserves ? 8 : 6, bottom: 0, right: 0)
         }
 
         @objc private func appearanceChanged() {
-            applySidebarFontSizeIfChanged()
+            applySidebarMetricsIfChanged()
             refreshSelectionAppearance()
             applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile reloads those rows.
@@ -285,6 +304,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             syncSelection()
             // agent-status colors are global, so the content diff can't see a color change — re-apply all.
             reapplyStatusGlyphs()
+            reapplyRowIconVisibility()
             updateEmptyState()
             // cheap re-assert in case a settings change requires recomputing the inset.
             applySidebarContentInset(outlineView?.enclosingScrollView)
@@ -294,14 +314,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
             reapplyStatusGlyphs()
         }
 
-        /// Re-apply the row height + fonts when the sidebar font-size setting changed. The size is not part
-        /// of `reconcile`'s per-row content diff, so it needs an explicit row-height update plus a full
-        /// `rebuildAndReload` to re-run the cell builder, guarded on the tracked value.
-        private func applySidebarFontSizeIfChanged() {
+        /// Re-apply the row height, indent and fonts when the sidebar font size, density or chevron visibility
+        /// changed. None is part of `reconcile`'s per-row content diff, so they need explicit outline updates
+        /// plus a full `rebuildAndReload` to re-run the cell builder, guarded on the tracked values.
+        private func applySidebarMetricsIfChanged() {
             let size = GhosttyApp.shared.sidebarFontSize
-            guard size != lastSidebarFontSize else { return }
+            let density = GhosttyApp.shared.sidebarDensity
+            guard size != lastSidebarFontSize || density != lastSidebarDensity || chevronsHidden != lastChevronsHidden else { return }
             lastSidebarFontSize = size
-            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size)
+            lastSidebarDensity = density
+            lastChevronsHidden = chevronsHidden
+            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size, density: density)
+            outlineView?.indentationPerLevel = density.indentPerLevel
             rebuildAndReload()
         }
 
@@ -364,6 +388,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private struct TreeShape: Equatable {
             let workspaceID: UUID
             let sessionIDs: [UUID]
+            /// Each session's parent while companions nest, empty otherwise.
+            var parentIDs: [UUID?] = []
         }
 
         /// A row's visible content: label (workspace name or session `displayName`), split-rectangle icon,
@@ -385,6 +411,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
             let focusMember: Bool
             /// The remote row's stream notice, nil while it is up or for a local row.
             var presentationNotice: String?
+            /// The row's own tint, so a recolor or a clear reloads just that row.
+            var tint: SidebarTint?
+            /// Names of a folded parent's companions that need attention.
+            var foldedAttention: [String] = []
+            /// info is the shown info line; a change reloads the row and re-asks its height.
+            var info: [SessionInfoSpan]?
 
             func differsOnlyInLabel(from other: RowContent) -> Bool {
                 var relabeled = self
@@ -425,9 +457,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// `visibleWorkspaces`, so marking a workspace or flipping the focus filter counts as a shape change too.
         private func currentShape() -> [TreeShape] {
             guard rendersWorkspaceRows else {
-                return [TreeShape(workspaceID: Self.flaggedShapeID, sessionIDs: store.flaggedSessions.map(\.id))]
+                return [TreeShape(workspaceID: Self.flaggedShapeID, sessionIDs: store.orderedFlaggedSessions.map(\.id))]
             }
-            return workspaceProjection.map { TreeShape(workspaceID: $0.workspace.id, sessionIDs: $0.sessions.map(\.id)) }
+            return workspaceProjection.map {
+                TreeShape(workspaceID: $0.workspace.id, sessionIDs: $0.sessions.map(\.id),
+                          parentIDs: nestsCompanions ? $0.sessions.map(\.parentID) : [])
+            }
         }
 
         /// Updates only the rows whose visible content changed — the session row and, for a badge roll-up,
@@ -443,6 +478,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 guard let node = nodeCache[id] else { return }
                 if node.kind == .session, previous?.differsOnlyInLabel(from: content) == true, relabel(node, content.label) { return }
                 outline.reloadItem(node)
+                let row = outline.row(forItem: node)
+                if content.info != previous?.info, row >= 0 { outline.noteHeightOfRows(withIndexesChanged: IndexSet(integer: row)) }
             }
             for workspace in store.workspaces {
                 reloadIfChanged(workspace.id, rowContent(forWorkspace: workspace))
@@ -482,7 +519,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             RowContent(label: workspace.name, hasSplit: false, splitAxis: .leftRight,
                        unseen: effectiveUnseen(displayedUnseen(for: workspace)),
                        indicator: AgentIndicator(), flagged: false,
-                       focusMember: store.focusedWorkspaceIDs.contains(workspace.id))
+                       focusMember: store.focusedWorkspaceIDs.contains(workspace.id), tint: workspace.tint)
         }
 
         /// The visible content of a session row. One builder shared by `reloadChangedContentRows` and
@@ -493,7 +530,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
                        splitAxis: session.splitAxis,
                        unseen: effectiveUnseen(session.unseenCount),
                        indicator: session.agentIndicator, flagged: session.flagged,
-                       focusMember: false, presentationNotice: presentationNotice(for: session))
+                       focusMember: false, presentationNotice: presentationNotice(for: session), tint: session.tint,
+                       foldedAttention: foldedAttention(forSession: session.id).map(\.displayName),
+                       info: sessionInfo(for: session))
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so NSOutlineView item
@@ -510,13 +549,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastFlaggedLayout = flaggedLayout
             lastShape = currentShape()
             snapshotRowContent()
+            (outline as? SidebarOutlineView)?.reservesDisclosureColumn = rendersWorkspaceRows && !chevronsHidden
+            applySidebarContentInset(outline.enclosingScrollView)
 
             // flat flagged list: non-expandable session rows; no workspace nodes, so they leave the cache.
             if !rendersWorkspaceRows {
                 var seen = Set<UUID>()
-                roots = store.flaggedSessions.map { session in
+                roots = store.orderedFlaggedSessions.map { session in
                     seen.insert(session.id)
-                    return node(for: session.id, kind: .session)
+                    let row = node(for: session.id, kind: .session)
+                    row.children = []
+                    return row
                 }
                 nodeCache = nodeCache.filter { seen.contains($0.key) }
                 outline.reloadData()
@@ -529,10 +572,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             for (workspace, sessions) in workspaceProjection {
                 let wsNode = node(for: workspace.id, kind: .workspace)
                 seen.insert(workspace.id)
-                wsNode.children = sessions.map { session in
-                    seen.insert(session.id)
-                    return node(for: session.id, kind: .session)
-                }
+                seen.formUnion(sessions.map(\.id))
+                wsNode.children = sessionNodes(for: sessions)
                 newRoots.append(wsNode)
             }
             nodeCache = nodeCache.filter { seen.contains($0.key) }
@@ -544,6 +585,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // already-present id are undisturbed (formUnion only adds).
             expandedWorkspaceIDs.formIntersection(Set(store.workspaces.map(\.id)))
             expandedWorkspaceIDs.formUnion(store.workspaces.filter(\.isExpanded).map(\.id))
+            let sessions = store.workspaces.flatMap(\.sessions)
+            expandedParentIDs.formIntersection(Set(sessions.map(\.id)))
+            expandedParentIDs.formUnion(sessions.filter(\.isExpanded).map(\.id))
 
             // restore expansion from the tracked set, not the live outline state, which forgets every
             // workspace a flagged-mode reload left out. A filter applied to a SINGLE marked workspace also force-expands it — a
@@ -560,6 +604,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 outline.expandItem(node)
             }
             suppressExpansionPersist = false
+            roots.forEach(applyParentExpansion(under:))
             updateEmptyState()
         }
 
@@ -651,23 +696,24 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         func outlineViewItemDidExpand(_ notification: Notification) {
-            guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode,
-                  node.kind == .workspace else { return }
+            guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode else { return }
+            guard node.kind == .workspace else { return parentExpansionChanged(node, expanded: true) }
             expandedWorkspaceIDs.insert(node.id)
             // persist ONLY a genuine user expand: a programmatic reveal or rebuild re-apply sets
             // suppressExpansionPersist, updating the visual set above without burning the persisted intent.
             if !suppressExpansionPersist { store.setWorkspaceExpanded(node.id, expanded: true) }
+            applyParentExpansion(under: node)
         }
 
         func outlineViewItemDidCollapse(_ notification: Notification) {
-            guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode,
-                  node.kind == .workspace else { return }
+            guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode else { return }
+            guard node.kind == .workspace else { return parentExpansionChanged(node, expanded: false) }
             expandedWorkspaceIDs.remove(node.id)
             // persist only a genuine user collapse; programmatic collapses are suppressed (see didExpand).
             if !suppressExpansionPersist { store.setWorkspaceExpanded(node.id, expanded: false) }
         }
 
-        private func node(for id: UUID, kind: SidebarNode.Kind) -> SidebarNode {
+        func node(for id: UUID, kind: SidebarNode.Kind) -> SidebarNode {
             if let existing = nodeCache[id] { return existing }
             let node = SidebarNode(kind: kind, id: id)
             nodeCache[id] = node
@@ -695,9 +741,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // expanded; expand its owner first so the row resolves. A VIEW action, so suppress the persist:
             // navigating into a deliberately collapsed workspace shows the session without un-collapsing it
             // on disk.
-            if selectionChanged, let owner = ownerWorkspaceNode(ofSession: selectedID), !outline.isItemExpanded(owner) {
+            if selectionChanged {
                 suppressExpansionPersist = true
-                outline.expandItem(owner)
+                for owner in ownerNodes(ofSession: selectedID) where !outline.isItemExpanded(owner) {
+                    outline.expandItem(owner)
+                }
                 suppressExpansionPersist = false
             }
             var rows = IndexSet()
@@ -719,9 +767,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastRevealedSelection = selectedID
         }
 
-        /// The workspace node whose `children` hold `sessionID` — used to expand a collapsed owner first.
-        private func ownerWorkspaceNode(ofSession sessionID: UUID) -> SidebarNode? {
-            roots.first { $0.children.contains { $0.id == sessionID } }
+        /// The workspace node holding `sessionID` and, for a nested companion, its parent's node, outermost
+        /// first, so a reveal expands them in order.
+        private func ownerNodes(ofSession sessionID: UUID) -> [SidebarNode] {
+            for workspace in roots {
+                if workspace.children.contains(where: { $0.id == sessionID }) { return [workspace] }
+                if let parent = workspace.children.first(where: { $0.children.contains { $0.id == sessionID } }) {
+                    return [workspace, parent]
+                }
+            }
+            return []
         }
 
         func outlineViewSelectionDidChange(_ notification: Notification) {
@@ -793,7 +848,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
             guard let node = item as? SidebarNode else { return false }
-            return node.kind == .workspace
+            return node.kind == .workspace || !node.children.isEmpty
         }
 
         /// Leading row icons as monochrome template symbols. A flagged SESSION swaps to its base glyph's
@@ -810,6 +865,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
         lazy var flaggedSplitSessionIcon = Self.rowIcon("rectangle.split.2x1.fill")
         lazy var flaggedHorizontalSplitSessionIcon = Self.rowIcon("rectangle.split.1x2.fill")
+        lazy var pageSessionIcon = Self.rowIcon("list.bullet.rectangle")
+        lazy var flaggedPageSessionIcon = Self.rowIcon("list.bullet.rectangle.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
         lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")
@@ -823,10 +880,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             return image
         }
 
-        /// The row label from an already-resolved session + its owning workspace name, with no store lookup.
+        /// The row label from an already-resolved session and its owning workspace name.
         func rowLabel(for session: Session, workspaceName: String) -> String {
-            guard flaggedLayout == .flat else { return session.displayName }
-            return "\(session.displayName) : \(workspaceName)"
+            guard let flaggedLayout else { return session.displayName }
+            let label = store.listLabel(for: session)
+            return flaggedLayout == .flat ? "\(label) : \(workspaceName)" : label
         }
 
         func workspaceNode(forID id: UUID) -> SidebarNode? {
@@ -854,67 +912,6 @@ final class SidebarScrollView: NSScrollView {
 // a first click into a background window only activates it, so the link's click-time check reads that window.
 private final class EmptyStateLinkButton: NSButton {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
-}
-
-/// `NSOutlineView` subclass routing the per-row context menu and double-click rename to the coordinator.
-final class SidebarOutlineView: NSOutlineView {
-    // never become first responder: focus lives in the terminal, and a mouse click still selects the row
-    // (selection is independent of first responder). Otherwise the responder bounce (terminal → outline →
-    // terminal, via mouseDown's focusActiveTerminal) makes AppKit re-set `isEmphasized` on the rows — an
-    // extra repaint that flicks the selection pill on every click. Programmatic selection never bounces.
-    override var acceptsFirstResponder: Bool { false }
-
-    /// Where a row's content belongs: the level-0 disclosure triangle ends at 14pt, and the cell's own 2pt
-    /// icon inset supplies the gap after it.
-    private static let contentX: CGFloat = 14
-
-    /// macOS 27 reserves a wider leading strip than the triangle occupies — a level-0 cell starts at 26
-    /// against a triangle ending at 14 — leaving the row icon stranded mid-gap. Trim the surplus, computed
-    /// from the frame rather than fixed so a release that lays out at `contentX` keeps its own geometry,
-    /// and gated on the version because the earlier layout is already tight and cannot be tested here.
-    /// `frameOfOutlineCell` stays untouched: the triangle keeps its place, and `handleSingleClick` reads
-    /// that frame to keep a row click from double-toggling expansion.
-    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
-        var frame = super.frameOfCell(atColumn: column, row: row)
-        guard #available(macOS 27.0, *), !frame.isEmpty, tableColumns.indices.contains(column),
-              tableColumns[column] === outlineTableColumn else { return frame }
-        let level = level(forRow: row)
-        guard level >= 0 else { return frame }
-        let trim = max(0, frame.minX - (Self.contentX + CGFloat(level) * indentationPerLevel))
-        frame.origin.x -= trim
-        frame.size.width += trim
-        return frame
-    }
-
-    override func draggingExited(_ sender: NSDraggingInfo?) {
-        super.draggingExited(sender)
-        (delegate as? WorkspaceSidebar.Coordinator)?.finishDraggingSequence()
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let point = convert(event.locationInWindow, from: nil)
-        let row = self.row(at: point)
-        // standard Mac list behavior: keep a multi-selection when right-clicking one of its selected rows,
-        // narrow to the clicked session when right-clicking outside it.
-        if row >= 0, let node = item(atRow: row) as? SidebarNode, node.kind == .session,
-           !selectedRowIndexes.contains(row) {
-            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        }
-        return (delegate as? WorkspaceSidebar.Coordinator)?.menu(forRow: row)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        // NSTableView treats Control-click as a plain click and ignores a left-button event handed to
-        // rightMouseDown, so the secondary-click convention has to open the menu here.
-        if event.modifierFlags.contains(.control) {
-            if let menu = menu(for: event) { NSMenu.popUpContextMenu(menu, with: event, for: self) }
-        } else {
-            super.mouseDown(with: event)
-        }
-        // after the click is handled, hand keyboard focus back to the terminal; row selection persists
-        // (model state), only first responder moves. Skipped mid-rename by the coordinator.
-        (delegate as? WorkspaceSidebar.Coordinator)?.focusActiveTerminal()
-    }
 }
 
 extension Notification.Name {

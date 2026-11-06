@@ -1,3 +1,5 @@
+import AppKit
+import WebKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -276,6 +278,20 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.remotePresentation?.connection, .connected)
     }
 
+    func testAMirroredInfoLineFollowsTheSnapshotAndItsFrames() throws {
+        let (fix, transport) = try connected()
+
+        try transport.feed(.snapshot(PresentationSnapshot(
+            status: nil, hud: nil, info: PresentationInfo(source: "first", markdown: false, hideAfter: 30))), rev: 1)
+        XCTAssertEqual(fix.session.effectiveInfo?.source, "first")
+
+        try transport.feed(.info(PresentationInfo(source: "**second**", markdown: true, hideAfter: 0)), rev: 2)
+        XCTAssertEqual(fix.session.effectiveInfo?.spans, [SessionInfoSpan(text: "second", bold: true)])
+
+        try transport.feed(.info(nil), rev: 3)
+        XCTAssertNil(fix.session.effectiveInfo)
+    }
+
     func testAMirroredHudFrameIsShownOnTheRow() throws {
         let (fix, transport) = try connected()
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
@@ -539,31 +555,35 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     @MainActor
     private final class BridgeTransport: RemotePresentationTransport {
         let argv: [String]
-        private let dropPageKinds: Bool
+        private let dropKind: (@Sendable (String) -> Bool)?
         private let process = RemotePresentationProcess()
 
-        init(argv: [String], dropPageKinds: Bool = false) {
+        init(argv: [String], dropKind: (@Sendable (String) -> Bool)? = nil) {
             self.argv = argv
-            self.dropPageKinds = dropPageKinds
+            self.dropKind = dropKind
         }
 
         func open(_ ignored: [String], onLine: @escaping @MainActor (Data) -> Void,
                   onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
             let link = process.open(argv, onLine: onLine, onClose: onClose)
-            return dropPageKinds ? OlderPresenterLink(inner: link) : link
+            return dropKind.map { OlderPresenterLink(inner: link, dropKind: $0) } ?? link
         }
     }
 
     @MainActor
     private final class OlderPresenterLink: RemotePresentationLink {
         private let inner: RemotePresentationLink
+        private let dropKind: @Sendable (String) -> Bool
 
-        init(inner: RemotePresentationLink) { self.inner = inner }
+        init(inner: RemotePresentationLink, dropKind: @escaping @Sendable (String) -> Bool) {
+            self.inner = inner
+            self.dropKind = dropKind
+        }
 
         func send(_ line: Data) {
             guard let frame = try? PresentationCodec.decode(line.dropLast()), case .hello(let hello) = frame.body,
                   let older = try? PresentationCodec.encode(PresentationFrame(gen: frame.gen, rev: frame.rev, body: .hello(
-                      PresentationHello(version: hello.version, kinds: hello.kinds.filter { !$0.hasPrefix("page.") },
+                      PresentationHello(version: hello.version, kinds: hello.kinds.filter { !dropKind($0) },
                                         mode: hello.mode)))) else { return inner.send(line) }
             inner.send(older)
         }
@@ -678,7 +698,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli: String
     }
 
-    private func bridgedPair(dropPageKinds: Bool = false) throws -> BridgedPair {
+    private func bridgedPair(dropKind: (@Sendable (String) -> Bool)? = nil) throws -> BridgedPair {
         let library = WindowLibrary(directory: stateDir)
         let socketPath = "/tmp/agterm-e2e-\(UUID().uuidString.prefix(8)).sock"
         let server = ControlServer(
@@ -707,7 +727,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli = try XCTUnwrap(Bundle.main.executableURL).deletingLastPathComponent()
             .appendingPathComponent("agtermctl").path
         server.remoteTransport = BridgeTransport(argv: [cli, "zmx", "present", origin.id.uuidString,
-                                                        "--socket", socketPath], dropPageKinds: dropPageKinds)
+                                                        "--socket", socketPath], dropKind: dropKind)
 
         server.startRemotePresentation(for: viewer)
         waitUntil("the viewer's stream connects") { viewer.remotePresentation?.connection == .connected }
@@ -763,6 +783,29 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(viewer.remotePresentation?.mode, .mirror)
         XCTAssertTrue(origin.hudActive, "the origin keeps drawing its own panel")
         XCTAssertEqual(origin.agentIndicator.status, .blocked)
+    }
+
+    func testInfoTravelsFromAnOriginSessionToItsViewerExpiresThereAndLeavesWithTheStream() throws {
+        let pair = try bridgedPair()
+        let (server, store, origin, viewer) = (pair.server, pair.store, pair.origin, pair.viewer)
+        let timed = try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 30).get()
+
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: timed).ok)
+        waitUntil("the origin's info line reaches the viewer row") { viewer.effectiveInfo?.source == "3 agents" }
+        XCTAssertNil(viewer.info, "a mirrored line never lands in the local slot")
+        XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == viewer.id.uuidString }?
+            .infoHideAfter, 30)
+        XCTAssertNil(server.infoAutoHide[viewer.id], "the viewer arms no timer of its own")
+
+        let brief = try SessionInfo.make(source: "brief", markdown: false, hideAfter: 0.2).get()
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: brief).ok)
+        waitUntil("the origin's expiry clears the viewer row") { viewer.effectiveInfo == nil && origin.info == nil }
+
+        XCTAssertTrue(server.setSessionInfo(origin.id.uuidString, window: nil, info: timed).ok)
+        waitUntil("the line is back on the viewer") { viewer.effectiveInfo != nil }
+        server.shutdownPresentationStreams()
+        waitUntil("the mirrored line leaves with the stream") { viewer.effectiveInfo == nil }
+        XCTAssertEqual(origin.info?.source, "3 agents", "the origin keeps its own line")
     }
 
     func testAnAskAndAnOverlayJobHandedToTheViewerCompleteOnTheOrigin() throws {
@@ -903,11 +946,152 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     }
 
     func testAnOlderPresenterKeepsTheRefusal() throws {
-        let pair = try bridgedPair(dropPageKinds: true)
+        let pair = try bridgedPair(dropKind: { $0.hasPrefix("page.") })
         follow(pair.origin)
         let dir = try pageDir(["index.html": "<p>x</p>"])
 
         XCTAssertEqual(try openPage(pair, in: dir).error, OverlayHtmlError.presenter)
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+    }
+
+    func testAMarkdownPageHandedToTheViewerRendersAndReloadsOverItsOneChannel() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        let launcher = relay(pair)
+        let dir = try pageDir(["README.md": "# One\n\n![s](shot.png)\n"])
+        let readme = dir.appendingPathComponent("README.md").path, shot = dir.appendingPathComponent("shot.png")
+        try png(width: 30, height: 10).write(to: shot)
+
+        let opened = openContent(pair, .markdown(path: readme))
+
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        waitUntil("the viewer renders the page") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        let web = try XCTUnwrap(HtmlOverlayRegistry.shared.existing(try XCTUnwrap(pair.viewer.htmlOverlay?.id))?.webView)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "One")
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "30")
+        let node = viewerNode(pair)
+        XCTAssertEqual(node?.markdown, readme)
+        XCTAssertEqual(node?.replica, true)
+
+        try Data("# Two\n\n![s](shot.png)\n".utf8).write(to: URL(fileURLWithPath: readme))
+        try png(width: 40, height: 10).write(to: shot)
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: false).ok)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "Two")
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "40")
+        try Data("# Three\n".utf8).write(to: URL(fileURLWithPath: readme))
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: true).ok)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "Three")
+
+        XCTAssertEqual(launcher.helpers.count, 1)
+        let asked = launcher.toOrigin.frames.compactMap { if case .resource(_, let path) = $0 { path } else { nil } }
+        XCTAssertEqual(asked.filter { $0 == readme }.count, 3)
+        XCTAssertEqual(asked.filter { $0 == shot.path }.count, 2)
+    }
+
+    func testAnUnsizedImageHandedToTheViewerIsSizedThereAndReportedAsAnImage() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let shot = try pageDir([:]).appendingPathComponent("shot.png")
+        try png(width: 300, height: 200).write(to: shot)
+
+        let opened = openContent(pair, .image(path: shot.path))
+
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        waitUntil("the viewer shows the picture") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        let web = try XCTUnwrap(HtmlOverlayRegistry.shared.existing(try XCTUnwrap(pair.viewer.htmlOverlay?.id))?.webView)
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "300")
+        XCTAssertEqual(pair.viewer.overlaySizePercent, ImagePage.basePercent)
+        XCTAssertFalse(pair.viewer.overlayPoints.isEmpty)
+        XCTAssertEqual(viewerNode(pair)?.image, shot.path)
+        XCTAssertFalse(pair.origin.overlayActive)
+        let fitted = pair.viewer.overlayPoints
+
+        let resized = pair.server.resizeSessionOverlay(pair.origin.id.uuidString, window: nil, sizePercent: nil,
+                                                       points: OverlayPointSize(width: 600))
+
+        XCTAssertTrue(resized.ok, resized.error ?? "")
+        waitUntil("the viewer takes the width") { pair.viewer.overlayPoints.width == 600 }
+        XCTAssertEqual(pair.viewer.overlayPoints.height, fitted.height)
+        XCTAssertNotNil(fitted.height)
+    }
+
+    func testATextPageHandedToTheViewerKeepsItsLineAndFailsOnceItsFileOutgrowsTheCap() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let dir = try pageDir(["main.go": "package main\n\nfunc main() {}\n"])
+        let main = dir.appendingPathComponent("main.go")
+
+        XCTAssertTrue(openContent(pair, .text(path: main.path, line: 3)).ok)
+
+        waitUntil("the viewer shows the text") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        XCTAssertEqual(viewerNode(pair)?.text?.line, 3)
+        try Data(count: TextPage.maxBytes + 1).write(to: main)
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: false).ok)
+        waitUntil("the oversized file fails the page") { pair.viewer.htmlOverlay?.loadState == .failed }
+        XCTAssertEqual(pair.viewer.htmlOverlay?.loadError, "file is too large for the page: \(main.path)")
+    }
+
+    func testAPresenterWithoutContentPagesRefusesThemAndStillTakesAFilePage() throws {
+        let content = PresentationHub.pageContentKind
+        let pair = try bridgedPair(dropKind: { $0 == content })
+        follow(pair.origin)
+        _ = relay(pair)
+        let dir = try pageDir(["index.html": "<p>x</p>", "README.md": "# x\n"])
+
+        XCTAssertEqual(openContent(pair, .markdown(path: dir.appendingPathComponent("README.md").path)).error,
+                       OverlayHtmlError.presenter)
+        XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+        XCTAssertTrue(try openPage(pair, in: dir).ok)
+    }
+
+    func testAnOriginClickOnAnImageInAFollowedSessionOpensOnThePresenter() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let shot = try pageDir([:]).appendingPathComponent("shot.png")
+        try png(width: 20, height: 20).write(to: shot)
+        var shown: Bool?
+
+        pair.server.openImageLink(shot, session: pair.origin.id) { shown = $0 }
+
+        waitUntil("the click resolves") { shown != nil }
+        XCTAssertEqual(shown, true)
+        waitUntil("the viewer shows the picture") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        XCTAssertFalse(pair.origin.overlayActive)
+    }
+
+    private func openContent(_ pair: BridgedPair, _ page: HtmlSource) -> ControlResponse {
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, page: page)
+        return pair.server.openSessionOverlay(pair.origin.id.uuidString, window: nil, options: options)
+    }
+
+    private func viewerNode(_ pair: BridgedPair) -> ControlHtmlOverlayNode? {
+        pair.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == pair.viewer.id.uuidString }?.htmlOverlays?.first
+    }
+
+    private func png(width: Int, height: Int) throws -> Data {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+    }
+
+    private func waitForScript(_ script: String, in view: WKWebView, _ expected: String) {
+        let met = expectation(description: script)
+        var last = ""
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(8)
+            while Date() < deadline {
+                last = (try? await view.evaluateJavaScript("String(\(script))") as? String) ?? ""
+                if last == expected { break }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            met.fulfill()
+        }
+        wait(for: [met], timeout: 10)
+        XCTAssertEqual(last, expected, script)
     }
 }

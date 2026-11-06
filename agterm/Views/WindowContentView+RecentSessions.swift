@@ -28,7 +28,7 @@ extension WindowContentView {
         } label: {
             Label("Recent sessions", systemImage: InterfaceElement.recentSessions.symbolName!)
         }
-        .help("Recent sessions (⌃Tab)")
+        .toolTip("Recent sessions (⌃Tab)", isShown: titlebarTipsShown)
         // pin the tint to chromeText like the attention bell: a disabled plain button otherwise resolves the SF
         // Symbol to the system disabled color, near-invisible on the themed titlebar — the dimmed clock would
         // vanish instead of graying out like the bell.
@@ -74,7 +74,7 @@ extension WindowContentView {
     @ViewBuilder private func recentSessionRow(_ id: UUID) -> some View {
         if let session = store.session(withID: id) {
             SessionPopoverRow(
-                title: session.displayName,
+                title: store.listLabel(for: session),
                 subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.switcherDetail)",
                 remote: session.remoteHost != nil,
                 status: session.agentIndicator.status,
@@ -128,7 +128,8 @@ extension WindowContentView {
         .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
         .opacity(enabled ? 1 : 0.35)
         .disabled(!enabled)
-        .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
+        .toolTip(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention),
+                 isShown: titlebarTipsShown)
         .accessibilityIdentifier("attention-button")
         .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
         .popover(isPresented: $attentionPopoverShown, arrowEdge: .bottom) {
@@ -156,7 +157,7 @@ extension WindowContentView {
             VStack(spacing: 2) {
                 ForEach(library.attentionAcrossWindows) { entry in
                     SessionPopoverRow(
-                        title: entry.session.displayName,
+                        title: library.attentionLabel(entry),
                         subtitle: library.attentionSubtitle(entry),
                         remote: entry.session.remoteHost != nil,
                         status: entry.session.agentIndicator.status,

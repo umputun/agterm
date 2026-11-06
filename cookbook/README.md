@@ -44,27 +44,36 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [backlog-picker](backlog-picker/) | pick one of the repo's written-down deferred items and hand it to the agent in the pane | 0.20.2, python3, Claude Code |
 | [claude-account-swap](claude-account-swap/) | switch the left pane's Claude account with a conversation summary | 0.26.0, python3, jq, Claude Code, Codex CLI, Git |
 | [claude-conversation-picker](claude-conversation-picker/) | pick a past Claude Code conversation by what it was about and resume it in the pane | 0.21.0, python3, Claude Code |
+| [claude-git-info](claude-git-info/) | Claude Code keeps its branch, changed-file count and unpushed commits on a line under the sidebar row | 0.40.0, jq, git, Claude Code |
 | [claude-recap](claude-recap/) | one key lists what the Claude Code run in a session was working on | 0.10.0, zsh, jq, Claude Code |
 | [close-tab-when-done](close-tab-when-done/) | arm a tab with a chord and it closes itself when the agent stops replying | 0.22.0, jq, Claude Code |
 | [container-agent-status](container-agent-status/) | a containerized agent reports status onto its sidebar row via a TCP notification to the host | 0.7.1, nc, timeout, Claude Code |
 | [copilot-agent-status](copilot-agent-status/) | Copilot CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Copilot CLI |
+| [end-of-task-offer](end-of-task-offer/) | once the agent clears the title-bar line, offer to clear its conversation or close the session | 0.39.0, jq, session-context-nudge, Claude Code or Codex |
+| [flag-recent-agents](flag-recent-agents/) | one chord lists the sessions whose agents reported a status lately, lets you untick any, and flags the rest | 0.38.0, jq |
 | [html-doc-overlay](html-doc-overlay/) | ask Claude Code for a page about the issue, PR, plan or topic in hand, read it in an overlay, and optionally share it on an expiring link | 0.33.0, jq, python3, Claude Code, cloudflared for sharing |
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code |
 | [kiro-agent-status](kiro-agent-status/) | Kiro CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Kiro CLI |
 | [long-commands-status](long-commands-status/) | wrap any long shell command so the row reports active while it runs and completed or blocked when it finishes | 0.17.0 |
+| [named-companion](named-companion/) | one chord duplicates the session as a tinted companion named from a dialog, or by its Claude Code when left blank | 0.39.0, python3 |
 | [remote-claude-session](remote-claude-session/) | one chord runs Claude Code in a tmux session on a remote host, reconnecting and reporting status onto its own tab | 0.22.0, jq, ssh, tmux, Claude Code |
 | [scheduled-jobs](scheduled-jobs/) | an agent installs cronn, schedules and reports on jobs, and jobs can open agterm sessions running an agent on a prompt | 0.37.0, Homebrew, jq, Claude Code |
 | [session-context-nudge](session-context-nudge/) | Claude Code keeps the title bar saying what the session is working on | 0.26.0, jq, Claude Code |
 | [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
+| [subagent-status](subagent-status/) | the row counts a Claude Code session's subagents, stays active until the last one finishes, and a chord pages one's transcript | 0.40.0, Claude Code |
 | [truthful-agent-lights](truthful-agent-lights/) | the row reports what is still running after the turn ends, and stops claiming work that is gone | 0.17.0, jq, Claude Code |
-| [two-agent-chat](two-agent-chat/) | let Claude Code and Codex talk to each other in one split | 0.24.0, python3, Claude Code, Codex |
+| [two-agent-chat](two-agent-chat/) | let Claude Code and Codex talk to each other in one split by typing into each other's composer | 0.24.0, python3, Claude Code, Codex |
+| [two-agent-mailbox-chat](two-agent-mailbox-chat/) | let two agents in one split talk through pane mailboxes and agent hooks, never typing into a composer; replaces two-agent-chat | 0.40.0, python3, Claude Code and/or Codex |
 
 ### Panes, pickers and input
 
 | recipe | what it does | needs |
 |---|---|---|
+| [claude-pasted-images](claude-pasted-images/) | draw an image pasted into Claude Code under the prompt that carried it | 0.3.1, Claude Code |
+| [container-overlays](container-overlays/) | open program, page and URL overlays from inside a docker container | 0.39.0, docker, python3 |
 | [flagged-dashboard](flagged-dashboard/) | grid the flagged panes that are running something, one chord to show and dismiss | 0.20.0, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
+| [image-path-gallery](image-path-gallery/) | show the image paths on a pane's screen in a gallery, copied from the session's host when attached | 0.36.0, perl, ssh |
 | [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 | [remote-image-paste](remote-image-paste/) | copy a screenshot to a remote session's Mac so ctrl+v there pastes it | 0.31.0 |

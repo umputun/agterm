@@ -26,6 +26,60 @@ struct ControlDispatcherSessionMetadataTests {
         ])
     }
 
+    @Test func sessionFlagMoveRoutesTheOneAnchorAndItsSide() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var before = ControlArgs(mode: "move", window: "win")
+        before.before = "b"
+        var after = ControlArgs(mode: "move")
+        after.after = "c"
+
+        #expect(await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, target: "a", args: before)) == ControlResponse(ok: true))
+        #expect(await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: after)) == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .flaggedMove(target: "a", window: "win", anchor: "b", .before),
+            .flaggedMove(target: nil, window: nil, anchor: "c", .after),
+        ])
+    }
+
+    @Test func sessionFlagMoveRefusesNoAnchorOrBoth() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var both = ControlArgs(mode: "move")
+        both.before = "b"
+        both.after = "c"
+
+        let none = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: ControlArgs(mode: "move")))
+        let two = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: both))
+
+        let refusal = ControlResponse(ok: false, error: "session.flag move requires exactly one of --before or --after")
+        #expect(none == refusal)
+        #expect(two == refusal)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test(arguments: ["on", "toggle", "clear", nil] as [String?])
+    func sessionFlagRefusesAnAnchorOutsideMove(_ mode: String?) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var args = ControlArgs(mode: mode)
+        args.after = "c"
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, args: args))
+
+        #expect(response == ControlResponse(ok: false, error: "--before and --after apply only to session.flag move"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionFlagWithoutAModeStillRoutesToTheToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionFlag, target: "a"))
+
+        #expect(actions.calls == [.sessionFlag(target: "a", window: nil, nil)])
+    }
+
     @Test func sessionContextRoutesSetAndClear() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -58,6 +112,65 @@ struct ControlDispatcherSessionMetadataTests {
         let dispatcher = ControlDispatcher(actions: actions)
 
         let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionContext, args: args))
+
+        #expect(response?.ok == false)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionInfoRoutesSetAndClear() async throws {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionInfo, target: "session",
+            args: ControlArgs(text: "^[run](color: \"green\")", mode: "set", hideAfter: 30, markdown: true, window: "win")
+        ))
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: ControlArgs(text: "**x**", mode: "set")))
+        let cleared = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: ControlArgs(mode: "clear")))
+
+        #expect(set == ControlResponse(ok: true))
+        #expect(plain == ControlResponse(ok: true))
+        #expect(cleared == ControlResponse(ok: true))
+        let colored = try SessionInfo.make(source: "^[run](color: \"green\")", markdown: true, hideAfter: 30).get()
+        let literal = try SessionInfo.make(source: "**x**", markdown: false, hideAfter: 0).get()
+        #expect(actions.calls == [
+            .sessionInfo(target: "session", window: "win", info: colored),
+            .sessionInfo(target: nil, window: nil, info: literal),
+            .sessionInfo(target: nil, window: nil, info: nil),
+        ])
+    }
+
+    @Test func sessionInfoRequestEncodesItsWireShape() throws {
+        let request = ControlRequest(cmd: .sessionInfo, target: "s1",
+                                     args: ControlArgs(text: "**3**", mode: "set", hideAfter: 5, markdown: true))
+        let json = try String(decoding: JSONEncoder().encode(request), as: UTF8.self)
+        #expect(json.contains("\"cmd\":\"session.info\""))
+        #expect(json.contains("\"mode\":\"set\""))
+        #expect(json.contains("\"markdown\":true"))
+        #expect(json.contains("\"hideAfter\":5"))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8)) == request)
+    }
+
+    @Test(arguments: [
+        ControlArgs(mode: "set"),
+        ControlArgs(text: "x"),
+        ControlArgs(text: "x", mode: "toggle"),
+        ControlArgs(text: "x", mode: "clear"),
+        ControlArgs(mode: "clear", markdown: true),
+        ControlArgs(mode: "clear", hideAfter: 5),
+        ControlArgs(text: "x", mode: "set", hideAfter: -1),
+        ControlArgs(text: "x", mode: "set", hideAfter: 86_401),
+        ControlArgs(text: "   ", mode: "set"),
+        ControlArgs(text: "a\nb", mode: "set"),
+        ControlArgs(text: "^[a](color: \"maroon\")", mode: "set", markdown: true),
+        ControlArgs(text: "^[a](color: red)", mode: "set", markdown: true),
+        ControlArgs(text: String(repeating: "a", count: 513), mode: "set"),
+    ])
+    func sessionInfoRejectionNeverReachesTheHost(args: ControlArgs) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionInfo, args: args))
 
         #expect(response?.ok == false)
         #expect(actions.calls.isEmpty)
@@ -501,5 +614,115 @@ struct ControlDispatcherSessionMetadataTests {
 
         #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionTintSetRoutesColorAndParsedParts() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bare = await dispatcher.dispatch(ControlRequest(cmd: .sessionTint, target: "s",
+                                                            args: ControlArgs(mode: "set", window: "w", tint: "Red")))
+        let placed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionTint, args: ControlArgs(mode: "set", tint: "blue", tintOn: ["name", "icon"])))
+        let cleared = await dispatcher.dispatch(ControlRequest(cmd: .sessionTint, args: ControlArgs(mode: "clear")))
+
+        #expect(bare == ControlResponse(ok: true) && placed == ControlResponse(ok: true) && cleared == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionTint(target: "s", window: "w", .set(.red, parts: nil)),
+            .sessionTint(target: nil, window: nil, .set(.blue, parts: [.icon, .name])),
+            .sessionTint(target: nil, window: nil, .clear),
+        ])
+    }
+
+    @Test func tintSetAndCreationTakeANormalizedHex() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(cmd: .workspaceTint, args: ControlArgs(mode: "set", tint: "#3A7BD5")))
+        let created = await dispatcher.dispatch(ControlRequest(cmd: .sessionCompanionNew, args: ControlArgs(tint: "3a7bd5")))
+
+        #expect(set == ControlResponse(ok: true) && created == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .workspaceTint(target: nil, window: nil, .set(TintValue.hex("#3a7bd5"), parts: nil)),
+            .companionNew(target: nil, options: CompanionOptions(tint: SidebarTint(color: .hex("#3a7bd5"))), window: nil),
+        ])
+    }
+
+    @Test func workspaceTintRoutesToTheWorkspaceAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceTint, target: "ws", args: ControlArgs(mode: "set", tint: "gray", tintOn: ["name"])))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.workspaceTint(target: "ws", window: nil, .set(.gray, parts: [.name]))])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(mode: "set"), "session.tint set requires a color"),
+        (ControlArgs(mode: "set", tint: "maroon"), "invalid tint: maroon (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
+        (ControlArgs(mode: "set", tint: "#3a7bd"), "invalid tint: #3a7bd (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
+        (ControlArgs(mode: "set", tint: "red", tintOn: ["strip"]), "invalid tint placement: strip (icon,name)"),
+        (ControlArgs(mode: "set", tint: "red", tintOn: []), "invalid tint placement:  (icon,name)"),
+        (ControlArgs(mode: "clear", tint: "red"), "session.tint clear takes no color or placement"),
+        (ControlArgs(mode: "clear", tintOn: ["icon"]), "session.tint clear takes no color or placement"),
+        (ControlArgs(tint: "red"), "invalid tint mode:  (set|clear)"),
+    ])
+    func sessionTintRefusesContradictoryOrUnknownInput(_ tc: (ControlArgs, String)) async {
+        let actions = MockControlActions()
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionTint, args: tc.0))
+
+        #expect(response == ControlResponse(ok: false, error: tc.1))
+        #expect(actions.calls.isEmpty)
+    }
+
+    // a host predating tints must refuse the tint, never create an untinted session and answer ok.
+    @Test func sessionNewThroughTheDefaultOverloadRefusesATint() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .sessionNew, args: ControlArgs(name: "s")))
+        let tinted = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew, args: ControlArgs(tint: "red", tintOn: ["name"])))
+
+        #expect(plain?.ok == true)
+        #expect(tinted == ControlResponse(ok: false, error: "session.new --tint is not supported on this platform"))
+        #expect(actions.calls == [.sessionNew(ControlSessionCreateOptions(
+            window: nil, cwd: nil, workspace: nil, workspaceName: nil, createWorkspace: nil, command: nil, name: "s"))])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(tintOn: ["icon"]), "--tint-on requires --tint"),
+        (ControlArgs(tint: "maroon"), "invalid tint: maroon (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint|#rrggbb)"),
+        (ControlArgs(tint: "red", tintOn: ["both"]), "invalid tint placement: both (icon,name)"),
+    ])
+    func creationRefusesABadTintBeforeCreatingAnything(_ tc: (ControlArgs, String)) async {
+        let (args, error) = tc
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        var named = args
+        named.workspaceName = "new"
+        named.createWorkspace = true
+
+        let session = await dispatcher.dispatch(ControlRequest(cmd: .sessionNew, args: named))
+        let workspace = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: args))
+
+        #expect(session == ControlResponse(ok: false, error: error))
+        #expect(workspace == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    // a host predating tints must refuse the tint, never create an untinted workspace and answer ok.
+    @Test func workspaceNewThroughTheDefaultOverloadRefusesATint() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let plain = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "w")))
+        let tinted = await dispatcher.dispatch(ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "t", tint: "red")))
+
+        #expect(plain == ControlResponse(ok: true))
+        #expect(tinted == ControlResponse(ok: false, error: "workspace.new --tint is not supported on this platform"))
+        #expect(actions.calls == [.workspaceNew(window: nil, "w", collapsed: false)])
     }
 }

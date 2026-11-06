@@ -174,8 +174,9 @@ extension WindowContentView {
         // the quick terminal owns it while it covers the window, and its own hide re-grabs the cover.
         //
         // Keyed on `visibleCover`, not the slots: a HUD, a hidden overlay closing, or the other pane's overlay
-        // toggling changes nothing the user types into, and `retryReparentFocus` would yank focus out of an
-        // open ⌘F search field or an in-progress sidebar rename for ~0.36s.
+        // toggling (unless it keeps the session cover out of sight) changes nothing the user types into, and
+        // `retryReparentFocus` would yank focus out of an open ⌘F search field or an in-progress sidebar
+        // rename for ~0.36s.
         .onChange(of: session.visibleCover) { _, _ in
             guard deckInteractive, isActive, !quickTerminal.holdsKey else { return }
             HtmlOverlayRegistry.shared.refocus(session)
@@ -220,7 +221,7 @@ extension WindowContentView {
         deckPane(session, pane: .left, focused: !session.splitFocused, gates: gates)
             .background {
                 SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight,
-                                   suspended: !deckInteractive,
+                                   dividerColor: splitDividerColor, suspended: !deckInteractive,
                                    deckVisible: gates.visible && !gates.overlaid,
                                    onPersist: { store.save() })
             }
@@ -249,7 +250,8 @@ extension WindowContentView {
         // revision, so its id needs the token to change when the occupants exchange.
         let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
         ZStack {
-            if deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
+            // a page companion has no terminal: its full page panel paints over this empty slot
+            if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
                 TerminalView(session: session, surfaceKeyPath: slot,
                              makeSurface: pane == .left ? makeSurface : makeSplitSurface,
                              isActive: gates.focusable && focused && !gates.overlaid && !covered,
@@ -288,7 +290,7 @@ extension WindowContentView {
         // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
         // stays inert as a whole and the session underneath keeps both. A hidden program or page is inert the
         // same way while its host stays mounted, so it keeps running and comes back without a re-host.
-        let shown = !session.overlayHidden
+        let shown = session.sessionSlotShown
         let live = isActive && style.interactive && shown
         GeometryReader { geo in
             let detailFrame = CGRect(origin: .zero, size: geo.size)
@@ -321,7 +323,10 @@ extension WindowContentView {
                         if let page = session.htmlOverlay, session.htmlOverlayActive {
                             HtmlOverlayView(store: store, session: session, overlay: page,
                                             backgroundColor: session.overlayBackgroundColor, isActive: live,
-                                            visible: live, foreground: chromeText, background: terminalColor)
+                                            visible: live, toolTipsShown: live && !chromeCovered && !session.askCoversAnyPane,
+                                            hideShown: shows(.overlayToggle) && session.content == .terminal,
+                                            onClose: session.content == .page ? { actions.closeSession(session.id, in: store) } : nil,
+                                            foreground: chromeText, background: terminalColor)
                         } else {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },
@@ -414,7 +419,9 @@ extension WindowContentView {
                     // keyed on the page, so a swap or promotion moves its web view instead of reusing a host
                     HtmlOverlayView(store: store, session: session, overlay: page,
                                     backgroundColor: session.paneOverlay(pane)?.backgroundColor, isActive: isActive,
-                                    visible: deckVisible, foreground: chromeText, background: terminalColor)
+                                    visible: deckVisible,
+                                    toolTipsShown: deckVisible && !chromeCovered && !session.askCovers(pane),
+                                    hideShown: shows(.overlayToggle), foreground: chromeText, background: terminalColor)
                         .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
                         .id("\(session.id.uuidString)-html-\(page.id.uuidString)")
                 } else if active {
@@ -538,7 +545,7 @@ struct OverlayPanelStyle: Equatable {
                                           cornerRadius: floating ? floatingCornerRadius : 0,
                                           borderOpacity: floating ? floatingBorderOpacity : 0,
                                           shadowRadius: floating ? floatingShadowRadius : 0,
-                                          backdrop: floating && !session.overlayHidden, interactive: true,
+                                          backdrop: floating && session.sessionSlotShown, interactive: true,
                                           position: .center)
             if let percent = session.overlaySizePercent, !session.overlayPoints.isEmpty {
                 style.pointSizing = PointSizing(sizePercent: percent, points: session.overlayPoints,

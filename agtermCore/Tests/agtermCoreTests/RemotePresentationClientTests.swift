@@ -48,6 +48,7 @@ struct RemotePresentationClientTests {
         var showsOverlays = true
         var overlayCloses: [PresentationOverlayChange] = []
         var overlayResizes: [PresentationOverlayChange] = []
+        var respawns: [(PresentationRespawns, Bool)] = []
         var warnings: [String] = []
     }
 
@@ -86,6 +87,7 @@ struct RemotePresentationClientTests {
             overlayClose: { recorder.overlayCloses.append($0) },
             overlayResize: { recorder.overlayResizes.append($0) },
             sound: { recorder.sounds.append($0) },
+            respawns: { recorder.respawns.append(($0, $1)) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -123,6 +125,18 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.context(nil), rev: 3))
 
         #expect(recorder.contexts == ["PR #517", "PR #518", nil])
+    }
+
+    @Test func aSnapshotsRespawnsAreASeedAndAFramesAreNot() {
+        let client = makeClient()
+        client.start()
+        let counts = PresentationRespawns(epoch: "e1", generations: ["agterm-a": 1])
+
+        connect(client, snapshot: PresentationSnapshot(status: nil, hud: nil, respawns: counts))
+        transport.deliver(line(.respawn(PresentationRespawns(epoch: "e1", generations: ["agterm-a": 2])), rev: 2))
+
+        #expect(recorder.respawns.map(\.1) == [true, false])
+        #expect(recorder.respawns.map(\.0.generations) == [["agterm-a": 1], ["agterm-a": 2]])
     }
 
     @Test func aLaterSnapshotWithoutContextClearsTheMirror() {

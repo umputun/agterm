@@ -1,0 +1,5 @@
+{
+  "name": "pasted-images",
+  "version": "0.1.0",
+  "description": "Draws pasted images under the prompt that carried them, on kitty graphics terminals"
+}

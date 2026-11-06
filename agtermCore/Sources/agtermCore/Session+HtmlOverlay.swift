@@ -38,6 +38,7 @@ extension Session {
     /// teardownOverlaySlot discards the session-wide occupant where the whole session goes away; a page has
     /// no surface, so tearing down `overlaySurface` alone would leave it running.
     public func teardownOverlaySlot() {
+        forgetSessionCoverHolds()
         overlaySurface?.teardown()
         HtmlOverlayReleases.shared.release(htmlOverlay)
         htmlOverlay = nil

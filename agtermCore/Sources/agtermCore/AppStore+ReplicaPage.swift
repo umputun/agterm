@@ -9,13 +9,7 @@ extension AppStore {
     public func presentReplicaPage(_ page: PresentationPage, forSession id: UUID) -> String? {
         guard let session = session(withID: id), session.remotePresentation != nil else { return "no such session" }
         guard let origin = UUID(uuidString: page.page) else { return "invalid page id" }
-        let source: HtmlSource
-        switch page.source {
-        case .file(let path, _): source = .replica(path: path)
-        case .url(let text):
-            guard let url = HtmlSource.webURL(text) else { return "invalid url" }
-            source = .url(url)
-        }
+        guard let source = Self.replicaSource(page.source) else { return "invalid url" }
         var pane: OverlayPane?
         if page.pane != nil {
             guard let role = localPane(page.pane, in: session), session.rendersPane(role) else {
@@ -26,12 +20,48 @@ extension AppStore {
         let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
                                   chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
                                   replicaOf: origin)
-        if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent,
+        if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent, points: page.points,
                                          backgroundColor: page.backgroundColor) {
             return failure.message(pane: pane)
         }
         if page.follow { selectSession(id) }
         return nil
+    }
+
+    static func replicaSource(_ source: PresentationPageSource) -> HtmlSource? {
+        switch source {
+        case .file(let path, _): return .replica(path: path, content: .html)
+        case .url(let text): return HtmlSource.webURL(text).map(HtmlSource.url)
+        case .image(let path, let width, let height): return .replica(path: path, content: .image(width: width, height: height))
+        case .markdown(let path): return .replica(path: path, content: .markdown)
+        case .text(let path, let line): return .replica(path: path, content: .text(line: line))
+        }
+    }
+
+    /// addReplicaPageCompanion shows another Mac's page companion as a companion of `parentID`, a row attached from
+    /// that Mac; the page stays the other Mac's, so closing the row here ends nothing there.
+    public func addReplicaPageCompanion(to parentID: UUID, page: PresentationPage,
+                                        select: Bool) -> Result<Session, ReplicaPageRefusal> {
+        guard let parent = session(withID: parentID), parent.parentID == nil, let host = parent.remoteHost,
+              let workspace = workspace(forSession: parentID)?.id else { return .failure(.init("the parent row here is gone")) }
+        guard let origin = UUID(uuidString: page.page), let source = Self.replicaSource(page.source) else {
+            return .failure(.init("the page cannot be shown here"))
+        }
+        guard let row = addSession(toWorkspace: workspace, cwd: FileManager.default.homeDirectoryForCurrentUser.path,
+                                   select: select, remoteHost: host, parentID: parentID, content: .page) else {
+            return .failure(.init("the parent row here is gone"))
+        }
+        let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
+                                  chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
+                                  replicaOf: origin)
+        if let failure = openHtmlOverlay(row.id, pane: nil, overlay: overlay, sizePercent: nil,
+                                         backgroundColor: page.backgroundColor) {
+            closeSession(row.id)
+            return .failure(.init(failure.message(pane: nil)))
+        }
+        // its outcome is the other Mac's, copied in when that Mac ends the page; a close here dismisses it
+        HtmlPageOutcomes.shared.register(overlay.id)
+        return .success(row)
     }
 
     /// replicaPage finds the page shown here for origin page `origin`, with the slot it sits in.
@@ -60,9 +90,10 @@ extension AppStore {
     }
 
     /// resizeReplicaPage applies the origin's size to a session-wide page; a pane page is always full-pane.
-    public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?) {
-        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil else { return }
-        resizeOverlay(id, sizePercent: sizePercent)
+    public func resizeReplicaPage(_ origin: String, forSession id: UUID, sizePercent: Int?,
+                                  points: OverlayPointSize = OverlayPointSize(), merge: Bool = false) {
+        guard let slot = replicaPage(origin, forSession: id), slot.pane == nil, let session = session(withID: id) else { return }
+        resizeOverlay(id, sizePercent: sizePercent, points: merge ? session.overlayPoints.merging(points) : points)
     }
 
     /// replicaPageState is what the page `localID` shows now, as the origin reads it back, nil once it is gone.
@@ -81,6 +112,8 @@ extension AppStore {
     /// has ended them, and nothing could reach it from them.
     func closeReplicaPages(of session: Session) {
         for slot in session.replicaPages {
+            // a page companion's own page is the row: its close released it, and closing it again closes the row again
+            if slot.pane == nil, session.content == .page { continue }
             if let pane = slot.pane {
                 closePaneOverlay(session.id, pane: pane)
             } else {
@@ -96,5 +129,14 @@ extension Session {
         let local: OverlayPane? = nil
         let slots = [(local, htmlOverlayActive ? htmlOverlay : nil)] + OverlayPane.allCases.map { ($0, paneOverlay($0)?.html) }
         return slots.compactMap { pane, page in page.flatMap { $0.replicaOf == nil ? nil : (pane, $0) } }
+    }
+}
+
+/// ReplicaPageRefusal is why another Mac's page could not be shown here.
+public struct ReplicaPageRefusal: Error, Equatable, Sendable {
+    public let message: String
+
+    public init(_ message: String) {
+        self.message = message
     }
 }

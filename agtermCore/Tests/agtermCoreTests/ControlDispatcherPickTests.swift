@@ -146,7 +146,7 @@ struct ControlDispatcherPickTests {
         (ControlPickItem(id: "a", label: "A", status: "busy"), "invalid pick item status (idle|active|completed|blocked)"),
         (ControlPickItem(id: "a", label: "A", status: "blocked", statusColor: "red"), "invalid pick item color (expected #rrggbb)"),
         (ControlPickItem(id: "a", label: "A", status: "active", statusShape: "hexagon"),
-         "invalid pick item shape (circle|square|triangle|diamond|capsule|star)"),
+         "invalid pick item shape (circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell)"),
     ])
     func openRejectsAnInvalidItemStatusWithoutCallingHost(item: ControlPickItem, error: String) async {
         let actions = MockControlActions()

@@ -28,7 +28,8 @@ paths:
 - Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
   `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
   Default-off nil fields include attention button, Dock bounce, global config inheritance, close
-  confirmation, auto-follow, attention-includes-active, hidden inactive sidebars, and interface hiding.
+  confirmation, auto-follow, attention-includes-active, attention-across-windows, hidden inactive sidebars,
+  and interface hiding.
   `restoreMode` defaults to `none`; the legacy `restoreRunningCommand` boolean migrates to `rerun` or `none`.
 - `newSessionPlacement` (nil = `end`) applies only to New Session: `AppActions.newSession()` and the
   workspace row's New Session and "+", through `AppActions.resolvedNewSessionIndex`. It inserts after the
@@ -88,6 +89,10 @@ paths:
   auto-follow, the bell and pane reveal are unchanged. `SettingsModel.applyWindowSettings` pushes it with
   auto-follow into every store; read back as top-level `tree.attentionIncludesActive`, no setter. Reset
   leaves it, as it leaves auto-follow.
+- `attentionNavigationAcrossWindows` makes GUI attention navigation walk every open window
+  (`WindowLibrary.attentionStep`, [[menu-actions]]). Pushed into every store the same way and read back as
+  top-level `tree.attentionNavigationAcrossWindows`, no setter; `session.go` stays window-scoped. Reset
+  leaves it.
 - Notification badges gate only the sidebar pill/workspace roll-up and Dock total; counts keep tracking
   while hidden. Banners are a separate `notificationsEnabled` mirror, and neither gates agent status.
 - `SettingsModel` saves and writes last-loaded `ghostty-settings.conf`. Reload app/surfaces and clear
@@ -98,14 +103,16 @@ paths:
   contract, so freeing it risks a crash and the rare leak is accepted.
 - `.agtermAppearanceChanged` is required because terminal color is not observable; it updates
   `terminalColor`, quick-terminal backing, title/window appearance, and non-observable chrome mirrors.
-- Settings is a 540x680 six-tab SwiftUI scene with explicit selection defaulting General, preventing
+- Settings is a 540x710 six-tab SwiftUI scene with explicit selection defaulting General, preventing
   `com_apple_SwiftUI_Settings_selectedTabIndex` persistence. General holds Mouse and Sessions; the
   global-Ghostty-config toggle and its hint close Sessions, since a third section made the tab scroll.
   Appearance holds Terminal and Window. Interface groups `InterfaceElement`s two per row, with the
-  Multiple Windows toggle as the Sidebar section's last row, plus the quick terminal's panel size,
+  Session info picker (`sessionInfoDisplay`, owned by [[sidebar]]) and the Multiple Windows toggle sharing the
+  Sidebar section's last row, since the grid's eight toggles leave no half-cell, plus the quick terminal's panel size,
   which sits there rather than under Appearance's Window because the panel belongs to no window.
   Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
-  status reset, Navigation (attention-includes-active plus auto-follow), and Reset, and is exactly full:
+  status reset, Navigation (attention-includes-active, attention-across-windows, auto-follow), and Reset,
+  and must not scroll:
   `testAttentionIncludesActiveTogglePersists` requires Reset not to move when scrolled. Key Mapping holds the keyboard layout lock,
   config directory, diagnostics, and Reload.
 - Every change that adds or moves a Settings control checks that its tab does not scroll: scroll the
@@ -162,8 +169,9 @@ paths:
   cached diagnostics.
 - **Process restore mode is frozen at launch; capture follows the configured next mode.** `none` restores fresh shells, `rerun` uses the captured-command path
   below, and `live` is zmx-backed. Settings changes apply after restart. A live request falls back to
-  `none` when the bundled executable, the bundled zsh or fish integration, or the password-database login
-  shell (zsh or fish) is unsupported, and Settings reports the reason. The requested-live latch still claims persisted daemons during fallback; only
+  `none` when the bundled executable, the bundled zsh or fish integration, or the Live shell is unsupported
+  (the password-database login shell, replaced by an absolute zsh or fish `command` that `GhosttyApp` reads
+  with the restore decision), and Settings reports the reason. The requested-live latch still claims persisted daemons during fallback; only
   a deliberate `none` or `rerun` launch reaps them. Factories, control status, and reap read the immutable
   requested or active mode. Exit capture and `restore.capture` read the configured next-launch mode.
 - **Command replay is launch-scoped; capture runs at two exits and on demand.**
@@ -260,7 +268,9 @@ paths:
   `sessionContext`, `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`,
   `overlayToggle`;
   sidebar cases are `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level
-  `workspaceAddSession`.
+  `workspaceAddSession`, `workspaceIcons`, `sessionIcons` and `workspaceChevrons` ([[sidebar]] owns its layout).
+  The two icon toggles show the glyph their rows
+  draw, so they share it with `focusFilter` and `quickTerminal`.
   A `hiddenByDefault` case (`workspaceName`, `customCommands` and `overlayToggle`) is governed by
   `shownInterfaceElements` instead, the same shape with the opposite sense, and its name in the hidden list is ignored. Attention
   has its separate default-off setting.
@@ -288,15 +298,21 @@ paths:
 - `flaggedViewLayout` is a raw `FlaggedViewLayout` (`flat`|`plain`|`tree`), nil for the default `flat`, resolved by
   `effectiveFlaggedViewLayout` and mirrored to `GhosttyApp.flaggedViewLayout`. App-wide, never per window.
   Every sidebar Coordinator picks it up on `.agtermAppearanceChanged`, and only one showing the flagged view
-  rebuilds. The picker sits at the bottom of the General tab's Sessions section: the Interface tab is exactly full at
-  540x680, and one more row pushes the quick-terminal Size off the bottom. A grouped Form scrolls, so an
+  rebuilds. The picker sits at the bottom of the General tab's Sessions section: the Interface tab is full at
+  540x710, and one more row pushes the quick-terminal Size off the bottom. A grouped Form scrolls, so an
   overflowing tab still reports every control hittable, and its last text can sit inside the window while
   the section's bottom inset does not; `assertGeneralTabFits` in `SettingsUITests` scrolls the tab and
   requires the closing hint not to move.
   The control catalog carries it as `sidebar.flagged-layout` ([[control-api]]).
+- `sidebarDensity` is a raw `SidebarDensity` (`default`|`compact`), nil for the default, resolved by
+  `effectiveSidebarDensity` and mirrored to `GhosttyApp.sidebarDensity`; app-wide. `SidebarDensity` owns every
+  metric it changes, and [[sidebar]] owns how a mounted outline applies them. Its picker sits under Sidebar font
+  size in Appearance, which `testSidebarDensityPickerPersistsAndTheAppearanceTabFits` keeps from scrolling.
+  The control catalog carries it as `sidebar.density`.
 - `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
   `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while the key
-  window's first responder is a `GhosttySurfaceView`, reselects on every source-change notification, and
+  window's first responder is a live `GhosttySurfaceView` or sits inside an `HtmlOverlayWebView`, page form
+  fields included, reselects on every source-change notification, and
   restores the earlier source when that stops being true and in `applicationWillTerminate`.
   It keys on key-window and responder changes, never app activation, because the quick terminal takes key
   while agterm stays inactive. The source-change notification is delivered to an inactive app (measured

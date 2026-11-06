@@ -41,6 +41,49 @@ final class RecentSessionsButtonUITests: ControlAPITestCase {
                        "the popover should list only the single other session, not the current one")
     }
 
+    func testPopoversNameACompanionAfterItsParent() throws {
+        try relaunch(withSettings: #"{"attentionButtonEnabled":true}"#)
+        let parent = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(parent)","args":{"name":"api"}}"#)["ok"] as? Bool, true)
+        let row = app.staticTexts["session-row"].firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.rightClick()
+        let item = app.menuItems.matching(identifier: "New Companion").allElementsBoundByIndex.first { $0.isHittable }
+        try XCTUnwrap(item, "the row menu should offer New Companion").click()
+        let companion = try XCTUnwrap(pollSecondSessionID(timeout: 8), "New Companion should add a session")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(companion)","args":{"name":"logs"}}"#)["ok"] as? Bool, true)
+        _ = try sendCommand(#"{"cmd":"session.status","target":"\#(companion)","args":{"status":"blocked"}}"#)
+        _ = try sendCommand(#"{"cmd":"session.select","target":"\#(parent)"}"#)
+
+        let recent = app.buttons["recent-sessions-button"]
+        XCTAssertTrue(pollEnabled(recent, true, timeout: 8))
+        let jumpRow = openPopoverJumpRow(button: recent, timeout: 10)
+        XCTAssertTrue(jumpRow.label.contains("api › logs"), "clock popover row: \(jumpRow.label)")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+        let bell = app.buttons["attention-button"]
+        let attentionRow = app.buttons["attention-session-row"]
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline, !attentionRow.exists {
+            bell.click()
+            _ = attentionRow.waitForExistence(timeout: 1)
+        }
+        XCTAssertTrue(attentionRow.label.contains("api › logs"), "bell popover row: \(attentionRow.label)")
+    }
+
+    private func pollSecondSessionID(timeout: TimeInterval) -> String? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let tree = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any]
+            let ws = ((tree?["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])?.first
+            if let sessions = ws?["sessions"] as? [[String: Any]], sessions.count == 2 {
+                return sessions[1]["id"] as? String
+            }
+            usleep(200_000)
+        }
+        return nil
+    }
+
     /// (Re)opens the recent-sessions popover until its jump row appears, returning it (or a non-existent
     /// element on timeout). The transient popover can dismiss before the first snapshot, so retry the open;
     /// a click is only issued while no row is showing, so it never toggles an already-open popover shut.

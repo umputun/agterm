@@ -14,6 +14,7 @@ public enum ControlEventKind: String, Codable, CaseIterable, Sendable, Equatable
     case remoteOpened = "remote.opened"
     case remoteClosed = "remote.closed"
     case appLaunched = "app.launched"
+    case message
 }
 
 /// Kind-specific event data. Optional fields keep the encoded payload compact while preserving one
@@ -39,11 +40,21 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
     /// The `pane.focused` pane's surface token, the value `tree` reports as `surfaces[].paneID`; nil while
     /// that pane's surface does not exist yet.
     public var paneID: String?
+    /// The `session.created` companion's parent id; nil for a top-level session.
+    public var parent: String?
+    /// The `message` event's sender address, nil for a sender outside agterm.
+    public var from: String?
+    /// The `message` event's message id; the body is never carried.
+    public var messageID: String?
 
     public init(name: String? = nil, status: String? = nil, pane: String? = nil,
                 blink: Bool? = nil, color: String? = nil, shape: String? = nil,
                 previous: String? = nil, title: String? = nil, body: String? = nil,
-                host: String? = nil, paneID: String? = nil) {
+                host: String? = nil, paneID: String? = nil, parent: String? = nil,
+                from: String? = nil, messageID: String? = nil) {
+        self.parent = parent
+        self.from = from
+        self.messageID = messageID
         self.name = name
         self.status = status
         self.pane = pane

@@ -95,6 +95,41 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid sidebar mode"), "should report invalid mode: \(bad)")
     }
 
+    func testSessionFlagMoveReordersTheFlaggedListAndReadsBack() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        let tree = try XCTUnwrap(try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any])
+        let ws = try XCTUnwrap(((tree["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])?.first)
+        var ids = [try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String)]
+        for _ in 0..<2 {
+            ids.append(try XCTUnwrap((try sendCommand(#"{"cmd":"session.new"}"#)["result"] as? [String: Any])?["id"] as? String))
+        }
+        for (id, name) in zip(ids, ["alpha", "beta", "gamma"]) {
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(id)","args":{"name":"\#(name)"}}"#)["ok"] as? Bool, true)
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.flag","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        }
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar.mode","args":{"mode":"flagged"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollSessionRowCount(3, timeout: 10), "all three flagged rows should be present")
+
+        let moved = try sendCommand(#"{"cmd":"session.flag","target":"\#(ids[2])","args":{"mode":"move","before":"\#(ids[0])"}}"#)
+
+        XCTAssertEqual(moved["ok"] as? Bool, true, "session.flag move should succeed: \(moved)")
+        let readBack = try XCTUnwrap(try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any])
+        XCTAssertEqual((readBack["tree"] as? [String: Any])?["flaggedOrder"] as? [String], [ids[2], ids[0], ids[1]])
+        XCTAssertTrue(pollRowOrder(["gamma", "alpha", "beta"], timeout: 10), "the flat rows should follow the moved order")
+    }
+
+    private func pollRowOrder(_ names: [String], timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let rows = app.staticTexts.matching(identifier: "session-row").allElementsBoundByIndex
+                .sorted { $0.frame.minY < $1.frame.minY }
+                .map { ($0.value as? String) ?? "" }
+            if rows.count == names.count, zip(rows, names).allSatisfy({ $0.hasPrefix($1) }) { return true }
+            usleep(200_000)
+        }
+        return false
+    }
+
     func testWorkspaceFlagFlagsEverySessionAndReadsBackPerSession() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.new"}"#)["ok"] as? Bool, true)
@@ -157,6 +192,32 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         let bad = try sendCommand(#"{"cmd":"sidebar.flagged-layout","args":{"mode":"grid"}}"#)
         XCTAssertEqual(bad["ok"] as? Bool, false, "an invalid layout should error: \(bad)")
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid flagged layout"), "should report the invalid layout: \(bad)")
+    }
+
+    func testSidebarDensityCommandResizesTheRenderedRowsAndReadsBack() throws {
+        let row = app.outlines.firstMatch.outlineRows.firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "a sidebar row")
+        let standardHeight = row.frame.height
+        XCTAssertEqual(try treeField("sidebarDensity"), "default", "the default density reads back")
+
+        let compact = try sendCommand(#"{"cmd":"sidebar.density","args":{"mode":"compact"}}"#)
+        XCTAssertEqual(compact["ok"] as? Bool, true, "sidebar.density compact should succeed: \(compact)")
+        XCTAssertEqual((compact["result"] as? [String: Any])?["text"] as? String, "compact", "the command echoes the density")
+        XCTAssertTrue(poll(until: row.frame.height < standardHeight, timeout: 10), "compact rows render shorter")
+        XCTAssertEqual(try treeField("sidebarDensity"), "compact")
+
+        let toggled = try sendCommand(#"{"cmd":"sidebar.density"}"#)
+        XCTAssertEqual((toggled["result"] as? [String: Any])?["text"] as? String, "default", "a bare command toggles")
+        XCTAssertTrue(poll(until: row.frame.height == standardHeight, timeout: 10), "default rows return to their height")
+
+        let bad = try sendCommand(#"{"cmd":"sidebar.density","args":{"mode":"dense"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an invalid density should error: \(bad)")
+        XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid sidebar density"), "should report the invalid density: \(bad)")
+    }
+
+    private func treeField(_ key: String) throws -> String? {
+        let tree = try XCTUnwrap((try sendCommand(#"{"cmd":"tree"}"#)["result"] as? [String: Any])?["tree"] as? [String: Any])
+        return tree[key] as? String
     }
 
     // orthogonal to the flagged view: the flat list ignores the marked set entirely.
@@ -663,7 +724,7 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
 
         let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","shape":"hexagon"}}"#)
         XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown shape should fail: \(bad)")
-        XCTAssertEqual(bad["error"] as? String, "invalid shape: hexagon (circle|square|triangle|diamond|capsule|star)",
+        XCTAssertEqual(bad["error"] as? String, "invalid shape: hexagon (circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell)",
                        "should report the accepted shapes: \(bad)")
         node = try sessionNode(id: seeded)
         XCTAssertEqual(node["status"] as? String, "blocked", "an invalid shape must leave the status unchanged")

@@ -52,7 +52,11 @@ final class GhosttyCallbacks: @unchecked Sendable {
                 return true
             }
             // a static `title` in the user's config stands in for every title a program sets
-            DispatchQueue.main.async { view.applyTitle(GhosttyApp.shared.staticTitle ?? title) }
+            guard view.titleAdmission.withLock({ $0.admit(title) }) else { return true }
+            DispatchQueue.main.async {
+                view.titleAdmission.withLock { $0.complete() }
+                view.applyTitle(GhosttyApp.shared.staticTitle ?? title)
+            }
             return true
         case GHOSTTY_ACTION_CELL_SIZE:
             // the cell pixel size changed (cmd +/- font size, or DPI): a trigger only — the view reads the
@@ -136,8 +140,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let openURL = action.action.open_url
             guard let view = surfaceView(from: target), let ptr = openURL.url else { return true }
             let link = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
-            let wantsBrowser = view.releaseWantsBrowser.withLock { $0 }
-            DispatchQueue.main.async { view.openLink(link, wantsBrowser: wantsBrowser) }
+            let intent = view.releaseIntent.withLock { $0 }
+            DispatchQueue.main.async { view.openLink(link, intent: intent) }
             return true
         case GHOSTTY_ACTION_COLOR_CHANGE:
             // a dynamic color set or RESET via OSC 10/11/12 (fg/bg/cursor) or their 110/111/112 resets,

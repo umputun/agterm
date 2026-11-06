@@ -23,6 +23,39 @@ extension WindowLibrary {
             .sorted { AppStore.attentionPrecedes($0.session, $1.session) }
     }
 
+    /// The next/previous attention target across every open window, for GUI navigation under
+    /// `AppStore.attentionNavigationAcrossWindows`. Walks windows in library order and each window's
+    /// `navigableSessions` in sidebar order, so every window keeps its own filter and stop rule. Scans
+    /// from `source`'s selection, wrapping and excluding it; with no selection it enters at the first
+    /// (forward) or last (backward) candidate. `eligible` skips a window under a modal cover without
+    /// stopping the scan; `source` always counts, since the caller gates it. Nil when nothing else stops.
+    public func attentionStep(from source: UUID, forward: Bool,
+                              eligible: (UUID) -> Bool) -> (windowID: UUID, sessionID: UUID)? {
+        let candidates = windows.flatMap { info -> [(window: UUID, store: AppStore, session: Session)] in
+            guard let store = stores[info.id], info.id == source || eligible(info.id) else { return [] }
+            return store.navigableSessions.map { (info.id, store, $0) }
+        }
+        let count = candidates.count
+        guard count > 0 else { return nil }
+        let selected = stores[source]?.selectedSessionID
+        let current = candidates.firstIndex { $0.window == source && $0.session.id == selected }
+        let step = forward ? 1 : -1
+        let start = current ?? (forward ? -1 : count)
+        for k in 1...count {
+            let idx = ((start + step * k) % count + count) % count
+            if let current, idx == current { break }
+            let candidate = candidates[idx]
+            if candidate.store.stopsAttentionNavigation(candidate.session) {
+                return (candidate.window, candidate.session.id)
+            }
+        }
+        return nil
+    }
+
+    public func attentionLabel(_ entry: AttentionEntry) -> String {
+        stores[entry.window.id]?.listLabel(for: entry.session) ?? entry.session.displayName
+    }
+
     /// The row subtitle every attention surface shares: "`workspace` · detail" as the per-window lists
     /// read, led by the window name once more than one window is open, since only then does a row need
     /// to say where it lives.

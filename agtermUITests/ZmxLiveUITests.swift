@@ -43,6 +43,67 @@ final class ZmxLiveUITests: ControlAPITestCase {
                        "the create-only payload must run exactly once")
     }
 
+    func testACommandSessionClosesWhenItsCommandExitsAndHoldsWithWait() throws {
+        _ = try activeSessionID()
+        let closing = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": "sleep 1"],
+        ]), as: UTF8.self))
+        let closingID = try XCTUnwrap((closing["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: (try? self.sessionNodeIfPresent(id: closingID)) == nil, timeout: 20),
+                      "a Live --command session should close when its command exits, as it does outside Live")
+
+        let holding = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": "echo held-output; sleep 1", "wait": true],
+        ]), as: UTF8.self))
+        let holdingID = try XCTUnwrap((holding["result"] as? [String: Any])?["id"] as? String)
+        let held = try heldText(holdingID)
+        XCTAssertTrue(held.contains("held-output"), "--wait should hold the exited command's output, got: \(held)")
+        XCTAssertNotNil(try sessionNodeIfPresent(id: holdingID))
+    }
+
+    func testAWaitCommandKeepsScrollbackPastOneScreenAfterExit() throws {
+        _ = try activeSessionID()
+        let command = "echo first-held-line; seq 1 300; printf '\\033[?1000h\\033[?1006h\\033[?2004h'; echo last-held-line"
+        let created = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": command, "wait": true],
+        ]), as: UTF8.self))
+        let sessionID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        let held = try heldText(sessionID)
+        XCTAssertTrue(held.contains("first-held-line"), "scrollback above the screen should survive exit, got: \(held)")
+        XCTAssertTrue(held.contains("last-held-line"), "the final screen should survive exit, got: \(held)")
+    }
+
+    func testAWaitCommandKeepsScrollbackOnceThePaneIsAttached() throws {
+        _ = try activeSessionID()
+        let release = stateDir.appendingPathComponent("release-scrollback")
+        let command = "echo pane-attached-marker; while [ ! -e '\(release.path)' ]; do sleep 0.05; done; "
+            + "echo first-held-line; seq 1 300; printf '\\033[?1000h\\033[?1006h\\033[?2004h'; echo last-held-line"
+        let created = try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: [
+            "cmd": "session.new", "args": ["command": command, "wait": true],
+        ]), as: UTF8.self))
+        let sessionID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: self.paneText(sessionID).contains("pane-attached-marker"), timeout: 20))
+        XCTAssertTrue(FileManager.default.createFile(atPath: release.path, contents: Data()))
+        let held = try heldText(sessionID)
+        XCTAssertTrue(held.contains("first-held-line"), "scrollback above the screen should survive exit, got: \(held)")
+        XCTAssertTrue(held.contains("last-held-line"), "the final screen should survive exit, got: \(held)")
+    }
+
+    func testALiveParentWhoseShellExitsRespawnsAndTakesInput() throws {
+        let parent = try activeSessionID()
+        let created = try sendCommand(#"{"cmd":"session.companion.new","target":"\#(parent)","args":{"noSelect":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "\(created)")
+        let marker = stateDir.appendingPathComponent("live-respawn.marker")
+
+        XCTAssertEqual(try sendCommand(typeRequest(text: "exit\n", target: parent, select: false))["ok"] as? Bool, true)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+
+        XCTAssertNotNil(try sessionNodeIfPresent(id: parent), "a Live parent with companions survives its shell's exit")
+        XCTAssertEqual(try typeUntilMarker("echo alive > '\(marker.path)'\n", target: parent, file: marker, select: false), "alive")
+        XCTAssertTrue(poll(until: self.isBacked(parent, expectedPanes: ["left"]), timeout: 20),
+                      "the respawned Live pane is daemon-backed again")
+    }
+
     func testRestartReplacesTheShellEndsItsProgramAndKeepsThePane() throws {
         let sessionID = try activeSessionID()
         XCTAssertTrue(poll(until: self.isBacked(sessionID, expectedPanes: ["left"]), timeout: 20))
@@ -123,6 +184,22 @@ final class ZmxLiveUITests: ControlAPITestCase {
         let receipt = try XCTUnwrap(result["restart"] as? [String: Any])
         XCTAssertEqual(receipt["paneID"] as? String, paneID)
         return (try XCTUnwrap(receipt["oldPid"] as? Int), try XCTUnwrap(receipt["newPid"] as? Int))
+    }
+
+    private func paneText(_ sessionID: String) -> String {
+        let response = try? sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"pane":"left"}}"#)
+        return ((response?["result"] as? [String: Any])?["text"] as? String) ?? ""
+    }
+
+    private func heldText(_ sessionID: String) throws -> String {
+        var text = ""
+        let exited = poll(until: {
+            let response = try? self.sendCommand(#"{"cmd":"session.text","target":"\#(sessionID)","args":{"all":true}}"#)
+            text = ((response?["result"] as? [String: Any])?["text"] as? String) ?? ""
+            return text.contains("Process exited")
+        }(), timeout: 20)
+        XCTAssertTrue(exited, "the --wait pane should reach the exit prompt, got: \(text)")
+        return text
     }
 
     private func paneID(_ sessionID: String, kind: String) -> String? {

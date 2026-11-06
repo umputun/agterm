@@ -37,7 +37,7 @@ Apply the file with File ▸ Reload Keymap or `agtermctl keymap reload`. Any fre
 
 Nothing else needs configuring, because the recipe has no list to maintain: flagging is the configuration. ⌘⇧F flags and unflags the selected session out of the box, and View ▸ Flag Session does the same from the menu.
 
-Fired from a chord or the palette, the script runs under the app's `PATH` rather than your shell's. That is the launchd default: `/usr/local/bin` plus the system directories, with no `/opt/homebrew/bin` and nothing else your profile adds. `agtermctl` normally resolves there, because **Help ▸ Install Command Line Tool…** symlinks it into `/usr/local/bin`. `jq` resolves only if it is a system one; recent macOS ships `/usr/bin/jq`, but a Homebrew `jq` is out of reach and needs its absolute path written into the script. Set `AGTERMCTL` to the binary's full path if yours sits somewhere unusual.
+Fired from a chord or the palette, the script does not load your shell profile. From agterm 0.22.0 the app prepends its bundled CLI directory and adds `/usr/local/bin` and `/opt/homebrew/bin` to `PATH`, so `agtermctl` and a Homebrew `jq` both resolve. Before 0.22.0 the script gets only the app's own `PATH`, often just the system directories; on those versions write `jq`'s absolute path into the script and set `AGTERMCTL` to the binary's full path. Set `AGTERMCTL` the same way on any version if yours sits somewhere unusual.
 
 ## Usage
 

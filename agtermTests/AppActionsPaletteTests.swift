@@ -74,6 +74,90 @@ final class AppActionsPaletteTests: XCTestCase {
         XCTAssertTrue(moveDestinationIDs().isEmpty, "there is no session to move")
     }
 
+    func testMoveRowsMoveTheSessionSelectedWhenTheyRun() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(first.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.selectSession(second.id)
+        XCTAssertTrue(move.isEnabled())
+        move.run()
+
+        XCTAssertEqual(store.workspace(forSession: first.id)?.id, owner)
+        XCTAssertEqual(store.workspace(forSession: second.id)?.id, target.id)
+    }
+
+    func testAMoveRowGoesInertWhenTheSessionSelectedUnderItAlreadyLivesInItsTarget() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        let resident = try XCTUnwrap(store.addSession(toWorkspace: target.id, cwd: NSHomeDirectory()))
+        store.selectSession(first.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.selectSession(resident.id)
+        XCTAssertFalse(move.isEnabled())
+        store.selectSession(nil)
+        XCTAssertFalse(move.isEnabled())
+        move.run()
+
+        XCTAssertEqual(store.workspace(forSession: first.id)?.id, owner)
+        XCTAssertEqual(store.workspace(forSession: resident.id)?.id, target.id)
+    }
+
+    func testMoveRowsAreListedButInertForACompanion() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let child = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "child")).get()
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(child.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        XCTAssertFalse(move.isEnabled())
+        XCTAssertFalse(move.runIfEnabled())
+        XCTAssertEqual(store.workspace(forSession: child.id)?.id, owner)
+    }
+
+    func testAMoveRowGoesInertWhenItsTargetIsRemovedUnderIt() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let target = store.addWorkspace(name: "target")
+        store.selectSession(session.id)
+        let move = try XCTUnwrap(actions.paletteActions().first { $0.id == "move-\(target.id)" })
+
+        store.removeWorkspace(target.id)
+
+        XCTAssertFalse(move.isEnabled())
+        XCTAssertFalse(move.runIfEnabled())
+    }
+
+    // the palette's rows outlive a selection change made while it is open, so the target is read at run.
+    func testTintRowsTintTheSessionSelectedWhenTheyRun() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let first = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(first.id)
+        let red = try XCTUnwrap(actions.paletteActions().first { $0.title == "Tint Session: Red" })
+
+        store.selectSession(second.id)
+        XCTAssertTrue(red.isEnabled())
+        red.run()
+
+        XCTAssertNil(first.tint)
+        XCTAssertEqual(second.tint, SidebarTint(color: .red))
+        let none = try XCTUnwrap(actions.paletteActions().first { $0.title == "Tint Session: None" })
+        none.run()
+        XCTAssertNil(second.tint)
+    }
+
     private func actionRow(_ command: PaletteCommand) throws -> PaletteItem {
         let title = command.title(in: actions.paletteContext)
         return try XCTUnwrap(actions.paletteActions().first { $0.title == title })
@@ -267,6 +351,51 @@ final class AppActionsPaletteTests: XCTestCase {
             wait(for: [opened], timeout: 1)
             XCTAssertEqual(palette.mode, mode)
         }
+    }
+
+    func testSessionRowsGroupCompanionsUnderIdenticallyNamedParents() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        for session in workspace.sessions { store.renameSession(session.id, to: "zeta") }
+        let first = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "api"))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "api"))
+        _ = try store.addCompanion(to: first.id, options: CompanionOptions(name: "zz")).get()
+        _ = try store.addCompanion(to: second.id, options: CompanionOptions(name: "aa")).get()
+
+        let titles = actions.paletteSessions().map(\.title)
+
+        XCTAssertEqual(titles.prefix(4), ["api", "api › zz", "api", "api › aa"])
+        XCTAssertEqual(actions.paletteFlaggedEditor().map(\.title).suffix(4), ["api", "api › zz", "api", "api › aa"])
+    }
+
+    // a flagged child dragged ahead of its parent split the group in the empty session palette
+    func testAFlaggedChildAheadOfItsParentStillListsUnderItInTheSessionPalette() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        for session in workspace.sessions { store.renameSession(session.id, to: "zeta") }
+        let first = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "api"))
+        let second = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "api"))
+        let firstChild = try store.addCompanion(to: first.id, options: CompanionOptions(name: "a")).get()
+        let secondChild = try store.addCompanion(to: second.id, options: CompanionOptions(name: "b")).get()
+        store.setFlag(true, forSessions: [first.id, firstChild.id, second.id, secondChild.id])
+        XCTAssertTrue(store.moveFlagged([firstChild.id], to: .before, of: first.id))
+        store.setSidebarMode(.flagged)
+
+        let rows = CommandPalette.ranked(actions.paletteSessions(), query: "",
+                                         keepsSourceOrder: PaletteMode.sessions.keepsSourceOrder, callerSupplied: false)
+
+        XCTAssertEqual(rows.map(\.id), [first, firstChild, second, secondChild].map(\.id.uuidString))
+        XCTAssertEqual(CommandPalette.ranked(rows.reversed(), query: "", keepsSourceOrder: false, callerSupplied: false).map(\.title),
+                       ["api", "api", "api › a", "api › b"])
+    }
+
+    func testAnAttentionCompanionRowNamesItsParent() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp", name: "api"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(name: "logs")).get()
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: companion.id)
+
+        XCTAssertEqual(actions.paletteAttention().first { $0.id == companion.id.uuidString }?.title, "api › logs")
     }
 
     func testAttentionRowsNameTheirWindowAndFollowItsCover() throws {

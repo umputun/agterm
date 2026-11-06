@@ -48,6 +48,32 @@ struct AppStorePendingCloseTests {
         }
     }
 
+    @Test(arguments: ["session", "batch", "workspace"])
+    func softCloseDropsATimedInfoLineAndUndoKeepsAnUntimedOne(path: String) throws {
+        let store = store()
+        let timed = addSession(store, name: "timed")
+        let untimed = addSession(store, name: "untimed")
+        let workspaceID = store.workspaces[0].id
+        store.workspaces.append(Workspace(name: "staying", sessions: []))
+        store.setInfo(try SessionInfo.make(source: "brief", markdown: false, hideAfter: 30).get(), forSession: timed.id)
+        store.setInfo(try SessionInfo.make(source: "kept", markdown: false, hideAfter: 0).get(), forSession: untimed.id)
+        defer { store.finalizeAllPendingCloses() }
+
+        switch path {
+        case "session":
+            #expect(store.softCloseSession(timed.id, grace: 60))
+            #expect(store.softCloseSession(untimed.id, grace: 60))
+        case "batch": #expect(store.softCloseSessions([timed.id, untimed.id], grace: 60))
+        default: #expect(store.softRemoveWorkspace(workspaceID, grace: 60))
+        }
+        #expect(timed.info == nil)
+        #expect(untimed.info?.source == "kept")
+
+        while store.undoPendingClose() {}
+        #expect(store.session(withID: timed.id)?.info == nil)
+        #expect(store.session(withID: untimed.id)?.info?.source == "kept")
+    }
+
     private final class DropLog {
         var identities: [UUID] = []
     }
@@ -95,6 +121,25 @@ struct AppStorePendingCloseTests {
 
         #expect(store.softCloseSessions([first.id, second.id]))
         #expect(Set(store.pendingCloseMembers().map(\.session.id)) == [first.id, second.id])
+    }
+
+    @Test func batchCloseStampsTheActiveSessionLeftWhenUndoSelectsABatchMate() throws {
+        let store = store()
+        let first = addSession(store, name: "one")
+        let second = addSession(store, name: "two")
+        _ = addSession(store, name: "three")
+        store.selectedSessionID = first.id
+        first.lastSelectedAt = Date(timeIntervalSince1970: 1)
+        defer { store.finalizeAllPendingCloses() }
+
+        let before = Date()
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        let after = Date()
+        #expect(store.undoPendingClose(selecting: second.id))
+
+        #expect(store.selectedSessionID == second.id)
+        let stamp = try #require(first.lastSelectedAt)
+        #expect((before...after).contains(stamp))
     }
 
     @Test func finalizingOnePendingSessionKeepsItsBatchMatesAndOtherRecordsUndoable() {

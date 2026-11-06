@@ -7,18 +7,20 @@ struct Workspace: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Workspace commands.",
         subcommands: [New.self, Rename.self, Delete.self, Select.self, Go.self, Move.self, Focus.self, Filter.self,
-                      FlagCommand.self, Collapse.self, Expand.self]
+                      FlagCommand.self, Collapse.self, Expand.self, Tint.self]
     )
 
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create a workspace.")
         @Argument(help: "Workspace name (defaults to the auto-generated name).") var name: String?
         @Flag(name: .long, help: "Create the workspace collapsed in the sidebar.") var collapsed = false
+        @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceNew, args: options.withWindow(ControlArgs(name: name, collapsed: collapsed ? true : nil)))
+            ControlRequest(cmd: .workspaceNew, args: options.withWindow(tint.apply(to:
+                ControlArgs(name: name, collapsed: collapsed ? true : nil))))
         }
     }
 

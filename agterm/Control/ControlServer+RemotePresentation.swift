@@ -70,6 +70,7 @@ extension ControlServer {
             context: { [weak self] context in
                 self?.library.store(forSession: id)?.applyRemoteContext(context, forSession: id)
             },
+            info: { [weak self] info in self?.library.store(forSession: id)?.applyRemoteInfo(info, forSession: id) },
             mode: { [weak self] mode in self?.library.store(forSession: id)?.setRemoteMode(mode, forSession: id) },
             askRequest: { [weak self] ask in self?.showReplicaAsk(ask, forSession: id) ?? false },
             askDismiss: { [weak self] ref in self?.library.store(forSession: id)?.dismissReplicaAsk(ref, forSession: id) },
@@ -91,6 +92,7 @@ extension ControlServer {
             },
             pageClose: { [weak self] change in self?.library.store(forSession: id)?.closeReplicaPage(change.page, forSession: id) },
             pageCommand: { [weak self] command in self?.applyReplicaPageCommand(command, forSession: id) },
+            respawns: { [weak self] respawns, seed in self?.applyRemoteRespawns(respawns, seed: seed, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })
@@ -136,7 +138,9 @@ extension ControlServer {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard let self, !Task.isCancelled else { return }
-                guard !self.remoteClients.isEmpty || !RemoteReconnectBook.shared.isEmpty else {
+                // respawn entries keep it alive so the last row's own prune still runs after that row is gone
+                guard !self.remoteClients.isEmpty || !RemoteReconnectBook.shared.isEmpty
+                        || !RemoteRespawnBook.shared.entries.isEmpty else {
                     self.remoteTick = nil
                     return
                 }

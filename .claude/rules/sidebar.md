@@ -2,6 +2,7 @@
 paths:
   - "agterm/Views/WorkspaceSidebar*.swift"
   - "agterm/Views/SidebarRowViews.swift"
+  - "agterm/Views/SidebarOutlineView.swift"
   - "agterm/Views/SidebarRenameController.swift"
   - "agtermCore/Sources/agtermCore/SidebarDrop.swift"
   - "agtermCore/Sources/agtermCore/SidebarMode.swift"
@@ -17,12 +18,26 @@ paths:
 - `WorkspaceSidebar` is an AppKit `NSOutlineView`, chosen over SwiftUI `List` for native
   cross-workspace drag-and-drop. Its `@MainActor` Coordinator caches reference-type `SidebarNode`s so
   reloads retain identity, expansion, and selection.
+- `SidebarDensity` ([[settings]]) sets row padding, indent, info-line spacing, the name's lift and the selection
+  inset. Rows sit edge to edge, so the padding is the only gap between items and the selection pill shrinks with
+  the row. A density change re-applies `rowHeight` and `indentationPerLevel` and rebuilds; cells are reused, so
+  `viewFor` resets `titleCenter` and `SidebarInfoCellView.apply` resets `infoTop` on every configure.
+  `SidebarDensityTests` switches a mounted outline both ways.
 - macOS 27 reserves a wider leading strip than the disclosure triangle occupies, stranding the row icon
   mid-gap. `SidebarOutlineView.frameOfCell` trims the surplus, gated on that version; its doc comment owns
-  the reasoning. Leave `frameOfOutlineCell` alone: the triangle keeps its place and `handleSingleClick`
-  reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27 and up, the
-  indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only below the
-  gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
+  the reasoning. While the strip is reserved, `frameOfOutlineCell` is native: the triangle keeps its place and
+  `handleSingleClick` reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27
+  and up, the indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only
+  below the gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
+- `reservesDisclosureColumn` drops that strip on every version while `InterfaceElement.workspaceChevrons` is
+  hidden and in the flat and plain flagged lists, which never draw a level-0 triangle. Level-0 triangles then get
+  an empty frame and a companion parent's ends at its content; never hide one through
+  `shouldShowOutlineCellForItem`, which makes AppKit refuse to collapse that item. A dropped strip also narrows
+  the scroll view's left inset from 8 to 6, keyed on the flag, never the setting. Every workspace row menu offers Collapse/Expand Workspace through the
+  row click's `toggleExpansion`, so a hidden chevron with row click off still leaves a mouse fold.
+- macOS 27 hides `NSMenuItem` images under the default `preferredImageVisibility` (`.automatic`), which is
+  how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`, by key
+  (`setValue(1, forKey: "preferredImageVisibility")`) while CI builds with the macOS 26 SDK, which lacks the property.
 
 ## Drag and row actions
 
@@ -76,27 +91,36 @@ paths:
 - Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank
   workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
   untouched rather than clearing it. No control form — see `control-api.md`.
-- Rename, Copy Name, Duplicate Session, and Reveal in Finder appear only for one target. Duplicate inserts a fresh
+- Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, and Reveal in Finder appear only
+  for one target. Duplicate as Companion is omitted on a page row. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
+- Each store keeps `flaggedOrder`, the saved order the flat and plain layouts render through
+  `orderedFlaggedSessions`; the flagged tree keeps tree order. `AppStore+FlaggedOrder.swift` owns order maintenance.
 - Flagged mode has three layouts, chosen by the app-wide `FlaggedViewLayout` setting ([[settings]]), not per window.
   `flat` is one non-expandable outline labeled `session : workspace`.
   `plain` is the same outline labeled by session name alone, so every `== .flat` test is about the suffix
   and every `== .tree` test about workspace rows.
   `tree` renders workspace rows holding only their flagged sessions, omits workspaces with none, and drops the suffix.
-  All use base terminal/split icons, status, and badge, ignore workspace focus, disable drag reorder, and show
+  All use base terminal/split icons, status, and badge, ignore workspace focus, and show
   the tinted non-scrolling hint `No flagged sessions.` with an `Add Sessions…` link when empty.
+- Session rows drag in every flagged layout; workspace rows drag only in the ordinary tree. A flat or plain
+  drop is a `moveFlagged` resolved by `SidebarDrop.resolveFlaggedReorder`, and a gap arrives with no item.
+  A flagged-tree drop maps its visible slot through `flaggedTreeChildIndex` into the ordinary `moveSessions`
+  path and is refused when `FlaggedTree.changesView` sees no visible change. A drop ON a session row there
+  keeps that row as the drop item, since `acceptDrop` reads back what `validateDrop` set.
 - `SidebarScrollView.layout()` owns placement of the non-scrolling empty-state stack.
   The link calls `perform(.editFlaggedSessions, in:)`, asking `isEnabled(in:)` at the click, and declines first
   mouse so a background-window click only activates the window.
 - The layout is orthogonal to `SidebarMode`, never a third case: every `sidebarMode == .flagged` check in
   `agtermCore` means "the flagged set is what is visible", which holds in every layout.
-  `AppStore.rendersWorkspaceRows(flaggedLayout:)` is the one predicate for "the outline has workspace rows",
-  taking the layout as a parameter because the store does not hold app-wide state.
+  `AppStore.rendersWorkspaceRows(flaggedLayout:)` is the one predicate for "the outline has workspace rows".
+  Rendering reads `GhosttyApp.flaggedViewLayout`; navigation reads each store's `flaggedLayout` mirror, which
+  `WindowLibrary` seeds before restore. `SettingsModel.applyFlaggedViewLayout` is the only setter of both.
 - `Coordinator.workspaceProjection` yields the workspace rows for the ordinary tree AND the flagged tree, so
   `rebuildAndReload` keeps one expansion-restore path. Never add a parallel flagged-tree build.
 - A flagged-tree header badge sums only its flagged children (`displayedUnseen(for:)`), in both the cell
@@ -123,6 +147,27 @@ paths:
   The split axis is not distinguished — no cloud symbol carries both arrangements. The title bar draws
   the same `cloud` beside the host, gated by `InterfaceElement.remoteHost`.
   See [[control-api]].
+- `InterfaceElement.workspaceIcons`/`.sessionIcons` hide a row kind's leading icon: `setIconVisible` zeroes its
+  width and gap so the name takes the slot, on every cell configuration and, through `reapplyRowIconVisibility`,
+  on `.agtermAppearanceChanged`. Everything the icon encodes goes with it; only the remote notice moves, into the
+  name's tooltip, because it is the one fact with nowhere else to show.
+- A row's tint (`Session.tint`, `Workspace.tint`) colors its icon and/or name through `SidebarCellView.setColors`,
+  selected rows included, so every retint keeps it; `RowContent.tint` reloads that row alone. The Tint submenu
+  checks an entry only when every target shares it and disables Show On unless every target is tinted.
+  An untinted row counts as the last Show On pick (`Coordinator.tintPlacement`, app-wide, never persisted), which a
+  menu color pick starts it on; the palette and `session.tint` keep starting on the icon.
+- A session with an info line (`session.info`, [[control-api]]) uses the `session-info-cell` identifier and a
+  taller row from `SidebarInfoMetrics`: the plain row, plus one line set 1.5 points smaller with a 9-point
+  minimum, lifted 6 points into the plain row's bottom padding. The title row centers in a band of plain
+  row height, so the name sits where a plain row puts it. `heightOfRowByItem` and the cell read the same `sessionInfo(forSession:)` gate.
+  `RowContent.info` reloads the row and calls `noteHeightOfRows`, which a reload alone does not do.
+- `SidebarInfoCellView` rebuilds its colors on every `setColors`. A colored fragment keeps its `TintColor`
+  on a selected row, as a row tint does, and uncolored text follows the selection foreground. Color emoji
+  are drawn at 0.7 of the line's size, centered on cap height, because a full-size glyph reads oversized
+  and low. A text-default symbol counts as emoji only with VS16, and VS15 always keeps text form.
+- `AppSettings.sessionInfoDisplay` (`always`|`flagged`|`off`, nil = always) decides where the line shows,
+  mirrored to `GhosttyApp.sessionInfoDisplay`. `flagged` shows it in the flagged view only. Hiding never
+  clears the line. The picker shares the Settings ▸ Interface Sidebar section's last row.
 
 ## Workspace focus
 
@@ -201,7 +246,7 @@ paths:
 - `TreeShape` reflects the `workspaceProjection` rows wherever workspace rows render, and one stable
   `flaggedShapeID` group under the flat flagged list. Mode and effective-layout changes always rebuild; the
   effective layout is nil under the ordinary tree, so a setting change there rebuilds nothing.
-  Observation must read mode, both focus fields, and every session flag: membership redraws icons; enabled
+  Observation must read mode, both focus fields, `flaggedOrder`, and every session flag: membership redraws icons; enabled
   state reshapes the tree. The layout is not observable and arrives on `.agtermAppearanceChanged`.
 - `rebuildAndReload` records what it rendered (`lastMode`, `lastFlaggedLayout`, `lastShape`, the row-content
   snapshot) itself, not `reconcile`: the mount builds directly, and an unrecorded first build makes the next
@@ -222,6 +267,22 @@ paths:
   Both no-op under the flat flagged list. In either tree layout they apply to all workspaces, including
   those the view omits. Menus/palette target frontmost; `sidebar.expand`/`sidebar.collapse` resolve
   `--window` and can target background windows.
+
+## Companions
+
+- In the ordinary tree a companion row nests under its parent's row (`sessionNodes(for:)`); every flagged layout
+  lists companions unindented. `TreeShape.parentIDs` carries the nesting, so a regroup rebuilds.
+- `expandedParentIDs` tracks open parents the way `expandedWorkspaceIDs` tracks workspaces: only a genuine
+  toggle persists, through `setSessionExpanded`. A selection reveal opens the workspace, then the parent, with
+  persistence suppressed. `applyParentExpansion(under:)` re-applies parents when their workspace opens.
+- A folded parent shows `companion-marker` for the companions `companionsNeedingAttention` returns, beside its
+  own glyph and badge, with their names as the accessibility label. `RowContent.foldedAttention` reloads it.
+- A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
+  slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
+- Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
+- `session.collapse`/`.expand` mirror the workspace pair: `AppActions.setSessionExpanded` persists, then posts
+  `.agtermSetSessionExpanded`, which updates `expandedParentIDs` even when no nested row is shown and drives a
+  visible row under suppression. It posts on an unchanged value too, since a reveal may have opened the row.
 
 ## Persistence
 

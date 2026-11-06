@@ -5,6 +5,36 @@ import Foundation
 // Mac-only commands refuse by name rather than answering an empty success, and compatibility overloads
 // delegate to the older form.
 public extension ControlActions {
+    func resolveMessagePane(_: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
+        .failure(.unsupported)
+    }
+
+    func messagePanes(workspace _: String?, window _: String?) -> Result<[MessageRecipient], MessagePaneError> {
+        .failure(.unsupported)
+    }
+
+    func messageQueued(_: UUID, from _: String?, to _: [MessageRecipient]) {}
+
+    func attachCompanionPage(_: String?, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page.attach"))
+    }
+
+    func duplicateAsCompanion(_: String?, window _: String?, select _: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.duplicate"))
+    }
+
+    func createPageCompanion(_: String?, window _: String?, options _: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page"))
+    }
+
+    func createCompanion(_: String?, options _: CompanionOptions, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.new"))
+    }
+
+    func setSessionExpansion(_: String?, window _: String?, expanded: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message(expanded ? "session.expand" : "session.collapse"))
+    }
+
     func reloadSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?, current _: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.reload"))
     }
@@ -21,6 +51,16 @@ public extension ControlActions {
     func setSessionOverlayVisibility(_: String?, window _: String?, pane _: OverlayPane?,
                                      mode: OverlayVisibilityMode) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.\(mode.rawValue)"))
+    }
+
+    func setSessionOverlayFollow(_: String?, window _: String?, pane _: OverlayPane?,
+                                 mode _: ControlToggleMode) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.follow"))
+    }
+
+    func searchSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?,
+                              request _: TextSearchRequest) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.search"))
     }
 
     // outcomes live in agtermCore, so every host answers the read the same way and owes no conformance
@@ -43,6 +83,15 @@ public extension ControlActions {
 
     func setFlaggedViewLayout(_: ControlFlaggedLayoutMode) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("sidebar.flagged-layout"))
+    }
+
+    func setSidebarDensity(_: ControlSidebarDensityMode) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("sidebar.density"))
+    }
+
+    func moveFlaggedSession(_: String?, window _: String?, anchor _: String,
+                            placement _: FlaggedOrderPlacement) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.flag move"))
     }
 
     func setWorkspaceFlag(_: String?, window _: String?, mode _: ControlToggleMode) -> ControlResponse {
@@ -131,6 +180,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach"))
     }
 
+    func attachRemoteGroup(host _: String, session _: String, window _: String?) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach.group"))
+    }
+
     func splitSession(_ target: String?, window: String?, mode: String?, axis _: SplitAxis?) -> ControlResponse {
         splitSession(target, window: window, mode: mode)
     }
@@ -184,6 +237,35 @@ public extension ControlActions {
 
     func setSessionContext(_: String?, window _: String?, context _: String?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.context"))
+    }
+
+    func setSessionInfo(_: String?, window _: String?, info _: SessionInfo?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.info"))
+    }
+
+    func setSessionTint(_: String?, window _: String?, update _: ControlTintUpdate) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.tint"))
+    }
+
+    func setWorkspaceTint(_: String?, window _: String?, update _: ControlTintUpdate) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.tint"))
+    }
+
+    /// A host that predates tints creates an untinted session through its own form and refuses a tint,
+    /// so the request never answers ok over a tint it dropped.
+    func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
+        guard tint == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.new --tint"))
+        }
+        return createSession(options)
+    }
+
+    /// The workspace twin of the session default above.
+    func createWorkspace(window: String?, name: String?, collapsed: Bool, tint: SidebarTint?) -> ControlResponse {
+        guard tint == nil else {
+            return ControlResponse(ok: false, error: ControlActionsUnsupported.message("workspace.new --tint"))
+        }
+        return createWorkspace(window: window, name: name, collapsed: collapsed)
     }
 
     func windowGo(direction _: WorkspaceNavigation) -> ControlResponse {

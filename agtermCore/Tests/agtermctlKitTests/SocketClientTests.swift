@@ -9,9 +9,6 @@ import Testing
 import agtermCore
 @testable import agtermctlKit
 
-// serialized: the stdout-capturing tests redirect the process-global STDOUT_FILENO, so in parallel
-// one test's output lands in the other's pipe.
-@Suite(.serialized)
 struct SocketClientTests {
     @Test func formatsCustomCommandErrorOptions() {
         let payload = ControlKeymap(path: "/tmp/keymap.conf", actions: [], commands: [
@@ -308,6 +305,8 @@ struct SocketClientTests {
             open_directory              cmd+o
             rename_session              -
             duplicate_session           -
+            new_companion               -
+            duplicate_companion         -
             close_session               cmd+w
             reopen_recent               cmd+shift+t
             undo_close                  cmd+z
@@ -388,9 +387,81 @@ struct SocketClientTests {
         try server.start()
         defer { server.stop() }
 
-        let command = try Session.New.parse(["--socket", server.path])
-        let printed = try captureStdout { try command.run() }
-        #expect(printed == Data("9f3c\n".utf8))
+        let run = try runCLI(["session", "new", "--socket", server.path])
+        #expect(run.status == 0)
+        #expect(run.out == Data("9f3c\n".utf8))
+    }
+
+    @Test func anAppTooOldForCompanionsIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.companion.new"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "new", "--parent", "p1", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(server.received?.cmd == .sessionCompanionNew)
+    }
+
+    @Test func anAppTooOldForCompanionsKeepsTheRawReplyUnderJSON() throws {
+        let response = ControlResponse(ok: false, error: "invalid request: Cannot initialize Command from invalid String value session.companion.new")
+        let server = StubServer(response: response)
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "new", "--parent", "p1", "--json", "--socket", server.path])
+
+        #expect(run.status == 1)
+        let decoded = try JSONDecoder().decode(ControlResponse.self, from: run.out)
+        #expect(decoded == response)
+    }
+
+    @Test func anAppTooOldForGroupAttachIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value zmx.attach.group"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["zmx", "attach", "buildbox", "s1", "--companions", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for group attach\n")
+        #expect(server.received?.cmd == .zmxAttachGroup)
+    }
+
+    @Test func aPartialGroupAttachNamesTheFailureAndTheUnknownMembershipThenFails() throws {
+        let group = ControlRemoteGroup(membershipKnown: false, companions: [ControlRemoteGroupMember(origin: "c1", error: "boom")])
+        let server = StubServer(response: ControlResponse(ok: false, result: ControlResult(id: "P", remoteGroup: group),
+                                                          error: "kept build (P) and 0 companion(s); not attached: logs (boom)"))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["zmx", "attach", "buildbox", "s1", "--companions", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self) == """
+        error: kept build (P) and 0 companion(s); not attached: logs (boom)
+        note: buildbox does not report group membership; unlisted companions cannot be detected
+
+        """)
+    }
+
+    @Test func aGroupAttachUnderJSONPrintsTheRawReplyAndNoNote() throws {
+        let line = " {\"ok\": true, \"result\": {\"id\": \"P\", \"remoteGroup\": {\"membershipKnown\": false, \"companions\": []}, "
+            + "\"futureField\": 1}} "
+        let server = StubServer(line: Data(line.utf8))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["zmx", "attach", "buildbox", "s1", "--companions", "--json", "--socket", server.path])
+
+        #expect(run.status == 0)
+        #expect(run.out == Data((line + "\n").utf8))
+        #expect(run.err.isEmpty)
     }
 
     @Test func runQuietsIdForNonCreateCommand() throws {
@@ -398,23 +469,30 @@ struct SocketClientTests {
         try server.start()
         defer { server.stop() }
 
-        let command = try Tree.parse(["--socket", server.path])
-        let printed = try captureStdout { try command.run() }
-        #expect(printed == Data("ok\n".utf8))
+        let run = try runCLI(["tree", "--socket", server.path])
+        #expect(run.status == 0)
+        #expect(run.out == Data("ok\n".utf8))
     }
 
-    /// Runs `body` with the process stdout redirected to a pipe, returning the bytes it printed.
-    private func captureStdout(_ body: () throws -> Void) throws -> Data {
-        let pipe = Pipe()
-        let saved = dup(STDOUT_FILENO)
-        defer { close(saved) }
-        fflush(nil)
-        dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO)
-        try body()
-        fflush(nil)
-        dup2(saved, STDOUT_FILENO)
-        try pipe.fileHandleForWriting.close()
-        return pipe.fileHandleForReading.readDataToEndOfFile()
+    // a separate process: redirecting this one's stdout or stderr also catches what parallel suites print
+    private func runCLI(_ args: [String]) throws -> (status: Int32, out: Data, err: Data) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent(".build/debug/agtermctl")
+        process.arguments = args
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        try process.run()
+        let clock = ContinuousClock(), started = clock.now
+        while process.isRunning, clock.now - started < .seconds(10) { Thread.sleep(forTimeInterval: 0.01) }
+        if process.isRunning {
+            Issue.record("agtermctl \(args) did not exit within 10 s")
+            kill(process.processIdentifier, SIGKILL)
+            process.waitUntilExit()
+        }
+        return (process.terminationStatus, out.fileHandleForReading.readDataToEndOfFile(),
+                err.fileHandleForReading.readDataToEndOfFile())
     }
 
     @Test func runThrowsExitCodeFailureOnErrorResponse() throws {
@@ -827,6 +905,23 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(ControlResponse(ok: true)) == "ok")
     }
 
+    @Test func formatRecentCountsAParentEntrysCompanions() {
+        let items = [
+            ControlRecentItem(id: "R1", kind: "session", title: "api", subtitle: "work", closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["P", "C1", "C2"]),
+            ControlRecentItem(id: "R2", kind: "session", title: "db", subtitle: nil, closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["S"]),
+            ControlRecentItem(id: "R3", kind: "workspace", title: "work", subtitle: "2 sessions", closedAt: 0,
+                              workspaceID: "W", sessionIDs: ["A", "B"]),
+        ]
+
+        #expect(SocketClient.formatRecent(items) == """
+        R1  session  api (work) +2 companion(s)
+        R2  session  db
+        R3  workspace  work (2 sessions)
+        """)
+    }
+
     @Test func formatResponseEchoesIdWhenRequested() {
         let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c"))
         #expect(SocketClient.formatResponse(response, echoID: true) == "9f3c")
@@ -928,9 +1023,9 @@ struct SocketClientTests {
         try server.start()
         defer { server.stop() }
 
-        let command = try Tree.parse(["--json", "--socket", server.path])
-        let printed = try captureStdout { try command.run() }
-        #expect(printed == Data((Self.unmodeledLine + "\n").utf8))
+        let run = try runCLI(["tree", "--json", "--socket", server.path])
+        #expect(run.status == 0)
+        #expect(run.out == Data((Self.unmodeledLine + "\n").utf8))
     }
 
     @Test func jsonPrintsAnErrorLineUnchangedBeforeFailing() throws {
@@ -939,11 +1034,9 @@ struct SocketClientTests {
         try server.start()
         defer { server.stop() }
 
-        let command = try Tree.parse(["--json", "--socket", server.path])
-        let printed = try captureStdout {
-            #expect(throws: ExitCode.failure) { try command.run() }
-        }
-        #expect(printed == Data((line + "\n").utf8))
+        let run = try runCLI(["tree", "--json", "--socket", server.path])
+        #expect(run.status == 1)
+        #expect(run.out == Data((line + "\n").utf8))
     }
 
     @Test(arguments: [("/other", "/main  split cwd: /other"), ("/main", "/main")])
@@ -1166,10 +1259,10 @@ struct SocketClientTests {
         try server.start()
         defer { server.stop() }
 
-        let command = try Version.parse(["--json", "--socket", server.path])
-        let printed = try captureStdout { try command.run() }
-        #expect(printed == Data((line + "\n").utf8))
-        #expect(!String(decoding: printed, as: UTF8.self).contains("client"))
+        let run = try runCLI(["version", "--json", "--socket", server.path])
+        #expect(run.status == 0)
+        #expect(run.out == Data((line + "\n").utf8))
+        #expect(!String(decoding: run.out, as: UTF8.self).contains("client"))
     }
 
     @Test func refusedConnectWithAHeldOwnershipLockReportsThePresentOwner() throws {

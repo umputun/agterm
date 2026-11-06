@@ -524,6 +524,66 @@ struct AppSettingsTests {
         #expect(legacy.effectiveFlaggedViewLayout == .flat)
     }
 
+    @Test func sidebarDensityDefaultsToStandardResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().effectiveSidebarDensity == .standard)
+        #expect(AppSettings(sidebarDensity: "compact").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        for density in SidebarDensity.allCases {
+            let settings = AppSettings(sidebarDensity: density.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.sidebarDensity == density.rawValue)
+            #expect(decoded.effectiveSidebarDensity == density)
+        }
+        #expect(AppSettings(sidebarDensity: "dense").effectiveSidebarDensity == .standard)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.sidebarDensity == nil)
+        #expect(legacy.effectiveSidebarDensity == .standard)
+    }
+
+    struct DensityMetrics: Sendable {
+        let padding, indent, info, lift, inset: Double
+    }
+
+    @Test(arguments: [
+        (SidebarDensity.standard, DensityMetrics(padding: 15, indent: 14, info: 6, lift: 0, inset: 1.5)),
+        (.compact, DensityMetrics(padding: 10, indent: 10, info: 4, lift: 1, inset: 0.5)),
+    ])
+    func sidebarDensityMetrics(_ density: SidebarDensity, _ expected: DensityMetrics) {
+        #expect(density.rowPadding == expected.padding)
+        #expect(density.indentPerLevel == expected.indent)
+        #expect(density.infoLineSpacing == expected.info)
+        #expect(density.titleLift == expected.lift)
+        #expect(density.selectionInset == expected.inset)
+    }
+
+    @Test func sidebarRowHeightFollowsDensity() {
+        #expect(AppSettings.sidebarRowHeight(fontSize: 13, density: .standard) == AppSettings.sidebarRowHeight(fontSize: 13))
+        #expect(AppSettings.sidebarRowHeight(fontSize: 9, density: .compact) == 19)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 13, density: .compact) == 23)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 20, density: .compact) == 30)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 99, density: .compact) == AppSettings.sidebarFontSizeRange.upperBound.rounded() + 10)
+    }
+
+    @Test func sidebarDensityDisplayNamesAndWireValues() {
+        #expect(SidebarDensity.standard.rawValue == "default")
+        #expect(SidebarDensity.compact.rawValue == "compact")
+        #expect(SidebarDensity.allCases.map(\.displayName) == ["Default", "Compact"])
+    }
+
+    @Test func sessionInfoDisplayDefaultsToAlwaysResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().sessionInfoDisplay == nil)
+        #expect(AppSettings().effectiveSessionInfoDisplay == .always)
+        #expect(AppSettings(sessionInfoDisplay: "flagged").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        for display in SessionInfoDisplay.allCases {
+            let settings = AppSettings(sessionInfoDisplay: display.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.effectiveSessionInfoDisplay == display)
+        }
+        #expect(AppSettings(sessionInfoDisplay: "sometimes").effectiveSessionInfoDisplay == .always)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.effectiveSessionInfoDisplay == .always)
+        #expect(SessionInfoDisplay.allCases.map(\.displayName) == ["Always", "Flagged", "Off"])
+    }
+
     @Test func terminalInputSourceDefaultsOffRoundTripsAndIsNotAGhosttyKey() throws {
         #expect(AppSettings().terminalInputSource == nil)
         let settings = AppSettings(terminalInputSource: "com.apple.keylayout.US")
@@ -719,6 +779,16 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
     }
 
+    @Test func attentionNavigationAcrossWindowsDefaultsNilAndRoundTrips() throws {
+        #expect(AppSettings().attentionNavigationAcrossWindows == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("attentionNavigationAcrossWindows"))
+        let original = AppSettings(attentionNavigationAcrossWindows: true)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded.attentionNavigationAcrossWindows == true)
+        #expect(original.ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+    }
+
     @Test func hiddenInterfaceElementsDefaultsNilAndShowsEverythingNotHiddenByDefault() {
         let settings = AppSettings()
         #expect(settings.hiddenInterfaceElements == nil)
@@ -753,8 +823,11 @@ struct AppSettingsTests {
         for element in InterfaceElement.allCases {
             #expect((element.symbolName == nil) == textOnly.contains(element), "\(element)")
         }
-        let symbols = InterfaceElement.allCases.compactMap(\.symbolName)
+        let rowIcons: Set<InterfaceElement> = [.sessionIcons, .workspaceIcons]
+        let symbols = InterfaceElement.allCases.filter { !rowIcons.contains($0) }.compactMap(\.symbolName)
         #expect(Set(symbols).count == symbols.count)
+        #expect(InterfaceElement.sessionIcons.symbolName == InterfaceElement.quickTerminal.symbolName)
+        #expect(InterfaceElement.workspaceIcons.symbolName == InterfaceElement.focusFilter.symbolName)
     }
 
     @Test func settingsOrderListsTextOnlyElementsFirst() {
@@ -785,6 +858,20 @@ struct AppSettingsTests {
         let hidden = AppSettings(hiddenInterfaceElements: ["workspaceAddSession"])
         #expect(hidden.isInterfaceElementHidden(.workspaceAddSession))
         #expect(!hidden.isInterfaceElementHidden(.newSession))
+    }
+
+    @Test(arguments: [(InterfaceElement.sessionIcons, "Session icons", InterfaceElement.workspaceIcons),
+                      (.workspaceIcons, "Workspace icons", .sessionIcons),
+                      (.workspaceChevrons, "Workspace chevrons", .workspaceIcons)])
+    func rowElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
+                                                          other: InterfaceElement) {
+        #expect(element.section == .sidebar)
+        #expect(element.displayName == name)
+        #expect(!element.hiddenByDefault)
+        #expect(!AppSettings().isInterfaceElementHidden(element))
+        let hidden = AppSettings(hiddenInterfaceElements: [element.rawValue])
+        #expect(hidden.isInterfaceElementHidden(element))
+        #expect(!hidden.isInterfaceElementHidden(other))
     }
 
     @Test func sessionContextIsATitleBarInterfaceElementGatingOnlyItself() {
@@ -852,7 +939,8 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+                            .workspaceChevrons])
         #expect(!titleBar.isEmpty)
     }
 

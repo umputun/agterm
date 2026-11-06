@@ -110,8 +110,22 @@ extension WorkspaceSidebar.Coordinator {
                 duplicate.representedObject = node
                 menu.addItem(duplicate)
             }
+            if sessionCount == 1 {
+                let companion = NSMenuItem(title: "New Companion", action: #selector(menuNewCompanion(_:)), keyEquivalent: "")
+                companion.target = self
+                companion.representedObject = node
+                menu.addItem(companion)
+                if store.session(withID: node.id)?.content == .terminal {
+                    let copy = NSMenuItem(title: "Duplicate as Companion", action: #selector(menuDuplicateCompanion(_:)),
+                                          keyEquivalent: "")
+                    copy.target = self
+                    copy.representedObject = node
+                    menu.addItem(copy)
+                }
+            }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
+                    && store.canMoveSessions(sessionTargets, toWorkspace: workspace.id)
             }
             if !targets.isEmpty {
                 let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
@@ -137,6 +151,7 @@ extension WorkspaceSidebar.Coordinator {
             flag.target = self
             flag.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
             menu.addItem(flag)
+            menu.addItem(tintMenuItem(forSessions: sessionTargets))
             if sessionCount == 1 {
                 let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(menuRevealInFinder(_:)), keyEquivalent: "")
                 reveal.target = self
@@ -158,6 +173,12 @@ extension WorkspaceSidebar.Coordinator {
             openSession.target = self
             openSession.representedObject = node
             menu.addItem(openSession)
+            // the one per-row fold that survives a hidden chevron with row click turned off.
+            let fold = NSMenuItem(title: outline.isItemExpanded(node) ? "Collapse Workspace" : "Expand Workspace",
+                                  action: #selector(menuToggleWorkspaceExpansion(_:)), keyEquivalent: "")
+            fold.target = self
+            fold.representedObject = node
+            menu.addItem(fold)
             // the focus items are their own group: they filter what the tree shows, unlike the create items
             // above and the destructive one below.
             menu.addItem(.separator())
@@ -184,6 +205,7 @@ extension WorkspaceSidebar.Coordinator {
             flagAll.representedObject = node
             flagAll.isEnabled = store.workspaces.first { $0.id == node.id }?.sessions.isEmpty == false
             menu.addItem(flagAll)
+            menu.addItem(tintMenuItem(forWorkspace: node.id))
             menu.addItem(.separator())
             let delete = NSMenuItem(title: "Delete Workspace", action: #selector(menuDeleteWorkspace(_:)), keyEquivalent: "")
             delete.target = self
@@ -206,6 +228,12 @@ extension WorkspaceSidebar.Coordinator {
             self.sessionIDs = sessionIDs
             self.targetID = targetID
         }
+    }
+
+    @objc private func menuToggleWorkspaceExpansion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode, let outline = outlineView,
+              outline.row(forItem: node) >= 0 else { return }
+        toggleExpansion(of: node, in: outline)
     }
 
     @objc private func menuRename(_ sender: NSMenuItem) {
@@ -264,6 +292,16 @@ extension WorkspaceSidebar.Coordinator {
         guard let node = sender.representedObject as? SidebarNode else { return }
         // this sidebar's window-local store, like Close/Flag — a background window acts on its own row.
         actions.duplicateSession(node.id, in: store)
+    }
+
+    @objc private func menuDuplicateCompanion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        actions.duplicateAsCompanion(node.id, in: store)
+    }
+
+    @objc private func menuNewCompanion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        actions.newCompanion(node.id, in: store)
     }
 
     @objc private func menuRevealInFinder(_ sender: NSMenuItem) {

@@ -149,6 +149,22 @@ struct RemoteSessionTests {
                 "one command: the far side does the whole join and answers with one document")
     }
 
+    @Test(arguments: ["/bin/sh", "/bin/zsh", "/bin/tcsh", "/opt/homebrew/bin/fish", "/usr/local/bin/fish"]
+        .filter(FileManager.default.isExecutableFile))
+    func controlReachesTheCliWithEveryArgumentIntactUnderAnyLoginShell(shell: String) throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+        let arguments = ["session", "new", "--parent", "p1", "--command", "tail -f 'my log' a\\b \\\\ end\\",
+                         "--name", "it's", "--cwd", ""]
+
+        let run = try fake.runRemote(RemoteSession.controlCommand(host: "buildbox", arguments: arguments), shell: shell,
+                                     exporting: ["ZDOTDIR": fake.root.path])
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [arguments + ["--json"]])
+    }
+
     @Test func treeWidensPathWithEveryDocumentedInstallDirectory() throws {
         let remote = try #require(RemoteSession.treeCommand(host: "buildbox").last)
 

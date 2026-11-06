@@ -76,6 +76,8 @@ enum PaletteMode {
     case focusEditor
 
     var keepsOpenOnRun: Bool { self == .flaggedEditor || self == .focusEditor }
+    /// keepsSourceOrder lists an empty query in the order the feed supplied rather than A→Z.
+    var keepsSourceOrder: Bool { self == .sessions || self == .attention || keepsOpenOnRun }
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -177,25 +179,26 @@ struct CommandPalette: View {
         }
     }
 
+    // skipping the rank is what preserves the source order: every row scores 0 on an empty query and the
+    // tie-break would re-sort A→Z, replacing the intended first row — the one Return runs.
+    static func ranked(_ items: [PaletteItem], query: String, keepsSourceOrder: Bool, callerSupplied: Bool) -> [PaletteItem] {
+        if query.isEmpty, keepsSourceOrder || callerSupplied { return items }
+        return fuzzyRank(query: query, items: items) { item in
+            paletteSearchKeys(title: item.title, subtitle: item.subtitle, callerSupplied: callerSupplied)
+        }
+    }
+
     /// Recomputes `filtered`: items whose search keys match (`paletteSearchKeys` — label only for a
     /// caller-supplied picker, label plus subtitle for a built-in palette), best score first then
     /// alphabetically by title so equal scores are ordered predictably. An empty query lists a built-in
-    /// palette A→Z, but leaves a caller-supplied picker, `.attention` and the editors in their source order.
+    /// palette A→Z, but leaves a caller-supplied picker and every `keepsSourceOrder` mode in source order.
     /// The query is trimmed of whitespace AND newlines first: `fuzzyScore` splits on both, so a blank query
     /// that kept a newline would score every row 0 and lose the source order to the tie-break.
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        // skipping the rank is what preserves the source order: every row scores 0 on an empty query and the
-        // tie-break below would re-sort A→Z, replacing the intended first row — the one Return runs.
-        if q.isEmpty, explicitItems != nil || controller.mode == .attention || controller.mode?.keepsOpenOnRun == true {
-            filtered = allItems
-            selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
-            return
-        }
-        filtered = fuzzyRank(query: q, items: allItems) { item in
-            paletteSearchKeys(title: item.title, subtitle: item.subtitle, callerSupplied: explicitItems != nil)
-        }
-        if explicitItems != nil,
+        filtered = Self.ranked(allItems, query: q, keepsSourceOrder: controller.mode?.keepsSourceOrder == true,
+                               callerSupplied: explicitItems != nil)
+        if explicitItems != nil, !q.isEmpty,
            let label = pickCustomRowLabel(query: q, filteredCount: filtered.count, allowCustom: allowCustom) {
             filtered = [PaletteItem(id: "pick-custom", title: label) { onCustom?(q) }]
         }

@@ -1,8 +1,8 @@
 import Foundation
 import XCTest
 
-/// Control-channel e2e for Settings ▸ Agent Status ▸ "Attention navigation includes active sessions". The
-/// setting is GUI-only over the control channel, so the test seeds `settings.json` and relaunches.
+/// Control-channel e2e for the Settings ▸ Agent Status ▸ Navigation toggles. Both are GUI-only over the
+/// control channel, so the tests seed `settings.json` and relaunch.
 @MainActor
 final class AttentionNavigationUITests: ControlAPITestCase {
     func testSessionGoNextAttentionStopsOnActiveWhenIncluded() throws {
@@ -22,6 +22,22 @@ final class AttentionNavigationUITests: ControlAPITestCase {
         XCTAssertEqual(try nextAttentionID(), active.lowercased(), "next-attention should stop on the active session")
         XCTAssertEqual(try nextAttentionID(), blocked.lowercased(), "then on the blocked one")
         XCTAssertEqual(try nextAttentionID(), active.lowercased(), "and wrap back to the active one")
+    }
+
+    func testCrossWindowSettingReachesEveryWindowStore() throws {
+        try relaunch(withSettings: #"{"attentionNavigationAcrossWindows":true}"#)
+        XCTAssertEqual(try acrossWindows(in: nil), true, "the launch window should read back the seeded setting")
+
+        let created = try sendCommand(#"{"cmd":"window.new"}"#)
+        let second = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new should return an id")
+        XCTAssertTrue(poll(until: (try? acrossWindows(in: second)) == true, timeout: 10),
+                      "a window opened later should get the setting too")
+    }
+
+    private func acrossWindows(in window: String?) throws -> Bool? {
+        let request = window.map { #"{"cmd":"tree","args":{"window":"\#($0)"}}"# } ?? #"{"cmd":"tree"}"#
+        let tree = try sendCommand(request)
+        return ((tree["result"] as? [String: Any])?["tree"] as? [String: Any])?["attentionNavigationAcrossWindows"] as? Bool
     }
 
     private func newSessionID() throws -> String {

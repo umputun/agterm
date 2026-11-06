@@ -10,7 +10,7 @@ struct SnapshotRoundTripTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let local = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        let remote = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
 
         let snapshot = store.snapshot()
 
@@ -308,6 +308,28 @@ struct SnapshotRoundTripTests {
         #expect(unknownSession.splitAxis == nil)
     }
 
+    @Test func anUnknownTintColorDropsOnlyTheTint() throws {
+        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"maroon","on":["name"]}}"#
+        let decodedSession = try JSONDecoder().decode(SessionSnapshot.self, from: Data(session.utf8))
+        #expect(decodedSession.tint == nil)
+        #expect(decodedSession.flagged == true)
+
+        let workspace = #"{"id":"00000000-0000-0000-0000-000000000004","name":"w","sessions":[],"collapsed":true,"tint":"red"}"#
+        let decodedWorkspace = try JSONDecoder().decode(WorkspaceSnapshot.self, from: Data(workspace.utf8))
+        #expect(decodedWorkspace.tint == nil)
+        #expect(decodedWorkspace.collapsed == true)
+    }
+
+    @Test func anUntintedTreeWritesNoTintKey() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+
+        let json = try String(decoding: JSONEncoder().encode(store.snapshot()), as: UTF8.self)
+
+        #expect(!json.contains("\"tint\""))
+    }
+
     @Test func hiddenSplitKeepsIdentityAndAxisButDefaultsFocusToPrimary() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -364,6 +386,74 @@ struct SnapshotRoundTripTests {
         #expect(restored.workspaces[0].sessions[0].context == "PR #517: restore reap ordering")
     }
 
+    @Test func lastSelectedAtSurvivesARestoreThatReselectsTheSession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        session.lastSelectedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let snap = store.snapshot()
+        #expect(snap.workspaces[0].sessions[0].lastSelectedAt == 1_700_000_000)
+        #expect(snap.selectedSessionID == session.id)
+
+        let restored = makeStore()
+        restored.restore(from: snap)
+
+        #expect(restored.workspaces[0].sessions[0].lastSelectedAt == Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    @Test func snapshotWithoutLastSelectedAtDecodesNil() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.lastSelectedAt == nil)
+    }
+
+    @Test func companionLinksAndParentFoldRoundTripThroughSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: ws.id, cwd: "/parent"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        parent.isExpanded = false
+
+        let snapshot = store.snapshot()
+        let restored = makeStore()
+        restored.restore(from: snapshot)
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [parent.id, companion.id])
+        #expect(sessions[1].parentID == parent.id)
+        #expect(!sessions[0].isExpanded)
+        #expect(sessions[1].isExpanded)
+        #expect(snapshot.workspaces[0].sessions[1].collapsed == nil)
+    }
+
+    @Test func snapshotWithoutCompanionFieldsDecodesATopLevelExpandedSession() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","parentID":42,"customName":"keep"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.parentID == nil)
+        #expect(snap.collapsed == nil)
+        #expect(snap.customName == "keep")
+    }
+
+    @Test func restoreDropsAnInvalidCompanionLinkAndRegroupsAHandEditedOrder() {
+        let parent = UUID()
+        let companion = UUID()
+        let orphan = UUID()
+        let other = UUID()
+        let snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: companion, customName: nil, cwd: "/c", parentID: parent),
+            SessionSnapshot(id: other, customName: nil, cwd: "/o"),
+            SessionSnapshot(id: parent, customName: nil, cwd: "/p"),
+            SessionSnapshot(id: orphan, customName: nil, cwd: "/x", parentID: UUID()),
+        ])])
+        let store = makeStore()
+
+        store.restore(from: snapshot)
+
+        let sessions = store.workspaces[0].sessions
+        #expect(sessions.map(\.id) == [other, parent, companion, orphan])
+        #expect(sessions.map(\.parentID) == [nil, nil, parent, nil])
+    }
+
     @Test func snapshotWithoutContextDecodesNil() throws {
         let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
@@ -401,6 +491,17 @@ struct SnapshotRoundTripTests {
         session.context = "PR #517"
         let copy = store.duplicateSession(session.id)
         #expect(copy?.context == nil)
+    }
+
+    @Test func sessionInfoIsNotSnapshottedOrDuplicated() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.setInfo(try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 0).get(), forSession: session.id)
+        let restored = makeStore()
+        restored.restore(from: store.snapshot())
+        #expect(restored.workspaces[0].sessions[0].info == nil)
+        #expect(store.duplicateSession(session.id)?.info == nil)
     }
 
     @Test func emptyRestoreCommandRoundTripsAsEmptyNotNil() throws {

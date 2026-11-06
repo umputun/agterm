@@ -70,4 +70,108 @@ final class WindowLibraryRecentClosedTests {
 
         #expect(library.reopenRecentClosedOutcome(UUID()) == nil)
     }
+
+    @Test func reopeningAClosedParentBringsItsCompanionsBack() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(parent.id)
+        let recent = try #require(library.recentClosedItems.first)
+
+        #expect(library.reopenRecentClosedOutcome(recent.id)?.complete == true)
+
+        let sessions = try #require(store.workspaces.first { $0.id == workspace.id }).sessions
+        #expect(sessions.map(\.id) == [parent.id, companion.id])
+        #expect(sessions[1].parentID == parent.id)
+    }
+
+    @Test func aLoneCompanionReopensUnderItsLiveParentWhereverItMoved() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let other = store.addWorkspace(name: "other")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        store.moveSession(parent.id, toWorkspace: other.id)
+        let recent = try #require(library.recentClosedItems.first)
+
+        #expect(library.reopenRecentClosedOutcome(recent.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == other.id }?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.isEmpty == true)
+    }
+
+    @Test func aLoneCompanionOfAClosedParentReopensTheParentFirst() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        store.closeSession(parent.id)
+        let companionEntry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+
+        #expect(library.reopenRecentClosedOutcome(companionEntry.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(library.recentClosedItems.isEmpty)
+    }
+
+    @Test func aLoneCompanionOfAParentInARemovedWorkspaceReopensThatWorkspaceFirst() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        _ = store.addWorkspace(name: "keep")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        store.removeWorkspace(workspace.id)
+        let companionEntry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+
+        #expect(library.reopenRecentClosedOutcome(companionEntry.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(store.session(withID: companion.id)?.parentID == parent.id)
+    }
+
+    @Test func onlyACompanionWithNoParentAnywhereLacksItsParent() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        _ = store.addWorkspace(name: "keep")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+        #expect(!library.recentClosedItemLacksParent(entry.id), "the parent is open")
+
+        store.removeWorkspace(workspace.id)
+        #expect(!library.recentClosedItemLacksParent(entry.id), "the parent sits in the removed workspace's entry")
+
+        let archive = try #require(library.recentClosedItems.first { $0.kind == .workspace })
+        library.recentClosedStore.remove(archive.id)
+        library.refreshRecentClosedItems()
+        #expect(library.recentClosedItemLacksParent(entry.id))
+    }
+
+    @Test func aLoneCompanionWithNoParentAnywhereStaysUnavailable() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        store.closeSession(parent.id)
+        let parentEntry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == parent.id })
+        library.recentClosedStore.remove(parentEntry.id)
+        library.refreshRecentClosedItems()
+        let companionEntry = try #require(library.recentClosedItems.first)
+
+        #expect(library.reopenRecentClosedOutcome(companionEntry.id) == nil)
+        #expect(store.session(withID: companion.id) == nil)
+        #expect(library.recentClosedItems.map(\.id) == [companionEntry.id])
+    }
 }

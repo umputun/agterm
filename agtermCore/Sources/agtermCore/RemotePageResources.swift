@@ -6,12 +6,40 @@ public enum RemotePageResources {
     /// resolve maps `requested` to the file the page may read, nil when it may not: with no grant only the page's
     /// own file, with a grant any file inside it. Both sides are standardized and their symlinks resolved before
     /// the check, so a `..` or a link that escapes the folder is refused. The path arrives already decoded
-    /// from the scheme URL.
+    /// from the scheme URL. A content page (image, markdown, text) is never served through here: see `content`.
     public static func resolve(_ requested: String, source: HtmlSource) -> String? {
         guard case .file(let path, let grantRoot) = source, requested.hasPrefix("/") else { return nil }
         let file = real(requested)
         guard let grantRoot else { return file == real(path) ? file : nil }
         return HtmlOverlay.contains(real(grantRoot), file) && file != real(grantRoot) ? file : nil
+    }
+
+    /// ContentResource is one file a content page may read, with the byte cap it is read under and whether its
+    /// bytes must carry a picture signature before any of them is sent.
+    public struct ContentResource: Equatable, Sendable {
+        public let path: String
+        public let maxBytes: Int
+        public let picture: Bool
+    }
+
+    /// content maps `requested` to the file a content page may read, nil when it may not: an image or text page
+    /// reads only its own file, a markdown page its own file and the pictures inside its folder, symlinks
+    /// resolved on this Mac. A markdown page's other file is served only as a picture, whatever its name.
+    public static func content(_ requested: String, source: HtmlSource) -> ContentResource? {
+        guard requested.hasPrefix("/") else { return nil }
+        switch source {
+        case .image(let path):
+            return real(requested) == real(path) ? ContentResource(path: real(path), maxBytes: ImagePage.maxBytes, picture: true) : nil
+        case .text(let path, _):
+            return real(requested) == real(path) ? ContentResource(path: real(path), maxBytes: TextPage.maxBytes, picture: false) : nil
+        case .markdown(let path):
+            if real(requested) == real(path) { return ContentResource(path: real(path), maxBytes: MarkdownPage.maxBytes, picture: false) }
+            let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
+            return MarkdownPage.localPath(requested, folder: folder)
+                .map { ContentResource(path: $0, maxBytes: MarkdownPage.maxImageBytes, picture: true) }
+        case .file, .url, .replica:
+            return nil
+        }
     }
 
     private static func real(_ path: String) -> String {

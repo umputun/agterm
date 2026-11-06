@@ -7,7 +7,7 @@ import XCTest
 @MainActor
 final class SplitRatioAccessorTests: XCTestCase {
     private var window: NSWindow!
-    private var split: NSSplitView!
+    private var split: RecordingSplit!
     private var session: Session!
     private var probe: SplitRatioAccessor.SplitProbeView!
 
@@ -17,7 +17,7 @@ final class SplitRatioAccessorTests: XCTestCase {
             window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
                               styleMask: [.titled], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
-            split = NSSplitView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+            split = RecordingSplit(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
             split.isVertical = true
             split.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 200)))
             split.addArrangedSubview(NSView(frame: NSRect(x: 201, y: 0, width: 199, height: 200)))
@@ -54,6 +54,30 @@ final class SplitRatioAccessorTests: XCTestCase {
         probe.layout()
         probe.removeFromSuperview()
         XCTAssertEqual(trackingAreasOwnedByProbe(), 0)
+    }
+
+    // pins a hidden deck entry's AppKit divider cursor painting the resize cursor under an ask
+    func testAnOffScreenProbeDropsItsSplitsNativeDividerCursor() {
+        probe.layout()
+        XCTAssertEqual(split.rebuildCursorRects().count, 1)
+        probe.deckVisible = false
+        XCTAssertTrue(split.rebuildCursorRects().isEmpty)
+        probe.deckVisible = true
+        XCTAssertEqual(split.rebuildCursorRects().count, 1)
+    }
+
+    func testAProbeAttachingOffScreenDropsItsSplitsNativeDividerCursor() {
+        probe.deckVisible = false
+        probe.layout()
+        XCTAssertTrue(split.rebuildCursorRects().isEmpty)
+    }
+
+    func testAProbeLeavingTheWindowRestoresItsSplitsNativeDividerCursor() {
+        probe.deckVisible = false
+        probe.layout()
+        XCTAssertTrue(split.rebuildCursorRects().isEmpty)
+        probe.removeFromSuperview()
+        XCTAssertEqual(split.rebuildCursorRects().count, 1)
     }
 
     func testRearmsAfterAReHost() {
@@ -479,5 +503,82 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertFalse(try press(atX: dividerX(), count: 1, windowNumber: 0))
         XCTAssertFalse(try press(atX: dividerX(), count: 2, windowNumber: 0))
         XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    private func dividerStrips(colored color: NSColor) -> [CALayer] {
+        (split.layer?.sublayers ?? []).filter { $0.backgroundColor == color.cgColor }
+    }
+
+    private func moveDivider(to ratio: Double) {
+        session.splitRatio = ratio
+        NotificationCenter.default.post(name: .agtermApplySplitRatio, object: session)
+        split.layoutSubtreeIfNeeded()
+    }
+
+    func testCoversTheLeftRightDividerGapWithItsColor() throws {
+        probe.dividerColor = .systemRed
+        probe.layout()
+        moveDivider(to: 0.3)
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        XCTAssertEqual(strip.frame, CGRect(x: 120, y: 0, width: split.dividerThickness, height: 200))
+    }
+
+    func testCoversTheTopBottomDividerGapAtAnUnevenRatio() throws {
+        probe.removeFromSuperview()
+        split.isVertical = false
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.dividerColor = .systemRed
+        probe.layout()
+        moveDivider(to: 0.3)
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        XCTAssertEqual(strip.frame, CGRect(x: 0, y: 60, width: 400, height: split.dividerThickness))
+    }
+
+    // pins the stock divider compositing over the strip: AppKit orders its divider layer after it
+    func testTheStripDrawsAboveTheSplitsOwnDivider() throws {
+        split.wantsLayer = true
+        let stockDivider = CALayer()
+        stockDivider.zPosition = 5000
+        split.layer?.addSublayer(stockDivider)
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        let strip = try XCTUnwrap(dividerStrips(colored: .systemRed).first)
+        let others = (split.layer?.sublayers ?? []).filter { $0 !== strip }
+        XCTAssertTrue(others.allSatisfy { $0.zPosition < strip.zPosition },
+                      "strip z=\(strip.zPosition); others: \(others.map { "\(type(of: $0)) z=\($0.zPosition) f=\($0.frame)" })")
+    }
+
+    func testTheStripFollowsTheDividerWithoutALayoutPass() throws {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        split.setPosition(300, ofDividerAt: 0)
+
+        XCTAssertEqual(try XCTUnwrap(dividerStrips(colored: .systemRed).first).frame.minX, 300)
+    }
+
+    func testAColorChangeRepaintsTheSameStrip() {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        probe.dividerColor = .systemBlue
+
+        XCTAssertTrue(dividerStrips(colored: .systemRed).isEmpty)
+        XCTAssertEqual(dividerStrips(colored: .systemBlue).count, 1)
+    }
+
+    func testTheStripLeavesWithTheProbeAndReturnsAfterAReHost() {
+        probe.dividerColor = .systemRed
+        probe.layout()
+
+        probe.removeFromSuperview()
+        XCTAssertTrue(dividerStrips(colored: .systemRed).isEmpty)
+
+        split.arrangedSubviews[0].addSubview(probe)
+        probe.layout()
+        XCTAssertEqual(dividerStrips(colored: .systemRed).count, 1)
     }
 }

@@ -185,7 +185,7 @@ struct DashboardView: View {
     private func caption(for member: DashboardMember, session: Session, isHighlighted: Bool) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            DashboardCaptionPill(text: session.displayName + paneIndicator(for: member, session: session),
+            DashboardCaptionPill(text: captionText(for: member, session: session),
                                  indicator: session.agentIndicator, isHighlighted: isHighlighted,
                                  idleFill: pillColor, idleText: pillTextColor,
                                  unselectedTextOpacity: Self.unselectedCaptionTextOpacity,
@@ -193,6 +193,10 @@ struct DashboardView: View {
         }
         .padding(.horizontal, 6)
         .allowsHitTesting(false)
+    }
+
+    func captionText(for member: DashboardMember, session: Session) -> String {
+        store.listLabel(for: session) + paneIndicator(for: member, session: session)
     }
 
     /// The caption's pane marker follows the session axis: right/left arrows or bottom/top arrows, and

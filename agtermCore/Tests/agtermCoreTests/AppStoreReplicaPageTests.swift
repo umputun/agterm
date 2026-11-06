@@ -24,10 +24,22 @@ struct AppStoreReplicaPageTests {
 
     private func page(_ source: PresentationPageSource = .file(path: "/docs/index.html", grantRoot: "/docs"),
                       id: UUID = AppStoreReplicaPageTests.origin, pane: PresentationPane? = nil, size: Int? = nil,
-                      follow: Bool = false) -> PresentationPage {
+                      points: OverlayPointSize = OverlayPointSize(), follow: Bool = false) -> PresentationPage {
         PresentationPage(page: id.uuidString, token: "tok", source: source, identity: "index.html", chromeless: false,
                          javascript: true, navigation: true, browse: false, persistent: false, backgroundColor: "#102030",
-                         pane: pane, sizePercent: size, follow: follow)
+                         pane: pane, sizePercent: size, points: points, follow: follow)
+    }
+
+    // closing a viewer's page companion closed its row, whose release closed its page, which closed the row again
+    @Test func aReplicaPageCompanionClosesOnceWithItsPage() throws {
+        let (store, parent) = try attached(split: false)
+        let row = try store.addReplicaPageCompanion(to: parent.id, page: page(), select: false).get()
+        #expect(row.parentID == parent.id && row.content == .page && row.remoteHost == "buildbox")
+
+        #expect(store.closeOverlay(row.id))
+
+        #expect(store.session(withID: row.id) == nil)
+        #expect(store.session(withID: parent.id) != nil)
     }
 
     @Test func aFilePageIsShownSessionWideUnderItsOwnId() throws {
@@ -37,7 +49,7 @@ struct AppStoreReplicaPageTests {
 
         let shown = try #require(session.htmlOverlay)
         #expect(session.htmlOverlayActive)
-        #expect(shown.source == .replica(path: "/docs/index.html"))
+        #expect(shown.source == .replica(path: "/docs/index.html", content: .html))
         #expect(shown.replicaOf == Self.origin)
         #expect(shown.id != Self.origin)
         #expect(shown.javascript && shown.navigation)
@@ -52,7 +64,34 @@ struct AppStoreReplicaPageTests {
 
         #expect(store.presentReplicaPage(page(.file(path: "/docs/index.html", grantRoot: nil)), forSession: session.id) == nil)
 
-        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html"))
+        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html", content: .html))
+    }
+
+    @Test(arguments: [
+        (PresentationPageSource.image(path: "/shots/a.png", width: 800, height: 600), ReplicaContent.image(width: 800, height: 600)),
+        (.markdown(path: "/docs/README.md"), .markdown),
+        (.text(path: "/src/main.go", line: 12), .text(line: 12)),
+    ])
+    func aContentPageIsShownAsAReplicaOfItsKind(source: PresentationPageSource, content: ReplicaContent) throws {
+        let (store, session) = try attached()
+
+        #expect(store.presentReplicaPage(page(source), forSession: session.id) == nil)
+
+        let shown = try #require(session.htmlOverlay)
+        guard case .replica(_, let kind) = shown.source else { Issue.record("not a replica: \(shown.source)"); return }
+        #expect(kind == content)
+        #expect(shown.replicaOf == Self.origin)
+    }
+
+    @Test func theTreeReportsAContentReplicaByItsKind() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(.text(path: "/src/main.go", line: 12)), forSession: session.id) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)
+
+        #expect(node.text == ControlTextOverlayNode(file: "/src/main.go", language: TextPage.language(forFile: "/src/main.go"), line: 12))
+        #expect(node.file == nil)
+        #expect(node.replica == true)
     }
 
     @Test func aUrlPageLoadsItsFullAddressHere() throws {
@@ -137,8 +176,8 @@ struct AppStoreReplicaPageTests {
 
     @Test func hidingTheReplicaLeavesItsNeighbourAlone() throws {
         let (store, session) = try attached()
-        #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)
         #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
+        #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)
         let changes = Changes()
         store.onReplicaPageChanged = { changes.ids.append($0) }
         let local = try #require(session.htmlOverlay?.id)
@@ -160,6 +199,33 @@ struct AppStoreReplicaPageTests {
         store.setOverlaysHidden(session.id, pane: nil, hidden: true)
 
         #expect(changes.ids == [try #require(session.htmlOverlay?.id)])
+    }
+
+    @Test func aLocalPaneOpenerOverTheReplicaLeavesItsReportedStateAlone() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)
+        let local = try #require(session.htmlOverlay?.id)
+        let changes = Changes()
+        store.onReplicaPageChanged = { changes.ids.append($0) }
+
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
+
+        #expect(!session.htmlOverlayVisible)
+        #expect(store.replicaPageState(local, appliedSeq: 1)?.hidden == false)
+        #expect(changes.ids.isEmpty)
+    }
+
+    @Test func anOriginHideOutlivesALocalPaneOpener() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(), forSession: session.id) == nil)
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
+
+        store.setReplicaPageHidden(Self.origin.uuidString, forSession: session.id, hidden: true)
+        #expect(store.closePaneOverlay(session.id, pane: .right))
+
+        #expect(!session.htmlOverlayVisible)
+        let local = try #require(session.htmlOverlay?.id)
+        #expect(store.replicaPageState(local, appliedSeq: 1)?.hidden == true)
     }
 
     @Test func theStateMirrorsWhatThePageReported() throws {
@@ -241,5 +307,30 @@ struct AppStoreReplicaPageTests {
         store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 80)
 
         #expect(session.overlaySizePercent == 80)
+    }
+
+    @Test func aHandedOverPageTakesTheOriginsPointSizesAndItsResizes() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 60, points: OverlayPointSize(height: 240)), forSession: session.id) == nil)
+        #expect(session.overlayPoints == OverlayPointSize(height: 240))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 60,
+                                points: OverlayPointSize(width: 900, height: 300))
+
+        #expect(session.overlaySizePercent == 60)
+        #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
+    }
+
+    @Test func aMergingResizeKeepsTheAxisItDoesNotNameAndAPlainOneReplacesIt() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 95, points: OverlayPointSize(width: 400, height: 300)), forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 600), merge: true)
+        #expect(session.overlayPoints == OverlayPointSize(width: 600, height: 300))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 500))
+        #expect(session.overlayPoints == OverlayPointSize(width: 500))
     }
 }

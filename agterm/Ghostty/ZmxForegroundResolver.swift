@@ -59,6 +59,9 @@ final class ZmxForegroundResolver {
         _ = refreshGate.shouldRefresh(now: Date())
     }
 
+    /// cachedLeader is the leader pid the last listing reported for `sessionName`, nil when it reported none.
+    func cachedLeader(sessionName: String) -> pid_t? { leaders[sessionName] }
+
     func foregroundPID(sessionName: String) -> pid_t? {
         guard let leader = leaders[sessionName] else {
             refreshGate.noteLifecycleChange()

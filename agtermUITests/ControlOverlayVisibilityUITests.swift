@@ -5,7 +5,7 @@ import XCTest
 @MainActor
 final class ControlOverlayVisibilityUITests: ControlAPITestCase {
     override var seededSettings: [String: Any]? {
-        name.contains("TitleBarButton") ? ["shownInterfaceElements": ["overlayToggle"]] : nil
+        name.contains("TitleBarButton") || name.contains("StripHideButton") ? ["shownInterfaceElements": ["overlayToggle"]] : nil
     }
 
     func testAHiddenProgramOverlayGivesTheKeysToThePaneAndShowTakesThemBack() throws {
@@ -85,6 +85,40 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         XCTAssertEqual((node(id)?["htmlOverlays"] as? [[String: Any]])?.first?["id"] as? String, pageID)
         XCTAssertTrue(pressUntilCountChanges(id, from: before), "the shown page owns the keyboard again")
         XCTAssertEqual(pageState(id)?.token, token, "the same document came back: a reload mints a new token")
+    }
+
+    func testAPanePageOverAProgramHidesItAndClosingThePageBringsItBack() throws {
+        let id = try activeSessionID()
+        let keys = markerDir.appendingPathComponent("cover-keys")
+        try openProgram(id, command: "sh -c 'while IFS= read -r x; do printf \"%s\\n\" \"$x\" >> \(keys.path); done'")
+        XCTAssertTrue(typeIntoCover("COVER1", marker: keys), "the program should own the keyboard first")
+        let page = markerDir.appendingPathComponent("pane-keys.html")
+        let script = "<script>let n = 0; document.title = 'x 0'; "
+            + "document.addEventListener('keydown', () => { n += 1; document.title = 'x ' + n })</script>"
+        try "<!doctype html><html><head><title>loading</title></head><body><p>pane page</p>\(script)</body></html>"
+            .write(to: page, atomically: true, encoding: .utf8)
+
+        let open = try sendCommand(
+            #"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(page.path)","javascript":true,"pane":"left"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "pane page open should succeed: \(open)")
+        let text = app.webViews.staticTexts["pane page"]
+        XCTAssertTrue(text.waitForExistence(timeout: 10))
+        XCTAssertTrue(poll(until: text.isHittable, timeout: 10), "the pane page is on screen, not under the program")
+        XCTAssertEqual(node(id)?["hiddenOverlays"] as? [String], ["session"])
+        XCTAssertTrue(poll(until: self.pageState(id)?.count == 0, timeout: 10))
+        text.click()
+        XCTAssertTrue(pressUntilCountChanges(id, from: 0), "the pane page owns the keyboard")
+
+        XCTAssertEqual(try visibility("toggle", id)["text"] as? String, "hidden")
+        XCTAssertEqual(try visibility("toggle", id)["text"] as? String, "shown")
+        XCTAssertTrue(poll(until: text.isHittable, timeout: 10), "a toggle round trip leaves the page above the program")
+        let before = try XCTUnwrap(pageState(id)?.count)
+        text.click()
+        XCTAssertTrue(pressUntilCountChanges(id, from: before), "the page still owns the keyboard")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(poll(until: self.node(id)?["hiddenOverlays"] == nil, timeout: 10), "closing the page shows the program")
+        XCTAssertTrue(typeIntoCover("COVER2", marker: keys), "the program owns the keyboard again")
     }
 
     private func pageState(_ id: String) -> (token: String, count: Int)? {
@@ -167,6 +201,24 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         XCTAssertFalse(app.buttons["htmlOverlay.hide"].isHittable, "the hidden page's strip is gone with it")
     }
 
+    func testThePageStripOffersHideOnlyWhileTheOverlaysButtonIsOn() throws {
+        let id = try activeSessionID()
+        let page = markerDir.appendingPathComponent("gated.html")
+        try "<!doctype html><html><body><p>gated page</p></body></html>".write(to: page, atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"html":"\#(page.path)"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "page open should succeed: \(open)")
+        XCTAssertTrue(app.buttons["htmlOverlay.close"].waitForExistence(timeout: 10), "the page shows its strip")
+        XCTAssertFalse(app.buttons["htmlOverlay.hide"].exists, "no Hide while the title-bar overlays button is off")
+
+        let toggle = settingsControl(tab: "Interface", control: "settings-interface-overlayToggle")
+        toggle.click()
+        XCTAssertTrue(app.buttons["htmlOverlay.hide"].waitForExistence(timeout: 10), "enabling the button adds Hide to the open page")
+
+        toggle.click()
+        XCTAssertTrue(poll(until: !self.app.buttons["htmlOverlay.hide"].exists, timeout: 10),
+                      "disabling the button removes Hide from the open page")
+    }
+
     private func openProgram(_ id: String, command: String, pane: String? = nil) throws {
         var args: [String: Any] = ["command": command]
         if let pane { args["pane"] = pane }
@@ -174,6 +226,24 @@ final class ControlOverlayVisibilityUITests: ControlAPITestCase {
         let open = try sendCommand(String(decoding: json, as: UTF8.self))
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         usleep(800_000)
+    }
+
+    private func settingsControl(tab: String, control: String, timeout: TimeInterval = 12,
+                                 file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = app.descendants(matching: .any).matching(identifier: control).firstMatch
+        let tabButton = app.buttons[tab].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if target.exists, target.isHittable { return target }
+            if tabButton.exists, tabButton.isHittable {
+                tabButton.click()
+            } else {
+                app.typeKey(",", modifierFlags: .command)
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTFail("Settings '\(tab)' control '\(control)' never became hittable", file: file, line: line)
+        return target
     }
 
     private func typeIntoCover(_ line: String, marker: URL) -> Bool {

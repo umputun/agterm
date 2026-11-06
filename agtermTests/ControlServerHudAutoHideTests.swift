@@ -63,7 +63,7 @@ final class ControlServerHudAutoHideTests: XCTestCase {
         let fix = try fixture()
         fix.server.armHudAutoHide(fix.session, spec: HudSpec(message: "one", hideAfter: 0.05))
 
-        try await Task.sleep(nanoseconds: 400_000_000)
+        try await waitUntil { !fix.session.hudActive }
 
         XCTAssertFalse(fix.session.hudActive)
         XCTAssertNil(fix.server.hudAutoHide[fix.session.id])
@@ -154,6 +154,13 @@ final class ControlServerHudAutoHideTests: XCTestCase {
         return sink
     }
 
+    private func waitUntil(timeout: TimeInterval = 5, _ condition: () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
     func testArmingPublishesThePanelWithItsDeadline() throws {
         let fix = try fixture()
         let start = Date(timeIntervalSince1970: 1_789_000_000)
@@ -208,7 +215,7 @@ final class ControlServerHudAutoHideTests: XCTestCase {
         let sink = try mirror(fix, at: Date())
         fix.server.armHudAutoHide(fix.session, spec: HudSpec(message: "one", hideAfter: 0.05))
 
-        try await Task.sleep(nanoseconds: 400_000_000)
+        try await waitUntil { sink.huds.count >= 2 }
 
         XCTAssertEqual(sink.huds.count, 2)
         XCTAssertNil(sink.huds.last ?? nil)

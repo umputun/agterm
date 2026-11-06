@@ -2,37 +2,36 @@
 # Build pinned libghostty and zmx artifacts from upstream source.
 #
 # We build from source rather than downloading a prebuilt artifact so the toolchain is fully
-# self-owned: the inputs are pinned upstream revisions, zig, and Xcode's Metal Toolchain. No fork or
-# daily-build release is involved; zmx takes the patches in scripts/zmx-patches over its plain pin.
+# self-owned: pinned upstream revisions, local patches, zig, and Xcode's Metal Toolchain.
 #
-# GHOSTTY_REV is a plain pin for reproducibility, not a workaround. It was held at a 2026-04-30
-# pre-regression commit while later builds blanked the scrollback on a font-size increase; that is
+# GHOSTTY_REV selects the upstream commit; local patches are applied after checkout. It was held at a
+# 2026-04-30 pre-regression commit while later builds blanked the scrollback on a font-size increase; that is
 # fixed upstream and re-verified by hand before this bump. Re-test the font-increase case when moving
-# it, and check `minimum_zig_version` in build.zig.zon against ZIG_FORMULA.
+# it, and check `minimum_zig_version` in build.zig.zon against GHOSTTY_ZIG_FORMULA.
 #
 # One-time cost: the build (a few minutes, plus a Metal Toolchain download on first run) is skipped
-# whenever the staged artifacts match the current rev. Presence alone is not enough — an xcframework
-# built from a different rev is indistinguishable from a current one, so the stamp, not the directory,
-# is what says a rebuild can be skipped.
+# whenever the staged artifacts match the current revision and patch digest. Presence alone is not
+# enough — the stamp, not the directory, determines whether the staged artifacts can be reused.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
-GHOSTTY_REV="683d8db643b95cf229bfb5fe9fab9ae677920343"  # 2026-08-25
+GHOSTTY_REV="83fb95624b0439ee660c2679b43b38c8b63769cd"  # v1.4.0, 2026-10-27
 ZMX_REPO="https://github.com/neurosnap/zmx"
 ZMX_REV="8bab1f0173b07e79835ea372d749af3dbf0d0842"  # v0.8.1, 2026-09-05; SessionHostRuntime/DeviceAttributeResponder.swift copies its DA replies
 # zig defaults to the builder's OS version and CPU; ship the app's arm64/macOS 14 baseline.
 ZMX_TARGET="aarch64-macos.14.0"
-# ghostty pins minimum_zig_version 0.16.0. Name the MINOR LINE, not `zig`: that one rolls, so a fresh
-# build once 0.17 is current would compile a fixed GHOSTTY_REV with a compiler it never supported. Today
-# `zig@0.16` is still an alias for `zig`, so this buys nothing yet — it claims the name Homebrew uses when
-# it cuts the real versioned formula, as it already has for zig@0.15 and zig@0.14.
-ZIG_FORMULA="zig@0.16"  # resolved by prefix, so an unlinked keg works
+# pin minor lines because the unversioned zig formula rolls; zmx stays on 0.16 independently.
+GHOSTTY_ZIG_FORMULA="zig@0.17"
+ZMX_ZIG_FORMULA="zig@0.16"
 XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # terminfo/ is the marker: it must extract as a SIBLING of ghostty/ so libghostty's
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
 RESOURCES_MARKER="agterm/Resources/terminfo"
 STAMP_FILE=".ghostty-build-stamp"
+GHOSTTY_PATCH_DIR="scripts/ghostty-patches"
+GHOSTTY_PATCH_DIGEST="$(cat "$GHOSTTY_PATCH_DIR"/*.patch | shasum -a 256 | cut -c1-16)"
+GHOSTTY_STAMP="$GHOSTTY_REV $GHOSTTY_PATCH_DIGEST"
 ZMX_STAGE_DIR="agterm/Resources/zmx"
 ZMX_STAMP_FILE=".zmx-build-stamp"
 # applied in name order over the plain pin; scripts/zmx-patches/README.md says what each one is for.
@@ -64,37 +63,56 @@ fi
 
 # a stale stamp restages BOTH: they come out of one build, and an artifact built from another revision
 # cannot be told apart from a current one.
-if [[ ! -f "$STAMP_FILE" || "$(cat "$STAMP_FILE")" != "$GHOSTTY_REV" ]]; then
+if [[ ! -f "$STAMP_FILE" || "$(cat "$STAMP_FILE")" != "$GHOSTTY_STAMP" ]]; then
   need_xc=true
   need_res=true
 fi
 
+# --zmx-only serves CI's Unit tests job, whose session-host fixtures need zmx and nothing from libghostty.
+# It overrides the stale-stamp check above, so a libghostty pin change cannot pull Metal or a ghostty build in.
+case "${1:-}" in
+  "") ;;
+  --zmx-only) need_xc=false; need_res=false ;;
+  *) echo "usage: $0 [--zmx-only]" >&2; exit 2 ;;
+esac
+
 if ! $need_xc && ! $need_res && ! $need_zmx; then
-  echo "GhosttyKit, resources and zmx already present"
+  echo "staged artifacts already current"
   stage_custom_themes
   exit 0
 fi
 
 # resolved through the keg prefix rather than PATH, so a machine still linking an older zig for another
-# project builds with the right one and keeps its own `zig` untouched.
-ZIG="$(brew --prefix "$ZIG_FORMULA" 2>/dev/null || true)/bin/zig"
-if [[ ! -x "$ZIG" ]]; then
-  echo "installing $ZIG_FORMULA..."
-  brew install "$ZIG_FORMULA"
-  ZIG="$(brew --prefix "$ZIG_FORMULA")/bin/zig"
-fi
+# project builds with the right one and keeps its own `zig` untouched. called only by the build that
+# needs it, so a zmx-only run never installs ghostty's compiler.
+zig_for() {
+  local formula="$1" want="${1#zig@}" zig ver
+  zig="$(brew --prefix "$formula" 2>/dev/null || true)/bin/zig"
+  if [[ ! -x "$zig" ]]; then
+    echo "installing $formula..." >&2
+    brew install "$formula" >&2 || return 1
+    zig="$(brew --prefix "$formula")/bin/zig" || return 1
+  fi
+  # a versioned alias can still resolve to a stale rolling keg.
+  ver="$("$zig" version)" || return 1
+  if [[ "$ver" != "$want".* ]]; then
+    echo "error: $zig is zig $ver, need $want; run brew upgrade $formula" >&2
+    return 1
+  fi
+  printf '%s\n' "$zig"
+}
 
 # The macOS 27 SDK's math.h asks the compiler's float.h for INFINITY/NAN through clang's
 # `__need_infinity_nan` protocol (LLVM PR #164348, Apple clang 21). Zig 0.16's bundled float.h does not
 # implement it, so compiling zig's libc++ fails with "undeclared identifier 'INFINITY'". Both builds link
 # libc++, but libghostty compiles against Ghostty's own apple-sdk math.h overlay and zmx's exported VT
 # dependency path does not, which is why only the zmx build needs this. A shim for the two macros, not a
-# backport of LLVM 22's header split: remove it once ZIG_FORMULA resolves to a release carrying zig's own
-# fix (master has it in 520af696).
+# backport of LLVM 22's header split: remove it once ZMX_ZIG_FORMULA resolves to a release carrying zig's own
+# fix, which 0.17.0 does.
 SHIM_MARK='Local patch (agterm scripts/setup.sh)'
 patch_zig_float_h() {
   local zig_lib float_h source tmp
-  zig_lib="$("$ZIG" env | sed -n 's/.*lib_dir"\{0,1\} *[=:] *"\([^"]*\)".*/\1/p')"
+  zig_lib="$("$ZMX_ZIG" env | sed -n 's/.*lib_dir"\{0,1\} *[=:] *"\([^"]*\)".*/\1/p')"
   float_h="$zig_lib/include/float.h"
   if [[ ! -f "$float_h" ]]; then
     echo "warning: zig float.h not found at $float_h; skipping __need_infinity_nan shim" >&2
@@ -150,8 +168,14 @@ if $need_xc || $need_res; then
   git -C "$ghostty_build" fetch -q --depth 1 origin "$GHOSTTY_REV"
   git -C "$ghostty_build" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
+  for ghostty_patch in "$GHOSTTY_PATCH_DIR"/*.patch; do
+    echo "applying libghostty/$(basename "$ghostty_patch")..."
+    git -C "$ghostty_build" apply --whitespace=nowarn "$PWD/$ghostty_patch"
+  done
+
+  GHOSTTY_ZIG="$(zig_for "$GHOSTTY_ZIG_FORMULA")"
   echo "building GhosttyKit.xcframework with zig (a few minutes)..."
-  ( cd "$ghostty_build" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
+  ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
       -Dxcframework-target=native -Demit-macos-app=false )
 
   if $need_xc; then
@@ -168,7 +192,7 @@ if $need_xc || $need_res; then
     cp -R "$ghostty_build/zig-out/share/ghostty/themes" agterm/Resources/ghostty/
     cp -R "$ghostty_build/zig-out/share/terminfo" agterm/Resources/terminfo
   fi
-  printf '%s\n' "$GHOSTTY_REV" > "$STAMP_FILE"
+  printf '%s\n' "$GHOSTTY_STAMP" > "$STAMP_FILE"
 fi
 
 if $need_zmx; then
@@ -199,10 +223,11 @@ if $need_zmx; then
     git -C "$zmx_build" apply --whitespace=nowarn "$PWD/$zmx_patch"
   done
 
+  ZMX_ZIG="$(zig_for "$ZMX_ZIG_FORMULA")"
   patch_zig_float_h
 
   echo "building zmx with zig..."
-  ( cd "$zmx_build" && "$ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )
+  ( cd "$zmx_build" && "$ZMX_ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )
   rm -rf "$ZMX_STAGE_DIR"
   mkdir -p "$ZMX_STAGE_DIR"
   install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"

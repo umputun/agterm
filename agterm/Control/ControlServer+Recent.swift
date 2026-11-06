@@ -15,6 +15,8 @@ extension ControlServer {
         return ControlResponse(ok: true)
     }
 
+    static let companionWithoutParentError = "parent session is not open or in Recent Closed"
+
     /// Restores without raising or focusing the window, unlike the menu item: a script names the window
     /// it wants in front with `window select`.
     func openRecentClosed(_ target: String?, window: String?) -> ControlResponse {
@@ -24,6 +26,9 @@ extension ControlServer {
             switch RecentClosedTarget.resolve(target, in: items) {
             case .failure(let error): return ControlResponse(ok: false, error: error.message)
             case .success(let resolved): id = resolved
+            }
+            guard !library.recentClosedItemLacksParent(id) else {
+                return ControlResponse(ok: false, error: Self.companionWithoutParentError)
             }
             guard let item = items.first(where: { $0.id == id }),
                   let outcome = library.reopenRecentClosedOutcome(id, into: store)

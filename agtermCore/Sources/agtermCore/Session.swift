@@ -1,87 +1,6 @@
 import Foundation
 import Observation
 
-/// Which pane a pane-scoped overlay covers. Two cases rather than `StatusPane` so a scratch overlay is
-/// not representable and no call site needs a scratch guard.
-public enum OverlayPane: String, CaseIterable, Codable, Sendable {
-    case left
-    case right
-
-    /// Accepts the same pane spellings as `TerminalZoomSurface`, minus `scratch`: a pane overlay covers a
-    /// split pane only. Role and axis names are accepted as aliases, so the rejection message naming only
-    /// `left or right` is guidance, not the full accepted set.
-    public init?(controlName: String) {
-        switch controlName {
-        case "left", "top", "primary":
-            self = .left
-        case "right", "bottom", "split":
-            self = .right
-        default:
-            return nil
-        }
-    }
-
-    /// The three `Session` slots this pane owns, plus its zoom surface — the ONE place the
-    /// `left`↔`leftOverlay*` mapping is written. Every reader and writer goes through these key paths, so a
-    /// transposed ternary can no longer drive the wrong pane from any of the call sites.
-    @MainActor public var overlaySlot: ReferenceWritableKeyPath<Session, PaneOverlay?> {
-        self == .left ? \.leftOverlay : \.rightOverlay
-    }
-
-    @MainActor public var surfaceSlot: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> {
-        self == .left ? \.leftOverlaySurface : \.rightOverlaySurface
-    }
-
-    @MainActor public var exitCodeSlot: ReferenceWritableKeyPath<Session, Int?> {
-        self == .left ? \.leftOverlayExitCode : \.rightOverlayExitCode
-    }
-
-    /// The zoom surface addressing this pane's overlay (`surface:<id>:overlay-left|overlay-right`).
-    public var zoomSurface: TerminalZoomSurface {
-        self == .left ? .overlayLeft : .overlayRight
-    }
-
-    /// The pane itself as a zoom surface, the slot this overlay covers.
-    public var paneZoomSurface: TerminalZoomSurface {
-        self == .left ? .primary : .split
-    }
-}
-
-/// One pane's ephemeral overlay — the session-scoped overlay's fields minus the size percent, which a
-/// pane overlay never has (it is always full-pane). The surface lives beside this in
-/// `leftOverlaySurface`/`rightOverlaySurface`, not inside, because `TerminalView` writes that slot back
-/// during view update and an observed write there would loop.
-public struct PaneOverlay: Equatable, Sendable {
-    /// The command the overlay runs as its process, read by the overlay factory at creation.
-    public var command: String
-    /// The overlay's working directory, or nil to inherit `effectiveCwd`.
-    public var cwd: String?
-    /// The overlay's own solid background as `#rrggbb`, nil for the theme default. Per-surface, so two
-    /// pane overlays open at once may carry different colors.
-    public var backgroundColor: String?
-    /// Whether the overlay holds its surface after the command exits (libghostty's "press any key to
-    /// close"), instead of closing.
-    public var wait: Bool
-    /// Set on a viewer when the overlay shows a job running on its origin.
-    public var replica: OverlayReplica?
-    /// html is the page this overlay shows instead of running `command`, which is then empty and never read.
-    public var html: HtmlOverlay?
-    /// hidden keeps the overlay running while it covers nothing; a new occupant starts shown.
-    public var hidden = false
-
-    public init(command: String, cwd: String? = nil, backgroundColor: String? = nil, wait: Bool = false) {
-        self.command = command
-        self.cwd = cwd
-        self.backgroundColor = backgroundColor
-        self.wait = wait
-    }
-
-    public init(html: HtmlOverlay, backgroundColor: String? = nil) {
-        self.init(command: "", backgroundColor: backgroundColor)
-        self.html = html
-    }
-}
-
 /// One shell, backed by a single libghostty surface.
 ///
 /// `@MainActor`, so implicitly `Sendable` via isolation — never make it an `actor`. `surface` is
@@ -100,7 +19,8 @@ public final class Session: Identifiable {
     /// Live cwd from the latest OSC 7 / PWD report; the sidebar row refreshes. Persisted by `snapshot()` on
     /// quit + structural mutations only (OSC 7 fires constantly), so a crash loses cwd since the last save.
     public var currentCwd: String?
-    public let initialCwd: String
+    /// initialCwd is where the primary shell starts; a respawned parent restarts from its last cwd.
+    public internal(set) var initialCwd: String
 
     /// Terminal title from the latest OSC 0/1/2 set-title report — shell `PROMPT_COMMAND`, ghostty shell
     /// integration, or a remote host over SSH; the sidebar row refreshes on change. Ephemeral, no save.
@@ -122,6 +42,8 @@ public final class Session: Identifiable {
     /// Must stay a wall-clock `Date`: `controlTree` ships it as epoch seconds compared against `ControlEvent.ts`,
     /// so a monotonic instant would make a client's computed age meaningless.
     @ObservationIgnored public var statusChangedAt: Date?
+    /// When the session last became or stopped being its window's selection, on the same clock; persisted.
+    @ObservationIgnored public var lastSelectedAt: Date?
 
     /// Whether idle auto-follow already pulled the user to THIS blocked episode; ephemeral. Set on jumping
     /// here by `AppStore.autoFollowFire`, so a later idle fire won't yank the user back to a block already
@@ -137,15 +59,19 @@ public final class Session: Identifiable {
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
     public let remoteHost: String?
 
+    /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.
+    public let content: SessionContent
+
     /// Whether this session may be written to disk at all. Every persistence producer gates on it: the
-    /// launch snapshot, the Recent Closed session record, and a closed workspace's record.
-    public var isPersistable: Bool { remoteHost == nil }
+    /// launch snapshot, the Recent Closed session record, and a closed workspace's record. A page lives
+    /// only as long as the app that shows it.
+    public var isPersistable: Bool { remoteHost == nil && content == .terminal }
 
     /// The pane identities this instance's zmx owns — none for a remote session, whose panes run ssh.
     /// Every reader of local daemon ownership goes through this, or a remote pane reports as a claimed
     /// local daemon that does not exist. Structural `paneIdentity` stays valid either way.
     public var locallyManagedPaneIdentities: [UUID] {
-        guard remoteHost == nil else { return [] }
+        guard remoteHost == nil, content == .terminal else { return [] }
         return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
     }
 
@@ -153,6 +79,12 @@ public final class Session: Identifiable {
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
+    /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
+    public var tint: SidebarTint?
+    /// parentID names the session this one is a companion of; set once at creation, never changed.
+    public internal(set) var parentID: UUID?
+    /// isExpanded is whether a parent row shows its companions.
+    public var isExpanded = true
 
     /// Local context, persisted for local sessions; clearing reveals any mirrored context.
     public var context: String?
@@ -160,9 +92,30 @@ public final class Session: Identifiable {
     public internal(set) var mirroredContext: String?
     public var effectiveContext: String? { context ?? mirroredContext }
 
+    /// info is the local sidebar info line (`session.info`), runtime-only; clearing reveals any mirrored info.
+    public internal(set) var info: SessionInfo?
+    /// mirroredInfo is the origin's info line from an attached stream.
+    public internal(set) var mirroredInfo: SessionInfo?
+    /// effectiveInfo is the line the row shows: the local one, else the origin's.
+    public var effectiveInfo: SessionInfo? { info ?? mirroredInfo }
+    /// onInfoDiscarded cancels the app's expiry timer for the local line; `discardInfo` fires and clears it.
+    @ObservationIgnored public var onInfoDiscarded: (() -> Void)?
+
+    /// discardInfo drops the local info line and fires `onInfoDiscarded`. Session and window teardown call it,
+    /// never an overlay close, which leaves the session and its line in place.
+    public func discardInfo() {
+        info = nil
+        let cancelTimer = onInfoDiscarded
+        onInfoDiscarded = nil
+        cancelTimer?()
+    }
+
     /// Changes only when one live primary-slot surface replaces another; SwiftUI hosts fold it into their
     /// identity, so lazy nil→first creation stays at zero while split-survivor promotion remounts the view.
     @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0
+    // observed, unlike the revision above: a respawn leaves the slot empty and nothing else remounts its host
+    public internal(set) var primaryRespawns = 0
+    @ObservationIgnored var lastRespawnAt: Date?
 
     /// The app-side surface (a `GhosttySurfaceView`), created lazily on first display and owned here so it
     /// survives sidebar/detail view churn.
@@ -395,7 +348,7 @@ public final class Session: Identifiable {
     /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
     @discardableResult
     public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil) -> Bool {
-        guard askPending == nil else { return false }
+        guard askPending == nil, content == .terminal else { return false }
         askPaneIdentity = paneIdentity
         askRemoteOwner = remoteOwner
         askPending = ask
@@ -596,7 +549,8 @@ public final class Session: Identifiable {
 
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil,
                 paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil,
-                remoteHost: String? = nil) {
+                remoteHost: String? = nil, content: SessionContent = .terminal) {
+        self.content = content
         self.id = id
         self.paneIdentity = paneIdentity
         self.splitPaneIdentity = splitPaneIdentity
@@ -614,6 +568,7 @@ public final class Session: Identifiable {
     /// `b`); an empty path → `~`, the home shorthand, since no sensible component exists.
     public var displayName: String {
         if let trimmed = customName?.trimmedOrNil { return trimmed }
+        if content == .page, let identity = htmlOverlay?.identity.trimmedOrNil { return identity }
         if let title = focusedOscTitle?.trimmedOrNil { return title }
         let path = focusedCwd
         if path.isEmpty { return "~" }
@@ -744,7 +699,7 @@ public final class Session: Identifiable {
     /// since surfaces defer creation until they get a nonzero backing size. Not `deckHostsSurface`, which
     /// also yields a placeholder while zoom or the dashboard owns the slot.
     public func rendersPane(_ pane: OverlayPane) -> Bool {
-        isSplit || pane == focusedPane
+        content == .terminal && (isSplit || pane == focusedPane)
     }
 
     /// The panes the detail pane lays out RIGHT NOW, ordered left then right. Derived from the observed

@@ -15,6 +15,12 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
     && FileManager.default.isExecutableFile(atPath: stagedZmxPath)
 
 @Suite(.serialized) struct SessionHostServerTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AGTERM_REQUIRE_ZMX"] != nil))
+    func requiredFixturePrerequisitesArePresent() {
+        #expect(Responsibility.system.isAvailable, "AGTERM_REQUIRE_ZMX is set but the responsibility SPI is unavailable")
+        #expect(FileManager.default.isExecutableFile(atPath: stagedZmxPath), "AGTERM_REQUIRE_ZMX is set but zmx is not staged at \(stagedZmxPath)")
+    }
+
     @Test func nativeReplyWritesPreservePartialAndTransientRemainders() throws {
         for errors in [[Int32(2), -EINTR, 3], [-EAGAIN], [-EINTR, -EINTR, -EINTR, -EINTR]] {
             let directory = try temporaryDirectory()
@@ -335,14 +341,14 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         var events: [String] = []
         let client = Client(connect: { peer }, diagnostic: { events.append($0) }, execute: { argv, _ in
             events.append("attach")
-            #expect(argv == context.request.argv)
+            #expect(argv == context.request.argv + ["/bin/sh", "-c", "printf '%s\\n' 'agterm: session is gone'; exit 1"])
             if argv.count > 3 {
                 let duplicate = NativeHostChild(try PTYProcess.spawn(argv: Array(argv.dropFirst(3)), env: [:], cwd: directory.path, rows: 24, cols: 80))
                 defer { try? duplicate.terminate(grace: 0.1) }
                 while duplicate.poll() == .running { Thread.sleep(forTimeInterval: 0.01) }
             }
         })
-        try client.run(request: request)
+        try client.run(request: request, endsPane: true)
         #expect(try String(contentsOf: marker, encoding: .utf8) == "x")
         #expect(context.backend.spawns == 1)
         #expect(events == [SessionHost.ClientOutcome.uncertain.diagnostic!, "attach"])
@@ -816,6 +822,122 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         let controlMatches = controlOutcome == AttributeProbe.secondary
         #expect(controlMatches, "DA2 outcome=\(String(reflecting: controlOutcome)); markers=\(probe.markers())")
         print("real-host startup: phase at emission=\(startup.phase); DA1 exact=\(startupMatches); clientless DA2 exact=\(controlMatches)")
+    }
+
+    // regression: a pane attaching after its created command ended got a fresh login shell instead
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and staged zmx"))
+    func paneAttachAfterTheCreatedCommandEndedStartsNoShell() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.start()
+        let gate = fixture.directory.appendingPathComponent("gate")
+        try #require(mkfifo(gate.path, 0o600) == 0)
+        let name = ZmxSupport.daemonName(for: UUID())
+        fixture.names.append(name)
+        let request = SessionHost.Ensure(name: name, argv: [fixture.zmx.path, "attach", name, "/bin/sh", "-c", "read _ < '\(gate.path)'; printf X"],
+                                         cwd: fixture.directory.path, env: fixture.environment, rows: 24, cols: 80)
+        let reply = try #require(try fixture.exchange(.ensure(request)).last)
+        guard case .ok(let ready) = reply, ready.state == .created else {
+            Issue.record("creation was not confirmed: \(reply); log: \(fixture.hostLog())")
+            return
+        }
+
+        var paneArgv: [String] = []
+        let client = Client(connect: { ForwardingPeer(reply: reply) }, diagnostic: { _ in },
+                            execute: { argv, _ in paneArgv = argv })
+        try client.run(request: request, endsPane: true)
+        try #require(!paneArgv.isEmpty)
+        let writer = open(gate.path, O_WRONLY)
+        try #require(writer >= 0)
+        _ = "\n".withCString { write(writer, $0, 1) }
+        close(writer)
+        let gone = Date().addingTimeInterval(5)
+        while try fixture.list().contains(where: { $0.name == name }), Date() < gone { Thread.sleep(forTimeInterval: 0.02) }
+        try #require(try !fixture.list().contains(where: { $0.name == name }), "the created command never ended")
+
+        let pane = try PTYProcess.spawn(argv: paneArgv, env: request.env, cwd: request.cwd, rows: 24, cols: 80)
+        defer { close(pane.ptyFD) }
+        var status: Int32 = 0
+        var ended = false
+        var lastWait: pid_t = 0
+        var lastErrno: Int32 = 0
+        let clock = ContinuousClock()
+        let windowStart = clock.now
+        let attachDeadline = Date().addingTimeInterval(3)
+        while !ended, Date() < attachDeadline {
+            lastWait = waitpid(pane.pid, &status, WNOHANG)
+            lastErrno = lastWait == -1 ? errno : 0
+            ended = lastWait == pane.pid
+            if !ended { Thread.sleep(forTimeInterval: 0.02) }
+        }
+        let report = ended ? "" : StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: clock.now - windowStart,
+                                                lastWait: lastWait, lastErrno: lastErrno).report(fixture: fixture)
+        #expect(ended, "the pane's attach to an ended command kept running\n\(report)")
+        if !ended {
+            kill(pane.pid, SIGKILL)
+            _ = waitpid(pane.pid, &status, 0)
+        }
+        let leftover = try fixture.list().filter { $0.name == name }
+        #expect(leftover.isEmpty, "a daemon started under the ended command's name: \(leftover)")
+    }
+
+    private struct StalledAttach {
+        let pane: PTYProcess
+        let argv: [String]
+        let daemon: String
+        let elapsed: Duration
+        let lastWait: pid_t
+        let lastErrno: Int32
+
+        func report(fixture: Fixture) -> String {
+            let listing: String
+            do {
+                listing = try fixture.list().map { "\($0.name)" }.joined(separator: ", ")
+            } catch {
+                listing = "list failed: \(error)"
+            }
+            return """
+                pid=\(pane.pid) elapsed=\(elapsed) waitpid=\(lastWait) errno=\(lastErrno) \
+                p_stat=\(SessionHostServerTests.processState(pane.pid)) argv=\(argv) daemon=\(daemon)
+                pty: \(SessionHostServerTests.available(pane.ptyFD).debugDescription)
+                exec error: \(SessionHostServerTests.available(pane.execErrorFD).debugDescription)
+                zmx list: \(listing)
+                host log: \(fixture.hostLog())
+                """
+        }
+    }
+
+    private static func available(_ fd: Int32) -> String {
+        guard fd >= 0 else { return "<no fd>" }
+        let flags = fcntl(fd, F_GETFL)
+        _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+        var bytes: [UInt8] = []
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while bytes.count < 16384 {
+            let count = read(fd, &buffer, buffer.count)
+            guard count > 0 else { break }
+            bytes.append(contentsOf: buffer[0..<count])
+        }
+        return String(decoding: bytes, as: UTF8.self)
+    }
+
+    private static func processState(_ pid: pid_t) -> String {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return "sysctl errno \(errno)" }
+        guard size > 0 else { return "absent" }
+        let names: [Int32: String] = [1: "SIDL", 2: "SRUN", 3: "SSLEEP", 4: "SSTOP", 5: "SZOMB"]
+        let stat = Int32(info.kp_proc.p_stat)
+        return "\(names[stat] ?? "\(stat)") flags=0x\(String(info.kp_proc.p_flag, radix: 16))"
+    }
+
+    private final class ForwardingPeer: ClientPeer {
+        let reply: SessionHost.Response
+        init(reply: SessionHost.Response) { self.reply = reply }
+        func send(_ frame: Data, deadline: TimeInterval) throws {}
+        func receive(deadline: TimeInterval) throws -> SessionHost.Response { reply }
+        func close() {}
     }
 
     private static let sweepTrials = 5

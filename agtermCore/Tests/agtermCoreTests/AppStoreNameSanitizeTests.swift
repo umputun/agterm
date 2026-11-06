@@ -17,6 +17,55 @@ struct AppStoreNameSanitizeTests {
         #expect(session.effectiveCwd == "/worktouch /tmp/pwned")
     }
 
+    @Test func listLabelNamesACompanionAfterItsParent() throws {
+        let g = try CompanionGroup()
+        g.store.renameSession(g.parent.id, to: "api")
+        g.store.renameSession(g.first.id, to: "logs")
+
+        #expect(g.store.listLabel(for: g.parent) == "api")
+        #expect(g.store.listLabel(for: g.first) == "api › logs")
+        #expect(g.store.listLabel(for: g.after) == g.after.displayName)
+
+        g.store.renameSession(g.parent.id, to: "web")
+        #expect(g.store.listLabel(for: g.first) == "web › logs")
+    }
+
+    @Test func listOrderKeepsEachGroupTogetherUnderIdenticallyNamedParents() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let zeta = try #require(store.addSession(toWorkspace: work.id, cwd: "/z", name: "zeta"))
+        let first = try #require(store.addSession(toWorkspace: work.id, cwd: "/a", name: "api"))
+        let second = try #require(store.addSession(toWorkspace: work.id, cwd: "/b", name: "api"))
+        let firstChild = try store.addCompanion(to: first.id, options: CompanionOptions(name: "zz")).get()
+        let secondChild = try store.addCompanion(to: second.id, options: CompanionOptions(name: "aa")).get()
+
+        let order = store.listOrdered(store.workspaces[0].sessions).map(\.id)
+
+        #expect(order == [first.id, firstChild.id, second.id, secondChild.id, zeta.id])
+    }
+
+    @Test func aCompanionListedAheadOfItsParentStillFollowsIt() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: work.id, cwd: "/a", name: "api"))
+        let second = try #require(store.addSession(toWorkspace: work.id, cwd: "/b", name: "api"))
+        let firstChild = try store.addCompanion(to: first.id, options: CompanionOptions(name: "a")).get()
+        let secondChild = try store.addCompanion(to: second.id, options: CompanionOptions(name: "b")).get()
+
+        let order = store.listOrdered([firstChild, first, second, secondChild]).map(\.id)
+
+        #expect(order == [first.id, firstChild.id, second.id, secondChild.id])
+    }
+
+    @Test func aCompanionListedWithoutItsParentSortsOnItsOwnLabel() throws {
+        let g = try CompanionGroup()
+        g.store.renameSession(g.parent.id, to: "m")
+        g.store.renameSession(g.after.id, to: "a")
+        g.store.renameSession(g.first.id, to: "c")
+
+        #expect(g.store.listOrdered([g.first, g.after]).map(\.id) == [g.after.id, g.first.id])
+    }
+
     @Test func renameSessionStripsInteriorControlCharacters() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

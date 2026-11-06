@@ -72,6 +72,7 @@ final class SettingsModel {
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
+        GhosttyApp.shared.setSessionInfoDisplay(settings.effectiveSessionInfoDisplay)
         applyHtmlOverlayZoom()
         TerminalInputSource.shared.setTarget(settings.terminalInputSource)
         ensureStarterKeymap()
@@ -219,6 +220,13 @@ final class SettingsModel {
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     func setSidebarFontSize(_ value: Double?) { settings.sidebarFontSize = value; persistAndApply() }
+
+    /// Persist the sidebar row spacing; `standard` is the nil case. An unchanged value skips the write.
+    func setSidebarDensity(_ density: SidebarDensity) {
+        guard density != settings.effectiveSidebarDensity else { return }
+        settings.sidebarDensity = density == .standard ? nil : density.rawValue
+        persistAndApply()
+    }
     func setInterfaceFontSize(_ value: Double?) { settings.interfaceFontSize = value; persistAndApply() }
     func setQuickTerminalSizePercent(_ value: Int?) {
         settings.quickTerminalSizePercent = value
@@ -262,6 +270,14 @@ final class SettingsModel {
     func setFlaggedViewLayout(_ layout: FlaggedViewLayout) {
         guard layout != settings.effectiveFlaggedViewLayout else { return }
         settings.flaggedViewLayout = layout == .flat ? nil : layout.rawValue
+        persistAndApply()
+    }
+
+    /// setSessionInfoDisplay persists where info lines draw; `always` is the nil case. Like the flagged layout it
+    /// rides `.agtermAppearanceChanged`, and an unchanged value skips the write.
+    func setSessionInfoDisplay(_ display: SessionInfoDisplay) {
+        guard display != settings.effectiveSessionInfoDisplay else { return }
+        settings.sessionInfoDisplay = display == .always ? nil : display.rawValue
         persistAndApply()
     }
 
@@ -359,6 +375,12 @@ final class SettingsModel {
     /// Persist whether attention navigation also stops on `active` sessions (nil = off) and fan it out.
     func setAttentionIncludesActive(_ value: Bool?) {
         settings.attentionIncludesActive = value
+        try? settingsStore.save(settings)
+        applyWindowSettingsToAllWindows()
+    }
+    /// Persist whether attention navigation walks every open window (nil = off) and fan it out.
+    func setAttentionNavigationAcrossWindows(_ value: Bool?) {
+        settings.attentionNavigationAcrossWindows = value
         try? settingsStore.save(settings)
         applyWindowSettingsToAllWindows()
     }
@@ -687,8 +709,9 @@ final class SettingsModel {
     private func starterGhosttyConfigText() -> String {
         """
         # agterm-scoped ghostty config — applies ONLY to agterm, not the standalone Ghostty.app.
-        # Put any ghostty config key here to override agterm's bundled defaults and your global
+        # Put any ghostty terminal config key here to override agterm's bundled defaults and your global
         # ~/.config/ghostty/config. Full key reference: https://ghostty.org/docs/config
+        # Keys for Ghostty.app's own window and split chrome are mostly not read; split-divider-color is.
         #
         # Edit this file and run File ▸ Reload Config (or relaunch) to apply. Blank lines and lines
         # starting with `#` are ignored. Most keys apply to open terminals on reload, but layout keys
@@ -757,6 +780,7 @@ final class SettingsModel {
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
+        GhosttyApp.shared.setSessionInfoDisplay(settings.effectiveSessionInfoDisplay)
         // refresh the chrome (title bar + sidebar + quick terminal) for the new terminal color,
         // translucency and toolbar style now, not at the next window re-key.
         NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
@@ -804,8 +828,10 @@ final class SettingsModel {
         GhosttyApp.shared.setHiddenInterfaceElements(settings.resolvedHiddenInterfaceElements)
     }
 
+    // the one setter of both copies: GhosttyApp's drives rendering, the library's drives navigation
     private func applyFlaggedViewLayout() {
         GhosttyApp.shared.setFlaggedViewLayout(settings.effectiveFlaggedViewLayout)
+        library.setFlaggedLayout(settings.effectiveFlaggedViewLayout)
     }
 
     private func applyHtmlOverlayZoom() {
@@ -823,6 +849,8 @@ final class SettingsModel {
         let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
         store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
         store.attentionIncludesActive = settings.attentionIncludesActive ?? false
+        let acrossWindows = settings.attentionNavigationAcrossWindows ?? false
+        if store.attentionNavigationAcrossWindows != acrossWindows { store.attentionNavigationAcrossWindows = acrossWindows }
     }
 
     /// Fan the per-window settings out to every open window's store — the settings-change broadcast and the
@@ -846,6 +874,7 @@ final class SettingsModel {
 
     private func applySidebarFontSize() {
         GhosttyApp.shared.setSidebarFontSize(settings.effectiveSidebarFontSize)
+        GhosttyApp.shared.setSidebarDensity(settings.effectiveSidebarDensity)
     }
 
     private func applyInterfaceFontSize() {

@@ -32,10 +32,10 @@ enum HudLinkClick {
         }
     }
 
-    /// Reports the pointer to the panel under it while ⌘ is the only modifier held, and takes it away again
-    /// when either stops being true, so libghostty raises and drops its own hovered-link state.
+    /// Reports the pointer to the panel under it while a link chord (⌘, or ⌘⌥ to reveal) is held, and takes it
+    /// away again when either stops being true, so libghostty raises and drops its own hovered-link state.
     static func hover(_ event: NSEvent) {
-        let held = event.modifierFlags.intersection([.command, .shift, .control, .option]) == .command
+        let held = isLinkChord(event.modifierFlags)
         let point = event.type == .mouseMoved ? event.locationInWindow : event.window?.mouseLocationOutsideOfEventStream
         var panel: GhosttySurfaceView?
         if held, let point { panel = Self.panel(in: event.window, at: point) }
@@ -64,11 +64,15 @@ enum HudLinkClick {
         return true
     }
 
-    /// Whether `event` is a left press with ⌘ as its only modifier, which is what libghostty requires
-    /// before it resolves a link under the pointer.
+    /// Whether `event` is a left press with a link chord: ⌘ alone, which is what libghostty requires before it
+    /// resolves a link under the pointer, or ⌘⌥, which the panel forwards as ⌘ and reveals the file.
     static func isLinkClick(_ event: NSEvent) -> Bool {
-        guard event.type == .leftMouseDown else { return false }
-        return event.modifierFlags.intersection([.command, .shift, .control, .option]) == .command
+        event.type == .leftMouseDown && isLinkChord(event.modifierFlags)
+    }
+
+    private static func isLinkChord(_ flags: NSEvent.ModifierFlags) -> Bool {
+        let held = flags.intersection([.command, .shift, .control, .option])
+        return held == .command || held == [.command, .option]
     }
 
     /// A terminal ask has its own slot and is drawn above the HUD, so a click on it is the ask's.

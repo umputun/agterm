@@ -28,11 +28,14 @@ public enum ZmxSupport {
         public let sessionHostExecutablePath: String?
         /// Nil leaves the attach unmanaged, as a zmx without explicit leadership expects.
         public let lead: ZmxLeadAttachment?
+        /// The shell `commandShell(fromCommand:)` took from ghostty `command`; it replaces
+        /// `passwordDatabaseShell`, nil leaving the login shell in charge.
+        public let commandShell: String?
 
         public init(zmxExecutablePath: String, passwordDatabaseShell: String?, resourcesDirectory: String?,
                     stateDirectory: String, paneIdentity: UUID, baseEnvironment: [String: String],
                     inheritedZdotdir: String?, sessionHostExecutablePath: String? = nil,
-                    lead: ZmxLeadAttachment? = nil) {
+                    lead: ZmxLeadAttachment? = nil, commandShell: String? = nil) {
             self.zmxExecutablePath = zmxExecutablePath
             self.passwordDatabaseShell = passwordDatabaseShell
             self.resourcesDirectory = resourcesDirectory
@@ -42,6 +45,7 @@ public enum ZmxSupport {
             self.inheritedZdotdir = inheritedZdotdir
             self.sessionHostExecutablePath = sessionHostExecutablePath
             self.lead = lead
+            self.commandShell = commandShell
         }
     }
 
@@ -54,15 +58,20 @@ public enum ZmxSupport {
         public let daemonName: String
         public let socketDirectory: String
         public let paneID: String
+        /// The ghostty `command` shell the attach line re-exports as `SHELL`, which `login` resets to the
+        /// password-database shell before zmx reads it; nil for a login-shell pane.
+        public let commandShell: String?
 
         public init(executablePath: String, environment: [String: String], daemonName: String,
-                    socketDirectory: String, paneID: String, sessionHostExecutablePath: String? = nil) {
+                    socketDirectory: String, paneID: String, sessionHostExecutablePath: String? = nil,
+                    commandShell: String? = nil) {
             self.executablePath = executablePath
             self.sessionHostExecutablePath = sessionHostExecutablePath
             self.environment = environment
             self.daemonName = daemonName
             self.socketDirectory = socketDirectory
             self.paneID = paneID
+            self.commandShell = commandShell
         }
     }
 
@@ -77,7 +86,7 @@ public enum ZmxSupport {
             switch self {
             case .executablePathNotAbsolute: "the zmx executable path is not absolute"
             case .executableUnavailable: "the zmx executable is unavailable"
-            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish"
+            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish, and the ghostty command setting names neither"
             case .missingZshIntegration: "the bundled zsh integration is unavailable"
             case .missingFishIntegration: "the bundled fish integration is unavailable"
             }
@@ -92,7 +101,7 @@ public enum ZmxSupport {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             return .failure(.executableUnavailable)
         }
-        guard let shell = inputs.passwordDatabaseShell, let shellKind = shellKind(for: shell) else {
+        guard let shell = inputs.commandShell ?? inputs.passwordDatabaseShell, let shellKind = shellKind(for: shell) else {
             return .failure(.unsupportedLoginShell)
         }
         guard let resources = inputs.resourcesDirectory else {
@@ -147,7 +156,8 @@ public enum ZmxSupport {
             daemonName: daemonName,
             socketDirectory: socketDirectory,
             paneID: paneID,
-            sessionHostExecutablePath: host
+            sessionHostExecutablePath: host,
+            commandShell: inputs.commandShell
         ))
     }
 
@@ -158,18 +168,47 @@ public enum ZmxSupport {
         return .wrapped(configuration)
     }
 
+    /// attachCommand builds a pane's zmx attach line. A captured `argv` wins over either command. `creationCommand`
+    /// runs and then becomes a login shell (`session restart --command`); `paneCommand` is the pane's own
+    /// creation command and the pane ends with it (`session new --command`).
     public static func attachCommand(_ configuration: Configuration, replaying argv: [String]?,
-                                     creationCommand: String? = nil, denylist: Set<String>) -> String {
-        var arguments = configuration.attachArguments + creationArguments(configuration, replaying: argv, creationCommand: creationCommand, denylist: denylist)
+                                     creationCommand: String? = nil, paneCommand: String? = nil,
+                                     denylist: Set<String>) -> String {
+        let creation = paneCommand.map(Creation.endingPane) ?? creationCommand.map(Creation.returningToShell)
+        let payload = creationArguments(configuration, replaying: argv, creation: creation, denylist: denylist)
+        var arguments = configuration.attachArguments + payload
         if let host = configuration.sessionHostExecutablePath {
-            arguments = [host, "client", configuration.daemonName, "--"] + arguments
+            let endsPane = argv == nil && paneCommand != nil && !payload.isEmpty
+            arguments = [host, "client", configuration.daemonName] + (endsPane ? ["--ends-pane"] : []) + ["--"] + arguments
         }
+        var wrapper: [String] = []
         if let shell = configuration.environment["SHELL"], shellKind(for: shell) == .fish,
            let integrationRoot = configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] {
-            arguments = ["/usr/bin/env", "/bin/sh", "-c", fishXDGDataDirectoriesScript, "sh", integrationRoot] + arguments
+            wrapper = ["/bin/sh", "-c", fishXDGDataDirectoriesScript, "sh", integrationRoot]
+        }
+        let assignments = configuration.commandShell.map { ["SHELL=\($0)"] } ?? []
+        if !wrapper.isEmpty || !assignments.isEmpty {
+            arguments = ["/usr/bin/env"] + assignments + wrapper + arguments
         }
         return CommandRestore.shellQuotedLine(arguments)
     }
+
+    /// commandShell is the shell a ghostty `command` value names when Live can run it in place of the login
+    /// shell: an absolute zsh or fish path after an optional `direct:` or `shell:` prefix, followed only by
+    /// flags Live applies anyway. Anything else is nil, since Live starts the shell itself and cannot honor
+    /// other programs or arguments.
+    public static func commandShell(fromCommand command: String) -> String? {
+        var value = command
+        for prefix in ["direct:", "shell:"] where value.hasPrefix(prefix) {
+            value = String(value.dropFirst(prefix.count))
+        }
+        let words = value.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let shell = words.first, (shell as NSString).isAbsolutePath, shellKind(for: shell) != nil,
+              words.dropFirst().allSatisfy(liveShellFlags.contains) else { return nil }
+        return shell
+    }
+
+    private static let liveShellFlags: Set<String> = ["-l", "--login", "-i", "--interactive", "-il", "-li"]
 
     /// Merged at launch because a surface `XDG_DATA_DIRS` would replace a `ghostty.conf` `env` entry.
     static let fishXDGDataDirectoriesScript = [
@@ -179,8 +218,13 @@ public enum ZmxSupport {
         "unset IFS", "XDG_DATA_DIRS=$merged", "export XDG_DATA_DIRS", "exec \"$@\"",
     ].joined(separator: "; ")
 
+    private enum Creation {
+        case returningToShell(String)
+        case endingPane(String)
+    }
+
     private static func creationArguments(_ configuration: Configuration, replaying argv: [String]?,
-                                          creationCommand: String?, denylist: Set<String>) -> [String] {
+                                          creation: Creation?, denylist: Set<String>) -> [String] {
         guard let shell = configuration.environment["SHELL"], let shellKind = shellKind(for: shell) else {
             return []
         }
@@ -197,11 +241,13 @@ public enum ZmxSupport {
                     argv: argv, integrationDirectory: integrationDirectory,
                     inheritedZdotdir: inheritedZdotdir, shell: shell
                 )
-            } else if let creationCommand {
+            } else if case .returningToShell(let line) = creation {
                 script = ZmxReplayScript.render(
-                    commandLine: creationCommand, integrationDirectory: integrationDirectory,
+                    commandLine: line, integrationDirectory: integrationDirectory,
                     inheritedZdotdir: inheritedZdotdir, shell: shell
                 )
+            } else if case .endingPane(let line) = creation {
+                script = ZmxReplayScript.renderEnding(commandLine: line)
             } else {
                 return []
             }
@@ -214,10 +260,10 @@ public enum ZmxSupport {
                     return []
                 }
                 script = ZmxReplayScript.renderFish(argv: argv, integrationRoot: integrationRoot, shell: shell)
-            } else if let creationCommand {
-                script = ZmxReplayScript.renderFish(
-                    commandLine: creationCommand, integrationRoot: integrationRoot, shell: shell
-                )
+            } else if case .returningToShell(let line) = creation {
+                script = ZmxReplayScript.renderFish(commandLine: line, integrationRoot: integrationRoot, shell: shell)
+            } else if case .endingPane(let line) = creation {
+                script = ZmxReplayScript.renderFishEnding(commandLine: line)
             } else {
                 return []
             }

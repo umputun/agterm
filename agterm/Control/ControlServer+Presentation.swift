@@ -140,9 +140,12 @@ extension ControlServer {
         let id = stream.session
         let library = library
         let clock = hudClock
+        let respawns = PresentationRespawns(epoch: originEpoch, generations: respawnGenerations[id] ?? [:])
         return try presentationHub.subscribe(session: id, hello: hello, sink: stream) {
-            library.store(forSession: id)?.presentationSnapshot(forSession: id, now: clock())
+            var snapshot = library.store(forSession: id)?.presentationSnapshot(forSession: id, now: clock())
                 ?? PresentationSnapshot(status: nil, hud: nil)
+            snapshot.respawns = respawns
+            return snapshot
         }
     }
 

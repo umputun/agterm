@@ -39,7 +39,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 540, height: 680)
+        .frame(width: 540, height: 710)
         // without this a process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale
         // Settings window on its last tab, stealing key focus from the real launch window.
         .background(NonRestorableWindow())
@@ -242,7 +242,7 @@ private struct GeneralSettingsView: View {
 }
 
 /// Interface tab: per-element title-bar and sidebar chrome visibility, grouped by surface, two toggles per
-/// row so the tab keeps fitting the fixed 540×680 window as the element set grows, plus the quick terminal's
+/// row so the tab keeps fitting the fixed 540×710 window as the element set grows, plus the quick terminal's
 /// panel size — that panel belongs to no window, so it is not a Window setting. A toggle off adds the
 /// element to `AppSettings.hiddenInterfaceElements`, a `hiddenByDefault` one toggled on to
 /// `shownInterfaceElements`, and both live-apply — title-bar and footer elements re-gate in open windows on
@@ -252,15 +252,26 @@ private struct InterfaceSettingsView: View {
 
     var body: some View {
         Form {
-            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar)) {
-                EmptyView()
-            }
-            // the multi-window toggle rides the Sidebar section: the tab is full at 540x680, and its own
-            // section header would push the quick-terminal Size off the bottom.
-            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar)) {
-                Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
+            twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() },
+                             trailing: { EmptyView() })
+            // the multi-window toggle and the info-line picker share the Sidebar section's last row: the tab is
+            // full at 540x710, and a row or section header of their own would push the quick-terminal Size off.
+            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { EmptyView() },
+                             trailing: {
+                HStack(spacing: 16) {
+                    sessionInfoPicker.frame(maxWidth: .infinity)
+                    Divider()
+                    Toggle(isOn: autoHideSidebarInactiveWindows) {
+                        HStack(spacing: 6) {
+                            Color.clear.frame(width: 18).accessibilityHidden(true)
+                            Text("Active window only")
+                        }
+                    }
+                    .accessibilityLabel("Active window only")
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
-            }
+                    .frame(maxWidth: .infinity)
+                }
+            })
             Section("Quick Terminal") {
                 Picker("Size", selection: quickTerminalSizePercent) {
                     Text("Default").tag(Int?.none)
@@ -287,10 +298,10 @@ private struct InterfaceSettingsView: View {
                 set: { model.setQuickTerminalSizePercent($0) })
     }
 
-    /// A section whose toggles lay out TWO per row, each filling half the row around a centered `Divider` so
-    /// the columns read as EVEN and visibly separated; an odd final element pairs with an empty half.
+    /// twoColumnSection lays toggles out TWO per row, each filling half the row around a centered `Divider` so
+    /// the columns read as EVEN and visibly separated; an odd final element pairs with `fill`.
     @ViewBuilder
-    private func twoColumnSection(_ title: String, elements: [InterfaceElement],
+    private func twoColumnSection(_ title: String, elements: [InterfaceElement], @ViewBuilder fill: @escaping () -> some View,
                                   @ViewBuilder trailing: () -> some View) -> some View {
         Section(title) {
             ForEach(Array(stride(from: 0, to: elements.count, by: 2)), id: \.self) { start in
@@ -300,7 +311,7 @@ private struct InterfaceSettingsView: View {
                     if start + 1 < elements.count {
                         toggle(for: elements[start + 1]).frame(maxWidth: .infinity)
                     } else {
-                        Spacer().frame(maxWidth: .infinity)
+                        fill().frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -330,6 +341,19 @@ private struct InterfaceSettingsView: View {
     private func binding(for element: InterfaceElement) -> Binding<Bool> {
         Binding(get: { !model.settings.isInterfaceElementHidden(element) },
                 set: { model.setInterfaceElementVisible(element, visible: $0) })
+    }
+
+    private var sessionInfoPicker: some View {
+        Picker(selection: Binding(get: { model.settings.effectiveSessionInfoDisplay },
+                                  set: { model.setSessionInfoDisplay($0) })) {
+            ForEach(SessionInfoDisplay.allCases, id: \.self) { Text($0.displayName).tag($0) }
+        } label: {
+            HStack(spacing: 6) {
+                Color.clear.frame(width: 18).accessibilityHidden(true)
+                Text("Session info").fixedSize()
+            }
+        }
+        .accessibilityIdentifier("settings-session-info-display")
     }
 }
 
@@ -414,7 +438,7 @@ private struct NotificationsSettingsView: View {
 private struct AgentStatusSettingsView: View {
     /// Gap between a glyph row's color well and its shape picker.
     private static let controlSpacing: CGFloat = 8
-    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the six
+    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the
     /// silhouettes differ by a few points, so without a fixed column the color wells jog between rows. Snug
     /// enough to read as spacing, not a hole, with room above the widest silhouette's button.
     private static let shapePickerWidth: CGFloat = 80
@@ -451,6 +475,8 @@ private struct AgentStatusSettingsView: View {
             Section("Navigation") {
                 Toggle("Attention navigation includes active sessions", isOn: attentionIncludesActive)
                     .accessibilityIdentifier("settings-attention-includes-active")
+                Toggle("Attention navigation crosses windows", isOn: attentionNavigationAcrossWindows)
+                    .accessibilityIdentifier("settings-attention-across-windows")
                 Picker("Auto-follow blocked sessions", selection: autoFollowAttention) {
                     Text("Disabled").tag(AppSettings.AutoFollowAttention.off)
                     Text("5 sec idle").tag(AppSettings.AutoFollowAttention.s5)
@@ -463,7 +489,6 @@ private struct AgentStatusSettingsView: View {
                 Toggle("Auto-follow away from a running session", isOn: autoFollowAwayFromRunning)
                     .accessibilityIdentifier("settings-auto-follow-stay-active")
                     .disabled(autoFollowAttention.wrappedValue == .off)
-                SettingHint("Only applies while auto-follow is on.")
             }
 
             Section {
@@ -603,6 +628,11 @@ private struct AgentStatusSettingsView: View {
     private var attentionIncludesActive: Binding<Bool> {
         Binding(get: { model.settings.attentionIncludesActive ?? false },
                 set: { model.setAttentionIncludesActive($0 ? true : nil) })
+    }
+
+    private var attentionNavigationAcrossWindows: Binding<Bool> {
+        Binding(get: { model.settings.attentionNavigationAcrossWindows ?? false },
+                set: { model.setAttentionNavigationAcrossWindows($0 ? true : nil) })
     }
 
     /// Inverted view of the stored `autoFollowStayOnActive` so the toggle reads forward — ON = do leave a

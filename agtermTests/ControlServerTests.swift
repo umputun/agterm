@@ -370,6 +370,79 @@ final class ControlServerTests: XCTestCase {
         wait(for: [remoteFinished], timeout: 10)
     }
 
+    func testAGroupAttachDoesNotHoldTheAcceptLoop() {
+        let runner = BlockingRemoteRunner()
+        let path = socketPath!
+        let server = makeServer(remoteRunner: runner)
+        server.start()
+        XCTAssertNotNil(server.boundSocketPath)
+
+        let sshInFlight = expectation(description: "the group attach's discovery ssh has started")
+        runner.onEntered = { sshInFlight.fulfill() }
+        let remoteFinished = expectation(description: "the group attach returns once released")
+        Thread {
+            _ = Self.roundTrip(#"{"cmd":"zmx.attach.group","target":"P","args":{"host":"buildbox"}}"#, at: path)
+            remoteFinished.fulfill()
+        }.start()
+
+        wait(for: [sshInFlight], timeout: 5)
+
+        let probeAnswered = expectation(description: "a second client is served during the ssh")
+        var probe: String?
+        Thread {
+            probe = Self.roundTrip(#"{"cmd":"window.list"}"#, at: path)
+            probeAnswered.fulfill()
+        }.start()
+
+        wait(for: [probeAnswered], timeout: 5)
+        XCTAssertNotNil(probe, "a second connection must be answered while the group attach is still waiting")
+
+        runner.release.signal()
+        wait(for: [remoteFinished], timeout: 10)
+    }
+
+    func testACompanionRequestLeavesTheAcceptLoopAndATreeAfterItsReplySeesTheCompanion() throws {
+        let runner = BlockingRemoteRunner()
+        let path = socketPath!
+        let library = WindowLibrary(directory: stateDir)
+        let server = makeServer(library: library, remoteRunner: runner)
+        server.start()
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [:], presentationVersion: nil),
+                         forSession: remote.id)
+
+        let sshInFlight = expectation(description: "the origin's create has started")
+        runner.onEntered = { sshInFlight.fulfill() }
+        let remoteFinished = expectation(description: "the remote create returns once released")
+        Thread {
+            _ = Self.roundTrip(#"{"cmd":"session.companion.new","target":"\#(remote.id.uuidString)"}"#, at: path)
+            remoteFinished.fulfill()
+        }.start()
+        wait(for: [sshInFlight], timeout: 5)
+
+        let answered = expectation(description: "a local create and a tree are served during the ssh")
+        var created: String?
+        var tree: String?
+        Thread {
+            created = Self.roundTrip(#"{"cmd":"session.companion.new","target":"\#(parent.id.uuidString)","args":{"noSelect":true}}"#, at: path)
+            tree = Self.roundTrip(#"{"cmd":"tree"}"#, at: path)
+            answered.fulfill()
+        }.start()
+        wait(for: [answered], timeout: 5)
+
+        let reply = try XCTUnwrap(created.flatMap { try? JSONDecoder().decode(ControlResponse.self, from: Data($0.utf8)) })
+        let id = try XCTUnwrap(reply.result?.id, created ?? "")
+        let read = try XCTUnwrap(tree.flatMap { try? JSONDecoder().decode(ControlResponse.self, from: Data($0.utf8)) })
+        let node = read.result?.tree?.workspaces.flatMap(\.sessions).first { $0.id == id }
+        XCTAssertEqual(node?.parent, parent.id.uuidString, "a tree sent after the create's reply sees the companion")
+
+        runner.release.signal()
+        wait(for: [remoteFinished], timeout: 10)
+    }
+
     nonisolated private static func address(for path: String) -> sockaddr_un {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)

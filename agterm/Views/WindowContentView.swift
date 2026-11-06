@@ -78,6 +78,7 @@ struct WindowContentView: View {
     /// The terminal theme's foreground, used for the chrome text (title bar text + buttons, sidebar bottom
     /// bar) so non-terminal text tracks the theme.
     @State var chromeText: Color = WindowContentView.resolvedChromeText()
+    @State var splitDividerColor: NSColor = GhosttyApp.shared.splitDividerColor
     /// When true the title bar shows the attention bell.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
     /// The title-bar / sidebar-footer chrome the user hid in Settings ▸ Interface, read by `shows(_:)`.
@@ -223,6 +224,7 @@ struct WindowContentView: View {
             terminalColor = WindowContentView.resolvedTerminalColor()
             toolbarMode = WindowContentView.resolvedToolbarMode()
             chromeText = WindowContentView.resolvedChromeText()
+            splitDividerColor = GhosttyApp.shared.splitDividerColor
             attentionButtonEnabled = WindowContentView.resolvedAttentionButtonEnabled()
             hiddenInterfaceElements = WindowContentView.resolvedHiddenInterfaceElements()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
@@ -435,7 +437,8 @@ struct WindowContentView: View {
                 onPrevious: { actions.navigateSearch(.previous) },
                 onClose: { actions.endSearch() },
                 chromeText: chromeText,
-                terminalColor: terminalColor
+                terminalColor: terminalColor,
+                toolTipsShown: !chromeCovered
             )
             .padding(.top, 8)
             .padding(.trailing, 8)
@@ -448,7 +451,7 @@ struct WindowContentView: View {
     func primarySurfaceID(_ session: Session) -> String {
         // the revision is not observed, and a fresh attach bumps it with nothing else changing
         _ = ZmxLeadBook.shared.attachments
-        return "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
+        return "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)-\(session.primaryRespawns)"
     }
 
     /// Opacity of the mute wash, shared by the inactive split pane and the backdrop behind a floating panel
@@ -684,11 +687,18 @@ struct WindowContentView: View {
         }
     }
 
+    /// Whether a window modal (a palette, the switcher, a pick or an ask) is drawn over the sidebar and the
+    /// deck, which AppKit tooltips cannot see, so chrome there gates its tooltips on it.
+    var chromeCovered: Bool {
+        pick.modalPending || (isFrontmost && (palette.mode != nil || sessionSwitcher.isActive))
+    }
+
     /// The sidebar footer, source-list style: two add controls on the left (a workspace; a menu adding a
     /// session at the default cwd or a picked directory) and two view toggles on the right (the workspace
     /// focus filter, the flagged working-set view). Each is hideable via Settings ▸ Interface (`shows(_:)`).
     private var bottomBar: some View {
-        HStack(spacing: 2) {
+        let tipsShown = terminalZoom.target == nil && !dashboard.isOpen && !chromeCovered
+        return HStack(spacing: 2) {
             if shows(.newWorkspace) {
                 Button {
                     actions.newWorkspace()
@@ -698,7 +708,7 @@ struct WindowContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help(helpHint("New Workspace", .newWorkspace))
+                .toolTip(helpHint("New Workspace", .newWorkspace), isShown: tipsShown)
                 .accessibilityLabel("New Workspace")
             }
 
@@ -716,7 +726,7 @@ struct WindowContentView: View {
                 .tint(chromeText)
                 .menuIndicator(.hidden)
                 .fixedSize()
-                .help(helpHint("New Session", .newSession))
+                .toolTip(helpHint("New Session", .newSession), isShown: tipsShown)
                 .accessibilityLabel("Add session")
                 .accessibilityIdentifier("add-session")
             }
@@ -738,8 +748,8 @@ struct WindowContentView: View {
                 // explicit chromeText foregroundStyle defeats SwiftUI's disabled dimming, so mute by hand.
                 .disabled(store.focusedWorkspaceIDs.isEmpty)
                 .opacity(store.focusedWorkspaceIDs.isEmpty ? 0.35 : 1)
-                .help(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
-                               .toggleWorkspaceFilter))
+                .toolTip(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
+                                  .toggleWorkspaceFilter), isShown: tipsShown)
                 .accessibilityLabel("Toggle Workspace Filter")
                 // the only accessibility-observable read of the filter state.
                 .accessibilityValue(store.focusEnabled ? "on" : "off")
@@ -762,7 +772,8 @@ struct WindowContentView: View {
                 // mode so the button can always switch back to the tree. Hand-muted, like the filter above.
                 .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
                 .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
-                .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
+                .toolTip(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView),
+                         isShown: tipsShown)
                 .accessibilityLabel("Toggle Flagged View")
                 .accessibilityIdentifier("flagged-view-toggle")
             }

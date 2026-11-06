@@ -348,7 +348,7 @@ a {
   gap: 16px;
 }
 .surfaces-grid .surfaces-wide {
-  grid-column: span 3;
+  grid-column: span 2;
   grid-template-columns: 1.1fr 0.9fr;
   gap: 36px;
   padding: 36px;

@@ -75,6 +75,22 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
+/// Parsed density for `sidebar.density`; an omitted mode is `toggle`.
+public enum ControlSidebarDensityMode: Equatable, Sendable {
+    case standard
+    case compact
+    case toggle
+
+    public static func parse(_ mode: String?) -> ControlSidebarDensityMode? {
+        switch mode ?? "toggle" {
+        case SidebarDensity.standard.rawValue: return .standard
+        case SidebarDensity.compact.rawValue: return .compact
+        case "toggle": return .toggle
+        default: return nil
+        }
+    }
+}
+
 /// Parsed layout for `sidebar.flagged-layout`.
 public enum ControlFlaggedLayoutMode: Equatable, Sendable {
     case flat
@@ -253,5 +269,27 @@ public struct ControlSessionRestoreUpdate: Equatable, Sendable {
         self.pin = pin
         self.pane = pane
         self.paneID = paneID
+    }
+}
+
+/// ControlTintUpdate is a parsed `session.tint`/`workspace.tint` request: a color with optional parts, or a
+/// clear.
+public enum ControlTintUpdate: Equatable, Sendable {
+    case set(TintValue, parts: Set<TintPart>?)
+    case clear
+
+    /// set builds a palette-name update.
+    public static func set(_ color: TintColor, parts: Set<TintPart>?) -> ControlTintUpdate {
+        .set(.named(color), parts: parts)
+    }
+
+    /// resolved is the tint this update leaves on a row that has `current`: a set without parts keeps the
+    /// row's own parts, starting at the icon.
+    public func resolved(over current: SidebarTint?) -> SidebarTint? {
+        switch self {
+        case .clear: nil
+        case let .set(color, parts?): SidebarTint(color: color, parts: parts)
+        case let .set(color, nil): SidebarTint.recolor(current, to: color)
+        }
     }
 }

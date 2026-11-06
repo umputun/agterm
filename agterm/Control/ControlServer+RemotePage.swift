@@ -5,7 +5,7 @@ import agtermCore
 private let replicaLogger = Logger(subsystem: "com.umputun.agterm", category: "RemotePage")
 
 /// ReplicaPageRecord is a page this Mac shows for an origin: whose stream it answers on, the origin's id, the
-/// channel a file page fetches through, and the last origin command it applied.
+/// channel a page other than a URL page fetches through, and the last origin command it applied.
 struct ReplicaPageRecord {
     let session: UUID
     let origin: UUID
@@ -17,15 +17,20 @@ extension ControlServer {
     /// showReplicaPage presents `page` for session `id`'s origin; nil when shown, otherwise the refusal reason.
     func showReplicaPage(_ page: PresentationPage, forSession id: UUID) -> String? {
         guard let store = library.store(forSession: id), let session = store.session(withID: id) else { return "no such session" }
+        var page = page
         var argv: [String]?
-        switch page.source {
-        case .file:
+        if page.source.usesChannel {
             guard let host = session.remoteHost, let command = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
                 return "the origin cannot be reached for this page"
             }
             argv = command
-        case .url:
-            if page.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() { return failure }
+        } else if page.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
+            return failure
+        }
+        // an unsized picture is sized here, for this Mac's screen, as the origin sizes its own
+        if case .image(_, let width, let height) = page.source, page.pane == nil, page.sizePercent == nil, page.points.isEmpty {
+            let points = imagePoints(in: store, sessionID: id, pixels: ImagePixels(width: width, height: height))
+            (page.sizePercent, page.width, page.height) = (ImagePage.basePercent, points.width, points.height)
         }
         if let reason = store.presentReplicaPage(page, forSession: id) { return reason }
         guard let slot = store.replicaPage(page.page, forSession: id), let origin = slot.page.replicaOf else {
@@ -35,7 +40,7 @@ extension ControlServer {
         let channel = argv.map { _ in RemotePageChannel() }
         replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
-                                            replica: channel.map(Self.link))
+                                            replica: channel.map { Self.link($0) })
         if let channel, let argv {
             channel.onClose = { [weak store] in store?.closeHtmlOverlay(local) }
             channel.start(argv, launcher: pageLauncher)
@@ -67,7 +72,8 @@ extension ControlServer {
         case .back: refusal = registry.navigate(local, .back)
         case .forward: refusal = registry.navigate(local, .forward)
         case .browser: refusal = registry.navigate(local, .browser)
-        case .resize: store.resizeReplicaPage(command.page, forSession: id, sizePercent: command.sizePercent)
+        case .resize: store.resizeReplicaPage(command.page, forSession: id, sizePercent: command.sizePercent,
+                                              points: command.points, merge: command.merge == true)
         }
         if let refusal {
             replicaLogger.notice("origin request \(command.action.rawValue, privacy: .public) not applied: \(refusal, privacy: .public)")
@@ -99,8 +105,9 @@ extension ControlServer {
         }
     }
 
-    private static func link(_ channel: RemotePageChannel) -> HtmlReplicaLink {
+    static func link(_ channel: RemotePageChannel, ownPageCommandsLocal: Bool = false) -> HtmlReplicaLink {
         HtmlReplicaLink(
+            ownPageCommandsLocal: ownPageCommandsLocal,
             fetch: { [weak channel] path, revision in
                 guard let channel else { throw RemotePageChannel.Failure.closed }
                 let asked = revision.value

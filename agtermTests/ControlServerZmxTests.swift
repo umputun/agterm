@@ -403,6 +403,65 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertTrue(isDirectory.boolValue)
     }
 
+    func testACompanionAttachedAloneJoinsItsAttachedParentInThatParentsWorkspace() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let parentReply = await server.attachRemoteSession(host: "buildbox", session: "s1")
+        let parent = try XCTUnwrap(parentReply.result?.id.flatMap(UUID.init(uuidString:)))
+        let home = try XCTUnwrap(store.workspace(forSession: parent)?.id)
+        let other = store.addWorkspace(name: "other").id
+        XCTAssertEqual(store.currentWorkspaceID, other)
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1")
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.parent, parent.uuidString)
+        let companion = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(store.session(withID: companion)?.parentID, parent)
+        XCTAssertEqual(store.workspace(forSession: companion)?.id, home)
+    }
+
+    func testACompanionWithNoAttachedParentStandsAlone() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1")
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(reply.result?.parent)
+        let store = try XCTUnwrap(library.activeStore)
+        XCTAssertNil(store.session(withID: try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:))))?.parentID)
+    }
+
+    func testACompanionStandsAloneWhenTwoRowsShowItsParent() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        _ = await server.attachRemoteSession(host: "buildbox", session: "s1")
+        _ = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1")
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(reply.result?.parent, "two candidate parents name no single group to join")
+    }
+
+    func testACompanionIgnoresAParentRowFromAnotherHostOrEndpoint() async throws {
+        let server = makeServer(list: "", remoteRunner: FakeRemoteRunner(result: Self.groupProjection))
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let elsewhere = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-other")
+        let current = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+        for (host, endpoint) in [("otherbox", current), ("buildbox", elsewhere)] {
+            let row = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(), remoteHost: host))
+            store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: nil,
+                                           origin: RemoteBinding.Origin(host: host, endpoint: endpoint, sessionName: "build")),
+                             forSession: row.id)
+        }
+
+        let reply = await server.attachRemoteSession(host: "buildbox", session: "c1")
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(reply.result?.parent)
+    }
+
     func testAttachBringsBothPanesOfARemoteSplit() async throws {
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection,
                                                                   stderr: ""))
@@ -1047,6 +1106,17 @@ final class ControlServerZmxTests: XCTestCase {
     "workspaceName":"work","cwd":"/repo",\
     "panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"}]}]}}}
     """
+
+    private static let groupProjection = RemoteCommandResult(status: 0, stdout: """
+    {"ok":true,"result":{"remote":{\
+    "endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},\
+    "sessions":[{"id":"s1","name":"build","windowID":"w1","windowName":"main","workspaceID":"ws1",\
+    "workspaceName":"work","cwd":"/repo","companions":[{"id":"c1","name":"logs"}],\
+    "panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1"}]},\
+    {"id":"c1","name":"logs","windowID":"w1","windowName":"main","workspaceID":"ws1",\
+    "workspaceName":"work","cwd":"/repo","parent":"s1",\
+    "panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2"}]}]}}}
+    """, stderr: "")
 
     /// The same remote, whose session has a top/bottom split with both daemons live.
     private static let splitProjection = """

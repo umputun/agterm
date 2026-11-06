@@ -23,31 +23,37 @@ extension ControlServer {
                 return closeResolvedSession(id, in: store, undoable: undoable)
             }
             let soft = closeGraceUndoEnabled
-            let affected: Int
+            let closing = closingGroup(ids, in: store)
+            let closed: [UUID]
             if soft {
                 // one grouped grace record is the batch behavior scripts cannot reproduce by looping.
-                affected = store.softCloseSessions(ids) ? ids.count : 0
+                closed = store.softCloseSessions(ids) ? closing : []
             } else {
                 // match the GUI's immediate batch-close path when grace undo is disabled.
-                affected = ids.reduce(into: 0) { count, id in
-                    guard store.session(withID: id) != nil else { return }
-                    store.closeSession(id)
-                    count += 1
-                }
+                for id in closeRoots(ids, in: store) where store.session(withID: id) != nil { store.closeSession(id) }
+                closed = closing.filter { store.session(withID: $0) == nil }
             }
             // `ok` with the count (0 included) mirrors `placeSessions` — every id resolved, so no error arm.
-            return ControlResponse(ok: true, result: ControlResult(affected: affected,
-                                                                   undoable: undoable ? soft && affected > 0 : nil))
+            return ControlResponse(ok: true, result: ControlResult(affected: closed.count,
+                                                                   undoable: undoable ? soft && !closed.isEmpty : nil,
+                                                                   closed: closed.map(\.uuidString)))
         }
     }
 
+    // a parent's group count rides `affected`; a lone session keeps the bare receipt
     private func closeResolvedSession(_ id: UUID, in store: AppStore, undoable: Bool) -> ControlResponse {
+        let closing = closingGroup([id], in: store)
+        let group = closing.count > 1 ? closing.count : nil
         if undoable, closeGraceUndoEnabled {
             guard store.softCloseSession(id) else { return ControlResponse(ok: false, error: "could not close session") }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, undoable: true))
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, affected: group, undoable: true,
+                                                                   closed: closing.map(\.uuidString)))
         }
         store.closeSession(id)
-        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, undoable: undoable ? false : nil))
+        let closed = closing.filter { store.session(withID: $0) == nil }
+        return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, affected: group,
+                                                               undoable: undoable ? false : nil,
+                                                               closed: closed.map(\.uuidString)))
     }
 
     private var closeGraceUndoEnabled: Bool {

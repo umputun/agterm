@@ -816,4 +816,126 @@ struct AppStoreOrganizationTests {
         #expect(sessions.map(\.initialCwd) == ["/1", "/a", "/b", "/9"])
         #expect(sessions.last?.id == last.id)
     }
+
+    @Test func aParentMovesToAnotherWorkspaceWithItsCompanions() throws {
+        let g = try CompanionGroup()
+        let (store, _, personal, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        #expect(store.moveSession(parent.id, toWorkspace: personal.id))
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+        #expect(store.workspaces[1].sessions.map(\.id) == [parent.id, first.id, second.id])
+    }
+
+    @Test func aParentMovedDownLandsWithItsGroupAfterTheNextSession() throws {
+        let g = try CompanionGroup()
+        let (store, work, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        store.moveSession(parent.id, toWorkspace: work.id, at: 3)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id, parent.id, first.id, second.id])
+    }
+
+    @Test func aParentMovedIntoItsOwnGroupStaysPut() throws {
+        let g = try CompanionGroup()
+        let (store, work, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        store.moveSession(parent.id, toWorkspace: work.id, at: 1)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+    }
+
+    @Test func aSessionMovedIntoAGroupLandsAfterIt() throws {
+        let g = try CompanionGroup()
+        let (store, work, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        store.moveSession(after.id, toWorkspace: work.id, at: 1)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        store.moveSession(after.id, toWorkspace: work.id, at: 0)
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id, parent.id, first.id, second.id])
+    }
+
+    @Test func aCompanionReordersOnlyAmongItsSiblings() throws {
+        let g = try CompanionGroup()
+        let (store, work, personal, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        #expect(store.moveSession(second.id, toWorkspace: work.id, at: 1))
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, second.id, first.id, after.id])
+        #expect(store.moveSession(second.id, toWorkspace: work.id))
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        #expect(!store.moveSession(second.id, toWorkspace: work.id, at: 0))
+        #expect(!store.moveSession(second.id, toWorkspace: work.id, at: 3))
+        #expect(!store.moveSession(first.id, toWorkspace: personal.id))
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        #expect(store.workspaces[1].sessions.isEmpty)
+        #expect(first.parentID == parent.id)
+    }
+
+    @Test func selectedSiblingsReorderAmongThemselvesWithoutTheirParent() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.parent.id).get()
+
+        #expect(g.store.moveSessions([g.first.id, g.second.id], toWorkspace: g.work.id, at: 2) == 2)
+        #expect(g.order == [g.parent.id, third.id, g.first.id, g.second.id, g.after.id])
+        #expect(g.store.moveSessions([g.first.id, g.second.id], toWorkspace: g.work.id, at: 0) == 0)
+        #expect(g.order == [g.parent.id, third.id, g.first.id, g.second.id, g.after.id])
+    }
+
+    @Test func aSingleCompanionMoveCountsOnlyItself() throws {
+        let g = try CompanionGroup()
+
+        #expect(g.store.companions(of: g.first.id).isEmpty)
+        #expect(g.store.moveSessions([g.second.id], toWorkspace: g.work.id, at: 1) == 1)
+        #expect(g.order == [g.parent.id, g.second.id, g.first.id, g.after.id])
+    }
+
+    @Test func aBatchCarriesCompanionsOnceAndLeavesALoneCompanion() throws {
+        let g = try CompanionGroup()
+        let (store, _, personal, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        let moved = store.moveSessions([first.id, parent.id, second.id], toWorkspace: personal.id)
+
+        #expect(moved == 3)
+        #expect(store.workspaces[1].sessions.map(\.id) == [parent.id, first.id, second.id])
+        #expect(store.moveSessions([first.id, after.id], toWorkspace: personal.id) == 1)
+        #expect(store.workspaces[0].sessions.isEmpty)
+        #expect(store.workspaces[1].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+    }
+
+    @Test func aBatchDropIndexCountsWithTheSelectionRemoved() throws {
+        let g = try CompanionGroup()
+        let (store, work, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+        let last = try #require(store.addSession(toWorkspace: work.id, cwd: "/last"))
+
+        store.moveSessions([parent.id, after.id], toWorkspace: work.id, at: 3)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [last.id, parent.id, first.id, second.id, after.id])
+    }
+
+    @Test func reorderingATopLevelSessionStepsOverAWholeGroup() throws {
+        let g = try CompanionGroup()
+        let (store, _, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        store.reorderSession(after.id, .up)
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id, parent.id, first.id, second.id])
+        store.reorderSession(after.id, .down)
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+        store.reorderSession(parent.id, .down)
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id, parent.id, first.id, second.id])
+        store.reorderSession(parent.id, .top)
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+    }
+
+    @Test func reorderingACompanionStaysWithinItsSiblings() throws {
+        let g = try CompanionGroup()
+        let (store, _, _, parent, first, second, after) = (g.store, g.work, g.personal, g.parent, g.first, g.second, g.after)
+
+        store.reorderSession(first.id, .down)
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, second.id, first.id, after.id])
+        store.reorderSession(first.id, .down)
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, second.id, first.id, after.id])
+        store.reorderSession(first.id, .top)
+        #expect(store.workspaces[0].sessions.map(\.id) == [parent.id, first.id, second.id, after.id])
+    }
 }

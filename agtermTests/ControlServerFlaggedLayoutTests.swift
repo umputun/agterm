@@ -94,4 +94,49 @@ final class ControlServerFlaggedLayoutTests: XCTestCase {
         store.setSidebarMode(.flagged)
         XCTAssertEqual(server.buildTree(in: store).sidebarFlaggedLayout, "tree")
     }
+
+    private func flaggedSessions(in store: AppStore, _ names: [String]) throws -> [Session] {
+        let ws = store.addWorkspace(name: "work")
+        let sessions = try names.map { try XCTUnwrap(store.addSession(toWorkspace: ws.id, cwd: "/\($0)")) }
+        for session in sessions { store.setFlag(true, forSession: session.id) }
+        return sessions
+    }
+
+    func testMoveFlaggedSessionReordersTheSavedOrderAndTheTreeReadsItBack() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let s = try flaggedSessions(in: store, ["a", "b", "c"])
+
+        let response = server.moveFlaggedSession(s[2].id.uuidString, window: nil, anchor: s[0].id.uuidString,
+                                                 placement: .before)
+
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: s[2].id.uuidString)))
+        XCTAssertEqual(server.buildTree(in: store).flaggedOrder, [s[2], s[0], s[1]].map(\.id.uuidString))
+    }
+
+    func testMoveFlaggedSessionRefusesAnUnflaggedOrUnknownAnchorAndItself() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let s = try flaggedSessions(in: store, ["a", "b"])
+        let unflagged = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.workspaces.last).id, cwd: "/u"))
+
+        for anchor in [unflagged.id.uuidString, UUID().uuidString, s[0].id.uuidString] {
+            let response = server.moveFlaggedSession(s[0].id.uuidString, window: nil, anchor: anchor, placement: .after)
+            XCTAssertFalse(response.ok, "anchor \(anchor) should be refused")
+        }
+        XCTAssertFalse(server.moveFlaggedSession(unflagged.id.uuidString, window: nil, anchor: s[0].id.uuidString,
+                                                 placement: .after).ok)
+        XCTAssertEqual(store.orderedFlaggedSessions.map(\.id), s.map(\.id))
+    }
+
+    func testMoveFlaggedSessionRefusesAnAnchorInAnotherWindow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let s = try flaggedSessions(in: store, ["a", "b"])
+        let other = try XCTUnwrap(library.store(for: library.newWindow(name: "other").id))
+        let elsewhere = try flaggedSessions(in: other, ["z"])
+
+        let response = server.moveFlaggedSession(s[1].id.uuidString, window: nil, anchor: elsewhere[0].id.uuidString,
+                                                 placement: .before)
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(store.orderedFlaggedSessions.map(\.id), s.map(\.id))
+    }
 }

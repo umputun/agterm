@@ -12,7 +12,9 @@ extension AppActions {
             closeSession(sessions[0].id, in: store)
             return
         }
-        guard confirmCloseSessions(sessions) else { return }
+        let selected = Set(ids)
+        let companions = sessions.flatMap { store.companions(of: $0.id) }.filter { !selected.contains($0.id) }
+        guard confirmCloseSessions(sessions, companions: companions) else { return }
         withAnimation(.easeInOut(duration: 0.16)) {
             if closeGraceUndoEnabled {
                 _ = store.softCloseSessions(sessions.map(\.id))
@@ -25,13 +27,13 @@ extension AppActions {
         focusActiveSession()
     }
 
-    private func confirmCloseSessions(_ sessions: [Session]) -> Bool {
+    private func confirmCloseSessions(_ sessions: [Session], companions: [Session]) -> Bool {
         guard settingsModel?.settings.confirmCloseSession == true,
               !ContentView.shouldBypassCloseConfirmation else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close \(sessions.count) Sessions?"
-        alert.informativeText = closeConfirmationText(for: sessions)
+        alert.informativeText = closeConfirmationText(for: sessions, companions: companions)
         alert.addButton(withTitle: "Close")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn

@@ -89,12 +89,15 @@ extension AppStore {
     /// If the grace expires, `finalizePendingClose` performs the same teardown as `closeSession`.
     @discardableResult
     public func softCloseSession(_ sessionID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
+        let companions = companions(of: sessionID)
+        if !companions.isEmpty { return softCloseSessions([sessionID] + companions.map(\.id), grace: grace) }
         guard let location = location(ofSession: sessionID) else { return false }
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
         let session = workspace.sessions[location.sessionIndex]
         releaseLeavingSession(session)
         closeTimedHud(session)
+        closeTimedInfo(session)
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(session, workspace: workspace.id)
         dropLaunchPanes([session])
@@ -120,7 +123,7 @@ extension AppStore {
                                   workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
                                   id: closeID)
         if wasActive {
-            selectedSessionID = closeReselectionTarget(after: location)
+            selectedSessionID = closeReselectionTarget(after: location, removing: sessionID)
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
@@ -137,7 +140,7 @@ extension AppStore {
     /// until the one shared grace timer finalizes, and a single undo restores every session in the group.
     @discardableResult
     public func softCloseSessions(_ sessionIDs: [UUID], grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
-        let targetIDs = Set(sessionIDs)
+        let targetIDs = Set(sessionIDs + sessionIDs.flatMap { companions(of: $0).map(\.id) })
         guard targetIDs.count > 1 else {
             guard let id = sessionIDs.first else { return false }
             return softCloseSession(id, grace: grace)
@@ -161,19 +164,29 @@ extension AppStore {
 
         let previousSelection = selectedSessionID
         let removingActive = previousSelection.map { targetIDs.contains($0) } ?? false
+        // the selection didSet cannot stamp a session already removed, and undo may select a batch mate
+        if removingActive, let previousSelection { session(withID: previousSelection)?.lastSelectedAt = Date() }
         for close in closes.sorted(by: pendingSessionRemovalSort) {
             guard workspaces.indices.contains(close.workspaceIndex),
                   workspaces[close.workspaceIndex].sessions.indices.contains(close.sessionIndex),
                   workspaces[close.workspaceIndex].sessions[close.sessionIndex].id == close.session.id else { continue }
             releaseLeavingSession(close.session)
             closeTimedHud(close.session)
+            closeTimedInfo(close.session)
             _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
         }
         dropLaunchPanes(closes.map(\.session))
+        let closingIDs = Set(closes.map(\.session.id))
         for close in closes {
+            // a companion closing with its parent rides in the parent's entry rather than its own
+            if let parentID = close.session.parentID, closingIDs.contains(parentID) {
+                emitSessionClosed(close.session, workspace: close.workspaceID)
+                continue
+            }
+            let companions = closes.map(\.session).filter { $0.parentID == close.session.id }
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
-                                      id: close.recentID)
+                                      id: close.recentID, companions: companions)
             emitSessionClosed(close.session, workspace: close.workspaceID)
         }
         if removingActive {
@@ -183,7 +196,8 @@ extension AppStore {
                     $0.workspaceIndex == close.workspaceIndex && $0.sessionIndex < close.sessionIndex
                 }
                 return closeReselectionTarget(after: (workspaceIndex: close.workspaceIndex,
-                                                      sessionIndex: close.sessionIndex - removedBeforeActive))
+                                                      sessionIndex: close.sessionIndex - removedBeforeActive),
+                                              removing: close.session.id)
             } ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID)
@@ -212,6 +226,7 @@ extension AppStore {
         for session in workspaces[index].sessions {
             releaseLeavingSession(session)
             closeTimedHud(session)
+            closeTimedInfo(session)
         }
         let visibleWorkspace = workspaces.remove(at: index)
         dropLaunchPanes(visibleWorkspace.sessions)
@@ -268,6 +283,7 @@ extension AppStore {
             restorePendingWorkspace(close)
             removeRecentClosedItem(closeID)
         }
+        appendFlaggedArrivals() // a parked id still in the saved order returns in place; a cleared one appends
         if pendingCloseSummary?.id == closeID { promotePendingCloseSummary() }
         save()
         return true
@@ -293,10 +309,16 @@ extension AppStore {
         }
     }
 
-    /// finalizePendingClose makes ONE soft-closed session's close final and leaves the rest of its record,
-    /// and every other record, inside their undo window. False when the session is not pending.
+    /// finalizePendingClose makes ONE soft-closed session's close final, with its own parked companions, and leaves
+    /// the rest of its record, and every other record, inside their undo window. False when the session is not pending.
     @discardableResult
     public func finalizePendingClose(ofSession sessionID: UUID) -> Bool {
+        guard finalizePendingMember(sessionID) else { return false }
+        finalizeParkedCompanions(of: [sessionID])
+        return true
+    }
+
+    private func finalizePendingMember(_ sessionID: UUID) -> Bool {
         for (id, record) in pendingCloseRecords {
             switch record {
             case .sessions(let close):
@@ -370,6 +392,13 @@ extension AppStore {
         closeHud(session.id)
     }
 
+    /// closeTimedInfo drops a local info line that was counting itself out, for the reason `closeTimedHud` gives; an untimed
+    /// line stays for undo to restore.
+    private func closeTimedInfo(_ session: Session) {
+        guard (session.info?.hideAfter ?? 0) > 0 else { return }
+        setInfo(nil, forSession: session.id)
+    }
+
     private func schedulePendingCloseFinalization(id: UUID, grace: TimeInterval) {
         pendingCloseTasks[id]?.cancel()
         let delay = UInt64(max(0, grace) * 1_000_000_000)
@@ -430,30 +459,51 @@ extension AppStore {
         return held
     }
 
+    /// finalizeParkedCompanions makes final the pending close of every companion of `parentIDs`, which are closing
+    /// for good: undone, one would come back with no parent to sit under.
+    func finalizeParkedCompanions(of parentIDs: [UUID]) {
+        let parents = Set(parentIDs)
+        let parked = pendingCloseRecords.values.flatMap { record -> [Session] in
+            switch record {
+            case .sessions(let close): close.sessions.map(\.session)
+            case .workspace(let close): close.workspace.sessions
+            }
+        }.filter { $0.parentID.map(parents.contains) == true }
+        for session in parked {
+            finalizePendingClose(ofSession: session.id)
+        }
+    }
+
     /// A workspace to stand in for one a restore needs but the tree no longer holds. Prefer the newest
     /// description: a pending close of that same workspace carries its live name and expansion state, and
     /// once those finalize an Open Recent snapshot still does. `name` is the caller's older copy, a last resort.
     func rebuiltWorkspaceShell(id: UUID, name: String) -> Workspace {
         for closeID in pendingCloseOrder.reversed() {
             guard case .workspace(let close)? = pendingCloseRecords[closeID], close.workspace.id == id else { continue }
-            return Workspace(id: id, name: close.workspace.name, isExpanded: close.workspace.isExpanded)
+            return Workspace(id: id, name: close.workspace.name, isExpanded: close.workspace.isExpanded,
+                             tint: close.workspace.tint)
         }
         if let snapshot = recentClosedStore?.load().compactMap(\.workspace).first(where: { $0.snapshot.id == id })?.snapshot {
-            return Workspace(id: id, name: snapshot.name, isExpanded: !(snapshot.collapsed ?? false))
+            return Workspace(id: id, name: snapshot.name, isExpanded: !(snapshot.collapsed ?? false),
+                             tint: snapshot.tint)
         }
         return Workspace(id: id, name: name)
     }
 
-    private func restorePendingSession(_ close: PendingSessionClose) {
+    // a companion whose parent moved since the close follows the parent, or regrouping would detach it
+    @discardableResult
+    private func restorePendingSession(_ close: PendingSessionClose) -> UUID {
         let workspaceIndex: Int
-        if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
+        if let parent = close.session.parentID.flatMap(location(ofSession:)) {
+            workspaceIndex = parent.workspaceIndex
+        } else if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
             workspaceIndex = existing
         } else {
             let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
             workspaces.insert(rebuiltWorkspaceShell(id: close.workspaceID, name: close.workspaceName), at: insertAt)
             workspaceIndex = insertAt
         }
-        let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
+        let insertAt = insertionIndex(for: close.session, near: close.sessionIndex, in: workspaces[workspaceIndex].sessions)
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
         // the deck's `dropUnrealizedPaneOverlays` watchers are unmounted while the session sits outside the
         // tree, and `.onChange` does not fire on the remount, so the last host of a pane overlay can go away
@@ -461,12 +511,17 @@ extension AppStore {
         // slot that target was sparing comes back marked open with no surface and no program. Reconcile the
         // SAME object being reinserted; a snapshot rebuild (`session(from:)`) carries no pane overlays.
         close.session.dropUnrealizedPaneOverlays()
-        emitSessionCreated(close.session, workspace: close.workspaceID)
+        let workspaceID = workspaces[workspaceIndex].id
+        emitSessionCreated(close.session, workspace: workspaceID)
+        return workspaceID
     }
 
     private func restorePendingSessions(_ close: PendingSessionsClose, selecting requestedSessionID: UUID?) {
-        for session in close.sessions {
-            restorePendingSession(session)
+        let destinations = Set(close.sessions.map { restorePendingSession($0) })
+        // a companion can come back before its parent does, so its group is rebuilt once all are in
+        for workspaceID in destinations {
+            guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { continue }
+            workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }
         let target = requestedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
             ?? close.selectedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
@@ -528,9 +583,11 @@ extension AppStore {
             session.teardownPaneOverlays()
             session.scratchSurface?.teardown()
             session.discardHudBody() // a HUD whose surface never realized has no teardown to delete its body file
+            session.discardInfo()
             WatermarkStorage.removeAllRenderedText(sessionID: session.id)
             removeFromRecency(session.id)
         }
+        dropFromFlaggedOrder(sessions.map(\.id))
     }
 
 }

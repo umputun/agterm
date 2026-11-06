@@ -35,6 +35,33 @@ final class GhosttyApp {
     private(set) var terminalForegroundColor: NSColor?
     /// terminalPalette is the 16 ANSI colors of the resolved config as `#rrggbb`, by slot; empty when unread.
     private(set) var terminalPalette: [String] = []
+    /// The config's `split-divider-color`, nil when unset.
+    private(set) var configuredSplitDividerColor: NSColor?
+
+    /// The color `SplitRatioAccessor` paints the split divider with: the configured key, else the theme.
+    var splitDividerColor: NSColor {
+        Self.splitDividerColor(configured: configuredSplitDividerColor, background: terminalBackgroundColor,
+                               foreground: terminalForegroundColor)
+    }
+
+    /// The configured color, else the background moved a tenth toward the foreground: the opaque form of
+    /// the `chromeText.opacity(0.1)` the titlebar hairline and sidebar divider use. Opaque because AppKit's
+    /// own divider still draws beneath the strip and a translucent one would mix with it. Mixed in sRGB, as
+    /// that compositing is; `blended(withFraction:of:)` mixes in calibrated RGB and lands lighter. With no
+    /// background read yet it is AppKit's own divider color.
+    static func splitDividerColor(configured: NSColor?, background: NSColor?, foreground: NSColor?) -> NSColor {
+        if let configured { return configured }
+        guard let bg = background?.usingColorSpace(.sRGB),
+              let fg = (foreground ?? .labelColor).usingColorSpace(.sRGB) else { return .separatorColor }
+        func mix(_ from: CGFloat, _ toward: CGFloat) -> CGFloat { from + (toward - from) * 0.1 }
+        return NSColor(srgbRed: mix(bg.redComponent, fg.redComponent), green: mix(bg.greenComponent, fg.greenComponent),
+                       blue: mix(bg.blueComponent, fg.blueComponent), alpha: 1)
+    }
+
+    /// Reads `split-divider-color` from a resolved config.
+    static func configuredSplitDividerColor(from config: ghostty_config_t) -> NSColor? {
+        color(from: config, key: "split-divider-color")
+    }
     /// Whether the active theme reads as dark, by perceived luminance of the WASHED sidebar background (theme
     /// background plus sidebar-tint wash) — the color the disclosure triangle sits on, so a strong tint pushing
     /// a near-threshold theme past the midpoint still classifies right. Pins AppKit-drawn chrome to the theme,
@@ -79,6 +106,9 @@ final class GhosttyApp {
     var requestedRestoreMode: RestoreMode { restoreLaunchDecision.requested }
     var launchRestoreMode: RestoreMode { restoreLaunchDecision.active }
     var liveRestoreUnavailableReason: String? { restoreLaunchDecision.liveUnavailableReason }
+    /// The Live pane shell ghostty `command` names, latched with the restore decision it feeds. A running
+    /// daemon keeps the shell it started with, so a reload switching it would mislabel those panes.
+    let liveCommandShell: String?
     var restoreRunningCommand: Bool { launchRestoreMode == .rerun }
     static func capturesForegroundOnExit(mode: RestoreMode) -> Bool { mode == .rerun || mode == .live }
     /// Whether the window title bar shows the attention bell icon; off by default. The title bar reads it via
@@ -93,6 +123,9 @@ final class GhosttyApp {
     /// How every window's flagged sidebar view arranges its sessions; the sidebar Coordinator reads it per
     /// rebuild and on `.agtermAppearanceChanged`.
     private(set) var flaggedViewLayout: FlaggedViewLayout = .flat
+    /// sessionInfoDisplay is where every sidebar draws info lines; read per row and reconciled on
+    /// `.agtermAppearanceChanged`.
+    private(set) var sessionInfoDisplay: SessionInfoDisplay = .always
     /// Program basenames NOT to re-run on restore: the parsed user-editable `restore-denylist.conf` (seeded
     /// with the terminal multiplexers), read at launch only; consulted via `CommandRestore.shouldRestore`.
     private(set) var restoreDenylist: Set<String> = []
@@ -106,6 +139,8 @@ final class GhosttyApp {
     /// The sidebar row-text point size. The sidebar Coordinator reads it for each row's font and the derived
     /// row height (via `AppSettings.sidebarRowHeight`); settings-mirrored like `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+    /// The sidebar row spacing; the Coordinator reads it with `sidebarFontSize`. Settings-mirrored.
+    private(set) var sidebarDensity: SidebarDensity = .standard
     /// The sizes the palette/picker and session switcher derive from the separate `interfaceFontSize`,
     /// resolved once per settings change rather than per row.
     private(set) var interfaceMetrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
@@ -135,9 +170,12 @@ final class GhosttyApp {
     private init() {
         let resolvedResources = Self.resolveResources()
         let initialSettings = Self.settingsStore().load()
+        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
+        let commandShell = Self.resolveLiveCommandShell(configInputs)
         let restoreDecision = initialSettings.effectiveRestoreMode.launchDecision(
-            liveUnavailableReason: ZmxLaunch.liveUnavailableReason())
+            liveUnavailableReason: ZmxLaunch.liveUnavailableReason(commandShell: commandShell))
         restoreLaunchDecision = restoreDecision
+        liveCommandShell = commandShell
         resourcesDir = resolvedResources
         let booted = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS
         // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
@@ -148,7 +186,6 @@ final class GhosttyApp {
             logger.error("ghostty_init failed")
             return
         }
-        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
             return
@@ -258,6 +295,10 @@ final class GhosttyApp {
         flaggedViewLayout = layout
     }
 
+    func setSessionInfoDisplay(_ display: SessionInfoDisplay) {
+        sessionInfoDisplay = display
+    }
+
     func setRestoreDenylist(_ denylist: Set<String>) {
         restoreDenylist = denylist
     }
@@ -279,6 +320,10 @@ final class GhosttyApp {
         // 9...20, but a hand-edited settings.json must not draw a giant font in the clamped row
         // (sidebarRowHeight clamps its own copy).
         sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
+    }
+
+    func setSidebarDensity(_ density: SidebarDensity) {
+        sidebarDensity = density
     }
 
     /// `InterfaceMetrics` clamps its own input, so a hand-edited out-of-range value lands in range here too.
@@ -429,6 +474,7 @@ final class GhosttyApp {
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
         terminalPalette = Self.palette(from: config)
+        configuredSplitDividerColor = Self.configuredSplitDividerColor(from: config)
         refreshSelectionColors(isDark: isDark)
     }
 
@@ -459,17 +505,8 @@ final class GhosttyApp {
     /// followed, so a `selection-*` behind one is missed.
     private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
                                                isDark: Bool) -> (NSColor?, NSColor?) {
-        var sources: [String] = []
-        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
-            sources.append(defaults.path)
-        }
-        if inheritGlobalConfig {
-            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
-        }
-        sources.append(ghosttyConfigPath)
-        sources.append(settingsConfigURL.path)
-
-        let config = sources.flatMap(keyValues(ofFileAt:))
+        let config = configSources(ghosttyConfigPath: ghosttyConfigPath, inheritGlobalConfig: inheritGlobalConfig)
+            .flatMap(keyValues(ofFileAt:))
         let themeName = GhosttyConfigText.lastSetting(of: "theme", in: config) { $0 }.over(.unset) ?? ""
         // the settings conf carries the raw dual `theme = light:,dark:` (ghostty picks the terminal side
         // itself), so pick the appearance side.
@@ -486,6 +523,34 @@ final class GhosttyApp {
                 .over(GhosttyConfigText.lastSetting(of: key, in: theme, parse: parseHexColor))
         }
         return (color("selection-background"), color("selection-foreground"))
+    }
+
+    /// configSources lists the files `loadConfig` reads before its `config-file` includes, in its order.
+    private static func configSources(ghosttyConfigPath: String, inheritGlobalConfig: Bool) -> [String] {
+        var sources: [String] = []
+        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
+            sources.append(defaults.path)
+        }
+        if inheritGlobalConfig {
+            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
+        }
+        sources.append(ghosttyConfigPath)
+        sources.append(settingsConfigURL.path)
+        return sources
+    }
+
+    /// resolveLiveCommandShell reads ghostty `command` from every config source and include, then
+    /// classifies the final raw value: an earlier supported one must not outlive a later unsupported one.
+    private static func resolveLiveCommandShell(_ inputs: ConfigInputs) -> String? {
+        let sources = configSources(ghosttyConfigPath: inputs.scopedURL.path,
+                                    inheritGlobalConfig: inputs.inheritGlobalConfig)
+        let pairs = GhosttyConfigText.keyValues(loading: sources, home: NSHomeDirectory()) {
+            try? String(contentsOfFile: $0, encoding: .utf8)
+        }
+        guard case .value(let command) = GhosttyConfigText.lastSetting(of: "command", in: pairs, parse: { $0 }) else {
+            return nil
+        }
+        return ZmxSupport.commandShell(fromCommand: command)
     }
 
     /// keyValues reads a config file's pairs; a missing or unreadable file yields none.

@@ -237,18 +237,51 @@ struct SessionWaitCommandsTests {
     @Test func watchdogFiresWhileTheGlobalQueueIsExhausted() throws {
         let probe = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent(".build/debug/session-wait-watchdog-probe")
+        let stageDir = FileManager.default.temporaryDirectory.appendingPathComponent("watchdog-probe-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: stageDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: stageDir) }
+        let stageLog = stageDir.appendingPathComponent("stages.log")
+        FileManager.default.createFile(atPath: stageLog.path, contents: nil)
         let process = Process()
         process.executableURL = probe
+        process.environment = ProcessInfo.processInfo.environment.merging(["AGTERM_PROBE_LOG": stageLog.path]) { $1 }
         try process.run()
-        let deadline = Date().addingTimeInterval(15)
-        while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
-        if process.isRunning {
-            process.terminate()
-            process.waitUntilExit()
-            Issue.record("watchdog probe did not exit within 15 s")
+        let runMs = DispatchTime.now().uptimeNanoseconds / 1_000_000
+        let clock = ContinuousClock()
+        let started = clock.now
+        while process.isRunning, clock.now - started < .seconds(15) { Thread.sleep(forTimeInterval: 0.05) }
+        guard process.isRunning else {
+            #expect(process.terminationStatus == 0, "exit 1: the watchdog did not fire; exit 3: the global queue was not exhausted")
             return
         }
-        #expect(process.terminationStatus == 0, "exit 1: the watchdog did not fire; exit 3: the global queue was not exhausted")
+        let pid = process.processIdentifier
+        let elapsed = clock.now - started
+        let state = Self.processState(pid)
+        let killResult = kill(pid, 0)
+        let killErrno = killResult == 0 ? 0 : errno
+        let stages = (try? String(contentsOf: stageLog, encoding: .utf8)) ?? "<unreadable>"
+        Issue.record("""
+            watchdog probe did not exit within 15 s: pid=\(pid) elapsed since run=\(elapsed) \
+            isRunning=\(process.isRunning) p_stat=\(state) kill(pid,0)=\(killResult) errno=\(killErrno) \
+            runMs=\(runMs) nowMs=\(DispatchTime.now().uptimeNanoseconds / 1_000_000)
+            probe stages (uptime ms):
+            \(stages)
+            """)
+        process.terminate()
+        let cleanupStarted = clock.now
+        while process.isRunning, clock.now - cleanupStarted < .seconds(5) { Thread.sleep(forTimeInterval: 0.05) }
+        if process.isRunning { kill(pid, SIGKILL) }
+    }
+
+    private static func processState(_ pid: pid_t) -> String {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return "sysctl errno \(errno)" }
+        guard size > 0 else { return "absent" }
+        let names: [Int32: String] = [1: "SIDL", 2: "SRUN", 3: "SSLEEP", 4: "SSTOP", 5: "SZOMB"]
+        let stat = Int32(info.kp_proc.p_stat)
+        return "\(names[stat] ?? "\(stat)") flags=0x\(String(info.kp_proc.p_flag, radix: 16))"
     }
 
     @Test func cancelledWatchdogDoesNotFire() {

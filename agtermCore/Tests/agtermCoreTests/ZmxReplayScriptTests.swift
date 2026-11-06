@@ -122,6 +122,54 @@ struct ZmxReplayScriptTests {
         #expect(try String(contentsOf: result, encoding: .utf8) == "two words and more")
     }
 
+    @Test func endingCommandRunsItsLineAndExitsWithItsStatus() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "ending")
+        let output = CommandRestore.shellQuotedLine([result.path])
+        let script = ZmxReplayScript.renderEnding(commandLine: "printf '%s' 'two words' > \(output) && exit 7")
+
+        #expect(script == "'builtin' 'eval' -- " + CommandRestore.shellQuotedLine(["printf '%s' 'two words' > \(output) && exit 7"]))
+        #expect(try runZsh(script: script) == 7)
+        #expect(try String(contentsOf: result, encoding: .utf8) == "two words")
+    }
+
+    @Test func aDuplicatedProgramsCreationCommandKeepsItsArgvThroughZsh() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "argv")
+        let probe = fixture.appending(path: "record-argv")
+        try makeArgumentProbe(probe)
+        let expected = ["can't", "two words", "", "$HOME", "semi;colon"]
+        let command = try #require(DuplicateReplay.Plan.program(argv: [probe.path, result.path] + expected, workingDirectory: "/").command)
+
+        #expect(try runZsh(script: ZmxReplayScript.renderEnding(commandLine: command)) == 0)
+        #expect(try nullSeparatedValues(at: result) == expected)
+    }
+
+    @Test func endingCommandStartsNoShellAfterIt() {
+        let script = ZmxReplayScript.renderEnding(commandLine: "lazygit")
+        let fishScript = ZmxReplayScript.renderFishEnding(commandLine: "printf '%s' 'two words'")
+
+        #expect(!script.contains("exec"))
+        #expect(!script.contains("ZDOTDIR"))
+        #expect(fishScript == "builtin status job-control full; builtin eval 'printf \\'%s\\' \\'two words\\''")
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func fishEndingCommandRunsItsLineAndStartsNoShell() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "ending")
+        let script = ZmxReplayScript.renderFishEnding(
+            commandLine: "printf '%s' 'two words' > " + CommandRestore.shellQuotedLine([result.path])
+        )
+
+        try runFish(executable: fish, script: script, fixture: fixture)
+        #expect(try String(contentsOf: result, encoding: .utf8) == "two words")
+    }
+
     @Test func fishRenderersUseFishEscapingAndRearmBeforeTheFinalShell() {
         let root = "/Applications/agterm resources/shell-integration"
         let argv = ["/tmp/tool $name;*", "two words", "can't", ""]
@@ -192,6 +240,22 @@ struct ZmxReplayScriptTests {
         #expect(environment == [
             "/integration root:/usr/local/share:/usr/share", "/integration root",
         ])
+    }
+
+    @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))
+    func aDuplicatedProgramsCreationCommandKeepsItsArgvThroughFish() throws {
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let result = fixture.appending(path: "argv")
+        let probe = fixture.appending(path: "record-argv")
+        try makeArgumentProbe(probe)
+        let expected = ["can't", "two words", "", "$HOME", "semi;colon"]
+        let command = try #require(DuplicateReplay.Plan.program(argv: [probe.path, result.path] + expected, workingDirectory: "/").command)
+
+        try runFish(executable: fish, script: ZmxReplayScript.renderFishEnding(commandLine: command), fixture: fixture,
+                    environment: ["RESULT_FILE": result.path])
+        #expect(try nullSeparatedValues(at: result) == expected)
     }
 
     @Test(.enabled(if: fishPath != nil || fishRequired, "fish is unavailable; real-fish tests are skipped"))

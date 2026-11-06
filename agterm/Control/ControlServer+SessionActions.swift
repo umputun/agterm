@@ -40,6 +40,10 @@ extension ControlServer: ControlActions {
             if store.session(withID: id)?.overlayHidden(options.pane) == true {
                 return ControlResponse(ok: false, error: OverlayVisibilityError.hidden)
             }
+            // the control path is trusted and synchronous: a file on slow storage stalls the app while it is read
+            if let path = options.page?.imagePath { return openImageFile(in: store, sessionID: id, path: path, options: options) }
+            if let path = options.page?.markdownPath, let refusal = markdownFileRefusal(path) { return refusal }
+            if let path = options.page?.textPath, let refusal = textFileRefusal(path, log: options.textLog) { return refusal }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }
@@ -74,25 +78,34 @@ extension ControlServer: ControlActions {
     /// A HUD on the session and a zoomed terminal in its window both refuse it up front: the store would
     /// accept the page, closing the HUD for good in one case and showing nothing in the other.
     func openLinkOverlay(_ url: URL, session id: UUID, sizePercent: Int?) -> Bool {
+        guard canShowLinkOverlay(session: id) else { return false }
+        releaseHiddenClickedPage(session: id, persistent: true)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
+                                                       backgroundColor: nil, page: .url(url), navigation: true,
+                                                       javascript: true, persistent: true, browse: true, clicked: true)
+        return openSessionOverlay(id.uuidString, window: nil, options: options).ok
+    }
+
+    /// canShowLinkOverlay is the up-front HUD and zoom refusal `openLinkOverlay` describes.
+    func canShowLinkOverlay(session id: UUID) -> Bool {
         guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
         if let windowID = library.windowID(forSession: id),
            TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
-        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
-                                                       backgroundColor: nil, page: .url(url), navigation: true,
-                                                       javascript: true, persistent: true, browse: true)
-        return openSessionOverlay(id.uuidString, window: nil, options: options).ok
+        return true
     }
 
     // a page the placement rule hands to the presenting Mac is stored, rendered and followed there, so none of
     // the local persistent store check, page build or `--follow` happens here
-    private func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
-                                 options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+    func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
+                         options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         let alreadyOpen = options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen
+        if let refusal = textLogRefusal(in: store, sessionID: id, options: options) { return refusal }
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
+                                  clicked: options.clicked, textLog: options.textLog)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
-            if case .file = page { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
+            if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, pageID: overlay.id.uuidString))
         case .slotTaken: return ControlResponse(ok: false, error: alreadyOpen)
         case .paneMissing: return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
@@ -228,6 +241,9 @@ extension ControlServer: ControlActions {
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
                               points: OverlayPointSize) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if let remote = store.resizeRemoteOverlay(id, sizePercent: sizePercent, points: points) {
+                return ControlResponse(ok: remote == .sent, result: remote == .sent ? ControlResult(id: id.uuidString) : nil, error: remote.error)
+            }
             if let failure = store.resizeOverlayInPoints(id, sizePercent: sizePercent, points: points) {
                 return ControlResponse(ok: false, error: failure.message)
             }
@@ -273,6 +289,10 @@ extension ControlServer: ControlActions {
     /// default) or `workspaceName` (the sidebar label) plus optional `createWorkspace` — create needs a
     /// name, there is nothing to create by id. cwd/command/name are applied in `makeSessionResponse`.
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
+        createSession(options, tint: nil)
+    }
+
+    func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
         resolver.resolvePlacementStore(options.window) { store in
             // anchor-relative placement: the anchor names its own workspace, bypassing `--workspace`/
             // `--workspace-name`. `before` takes the anchor's slot, `after` the next (clamped in `addSession`).
@@ -280,7 +300,7 @@ extension ControlServer: ControlActions {
                 let placeBefore = options.before != nil
                 return resolveAnchorLocation(anchor, in: store) { location in
                     let index = placeBefore ? location.index : location.index + 1
-                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
+                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, tint: tint, at: index)
                 }
             }
             // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
@@ -296,13 +316,13 @@ extension ControlServer: ControlActions {
                 guard let workspace else {
                     return ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)")
                 }
-                return makeSessionResponse(in: store, workspaceID: workspace.id, options: options)
+                return makeSessionResponse(in: store, workspaceID: workspace.id, options: options, tint: tint)
             }
             // id addressing (default `active`): the canonical prefix/active resolver.
             let target = options.workspace ?? "active"
             return resolver.resolve(target, candidates: store.workspaces.map(\.id),
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                makeSessionResponse(in: store, workspaceID: workspaceID, options: options)
+                makeSessionResponse(in: store, workspaceID: workspaceID, options: options, tint: tint)
             }
         }
     }
@@ -650,6 +670,25 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// moveFlaggedSession moves the target within its window's saved flagged order, just before or after
+    /// `anchor`, resolved in the same window. Both must be flagged; an unchanged order still answers ok.
+    func moveFlaggedSession(_ target: String?, window: String?, anchor: String,
+                            placement: FlaggedOrderPlacement) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                             active: store.selectedSessionID, noun: "session") { anchorID in
+                guard anchorID != id else {
+                    return ControlResponse(ok: false, error: "a session cannot be its own anchor")
+                }
+                guard store.session(withID: id)?.flagged == true, store.session(withID: anchorID)?.flagged == true else {
+                    return ControlResponse(ok: false, error: "session.flag move needs a flagged session and a flagged anchor")
+                }
+                store.moveFlagged([id], to: placement, of: anchorID)
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
+        }
+    }
+
     /// Set or clear a session's title-bar context. The value is already trimmed and validated by the
     /// dispatcher, so nil here means clear rather than "nothing supplied".
     func setSessionContext(_ target: String?, window: String?, context: String?) -> ControlResponse {
@@ -687,7 +726,9 @@ extension ControlServer: ControlActions {
             return resolver.resolveSession(target, window: window) { store, sessionID in
                 resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
                         active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                    store.moveSession(sessionID, toWorkspace: workspaceID)
+                    guard store.moveSession(sessionID, toWorkspace: workspaceID) else {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                     return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
                 }
             }
@@ -705,6 +746,9 @@ extension ControlServer: ControlActions {
                 resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
                         active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                     let affected = store.moveSessions(ids, toWorkspace: workspaceID)
+                    if affected == 0, refusesCompanionMove(ids, in: store) {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                     return ControlResponse(ok: true, result: ControlResult(affected: affected))
                 }
             }
@@ -724,8 +768,9 @@ extension ControlServer: ControlActions {
                 if let resolution = SidebarDrop.resolveRelative(
                     source: (workspace: source.workspace, index: source.index),
                     anchor: (workspace: anchorLoc.workspace, index: anchorLoc.index, count: anchorLoc.count),
-                    placeAfter: after) {
-                    store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination)
+                    placeAfter: after),
+                   !store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination) {
+                    return ControlResponse(ok: false, error: Self.companionMoveError)
                 }
                 return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
             }
@@ -755,6 +800,9 @@ extension ControlServer: ControlActions {
                 ) {
                     affected = store.moveSessions(ids, toWorkspace: resolution.workspace,
                                                   at: resolution.destination)
+                    if affected == 0, refusesCompanionMove(ids, in: store) {
+                        return ControlResponse(ok: false, error: Self.companionMoveError)
+                    }
                 } else {
                     affected = 0
                 }

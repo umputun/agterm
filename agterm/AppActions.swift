@@ -56,12 +56,10 @@ final class AppActions {
     /// for a banner-clicked session whose window had closed. Nil before the scene `.task` runs.
     var openWindow: ((WindowInfo.ID) -> Void)?
 
-    /// The settings model, holding the parsed keymap whose custom commands feed the action palette. It and
-    /// `customCommandRunner` are built AFTER `actions` in `agtermApp.init`, so both are wired from the scene
-    /// `.task` rather than passed to `init(library:)` — an init-order break. Nil until that `.task` runs.
+    /// settingsModel is wired during app initialization, before commands are evaluated.
     var settingsModel: SettingsModel?
 
-    /// The custom-command runner the palette's custom items invoke. Wired in the scene `.task` like `settingsModel`.
+    /// customCommandRunner runs the palette's custom commands; wired in the scene `.task`.
     var customCommandRunner: CustomCommandRunner?
 
     /// The command-palette controller, so "Select Theme…" and the View menu item can open the `.themes`
@@ -239,14 +237,18 @@ final class AppActions {
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
         if let dashboard = frontmostDashboard, dashboard.isOpen { dashboard.close(); focusActiveSession(); return true }
         guard let store, let session = store.activeSession else { return false }
-        if session.hudActive || session.coverOverlayVisible { store.closeOverlay(session.id); return true }
+        // a page companion's page is the row, so Cmd-W takes the session close with its confirmation and undo
+        if session.hudActive || (session.coverOverlayVisible && session.content == .terminal) {
+            store.closeOverlay(session.id)
+            return true
+        }
         if session.scratchActive { store.toggleScratch(session.id); return true }
         // the focused pane's own overlay is the last cover: without this rung ⌘W over one falls straight
         // through and closes the SESSION. An overlay on the other pane is not in front of the user, so it
         // does not intercept — that pane stays live and ⌘W keeps its ordinary meaning.
         if let pane = session.focusedOverlayPane { store.closePaneOverlay(session.id, pane: pane); return true }
         // handled either way — returning true on cancel keeps the File menu from closing the whole window.
-        guard confirmCloseSession(session) else { return true }
+        guard confirmCloseSession(session, companions: store.companions(of: session.id)) else { return true }
         closeSessionAfterConfirmation(session.id, in: store)
         focusActiveSession()
         return true
@@ -288,7 +290,7 @@ final class AppActions {
     func closeSession(_ id: UUID, in store: AppStore) {
         guard uiActionsEnabled else { return }
         guard let session = store.session(withID: id) else { return }
-        guard confirmCloseSession(session) else { return }
+        guard confirmCloseSession(session, companions: store.companions(of: session.id)) else { return }
         closeSessionAfterConfirmation(id, in: store)
     }
 
@@ -321,13 +323,13 @@ final class AppActions {
 
     /// A native warning confirm before closing `session`, gated by `AppSettings.confirmCloseSession`. Returns
     /// whether to proceed: true with no prompt when the setting is off or under XCUITest (a modal hangs it).
-    private func confirmCloseSession(_ session: Session) -> Bool {
+    private func confirmCloseSession(_ session: Session, companions: [Session]) -> Bool {
         guard settingsModel?.settings.confirmCloseSession == true,
               !ContentView.shouldBypassCloseConfirmation else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close “\(session.displayName)”?"
-        alert.informativeText = closeConfirmationText(for: [session])
+        alert.informativeText = closeConfirmationText(for: [session], companions: companions)
         alert.addButton(withTitle: "Close")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
@@ -384,6 +386,7 @@ final class AppActions {
     /// The session whose open overlay is the hooks editor, so its close reloads the hooks. Nil when none.
     var hooksEditOverlaySession: UUID?
     weak var remoteAttacher: (any RemoteAttaching)?
+    weak var companionDuplicator: (any CompanionDuplicating)?
 
     /// Open `hooks.conf` in the user's editor in a 95% overlay over the active session, exactly like
     /// `editKeymap`; exiting reloads the hooks.
@@ -898,49 +901,33 @@ final class AppActions {
 
     // MARK: - Search (on the surface that opened it)
 
-    /// The search-capable target. A covering SCRATCH wins FIRST, so ⌘F over a scratch never opens the bar on
-    /// the hidden pane beneath — even with key-window focus off the surface (e.g. the sidebar), where
-    /// `focusedSurface()` would fall back to the hidden `activeSurface`. Else the focused surface IFF
-    /// searchable, else the active session's focused pane. Full overlay and quick terminal are unsearchable
-    /// (blocked by `coverHidesActiveSession`); a FLOATING overlay leaves the pane visible, so it targets it.
+    /// searchTarget is the surface ⌘F searches once no cover owns the key (`coverTakesSearch`): the scratch first, so
+    /// its bar never opens on the hidden pane beneath even with focus off the surface, as on the sidebar, where
+    /// `focusedSurface()` falls back to the hidden `activeSurface`; else the focused surface when searchable, else
+    /// the active session's focused pane.
     private func searchTarget() -> GhosttySurfaceView? {
-        if let session = store?.activeSession, session.scratchActive, !session.coverOverlayVisible {
+        if let session = store?.activeSession, session.scratchActive {
             return session.topmostSurface as? GhosttySurfaceView
         }
-        // the focused pane hidden under its OWN overlay has no searchable target: the overlay is unsearchable
-        // and returning the pane would strand the bar over it. The sibling pane keeps its own ⌘F once focused.
-        // AFTER the scratch rung on purpose: the scratch covers the pane overlays too, and it IS searchable.
-        if store?.activeSession?.focusedOverlayPane != nil { return nil }
         if let view = focusedSurface(), view.isSearchable { return view }
         return store?.activeSession?.activeSurface as? GhosttySurfaceView
     }
 
-    /// Whether a SESSION-WIDE cover BLOCKS ⌘F — the frontmost quick terminal or the active session's FULL
-    /// overlay, neither searchable, so the bar would strand over a hidden pane. The scratch IS searchable, so
-    /// it never blocks and ⌘F opens the bar over it; the ⌘F-again CLOSE runs regardless. A covering PANE
-    /// overlay is NOT a term here — `searchTarget` owns that rung, in the one order that gets the
-    /// scratch-above-a-pane-overlay case right; duplicating it here would block ⌘F on the searchable scratch.
-    private var coverHidesActiveSession: Bool {
-        if quickTerminal.holdsKey { return true }
-        guard let session = store?.activeSession else { return false }
-        // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
-        return session.fullOverlayVisible
-    }
-
     /// Toggle the search bar for the active session; shared by the Find menu item, the palette, and ⌘F.
+    /// A cover on top takes ⌘F first (`coverTakesSearch`), so the terminal behind it never opens or closes its bar.
     /// CLOSE: `end_search` DIRECTLY to the pinned `searchSurface` (the surface that opened search) so the END
     /// callback clears the fields and refocuses — never a re-resolved target or a `start_search` round-trip,
     /// which on a split with focus moved to the OTHER pane puts that pane into search mode while
-    /// `onSearchStart` closes only the pinned owner, stranding it. OPEN: no-op with no searchable surface or
-    /// behind a cover, else `start_search` on the search target, whose `onSearchStart` opens and pins the bar.
+    /// `onSearchStart` closes only the pinned owner, stranding it. OPEN: `start_search` on the search target,
+    /// whose `onSearchStart` opens and pins the bar.
     func toggleSearch() {
         guard !pickActive(for: library.activeWindowID) else { return }
+        if coverTakesSearch() { return }
         if store?.activeSession?.searchActive == true {
             (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.endSearch()
             return
         }
-        guard !terminalZoomActive else { return }
-        guard let target = searchTarget(), !coverHidesActiveSession else { return }
+        guard !terminalZoomActive, let target = searchTarget() else { return }
         target.startSearch()
     }
 

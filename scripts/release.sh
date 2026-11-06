@@ -139,7 +139,7 @@ GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 xcodebuild -project agterm.xcodeproj -scheme agterm -configuration Release \
   -derivedDataPath "$BUILD_DIR/DerivedData" \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" GIT_COMMIT="$GIT_COMMIT" \
-  build
+  ARCHS=arm64 build
 [ -d "$APP" ] || { echo "expected app not found: $APP" >&2; exit 1; }
 
 # authoritative Developer ID signing — AFTER xcodebuild so nothing clobbers it,

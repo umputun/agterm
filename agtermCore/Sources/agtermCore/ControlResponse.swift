@@ -9,4 +9,11 @@ public struct ControlResponse: Codable, Sendable, Equatable {
         self.result = result
         self.error = error
     }
+
+    /// refusesUnknown names the reply an app predating `command` gives: it cannot decode the command, so it
+    /// refused the request before doing anything. Every other error is the server's own.
+    public func refusesUnknown(_ command: Command) -> Bool {
+        guard !ok, let error else { return false }
+        return error.hasPrefix("invalid request:") && error.contains(command.rawValue)
+    }
 }

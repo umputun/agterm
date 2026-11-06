@@ -20,6 +20,80 @@ public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case tree
 }
 
+/// SidebarDensity is the sidebar's row spacing: `standard` (raw "default") or `compact`, which tightens the
+/// row padding, indent and info-line gap. App-wide. Raw-stored, resolved by `effectiveSidebarDensity`.
+public enum SidebarDensity: String, Codable, Sendable, CaseIterable {
+    case standard = "default"
+    case compact
+
+    /// displayName is the Settings picker's label for the value.
+    public var displayName: String {
+        switch self {
+        case .standard: "Default"
+        case .compact: "Compact"
+        }
+    }
+
+    /// rowPadding is the vertical padding a row adds to its rounded font size.
+    public var rowPadding: Double {
+        switch self {
+        case .standard: 15
+        case .compact: 10
+        }
+    }
+
+    /// indentPerLevel is the outline's horizontal step per nesting level.
+    public var indentPerLevel: Double {
+        switch self {
+        case .standard: 14
+        case .compact: 10
+        }
+    }
+
+    /// titleLift raises the row name above the row's center. A centered text box leaves lowercase letters
+    /// visibly low, which the compact row's tighter selection exposes.
+    public var titleLift: Double {
+        switch self {
+        case .standard: 0
+        case .compact: 1
+        }
+    }
+
+    /// selectionInset is the gap between a selected row's highlight and its row edge, top and bottom.
+    public var selectionInset: Double {
+        switch self {
+        case .standard: 1.5
+        case .compact: 0.5
+        }
+    }
+
+    /// infoLineSpacing is how far an info line lifts into the title band, and the padding under it.
+    public var infoLineSpacing: Double {
+        switch self {
+        case .standard: 6
+        case .compact: 4
+        }
+    }
+}
+
+/// SessionInfoDisplay is where the sidebar draws a session's info line: in every sidebar view, only in the
+/// flagged view, or nowhere. It gates drawing alone; the line, its expiry and its read-back stay either way.
+/// App-wide. Raw-stored, resolved by `effectiveSessionInfoDisplay`.
+public enum SessionInfoDisplay: String, Codable, Sendable, CaseIterable {
+    case always
+    case flagged
+    case off
+
+    /// displayName is the Settings picker's label for the value.
+    public var displayName: String {
+        switch self {
+        case .always: "Always"
+        case .flagged: "Flagged"
+        case .off: "Off"
+        }
+    }
+}
+
 /// Where a clicked web link from terminal output opens: the system `browser`, or a session web overlay at
 /// full size (`overlay`), 95%, 75% or 50%. App-wide. Raw-stored, resolved by `effectiveLinkOpenMode`.
 public enum LinkOpenMode: String, Codable, Sendable, CaseIterable {
@@ -75,6 +149,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case flaggedView
     case focusFilter
     case workspaceAddSession
+    case workspaceIcons
+    case sessionIcons
+    case workspaceChevrons
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
@@ -82,7 +159,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     /// The surface this element lives on; the title bar for everything not listed as sidebar.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession: return .sidebar
+        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+             .workspaceChevrons:
+            return .sidebar
         default: return .titleBar
         }
     }
@@ -111,6 +190,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .flaggedView: return "Flagged view"
         case .focusFilter: return "Workspace filter"
         case .workspaceAddSession: return "Workspace add-session"
+        case .sessionIcons: return "Session icons"
+        case .workspaceIcons: return "Workspace icons"
+        case .workspaceChevrons: return "Workspace chevrons"
         }
     }
 
@@ -139,6 +221,9 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .flaggedView: return "flag"
         case .focusFilter: return "square.grid.2x2"
         case .workspaceAddSession: return "plus"
+        case .sessionIcons: return "terminal"
+        case .workspaceIcons: return "square.grid.2x2"
+        case .workspaceChevrons: return "chevron.right"
         }
     }
 
@@ -365,6 +450,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Whether attention navigation also stops on `active` sessions, not only blocked and completed ones;
     /// nil = off. Pushed into every window's `AppStore.attentionIncludesActive`.
     public var attentionIncludesActive: Bool?
+    /// Whether attention navigation walks every open window, in window order, instead of the active one
+    /// only; nil = off. GUI navigation only, `session.go` stays window-scoped. Pushed into every window's `AppStore.attentionNavigationAcrossWindows`.
+    public var attentionNavigationAcrossWindows: Bool?
     /// The sidebar row-text point size, nil for `defaultSidebarFontSize`; the row height scales with it
     /// (`sidebarRowHeight(fontSize:)`). Independent of `interfaceFontSize`.
     public var sidebarFontSize: Double?
@@ -386,6 +474,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Raw `FlaggedViewLayout` for the sidebar's flagged view; nil = flat. Resolved by
     /// `effectiveFlaggedViewLayout`.
     public var flaggedViewLayout: String?
+    /// sessionInfoDisplay is the raw `SessionInfoDisplay` for the sidebar info line; nil = always. Resolved by
+    /// `effectiveSessionInfoDisplay`.
+    public var sessionInfoDisplay: String?
+    /// sidebarDensity is the raw `SidebarDensity`; nil = default. Resolved by `effectiveSidebarDensity`.
+    public var sidebarDensity: String?
     /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
     public var linkOpenMode: String?
     /// terminalInputSource is the keyboard input source id held while a terminal has the keyboard; nil = off.
@@ -420,12 +513,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, attentionIncludesActive: Bool? = nil,
-                sidebarFontSize: Double? = nil,
+                attentionNavigationAcrossWindows: Bool? = nil, sidebarFontSize: Double? = nil,
                 interfaceFontSize: Double? = nil, quickTerminalSizePercent: Int? = nil,
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
                 linkOpenMode: String? = nil, terminalInputSource: String? = nil,
-                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil) {
+                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil, sessionInfoDisplay: String? = nil,
+                sidebarDensity: String? = nil) {
+        self.sessionInfoDisplay = sessionInfoDisplay
+        self.sidebarDensity = sidebarDensity
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -468,6 +564,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.attentionIncludesActive = attentionIncludesActive
+        self.attentionNavigationAcrossWindows = attentionNavigationAcrossWindows
         self.sidebarFontSize = sidebarFontSize
         self.interfaceFontSize = interfaceFontSize
         self.quickTerminalSizePercent = quickTerminalSizePercent
@@ -513,6 +610,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The window and the mute wash must agree on whether the backing is opaque.
     public static func windowReducesTransparency(system: Bool, ignoring: Bool) -> Bool {
         system && !ignoring
+    }
+
+    /// effectiveSessionInfoDisplay is the explicit `sessionInfoDisplay` when a KNOWN raw value, else `always`.
+    public var effectiveSessionInfoDisplay: SessionInfoDisplay {
+        sessionInfoDisplay.flatMap(SessionInfoDisplay.init(rawValue:)) ?? .always
     }
 
     /// The resolved flagged-view layout: the explicit `flaggedViewLayout` when a KNOWN raw value, else `flat`.
@@ -627,10 +729,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
         Self.clampInterfaceFontSize(interfaceFontSize ?? Self.defaultInterfaceFontSize)
     }
 
-    /// The outline row height: the clamped point size plus a fixed 15pt of vertical padding, so the
-    /// default 13pt maps to a 28pt row. The row icon and status glyph keep their fixed sizes.
-    public static func sidebarRowHeight(fontSize: Double) -> Double {
-        clampSidebarFontSize(fontSize).rounded() + 15
+    /// The resolved sidebar density: the explicit `sidebarDensity` when a KNOWN raw value, else `standard`.
+    public var effectiveSidebarDensity: SidebarDensity {
+        sidebarDensity.flatMap(SidebarDensity.init(rawValue:)) ?? .standard
+    }
+
+    /// The outline row height: the clamped point size plus the density's vertical padding, so the default
+    /// 13pt maps to a 28pt row (23pt compact). The row icon and status glyph keep their fixed 16pt.
+    public static func sidebarRowHeight(fontSize: Double, density: SidebarDensity = .standard) -> Double {
+        clampSidebarFontSize(fontSize).rounded() + density.rowPadding
     }
 
     /// The theme name that renders for the given appearance, the dark slot falling back to `theme`. Used

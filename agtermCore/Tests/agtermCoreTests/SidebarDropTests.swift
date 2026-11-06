@@ -309,4 +309,160 @@ struct SidebarDropTests {
         let insert = SidebarDrop.workspaceInsertIndex(visibleIndices: [1, 3], slot: 1)
         #expect(SidebarDrop.resolveWorkspace(sourceIndex: 1, count: 4, childIndex: insert) == nil)
     }
+
+    private static let ids = (0..<8).map { _ in UUID() }
+    private static let flat = Array(ids[0..<4])
+
+    @Test(arguments: [
+        ((dragged: [3], onRow: nil as Int?, slot: 0), (ids: [3], placement: FlaggedOrderPlacement.before, anchor: 0)),
+        ((dragged: [0], onRow: nil, slot: 4), (ids: [0], placement: .after, anchor: 3)),
+        ((dragged: [0], onRow: nil, slot: 2), (ids: [0], placement: .before, anchor: 2)),
+        ((dragged: [1], onRow: 3, slot: -1), (ids: [1], placement: .after, anchor: 3)),
+        ((dragged: [2, 0], onRow: nil, slot: 2), (ids: [0, 2], placement: .before, anchor: 3)),
+        ((dragged: [3, 2], onRow: nil, slot: 0), (ids: [2, 3], placement: .before, anchor: 0)),
+    ])
+    func flatDropResolvesToAMoveOfTheBlockInListOrder(
+        drop: (dragged: [Int], onRow: Int?, slot: Int),
+        want: (ids: [Int], placement: FlaggedOrderPlacement, anchor: Int)
+    ) throws {
+        let move = try #require(SidebarDrop.resolveFlaggedReorder(
+            order: Self.flat, dragged: drop.dragged.map { Self.flat[$0] }, onRow: drop.onRow.map { Self.flat[$0] },
+            childIndex: drop.slot))
+        #expect(move == SidebarDrop.FlaggedReorder(ids: want.ids.map { Self.flat[$0] }, placement: want.placement,
+                                                   anchor: Self.flat[want.anchor]))
+    }
+
+    @Test(arguments: [
+        (dragged: [1], onRow: nil as Int?, slot: 1),
+        (dragged: [1], onRow: nil, slot: 2),
+        (dragged: [1], onRow: 1, slot: -1),
+        (dragged: [1], onRow: 0, slot: -1),
+        (dragged: [3], onRow: nil, slot: 4),
+        (dragged: [0, 1], onRow: nil, slot: 0),
+        (dragged: [0, 1, 2, 3], onRow: nil, slot: 2),
+    ])
+    func flatDropThatKeepsTheOrderIsANoOp(dragged: [Int], onRow: Int?, slot: Int) {
+        #expect(SidebarDrop.resolveFlaggedReorder(
+            order: Self.flat, dragged: dragged.map { Self.flat[$0] }, onRow: onRow.map { Self.flat[$0] },
+            childIndex: slot) == nil)
+    }
+
+    @Test(arguments: [
+        (moving: [3, 1], placement: FlaggedOrderPlacement.before, anchor: 0, want: [1, 3, 0, 2] as [Int]?),
+        (moving: [0], placement: .after, anchor: 3, want: [1, 2, 3, 0]),
+        (moving: [1], placement: .before, anchor: 2, want: nil),
+        (moving: [1], placement: .after, anchor: 0, want: nil),
+        (moving: [1], placement: .before, anchor: 1, want: nil),
+    ])
+    func reorderedFlaggedMovesTheBlockInListOrder(moving: [Int], placement: FlaggedOrderPlacement, anchor: Int,
+                                                  want: [Int]?) {
+        #expect(SidebarDrop.reorderedFlagged(Self.flat, moving: Set(moving.map { Self.flat[$0] }),
+                                             placement: placement, anchor: Self.flat[anchor])
+            == want.map { $0.map { Self.flat[$0] } })
+    }
+
+    @Test func reorderedFlaggedWithAnAnchorOutsideTheListIsNil() {
+        #expect(SidebarDrop.reorderedFlagged(Self.flat, moving: [Self.flat[0]], placement: .before, anchor: UUID()) == nil)
+    }
+
+    @Test func flatDropOfRowsOutsideTheListIsANoOp() {
+        #expect(SidebarDrop.resolveFlaggedReorder(order: Self.flat, dragged: [UUID()], onRow: nil, childIndex: 0) == nil)
+        #expect(SidebarDrop.resolveFlaggedReorder(order: [], dragged: [Self.flat[0]], onRow: nil, childIndex: 0) == nil)
+    }
+
+    @Test(arguments: [
+        (visible: [1, 3], slot: 0, want: 1),
+        (visible: [1, 3], slot: 1, want: 3),
+        (visible: [1, 3], slot: 2, want: 4),
+        (visible: [0, 1], slot: 2, want: 2),
+        (visible: [1, 3], slot: SidebarDrop.onItemIndex, want: SidebarDrop.onItemIndex),
+        (visible: [], slot: 0, want: 0),
+    ])
+    func flaggedTreeGapMapsNextToTheVisibleRowItWasAimedAt(visible: [Int], slot: Int, want: Int) {
+        #expect(SidebarDrop.flaggedTreeChildIndex(visibleIndices: visible, slot: slot) == want)
+    }
+
+    @Test(arguments: [
+        (parent: 2, slot: 0, want: 3),
+        (parent: 2, slot: 2, want: 5),
+        (parent: 0, slot: -1, want: 1),
+    ])
+    func companionGapMapsPastTheParentRow(parent: Int, slot: Int, want: Int) {
+        #expect(SidebarDrop.companionChildIndex(parentIndex: parent, slot: slot) == want)
+    }
+
+    @Test func aSiblingDraggedAboveItsFirstSiblingResolvesInsideTheGroup() {
+        let resolution = SidebarDrop.resolveSessions(
+            sources: [SidebarDrop.SessionSource(workspace: Self.wsA, index: 2)],
+            target: .workspaceRow(id: Self.wsA, sessionCount: 4),
+            childIndex: SidebarDrop.companionChildIndex(parentIndex: 0, slot: 0))
+        #expect(resolution?.destination == 1)
+        #expect(resolution?.workspace == Self.wsA)
+    }
+
+    private static let (a, h, b, c, k) = (ids[0], ids[1], ids[2], ids[3], ids[4])
+    private static let tree = SidebarDrop.FlaggedTree(
+        workspaces: [(id: wsA, sessions: [a, h, b]), (id: wsB, sessions: [c, k])], flagged: [a, b, c])
+
+    private enum TreeTarget {
+        case gap(workspace: UUID, visible: [Int], count: Int, slot: Int)
+        case onWorkspace(UUID, count: Int)
+        case onSession(workspace: UUID, index: Int, count: Int)
+    }
+
+    private func treeDrop(_ dragged: UUID, from source: (UUID, Int), _ target: TreeTarget) -> SidebarDrop.SessionResolution? {
+        let sources = [SidebarDrop.SessionSource(workspace: source.0, index: source.1)]
+        let resolution: SidebarDrop.SessionResolution?
+        switch target {
+        case let .gap(workspace, visible, count, slot):
+            resolution = SidebarDrop.resolveSessions(
+                sources: sources, target: .workspaceRow(id: workspace, sessionCount: count),
+                childIndex: SidebarDrop.flaggedTreeChildIndex(visibleIndices: visible, slot: slot))
+        case let .onWorkspace(workspace, count):
+            resolution = SidebarDrop.resolveSessions(
+                sources: sources, target: .workspaceRow(id: workspace, sessionCount: count),
+                childIndex: SidebarDrop.flaggedTreeChildIndex(visibleIndices: [], slot: Self.onItem))
+        case let .onSession(workspace, index, count):
+            resolution = SidebarDrop.resolveSessions(
+                sources: sources, target: .sessionRow(workspace: workspace, sessionIndex: index, sessionCount: count),
+                childIndex: Self.onItem)
+        }
+        guard let resolution, Self.tree.changesView(moving: [dragged], to: resolution) else { return nil }
+        return resolution
+    }
+
+    @Test func flaggedTreeDropBackAboveTheNextFlaggedRowAcrossAHiddenSiblingIsANoOp() {
+        #expect(treeDrop(Self.a, from: (Self.wsA, 0), .gap(workspace: Self.wsA, visible: [0, 2], count: 3, slot: 1)) == nil)
+    }
+
+    @Test func flaggedTreeReorderInsideAWorkspaceKeepsTheHiddenSiblingInPlace() {
+        let up = treeDrop(Self.b, from: (Self.wsA, 2), .gap(workspace: Self.wsA, visible: [0, 2], count: 3, slot: 0))
+        #expect(up == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 0, destination: 0))
+        let down = treeDrop(Self.a, from: (Self.wsA, 0), .gap(workspace: Self.wsA, visible: [0, 2], count: 3, slot: 2))
+        #expect(down == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 3, destination: 2))
+    }
+
+    @Test func flaggedTreeMoveToAnotherWorkspaceCountsEvenWhenTheFlatOrderStaysTheSame() {
+        let move = treeDrop(Self.b, from: (Self.wsA, 2), .gap(workspace: Self.wsB, visible: [0], count: 2, slot: 0))
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 0, destination: 0))
+    }
+
+    @Test func flaggedTreeEndOfGroupGapLandsRightAfterTheLastFlaggedRow() {
+        let move = treeDrop(Self.a, from: (Self.wsA, 0), .gap(workspace: Self.wsB, visible: [0], count: 2, slot: 1))
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func flaggedTreeDropOnAWorkspaceRowAppendsAfterItsLastSession() {
+        let move = treeDrop(Self.a, from: (Self.wsA, 0), .onWorkspace(Self.wsB, count: 2))
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: Self.onItem, destination: 2))
+    }
+
+    @Test func flaggedTreeDropOnASessionRowLandsRightAfterIt() {
+        let move = treeDrop(Self.a, from: (Self.wsA, 0), .onSession(workspace: Self.wsB, index: 0, count: 2))
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func flaggedTreeDropOnItsOwnRowIsANoOp() {
+        #expect(treeDrop(Self.b, from: (Self.wsA, 2), .onSession(workspace: Self.wsA, index: 2, count: 3)) == nil)
+    }
 }

@@ -98,7 +98,9 @@ enum EventFormatter {
             return parts.joined(separator: " ")
         case .notify:
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.title ?? name): \(event.payload.body ?? "")"
-        case .sessionCreated, .sessionClosed, .treeChanged:
+        case .sessionCreated:
+            return "\(time) \(event.kind.rawValue) \(name)" + (event.payload.parent.map { " parent=\($0)" } ?? "")
+        case .sessionClosed, .treeChanged:
             return "\(time) \(event.kind.rawValue) \(name)"
         case .sessionSelected:
             return "\(time) \(event.kind.rawValue) \(name) previous=\(event.payload.previous ?? "-")"
@@ -110,6 +112,9 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
         case .appLaunched:
             return "\(time) \(event.kind.rawValue)"
+        case .message:
+            return "\(time) \(event.kind.rawValue) \(name) pane-id=\(event.payload.paneID ?? "-")"
+                + " from=\(event.payload.from ?? "-") id=\(event.payload.messageID ?? "-")"
         }
     }
 }

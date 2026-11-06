@@ -20,7 +20,7 @@ extension WindowContentView {
     /// session or a split pane while the dashboard is open changes it, and `reconcileDashboardMembers`
     /// prunes the gone cells.
     var dashboardValidMembers: [DashboardMember] {
-        store.workspaces.flatMap(\.sessions).flatMap { session -> [DashboardMember] in
+        store.workspaces.flatMap(\.sessions).filter { $0.content == .terminal }.flatMap { session -> [DashboardMember] in
             var members = [DashboardMember(session: session.id, surface: .primary)]
             if session.hasSplit { members.append(DashboardMember(session: session.id, surface: .split)) }
             return members
@@ -77,7 +77,7 @@ extension WindowContentView {
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .help("Exit Dashboard")
+                .toolTip("Exit Dashboard", isShown: titlebarTipsShown)
                 .accessibilityLabel("Exit Dashboard")
                 .accessibilityIdentifier("dashboard-exit")
                 .padding(.trailing, 14)
@@ -126,7 +126,7 @@ extension WindowContentView {
         } label: {
             Label("Dashboard", systemImage: InterfaceElement.dashboard.symbolName!)
         }
-        .help(helpHint("Dashboard", .dashboard))
+        .toolTip(helpHint("Dashboard", .dashboard), isShown: titlebarTipsShown)
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("dashboard-toggle-button")
     }

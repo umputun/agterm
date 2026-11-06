@@ -256,6 +256,40 @@ final class AppStoreEventTests {
         #expect(batch.items.allSatisfy { $0.session == session.id.uuidString && $0.payload.name == "api" })
     }
 
+    @Test func aCompanionsCreatedEventNamesItsParent() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let parent = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        let companion = try store.addCompanion(to: parent.id).get()
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.sessionCreated], limit: 100
+        )))
+        #expect(batch.items.map(\.session) == [companion.id.uuidString])
+        #expect(batch.items.map(\.payload.parent) == [parent.id.uuidString])
+    }
+
+    @Test func anUndoneCompanionCloseReportsTheParentsCurrentWorkspace() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let home = try #require(store.workspaces.first)
+        let away = store.addWorkspace(name: "away")
+        let parent = try #require(store.addSession(toWorkspace: home.id, cwd: "/tmp"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        #expect(store.softCloseSession(companion.id, grace: 60))
+        #expect(store.moveSession(parent.id, toWorkspace: away.id))
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.undoPendingClose())
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.sessionCreated], limit: 100
+        )))
+        #expect(batch.items.map(\.workspace) == [away.id.uuidString])
+    }
+
     @Test func duplicateSessionEmitsOneCreatedEdge() throws {
         let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
         let store = try #require(library.activeStore)
@@ -389,6 +423,42 @@ final class AppStoreEventTests {
         )))
         #expect(afterSecondClear.items.isEmpty)
         #expect(session.context == nil)
+    }
+
+    @Test func settingSessionInfoEmitsTreeChangedOnlyWhenItChanges() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let window = library.newWindow(name: "open")
+        let store = try #require(library.store(for: window.id))
+        let session = try #require(store.activeSession)
+        let info = try SessionInfo.make(source: "3 agents", markdown: false, hideAfter: 0).get()
+        var discarded = 0
+        library.flushTreeEvents()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        #expect(store.setInfo(info, forSession: session.id))
+        library.flushTreeEvents()
+        let afterSet = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSet.items.count == 1)
+
+        #expect(!store.setInfo(info, forSession: session.id))
+        library.flushTreeEvents()
+        let afterSame = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSet.run, after: afterSet.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterSame.items.isEmpty)
+
+        session.onInfoDiscarded = { discarded += 1 }
+        #expect(store.setInfo(nil, forSession: session.id))
+        library.flushTreeEvents()
+        let afterClear = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: afterSame.run, after: afterSame.next), kinds: [.treeChanged], limit: 100
+        )))
+        #expect(afterClear.items.count == 1)
+        #expect(discarded == 1)
+        #expect(session.info == nil)
+        #expect(session.onInfoDiscarded == nil)
     }
 
     @Test func settingSessionContextWritesItToTheSavedSnapshot() throws {
@@ -1087,6 +1157,22 @@ final class AppStoreEventTests {
         return try eventBatch(library.readEvents(ControlEventReadOptions(
             cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.treeChanged], limit: 100
         ))).items.count
+    }
+
+    @Test func closingAParentEmitsOneClosedEdgePerGroupMember() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let workspace = try #require(store.workspaces.first)
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "api"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        store.closeSession(parent.id)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.sessionClosed], limit: 100
+        )))
+        #expect(batch.items.map(\.session) == [companion.id.uuidString, parent.id.uuidString])
     }
 
     private func eventBatch(_ response: ControlResponse) throws -> ControlEventBatch {

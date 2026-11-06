@@ -32,6 +32,17 @@ struct CommandRestoreTests {
         #expect(CommandRestore.parseProcArgs(Data([1, 2])) == nil)
     }
 
+    @Test func parseProcEnvironmentReadsTheStringsAfterArgvUpToTheFirstEmptyOne() {
+        let data = blob(argc: 2, execPath: "/usr/bin/vim", padding: 2,
+                        args: ["vimdiff", "a", "PATH=/work/.venv/bin:/usr/bin", "HOME=/Users/x", "", "executable_path=/usr/bin/vim"])
+        #expect(CommandRestore.parseProcEnvironment(data) == ["PATH": "/work/.venv/bin:/usr/bin", "HOME": "/Users/x"])
+        #expect(CommandRestore.parseProcEnvironment(blob(argc: 1, execPath: "/bin/ls", padding: 0, args: ["ls"])) == [:])
+        let argvPath = blob(argc: 2, execPath: "/usr/bin/env", padding: 0, args: ["env", "PATH=/evil", "PATH=/real"])
+        #expect(CommandRestore.parseProcArgs(argvPath) == ["env", "PATH=/evil"])
+        #expect(CommandRestore.parseProcEnvironment(argvPath) == ["PATH": "/real"])
+        #expect(CommandRestore.parseProcEnvironment(blob(argc: 2, execPath: "/bin/ls", padding: 0, args: ["ls"])) == nil)
+    }
+
     @Test func isKnownShellMatchesShellsAndExtra() {
         #expect(CommandRestore.isKnownShell("zsh"))
         #expect(CommandRestore.isKnownShell("bash"))

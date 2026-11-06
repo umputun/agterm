@@ -16,11 +16,11 @@ paths:
 
 ## Rendering
 
-- Nothing in agterm paints a surface. `src/apprt/embedded.zig` declares no `must_draw_from_app_thread`, so
-  `renderer/Thread.drawFrame` draws on the render thread instead of posting `redraw_surface`, the only
-  producer of `GHOSTTY_ACTION_RENDER`. The action is therefore unreachable on the embedded apprt and the
-  `action` switch drops it to `default`. If `GHOSTTY_REV` ever advances onto a libghostty that declares
-  that constant, panes stop painting until a RENDER arm calling `ghostty_surface_draw` comes back.
+- Nothing in agterm paints a surface. `GHOSTTY_ACTION_RENDER` comes only from `Surface.redraw`, which
+  answers the `.redraw` surface message, and only the OpenGL renderer's `Frame` posts that message. Metal
+  presents through its own layer, so the action is unreachable on macOS and the `action` switch drops it
+  to `default`. If a `GHOSTTY_REV` has Metal post `.redraw`, check that frames still present without an
+  apprt draw before leaving the action dropped.
 - The render thread is not the only painter: libghostty installs its own `CALayer` subclass as the surface
   view's layer, and its `display` calls a callback holding a raw `*Renderer`, so CoreAnimation draws on the
   main thread too. Before upstream `4b4a5b241109` nothing cleared that callback — `Metal.deinit` dropped
@@ -53,7 +53,7 @@ paths:
   (`ghostty_surface_draw`) because that sweep cleared `contents` and `refresh` merely queues a render.
 - A hidden pane also clears `needsDisplayOnBoundsChange` on libghostty's layer and restores it on
   reveal. Without that, a window resize makes CoreAnimation display every mounted hidden pane and
-  rebuild the chain the release just freed. At `683d8db`, `Metal.init` installs one `IOSurfaceLayer`
+  rebuild the chain the release just freed. At `83fb956`, `Metal.init` installs one `IOSurfaceLayer`
   for the surface renderer and sets the flag once; no later Ghostty path replaces the layer or
   rewrites the flag. A `GHOSTTY_REV` bump has to recheck both, and that the synchronous reveal draw
   still restores the intended visible-resize path.
@@ -330,8 +330,12 @@ paths:
   suppress hit testing and the deck never sets `isHidden`.
 - Both dividers paint ↔ themselves: the sidebar handle from `onContinuousHover`, the split from
   `SplitProbeView`'s tracking area over the split, which covers both panes, so it repaints only inside the
-  band and gates on the deck's `visible` minus any overlay or scratch. AppKit's own divider cursor stops
-  firing once a second session is mounted, so nothing else writes it.
+  band and gates on the deck's `visible` minus any overlay or scratch.
+- AppKit's own divider cursor rect stays live on a background session's split, which the deck hides by
+  opacity only. The visible terminal's per-move writes mask it, so it surfaces only under a cover with no
+  per-move writer: a session ask left ↔ stuck over the hidden divider's column.
+  `SplitCursorRects` drops that rect while the probe's `deckVisible` is false and restores it when shown.
+  Reproduce with two split sessions at different ratios.
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.

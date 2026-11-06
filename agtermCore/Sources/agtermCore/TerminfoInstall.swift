@@ -68,8 +68,8 @@ public enum TerminfoInstall {
 
     /// The first candidate directory that holds the entry under either hashed layout: ncurses files it
     /// under the first letter (`x/`), Darwin's under its hex code (`78/`).
-    static func terminfoDirectory(clientPath: String?, environment: [String: String],
-                                  fileManager: FileManager = .default) -> String? {
+    public static func terminfoDirectory(clientPath: String?, environment: [String: String],
+                                         fileManager: FileManager = .default) -> String? {
         candidateDirectories(clientPath: clientPath, environment: environment).first { directory in
             ["78", "x"].contains { fileManager.fileExists(atPath: "\(directory)/\($0)/\(entry)") }
         }

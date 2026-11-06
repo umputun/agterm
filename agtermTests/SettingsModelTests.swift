@@ -21,6 +21,7 @@ final class SettingsModelTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             GhosttyApp.shared.setFlaggedViewLayout(.flat)
+            GhosttyApp.shared.setSidebarDensity(.standard)
             HtmlOverlayRegistry.shared.setZoom(1)
             model = nil
             library = nil
@@ -81,6 +82,17 @@ final class SettingsModelTests: XCTestCase {
         XCTAssertEqual(SettingsStore(directory: stateDir).load().flaggedViewLayout, "tree")
     }
 
+    func testSetFlaggedViewLayoutReachesTheLibraryAndEveryOpenStore() throws {
+        let first = try XCTUnwrap(library.windows.first.flatMap { library.store(for: $0.id) })
+        let second = try XCTUnwrap(library.store(for: library.newWindow(name: "second").id))
+
+        model.setFlaggedViewLayout(.plain)
+
+        XCTAssertEqual(library.flaggedLayout, .plain)
+        XCTAssertEqual(first.flaggedLayout, .plain)
+        XCTAssertEqual(second.flaggedLayout, .plain)
+    }
+
     func testSetFlaggedViewLayoutBackToFlatClearsTheStoredField() {
         model.setFlaggedViewLayout(.tree)
 
@@ -96,6 +108,35 @@ final class SettingsModelTests: XCTestCase {
         posted.isInverted = true
 
         model.setFlaggedViewLayout(.tree)
+
+        wait(for: [posted], timeout: 0.3)
+    }
+
+    func testSetSidebarDensityPersistsMirrorsAndBroadcasts() {
+        let posted = expectation(forNotification: .agtermAppearanceChanged, object: nil)
+
+        model.setSidebarDensity(.compact)
+
+        wait(for: [posted], timeout: 1)
+        XCTAssertEqual(GhosttyApp.shared.sidebarDensity, .compact)
+        XCTAssertEqual(SettingsStore(directory: stateDir).load().sidebarDensity, "compact")
+    }
+
+    func testSetSidebarDensityBackToDefaultClearsTheStoredField() {
+        model.setSidebarDensity(.compact)
+
+        model.setSidebarDensity(.standard)
+
+        XCTAssertEqual(GhosttyApp.shared.sidebarDensity, .standard)
+        XCTAssertNil(SettingsStore(directory: stateDir).load().sidebarDensity)
+    }
+
+    func testSetSidebarDensitySkipsAnUnchangedValue() {
+        model.setSidebarDensity(.compact)
+        let posted = expectation(forNotification: .agtermAppearanceChanged, object: nil)
+        posted.isInverted = true
+
+        model.setSidebarDensity(.compact)
 
         wait(for: [posted], timeout: 0.3)
     }

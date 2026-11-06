@@ -35,6 +35,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let hasRecentClosed: Bool
     /// Whether the frontmost window has an active session at all.
     public let hasActiveSession: Bool
+    /// Whether attention navigation walks every open window, so an empty frontmost window can still step.
+    public let attentionNavigationAcrossWindows: Bool
     /// hasSessions includes sessions created without selecting one.
     public let hasSessions: Bool
     /// Whether it has a current workspace — nil only with no store, since a window always keeps one.
@@ -47,6 +49,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let pickerActive: Bool
     /// activeSessionHasOverlay says the active session holds a program or page that can be hidden or shown.
     public let activeSessionHasOverlay: Bool
+    /// activeSessionIsPage says the active session is a page companion, which has no terminal.
+    public let activeSessionIsPage: Bool
 
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
@@ -67,13 +71,16 @@ public struct PaletteContext: Sendable, Equatable {
                 hasPendingClose: Bool = false,
                 hasRecentClosed: Bool = false,
                 hasActiveSession: Bool = false,
+                attentionNavigationAcrossWindows: Bool = false,
                 hasSessions: Bool = false,
                 hasCurrentWorkspace: Bool = false,
                 hasRemotes: Bool = false,
                 terminalZoomActive: Bool = false,
                 dashboardOpen: Bool = false,
                 pickerActive: Bool = false,
-                activeSessionHasOverlay: Bool = false) {
+                activeSessionHasOverlay: Bool = false,
+                activeSessionIsPage: Bool = false) {
+        self.activeSessionIsPage = activeSessionIsPage
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -90,6 +97,7 @@ public struct PaletteContext: Sendable, Equatable {
         self.hasPendingClose = hasPendingClose
         self.hasRecentClosed = hasRecentClosed
         self.hasActiveSession = hasActiveSession
+        self.attentionNavigationAcrossWindows = attentionNavigationAcrossWindows
         self.hasSessions = hasSessions
         self.hasCurrentWorkspace = hasCurrentWorkspace
         self.hasRemotes = hasRemotes
@@ -103,7 +111,7 @@ public struct PaletteContext: Sendable, Equatable {
 /// Static action-palette rows, in the same order the macOS palette presents them before dynamic rows.
 public enum PaletteCommand: String, CaseIterable, Sendable {
     case newSession, newWorkspace, openDirectory
-    case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
+    case renameSession, duplicateSession, newCompanion, duplicateCompanion, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case previousWorkspace, nextWorkspace
     case previousWindow, nextWindow
@@ -124,11 +132,15 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     /// diverge. Relevance, then the modal cover, then the presence terms.
     public func isEnabled(in context: PaletteContext) -> Bool {
         guard isVisible(in: context), !isCoveredByModal(context) else { return false }
+        if context.activeSessionIsPage, Self.terminalOnly.contains(self) { return false }
         switch self {
         case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
              .toggleHorizontalSplit, .toggleScratch,
-             .find, .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
-             .firstSession, .lastSession:
+             .find, .previousSession, .nextSession, .firstSession, .lastSession:
+            return context.hasActiveSession
+        case .previousAttentionSession, .nextAttentionSession:
+            return context.hasActiveSession || context.attentionNavigationAcrossWindows
+        case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
@@ -150,6 +162,12 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return true
         }
     }
+
+    // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
+    private static let terminalOnly: Set<PaletteCommand> = [
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .find,
+        .focusLeftPane, .focusRightPane, .duplicateCompanion,
+    ]
 
     /// Whether a cover blocks the command. Most menu items mirror the whole cover; the font sizes, both
     /// reloads, terminal zoom and Close Session carry no modal term at all, and Dashboard carries every
@@ -221,6 +239,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .openDirectory: return "Open Directory…"
         case .renameSession: return "Rename Session"
         case .duplicateSession: return "Duplicate Session"
+        case .newCompanion: return "New Companion"
+        case .duplicateCompanion: return "Duplicate as Companion"
         case .renameWorkspace: return "Rename Workspace"
         case .closeSession: return "Close Session"
         case .reopenRecent: return "Reopen Last Closed Item"
@@ -285,6 +305,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .openDirectory: return .openDirectory
         case .renameSession: return .renameSession
         case .duplicateSession: return .duplicateSession
+        case .newCompanion: return .newCompanion
+        case .duplicateCompanion: return .duplicateCompanion
         case .renameWorkspace: return .renameWorkspace
         case .closeSession: return .closeSession
         case .reopenRecent: return .reopenRecent

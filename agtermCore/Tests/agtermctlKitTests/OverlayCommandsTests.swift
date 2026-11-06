@@ -139,9 +139,150 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--wait"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--block"],
         ["session", "overlay", "open", "--url", "http://localhost:5173/", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "revdiff", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--image", "/tmp/a.png"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--companion"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--block"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--wait"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--navigation"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--js"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--chromeless"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--persistent"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--browse"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--width", "400"],
+        ["session", "overlay", "open", "revdiff", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--url", "http://localhost:5173/", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--image", "/tmp/a.png", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--companion"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--block"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--wait"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--js"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--chromeless"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--persistent"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--browse"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "revdiff", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--html", "/tmp/r.html", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--text", "/tmp/a.go"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--companion"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--block"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--wait"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--navigation"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--js"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--chromeless"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--persistent"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--browse"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--cwd", "/tmp"],
+        ["session", "overlay", "open", "--text", "/tmp/a.go", "--line", "0"],
+        ["session", "overlay", "open", "--line", "3", "--markdown", "/tmp/r.md"],
+        ["session", "overlay", "open", "revdiff", "--line", "3"],
+        ["session", "overlay", "open", "--tail", "10"],
+        ["session", "overlay", "open", "revdiff", "--follow-file"],
+        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--tail", "10"],
+        ["session", "overlay", "open", "--text", "/tmp/a.log", "--line", "3", "--tail", "10"],
+        ["session", "overlay", "open", "--text", "/tmp/a.log", "--line", "3", "--follow-file"],
+        ["session", "overlay", "open", "--text", "/tmp/a.log", "--tail", "0"],
+        ["session", "overlay", "open", "--text", "/tmp/a.log", "--tail", "100001"],
     ])
     func openRejectsAMissingOrConflictingContent(_ argv: [String]) {
         #expect(rejects(argv))
+    }
+
+    @Test func imageOpenSendsTheResolvedPathAndNoPageFlags() throws {
+        let req = try request(["session", "overlay", "open", "--image", "shots/../shots/a.png", "--follow"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.image == URL(fileURLWithPath: cwd).appendingPathComponent("shots/a.png").standardizedFileURL.path)
+        #expect(req.args?.html == nil)
+        #expect(req.args?.cwd == nil)
+        #expect(req.args?.sizePercent == nil)
+        #expect(req.args?.follow == true)
+    }
+
+    @Test func markdownOpenSendsTheResolvedPathInItsOwnField() throws {
+        let req = try request(["session", "overlay", "open", "--markdown", "docs/../docs/r.md", "--size-percent", "95"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.markdownFile == URL(fileURLWithPath: cwd).appendingPathComponent("docs/r.md").standardizedFileURL.path)
+        #expect(req.args?.markdown == nil)
+        #expect(req.args?.image == nil)
+        #expect(req.args?.sizePercent == 95)
+        let data = try JSONEncoder().encode(req)
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: data) == req)
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(json.contains(#""markdownFile":"#))
+        #expect(!json.contains(#""markdown":"#))
+    }
+
+    @Test func textOpenSendsTheResolvedPathLiterallyAndItsLine() throws {
+        let req = try request(["session", "overlay", "open", "--text", "src/../src/a.go:12", "--line", "40"])
+        let cwd = FileManager.default.currentDirectoryPath
+        #expect(req.cmd == .sessionOverlayOpen)
+        #expect(req.args?.textFile == URL(fileURLWithPath: cwd).appendingPathComponent("src/a.go:12").standardizedFileURL.path)
+        #expect(req.args?.line == 40)
+        #expect(req.args?.markdownFile == nil)
+        #expect(req.args?.cwd == nil)
+        let bare = try request(["session", "overlay", "open", "--text", "/tmp/notes.txt"])
+        #expect(bare.args?.textFile == "/tmp/notes.txt")
+        #expect(bare.args?.line == nil)
+    }
+
+    @Test func textOpenSendsTheTailAndFollowFile() throws {
+        let req = try request(["session", "overlay", "open", "--text", "/tmp/app.log", "--tail", "200", "--follow-file"])
+        #expect(req.args?.tail == 200)
+        #expect(req.args?.followFile == true)
+        #expect(req.args?.follow == nil)
+        let bare = try request(["session", "overlay", "open", "--text", "/tmp/app.log"])
+        #expect(bare.args?.tail == nil)
+        #expect(bare.args?.followFile == nil)
+    }
+
+    @Test(arguments: ["on", "off", "toggle"])
+    func followSendsItsModePaneAndTarget(_ mode: String) throws {
+        let req = try request(["session", "overlay", "follow", mode, "--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlayFollow)
+        #expect(req.target == "s")
+        #expect(req.args?.mode == mode)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func followRefusesABadModeOrPane() {
+        #expect(rejects(["session", "overlay", "follow", "maybe"]))
+        #expect(rejects(["session", "overlay", "follow"]))
+        #expect(rejects(["session", "overlay", "follow", "on", "--pane", "scratch"]))
+    }
+
+    @Test(arguments: [
+        (["main()"], "main()" as String?, nil as String?),
+        (["--next"], nil as String?, "next" as String?),
+        (["--prev"], nil as String?, "prev" as String?),
+        (["--close"], nil as String?, "close" as String?),
+    ])
+    func searchSendsItsQueryOrStepPaneAndTarget(_ extra: [String], _ text: String?, _ to: String?) throws {
+        let req = try request(["session", "overlay", "search"] + extra + ["--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlaySearch)
+        #expect(req.target == "s")
+        #expect(req.args?.text == text)
+        #expect(req.args?.to == to)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func searchRefusesAMissingOrMixedRequest() {
+        #expect(rejects(["session", "overlay", "search"]))
+        #expect(rejects(["session", "overlay", "search", ""]))
+        #expect(rejects(["session", "overlay", "search", "a", "--next"]))
+        #expect(rejects(["session", "overlay", "search", "--next", "--prev"]))
+        #expect(rejects(["session", "overlay", "search", "a", "--pane", "scratch"]))
+    }
+
+    @Test func openHelpTellsFollowFileFromFollow() {
+        let open = Session.Overlay.Open.helpMessage(columns: 400)
+        #expect(open.contains("--follow-file"))
+        #expect(open.contains("Not --follow, which selects the session."))
     }
 
     @Test func submitSendsTheValuePaneAndTarget() throws {

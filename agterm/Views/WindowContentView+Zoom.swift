@@ -46,7 +46,7 @@ extension WindowContentView {
                 } label: {
                     Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
-                .help("Exit Terminal Zoom")
+                .toolTip("Exit Terminal Zoom", isShown: titlebarTipsShown)
                 .accessibilityLabel("Exit Terminal Zoom")
                 .accessibilityIdentifier("terminal-zoom-exit")
                 .padding(.trailing, 14)

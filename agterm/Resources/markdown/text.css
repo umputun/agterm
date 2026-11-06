@@ -1,0 +1,55 @@
+#agterm-page { display: flex; position: relative; max-width: none; min-width: max-content; margin: 0; padding: 0; }
+.agterm-gutter, #agterm-page pre {
+  margin: 0; padding: 12px 16px; font: 13px/20px var(--mono); white-space: pre; border-radius: 0; background: none;
+}
+.agterm-gutter { text-align: right; color: var(--muted); border-right: 1px solid var(--rule); user-select: none; }
+#agterm-page pre { flex: 1; overflow: visible; }
+.agterm-band {
+  position: absolute; left: 0; right: 0; height: 20px; pointer-events: none;
+  background: color-mix(in srgb, var(--agterm-color-11, #d9b45a) 22%, transparent);
+}
+/* fixed: a sticky bar as wide as body scrolls away sideways, and 100vw runs under a layout scroll bar */
+body { padding-top: 35px; }
+.agterm-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 35px; z-index: 1; display: flex; gap: 12px; align-items: center;
+  box-sizing: border-box; padding: 4px 6px 4px 16px; font: 12px/20px var(--mono); color: var(--muted);
+  background: var(--agterm-background, Canvas); border-bottom: 1px solid var(--rule);
+  white-space: nowrap; overflow: hidden;
+}
+/* one line at any width: a wrapping bar changes the page height as it scrolls sideways, which moves the view */
+.agterm-logbar, .agterm-search { display: flex; gap: 8px; align-items: center; }
+.agterm-logbar { gap: 12px; flex: 0 1 auto; }
+.agterm-logbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agterm-bar button { flex: none; }
+.agterm-logbar button {
+  font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
+  padding: 0 8px; cursor: pointer;
+}
+.agterm-logbar button.agterm-paused { color: var(--agterm-color-11, #d9b45a); }
+/* matches TerminalSearchBar: change the two together */
+.agterm-search {
+  margin-left: auto; min-width: 0; flex: 0 1 auto; padding: 3px 6px 3px 10px; border-radius: 8px;
+  background: var(--agterm-background, Canvas); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  font: 13px/18px -apple-system, system-ui, sans-serif; color: var(--fg);
+}
+.agterm-search svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.agterm-magnifier { flex: none; color: color-mix(in srgb, var(--fg) 70%, transparent); }
+.agterm-search input {
+  flex: 0 1 120px; width: 120px; min-width: 2.5em; padding: 0; font: inherit; color: var(--fg);
+  background: none; border: none; outline: none;
+}
+.agterm-search input::placeholder { color: color-mix(in srgb, var(--fg) 45%, transparent); }
+/* a fixed slot, so the box keeps its width as the count appears and changes */
+.agterm-count {
+  flex: 0 1 76px; width: 76px; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: 11px;
+  color: color-mix(in srgb, var(--fg) 70%, transparent);
+}
+.agterm-search button {
+  flex: none; display: flex; padding: 0; color: color-mix(in srgb, var(--fg) 80%, transparent); background: none;
+  border: none; cursor: pointer;
+}
+.agterm-search button:disabled { opacity: 0.4; cursor: default; }
+::highlight(agterm-match) { background-color: color-mix(in srgb, var(--agterm-color-11, #d9b45a) 35%, transparent); }
+::highlight(agterm-current) {
+  background-color: var(--agterm-color-11, #d9b45a); color: var(--agterm-background, #000);
+}

@@ -14,7 +14,7 @@ public enum RemotePageOpen: Equatable, Sendable {
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
-    /// pointsUnsupported: the open carries point sizes, which the presenting Mac does not take.
+    /// pointsUnsupported is never returned; it stays for agterm-linux, whose switches still name it.
     case pointsUnsupported
     case opened
 }
@@ -45,7 +45,7 @@ public struct RemotePageClaim: Equatable, Sendable {
 // MARK: - Pages handed to the viewer presenting a session, on the origin
 
 extension AppStore {
-    /// pageClaimWindow bounds how long a handed-over file page waits for its channel to be claimed.
+    /// pageClaimWindow bounds how long a handed-over page that fetches over a channel waits for it to be claimed.
     public static let pageClaimWindow: TimeInterval = 30
 
     /// openRemotePage hands a page to the viewer presenting `sessionID` under the program overlay placement rule:
@@ -55,29 +55,37 @@ extension AppStore {
                                now: Date = Date()) -> RemotePageOpen {
         let pane = options.pane
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID), let session = session(withID: sessionID),
-              let source = Self.presentationSource(overlay.source) else { return .local }
+              let source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
-        guard options.points.isEmpty else { return .pointsUnsupported }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
+        if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
+        let points = size == nil ? OverlayPointSize() : options.points
         let request = PresentationPage(
             page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
             chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
             browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
-            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size, follow: options.follow)
+            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
+            points: presentablePoints(points, session: sessionID), follow: options.follow)
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
         if pane == nil, session.hudActive { closeHud(sessionID) }
         let page = RemotePage(overlay: overlay, token: token, claimDeadline: now.addingTimeInterval(Self.pageClaimWindow))
-        session.remoteOverlays.reserve(RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane,
-                                                         owner: hub.presenterGeneration(session: sessionID),
-                                                         sizePercent: size, page: page))
+        // the presenter sizes an unsized picture itself as a floating panel at the base percent, so the slot records
+        // that percent: the tree then reads it floating and a point resize has a percent to keep
+        var reserved = size
+        if case .image = source, pane == nil, size == nil { reserved = ImagePage.basePercent }
+        var slot = RemoteOverlaySlot(job: overlay.id.uuidString, pane: pane, owner: hub.presenterGeneration(session: sessionID),
+                                     sizePercent: reserved, page: page)
+        slot.points = points
+        slot.presenterSized = reserved != size
+        session.remoteOverlays.reserve(slot)
         clearOverlayExitCode(pane, in: session)
         HtmlPageOutcomes.shared.register(overlay.id)
         scheduleTreeChanged()
@@ -114,13 +122,13 @@ extension AppStore {
         return nil
     }
 
-    /// expireRemotePageClaims ends every file page whose channel was not claimed in time; a URL page loads on
+    /// expireRemotePageClaims ends every channel page whose channel was not claimed in time; a URL page loads on
     /// the presenter with no channel and never expires.
     public func expireRemotePageClaims(now: Date = Date()) {
         for session in workspaces.flatMap(\.sessions) {
             for slot in session.remoteOverlays.slots {
                 guard let page = slot.page, !page.claimed, now > page.claimDeadline,
-                      case .file = page.overlay.source else { continue }
+                      page.overlay.source.kind != .url else { continue }
                 closeRemoteOverlay(session.id, pane: slot.pane)
             }
         }
@@ -130,7 +138,8 @@ extension AppStore {
     /// sits there or the stream it was handed to is gone.
     @discardableResult
     public func sendRemotePageCommand(_ sessionID: UUID, pane: OverlayPane?, action: PresentationPageAction,
-                                      sizePercent: Int? = nil) -> Bool {
+                                      sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
+                                      merge: Bool? = nil) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil,
               let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else { return false }
         var seq = 0
@@ -142,14 +151,14 @@ extension AppStore {
             }
         }
         return hub.sendToPresenter(.pageCommand(PresentationPageCommand(page: slot.job, seq: seq, action: action,
-                                                                        sizePercent: sizePercent)), session: sessionID)
+                                                                        sizePercent: sizePercent, points: points, merge: merge)),
+                                   session: sessionID)
     }
 
     /// navigateRemotePage runs a toolbar navigation on the page in `pane`'s slot when the presenting Mac shows it.
     public func navigateRemotePage(_ sessionID: UUID, pane: OverlayPane?, navigation: HtmlNavigation) -> RemotePageCommand {
         guard let page = session(withID: sessionID)?.remoteOverlays.slot(pane)?.page else { return .local }
-        let file: Bool
-        if case .file = page.overlay.source { file = true } else { file = false }
+        let file = page.overlay.source.kind != .url
         switch navigation {
         case .back: return deliverRemotePageCommand(sessionID, pane: pane, action: .back)
         case .forward: return deliverRemotePageCommand(sessionID, pane: pane, action: .forward)
@@ -193,11 +202,23 @@ extension AppStore {
         session.remoteOverlays.slots.compactMap { slot in slot.page.map { (slot.pane, $0) } }
     }
 
-    private static func presentationSource(_ source: HtmlSource) -> PresentationPageSource? {
+    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica, and
+    /// for an image whose probed size is not given.
+    public static func presentationSource(_ source: HtmlSource, imagePixels: ImagePixels? = nil) -> PresentationPageSource? {
         switch source {
         case .file(let path, let grantRoot): return .file(path: path, grantRoot: grantRoot)
         case .url(let url): return .url(url.absoluteString)
+        case .image(let path): return imagePixels.map { .image(path: path, width: $0.width, height: $0.height) }
+        case .markdown(let path): return .markdown(path: path)
+        case .text(let path, let line): return .text(path: path, line: line)
         case .replica: return nil
         }
+    }
+
+    /// pageBelongsRemote says the placement rule hands a page in `pane`'s slot of session `sessionID` to the
+    /// presenting Mac, false for an unknown session.
+    public func pageBelongsRemote(_ sessionID: UUID, pane: OverlayPane?) -> Bool {
+        guard let session = session(withID: sessionID) else { return false }
+        return pageBelongsRemote(session, pane: pane)
     }
 }

@@ -166,7 +166,86 @@ final class ReorderUITests: XCTestCase {
                       "dropping workspace 3 onto workspace 1's session row should land it after workspace 1 → [w1, w3, w2]")
     }
 
+    func testFlatFlaggedDropBetweenRowsReordersAcrossWorkspaces() throws {
+        try relaunchFlagged([
+            (name: "one", sessions: [("aaa", true), ("bbb", true)], collapsed: false),
+            (name: "two", sessions: [("ccc", true)], collapsed: false),
+        ], layout: "plain")
+
+        dragRow(named: "ccc", toTopOf: "aaa")
+
+        XCTAssertTrue(pollFlaggedOrder(["ccc", "aaa", "bbb"], timeout: 10))
+        XCTAssertTrue(pollWorkspaceSessionNames(["one": ["aaa", "bbb"], "two": ["ccc"]], timeout: 5))
+        XCTAssertLessThan(sessionRow(named: "ccc").frame.minY, sessionRow(named: "aaa").frame.minY)
+    }
+
+    func testFlaggedTreeDropOnACollapsedWorkspaceMovesTheSessionAfterItsHiddenSibling() throws {
+        try relaunchFlagged([
+            (name: "one", sessions: [("aaa", true), ("hhh", false), ("bbb", true)], collapsed: false),
+            (name: "two", sessions: [("ccc", true), ("kkk", false)], collapsed: true),
+        ], layout: "tree")
+
+        XCTAssertFalse(sessionRow(named: "ccc").exists)
+
+        dragRow(named: "bbb", ontoWorkspace: "two", hold: 1.2)
+
+        XCTAssertTrue(pollWorkspaceSessionNames(["one": ["aaa", "hhh"], "two": ["ccc", "kkk", "bbb"]], timeout: 10))
+        XCTAssertTrue(pollFlaggedOrder(["aaa", "bbb", "ccc"], timeout: 5))
+        XCTAssertTrue(pollSelectedName("bbb", timeout: 5))
+        let ccc = sessionRow(named: "ccc"), moved = sessionRow(named: "bbb")
+        XCTAssertTrue(ccc.waitForHittable(timeout: 5), "the destination group should show ccc")
+        XCTAssertTrue(moved.waitForHittable(timeout: 5), "the moved row should be visible in its new group")
+        XCTAssertLessThan(ccc.frame.minY, moved.frame.minY)
+        XCTAssertLessThan(workspaceRow(named: "two").frame.minY, ccc.frame.minY)
+        XCTAssertFalse(sessionRow(named: "kkk").exists)
+    }
+
+    // regression: on-row retargeting skipped hidden siblings during acceptance
+    func testFlaggedTreeDropOnASessionRowLandsRightAfterItBeforeAHiddenSibling() throws {
+        try relaunchFlagged([
+            (name: "one", sessions: [("aaa", true)], collapsed: false),
+            (name: "two", sessions: [("bbb", true), ("hhh", false), ("ccc", true)], collapsed: false),
+        ], layout: "tree")
+
+        dragRow(named: "aaa", onto: "bbb")
+
+        XCTAssertTrue(pollWorkspaceSessionNames(["one": [], "two": ["bbb", "aaa", "hhh", "ccc"]], timeout: 10))
+    }
+
     // MARK: - Fixture
+
+    private func relaunchFlagged(_ fixtures: [(name: String, sessions: [(String, Bool)], collapsed: Bool)],
+                                 layout: String) throws {
+        let snapshotFile = stateDir.windowSnapshotFile()
+        app.terminate()
+
+        var selected: String?
+        let workspaces = fixtures.map { fixture -> [String: Any] in
+            let sessions = fixture.sessions.map { name, flagged -> [String: Any] in
+                let id = UUID().uuidString
+                if flagged, selected == nil { selected = id }
+                return ["id": id, "customName": name, "cwd": NSHomeDirectory(), "flagged": flagged]
+            }
+            return ["id": UUID().uuidString, "name": fixture.name, "sessions": sessions, "collapsed": fixture.collapsed]
+        }
+        let snapshot: [String: Any] = [
+            "version": 1,
+            "selectedSessionID": try XCTUnwrap(selected, "the fixture must flag at least one session"),
+            "workspaces": workspaces,
+            "sidebarVisible": true,
+            "sidebarMode": "flagged",
+        ]
+        try JSONSerialization.data(withJSONObject: snapshot, options: [.sortedKeys]).write(to: snapshotFile, options: .atomic)
+        try Data(#"{"flaggedViewLayout":"\#(layout)"}"#.utf8)
+            .write(to: stateDir.appendingPathComponent("settings.json"), options: .atomic)
+
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        for (name, flagged) in fixtures.filter({ !$0.collapsed }).flatMap(\.sessions) where flagged {
+            XCTAssertTrue(sessionRow(named: name).waitForExistence(timeout: 10), "flagged session \(name) should be visible")
+        }
+    }
 
     /// Relaunches with a prewritten window snapshot so tests that specifically exercise selection/drag
     /// gestures don't depend on the slower inline-rename fixture.
@@ -301,6 +380,30 @@ final class ReorderUITests: XCTestCase {
         start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
     }
 
+    private func dragRow(named source: String, toTopOf target: String) {
+        let from = sessionRow(named: source)
+        let to = sessionRow(named: target)
+        XCTAssertTrue(from.waitForHittable(timeout: 10), "\(source) row should be hittable to drag")
+        XCTAssertTrue(to.waitForHittable(timeout: 10), "\(target) row should be hittable as a drop target")
+        from.click()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
+        start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
+    }
+
+    private func dragRow(named source: String, ontoWorkspace workspace: String, hold: TimeInterval) {
+        let from = sessionRow(named: source)
+        let to = workspaceRow(named: workspace)
+        XCTAssertTrue(from.waitForHittable(timeout: 10), "\(source) row should be hittable to drag")
+        XCTAssertTrue(to.waitForHittable(timeout: 10), "\(workspace) row should be hittable as a drop target")
+        from.click()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: hold)
+    }
+
     /// Drags from a row that is already part of the current selection. Unlike `dragRow`, this must not
     /// click the source first: a plain click would collapse the multi-selection before the drag begins.
     private func dragSelectedRow(named source: String, onto target: String) {
@@ -375,6 +478,29 @@ final class ReorderUITests: XCTestCase {
             }
             return result.count == expected.count ? result : nil
         }
+    }
+
+    private func pollFlaggedOrder(_ expected: [String], timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            guard let order = obj["flaggedOrder"] as? [String] else { return nil }
+            let names = Self.sessionNames(in: obj)
+            return order.compactMap { names[$0] }
+        }
+    }
+
+    private func pollSelectedName(_ expected: String, timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            (obj["selectedSessionID"] as? String).flatMap { Self.sessionNames(in: obj)[$0] }
+        }
+    }
+
+    private static func sessionNames(in obj: [String: Any]) -> [String: String] {
+        let workspaces = obj["workspaces"] as? [[String: Any]] ?? []
+        let sessions = workspaces.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
+        return Dictionary(sessions.compactMap { session in
+            guard let id = session["id"] as? String, let name = session["customName"] as? String else { return nil }
+            return (id, name)
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Polls the hermetic snapshot file until the workspace `name`s equal `expected`, in order.

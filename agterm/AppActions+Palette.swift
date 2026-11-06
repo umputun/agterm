@@ -38,13 +38,15 @@ extension AppActions {
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
             hasRecentClosed: !library.recentClosedItems.isEmpty,
             hasActiveSession: activeStore?.activeSession != nil,
+            attentionNavigationAcrossWindows: activeStore?.attentionNavigationAcrossWindows == true,
             hasSessions: activeStore?.workspaces.contains { !$0.sessions.isEmpty } == true,
             hasCurrentWorkspace: activeStore?.currentWorkspaceID != nil,
             hasRemotes: !configuredRemotes.isEmpty,
             terminalZoomActive: terminalZoomActive,
             dashboardOpen: frontmostDashboard?.isOpen == true,
             pickerActive: pickActive(for: library.activeWindowID),
-            activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false
+            activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false,
+            activeSessionIsPage: activeStore?.activeSession?.content == .page
         )
     }
 
@@ -75,6 +77,8 @@ extension AppActions {
         case .openDirectory: openDirectory()
         case .renameSession: renameActiveSession()
         case .duplicateSession: duplicateActiveSession()
+        case .newCompanion: newCompanionOfActiveSession()
+        case .duplicateCompanion: duplicateActiveSessionAsCompanion()
         case .renameWorkspace: renameActiveWorkspace()
         case .closeSession: closeActiveSession()
         case .reopenRecent: openLatestRecentClosed()
@@ -190,19 +194,54 @@ extension AppActions {
                 self?.openWindow(target)
             })
         }
-        // skip the session's OWN workspace, not `currentWorkspaceID` — a freshly created workspace is
-        // current while the selection still sits elsewhere, and it is a valid destination.
-        if let store, let sessionID = store.selectedSessionID,
-           let owner = store.workspace(forSession: sessionID)?.id {
-            for workspace in store.workspaces where workspace.id != owner {
-                let target = workspace.id
-                items.append(PaletteItem(id: "move-\(target)", title: "Move Session to \(workspace.name)") { [weak self] in
-                    self?.moveSession(sessionID, toWorkspace: target)
-                })
-            }
-        }
+        items.append(contentsOf: moveItems())
+        items.append(contentsOf: tintItems())
         items.append(contentsOf: customCommandItems(badge: "custom"))
         return items
+    }
+
+    /// moveItems are "Move Session to <workspace>" for every workspace but the selected session's own. The
+    /// session is read when the row runs, since the selection can move under an open palette.
+    private func moveItems() -> [PaletteItem] {
+        // skip the session's OWN workspace, not `currentWorkspaceID`: a freshly created workspace is
+        // current while the selection still sits elsewhere, and it is a valid destination.
+        guard let store, let sessionID = store.selectedSessionID,
+              let owner = store.workspace(forSession: sessionID)?.id else { return [] }
+        return store.workspaces.filter { $0.id != owner }.map { workspace in
+            let target = workspace.id
+            let movable: (AppStore) -> UUID? = { store in
+                guard let id = store.selectedSessionID,
+                      let current = store.workspace(forSession: id)?.id, current != target,
+                      store.canMoveSessions([id], toWorkspace: target) else { return nil }
+                return id
+            }
+            return PaletteItem(id: "move-\(target)", title: "Move Session to \(workspace.name)",
+                               isEnabled: { [weak self, weak store] in
+                                   (self?.uiActionsEnabled ?? false) && store.flatMap(movable) != nil
+                               },
+                               run: { [weak self, weak store] in
+                                   guard let store, let id = movable(store) else { return }
+                                   self?.moveSession(id, toWorkspace: target)
+                               })
+        }
+    }
+
+    /// tintItems are "Tint Session: <color>" plus None for the active session, each keeping the session's
+    /// placement. The session is read when the row runs, since the selection can move under an open palette.
+    private func tintItems() -> [PaletteItem] {
+        guard let store, store.selectedSessionID != nil else { return [] }
+        let choices: [TintColor?] = TintColor.allCases + [nil]
+        return choices.map { color in
+            PaletteItem(id: "tint-\(color?.rawValue ?? "none")",
+                        title: "Tint Session: \(color?.rawValue.capitalized ?? "None")",
+                        isEnabled: { [weak self, weak store] in
+                            (self?.uiActionsEnabled ?? false) && store?.selectedSessionID != nil
+                        },
+                        run: { [weak self, weak store] in
+                            guard self?.uiActionsEnabled == true, let store, let id = store.selectedSessionID else { return }
+                            store.setTintColor(color, forSessions: [id])
+                        })
+        }
     }
 
     /// The user-defined keymap commands as palette items with their bound chord. `badge` tags each entry.
@@ -232,7 +271,7 @@ extension AppActions {
     /// leads with the owning workspace, telling same-named sessions apart and searchable, then `subtitleDetail`.
     func paletteSessions() -> [PaletteItem] {
         guard let store else { return [] }
-        return store.navigableSessions.map { paletteItem(for: $0, in: store) }
+        return store.listOrdered(store.navigableSessions).map { paletteItem(for: $0, in: store) }
     }
 
     /// Every open window's non-idle sessions as palette items (`.attention` mode), in the library's order so
@@ -243,7 +282,7 @@ extension AppActions {
         library.attentionAcrossWindows.map { entry in
             let windowID = entry.window.id
             let sessionID = entry.session.id
-            return PaletteItem(id: sessionID.uuidString, title: entry.session.displayName,
+            return PaletteItem(id: sessionID.uuidString, title: library.attentionLabel(entry),
                                subtitle: library.attentionSubtitle(entry),
                                indicator: { [weak session = entry.session] in session?.agentIndicator ?? AgentIndicator() },
                                isEnabled: { [weak self] in
@@ -255,13 +294,13 @@ extension AppActions {
         }
     }
 
-    /// Maps one session to a palette row — title `displayName`, subtitle "`workspace` · `subtitleDetail`", run
+    /// Maps one session to a palette row — title `listLabel`, subtitle "`workspace` · `subtitleDetail`", run
     /// selects it.
     private func paletteItem(for session: Session, in store: AppStore) -> PaletteItem {
         let id = session.id
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
+        return PaletteItem(id: id.uuidString, title: store.listLabel(for: session), subtitle: subtitle,
                            indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
                            run: { [weak self] in
             guard self?.uiActionsEnabled == true else { return }
@@ -333,7 +372,7 @@ extension AppActions {
         return store.workspaces.flatMap { workspace in
             workspace.sessions.map { session in
                 let id = session.id
-                return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: workspace.name,
+                return PaletteItem(id: id.uuidString, title: store.listLabel(for: session), subtitle: workspace.name,
                                    indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
                                    isEnabled: { [weak self, weak store] in
                                        self?.uiActionsEnabled == true && store?.session(withID: id) != nil

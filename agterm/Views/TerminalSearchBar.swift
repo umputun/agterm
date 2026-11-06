@@ -14,6 +14,8 @@ struct TerminalSearchBar: View {
     let chromeText: Color
     /// The terminal background color, used as the bar's opaque backing so it reads as a distinct panel.
     let terminalColor: Color
+    /// False while a window modal covers the bar, whose AppKit tooltips would otherwise show through it.
+    var toolTipsShown = true
 
     @FocusState private var fieldFocused: Bool
 
@@ -25,7 +27,7 @@ struct TerminalSearchBar: View {
                 .textFieldStyle(.plain)
                 .foregroundStyle(chromeText)
                 // fixed compact width, so the bar stays a narrow right-aligned panel, not a full-width strip
-                .frame(width: 150)
+                .frame(width: 120)
                 .focused($fieldFocused)
                 .onSubmit { onNext() }
                 // Shift+Return steps to the previous match; a plain Return falls through to onSubmit (next).
@@ -39,6 +41,9 @@ struct TerminalSearchBar: View {
             Text(displayText)
                 .font(.caption)
                 .foregroundStyle(chromeText.opacity(0.7))
+                .lineLimit(1)
+                // a fixed slot, so the bar keeps its width as the count appears and changes
+                .frame(width: 76, alignment: .trailing)
                 .accessibilityIdentifier("search-counter")
             chevron(systemName: "chevron.up", help: "Previous match", action: onPrevious)
             chevron(systemName: "chevron.down", help: "Next match", action: onNext)
@@ -60,6 +65,7 @@ struct TerminalSearchBar: View {
                 .foregroundStyle(chromeText.opacity(0.8))
         }
         .buttonStyle(.plain)
-        .help(help)
+        .toolTip(help, isShown: toolTipsShown)
+        .accessibilityLabel(help)
     }
 }

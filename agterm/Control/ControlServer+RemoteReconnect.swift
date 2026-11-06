@@ -15,6 +15,7 @@ extension ControlServer {
     }
 
     func tickReconnects() {
+        pruneRespawnBook()
         let book = RemoteReconnectBook.shared
         for pane in book.due(now: hudClock()) {
             guard let entry = book.entries[pane], waitingSurface(pane, in: entry.session) != nil,
@@ -57,7 +58,7 @@ extension ControlServer {
         return surface as? GhosttySurfaceView
     }
 
-    private func heldSession(_ id: UUID) -> Session? {
+    func heldSession(_ id: UUID) -> Session? {
         guard let store = library.store(holdingSession: id) else { return nil }
         return store.session(withID: id) ?? store.pendingCloseSession(withID: id)
     }

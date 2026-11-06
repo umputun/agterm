@@ -27,8 +27,9 @@ final class PageServeAdmission: Sendable {
     }
 }
 
-/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves the
-/// page's files from inside its grant and runs the page's bridge requests here, as a local page's would run.
+/// PageServeStream is the channel a presenter's helper opened for one page this Mac handed over. It serves a file
+/// page's files from inside its grant and runs its bridge requests here, as a local page's would run, and serves an
+/// image, markdown or text page the files its kind may read, with no bridge.
 /// The helper's connection closing, or sending what a helper never sends, ends the page; the presenter
 /// subscription is not touched.
 @MainActor
@@ -39,6 +40,8 @@ final class PageServeStream {
     }
 
     let page: UUID
+    /// companion is set for one attachment of a page companion, whose channel ends nothing but itself.
+    let companion: CompanionPageServing?
     let resourceSlots = PageServeAdmission(limit: ControlServer.pageServeResourceLimit)
     let bridgeSlots = PageServeAdmission(limit: ControlServer.pageServeBridgeLimit)
     private let source: HtmlSource
@@ -51,8 +54,10 @@ final class PageServeStream {
     private let transfers = OSAllocatedUnfairLock(initialState: Transfers())
     private var ending = false
 
-    init(page: UUID, source: HtmlSource, owner: ControlStreamOwner, server: ControlServer) {
+    init(page: UUID, source: HtmlSource, owner: ControlStreamOwner, server: ControlServer,
+         companion: CompanionPageServing? = nil) {
         self.page = page
+        self.companion = companion
         self.source = source
         self.owner = owner
         self.server = server
@@ -102,6 +107,10 @@ final class PageServeStream {
     }
 
     func closed() {
+        if let companion {
+            server?.companionPageStreams[companion.claim] = nil
+            return
+        }
         if server?.pageServeStreams[page] === self { server?.pageServeStreams[page] = nil }
         guard !ending else { return }
         server?.endRemotePage(page)
@@ -115,7 +124,7 @@ final class PageServeStream {
         guard !ending else { return }
         pageLogger.error("ending a page whose channel sent \(reason, privacy: .public)")
         ending = true
-        server?.endRemotePage(page)
+        if companion == nil { server?.endRemotePage(page) }
         shutdown()
     }
 
@@ -138,6 +147,21 @@ final class PageServeStream {
         let cancelled = { transfers.withLock { $0.cancelled.contains(id) } }
         let stop = { _ = sendWaiting(.failure(id: id, error: PageServeFrame.cancelled), owner) }
         guard !cancelled() else { return stop() }
+        if let resource = RemotePageResources.content(path, source: source) {
+            switch contentBody(resource) {
+            case .failure(let refusal):
+                _ = sendWaiting(.failure(id: id, error: refusal.message), owner)
+            case .success(let body):
+                guard sendWaiting(.head(id: id, mimeType: body.mimeType), owner) else { return }
+                for start in stride(from: 0, to: body.data.count, by: PageServeCodec.maxChunkBytes) {
+                    guard !cancelled() else { return stop() }
+                    let end = min(start + PageServeCodec.maxChunkBytes, body.data.count)
+                    guard sendWaiting(.chunk(id: id, data: body.data.subdata(in: start..<end)), owner) else { return }
+                }
+                _ = sendWaiting(.end(id: id), owner)
+            }
+            return
+        }
         guard let file = RemotePageResources.resolve(path, source: source) else {
             _ = sendWaiting(.failure(id: id, error: "file is outside the page's folder"), owner)
             return
@@ -179,7 +203,11 @@ final class PageServeStream {
     /// answer resolves the page where it sits now and dispatches in the same main-actor turn, so a request
     /// queued before its page closed or moved never runs against the old place.
     private func answer(id: Int, request: String) async -> PageServeFrame {
-        guard let server, let place = server.remotePagePlace(page) else { return .failure(id: id, error: "page closed") }
+        if companion != nil, case .url = source { return .failure(id: id, error: "a URL page has no bridge") }
+        if [.image, .markdown, .text].contains(source.kind) { return .failure(id: id, error: "this page has no bridge") }
+        guard let server, let place = companion.map(server.companionPagePlace) ?? server.remotePagePlace(page) else {
+            return .failure(id: id, error: "page closed")
+        }
         let origin = HtmlBridgePage(window: place.window?.uuidString, session: place.session, pane: place.pane)
         let built: ControlRequest
         switch HtmlBridge.request(from: Data(request.utf8), page: origin) {
@@ -207,6 +235,28 @@ final class PageServeStream {
         }
     }
 
+    private struct ContentRefusal: Error {
+        let message: String
+    }
+
+    // a content page's file is read whole under its kind's cap through one checked descriptor, and a picture is
+    // sent only when its bytes carry a picture signature, so no other file in a markdown page's folder crosses
+    nonisolated private static func contentBody(
+        _ resource: RemotePageResources.ContentResource
+    ) -> Result<(mimeType: String, data: Data), ContentRefusal> {
+        let data: Data
+        switch BoundedFile.read(path: resource.path, maxBytes: resource.maxBytes) {
+        case .success(let read): data = read
+        case .failure(.tooLarge): return .failure(ContentRefusal(message: "file is too large for the page"))
+        case .failure(.unreadable): return .failure(ContentRefusal(message: "file cannot be read"))
+        }
+        guard resource.picture else { return .success(("text/plain; charset=utf-8", data)) }
+        guard let mimeType = ImagePage.mimeType(sniffing: data) else {
+            return .failure(ContentRefusal(message: "not a png, jpg, gif or webp image"))
+        }
+        return .success((mimeType, data))
+    }
+
     nonisolated private static func mimeType(_ path: String) -> String {
         UTType(filenameExtension: URL(fileURLWithPath: path).pathExtension)?.preferredMIMEType ?? "application/octet-stream"
     }
@@ -223,6 +273,7 @@ extension ControlServer {
     /// claimPageServe answers `session.overlay.page.serve`: an ok answer is the token's one admitted claim, and the connection
     /// is then adopted as that page's channel.
     func claimPageServe(_ token: String) -> ControlResponse {
+        if let companion = claimCompanionPage(token) { return companion }
         for store in openStores {
             guard let claim = store.claimRemotePage(token: token) else { continue }
             pendingPageClaims[claim.overlay.id] = claim.overlay.source
@@ -233,6 +284,9 @@ extension ControlServer {
 
     /// adoptPageServeStream takes over the connection of a page whose claim was just answered ok.
     func adoptPageServeStream(descriptor: Int32, page: UUID) {
+        if let serving = pendingCompanionClaims.removeValue(forKey: page) {
+            return adoptCompanionPageStream(descriptor: descriptor, serving: serving)
+        }
         let owner = ControlStreamOwner(descriptor: descriptor, limits: Self.pageServeLimits)
         // a page that ended between its claim and this adoption gets no channel
         guard let source = pendingPageClaims.removeValue(forKey: page), remotePagePlace(page) != nil else {
@@ -252,6 +306,8 @@ extension ControlServer {
 
     /// pageClaimUnanswered ends a page whose claim reply never reached the helper, which leaves nobody to load it.
     func pageClaimUnanswered(_ page: UUID) {
+        // a page companion's attachment that never connected leaves the page and its other viewers alone
+        if pendingCompanionClaims.removeValue(forKey: page) != nil { return }
         pendingPageClaims[page] = nil
         endRemotePage(page)
     }
@@ -290,7 +346,7 @@ extension ControlServer {
         store.receiveRemotePageFrame(body, forSession: sessionID)
     }
 
-    /// schedulePageClaimExpiry ends every file page whose channel was not claimed in time, once `seconds` passed.
+    /// schedulePageClaimExpiry ends every channel page whose channel was not claimed in time, once `seconds` passed.
     func schedulePageClaimExpiry(after seconds: TimeInterval) {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((seconds + 0.1) * 1_000_000_000))

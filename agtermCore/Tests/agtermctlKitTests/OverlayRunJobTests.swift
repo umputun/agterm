@@ -174,6 +174,36 @@ struct OverlayRunJobTests {
         #expect(origin.frames() == [.started, .exited(0)])
     }
 
+    struct TerminfoCase: Sendable, CustomTestStringConvertible {
+        let name: String
+        let term: String
+        let terminfo: String?
+        let bundled: String?
+        let expected: String?
+        var testDescription: String { name }
+    }
+
+    static let terminfoCases: [TerminfoCase] = [
+        TerminfoCase(name: "unset is filled", term: "xterm-ghostty", terminfo: nil, bundled: "/b", expected: "/b"),
+        TerminfoCase(name: "empty is filled", term: "xterm-ghostty", terminfo: "", bundled: "/b", expected: "/b"),
+        TerminfoCase(name: "existing is kept", term: "xterm-ghostty", terminfo: "/mine", bundled: "/b", expected: "/mine"),
+        TerminfoCase(name: "other terminal is left alone", term: "xterm-256color", terminfo: nil, bundled: "/b", expected: nil),
+        TerminfoCase(name: "no bundled database leaves it unset", term: "xterm-ghostty", terminfo: nil, bundled: nil, expected: nil),
+    ]
+
+    @Test(arguments: terminfoCases)
+    func theBundledTerminfoBacksAGhosttyTerminal(_ tc: TerminfoCase) {
+        var base = Self.base
+        base["TERM"] = tc.term
+        base["TERMINFO"] = tc.terminfo
+
+        let environment = OverlayJobRunner.terminalEnvironment(base, bundledTerminfo: tc.bundled)
+
+        #expect(environment["TERMINFO"] == tc.expected)
+        #expect(environment["TERM"] == tc.term)
+        #expect(environment["PATH"] == base["PATH"])
+    }
+
     @Test func theProgramGetsTheHelpersEnvironmentUnderTheContext() throws {
         let bin = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-run-job-bin-\(UUID().uuidString)")
         try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)

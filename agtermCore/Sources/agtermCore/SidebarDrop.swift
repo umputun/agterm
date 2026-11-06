@@ -174,4 +174,97 @@ public enum SidebarDrop {
         if sourceIndex == destination { return nil }
         return WorkspaceResolution(dropChildIndex: dropChildIndex, destination: destination)
     }
+
+    // MARK: - Flagged view
+
+    /// FlaggedReorder is a flat or plain flagged-list drop resolved into the arguments of
+    /// `AppStore.moveFlagged`.
+    public struct FlaggedReorder: Equatable, Sendable {
+        public let ids: [UUID]
+        public let placement: FlaggedOrderPlacement
+        public let anchor: UUID
+    }
+
+    /// resolveFlaggedReorder resolves a drop on the flat or plain flagged list, whose rows are `order`. A drop
+    /// ON a row (`onRow`) lands after it. A gap drop at `childIndex` lands before the first undragged row at or
+    /// below the gap, else after the last undragged row above it. Nil when the order would not change.
+    public static func resolveFlaggedReorder(order: [UUID], dragged: [UUID], onRow: UUID?,
+                                             childIndex: Int) -> FlaggedReorder? {
+        let moving = Set(dragged)
+        let block = order.filter { moving.contains($0) }
+        guard !block.isEmpty else { return nil }
+        let placement: FlaggedOrderPlacement
+        let anchor: UUID
+        if let onRow {
+            guard !moving.contains(onRow), order.contains(onRow) else { return nil }
+            (placement, anchor) = (.after, onRow)
+        } else {
+            let slot = max(0, min(childIndex, order.count))
+            if let below = order[slot...].first(where: { !moving.contains($0) }) {
+                (placement, anchor) = (.before, below)
+            } else if let above = order[..<slot].last(where: { !moving.contains($0) }) {
+                (placement, anchor) = (.after, above)
+            } else {
+                return nil
+            }
+        }
+        guard reorderedFlagged(order, moving: moving, placement: placement, anchor: anchor) != nil else { return nil }
+        return FlaggedReorder(ids: block, placement: placement, anchor: anchor)
+    }
+
+    // shared with AppStore.moveFlagged so a drop the sidebar accepts is the move the store applies
+    static func reorderedFlagged(_ order: [UUID], moving: Set<UUID>, placement: FlaggedOrderPlacement,
+                                 anchor: UUID) -> [UUID]? {
+        var reordered = order.filter { !moving.contains($0) }
+        guard let anchorIndex = reordered.firstIndex(of: anchor) else { return nil }
+        reordered.insert(contentsOf: order.filter { moving.contains($0) },
+                         at: placement == .before ? anchorIndex : anchorIndex + 1)
+        return reordered == order ? nil : reordered
+    }
+
+    /// flaggedTreeChildIndex maps a gap among a flagged-tree workspace's visible rows to the full workspace's
+    /// pre-removal child index `resolveSessions` takes. `visibleIndices` are the flagged rows' full indices,
+    /// ascending. A gap above a visible row lands right before it and the gap after the last one right after
+    /// it, so a hidden unflagged sibling never crosses the drop. `onItemIndex`, a drop ON the workspace row,
+    /// passes through and appends after the workspace's last session, flagged or not.
+    public static func flaggedTreeChildIndex(visibleIndices: [Int], slot: Int) -> Int {
+        guard slot != onItemIndex else { return onItemIndex }
+        guard let last = visibleIndices.last else { return 0 }
+        guard slot < visibleIndices.count else { return last + 1 }
+        return visibleIndices[max(0, slot)]
+    }
+
+    /// companionChildIndex maps a gap among a parent's nested companion rows to the workspace child index
+    /// `resolveSessions` takes.
+    public static func companionChildIndex(parentIndex: Int, slot: Int) -> Int {
+        parentIndex + 1 + max(0, slot)
+    }
+
+    /// FlaggedTree is the workspace tree as the flagged tree layout sees it: every session, and which are
+    /// flagged.
+    public struct FlaggedTree: Sendable {
+        public let workspaces: [(id: UUID, sessions: [UUID])]
+        public let flagged: Set<UUID>
+
+        public init(workspaces: [(id: UUID, sessions: [UUID])], flagged: Set<UUID>) {
+            self.workspaces = workspaces
+            self.flagged = flagged
+        }
+
+        /// changesView says whether moving `dragged` as `resolution` describes changes any workspace's flagged
+        /// rows or their order. A move that only shifts hidden unflagged siblings, which the full-tree no-op
+        /// check in `resolveSessions` cannot see, changes nothing on screen.
+        public func changesView(moving dragged: [UUID], to resolution: SessionResolution) -> Bool {
+            let moving = Set(dragged)
+            var after = workspaces.map { (id: $0.id, sessions: $0.sessions.filter { !moving.contains($0) }) }
+            guard let target = after.firstIndex(where: { $0.id == resolution.workspace }) else { return false }
+            let destination = max(0, min(resolution.destination, after[target].sessions.count))
+            after[target].sessions.insert(contentsOf: dragged, at: destination)
+            return flaggedRows(after) != flaggedRows(workspaces)
+        }
+
+        private func flaggedRows(_ tree: [(id: UUID, sessions: [UUID])]) -> [[UUID]] {
+            tree.map { $0.sessions.filter(flagged.contains) }
+        }
+    }
 }
