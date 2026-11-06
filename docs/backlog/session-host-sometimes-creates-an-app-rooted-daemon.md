@@ -104,10 +104,12 @@ unified logging has no `session-host` record in the window, so the host and the 
 error. The unmediated client is plain `zmx attach`, which puts the create-then-cannot-connect failure
 inside zmx, independent of the session host.
 
-[Unverified] one candidate: `createSocket` binds and then listens, and a concurrent `zmx list` that
-connects between the two gets `ConnectionRefused` and deletes the socket as stale (`util.zig`,
-`cleanupStaleSocket`). A probe creating 800 sessions against 4 to 8 concurrent `zmx list` loops
-reproduced nothing, and 60 isolated iterations of the test passed, so this is not established.
+One candidate was that `createSocket` binds and then listens, so a concurrent `zmx list` connecting
+between the two deletes the socket as stale. `scripts/zmx-patches/0003-atomic-socket-publish.patch`,
+added after this sighting, publishes the socket name only once it listens, so a recurrence on the
+patched build rules that route out wherever the staged publication ran. Its direct-bind fallback, taken
+when `.s` cannot be made or the staged path is too long, still binds then listens. The two app-rooted
+routes above stay open.
 
 The fixture now keeps what was missing: `terminal-INDEX.out` holds each terminal client's pty output,
 which is where a terminal client's `cannot connect` line goes, and `leaders-timeout.list` holds the
