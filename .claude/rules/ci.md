@@ -37,7 +37,10 @@ paths:
   `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
   `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
   `hosted` runs Debug `scripts/test-app.sh` and needs nothing from `build`; it builds the bundled helpers
-  itself. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
+  itself. It stages libghostty and zmx in a step of its own, then runs `test-app.sh` under the watchdog at
+  900s, about 1.6 times a normal run, with `WATCHDOG_RUNNER` naming the DerivedData test host, which
+  xcodebuild launches outside the command's process tree. The `hosted-test-hang` artifact adds the
+  xcresult under `build/DerivedData/Logs/Test`. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
   enable testability in the notarized Release app.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
