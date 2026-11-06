@@ -544,6 +544,12 @@ public struct PresentationFrame: Equatable, Sendable {
         case askRejected(PresentationAskRef)
         /// The ask ended on the origin; the presenter takes its dialog down without answering.
         case askDismiss(PresentationAskRef)
+        case pickRequest(PresentationPick)
+        case pickResolve(PresentationPickAnswer)
+        /// The presenter cannot show the pick, so the origin takes it back.
+        case pickRejected(PresentationPickRef)
+        /// The pick ended on the origin; the presenter takes its picker down without answering.
+        case pickDismiss(PresentationPickRef)
         case overlayRequest(PresentationOverlay)
         /// The presenter cannot show the overlay; the origin fails the job without launching anything.
         case overlayRejected(PresentationOverlayChange)
@@ -588,6 +594,10 @@ public struct PresentationFrame: Equatable, Sendable {
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"
             case .askDismiss: return "ask.dismiss"
+            case .pickRequest: return "pick.request"
+            case .pickResolve: return "pick.resolve"
+            case .pickRejected: return "pick.rejected"
+            case .pickDismiss: return "pick.dismiss"
             case .overlayRequest: return "overlay.request"
             case .overlayRejected: return "overlay.rejected"
             case .overlayClose: return "overlay.close"
@@ -620,7 +630,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, overlay, page, respawn, link
+        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, pick, overlay, page, respawn, link
     }
 
     public init(from decoder: Decoder) throws {
@@ -647,6 +657,10 @@ extension PresentationFrame: Codable {
         case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
         case "ask.rejected": body = .askRejected(try container.decode(PresentationAskRef.self, forKey: .ask))
         case "ask.dismiss": body = .askDismiss(try container.decode(PresentationAskRef.self, forKey: .ask))
+        case "pick.request": body = .pickRequest(try container.decode(PresentationPick.self, forKey: .pick))
+        case "pick.resolve": body = .pickResolve(try container.decode(PresentationPickAnswer.self, forKey: .pick))
+        case "pick.rejected": body = .pickRejected(try container.decode(PresentationPickRef.self, forKey: .pick))
+        case "pick.dismiss": body = .pickDismiss(try container.decode(PresentationPickRef.self, forKey: .pick))
         case "overlay.request": body = .overlayRequest(try container.decode(PresentationOverlay.self, forKey: .overlay))
         case "overlay.rejected":
             body = .overlayRejected(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
@@ -684,6 +698,9 @@ extension PresentationFrame: Codable {
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)
         case .askResolve(let answer): try container.encode(answer, forKey: .ask)
         case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)
+        case .pickRequest(let pick): try container.encode(pick, forKey: .pick)
+        case .pickResolve(let answer): try container.encode(answer, forKey: .pick)
+        case .pickRejected(let ref), .pickDismiss(let ref): try container.encode(ref, forKey: .pick)
         case .overlayRequest(let overlay): try container.encode(overlay, forKey: .overlay)
         case .overlayRejected(let change), .overlayClose(let change), .overlayResize(let change),
              .overlayClosed(let change):

@@ -71,6 +71,7 @@ extension AppStore {
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
         if session.askReplica { session.releaseAsk() }
+        SessionPickBook.shared.dropReplicas(forSession: id)
         orphanReplicaOverlays(of: session)
         closeReplicaPages(of: session)
     }

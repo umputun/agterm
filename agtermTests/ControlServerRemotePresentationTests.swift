@@ -403,6 +403,87 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.askPending?.id, "local")
     }
 
+    private func pickWindow(_ fix: (server: ControlServer, store: AppStore, session: Session)) throws -> PickController {
+        let windowID = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        let controller = PickController()
+        PickRegistry.shared.register(windowID, controller: controller)
+        addTeardownBlock { @MainActor in PickRegistry.shared.unregister(windowID) }
+        return controller
+    }
+
+    private func handedPick(owner: Int = 2) -> PresentationPick {
+        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner)
+    }
+
+    func testAHandedOverPickIsShownInTheRowsWindowAndItsAnswerGoesBack() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let pick = handedPick()
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(controller.pending, pick.pending)
+        let node = fix.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == fix.session.id.uuidString }
+        XCTAssertEqual(node?.pick, ControlSessionPick(id: pick.id, replica: true))
+        controller.resolve(ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .pickResolve(PresentationPickAnswer(id: pick.id, owner: 2, item: "a")))
+    }
+
+    private func followedReplica(_ follow: Bool) throws -> (rowWindow: WindowInfo.ID, frontmost: WindowInfo.ID?) {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let rowWindow = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        _ = fix.server.library.newWindow(name: "front")
+        XCTAssertNotEqual(fix.server.library.frontmostWindowID, rowWindow)
+        let pick = PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]),
+                                    owner: 2, follow: follow)
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(controller.pending?.id, pick.id)
+        return (rowWindow, fix.server.library.frontmostWindowID)
+    }
+
+    func testAFollowedReplicaRaisesTheRowsBackgroundWindow() throws {
+        let shown = try followedReplica(true)
+        XCTAssertEqual(shown.frontmost, shown.rowWindow)
+    }
+
+    func testAnUnfollowedReplicaLeavesTheFrontmostWindow() throws {
+        let shown = try followedReplica(false)
+        XCTAssertNotEqual(shown.frontmost, shown.rowWindow)
+    }
+
+    func testAPickTheRowsWindowCannotShowIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+        controller.open(local)
+        let pick = handedPick()
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .pickRejected(PresentationPickRef(id: pick.id, owner: 2)))
+        XCTAssertEqual(controller.pending, local)
+    }
+
+    func testTheOriginsPickDismissalClosesTheReplicaWithoutAnswering() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let pick = handedPick()
+        try transport.feed(.pickRequest(pick), rev: 2)
+        let sent = transport.links[0].sent.count
+
+        try transport.feed(.pickDismiss(PresentationPickRef(id: pick.id, owner: 2)), rev: 3)
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(transport.links[0].sent.count, sent)
+    }
+
     private let handedOverlay = PresentationOverlay(job: "job-1", pane: nil, sizePercent: 50, backgroundColor: nil,
                                                     follow: false, wait: false)
 

@@ -480,6 +480,8 @@ struct Pick: ParsableCommand {
         var select: String?
         @Flag(name: .long, help: "Raise the target window when the picker opens.") var follow = false
         @Flag(name: .long, help: "Print the picker id and return without waiting for a result.") var noBlock = false
+        @Option(name: .long, help: "Bind the picker to a session: it shows wherever that session is presented.")
+        var session: String?
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
@@ -487,7 +489,7 @@ struct Pick: ParsableCommand {
         }
 
         /// Build the open request from injected stdin bytes, so tests never block on the process's real stdin.
-        func makeRequest(input: Data) throws -> ControlRequest {
+        func makeRequest(input: Data, session bound: String? = nil) throws -> ControlRequest {
             let args = ControlArgs(
                 follow: follow ? true : nil,
                 items: try Self.parseItems(input),
@@ -496,7 +498,15 @@ struct Pick: ParsableCommand {
                 allowCustom: allowCustom ? true : nil,
                 selection: select
             )
-            return ControlRequest(cmd: .pickOpen, args: options.withWindow(args))
+            return ControlRequest(cmd: .pickOpen, target: bound ?? session, args: options.withWindow(args))
+        }
+
+        /// boundSession is the session the pick is bound to: `--session`, else the pane's own session when the
+        /// server is agterm-server, which has no window of its own to show a pick in. A Mac keeps the window pick.
+        func boundSession(environment: [String: String], send: (ControlRequest) throws -> SocketReply) throws -> String? {
+            if let session { return session }
+            guard let own = environment["AGTERM_SESSION_ID"], !own.isEmpty else { return nil }
+            return try send(ControlRequest(cmd: .version)).response.result?.headless == true ? own : nil
         }
 
         /// Sniff stdin's first non-whitespace byte. JSON arrays preserve caller-supplied ids/subtitles;
@@ -522,7 +532,8 @@ struct Pick: ParsableCommand {
                 send: client.send,
                 sleep: Thread.sleep(forTimeInterval:),
                 output: { print($0) },
-                errorOutput: ModalCommandRunner.writeStandardError
+                errorOutput: ModalCommandRunner.writeStandardError,
+                environment: ProcessInfo.processInfo.environment
             )
         }
 
@@ -533,11 +544,13 @@ struct Pick: ParsableCommand {
             send: @escaping (ControlRequest) throws -> SocketReply,
             sleep: @escaping (TimeInterval) -> Void,
             output: @escaping (String) -> Void,
-            errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError
+            errorOutput: @escaping (String) -> Void = ModalCommandRunner.writeStandardError,
+            environment: [String: String] = [:]
         ) throws {
             let runner = ModalCommandRunner(family: .pick, json: options.json, send: send, sleep: sleep,
                                             output: output, errorOutput: errorOutput)
-            try runner.open(makeRequest(input: input), noBlock: noBlock)
+            let bound = try boundSession(environment: environment, send: send)
+            try runner.open(makeRequest(input: input, session: bound), noBlock: noBlock)
         }
     }
 

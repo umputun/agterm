@@ -64,6 +64,14 @@ struct PresentationFramesTests {
             pane: nil, owner: 3))),
         PresentationFrame(gen: 1, rev: 34, body: .askResolve(PresentationAskAnswer(id: "a2", owner: 3, button: "ok", text: " mine ",
                                                                                    selected: ["a"]))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickRequest(PresentationPick(
+            PendingPick(id: "k1", items: [ControlPickItem(id: "a", label: "A", subtitle: "s")], prompt: "p", query: "q",
+                        allowCustom: true, selection: "a"), owner: 3, follow: true))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3, item: "a"))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3, query: "typed"))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickRejected(PresentationPickRef(id: "k1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickDismiss(PresentationPickRef(id: "k1", owner: 3))),
         PresentationFrame(gen: 1, rev: 35, body: .pageRequest(PresentationPage(
             page: "p1", token: "t1", source: .url("https://example.com/review/42?token=abc&x=1#top"), identity: "https://example.com",
             chromeless: false, javascript: true, navigation: true, browse: false, persistent: true, backgroundColor: nil,

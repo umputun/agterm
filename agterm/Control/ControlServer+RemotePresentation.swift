@@ -74,6 +74,8 @@ extension ControlServer {
             mode: { [weak self] mode in self?.library.store(forSession: id)?.setRemoteMode(mode, forSession: id) },
             askRequest: { [weak self] ask in self?.showReplicaAsk(ask, forSession: id) ?? false },
             askDismiss: { [weak self] ref in self?.library.store(forSession: id)?.dismissReplicaAsk(ref, forSession: id) },
+            pickRequest: { [weak self] pick in self?.showReplicaPick(pick, forSession: id) ?? false },
+            pickDismiss: { ref in SessionPickBook.shared.dismissReplica(ref, session: id) },
             overlayRequest: { [weak self] overlay in self?.showReplicaOverlay(overlay, forSession: id) ?? false },
             overlayClose: { [weak self] change in
                 self?.library.store(forSession: id)?.closeReplicaOverlay(change.job, forSession: id)

@@ -173,6 +173,21 @@ public struct ControlSessionAsk: Codable, Sendable, Equatable {
     }
 }
 
+/// The session-bound pick in flight for a session; a window's own pick is the tree's top-level `pickPending`.
+public struct ControlSessionPick: Codable, Sendable, Equatable {
+    public let id: String
+    /// True while a viewer presenting the session draws the pick; omitted when this Mac does.
+    public let remote: Bool?
+    /// True on a viewer for a replica of a pick its origin owns; the id is the origin's.
+    public let replica: Bool?
+
+    public init(id: String, remote: Bool? = nil, replica: Bool? = nil) {
+        self.id = id
+        self.remote = remote
+        self.replica = replica
+    }
+}
+
 /// A session as projected into the `tree` response.
 public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let id: String
@@ -233,6 +248,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let hud: ControlHudNode?
     /// Pending terminal ask; GUI asks are exposed at the tree's top level.
     public let ask: ControlSessionAsk?
+    public let pick: ControlSessionPick?
     public let scratch: Bool
     public let flagged: Bool
     /// What the session is FOR: `Session.effectiveContext`, so the local `session.context` value or, on an
@@ -377,7 +393,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, overlayWidth: Double? = nil,
                 overlayHeight: Double? = nil, paneOverlays: [String]? = nil,
-                hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, scratch: Bool = false, flagged: Bool = false,
+                hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, pick: ControlSessionPick? = nil,
+                scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
@@ -418,6 +435,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.paneOverlays = paneOverlays
         self.hud = hud
         self.ask = ask
+        self.pick = pick
         self.scratch = scratch
         self.flagged = flagged
         self.context = context

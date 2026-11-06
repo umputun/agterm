@@ -48,11 +48,11 @@ extension ControlDispatcher {
                 allowCustom: allowCustom,
                 selection: selection
             )
-            return actions.openPick(
-                pick,
-                window: request.args?.window,
-                follow: request.args?.follow == true
-            )
+            let window = request.args?.window, follow = request.args?.follow == true
+            if let session = request.target {
+                return actions.openPick(pick, session: session, window: window, follow: follow)
+            }
+            return actions.openPick(pick, window: window, follow: follow)
 
         case .pickResult:
             guard let target = request.target else {

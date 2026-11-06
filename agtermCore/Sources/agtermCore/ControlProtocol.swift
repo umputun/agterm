@@ -697,6 +697,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// The build metadata of the bundle on disk, for `version`. Omitted when it cannot be read, which
     /// means unknown, never "same as `app`".
     public var installed: AppIdentity?
+    /// headless is true on `version` from agterm-server, where a pane's own untargeted pick belongs to its
+    /// session rather than to a window; a Mac app omits it.
+    public var headless: Bool?
     /// The restore-mode policy for `restore.mode`, and the header `zmx list` repeats so its rows can be
     /// read without a second call.
     public var restore: ControlRestoreStatus?

@@ -15,6 +15,10 @@ public final class Session: Identifiable {
     public var paneIdentity: UUID
     /// Stable process identity for an existing split pane, including a hidden split.
     public var splitPaneIdentity: UUID?
+    /// daemonBackedPanes holds the pane identities a headless origin runs as detached zmx daemons with no
+    /// surface. Backing and pane-token resolution fall back to it only for a slot without a surface; the Mac
+    /// leaves it empty. Not persisted: the server rebuilds it from the daemons it observes.
+    public var daemonBackedPanes: Set<UUID> = []
     public var customName: String?
     /// Live cwd from the latest OSC 7 / PWD report; the sidebar row refreshes. Persisted by `snapshot()` on
     /// quit + structural mutations only (OSC 7 fires constantly), so a crash loses cwd since the last save.
@@ -152,8 +156,8 @@ public final class Session: Identifiable {
     /// A pane hidden since launch has no surface yet, so its realized sibling answers for the shared launch disposition.
     public func zmxBacking(for surface: TerminalZoomSurface) -> Bool? {
         switch surface {
-        case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? false
-        case .split: (splitSurface ?? self.surface)?.backedByZmx ?? false
+        case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? daemonBackedPanes.contains(paneIdentity)
+        case .split: (splitSurface ?? self.surface)?.backedByZmx ?? splitPaneIdentity.map(daemonBackedPanes.contains) ?? false
         default: nil
         }
     }
@@ -625,9 +629,9 @@ public final class Session: Identifiable {
     public func paneToken(for pane: CommandContext.Pane) -> String {
         switch pane {
         case .left:
-            return surface?.paneToken ?? ""
+            return surface?.paneToken ?? daemonToken(paneIdentity)
         case .right:
-            return splitSurface?.paneToken ?? ""
+            return splitSurface?.paneToken ?? splitPaneIdentity.map(daemonToken) ?? ""
         case .scratch:
             return scratchSurface?.paneToken ?? ""
         }
@@ -805,7 +809,14 @@ public final class Session: Identifiable {
         if surface?.paneToken == token { return .left }
         if splitSurface?.paneToken == token { return .right }
         if scratchSurface?.paneToken == token { return .scratch }
+        if surface == nil, daemonToken(paneIdentity) == token { return .left }
+        if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
         return nil
+    }
+
+    /// daemonToken is the `AGTERM_PANE_ID` of a surfaceless daemon-backed pane, empty otherwise.
+    private func daemonToken(_ identity: UUID) -> String {
+        daemonBackedPanes.contains(identity) ? identity.uuidString : ""
     }
 
     /// PaneAddress is the outcome of resolving a command's `--pane-id` and `--pane` pair.

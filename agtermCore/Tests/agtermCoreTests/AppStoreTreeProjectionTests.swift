@@ -92,6 +92,30 @@ struct AppStoreTreeProjectionTests {
         #expect(store.controlTree().workspaces.first?.sessions.first?.backedByZmx == false)
     }
 
+    @Test func surfacelessDaemonBackedPanesProjectAsBacked() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "server")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        session.daemonBackedPanes = [session.paneIdentity, session.splitPaneIdentity!]
+
+        let node = try #require(store.controlTree().workspaces.first?.sessions.first)
+        #expect(node.backedByZmx == true)
+        #expect(node.surfaces?.map(\.paneID) == [session.paneIdentity.uuidString, session.splitPaneIdentity!.uuidString])
+    }
+
+    @Test func aSurfacelessSessionWithoutDaemonsStaysUnbacked() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        session.daemonBackedPanes = [session.paneIdentity]
+
+        #expect(store.controlTree().workspaces.first?.sessions.first?.backedByZmx == false)
+    }
+
     @Test func paneBackgroundsProjectOverridesOnlyNeverTheInheritedDefault() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

@@ -172,6 +172,13 @@ public final class ZmxLeadBook {
     public func forget(pane: UUID) { states[pane] = nil }
 }
 
+extension AppStore {
+    /// presentsRemotely is whether a session effect goes to its presenter: always when headless, else when it follows.
+    func presentsRemotely(_ session: Session, paneIdentity: UUID?) -> Bool {
+        headless || session.followsRemotely(paneIdentity: paneIdentity)
+    }
+}
+
 extension Session {
     /// Remote presentation requires the target pane, or every existing pane, to follow on this Mac.
     func followsRemotely(paneIdentity: UUID?) -> Bool {

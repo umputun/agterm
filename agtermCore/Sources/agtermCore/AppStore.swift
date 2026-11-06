@@ -211,6 +211,11 @@ public final class AppStore {
     /// and mutated only through the two public methods, so the app target cannot desync it.
     @ObservationIgnored var autoFollowSuppressionCount = 0
 
+    /// headless marks agterm-server's store: every pane is a detached zmx daemon with no surface, so pane
+    /// structure keys on `Session.daemonBackedPanes` and session effects go to the presenting Mac. Only the
+    /// server sets it; a store on the Mac keeps every surface rule.
+    public let headless: Bool
+
     public init(workspaces: [Workspace] = [], selectedSessionID: UUID? = nil,
                 persistence: PersistenceStore = PersistenceStore(),
                 recentClosedStore: RecentClosedStore? = nil,
@@ -218,7 +223,9 @@ public final class AppStore {
                 snapshotDidSave: (() -> Void)? = nil,
                 controlEventSink: ((ControlEventDraft) -> Void)? = nil,
                 paneFinalizer: (([UUID]) -> Void)?,
-                launchPaneDrop: (([UUID]) -> Void)? = nil) {
+                launchPaneDrop: (([UUID]) -> Void)? = nil,
+                headless: Bool = false) {
+        self.headless = headless
         self.workspaces = workspaces
         self.selectedSessionID = selectedSessionID
         self.persistence = persistence
@@ -345,6 +352,7 @@ public final class AppStore {
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
                     let pane = session.paneIdentity(for: surface)
                     let token = surface.surface(in: session)?.paneToken
+                        ?? pane.flatMap { session.daemonBackedPanes.contains($0) ? $0.uuidString : nil }
                     return ControlSurfaceNode(id: id, kind: surface.rawValue, active: surface.isActive(in: session),
                                               visible: surface.isVisible(in: session),
                                               backedByZmx: session.zmxBacking(for: surface),
@@ -373,6 +381,7 @@ public final class AppStore {
                                                                 remote: session.askPresentedRemotely ? true : nil,
                                                                 replica: session.askReplica ? true : nil)
                                           },
+                                          pick: SessionPickBook.shared.node(forSession: session.id),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)

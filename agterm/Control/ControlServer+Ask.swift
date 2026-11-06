@@ -155,6 +155,10 @@ extension ControlServer {
             store.resolveRemoteAsk(answer, forSession: sessionID)
         case .askRejected(let ref) where store.isPresentingRemotely(ref, forSession: sessionID):
             takeBackRemoteAsk(forSession: sessionID)
+        case .pickResolve(let answer):
+            SessionPickBook.shared.resolveRemote(answer, session: sessionID)
+        case .pickRejected(let ref):
+            takeBackRemotePick(forSession: sessionID, refused: ref)
         case .overlayRejected(let change):
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):

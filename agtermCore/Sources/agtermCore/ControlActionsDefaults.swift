@@ -182,6 +182,10 @@ public extension ControlActions {
         return await attachRemoteSession(host: host, session: session)
     }
 
+    func openPick(_: PendingPick, session _: String, window _: String?, follow _: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("pick.open --session"))
+    }
+
     func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {
         guard paneID?.isEmpty != false else {
             return ControlResponse(ok: false, error: ControlActionsUnsupported.message("surface.cursor --pane-id"))

@@ -77,6 +77,7 @@ public final class PickController {
             pickWaiter = nil
             waiter.continuation.resume(returning: outcome)
         }
+        SessionPickBook.shared.controllerResolved(pending.id, result: outcome)
     }
 
     /// pick opens `pick` and suspends until it resolves, for a caller inside the app. Returns nil when the

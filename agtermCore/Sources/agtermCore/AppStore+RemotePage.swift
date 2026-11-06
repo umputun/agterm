@@ -60,7 +60,7 @@ extension AppStore {
         guard session.remoteOverlays.slot(pane) == nil || replaces, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
-        guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
+        guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .local }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
         if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return .unsupported }
         if case .document = source, !hub.presenterSupports(PresentationHub.pageDocumentKind, session: sessionID) { return .unsupported }
@@ -192,7 +192,7 @@ extension AppStore {
         guard presentationHub?.hasPresenter(session: session.id) == true else { return false }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return false }
-        return session.followsRemotely(paneIdentity: identity.flatMap { $0 })
+        return presentsRemotely(session, paneIdentity: identity.flatMap { $0 })
     }
 
     /// holdsHiddenClickedRemotePage says whether `pane`'s slot holds a clicked page the presenting Mac hides, the one

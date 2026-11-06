@@ -47,7 +47,7 @@ extension AppStore {
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
-        guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
+        guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
         guard let frame = try? OverlayJobFrame.context(context).line(),
               frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one
@@ -197,6 +197,7 @@ extension AppStore {
     /// whose held exit went unseen, so each ends now.
     func releaseLeavingSession(_ session: Session) {
         session.cancelPendingAsk()
+        SessionPickBook.shared.sessionEnded(session.id)
         disposeMailboxes(of: session)
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()

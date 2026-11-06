@@ -428,6 +428,15 @@ struct AppStoreCompanionsTests {
         #expect(mate.parentID == other.id && store.session(withID: mate.id) != nil)
     }
 
+    @Test func aHeadlessParentRespawnForgetsItsExitedDaemons() throws {
+        let (store, parent) = makeHeadlessSession(split: false)
+        _ = try store.addCompanion(to: parent.id).get()
+
+        #expect(store.closePrimaryPane(parent.id) == .respawned)
+        #expect(parent.daemonBackedPanes.isEmpty)
+        #expect(store.session(withID: parent.id) != nil)
+    }
+
     @Test func aParentsLastPaneExitStartsAFreshShellInItsLastCwd() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

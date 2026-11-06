@@ -108,20 +108,22 @@ extension AppStore {
     public func swapPanes(_ sessionID: UUID) -> SwapRefusal? {
         guard let session = session(withID: sessionID) else { return .noSession }
         guard session.hasSplit else { return .noSplit }
-        guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
-            return .slotNotRealized
-        }
-        guard let primaryRole = primarySurface as? any PaneRoleMutableSurface,
-              let splitRole = splitSurface as? any PaneRoleMutableSurface else {
-            return .roleNotMutable
+        // a headless store's panes are daemons with no surface, so only the model fields move
+        if !headless {
+            guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
+                return .slotNotRealized
+            }
+            guard let primaryRole = primarySurface as? any PaneRoleMutableSurface,
+                  let splitRole = splitSurface as? any PaneRoleMutableSurface else {
+                return .roleNotMutable
+            }
+            primaryRole.setPaneRole(.split)
+            splitRole.setPaneRole(.primary)
         }
 
         let primaryCwd = session.currentCwd ?? session.initialCwd
         let splitCwd = session.splitCwd ?? session.initialSplitCwd ?? primaryCwd
-        primaryRole.setPaneRole(.split)
-        splitRole.setPaneRole(.primary)
-        session.surface = splitSurface
-        session.splitSurface = primarySurface
+        (session.surface, session.splitSurface) = (session.splitSurface, session.surface)
         if let splitPaneIdentity = session.splitPaneIdentity {
             session.splitPaneIdentity = session.paneIdentity
             session.paneIdentity = splitPaneIdentity
@@ -220,6 +222,7 @@ extension AppStore {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
             MessageBus.shared.dispose(pane: split)
+            session.daemonBackedPanes.remove(split)
         }
         let wasShown = session.isSplit
         session.isSplit = false
@@ -267,7 +270,8 @@ extension AppStore {
     @discardableResult
     public func closePrimaryPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) -> PrimaryPaneExit {
         guard let session = session(withID: sessionID) else { return .closed }
-        guard let survivor = session.splitSurface else {
+        let survivor = session.splitSurface
+        guard hasLiveSplit(session, survivor: survivor) else {
             if respawnsOnLastPaneExit(session, now: now) {
                 respawnPrimaryPane(session, now: now)
                 return .respawned
@@ -280,9 +284,10 @@ extension AppStore {
         if session.askPaneIdentity == session.paneIdentity { session.cancelPendingAsk() }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
-        survivor.promoteToPrimaryPane()
+        survivor?.promoteToPrimaryPane()
         session.surface = survivor
         session.splitSurface = nil
+        session.daemonBackedPanes.remove(session.paneIdentity)
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
         MessageBus.shared.dispose(pane: session.paneIdentity)
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
@@ -352,6 +357,13 @@ extension AppStore {
         return .promoted
     }
 
+    /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, its
+    /// daemon on a headless store, where a split identity is minted before any daemon is provisioned for it.
+    private func hasLiveSplit(_ session: Session, survivor: (any TerminalSurface)?) -> Bool {
+        guard headless else { return survivor != nil }
+        return session.splitPaneIdentity.map(session.daemonBackedPanes.contains) ?? false
+    }
+
     /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane
     /// split is live, BOTH `surface` and `splitSurface` set. Otherwise this was the session's last pane —
     /// promoted into the primary slot (`splitSurface == nil`) while keeping the split pane's `onExit`, so its
@@ -360,7 +372,11 @@ extension AppStore {
     /// INTO `surface`. Called by the split surface's `onExit`.
     public func closeSplitPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) {
         guard let session = session(withID: sessionID) else { return }
-        guard session.surface != nil, session.splitSurface != nil else {
+        // headless: the exiting split's own daemon may already be unmarked, so only the primary's counts
+        let bothLive = headless
+            ? session.splitPaneIdentity != nil && session.daemonBackedPanes.contains(session.paneIdentity)
+            : session.surface != nil && session.splitSurface != nil
+        guard bothLive else {
             if respawnsOnLastPaneExit(session, now: now) {
                 respawnPrimaryPane(session, now: now)
                 return

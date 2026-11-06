@@ -66,10 +66,12 @@ public final class PresentationHub {
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
-                                        linkClickKind] + pageKinds
+                                        linkClickKind] + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
+    /// pickKinds are the presentation kinds a presenter must speak to be handed a session-bound pick.
+    public static let pickKinds = ["pick.request", "pick.resolve", "pick.rejected", "pick.dismiss"]
     /// askFormKind is the capability of drawing an ask's text field, choice list and cancel role. It names no
     /// frame body: an ask needing it travels as an ordinary `ask.request`, sent only to a presenter listing it.
     public static let askFormKind = "ask.form"
@@ -178,7 +180,8 @@ public final class PresentationHub {
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-        case .askResolve, .askRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState, .linkClick:
+        case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
+             .pageState, .linkClick:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break

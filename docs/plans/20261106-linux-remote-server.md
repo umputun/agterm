@@ -296,19 +296,19 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/Control/ControlServer+Pick.swift`, `ControlServer+RemotePresentation.swift`
 - Modify: matching tests in `agtermCore/Tests/agtermCoreTests/`
 
-- [ ] model daemon backing as session state keyed by stable pane identity, so attachability (`zmxBacking`,
+- [x] model daemon backing as session state keyed by stable pane identity, so attachability (`zmxBacking`,
       `RemoteTreeMerger`) and `paneRole(forToken:)` work with no surface; the Mac keeps deriving it from surfaces
-- [ ] decouple `swapPanes` and split on/off/close from realized surfaces for a store marked headless
-- [ ] add a headless-origin presentation rule: with no local client, asks, pick, pages and jobs route to the elected
+- [x] decouple `swapPanes` and split on/off/close from realized surfaces for a store marked headless
+- [x] add a headless-origin presentation rule: with no local client, asks, pick, pages and jobs route to the elected
       presenter; the Mac origin's follower gate is unchanged
-- [ ] session-bound pick, end to end: `agtermctl pick --session`/env, wire arguments, a session-targeted
+- [x] session-bound pick, end to end: `agtermctl pick --session`/env, wire arguments, a session-targeted
       `ControlActions.openPick` overload with a default (the existing window/follow witness stays), presentation
       frames for pick request, result and cancel, the Mac presenter's receiver, and the origin's routing; today's
       window-scoped pick stays for untargeted calls; a session-bound pick in flight is reported on that session's
       `tree` node, beside the per-window `pickPending`
-- [ ] a durable catalog root for a windowless store: logical window id/name on the wire, a default workspace, and
+- [x] a durable catalog root for a windowless store: logical window id/name on the wire, a default workspace, and
       refusal of physical window commands
-- [ ] tests: backing and token resolution without surfaces, swap/split on a headless store, presenter routing for
+- [x] tests: backing and token resolution without surfaces, swap/split on a headless store, presenter routing for
       both origin kinds, pick request/result/cancel across the stream, old witness still compiles and behaves, Mac
       behavior unchanged; hosted `agtermTests` for the Mac pick receiver (`-only-testing`)
 

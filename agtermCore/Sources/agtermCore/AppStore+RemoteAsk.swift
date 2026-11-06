@@ -11,7 +11,7 @@ extension AppStore {
     public func presentAskRemotely(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
                                    window: WindowInfo.ID) -> Bool? {
         guard let hub = presentationHub, hub.hasPresenter(session: session.id),
-              session.followsRemotely(paneIdentity: paneIdentity) else { return nil }
+              presentsRemotely(session, paneIdentity: paneIdentity) else { return nil }
         let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
         if request.needsFormSupport {

@@ -218,6 +218,8 @@ public protocol ControlActions {
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
     /// Open a native picker. The host owns window resolution, registry lookup, and presentation.
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse
+    /// openPick bound to `session`: drawn by the session's presenter or in the session's own window.
+    func openPick(_ pick: PendingPick, session: String, window: String?, follow: Bool) -> ControlResponse
     /// Read a native picker's current result. The host owns window resolution and registry lookup.
     func pickResult(_ target: String, window: String?) -> ControlResponse
     /// Cancel a native picker. The host owns window resolution, registry lookup, and dismissal.

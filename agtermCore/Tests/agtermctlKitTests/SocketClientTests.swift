@@ -680,6 +680,53 @@ struct SocketClientTests {
             ["id": "pick-1"])
     }
 
+    private func pickRequests(_ arguments: [String], environment: [String: String], headless: Bool?) throws -> [ControlRequest] {
+        var requests: [ControlRequest] = []
+        var version = ControlResult()
+        version.headless = headless
+        try Pick.Open.parse(arguments + ["--no-block"]).execute(
+            input: Data("One\n".utf8),
+            send: { request in
+                requests.append(request)
+                return SocketReply(ControlResponse(ok: true, result: request.cmd == .version ? version : ControlResult(id: "pick-1")))
+            },
+            sleep: { _ in },
+            output: { _ in },
+            environment: environment
+        )
+        return requests
+    }
+
+    private static let items = [ControlPickItem(id: "One", label: "One")]
+
+    @Test func pickSessionTargetsTheSessionWithoutAskingTheServer() throws {
+        let requests = try pickRequests(["--session", "s1"], environment: ["AGTERM_SESSION_ID": "own"], headless: true)
+
+        #expect(requests == [ControlRequest(cmd: .pickOpen, target: "s1", args: ControlArgs(items: Self.items))])
+    }
+
+    @Test func aPaneOnAgtermServerBindsThePickToItsOwnSession() throws {
+        let requests = try pickRequests([], environment: ["AGTERM_SESSION_ID": "own"], headless: true)
+
+        #expect(requests == [
+            ControlRequest(cmd: .version),
+            ControlRequest(cmd: .pickOpen, target: "own", args: ControlArgs(items: Self.items)),
+        ])
+    }
+
+    @Test(arguments: [nil, false] as [Bool?])
+    func aPaneOnTheMacKeepsTheWindowPick(headless: Bool?) throws {
+        let requests = try pickRequests([], environment: ["AGTERM_SESSION_ID": "own"], headless: headless)
+
+        #expect(requests.last == ControlRequest(cmd: .pickOpen, args: ControlArgs(items: Self.items)))
+    }
+
+    @Test func noSessionInTheEnvironmentAsksNothing() throws {
+        let requests = try pickRequests([], environment: [:], headless: true)
+
+        #expect(requests == [ControlRequest(cmd: .pickOpen, args: ControlArgs(items: Self.items))])
+    }
+
     @Test func pickBlockPollsWithBackoffPrintsResultAndExitsZero() throws {
         let command = try Pick.Open.parse(["--window", "w1"])
         var requests: [ControlRequest] = []

@@ -33,6 +33,9 @@ public struct RemotePresentationEffects {
     /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
     public var askRequest: @MainActor (PresentationAsk) -> Bool
     public var askDismiss: @MainActor (PresentationAskRef) -> Void
+    /// Shows a session-bound pick the origin handed over; false when it cannot, which the client reports as a refusal.
+    public var pickRequest: @MainActor (PresentationPick) -> Bool
+    public var pickDismiss: @MainActor (PresentationPickRef) -> Void
     /// Shows an overlay the origin handed over; false when it cannot, which the client reports as a refusal.
     public var overlayRequest: @MainActor (PresentationOverlay) -> Bool
     public var overlayClose: @MainActor (PresentationOverlayChange) -> Void
@@ -57,6 +60,8 @@ public struct RemotePresentationEffects {
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
                 askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
+                pickRequest: @escaping @MainActor (PresentationPick) -> Bool = { _ in false },
+                pickDismiss: @escaping @MainActor (PresentationPickRef) -> Void = { _ in },
                 overlayRequest: @escaping @MainActor (PresentationOverlay) -> Bool = { _ in false },
                 overlayClose: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
                 overlayResize: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
@@ -80,6 +85,8 @@ public struct RemotePresentationEffects {
         self.mode = mode
         self.askRequest = askRequest
         self.askDismiss = askDismiss
+        self.pickRequest = pickRequest
+        self.pickDismiss = pickDismiss
         self.overlayRequest = overlayRequest
         self.overlayClose = overlayClose
         self.overlayResize = overlayResize
@@ -244,6 +251,9 @@ public final class RemotePresentationClient {
         case .askRequest(let ask):
             if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
         case .askDismiss(let ref): effects.askDismiss(ref)
+        case .pickRequest(let pick):
+            if !effects.pickRequest(pick) { send(.pickRejected(PresentationPickRef(id: pick.id, owner: pick.owner)), on: link) }
+        case .pickDismiss(let ref): effects.pickDismiss(ref)
         case .overlayRequest(let overlay):
             if !effects.overlayRequest(overlay) { send(.overlayRejected(PresentationOverlayChange(job: overlay.job)), on: link) }
         case .overlayClose(let change): effects.overlayClose(change)
@@ -256,7 +266,8 @@ public final class RemotePresentationClient {
         case .pageCommand(let command): effects.pageCommand(command)
         case .respawn(let respawns): effects.respawns(respawns, false)
         case .linkRefused(let refusal): effects.linkRefused(refusal.reason)
-        case .ack, .presenterAcquire, .linkClick, .askResolve, .askRejected, .overlayRejected, .overlayClosed, .unknown,
+        case .ack, .presenterAcquire, .linkClick, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
+             .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState:
             break
         }

@@ -154,6 +154,7 @@ extension ControlServer {
     func attachPresentationHub() {
         presentationHub.onPresenterLost = { [weak self] session in
             self?.takeBackRemoteAsk(forSession: session)
+            self?.takeBackRemotePick(forSession: session)
             self?.library.store(forSession: session)?.remoteOverlayPresenterLost(forSession: session)
         }
         presentationHub.onPresenterFrame = { [weak self] session, body in

@@ -44,6 +44,9 @@ struct RemotePresentationClientTests {
         var asks: [PresentationAsk] = []
         var dismissals: [PresentationAskRef] = []
         var showsAsks = true
+        var picks: [PresentationPick] = []
+        var pickDismissals: [PresentationPickRef] = []
+        var showsPicks = true
         var overlays: [PresentationOverlay] = []
         var showsOverlays = true
         var overlayCloses: [PresentationOverlayChange] = []
@@ -81,6 +84,11 @@ struct RemotePresentationClientTests {
                 return recorder.showsAsks
             },
             askDismiss: { recorder.dismissals.append($0) },
+            pickRequest: {
+                recorder.picks.append($0)
+                return recorder.showsPicks
+            },
+            pickDismiss: { recorder.pickDismissals.append($0) },
             overlayRequest: {
                 recorder.overlays.append($0)
                 return recorder.showsOverlays
@@ -241,6 +249,40 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.askDismiss(PresentationAskRef(id: "a1", owner: 2)), rev: 2))
 
         #expect(recorder.dismissals == [PresentationAskRef(id: "a1", owner: 2)])
+    }
+
+    static let handedOverPick = PresentationPick(PendingPick(id: "k1", items: [ControlPickItem(id: "a", label: "A")]), owner: 2)
+
+    @Test func aHandedOverPickReachesTheAppAndNothingIsSentBack() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.pickRequest(Self.handedOverPick), rev: 2))
+
+        #expect(recorder.picks == [Self.handedOverPick])
+        #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
+    }
+
+    @Test func aPickTheAppCannotShowIsRefused() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        recorder.showsPicks = false
+
+        transport.deliver(line(.pickRequest(Self.handedOverPick), rev: 2))
+
+        #expect(transport.links[0].sent.map(\.body).last == .pickRejected(PresentationPickRef(id: "k1", owner: 2)))
+    }
+
+    @Test func theOriginsPickDismissalReachesTheApp() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.pickDismiss(PresentationPickRef(id: "k1", owner: 2)), rev: 2))
+
+        #expect(recorder.pickDismissals == [PresentationPickRef(id: "k1", owner: 2)])
     }
 
     static let overlay = PresentationOverlay(job: "j1", pane: nil, sizePercent: 60, backgroundColor: nil, follow: false,
