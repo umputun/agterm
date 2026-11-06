@@ -59,6 +59,19 @@ struct AppStoreTintTests {
         #expect(plain.tint == SidebarTint(color: .hex("#3a7bd5"), parts: [.icon]))
     }
 
+    @Test func batchColorStartsUntintedRowsOnTheGivenPlacement() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let named = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let plain = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        store.setTint(SidebarTint(color: .green, parts: [.icon]), forSession: named.id)
+
+        store.setTintColor(TintValue.named(.red), forSessions: [named.id, plain.id], startingOn: [.name])
+
+        #expect(named.tint == SidebarTint(color: .red, parts: [.icon]))
+        #expect(plain.tint == SidebarTint(color: .red, parts: [.name]))
+    }
+
     @Test func batchPlacementKeepsEachRowsColorAndSkipsUntintedRows() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

@@ -109,6 +109,12 @@ struct SidebarTintTests {
             == SidebarTint(color: .red, parts: [.name]))
     }
 
+    @Test func recolorStartsAnUntintedRowOnTheGivenPlacement() {
+        let named = SidebarTint(color: .green, parts: [.name])
+        #expect(SidebarTint.recolor(nil, to: .named(.red), startingOn: [.icon, .name]) == SidebarTint(color: .red, parts: [.icon, .name]))
+        #expect(SidebarTint.recolor(named, to: .named(.red), startingOn: [.icon]) == SidebarTint(color: .red, parts: [.name]))
+    }
+
     @Test func updateResolvesAgainstTheCurrentTint() {
         let named = SidebarTint(color: .green, parts: [.name])
         #expect(ControlTintUpdate.set(.red, parts: nil).resolved(over: named) == SidebarTint(color: .red, parts: [.name]))

@@ -86,9 +86,9 @@ public struct SidebarTint: Equatable, Sendable {
         color.map { recolor(current, to: .named($0)) }
     }
 
-    /// recolor is the named form's rule for any color value.
-    public static func recolor(_ current: SidebarTint?, to color: TintValue) -> SidebarTint {
-        SidebarTint(color: color, parts: Set(current?.parts ?? [.icon]))
+    /// recolor is the named form's rule for any color value, with an untinted row starting on `placement`.
+    public static func recolor(_ current: SidebarTint?, to color: TintValue, startingOn placement: Set<TintPart> = [.icon]) -> SidebarTint {
+        SidebarTint(color: color, parts: current.map { Set($0.parts) } ?? placement)
     }
 
     /// place shows `current`'s color on `parts` instead. An untinted row stays untinted, so no row holds a
