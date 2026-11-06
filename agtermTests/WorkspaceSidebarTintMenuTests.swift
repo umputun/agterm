@@ -19,6 +19,7 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         await MainActor.run {
             savedUserKeyEquivalents = NSMenuItem.usesUserKeyEquivalents
             NSMenuItem.usesUserKeyEquivalents = false
+            WorkspaceSidebar.Coordinator.tintPlacement = [.icon]
             stateDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("agterm-tint-menu-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
@@ -29,6 +30,7 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             NSMenuItem.usesUserKeyEquivalents = savedUserKeyEquivalents
+            WorkspaceSidebar.Coordinator.tintPlacement = [.icon]
             window?.orderOut(nil)
             window = nil
             outline = nil
@@ -88,6 +90,25 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
 
         XCTAssertEqual(sessions.map(\.tint), [SidebarTint(color: .red, parts: [.icon, .name]),
                                               SidebarTint(color: .green, parts: [.icon, .name])])
+    }
+
+    func testLastPlacementPickStartsTheNextUntintedRow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (workspaceID, sessions) = try seed(store, tints: [SidebarTint(color: .red), nil])
+        buildSidebar(for: store)
+
+        try perform("Name", in: try tintMenu(onSession: sessions[0].id))
+        let untinted = try tintMenu(onSession: sessions[1].id)
+
+        XCTAssertEqual(try item("Name", in: untinted).state, .on)
+        XCTAssertFalse(try item("Name", in: untinted).isEnabled)
+        XCTAssertEqual(try item("Icon", in: untinted).state, .off)
+        try perform("Blue", in: untinted)
+        XCTAssertEqual(sessions[1].tint, SidebarTint(color: .blue, parts: [.name]))
+        try perform("Green", in: try tintMenu(onWorkspace: workspaceID))
+        XCTAssertEqual(store.workspaces.first { $0.id == workspaceID }?.tint, SidebarTint(color: .green, parts: [.name]))
+        try perform("Yellow", in: try tintMenu(onSession: sessions[0].id))
+        XCTAssertEqual(sessions[0].tint, SidebarTint(color: .yellow, parts: [.name]))
     }
 
     func testNoneClearsTheTint() throws {

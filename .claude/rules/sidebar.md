@@ -154,6 +154,8 @@ paths:
 - A row's tint (`Session.tint`, `Workspace.tint`) colors its icon and/or name through `SidebarCellView.setColors`,
   selected rows included, so every retint keeps it; `RowContent.tint` reloads that row alone. The Tint submenu
   checks an entry only when every target shares it and disables Show On unless every target is tinted.
+  An untinted row counts as the last Show On pick (`Coordinator.tintPlacement`, app-wide, never persisted), which a
+  menu color pick starts it on; the palette and `session.tint` keep starting on the icon.
 - A session with an info line (`session.info`, [[control-api]]) uses the `session-info-cell` identifier and a
   taller row from `SidebarInfoMetrics`: the plain row, plus one line set 1.5 points smaller with a 9-point
   minimum, lifted 6 points into the plain row's bottom padding. The title row centers in a band of plain
