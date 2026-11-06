@@ -24,3 +24,10 @@ errno 0, `p_stat` SRUN after 3.06 s. The argv was the guard payload (`zmx attach
 session under the name and the host log was empty. So the daemon zmx created for the payload was gone or
 never listed while the attach client kept running; whether the payload ran and its output was lost, or the
 attach never saw the daemon end, is not established.
+
+Run 42295772822 (master `255f13a2`, the v0.41.0 release commit) failed it a third time, 4.32 s in: `waitpid` 0,
+errno 0, `p_stat` SRUN after 3.16 s, empty `zmx list` and host log. This time the PTY held the payload's
+output after zmx's `session "<name>" created` and screen reset: `agterm: session is gone`. So the payload
+reached its `printf` in this run, and the attach client was still not reapable at the last poll. Whether it
+exits late or never, whether the daemon process had ended, and what happened in the earlier run without
+that message, are still open.
