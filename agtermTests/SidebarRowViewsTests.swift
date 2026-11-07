@@ -16,6 +16,12 @@ final class SidebarRowViewsTests: XCTestCase {
     private var coordinator: WorkspaceSidebar.Coordinator!
     private var savedHiddenElements: Set<InterfaceElement> = []
 
+    @MainActor private final class TrackingObservation {
+        var fired = false
+        var editorStayedAttached = false
+        var addedRowWasVisible = false
+    }
+
     override func setUp() async throws {
         try await super.setUp()
         await MainActor.run {
@@ -253,6 +259,129 @@ final class SidebarRowViewsTests: XCTestCase {
         XCTAssertTrue(try renderedNameField(forSession: session.id) === nextField)
         XCTAssertEqual(nextField.stringValue, "unfinished")
         try endRename(nextField, cancelled: true)
+        await drainRenameCallback()
+    }
+
+    func testStructuralChangeWaitsForRenameToFinish() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        let field = try beginRename(sessionNode(session.id))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.string = "unfinished"
+        let added = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/new"))
+
+        coordinator.reconcile()
+        XCTAssertTrue(field.currentEditor() === editor)
+        XCTAssertEqual(editor.string, "unfinished")
+        XCTAssertFalse((0..<outline.numberOfRows).contains { (outline.item(atRow: $0) as? SidebarNode)?.id == added.id })
+
+        field.stringValue = "renamed"
+        try endRename(field)
+        await drainRenameCallback()
+        XCTAssertEqual(session.customName, "renamed")
+        XCTAssertGreaterThanOrEqual(outline.row(forItem: try sessionNode(added.id)), 0)
+    }
+
+    func testStructuralChangeWaitsForMouseTrackingAfterEditingEnds() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        let field = try beginRename(sessionNode(session.id))
+        let editor = try XCTUnwrap(field.currentEditor() as? SidebarNameFieldEditor)
+        let added = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/new"))
+        let point = editor.convert(NSPoint(x: 10, y: 10), to: nil)
+        let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+                                                    timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                    eventNumber: 1, clickCount: 2, pressure: 1))
+        let observation = TrackingObservation()
+        let coordinator = try XCTUnwrap(coordinator)
+        let outline = try XCTUnwrap(outline)
+        let window = try XCTUnwrap(window)
+        let addedID = added.id
+        let timer = Timer(timeInterval: 0.05, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                observation.fired = true
+                coordinator.reconcile()
+                observation.editorStayedAttached = field.currentEditor() === editor
+                observation.addedRowWasVisible = (0..<outline.numberOfRows).contains {
+                    (outline.item(atRow: $0) as? SidebarNode)?.id == addedID
+                }
+                _ = window.makeFirstResponder(nil)
+                if let up = NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+                                               timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                               eventNumber: 1, clickCount: 2, pressure: 0) {
+                    NSApp.postEvent(up, atStart: false)
+                }
+            }
+        }
+        RunLoop.main.add(timer, forMode: .eventTracking)
+        RunLoop.main.add(timer, forMode: .default)
+        editor.mouseDown(with: down)
+        XCTAssertTrue(observation.fired)
+        XCTAssertTrue(observation.editorStayedAttached)
+        XCTAssertFalse(observation.addedRowWasVisible)
+        await drainRenameCallback()
+        XCTAssertGreaterThanOrEqual(outline.row(forItem: try sessionNode(added.id)), 0)
+    }
+
+    func testDeletedRenamedSessionDoesNotRenameAnotherRow() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let other = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/other"))
+        store.renameSession(other.id, to: "other")
+        buildSidebar(for: store)
+        let field = try beginRename(sessionNode(session.id))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        editor.string = "removed"
+        store.closeSession(session.id)
+
+        coordinator.reconcile()
+        XCTAssertTrue(field.currentEditor() === editor)
+        field.stringValue = "removed"
+        try endRename(field)
+        await drainRenameCallback()
+        XCTAssertNil(store.session(withID: session.id))
+        XCTAssertEqual(other.customName, "other")
+        XCTAssertGreaterThanOrEqual(outline.row(forItem: try sessionNode(other.id)), 0)
+    }
+
+    func testDensityChangeWaitsUntilRenameIsCancelled() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let original = GhosttyApp.shared.sidebarDensity
+        let next: SidebarDensity = .compact
+        defer {
+            GhosttyApp.shared.setSidebarDensity(original)
+            NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        }
+        GhosttyApp.shared.setSidebarDensity(.standard)
+        buildSidebar(for: store)
+        let field = try beginRename(sessionNode(session.id))
+        let editor = try XCTUnwrap(field.currentEditor() as? NSTextView)
+        let oldHeight = outline.rowHeight
+
+        GhosttyApp.shared.setSidebarDensity(next)
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertEqual(outline.rowHeight, oldHeight)
+        XCTAssertTrue(field.currentEditor() === editor)
+        try endRename(field, cancelled: true)
+        await drainRenameCallback()
+        XCTAssertEqual(outline.rowHeight, AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize, density: next))
+    }
+
+    func testDetachedSidebarEditorIgnoresMouseDown() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+        let field = try beginRename(sessionNode(session.id))
+        let editor = try XCTUnwrap(field.currentEditor() as? SidebarNameFieldEditor)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: [],
+                                                     timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                     eventNumber: 1, clickCount: 2, pressure: 1))
+        outline.reloadData()
+        XCTAssertNil(editor.window)
+        editor.mouseDown(with: event)
         await drainRenameCallback()
     }
 

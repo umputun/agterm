@@ -14,6 +14,7 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// return focus to the active terminal. Invoked asynchronously from `controlTextDidEndEditing` so the
     /// field editor's resign settles first.
     var onRenameEnded: ((SidebarNode?) -> Void)?
+    var onMouseTrackingEnded: (() -> Void)?
 
     /// Set while an end-editing notification is being processed, to ignore the re-entrant end-editing the
     /// cancel/commit path can trigger.
@@ -36,6 +37,16 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// Whether an end-editing notification is being processed. Read by the Coordinator to skip a row reload
     /// during the commit instant.
     var isCommitting: Bool { committing }
+    private var mouseTrackingDepth = 0
+    var isTrackingMouse: Bool { mouseTrackingDepth > 0 }
+
+    func beginMouseTracking() { mouseTrackingDepth += 1 }
+
+    func endMouseTracking() {
+        mouseTrackingDepth -= 1
+        guard mouseTrackingDepth == 0 else { return }
+        DispatchQueue.main.async { [weak self] in self?.onMouseTrackingEnded?() }
+    }
 
     init(store: AppStore) {
         self.store = store
@@ -45,7 +56,7 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// Puts the row's text field into editing mode and focuses it. Called from the "Rename" menu item and
     /// from double-click.
     func beginEditing(node: SidebarNode) {
-        guard let outline = outlineView else { return }
+        guard !editing, !committing, !isTrackingMouse, let outline = outlineView else { return }
         let row = outline.row(forItem: node)
         guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
               let field = cell.textField else { return }
@@ -66,12 +77,18 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         field.textColor = theme.terminalForegroundColor ?? .labelColor
         field.backgroundColor = theme.terminalBackgroundColor ?? .textBackgroundColor
         field.setAccessibilityIdentifier("edit-field")
-        field.window?.makeFirstResponder(field)
         editing = true
         // pause auto-follow while the rename field owns first responder: an armed idle jump would move the
         // outline selection off this row and yank focus into the followed terminal, silently committing the
         // rename mid-edit. balanced by the resume in `restore` when editing ends.
         store.suppressAutoFollow()
+        guard let window = field.window, window.makeFirstResponder(field), editing, field.currentEditor() != nil else {
+            if editing {
+                restore(field: field, kind: node.kind)
+                DispatchQueue.main.async { [weak self] in self?.onRenameEnded?(node) }
+            }
+            return
+        }
     }
 
     /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`, not the
@@ -135,5 +152,37 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         if let cell = field.superview as? SidebarCellView {
             cell.setColors(selected: (cell.superview as? NSTableRowView)?.isSelected ?? false)
         }
+    }
+}
+
+final class SidebarNameField: NSTextField {
+    override static var cellClass: AnyClass? {
+        get { SidebarNameFieldCell.self }
+        set { _ = newValue }
+    }
+}
+
+final class SidebarNameFieldCell: NSTextFieldCell {
+    weak var renameController: SidebarRenameController?
+    private lazy var editor: SidebarNameFieldEditor = {
+        let editor = SidebarNameFieldEditor()
+        editor.isFieldEditor = true
+        return editor
+    }()
+
+    override func fieldEditor(for _: NSView) -> NSTextView? {
+        editor.renameController = renameController
+        return editor
+    }
+}
+
+final class SidebarNameFieldEditor: NSTextView {
+    weak var renameController: SidebarRenameController?
+
+    override func mouseDown(with event: NSEvent) {
+        guard window != nil, superview != nil, let renameController else { return }
+        renameController.beginMouseTracking()
+        defer { renameController.endMouseTracking() }
+        super.mouseDown(with: event)
     }
 }
