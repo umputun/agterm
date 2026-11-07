@@ -53,3 +53,16 @@ body { padding-top: 35px; }
 ::highlight(agterm-current) {
   background-color: var(--agterm-color-11, #d9b45a); color: var(--agterm-background, #000);
 }
+/* a light tint: a stronger one washes out the diff's own colors */
+.agterm-change {
+  position: absolute; left: 0; right: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--agterm-color-12, #6ca0dc) 4%, transparent);
+  box-shadow: inset 4px 0 0 var(--agterm-color-12, #6ca0dc);
+}
+.agterm-changes { display: flex; gap: 6px; align-items: center; flex: none; }
+.agterm-changes button {
+  display: flex; padding: 2px 4px; color: var(--fg); background: var(--tint); border: 1px solid var(--rule);
+  border-radius: 4px; cursor: pointer;
+}
+.agterm-changes svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.agterm-changes span { margin-left: 4px; }

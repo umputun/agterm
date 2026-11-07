@@ -1022,4 +1022,31 @@ struct ControlDispatcherOverlayTests {
         #expect(response == ControlResponse(ok: false, error: error))
         #expect(actions.calls.isEmpty)
     }
+
+    @Test(arguments: [("next", true), ("prev", false)])
+    func overlayChangesRoutesItsDirectionAndPane(_ to: String, _ forward: Bool) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayChanges, target: "session",
+                                                                args: ControlArgs(pane: "right", to: to)))
+
+        #expect(response?.result?.text == "3 of 7")
+        #expect(actions.calls == [.overlayChanges(target: "session", window: nil, pane: .right, forward: forward)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(), "session.overlay.changes requires to next or prev"),
+        (ControlArgs(to: "close"), "invalid overlay changes direction: close"),
+        (ControlArgs(pane: "middle", to: "next"), PaneOverlayError.invalidPane),
+    ])
+    func overlayChangesRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayChanges, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
 }

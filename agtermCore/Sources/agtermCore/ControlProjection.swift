@@ -471,6 +471,17 @@ public struct ControlTextSearchNode: Codable, Sendable, Equatable {
     }
 }
 
+/// ControlTextChangesNode is a diff page's count of changes and the one it last stepped to, 0 before any step.
+public struct ControlTextChangesNode: Codable, Sendable, Equatable {
+    public let count: Int
+    public let current: Int
+
+    public init(count: Int, current: Int) {
+        self.count = count
+        self.current = current
+    }
+}
+
 /// ControlTextOverlayNode is a text page's source: the file, the highlight.js language its name maps to
 /// (omitted when unmapped, and still reported for a file too large to highlight), and the line it was
 /// opened at, not the line in view.
@@ -487,10 +498,14 @@ public struct ControlTextOverlayNode: Codable, Sendable, Equatable {
     public let unreadable: Bool?
     /// search is the page's search, omitted with no query.
     public let search: ControlTextSearchNode?
+    /// changes is a diff page's change count and current change, omitted until the page reports and on other pages.
+    public let changes: ControlTextChangesNode?
 
     public init(file: String, language: String?, line: Int?, tail: Int? = nil, following: Bool? = nil, lines: Int? = nil,
-                clipped: Bool? = nil, waiting: Bool? = nil, unreadable: Bool? = nil, search: ControlTextSearchNode? = nil) {
+                clipped: Bool? = nil, waiting: Bool? = nil, unreadable: Bool? = nil, search: ControlTextSearchNode? = nil,
+                changes: ControlTextChangesNode? = nil) {
         self.search = search
+        self.changes = changes
         self.file = file
         self.language = language
         self.line = line

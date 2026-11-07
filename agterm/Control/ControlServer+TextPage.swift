@@ -87,4 +87,26 @@ extension ControlServer {
         case .success(let found): return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: "\(found.current) of \(found.matches)"))
         }
     }
+
+    /// stepSessionOverlayChanges moves the loaded diff page once and answers `N of M`.
+    func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
+                                   forward: Bool) async -> ControlResponse {
+        let store: AppStore, id: UUID
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        let page: HtmlOverlay
+        switch store.textChangesPage(id, pane: pane) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found): page = found
+        }
+        guard let bridge = HtmlOverlayRegistry.shared.existing(page.id)?.textPage else {
+            return ControlResponse(ok: false, error: TextChangesFailure.notLoaded.message)
+        }
+        switch await bridge.stepChange(forward: forward) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found): return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: "\(found.current) of \(found.count)"))
+        }
+    }
 }

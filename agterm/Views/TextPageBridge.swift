@@ -28,6 +28,8 @@ final class TextPageBridge {
     private var documentLoad = 0
     // set from a document build until its renderer reports ready; the ready report delivers the latest search
     private var documentPending = false
+    // a diff page's current change, handed to a rebuild from the same text so a theme change keeps it
+    private var change = 0
 
     init(path: String, line: Int?, follower: LogFollower?, pageID: UUID, store: AppStore?, webView: WKWebView?,
          world: WKContentWorld, onFail: @escaping (String) -> Void) {
@@ -71,6 +73,11 @@ final class TextPageBridge {
             // a shown page reopens where it was, so a theme change or a reload never moves the view
             let top = self?.text == nil ? nil : await self?.scrollTop()
             if fresh || self?.text == nil {
+                // the file may now hold other changes, so the old report goes before the read
+                if let self {
+                    change = 0
+                    store?.setTextChangesReport(pageID, changes: nil)
+                }
                 let read = await Task.detached(priority: .userInitiated) { TextProbe.load(path: path) }.value
                 guard let self, load == documentLoad else { return }
                 switch read {
@@ -80,7 +87,7 @@ final class TextPageBridge {
             }
             guard let self, load == documentLoad, let text else { return }
             let html = TextPage.html(text: text, language: TextPage.language(forFile: path), line: line,
-                                     style: MarkdownAssets.shared.textStyle, anchor: top, search: search)
+                                     style: MarkdownAssets.shared.textStyle, anchor: top, search: search, change: change)
             webView?.loadHTMLString(html, baseURL: nil)
         }
     }
@@ -111,6 +118,16 @@ final class TextPageBridge {
         return .success((matches, current))
     }
 
+    /// stepChange moves a diff page to its next or previous change and answers the page's count and the change it
+    /// reached.
+    func stepChange(forward: Bool) async -> Result<TextChanges, TextChangesFailure> {
+        guard !documentPending, let webView else { return .failure(.notLoaded) }
+        let value = try? await webView.callAsyncJavaScript("return agtermTextChangeStep(forward)", arguments: ["forward": forward],
+                                                           in: nil, contentWorld: world)
+        guard let body = value as? [String: Any], let changes = Self.changes(body) else { return .failure(.notLoaded) }
+        return changes.count == 0 ? .failure(.noChanges) : .success(changes)
+    }
+
     /// stop ends the follower and drops every build in flight.
     func stop() {
         documentLoad += 1
@@ -129,6 +146,18 @@ final class TextPageBridge {
               let matches = (body["matches"] as? NSNumber)?.intValue, let current = (body["current"] as? NSNumber)?.intValue
         else { return }
         store?.setTextSearchReport(pageID, revision: revision, query: query, matches: matches, current: current)
+    }
+
+    private func changesReport(_ body: [String: Any]) {
+        guard let changes = Self.changes(body) else { return }
+        change = changes.current
+        store?.setTextChangesReport(pageID, changes: changes)
+    }
+
+    private static func changes(_ body: [String: Any]) -> TextChanges? {
+        guard let count = (body["count"] as? NSNumber)?.intValue, let current = (body["current"] as? NSNumber)?.intValue
+        else { return nil }
+        return TextChanges(count: count, current: current)
     }
 
     private func typed(_ query: String) {
@@ -150,7 +179,7 @@ final class TextPageBridge {
     }
 
     // accepts only the page's own reports from its main frame: a new document ready for updates, a user scroll on a
-    // log page, a query typed into the field, or the matches the page found
+    // log page, a query typed into the field, the matches the page found, or a diff page's changes
     private final class PageHandler: NSObject, WKScriptMessageHandler {
         weak var bridge: TextPageBridge?
 
@@ -166,6 +195,10 @@ final class TextPageBridge {
             }
             if let report = body["report"] as? [String: Any] {
                 bridge.report(report)
+                return
+            }
+            if let changes = body["changes"] as? [String: Any] {
+                bridge.changesReport(changes)
                 return
             }
             guard let following = body["following"] as? Bool else { return }

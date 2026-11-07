@@ -325,4 +325,21 @@ extension ControlDispatcher {
             return await actions.searchSessionOverlay(request.target, window: request.args?.window, pane: pane, request: search)
         }
     }
+
+    /// dispatchSessionOverlayChanges takes a required `to` of next or prev.
+    func dispatchSessionOverlayChanges(_ request: ControlRequest) async -> ControlResponse {
+        let forward: Bool
+        switch request.args?.to {
+        case "next": forward = true
+        case "prev": forward = false
+        case nil: return ControlResponse(ok: false, error: "session.overlay.changes requires to next or prev")
+        case let to?: return ControlResponse(ok: false, error: "invalid overlay changes direction: \(to)")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.stepSessionOverlayChanges(request.target, window: request.args?.window, pane: pane,
+                                                           forward: forward)
+        }
+    }
 }

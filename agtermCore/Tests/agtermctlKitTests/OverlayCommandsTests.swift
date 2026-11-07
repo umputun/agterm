@@ -279,6 +279,21 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "search", "a", "--pane", "scratch"]))
     }
 
+    @Test(arguments: [("--next", "next"), ("--prev", "prev")])
+    func changesSendsItsStepPaneAndTarget(_ flag: String, _ to: String) throws {
+        let req = try request(["session", "overlay", "changes", flag, "--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlayChanges)
+        #expect(req.target == "s")
+        #expect(req.args?.to == to)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func changesRefusesAMissingOrDoubleStep() {
+        #expect(rejects(["session", "overlay", "changes"]))
+        #expect(rejects(["session", "overlay", "changes", "--next", "--prev"]))
+        #expect(rejects(["session", "overlay", "changes", "--next", "--pane", "scratch"]))
+    }
+
     @Test func openHelpTellsFollowFileFromFollow() {
         let open = Session.Overlay.Open.helpMessage(columns: 400)
         #expect(open.contains("--follow-file"))

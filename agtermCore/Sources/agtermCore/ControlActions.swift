@@ -151,6 +151,10 @@ public protocol ControlActions {
     /// `N of M` for the match it reached.
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                               request: TextSearchRequest) async -> ControlResponse
+    /// stepSessionOverlayChanges moves the diff page in the addressed slot to its next or previous change and answers
+    /// `N of M`.
+    func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
+                                   forward: Bool) async -> ControlResponse
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
