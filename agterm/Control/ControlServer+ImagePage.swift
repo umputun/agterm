@@ -3,7 +3,7 @@ import agtermCore
 
 extension ControlServer {
     /// openImageLink shows a clicked local picture over its session, sized to the picture, and reports whether
-    /// it did through `completion`; false reveals the file instead. The file is read off the main actor, and
+    /// it did through `completion`. The file is read off the main actor, and
     /// everything the open depends on is checked again after the read, since it may have changed meanwhile.
     func openImageLink(_ url: URL, session id: UUID, forward: Int? = nil, completion: @escaping @MainActor (Bool) -> Void) {
         guard canShowLinkOverlay(session: id, forwarded: forward != nil) else { return completion(false) }

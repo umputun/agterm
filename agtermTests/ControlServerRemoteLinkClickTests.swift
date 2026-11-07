@@ -124,6 +124,47 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         XCTAssertEqual(fix.session.hudSpec?.message, "agent")
     }
 
+    // regression: the refusal panel turned the next valid click into a bare beep for as long as it was up
+    func testAClickRightAfterARefusalStillTravels() throws {
+        let fix = try connected()
+        fix.server.refuseRemoteLinkClick(.notFound, session: fix.session.id)
+        XCTAssertTrue(fix.session.hudActive)
+
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity)))
+
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+    }
+
+    // regression: a hidden page of this Mac's own let the click through, and the origin's page then vanished unreported
+    func testAHiddenLocalPageRefusesTheClickAndStays() async throws {
+        let fix = try connected()
+        let page = HtmlOverlay(source: .markdown(path: "/tmp/local.md"), clicked: true)
+        XCTAssertNil(fix.store.openHtmlOverlay(fix.session.id, pane: nil, overlay: page, sizePercent: nil))
+        fix.store.setOverlaysHidden(fix.session.id, pane: nil, hidden: true)
+
+        let refusal = fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity))
+        fix.server.refuseRemoteLinkClick(try XCTUnwrap(refusal), session: fix.session.id)
+
+        XCTAssertEqual(refusal, .hidden)
+        XCTAssertTrue(fix.transport.clicks.isEmpty)
+        try await waitUntil { fix.alerts.count == 1 }
+        XCTAssertEqual(fix.session.htmlOverlay?.id, page.id)
+        XCTAssertTrue(fix.session.overlayHidden)
+        fix.store.closeOverlay(fix.session.id)
+    }
+
+    func testAHiddenReplicaPageLetsTheClickTravel() throws {
+        let fix = try connected()
+        let replica = HtmlOverlay(source: .markdown(path: "/tmp/remote.md"), clicked: true, replicaOf: UUID())
+        XCTAssertNil(fix.store.openHtmlOverlay(fix.session.id, pane: nil, overlay: replica, sizePercent: nil))
+        fix.store.setOverlaysHidden(fix.session.id, pane: nil, hidden: true)
+
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity)))
+
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+        fix.store.closeOverlay(fix.session.id)
+    }
+
     func testARefusalBeepsAndLeavesAHudAlreadyUp() async throws {
         let fix = try connected()
         XCTAssertTrue(fix.server.openHud(fix.session.id.uuidString, window: nil, spec: HudSpec(message: "agent")).ok)

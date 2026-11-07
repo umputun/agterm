@@ -729,8 +729,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openRemotePage` replaces a hidden clicked remote page only after every other check passed. Refusals return
   `link.refused` only to that presenter generation; the reason travels as a `RemoteLinkRefusal` raw value and is worded
   on the presenting Mac. A
-  refusal there opens a HUD hiding after `remoteAttachErrorSeconds`, or plays the system alert when a HUD is already up
-  (`openHud` would replace it) or a cover or zoom would hide it. A mirrored HUD replaces that panel while it is still the
+  refusal there opens a HUD hiding after `remoteAttachErrorSeconds`, or plays the system alert when a HUD other than
+  that refusal panel is already up (`openHud` would replace it), a cover or zoom would hide it, or a hidden page of this
+  Mac's own holds the slot (only a hidden replica page is the origin's to replace); the click itself refuses on the
+  same terms before anything is sent. A mirrored HUD replaces that panel while it is still the
   one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
   sent. The click is a
   gesture with no control command: its page reads back as the replica page on the session node.

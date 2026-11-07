@@ -45,10 +45,13 @@ extension ControlServer {
     }
 
     /// remoteLinkPageHidden says whether this Mac would hide a page or panel over `id`: a HUD already up, which a new
-    /// one would replace, a cover overlay, or a zoomed terminal in its window.
+    /// one would replace, other than a refusal panel the page replaces anyway; a shown cover; a hidden one of this Mac's
+    /// own, which only a hidden replica page the origin replaces would not be; or a zoomed terminal in its window.
     private func remoteLinkPageHidden(_ id: UUID) -> Bool {
         guard let session = library.store(forSession: id)?.session(withID: id) else { return true }
-        if session.hudActive || session.coverOverlayVisible { return true }
+        if session.hudActive, !showsRemoteLinkRefusal(id) { return true }
+        if session.coverOverlayVisible { return true }
+        if session.coverOverlayActive, session.htmlOverlay?.replicaOf == nil { return true }
         guard let windowID = library.windowID(forSession: id) else { return false }
         return TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil
     }
