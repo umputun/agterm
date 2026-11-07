@@ -67,8 +67,9 @@
 ## Technical Details
 
 **Store operation** (`AppStore+Companions.swift`):
-- `convertToCompanion(_ id: UUID) -> Result<Session, CompanionRefusal>` returns N.
-- Refusals: no such session; S is already a companion (new case, "already a companion"); S is a remote row
+- `convertToCompanion(_ id: UUID) -> Result<Session, ConvertRefusal>` returns N.
+- Refusals (`ConvertRefusal`, its own enum: `CompanionRefusal.remoteParent` is shared with companion creation,
+  so a convert message on it would be wrong there): `noSuchSession`; `alreadyCompanion`; `remoteSession`
   (`remoteHost != nil`, reported as "convert it on the Mac it runs on").
 - Steps:
   1. resolve S's workspace and index;
@@ -106,7 +107,7 @@
   `finalizeParkedCompanions`. Otherwise "soft-close C under S, convert S, hard-close N" leaves C parked
   with `parentID == S`, and its undo brings C back top-level with both recorded parents gone.
 
-**Refusal text**: owned once in `agtermCore`, as a `message` on `CompanionRefusal` ("already a
+**Refusal text**: owned once in `agtermCore`, as a `message` on `ConvertRefusal` ("already a
 companion", "convert it on the Mac it runs on"), used by both `ControlServer` and
 `AppActions.convertToCompanion`.
 
@@ -138,7 +139,7 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
   block. It is omitted on companion rows, as Duplicate as Companion is on page rows, and disabled on
   remote rows.
 - `AppActions.convertToCompanion(_:in:)` shared by all three; a refusal goes to `notifyCommandFailure`
-  with the `CompanionRefusal` message.
+  with the `ConvertRefusal` message.
 
 ## What Goes Where
 - **Implementation Steps**: code, tests and docs in this repo.
@@ -153,17 +154,16 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreCompanionsTests.swift`
 
-- [ ] write failing tests: plain conversion (N at S's slot, S under N, N's cwd from S, N not selected,
+- [x] write failing tests: plain conversion (N at S's slot, S under N, N's cwd from S, N not selected,
   S keeps id/name/flag, and the same `Session` object, surfaces and pane identities survive); selection
   with a different session selected beforehand, so S ending selected is proven; S with companions (order
   N, S, old companions, all pointing at N); refusal for a companion target, a remote row, an unknown id;
   events (one `session.created` for N, no create/close for S); respawn duty (N respawns with companions,
   S closes on its exit); persistence round-trip keeps the group; the converted group closed and reopened,
   and soft-closed and undone, restores N, S and the old companions with their parent links
-- [ ] implement `convertToCompanion`, the new refusal case and the `CompanionRefusal` message per
-  Technical Details
-- [ ] update the `parentID` doc on `Session` to the new contract (one line)
-- [ ] run `swift test --filter AppStoreCompanionsTests` - must pass before task 2
+- [x] implement `convertToCompanion` and `ConvertRefusal` with its message per Technical Details
+- [x] update the `parentID` doc on `Session` to the new contract (one line)
+- [x] run `swift test --filter AppStoreCompanionsTests` - must pass before task 2
 
 ### Task 2: Reopen resolves a recorded parent to its current root
 

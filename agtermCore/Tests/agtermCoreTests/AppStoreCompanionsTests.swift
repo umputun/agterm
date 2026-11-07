@@ -9,6 +9,11 @@ struct AppStoreCompanionsTests {
         return nil
     }
 
+    private func convertRefusal(_ result: Result<Session, ConvertRefusal>) -> ConvertRefusal? {
+        if case .failure(let refusal) = result { return refusal }
+        return nil
+    }
+
     @Test func aCompanionLandsAfterTheParentsLastCompanion() throws {
         let g = try CompanionGroup()
         let (store, parent, first, second, after) = (g.store, g.parent, g.first, g.second, g.after)
@@ -551,4 +556,142 @@ struct AppStoreCompanionsTests {
         #expect(chained.parentID == nil)
         #expect(companion.parentID == parent.id)
     }
+
+    @Test func convertNestsTheSameSessionUnderAFreshSessionInItsSlot() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let before = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/before"))
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start", name: "task"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        task.currentCwd = "/work/task"
+        store.setFlag(true, forSession: task.id)
+        let surface = SpySurface()
+        task.surface = surface
+        let pane = task.paneIdentity
+        store.selectSession(before.id)
+
+        let fresh = try store.convertToCompanion(task.id).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [before.id, fresh.id, task.id, after.id])
+        #expect(fresh.parentID == nil)
+        #expect(fresh.initialCwd == "/work/task")
+        #expect(fresh.customName == nil)
+        #expect(!fresh.flagged)
+        #expect(fresh.isExpanded)
+        #expect(store.session(withID: task.id) === task)
+        #expect(task.parentID == fresh.id)
+        #expect(task.surface === surface)
+        #expect(task.paneIdentity == pane)
+        #expect(task.displayName == "task")
+        #expect(task.flagged)
+        #expect(store.selectedSessionID == task.id)
+    }
+
+    @Test func convertCarriesTheSessionsCompanionsUnderTheFreshParent() throws {
+        let g = try CompanionGroup()
+
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+        #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
+    }
+
+    @Test func convertRefusesACompanionARemoteRowAndAnUnknownSession() throws {
+        let g = try CompanionGroup()
+        let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "buildbox"))
+        let before = g.order
+
+        #expect(convertRefusal(g.store.convertToCompanion(g.first.id)) == .alreadyCompanion)
+        #expect(convertRefusal(g.store.convertToCompanion(remote.id)) == .remoteSession)
+        #expect(convertRefusal(g.store.convertToCompanion(UUID())) == .noSuchSession)
+        #expect(g.order == before)
+        #expect(g.first.parentID == g.parent.id)
+    }
+
+    @Test func convertRefusalsCarryTheirMessage() {
+        #expect(ConvertRefusal.alreadyCompanion.message == "already a companion")
+        #expect(ConvertRefusal.remoteSession.message == "convert it on the Mac it runs on")
+        #expect(ConvertRefusal.noSuchSession.message == "no such session")
+    }
+
+    @Test func convertAnnouncesOnlyTheFreshSession() throws {
+        let events = CompanionEventKinds()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { events.kinds.append($0.kind) })
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        events.kinds.removeAll()
+
+        _ = try store.convertToCompanion(task.id).get()
+
+        #expect(events.kinds.filter { $0 == .sessionCreated }.count == 1)
+        #expect(!events.kinds.contains(.sessionClosed))
+        #expect(!events.kinds.contains(.sessionSelected))
+        #expect(events.kinds.contains(.treeChanged))
+    }
+
+    @Test func aConvertedSessionClosesOnItsExitWhileTheFreshParentRespawns() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        _ = try store.addCompanion(to: task.id).get()
+        let fresh = try store.convertToCompanion(task.id).get()
+        task.surface = SpySurface()
+        fresh.surface = SpySurface()
+
+        #expect(store.closePrimaryPane(task.id) == .closed)
+        #expect(store.session(withID: task.id) == nil)
+        #expect(store.closePrimaryPane(fresh.id) == .respawned)
+        #expect(store.session(withID: fresh.id) != nil)
+    }
+
+    @Test func aConvertedGroupRoundTripsThroughSnapshot() throws {
+        let g = try CompanionGroup()
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        let restored = makeStore()
+        restored.restore(from: g.store.snapshot())
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect(sessions[0].parentID == nil)
+        #expect(sessions[1...3].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    @Test func aConvertedGroupClosesAndReopensWhole() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        let other = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/other"))
+        let old = try store.addCompanion(to: task.id).get()
+        let fresh = try store.convertToCompanion(task.id).get()
+
+        store.closeSession(fresh.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [other.id])
+        let item = try #require(recent.load().first)
+        #expect(item.session?.snapshot.id == fresh.id)
+        #expect(item.session?.companions?.map(\.id) == [task.id, old.id])
+        #expect(store.restoreRecentClosed(item))
+        let sessions = store.workspaces[0].sessions
+        #expect(sessions.map(\.id) == [fresh.id, task.id, old.id, other.id])
+        #expect(sessions[1...2].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    @Test func aSoftClosedConvertedGroupUndoesWhole() throws {
+        let g = try CompanionGroup()
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.store.softCloseSession(fresh.id, grace: 60))
+        #expect(g.order == [g.after.id])
+        #expect(g.store.undoPendingClose())
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+    }
+}
+
+private final class CompanionEventKinds {
+    var kinds: [ControlEventKind] = []
 }

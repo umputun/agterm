@@ -39,6 +39,21 @@ public enum CompanionRefusal: Error, Equatable, Sendable {
     case pageNotOpened(HtmlOverlayOpenFailure)
 }
 
+/// ConvertRefusal is why Convert to Companion changed nothing; `message` is the text every caller shows.
+public enum ConvertRefusal: Error, Equatable, Sendable {
+    case noSuchSession
+    case alreadyCompanion
+    case remoteSession
+
+    public var message: String {
+        switch self {
+        case .noSuchSession: "no such session"
+        case .alreadyCompanion: "already a companion"
+        case .remoteSession: "convert it on the Mac it runs on"
+        }
+    }
+}
+
 extension AppStore {
     /// companions returns a parent's companions in sidebar order, and nothing for a companion.
     public func companions(of parentID: UUID) -> [Session] {
@@ -60,6 +75,24 @@ extension AppStore {
                        wait: options.wait, at: slot.index, select: options.select, tint: options.tint,
                        parentID: slot.parent).map(Result.success) ?? .failure(.noSuchSession)
         }
+    }
+
+    /// convertToCompanion nests a local top-level session and its companions under a fresh session opened in its
+    /// slot and focused cwd, then selects the converted session. Returns the fresh parent.
+    @discardableResult
+    public func convertToCompanion(_ id: UUID) -> Result<Session, ConvertRefusal> {
+        guard let session = session(withID: id), let location = location(ofSession: id) else { return .failure(.noSuchSession) }
+        guard session.parentID == nil else { return .failure(.alreadyCompanion) }
+        guard session.remoteHost == nil else { return .failure(.remoteSession) }
+        // read before the regroup: companions(of:) answers nothing once the session is itself a companion
+        let group = [session] + companions(of: id)
+        guard let parent = addSession(toWorkspace: workspaces[location.workspaceIndex].id, cwd: session.focusedCwd,
+                                      at: location.sessionIndex, select: false) else { return .failure(.noSuchSession) }
+        group.forEach { $0.parentID = parent.id }
+        if selectedSessionID != id { selectSession(id) }
+        scheduleTreeChanged()
+        save()
+        return .success(parent)
     }
 
     /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
