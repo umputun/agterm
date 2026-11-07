@@ -81,7 +81,7 @@ public final class Session: Identifiable {
     public var flagged: Bool = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
-    /// parentID names the session this one is a companion of; set at creation or by `convertToCompanion`.
+    /// parentID names this session's top-level parent; conversion and reopen may update it.
     public internal(set) var parentID: UUID?
     /// isExpanded is whether a parent row shows its companions.
     public var isExpanded = true
