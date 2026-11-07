@@ -257,6 +257,12 @@ paths:
   overwriting them and clears `lastRevealedSelection` only for that switch, so the next `syncSelection`
   reveals it with persistence suppressed. No other rebuild may clear it, or a deliberate fold reopens.
   `appearanceChanged` calls `syncSelection` after `reconcile` because that path never reaches `updateNSView`.
+- A reload under an open rename detaches its field editor, and a detached standard editor that takes a mouse-down
+  spins TextKit 2 on the main thread. While `SidebarRenameController.isRenameInFlight` (editing, committing, or a
+  mouse-down still tracking in the editor), rebuilds, row reloads, metrics, selection sync and focus hand-back
+  wait for `flushDeferredRenameUpdates`, and `SidebarNameFieldEditor` ignores a mouse-down once detached.
+  Renaming another row commits the open edit first; a repeat for the edited row keeps it. End-editing commits to
+  the row `beginEditing` recorded, since collapsing its workspace takes the field's row away mid-edit.
 - Track expansion independently in `expandedWorkspaceIDs`. `NSOutlineView` drops expansion when items
   leave the data source, so expand/collapse delegate callbacks and `expandAll` update the set and
   `rebuildAndReload` reapplies it after flagged-mode round trips, where the flat list drops every workspace
