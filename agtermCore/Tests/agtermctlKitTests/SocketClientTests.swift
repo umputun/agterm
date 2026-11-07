@@ -1363,6 +1363,49 @@ struct SocketClientTests {
         #expect(format(installed: AppIdentity(version: "0.35.1")) == "0.34.0 (a1b2c3d)\ninstalled: 0.35.1")
     }
 
+    @Test func formatsTheVersionsAHeadlessServerAdvertises() {
+        var result = ControlResult(app: AppIdentity(version: "1.2.3"))
+        result.versions = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1)
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result))
+            == "1.2.3\nserver: 1.2.3, protocol: 1, catalog: 1")
+    }
+
+    @Test(arguments: [
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied, rev: 4), "operation a: applied at rev 4 in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied), "operation a: applied in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .noop), "operation a: no change in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .refused, error: "no such session"),
+         "operation a: refused in epoch e1: no such session"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .fenced), "operation a: fenced in epoch e1, so it will not run"),
+    ])
+    func formatsAReceiptAlone(_ receipt: CatalogReceipt, _ expected: String) {
+        var result = ControlResult()
+        result.receipt = receipt
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result)) == expected)
+    }
+
+    @Test(arguments: [
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .refused, error: "no such session"),
+         "error: operation a: refused in epoch e1: no such session"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .fenced), "error: operation a: fenced in epoch e1, so it will not run"),
+    ])
+    func aRefusedOrFencedCommandStillNamesItsReceipt(_ receipt: CatalogReceipt, _ expected: String) {
+        var result = ControlResult()
+        result.receipt = receipt
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: false, result: result, error: "ignored")) == expected)
+    }
+
+    @Test func aReceiptFollowsWhatTheCommandPrints() {
+        var result = ControlResult(id: "s1")
+        result.receipt = CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied, rev: 2)
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result), echoID: true)
+            == "s1\noperation a: applied at rev 2 in epoch e1")
+    }
+
     @Test func versionJSONCarriesTheRawResponseWithoutTheClientPath() throws {
         let line = "{\"ok\": true, \"result\": {\"app\": {\"version\": \"0.24.0\", \"commit\": \"a1b2c3d\\u0020\"}}} "
         let server = StubServer(line: Data(line.utf8))

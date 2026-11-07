@@ -402,19 +402,19 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agtermCore/Sources/AgtermServerKit/`
 - Create: `agtermCore/Tests/agtermCoreTests/CatalogHubTests.swift`
 
-- [ ] catalog snapshot and deltas with epoch and revision, covering workspaces, sessions, panes, names, order,
+- [x] catalog snapshot and deltas with epoch and revision, covering workspaces, sessions, panes, names, order,
       companions and lifecycle; subscriber registered before the snapshot so nothing falls between
-- [ ] `agtermctl catalog subscribe` bridging stdio to the server's catalog stream, the same way `zmx present` does
-- [ ] resnapshot on reconnect and on a new epoch; unknown kinds skipped without ending the stream; a snapshot over
+- [x] `agtermctl catalog subscribe` bridging stdio to the server's catalog stream, the same way `zmx present` does
+- [x] resnapshot on reconnect and on a new epoch; unknown kinds skipped without ending the stream; a snapshot over
       the frame cap goes as chunks plus a commit frame
-- [ ] operation receipts: every structural command accepts an `opID` and the expected epoch, refuses a stale epoch,
+- [x] operation receipts: every structural command accepts an `opID` and the expected epoch, refuses a stale epoch,
       and replies `applied(rev)`, `noop` or `refused`; the bounded op table, saved with the catalog, answers a
       repeated `opID` with its recorded outcome, and `agtermctl catalog op OPID` answers lookups, fencing an unseen
       `opID`
-- [ ] the Mac app's `ControlActions` default refuses `catalog subscribe` and receipt-bearing structural commands
-- [ ] version advertisement: the catalog snapshot and `agtermctl version` against the server report server,
+- [x] the Mac app's `ControlActions` default refuses `catalog subscribe` and receipt-bearing structural commands
+- [x] version advertisement: the catalog snapshot and `agtermctl version` against the server report server,
       protocol and catalog versions
-- [ ] tests: snapshot/delta ordering, restart epoch, every structural command producing the right delta and
+- [x] tests: snapshot/delta ordering, restart epoch, every structural command producing the right delta and
       receipt, refusal and no-op receipts, a repeated `opID` never running twice, a lookup fencing an `opID` that
       arrives later, a stale-epoch command refused, an operation that committed and lost its reply still answered
       by lookup after a server restart, chunked snapshot applied only at commit, version fields in the

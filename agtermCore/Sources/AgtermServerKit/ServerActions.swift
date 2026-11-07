@@ -11,6 +11,8 @@ public final class ServerActions: ControlActions {
     let panes: ServerPanes
     let streams: ServerStreams
     var hudAutoHide: [UUID: HudTimer] = [:]
+    /// operationsUnsaved is set while the operation table holds an entry its last write failed to save.
+    var operationsUnsaved = false
 
     init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes) {
         self.store = store
@@ -22,14 +24,19 @@ public final class ServerActions: ControlActions {
             await self?.serve(request) ?? ControlResponse(ok: false, error: "agterm-server is stopping")
         }
         wireAskOwners()
+        streams.catalogVersions = catalogVersions
+        streams.catalogWorkspaces = { [weak self] in self?.catalogWorkspaces() ?? [] }
     }
 
     /// serve refuses a command the server does not serve, then dispatches the rest: the socket's requests and a
-    /// handed-over page's bridge requests alike.
+    /// handed-over page's bridge requests alike. The catalog is published after each, whatever it changed.
     func serve(_ request: ControlRequest) async -> ControlResponse {
         if let refusal = ServerCommandPolicy.refusal(request.cmd) { return ControlResponse(ok: false, error: refusal) }
-        return await ControlDispatcher(actions: self).dispatch(request)
+        if let opID = request.args?.opID { return await serveOperation(request, opID: opID) }
+        let response = await ControlDispatcher(actions: self).dispatch(request)
             ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
+        streams.catalogHub.refresh()
+        return response
     }
 
     public func claimOverlayJob(_ job: String) -> ControlResponse { streams.claimJobStream(job) }
@@ -44,6 +51,7 @@ public final class ServerActions: ControlActions {
     public func appIdentity() -> ControlResponse {
         var result = ControlResult(app: identity)
         result.headless = true
+        result.versions = catalogVersions
         return ControlResponse(ok: true, result: result)
     }
 

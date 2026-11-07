@@ -137,6 +137,10 @@ public enum Command: String, Codable, Sendable {
     case zmxAttachGroup = "zmx.attach.group"
     case zmxPresent = "zmx.present"
     case zmxScreen = "zmx.screen"
+    /// catalogSubscribe opens agterm-server's catalog stream; after an ok reply the connection carries catalog frames.
+    case catalogSubscribe = "catalog.subscribe"
+    /// catalogOp answers what became of an operation id, fencing one agterm-server has not seen.
+    case catalogOp = "catalog.op"
     case recentList = "recent.list"
     case recentOpen = "recent.open"
     case recentClear = "recent.clear"
@@ -155,6 +159,10 @@ public enum Command: String, Codable, Sendable {
 /// A bag of optional command parameters. Each command reads only the fields it needs; the rest stay nil and
 /// are omitted from the JSON.
 public struct ControlArgs: Codable, Sendable, Equatable {
+    /// opID names a structural command for agterm-server's receipts; only agterm-server takes one.
+    public var opID: String?
+    /// epoch is the catalog epoch the caller last saw, sent with `opID`; another epoch refuses the command.
+    public var epoch: String?
     /// New name for `workspace.new`/`workspace.rename`/`session.rename`; the initial `session.new` name
     /// (blank/omitted leaves the auto basename); the `theme.set` theme (omitted/empty = ghostty's built-in
     /// colors / "default ghostty", NOT the seeded `agterm` app default).
@@ -700,6 +708,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// headless is true on `version` from agterm-server, where a pane's own untargeted pick belongs to its
     /// session rather than to a window; a Mac app omits it.
     public var headless: Bool?
+    /// versions is what agterm-server advertises on `version`; a Mac app omits it.
+    public var versions: CatalogVersions?
+    /// receipt answers a command sent with an operation id, and `catalog.op`.
+    public var receipt: CatalogReceipt?
     /// The restore-mode policy for `restore.mode`, and the header `zmx list` repeats so its rows can be
     /// read without a second call.
     public var restore: ControlRestoreStatus?

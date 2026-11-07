@@ -13,6 +13,10 @@ public struct ControlDispatcher {
     }
 
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
+        // a receipt the host never keeps would read as a durable answer
+        if request.args?.opID != nil, !actions.takesOperationReceipts {
+            return ControlResponse(ok: false, error: "operation receipts are served only by agterm-server")
+        }
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
@@ -49,6 +53,13 @@ public struct ControlDispatcher {
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
+        case .catalogSubscribe:
+            return actions.catalogSubscribe()
+        case .catalogOp:
+            guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
+                return ControlResponse(ok: false, error: "catalog.op requires an operation id")
+            }
+            return actions.catalogOperation(opID)
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
         case .recentList, .recentOpen, .recentClear:

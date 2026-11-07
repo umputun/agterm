@@ -189,6 +189,7 @@ renumbering. Do not reintroduce a count anywhere.
   `restore.clear`, `restore.mode`, `version`
 - `recent.list`, `recent.open`, `recent.clear`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
+- `catalog.subscribe`, `catalog.op`: served only by agterm-server; a Mac app refuses them and any `opID`
 
 `terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is

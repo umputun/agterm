@@ -16,11 +16,12 @@ struct Workspace: ParsableCommand {
         @Flag(name: .long, help: "Create the workspace collapsed in the sidebar.") var collapsed = false
         @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceNew, args: options.withWindow(tint.apply(to:
-                ControlArgs(name: name, collapsed: collapsed ? true : nil))))
+            operation.stamp(ControlRequest(cmd: .workspaceNew, args: options.withWindow(tint.apply(to:
+                ControlArgs(name: name, collapsed: collapsed ? true : nil)))))
         }
     }
 
@@ -29,9 +30,11 @@ struct Workspace: ParsableCommand {
         @Argument(help: "New workspace name.") var name: String
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceRename, target: target.target, args: options.withWindow(ControlArgs(name: name)))
+            operation.stamp(ControlRequest(cmd: .workspaceRename, target: target.target,
+                                           args: options.withWindow(ControlArgs(name: name))))
         }
     }
 
@@ -39,9 +42,10 @@ struct Workspace: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Delete a workspace.")
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceDelete, target: target.target, args: options.withWindow())
+            operation.stamp(ControlRequest(cmd: .workspaceDelete, target: target.target, args: options.withWindow()))
         }
     }
 
@@ -74,9 +78,11 @@ struct Workspace: ParsableCommand {
         @Option(name: .long, help: "Direction: up, down, top, or bottom.") var to: String
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceMove, target: target.target, args: options.withWindow(ControlArgs(to: to)))
+            operation.stamp(ControlRequest(cmd: .workspaceMove, target: target.target,
+                                           args: options.withWindow(ControlArgs(to: to))))
         }
     }
 

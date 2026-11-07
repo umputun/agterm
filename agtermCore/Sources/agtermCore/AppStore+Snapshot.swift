@@ -18,13 +18,15 @@ extension AppStore {
         let persistable = Set(workspaceSnapshots.flatMap(\.sessions).map(\.id))
         let recency = sessionRecency.items.filter(persistable.contains)
         let flaggedIDs = orderedFlaggedSessions.map(\.id).filter(persistable.contains)
-        return Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
-                        workspaces: workspaceSnapshots,
-                        sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
-                        focusedWorkspaceIDs: focusIDs.isEmpty ? nil : focusIDs,
-                        focusEnabled: focusEnabled ? true : nil,
-                        sessionRecency: recency,
-                        flaggedOrder: flaggedIDs.isEmpty ? nil : flaggedIDs)
+        var snapshot = Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
+                                workspaces: workspaceSnapshots,
+                                sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
+                                focusedWorkspaceIDs: focusIDs.isEmpty ? nil : focusIDs,
+                                focusEnabled: focusEnabled ? true : nil,
+                                sessionRecency: recency,
+                                flaggedOrder: flaggedIDs.isEmpty ? nil : flaggedIDs)
+        snapshot.catalogOperations = catalogOperations
+        return snapshot
     }
 
     /// The selection to write. A remote session is not in the snapshot, so naming it would restore an empty
@@ -176,6 +178,7 @@ extension AppStore {
         restoringSelection = true
         defer { restoringSelection = false }
         freshWorkspaceID = nil // live create-time state, never restored from disk
+        catalogOperations = snapshot.catalogOperations
         // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
         // repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []

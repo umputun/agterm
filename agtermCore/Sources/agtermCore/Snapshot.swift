@@ -30,6 +30,8 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// flaggedOrder is the flagged working set's saved order (`AppStore.flaggedOrder`); nil restores in tree
     /// order.
     public var flaggedOrder: [UUID]?
+    /// catalogOperations is agterm-server's operation table, saved with the catalog it describes; nil on a Mac.
+    public var catalogOperations: CatalogOperationTable?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
                 workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
@@ -49,7 +51,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
-        case focusedWorkspaceIDs, focusEnabled, sessionRecency, flaggedOrder
+        case focusedWorkspaceIDs, focusEnabled, sessionRecency, flaggedOrder, catalogOperations
     }
 
     /// The legacy single-workspace focus key from before the focus SET existed. Its own key type with no
@@ -103,6 +105,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         }
         sessionRecency = (try? c.decodeIfPresent([UUID].self, forKey: .sessionRecency)) ?? nil
         flaggedOrder = (try? c.decodeIfPresent([UUID].self, forKey: .flaggedOrder)) ?? nil
+        catalogOperations = (try? c.decodeIfPresent(CatalogOperationTable.self, forKey: .catalogOperations)) ?? nil
     }
 }
 

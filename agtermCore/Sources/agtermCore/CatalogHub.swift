@@ -1,0 +1,157 @@
+import Foundation
+
+/// CatalogSink is where the hub hands a subscriber's frames; the bounded queue and the socket live behind it.
+@MainActor
+public protocol CatalogSink: AnyObject {
+    /// offer returns false when the consumer's queue is full, which the hub treats as a stalled subscriber.
+    func offer(_ frame: CatalogFrame) -> Bool
+    func close(_ reason: CatalogHub.CloseReason)
+}
+
+/// CatalogHub numbers a headless store's catalog within one epoch and streams it to its viewers: each one gets the
+/// snapshot, then every change as a delta with its own revision.
+@MainActor
+public final class CatalogHub {
+    public enum CloseReason: Equatable, Sendable {
+        case stalled
+        case stale
+        case unsendable
+    }
+
+    public enum SubscribeError: Error, Equatable {
+        case unsupportedVersion(Int)
+    }
+
+    public struct SubscriberID: Hashable, Sendable {
+        let value: Int
+    }
+
+    private final class Subscriber {
+        let sink: CatalogSink
+        var lastAck: Date
+
+        init(sink: CatalogSink, now: Date) {
+            self.sink = sink
+            lastAck = now
+        }
+    }
+
+    public let epoch: String
+    public private(set) var rev = 0
+    private let source: @MainActor () -> CatalogSnapshot
+    private let staleTimeout: TimeInterval
+    private let now: () -> Date
+    private var current: CatalogSnapshot?
+    private var subscribers: [SubscriberID: Subscriber] = [:]
+    private var lastID = 0
+
+    /// `source` projects the store; its epoch and revision are ignored and replaced with the hub's.
+    public init(epoch: String, staleTimeout: TimeInterval, now: @escaping () -> Date = Date.init,
+                source: @escaping @MainActor () -> CatalogSnapshot) {
+        self.epoch = epoch
+        self.staleTimeout = staleTimeout
+        self.now = now
+        self.source = source
+    }
+
+    /// snapshot is the catalog as of the current revision, after any change not yet published.
+    public func snapshot() -> CatalogSnapshot {
+        refresh()
+        return current ?? stamped(source())
+    }
+
+    /// refresh projects the store again and publishes what changed, one revision per change. Nothing changed
+    /// publishes nothing, so callers run it after anything that may have changed the catalog.
+    public func refresh() {
+        let next = stamped(source())
+        guard let previous = current else {
+            current = next
+            return
+        }
+        guard previous.workspaces != next.workspaces else { return }
+        var state = previous
+        for change in previous.changes(to: next) {
+            rev += 1
+            state.apply(change)
+            broadcast(.delta(epoch: epoch, rev: rev, change: change))
+        }
+        state.rev = rev
+        current = state
+    }
+
+    /// subscribe registers a viewer and sends it hello, then the snapshot. Pending changes are published to
+    /// everyone else first, so the snapshot and the deltas that follow it meet at the same revision.
+    @discardableResult
+    public func subscribe(hello: CatalogHello, sink: CatalogSink, versions: CatalogVersions) throws -> SubscriberID {
+        guard hello.version >= 1 else { throw SubscribeError.unsupportedVersion(hello.version) }
+        let state = snapshot()
+        lastID += 1
+        let id = SubscriberID(value: lastID)
+        subscribers[id] = Subscriber(sink: sink, now: now())
+        let answer = CatalogHello(version: min(hello.version, CatalogCodec.version), epoch: epoch, versions: versions)
+        let frames: [CatalogFrame]
+        do {
+            frames = [.hello(answer)] + (try CatalogCodec.snapshotFrames(state))
+        } catch {
+            drop(id, reason: .unsendable)
+            return id
+        }
+        for frame in frames {
+            guard send(frame, to: id) else { break }
+        }
+        return id
+    }
+
+    public func unsubscribe(_ id: SubscriberID) {
+        subscribers[id] = nil
+    }
+
+    public func receive(_ frame: CatalogFrame, from id: SubscriberID) {
+        guard let subscriber = subscribers[id] else { return }
+        switch frame {
+        case .ack: subscriber.lastAck = now()
+        case .ping: send(.ack, to: id)
+        default: break
+        }
+    }
+
+    /// heartbeat closes every subscriber whose last ack is older than the stale timeout and pings the rest.
+    public func heartbeat() {
+        let current = now()
+        for (id, subscriber) in subscribers {
+            if current.timeIntervalSince(subscriber.lastAck) > staleTimeout {
+                drop(id, reason: .stale)
+                continue
+            }
+            send(.ping, to: id)
+        }
+    }
+
+    public var subscriberCount: Int { subscribers.count }
+
+    private func stamped(_ snapshot: CatalogSnapshot) -> CatalogSnapshot {
+        var snapshot = snapshot
+        snapshot.epoch = epoch
+        snapshot.rev = rev
+        return snapshot
+    }
+
+    private func broadcast(_ frame: CatalogFrame) {
+        for id in subscribers.keys { send(frame, to: id) }
+    }
+
+    @discardableResult
+    private func send(_ frame: CatalogFrame, to id: SubscriberID) -> Bool {
+        guard let subscriber = subscribers[id] else { return false }
+        guard subscriber.sink.offer(frame) else {
+            drop(id, reason: .stalled)
+            return false
+        }
+        return true
+    }
+
+    private func drop(_ id: SubscriberID, reason: CloseReason) {
+        guard let subscriber = subscribers.removeValue(forKey: id) else { return }
+        subscriber.sink.close(reason)
+    }
+}

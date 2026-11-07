@@ -10,7 +10,7 @@ public enum ServerCommandPolicy {
         .sessionCompanionNew, .sessionText, .sessionType,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
-        .zmxTree, .zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe,
+        .zmxTree, .zmxPresent, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe,
         .sessionStatus, .sessionContext, .notify, .sessionHudOpen, .sessionHudUpdate, .sessionHudClose,
         .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
         .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,

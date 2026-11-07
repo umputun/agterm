@@ -141,6 +141,8 @@ public final class AppStore {
     @ObservationIgnored var pendingCloseTasks: [UUID: Task<Void, Never>] = [:]
 
     @ObservationIgnored let persistence: PersistenceStore
+    /// catalogOperations is agterm-server's operation table, written in every save of this store; nil on a Mac.
+    @ObservationIgnored public var catalogOperations: CatalogOperationTable?
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
     /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.

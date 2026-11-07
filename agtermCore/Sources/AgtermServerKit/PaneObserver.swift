@@ -12,6 +12,8 @@ final class PaneObserver {
     let cwd: (Int32) -> String?
     /// onRespawn hears that a parent's pane runs a fresh shell under the same daemon name.
     var onRespawn: ((_ session: UUID, _ daemon: String) -> Void)?
+    /// onApplied runs after each listing is settled, which is when pane lifecycle and cwd change.
+    var onApplied: (() -> Void)?
     private var loop: Task<Void, Never>?
 
     init(store: AppStore, panes: ServerPanes, cwd: @escaping (Int32) -> String? = ProcCwd.foreground) {
@@ -66,6 +68,7 @@ final class PaneObserver {
         }
         for (session, gone) in missing { gone.forEach { session.daemonBackedPanes.remove($0) } }
         for (session, gone) in missing { settle(session, gone: gone) }
+        onApplied?()
     }
 
     private func panesOf(_ session: Session) -> [(UUID, StatusPane)] {

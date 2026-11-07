@@ -21,6 +21,15 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     private var respawnGenerations: [UUID: [String: Int]] = [:]
     /// dispatch runs a page's bridge request through the server's own dispatcher.
     var dispatch: ((ControlRequest) async -> ControlResponse)?
+    var catalogStreams: [CatalogStream] = []
+    var catalogHeartbeat: Task<Void, Never>?
+    /// catalogWorkspaces projects the store's workspaces into the catalog.
+    var catalogWorkspaces: @MainActor () -> [CatalogWorkspace] = { [] }
+    var catalogVersions = CatalogVersions(server: "", protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
+    /// catalogHub numbers the catalog in this run's epoch, the same one respawn counts carry.
+    lazy var catalogHub = CatalogHub(epoch: originEpoch, staleTimeout: 30) { [unowned self] in
+        CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces())
+    }
 
     init(store: AppStore, catalogID: UUID) {
         self.store = store
@@ -145,6 +154,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         case .zmxPresent:
             guard written, response.ok, let session = response.result?.id.flatMap(UUID.init(uuidString:)) else { return false }
             adoptPresentationStream(descriptor: conn, session: session)
+        case .catalogSubscribe:
+            guard written, response.ok else { return false }
+            adoptCatalogStream(descriptor: conn)
         case .sessionOverlayJobRun:
             guard response.ok, let job = response.result?.id else { return false }
             guard written else {
@@ -167,6 +179,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
     func shutdown() {
         shutdownPresentationStreams()
+        shutdownCatalogStreams()
         for stream in overlayJobStreams.values { stream.shutdown() }
         for stream in pageServeStreams.values { stream.shutdown() }
     }

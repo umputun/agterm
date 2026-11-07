@@ -4,14 +4,14 @@ import os
 #endif
 
 /// CoreLog writes agtermCore's diagnostics: the unified log on macOS, stderr where there is none.
-struct CoreLog: Sendable {
+public struct CoreLog: Sendable {
     #if canImport(os)
     private let logger: Logger
     #else
     private let category: String
     #endif
 
-    init(category: String) {
+    public init(category: String) {
         #if canImport(os)
         logger = Logger(subsystem: "com.umputun.agterm", category: category)
         #else
@@ -19,7 +19,7 @@ struct CoreLog: Sendable {
         #endif
     }
 
-    func notice(_ message: String) {
+    public func notice(_ message: String) {
         #if canImport(os)
         logger.notice("\(message, privacy: .public)")
         #else
@@ -27,7 +27,7 @@ struct CoreLog: Sendable {
         #endif
     }
 
-    func error(_ message: String) {
+    public func error(_ message: String) {
         #if canImport(os)
         logger.error("\(message, privacy: .public)")
         #else

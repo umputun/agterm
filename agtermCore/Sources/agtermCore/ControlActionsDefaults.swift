@@ -163,6 +163,17 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.present"))
     }
 
+    // only a headless server owns a catalog; a remote window must never bind to a live Mac's windows
+    func catalogSubscribe() -> ControlResponse {
+        ControlResponse(ok: false, error: "catalog.subscribe is served only by agterm-server")
+    }
+
+    func catalogOperation(_: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "catalog.op is served only by agterm-server")
+    }
+
+    var takesOperationReceipts: Bool { false }
+
     func claimOverlayJob(_: String) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.job.run"))
     }

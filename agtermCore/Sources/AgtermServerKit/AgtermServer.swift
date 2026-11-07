@@ -36,6 +36,7 @@ public final class AgtermServer {
         actions = ServerActions(store: store, catalog: catalog, identity: identity, panes: panes)
         observer = PaneObserver(store: store, panes: panes)
         observer.onRespawn = { [weak actions] session, daemon in actions?.streams.noteRespawn(session: session, daemon: daemon) }
+        observer.onApplied = { [weak actions] in actions?.streams.catalogHub.refresh() }
     }
 
     /// start takes the state directory, loads the catalog and the saved store and serves the control socket. A
@@ -73,6 +74,8 @@ public final class AgtermServer {
 
         let server = AgtermServer(configuration: configuration, store: store, catalog: catalog, identity: identity,
                                   panes: panes, lock: lock)
+        // an operation that committed in an earlier run is answered at a revision this run's viewers can reach
+        store.catalogOperations?.adopt(epoch: server.actions.streams.catalogHub.epoch, rev: server.actions.streams.catalogHub.rev)
         let socket = ServerControlSocket(path: configuration.socketPath, handler: { [weak server] request in
             guard let server else { return ControlResponse(ok: false, error: "agterm-server is stopping") }
             return await server.handle(request)

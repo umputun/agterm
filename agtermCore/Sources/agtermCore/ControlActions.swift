@@ -261,6 +261,12 @@ public protocol ControlActions {
     func attachRemoteSession(host: String, session: String) async -> ControlResponse
     /// Accept a viewer's presentation stream. After an ok answer the host speaks frames on that connection.
     func openPresentation(session: String) -> ControlResponse
+    /// catalogSubscribe answers `catalog.subscribe`; after an ok answer the connection carries catalog frames.
+    func catalogSubscribe() -> ControlResponse
+    /// catalogOperation answers `catalog.op`: what became of `opID`, fencing an id the host has not seen.
+    func catalogOperation(_ opID: String) -> ControlResponse
+    /// takesOperationReceipts is whether this host answers a structural command's `opID` with a receipt.
+    var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
     func claimOverlayJob(_ job: String) -> ControlResponse
     /// claimPageServe claims a handed-over page's channel with its single-use token. After an ok answer the
