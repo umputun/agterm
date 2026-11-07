@@ -767,7 +767,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and NUL bytes in the check as well as the load, so a binary click is revealed. `TextPage.html` holds the escaped text
   in a hidden `div` (a parser drops a newline after `<pre>`, shifting every line) under a CSP that loads nothing;
   `text.js` writes it through `textContent`, and highlight.js's escaped value, chosen by the app's extension and
-  basename map up to `maxHighlightBytes`, is the only `innerHTML` it assigns. Markdown, HTML and SVG are not text
+  basename map up to `maxHighlightBytes`, is one of two `innerHTML` sinks; the other is a diff page's rows, built from
+  the page's own `escape` and highlight.js spans reopened per row. Markdown, HTML and SVG are not text
   pages. `--text` is taken literally, never suffix-parsed; read back `htmlOverlays[].text` with the file, the mapped
   language and the requested line.
 - A document page (`HtmlSource.document`) is a clicked `.html` or `.htm` file, never a CLI page: terminal output
@@ -806,6 +807,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   step into `HtmlOverlay.textChanges` (`setTextChangesReport`, never emitted); a fresh read clears it first, and a theme
   rebuild passes the current change back as `data-change`. A step is a one-shot push like a search step.
   Read back `htmlOverlays[].text.changes`, omitted until the page reports.
+  Under the cap `data-files` carries `TextPage.diffLanguages`, and the page highlights each hunk's two sides whole in
+  its file's language, with the marker column kept in the text at zero width; added and removed runs get bands at
+  any size. A patch with no unified hunk keeps the `diff` grammar. `text.language` stays `diff`.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any

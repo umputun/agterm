@@ -54,6 +54,19 @@ public enum TextPage {
         language(forFile: path) == diffLanguage
     }
 
+    /// diffLanguages maps each path a patch's `--- ` or `+++ ` row names, as the row spells it up to a tab, to the
+    /// file's language. A changed row can look like a header, so the renderer looks up only rows outside hunks.
+    static func diffLanguages(in text: String) -> [String: String] {
+        var found: [String: String] = [:]
+        for row in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        where row.hasPrefix("--- ") || row.hasPrefix("+++ ") {
+            let path = String(row.dropFirst(4).prefix { $0 != "\t" })
+            let file = path.count > 1 && path.hasPrefix("\"") && path.hasSuffix("\"") ? String(path.dropFirst().dropLast()) : path
+            if let language = language(forFile: file) { found[path] = language }
+        }
+        return found
+    }
+
     /// isLog says whether a plain click on `path` opens it as a log page, following its end.
     public static func isLog(file path: String) -> Bool {
         logExtensions.contains(((path as NSString).lastPathComponent as NSString).pathExtension.lowercased())
@@ -86,13 +99,21 @@ public enum TextPage {
     /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter; `anchor`
     /// is the scroll offset a rebuilt page reopens at, a paused log page's or a plain page's.
     /// A plain page of a diff is marked whatever its size, so change navigation outlives the highlighting limit;
-    /// `change` is the change a rebuilt page reopens on, from 1.
+    /// `change` is the change a rebuilt page reopens on, from 1. Under the limit a diff also carries `diffLanguages`
+    /// as JSON, so each file's lines are highlighted in that file's language.
     public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
                             anchor: Double? = nil, search: SearchState? = nil, change: Int? = nil) -> String {
         var attributes = ""
+        let highlighted = text.utf8.count <= maxHighlightBytes
         if log == nil, language == diffLanguage {
             attributes += " data-diff"
             if let change, change > 0 { attributes += " data-change=\"\(change)\"" }
+            let files = highlighted ? diffLanguages(in: text) : [:]
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            if !files.isEmpty, let json = try? encoder.encode(files) {
+                attributes += " data-files=\"\(MarkdownPage.escaped(String(decoding: json, as: UTF8.self)))\""
+            }
         }
         if let search {
             attributes += " data-revision=\"\(search.revision)\""
@@ -100,7 +121,7 @@ public enum TextPage {
                 attributes += " data-query=\"\(MarkdownPage.escaped(search.query))\" data-current=\"\(search.current)\""
             }
         }
-        if let language, text.utf8.count <= maxHighlightBytes {
+        if let language, highlighted {
             attributes += " data-language=\"\(MarkdownPage.escaped(language))\""
         }
         if let log {

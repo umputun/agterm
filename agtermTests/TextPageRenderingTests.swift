@@ -192,9 +192,10 @@ final class TextPageRenderingTests: HtmlPageTestCase {
 
     func testANearCapFileRendersInBoundedTime() async throws {
         let line = "func main() { return }\n"
-        let cases = [("high.go", TextPage.maxHighlightBytes), ("plain.log", TextPage.maxBytes)]
-        for (name, size) in cases {
-            let text = String(repeating: line, count: size / line.utf8.count)
+        let diff = Self.patch(changes: [0], lines: TextPage.maxBytes / " line 100000\n".utf8.count - 10)
+        let cases = [("high.go", String(repeating: line, count: TextPage.maxHighlightBytes / line.utf8.count)),
+                     ("plain.log", String(repeating: line, count: TextPage.maxBytes / line.utf8.count)), ("big.diff", diff)]
+        for (name, text) in cases {
             let clock = ContinuousClock(), started = clock.now
             let page = registry.page(for: try openText(name, text), store: store)
             try await waitForScript("document.querySelector('pre code')?.textContent.length ?? 0", in: page.webView) { $0 == "\(text.utf16.count)" }
@@ -993,6 +994,120 @@ extension TextPageRenderingTests {
         try await waitForScript(Self.bandRows, in: page.webView) { $0 == "11|3" }
     }
 
+    func testEachFileOfADiffIsHighlightedInItsOwnLanguageAndKeepsItsText() async throws {
+        let text = """
+            diff --git a/main.go b/main.go
+            --- a/main.go
+            +++ b/main.go
+            @@ -1,3 +1,3 @@
+             /* opened
+            -old comment line
+            +<script>document.title = 'ran'</script>
+             */ func main() {}
+            diff --git a/q.sql b/q.sql
+            --- a/q.sql
+            +++ b/q.sql
+            @@ -1,2 +1,2 @@
+            --- dropped
+            +select 1;
+             from t
+
+            """
+        let (page, window) = try shown(try openText("two.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "2 changes" }
+
+        let dom = try await page.webView.evaluateJavaScript("""
+            (() => {
+              const code = document.querySelector('pre code');
+              const rows = code.innerHTML.split('\\n');
+              const has = (row, cls) => rows[row].includes(`class="${cls}"`);
+              const style = getComputedStyle(code.parentElement);
+              const height = code.parentElement.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+              return [code.textContent === \(try json(text)), height / parseFloat(style.lineHeight),
+                [...new Set([...code.querySelectorAll('*')].map(e => e.tagName))].join(','),
+                has(6, 'hljs-comment'), has(7, 'hljs-keyword'), has(13, 'hljs-keyword'), has(12, 'hljs-comment'),
+                has(1, 'hljs-meta'), [4, 5, 6, 7].every(row => has(row, 'agterm-marker')),
+                getComputedStyle(code.querySelector('.agterm-marker')).fontSize, document.title].join('|');
+            })()
+            """)
+        XCTAssertEqual(dom as? String, "true|15|SPAN|true|true|true|true|true|true|0px|")
+    }
+
+    func testEachHunkIsHighlightedOnItsOwn() async throws {
+        let text = """
+            --- a/x.go
+            +++ b/x.go
+            @@ -1 +1 @@
+            -var a
+            +/* opened, closed in lines the patch leaves out
+            @@ -40 +40 @@
+            -var b
+            +func c() {}
+
+            """
+        let (page, window) = try shown(try openText("hunks.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "2 changes" }
+
+        let keyword = try await page.webView.evaluateJavaScript("""
+            document.querySelector('pre code').innerHTML.split('\\n')[7].includes('class="hljs-keyword"')
+            """)
+        XCTAssertEqual(keyword as? Bool, true)
+    }
+
+    func testADiffWithNoUnifiedHunkKeepsTheDiffGrammar() async throws {
+        let text = "*** a.c\n--- b.c\n***************\n*** 1,2 ****\n- old\n  same\n--- 1,2 ----\n+ new\n  same\n"
+        let (page, window) = try shown(try openText("context.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript("document.querySelectorAll('pre code .hljs-deletion').length", in: page.webView) { $0 != "0" }
+
+        let dom = try await page.webView.evaluateJavaScript("""
+            [document.querySelector('pre code').textContent === \(try json(text)),
+             document.querySelectorAll('pre code .hljs-addition').length > 0,
+             document.querySelectorAll('pre code .agterm-marker').length].join('|')
+            """)
+        XCTAssertEqual(dom as? String, "true|true|0")
+    }
+
+    func testACRLFDiffIsHighlightedInItsFileLanguage() async throws {
+        let text = ["diff --git a/x.go b/x.go", "--- a/x.go", "+++ b/x.go", "@@ -1 +1 @@", "-var a", "+func b() {}", ""]
+            .joined(separator: "\r\n")
+        let (page, window) = try shown(try openText("crlf.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "1 change" }
+
+        let keywords = try await page.webView.evaluateJavaScript("document.querySelectorAll('pre code .hljs-keyword').length")
+        XCTAssertEqual(keywords as? Int, 2)
+    }
+
+    func testAddedAndRemovedRunsGetBandsAlsoPastTheHighlightCap() async throws {
+        let bands = """
+            [...document.querySelectorAll('.agterm-added, .agterm-removed')].map(b => {
+              const style = getComputedStyle(document.querySelector('#agterm-page pre'));
+              const height = parseFloat(style.lineHeight);
+              return [b.className, (parseFloat(b.style.top) - parseFloat(style.paddingTop)) / height,
+                parseFloat(b.style.height) / height].join(':');
+            }).join(' ')
+            """
+        let small = try shown(try openText("a.diff", Self.patch(changes: [1, 2], lines: 5)))
+        try await waitForScript(Self.changesLabel, in: small.0.webView) { $0 == "1 change" }
+        try await waitForScript(bands, in: small.0.webView) {
+            $0 == "agterm-removed:6:1 agterm-added:7:1 agterm-removed:8:1 agterm-added:9:1"
+        }
+        small.1.orderOut(nil)
+        store.closeHtmlOverlay(small.0.id)
+
+        let large = try shown(try openText("b.diff", Self.patch(changes: [0], lines: 30_000)))
+        defer { large.1.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: large.0.webView) { $0 == "1 change" }
+        try await waitForScript(bands, in: large.0.webView) { $0 == "agterm-removed:5:1 agterm-added:6:1" }
+        let classes = try await large.0.webView.evaluateJavaScript("""
+            [...new Set([...document.querySelectorAll('pre code span')].map(e => e.className))].sort().join(',')
+            """)
+        XCTAssertEqual(classes as? String, "agterm-marker,hljs-meta")
+    }
+
     func testAfterAManualScrollNextStartsBelowTheView() async throws {
         let (page, window) = try shown(try openText("a.diff", Self.patch(changes: [10, 100, 190])))
         defer { window.orderOut(nil) }
@@ -1070,10 +1185,12 @@ extension TextPageRenderingTests {
         defer { window.orderOut(nil) }
         try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "2 changes" }
 
-        let spans = try await page.webView.evaluateJavaScript("document.querySelectorAll('pre code span').length")
+        let classes = try await page.webView.evaluateJavaScript("""
+            [...new Set([...document.querySelectorAll('pre code span')].map(e => e.className))].sort().join(',')
+            """)
         let stepped = try await stepChange(false, on: page)
 
-        XCTAssertEqual(spans as? Int, 0)
+        XCTAssertEqual(classes as? String, "agterm-marker,hljs-meta")
         XCTAssertEqual(stepped, "2 of 2")
     }
 
