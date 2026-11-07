@@ -338,12 +338,101 @@ struct SessionPickTests {
         #expect(book.node(forSession: session.id) == nil)
     }
 
-    @Test func aReplicaInAnOccupiedWindowIsRefused() throws {
+    @Test func aReplicaInAnOccupiedWindowWaitsAndIsShownWhenTheSlotFrees() throws {
+        let session = try session()
+        let (windowID, controller) = window()
+        let local = pick()
+        controller.open(local)
+        let request = replica()
+
+        #expect(book.openReplica(request, session: session.id, window: windowID, controller: controller) { _ in })
+        #expect(controller.pending == local)
+        #expect(book.node(forSession: session.id) == ControlSessionPick(id: request.id, replica: true))
+        controller.cancel()
+
+        #expect(controller.pending?.id == request.id)
+    }
+
+    @Test func aClosingWindowDetachesItsShownAndQueuedReplicasWithoutAnsweringOrMountingThem() throws {
+        let first = try session(), second = try session()
+        let (windowID, controller) = window()
+        let shown = replica(), waiting = replica()
+        var answers: [PresentationFrame.Body] = []
+        _ = book.openReplica(shown, session: first.id, window: windowID, controller: controller) { answers.append($0) }
+        _ = book.openReplica(waiting, session: second.id, window: windowID, controller: controller) { answers.append($0) }
+
+        PickRegistry.shared.unregister(windowID)
+
+        #expect(answers.isEmpty)
+        #expect(controller.pending == nil)
+        #expect(book.node(forSession: first.id) == nil)
+        #expect(book.node(forSession: second.id) == nil)
+    }
+
+    @Test func aLocalPickEndingInItsWindowStillShowsTheQueuedReplica() throws {
         let session = try session()
         let (windowID, controller) = window()
         controller.open(pick())
+        let waiting = replica()
+        _ = book.openReplica(waiting, session: session.id, window: windowID, controller: controller) { _ in }
 
-        #expect(!book.openReplica(replica(), session: session.id, window: windowID, controller: controller) { _ in })
+        controller.cancel()
+
+        #expect(controller.pending?.id == waiting.id)
+    }
+
+    @Test func aQueuedReplicaReadsPendingInItsWindowAndCancelsOnceWithoutTheBlockingPick() throws {
+        let session = try session()
+        let (windowID, controller) = window()
+        let local = pick()
+        controller.open(local)
+        let waiting = replica()
+        var answers: [PresentationFrame.Body] = []
+        _ = book.openReplica(waiting, session: session.id, window: windowID, controller: controller) { answers.append($0) }
+        #expect(book.result(for: waiting.id) == ControlPickResult(result: .pending))
+        #expect(book.window(of: waiting.id) == windowID)
+
+        #expect(book.cancel(waiting.id))
+        #expect(book.cancel(waiting.id))
+        controller.cancel()
+
+        #expect(answers == [.pickResolve(PresentationPickAnswer(id: waiting.id, owner: 4, result: ControlPickResult(result: .cancelled)))])
+        #expect(book.result(for: waiting.id) == ControlPickResult(result: .cancelled))
+        #expect(controller.pending == nil)
+        #expect(book.node(forSession: session.id) == nil)
+    }
+
+    @Test func twoQueuedReplicasAreShownInOrderAsEachIsAnswered() throws {
+        let first = try session(), second = try session()
+        let (windowID, controller) = window()
+        controller.openAsk(PendingAsk(id: UUID().uuidString, title: "local", buttons: [ControlAskButton(id: "ok", label: "OK")], style: .gui))
+        let one = replica(), two = replica()
+        var answers: [PresentationFrame.Body] = []
+        _ = book.openReplica(one, session: first.id, window: windowID, controller: controller) { answers.append($0) }
+        _ = book.openReplica(two, session: second.id, window: windowID, controller: controller) { answers.append($0) }
+
+        controller.cancelAsk()
+        #expect(controller.pending?.id == one.id)
+        controller.resolve(ControlPickResult(result: .custom, query: "x"))
+
+        #expect(controller.pending?.id == two.id)
+        #expect(answers == [.pickResolve(PresentationPickAnswer(id: one.id, owner: 4, query: "x"))])
+    }
+
+    @Test func aQueuedReplicaDismissedOrDroppedIsNeverShown() throws {
+        let first = try session(), second = try session()
+        let (windowID, controller) = window()
+        controller.open(pick())
+        let dismissed = replica(), dropped = replica()
+        _ = book.openReplica(dismissed, session: first.id, window: windowID, controller: controller) { _ in }
+        _ = book.openReplica(dropped, session: second.id, window: windowID, controller: controller) { _ in }
+
+        book.dismissReplica(PresentationPickRef(id: dismissed.id, owner: 4), session: first.id)
+        book.dropReplicas(forSession: second.id)
+        controller.cancel()
+
+        #expect(controller.pending == nil)
+        #expect(book.node(forSession: first.id) == nil)
     }
 
     @Test func theOriginsDismissalClosesTheReplicaWithoutAnswering() throws {

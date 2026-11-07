@@ -26,15 +26,19 @@ public struct RemoteBinding: Equatable, Sendable {
     /// catalogOwned marks a row of a remote window: its server's catalog is the only writer of its pane
     /// structure, so presentation layout never moves, hides or closes its panes.
     public let catalogOwned: Bool
+    /// originHeadless marks an origin with no screen of its own, which keeps what this Mac cannot show yet for
+    /// this Mac rather than taking it back.
+    public let originHeadless: Bool
     private let localByRemotePane: [UUID: UUID]
     private let daemonsByLocalPane: [UUID: String]
 
     /// `daemonsByLocalPane` is what an attach knows: the daemon each local pane runs `zmx attach` against.
     /// A daemon name encodes the origin's pane identity, so the mapping is decoded once, here.
     public init(remoteSessionID: String, daemonsByLocalPane: [UUID: String], presentationVersion: Int?,
-                origin: Origin? = nil, catalogOwned: Bool = false) {
+                origin: Origin? = nil, catalogOwned: Bool = false, originHeadless: Bool = false) {
         self.remoteSessionID = remoteSessionID
         self.catalogOwned = catalogOwned
+        self.originHeadless = originHeadless
         self.presentationVersion = presentationVersion
         self.origin = origin
         self.daemonsByLocalPane = daemonsByLocalPane

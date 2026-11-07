@@ -51,7 +51,20 @@ struct ServerStreamsTests {
             return nil
         }
 
+        private(set) var bodies: [PresentationFrame.Body] = []
+        private(set) var delivered: [PresentationFrame.Body] = []
+        private var committed: [PresentationFrame.Body] = []
+        private var batch = PresentationPendingBatch()
+
+        private func takeCommitted(_ match: (PresentationFrame.Body) -> Bool) -> PresentationFrame.Body? {
+            guard let index = committed.firstIndex(where: match) else { return nil }
+            let found = committed[index]
+            committed.removeSubrange(...index)
+            return found
+        }
+
         func first(within seconds: TimeInterval = 60, where match: (PresentationFrame.Body) -> Bool) -> PresentationFrame.Body? {
+            if let found = takeCommitted(match) { return found }
             let deadline = Date().addingTimeInterval(seconds)
             while true {
                 let remaining = deadline.timeIntervalSinceNow
@@ -59,6 +72,19 @@ struct ServerStreamsTests {
                 var timeout = timeval(tv_sec: Int(remaining), tv_usec: .init(remaining.truncatingRemainder(dividingBy: 1) * 1_000_000))
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
                 guard let frame = next() else { return nil }
+                bodies.append(frame.body)
+                if case .pendingChunk(let chunk) = frame.body {
+                    batch.add(chunk)
+                    continue
+                }
+                if frame.body == .pendingCommit {
+                    let entries = (try? batch.commit()) ?? []
+                    delivered += entries
+                    committed += entries
+                    if match(frame.body) { return frame.body }
+                    if let found = takeCommitted(match) { return found }
+                    continue
+                }
                 if match(frame.body) { return frame.body }
             }
         }
@@ -175,6 +201,12 @@ struct ServerStreamsTests {
         #expect(respawns.generations == [daemon: 1])
     }
 
+    private func drop(_ viewer: Viewer, from session: Session) async {
+        close(viewer.fd)
+        let released = await eventually { !streams.presentationHub.hasPresenter(session: session.id) }
+        #expect(released)
+    }
+
     private func presenter(for session: Session, kinds: [String] = PresentationHub.supportedKinds) async throws -> Viewer {
         let viewer = try await connect(session, mode: .presenter, kinds: kinds)
         try viewer.send(.presenterAcquire)
@@ -198,16 +230,135 @@ struct ServerStreamsTests {
         #expect(settled)
     }
 
-    @Test func aPickWhosePresenterLeavesEndsCancelled() async throws {
+    @Test func aPickWhosePresenterLeavesWaitsForTheNextOne() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
         let pick = PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")])
         #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: false).ok)
+        let first = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
+        guard case .pickRequest(let old)? = first else { Issue.record("no pick request"); return }
 
         close(viewer.fd)
+        let returned = await eventually {
+            harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?
+                .interactions?.first?.state == ControlInteraction.unpresented
+        }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
 
-        let cancelled = await eventually { harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .cancelled }
+        let offered = await offPool { next.first { if case .pickRequest = $0 { true } else { false } } }
+        guard case .pickRequest(let shown)? = offered else { Issue.record("no pick offer"); return }
+        #expect(shown.id == pick.id)
+        #expect(shown.owner > old.owner)
+        streams.receivePresenterFrame(.pickResolve(PresentationPickAnswer(id: pick.id, owner: old.owner, item: "a")), forSession: session.id)
+        #expect(harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .pending)
+        try next.send(.pickResolve(PresentationPickAnswer(id: pick.id, owner: shown.owner, item: "a")))
+        let settled = await eventually { harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .picked }
+        #expect(settled)
+    }
+
+    @Test func anAskOpenedWithNoPresenterIsOfferedToTheNextCapableOne() async throws {
+        let session = try newSession()
+        let ask = Self.ask()
+        #expect(openAsk(ask, on: session).ok)
+        let older = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pendingSnapshotKind })
+
+        let unoffered = await offPool { older.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
+        #expect(unoffered == nil)
+        close(older.fd)
+        let capable = try await presenter(for: session)
+        defer { close(capable.fd) }
+
+        let offered = await offPool { capable.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = offered else { Issue.record("no ask offer"); return }
+        #expect(shown.id == ask.id)
+        #expect(shown.owner == harness.store.presentationHub?.presenterGeneration(session: session.id))
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.interactions?.first?.state == ControlInteraction.offered)
+    }
+
+    @Test func aFollowedPickOpenedOfflineIsOfferedWithItsFollow() async throws {
+        let session = try newSession()
+        let pick = PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")])
+        #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: true).ok)
+
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+
+        let offered = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
+        guard case .pickRequest(let shown)? = offered else { Issue.record("no pick offer"); return }
+        #expect(shown.follow == true)
+    }
+
+    @Test func anExpiredAskIsNeverHandedToAConnectedPresenter() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        var late = Self.ask()
+        late.deadline = Date().addingTimeInterval(-1)
+
+        #expect(openAsk(late, on: session).ok)
+
+        let request = await offPool { viewer.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
+        #expect(request == nil)
+        let cancelled = await eventually { askOutcome(late.id)?.result == .cancelled }
         #expect(cancelled)
+    }
+
+    @Test func everythingHeldForASessionReachesTheNextPresenterAsChunksAndOneCommit() async throws {
+        let session = try newSession()
+        let ask = Self.ask()
+        #expect(openAsk(ask, on: session).ok)
+        #expect(openOverlay(on: session).ok)
+
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+
+        let commit = await offPool { viewer.first { $0 == .pendingCommit } }
+        #expect(commit == .pendingCommit)
+        let entries = viewer.delivered
+        #expect(entries.contains { if case .askRequest(let shown) = $0 { shown.id == ask.id } else { false } })
+        #expect(entries.contains { if case .overlayRequest = $0 { true } else { false } })
+        #expect(!viewer.bodies.contains { if case .askRequest = $0 { true } else { false } })
+    }
+
+    @Test func aFormAskWaitsForAPresenterThatDrawsForms() async throws {
+        let session = try newSession()
+        let ask = Self.ask(form: .input(AskInputForm(mode: .line)))
+        #expect(openAsk(ask, on: session).ok)
+        let plain = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.askFormKind })
+
+        let unoffered = await offPool { plain.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
+
+        #expect(unoffered == nil)
+        #expect(session.askPending?.id == ask.id)
+        close(plain.fd)
+    }
+
+    @Test func anAskPastItsDeadlineIsNotOfferedAndAnAnswerPastItEndsIt() async throws {
+        let session = try newSession()
+        var late = Self.ask()
+        late.deadline = Date().addingTimeInterval(60)
+        #expect(openAsk(late, on: session).ok)
+        streams.now = { Date().addingTimeInterval(120) }
+
+        let capable = try await presenter(for: session)
+        defer { close(capable.fd) }
+
+        #expect(askOutcome(late.id)?.result == .cancelled)
+        streams.now = Date.init
+        var answered = Self.ask()
+        answered.deadline = Date().addingTimeInterval(60)
+        #expect(openAsk(answered, on: session).ok)
+        let request = await offPool { capable.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = request else { Issue.record("no ask request"); return }
+        streams.now = { Date().addingTimeInterval(120) }
+
+        streams.receivePresenterFrame(.askResolve(PresentationAskAnswer(id: shown.id, owner: shown.owner, button: "yes")),
+                                      forSession: session.id)
+
+        #expect(askOutcome(answered.id)?.result == .cancelled)
     }
 
     private func openAsk(_ ask: PendingAsk, on session: Session) -> ControlResponse {
@@ -237,19 +388,24 @@ struct ServerStreamsTests {
         #expect(session.askPending == nil)
     }
 
-    @Test func anAskWhosePresenterLeavesEndsCancelled() async throws {
+    @Test func anAskWhosePresenterLeavesWaitsAndAStaleAnswerIsDropped() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
         let ask = Self.ask()
         #expect(openAsk(ask, on: session).ok)
+        let request = await offPool { viewer.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = request else { Issue.record("no ask request"); return }
 
         close(viewer.fd)
 
-        let cancelled = await eventually { askOutcome(ask.id) == ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost) }
-        #expect(cancelled)
+        let returned = await eventually { session.askPending?.id == ask.id && !session.askPresentedRemotely }
+        #expect(returned)
+        streams.receivePresenterFrame(.askResolve(PresentationAskAnswer(id: shown.id, owner: shown.owner, button: "yes")),
+                                      forSession: session.id)
+        #expect(askOutcome(ask.id)?.result == .pending)
     }
 
-    @Test func anAskThePresenterRefusesEndsCancelled() async throws {
+    @Test func anAskThePresenterRefusesWaitsUnpresented() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
         defer { close(viewer.fd) }
@@ -260,8 +416,9 @@ struct ServerStreamsTests {
 
         try viewer.send(.askRejected(PresentationAskRef(id: shown.id, owner: shown.owner)))
 
-        let cancelled = await eventually { askOutcome(ask.id)?.result == .cancelled }
-        #expect(cancelled)
+        let returned = await eventually { !session.askPresentedRemotely }
+        #expect(returned)
+        #expect(askOutcome(ask.id)?.result == .pending)
     }
 
     @Test func aCancelledAskIsWithdrawnFromThePresenter() async throws {
@@ -279,15 +436,16 @@ struct ServerStreamsTests {
         #expect(askOutcome(ask.id)?.result == .cancelled)
     }
 
-    @Test func aFormAskThePresenterCannotDrawIsRefused() async throws {
+    @Test func aFormAskThePresenterCannotDrawWaitsUnpresented() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.askFormKind })
         defer { close(viewer.fd) }
 
         let reply = openAsk(Self.ask(form: .input(AskInputForm(mode: .line))), on: session)
 
-        #expect(reply == ControlResponse(ok: false, error: "the connected Mac cannot show a form ask"))
-        #expect(session.askPending == nil)
+        #expect(reply.ok)
+        #expect(session.askPending != nil)
+        #expect(!session.askPresentedRemotely)
     }
 
     private func openOverlay(on session: Session, page: HtmlSource? = nil) -> ControlResponse {
@@ -449,6 +607,330 @@ struct ServerStreamsTests {
         guard case .hud(let hud?)? = resized else { Issue.record("no resized hud frame"); return }
         #expect(hud.spec.sizePercent == 40)
         #expect((hud.remaining ?? 0) > 500)
+    }
+
+    @Test func aProgramOpenedOfflineIsOfferedWithATokenThatAClaimMustCarry() async throws {
+        let session = try newSession()
+        #expect(openOverlay(on: session).ok)
+        let job = try #require(session.remoteOverlays.slot(nil)?.job)
+        #expect(streams.claimJobStream(job).ok == false)
+
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+
+        let request = await offPool { viewer.first { if case .overlayRequest = $0 { true } else { false } } }
+        guard case .overlayRequest(let shown)? = request, let token = shown.token else { Issue.record("no tokened offer"); return }
+        #expect(shown.job == job)
+        #expect(session.remoteOverlays.slot(nil)?.owner == harness.store.presentationHub?.presenterGeneration(session: session.id))
+        #expect(streams.claimJobStream(job).ok == false)
+        #expect(streams.claimJobStream(job, token: "other").ok == false)
+        #expect(streams.claimJobStream(job, token: token).ok)
+    }
+
+    @Test func anUnclaimedJobReturnsToPendingAndItsOldTokenIsRefusedAfterTheReoffer() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        #expect(openOverlay(on: session).ok)
+        let offered = await offPool { first.first { if case .overlayRequest = $0 { true } else { false } } }
+        guard case .overlayRequest(let old)? = offered, let oldToken = old.token else { Issue.record("no offer"); return }
+
+        close(first.fd)
+        let withdrawn = await eventually { streams.overlayJobs.job(old.job)?.state == .unpresented }
+        #expect(withdrawn)
+        #expect(streams.claimJobStream(old.job, token: oldToken).ok == false)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .overlayRequest = $0 { true } else { false } } }
+        guard case .overlayRequest(let fresh)? = reoffered, let freshToken = fresh.token else { Issue.record("no re-offer"); return }
+        #expect(fresh.job == old.job)
+        #expect(freshToken != oldToken)
+        #expect(streams.claimJobStream(old.job, token: oldToken).ok == false)
+        #expect(streams.claimJobStream(old.job, token: freshToken).ok)
+    }
+
+    @Test func aClaimedJobKeepsItsHonestOutcomeAcrossPresenterLoss() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        #expect(openOverlay(on: session).ok)
+        let offered = await offPool { first.first { if case .overlayRequest = $0 { true } else { false } } }
+        guard case .overlayRequest(let shown)? = offered else { Issue.record("no offer"); return }
+        #expect(streams.claimJobStream(shown.job, token: shown.token).ok)
+
+        await drop(first, from: session)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first(within: 0.5) { if case .overlayRequest = $0 { true } else { false } } }
+        #expect(reoffered == nil)
+        streams.overlayJobs.helperGone(shown.job)
+        #expect(streams.overlayJobs.job(shown.job)?.state == .finished(.unknown))
+    }
+
+    @Test func aClaimedPageReturnsToPendingAndIsReofferedUnderANewToken() async throws {
+        let session = try newSession()
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let first = try await presenter(for: session)
+        #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
+        let offered = await offPool { first.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let old)? = offered else { Issue.record("no page offer"); return }
+        #expect(streams.claimPageStream(old.token).ok)
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.interactions?.first?.state == ControlInteraction.claimed)
+
+        close(first.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(fresh.page == old.page)
+        #expect(fresh.token != old.token)
+        #expect(streams.claimPageStream(old.token).ok == false)
+        #expect(streams.claimPageStream(fresh.token).ok)
+    }
+
+    // regression: the grant was taken off a held page for an older presenter, and the next capable one lost it too
+    @Test func aHeldMarkdownPageOffersItsGrantOnlyToAPresenterThatFollowsLinks() async throws {
+        let session = try newSession()
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let grant = try #require(MarkdownPage.linkGrant(for: path))
+        let older = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageLinksKind })
+        #expect(harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
+            command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, page: .markdown(path: path), navigation: true)).ok)
+        let first = await offPool { older.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let plain)? = first else { Issue.record("no page offer"); return }
+        #expect(plain.markdownLinks == nil)
+        #expect(!plain.navigation)
+
+        close(older.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let linked)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(linked.markdownLinks == grant)
+        #expect(linked.navigation)
+        #expect(streams.claimPageStream(linked.token).ok)
+        #expect(streams.pendingPageClaims[linked.token]?.served.links == grant)
+    }
+
+    @Test func anOldPageChannelClosingAfterANewClaimLeavesThePageServed() async throws {
+        let session = try newSession()
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let first = try await presenter(for: session)
+        #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
+        let offered = await offPool { first.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let old)? = offered, let page = UUID(uuidString: old.page) else { Issue.record("no page offer"); return }
+        var oldPair: [Int32] = [-1, -1], newPair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &oldPair) == 0)
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &newPair) == 0)
+        defer { close(newPair[1]) }
+        #expect(streams.claimPageStream(old.token).ok)
+        streams.adoptPageServeStream(descriptor: oldPair[0], page: page, token: old.token)
+        close(first.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(streams.claimPageStream(fresh.token).ok)
+        streams.adoptPageServeStream(descriptor: newPair[0], page: page, token: fresh.token)
+        let replacement = try #require(streams.pageServeStreams[page])
+
+        close(oldPair[1])
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(streams.pageServeStreams[page] === replacement)
+        #expect(session.remoteOverlays.slot(nil)?.page != nil)
+    }
+
+    @Test func aChannelNoLongerRegisteredForItsPageClosesWithoutEndingIt() async throws {
+        let session = try newSession()
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
+        let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let shown)? = offered, let page = UUID(uuidString: shown.page) else { Issue.record("no page offer"); return }
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: page, token: shown.token)
+        let unregistered = try #require(streams.pageServeStreams[page])
+        streams.pageServeStreams[page] = nil
+
+        close(pair[1])
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(session.remoteOverlays.slot(nil)?.page != nil)
+        withExtendedLifetime(unregistered) {}
+    }
+
+    private func offeredPage(_ session: Session, to viewer: Viewer) async throws -> PresentationPage? {
+        let path = harness.scratch.root + "/page-\(UUID().uuidString).md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
+        let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let page)? = offered else { return nil }
+        return page
+    }
+
+    @Test func aPageChannelEndingBeforeItsPresenterKeepsThePageForTheNextOne() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        let shown = try #require(try await offeredPage(session, to: first))
+        let page = try #require(UUID(uuidString: shown.page))
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: page, token: shown.token)
+
+        close(pair[1])
+        let kept = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(kept)
+        try first.send(.pageClosed(PresentationPageChange(page: shown.page)))
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(session.remoteOverlays.slot(nil)?.page != nil)
+        await drop(first, from: session)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(fresh.page == shown.page)
+    }
+
+    @Test func aPresenterReportingItsChannelLostBeforeTheServerSeesItKeepsThePage() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        let shown = try #require(try await offeredPage(session, to: first))
+
+        try first.send(.pageClosed(PresentationPageChange(page: shown.page, reason: PresentationPageChange.channelLost)))
+        let kept = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(kept)
+        await drop(first, from: session)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(fresh.page == shown.page)
+    }
+
+    @Test func aPageThePresenterClosesEnds() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let shown = try #require(try await offeredPage(session, to: viewer))
+
+        try viewer.send(.pageClosed(PresentationPageChange(page: shown.page)))
+
+        let ended = await eventually { session.remoteOverlays.slot(nil) == nil }
+        #expect(ended)
+    }
+
+    @Test func anAutoSizedPictureKeepsItsPointOverrideAcrossAReoffer() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        let path = harness.scratch.root + "/shot.png"
+        let png: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+                            0, 0, 0x02, 0x80, 0, 0, 0x01, 0xE0, 8, 6, 0, 0, 0, 0, 0, 0, 0]
+        try Data(png).write(to: URL(fileURLWithPath: path))
+        #expect(openOverlay(on: session, page: .image(path: path)).ok)
+        _ = await offPool { first.first { if case .pageRequest = $0 { true } else { false } } }
+        #expect(harness.actions.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: nil,
+                                                     points: OverlayPointSize(width: 300)).ok)
+
+        close(first.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(fresh.sizePercent == nil)
+        #expect(fresh.points.isEmpty)
+        let resize = await offPool { next.first { if case .pageCommand(let command) = $0 { command.action == .resize } else { false } } }
+        guard case .pageCommand(let command)? = resize else { Issue.record("no merge resize"); return }
+        #expect(command.points.width == 300)
+        #expect(command.sizePercent == ImagePage.basePercent)
+        #expect(command.merge == true)
+    }
+
+    @Test func aStaleClaimCannotTakeOrEndTheReofferedPage() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        let old = try #require(try await offeredPage(session, to: first))
+        let page = try #require(UUID(uuidString: old.page))
+        #expect(streams.claimPageStream(old.token).ok)
+        close(first.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(streams.claimPageStream(fresh.token).ok)
+        var stale: [Int32] = [-1, -1], current: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &stale) == 0)
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &current) == 0)
+        defer { close(stale[1]); close(current[1]) }
+
+        streams.adoptPageServeStream(descriptor: stale[0], page: page, token: old.token)
+        streams.pageClaimUnanswered(page, token: old.token)
+
+        #expect(streams.pageServeStreams[page] == nil)
+        #expect(session.remoteOverlays.slot(nil)?.page != nil)
+        streams.adoptPageServeStream(descriptor: current[0], page: page, token: fresh.token)
+        #expect(streams.pageServeStreams[page] != nil)
+    }
+
+    @Test func aReofferedPageComesBackAtItsCurrentSizeAndHidden() async throws {
+        let session = try newSession()
+        let first = try await presenter(for: session)
+        let shown = try #require(try await offeredPage(session, to: first))
+        let id = session.id.uuidString
+        #expect(harness.actions.resizeSessionOverlay(id, window: nil, sizePercent: 40).ok)
+        _ = await offPool { first.first { if case .pageCommand = $0 { true } else { false } } }
+        try first.send(.pageState(PresentationPageState(page: shown.page, title: nil, address: nil, load: .loaded, error: nil,
+                                                        canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0)))
+        try await Task.sleep(for: .milliseconds(200))
+
+        close(first.fd)
+        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
+        #expect(returned)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        #expect(fresh.sizePercent == 40)
+        let hide = await offPool { next.first { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } } }
+        #expect(hide != nil)
+    }
+
+    @Test func offeredPagesAndJobsReadBackTheirWindows() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        #expect(openOverlay(on: session).ok)
+        let job = try #require(session.remoteOverlays.slot(nil)?.job)
+
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        let deadline = try #require(node?.interactions?.first { $0.id == job }?.deadline)
+        #expect(deadline > Date().timeIntervalSince1970)
+        #expect(deadline <= Date().addingTimeInterval(OverlayJobs.launchWindow).timeIntervalSince1970)
     }
 
     @Test func aJobWhoseClaimReplyWasNotWrittenIsGivenUp() {

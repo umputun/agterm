@@ -1274,6 +1274,17 @@ struct SocketClientTests {
         #expect(lines[1] == expected)
     }
 
+    @Test func formatTreeCountsTheInteractionsARowHolds() {
+        let held = [ControlInteraction(kind: "ask", id: "a", state: ControlInteraction.unpresented),
+                    ControlInteraction(kind: "page", id: "p", state: ControlInteraction.offered)]
+        let session = ControlSessionNode(id: "s5", name: "shell", cwd: "/tmp", active: true, split: false, backedByZmx: nil, interactions: held)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w5", name: "work", active: true, sessions: [session])])
+
+        let lines = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree))).split(separator: "\n").map(String.init)
+
+        #expect(lines[1] == "  * shell (2 interactions)  [s5]  /tmp")
+    }
+
     @Test func formatTreeShowsScratchTag() {
         let session = ControlSessionNode(id: "s3", name: "shell", cwd: "/tmp", active: true, split: false,
                                          overlay: false, scratch: true)

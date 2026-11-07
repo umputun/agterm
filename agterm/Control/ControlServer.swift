@@ -83,8 +83,8 @@ final class ControlServer {
     var pendingJobCancels: Set<String> = []
     /// pageServeStreams are the channels presenters opened for pages this Mac handed over, by page id.
     var pageServeStreams: [UUID: PageServeStream] = [:]
-    /// pendingPageClaims are pages whose claim was answered ok and whose connection is not adopted yet.
-    var pendingPageClaims: [UUID: PageServeClaim] = [:]
+    /// pendingPageClaims are claims answered ok whose connection is not adopted yet, by the token that claimed.
+    var pendingPageClaims: [String: PendingPageClaim] = [:]
     var presentationHeartbeat: Task<Void, Never>?
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10
@@ -512,13 +512,13 @@ final class ControlServer {
         if request.cmd == .sessionOverlayPageServe {
             let response = runBlocking { await server.dispatch(request) }
             let written = server.responseWriter(conn, response)
-            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)) else { return }
+            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)), let token = request.target else { return }
             guard written else {
-                runBlocking { await server.pageClaimUnanswered(page) }
+                runBlocking { await server.pageClaimUnanswered(page, token: token) }
                 return
             }
             handedOff = true
-            runBlocking { await server.adoptPageServeStream(descriptor: conn, page: page) }
+            runBlocking { await server.adoptPageServeStream(descriptor: conn, page: page, token: token) }
             return
         }
 

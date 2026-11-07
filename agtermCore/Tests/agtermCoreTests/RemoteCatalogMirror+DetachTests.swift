@@ -24,11 +24,16 @@ final class RemoteCatalogMirrorDetachTests {
     private final class Effects: RemoteCatalogEffects {
         var added: [UUID] = []
         var removed: [UUID] = []
+        var removedWhileListed: [UUID] = []
+        var store: AppStore?
         var saves = 0
 
         func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_ session: Session) { added.append(session.id) }
-        func catalogRowRemoved(_ sessionID: UUID) { removed.append(sessionID) }
+        func catalogRowRemoved(_ sessionID: UUID) {
+            removed.append(sessionID)
+            if store?.session(withID: sessionID) != nil { removedWhileListed.append(sessionID) }
+        }
         func catalogRowEnded(_: UUID) {}
         func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
         func catalogBound(_: UUID) -> Bool { true }
@@ -96,6 +101,16 @@ final class RemoteCatalogMirrorDetachTests {
         #expect(effects.removed == [first.id])
         #expect(store.catalogDetachedSessions == [first.id])
         #expect(effects.saves == 1)
+    }
+
+    @Test func aDetachedRowsStreamStopsBeforeTheRowIsTornDown() {
+        let row = session()
+        open([row])
+        effects.store = store
+
+        mirror.detach(sessions: [row.id])
+
+        #expect(effects.removedWhileListed == [row.id])
     }
 
     @Test func aDetachedParentHidesItsCompanionsAndOnesMadeLater() {

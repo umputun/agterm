@@ -271,7 +271,8 @@ extension ControlServer {
         }
         let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name)
         store.bindRemote(RemoteBinding(remoteSessionID: remote.id, daemonsByLocalPane: daemons,
-                                       presentationVersion: tree.presentation, origin: origin),
+                                       presentationVersion: tree.presentation, origin: origin,
+                                       originHeadless: tree.headless == true),
                          forSession: created.id)
         // the row's created event fired inside `addSession`, before the binding existed
         startRemotePresentation(for: created)

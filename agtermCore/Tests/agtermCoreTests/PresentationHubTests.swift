@@ -269,6 +269,32 @@ struct PresentationHubTests {
         #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)))
     }
 
+    @Test func aBatchGoesAsChunksOfOneArrayWithEveryEntryBehindTheCommit() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: ["notify"], mode: .presenter),
+                                   sink: sink) { Self.empty }
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+        let small = (0..<40).map { PresentationNotify(title: "t", body: String(repeating: "x", count: 5000) + "\($0)", pane: nil, source: "osc") }
+        let big = PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024), pane: nil, source: "osc")
+        let before = sink.frames.count
+
+        hub.batchToPresenter(session: Self.session) {
+            for notify in small { hub.sendToPresenter(.notify(notify), session: Self.session) }
+            hub.sendToPresenter(.notify(big), session: Self.session)
+        }
+
+        let sent = sink.bodies.dropFirst(before)
+        let chunks = sent.compactMap { if case .pendingChunk(let chunk) = $0 { chunk } else { nil } }
+        #expect(chunks.count > 1)
+        #expect(chunks.map(\.index) == Array(chunks.indices))
+        #expect(Array(sent.dropLast()).allSatisfy { if case .pendingChunk = $0 { true } else { false } })
+        #expect(sent.last == .pendingCommit)
+        var batch = PresentationPendingBatch()
+        for chunk in chunks { batch.add(chunk) }
+        #expect(try batch.commit() == small.map { .notify($0) } + [.notify(big)])
+    }
+
     @Test func aPeerWithNoUsableVersionIsRefused() {
         let hub = makeHub()
         let sink = Sink()

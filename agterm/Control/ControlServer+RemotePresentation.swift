@@ -105,11 +105,12 @@ extension ControlServer {
             })
     }
 
-    /// Shows an ask `id`'s origin handed over. A GUI one keeps the local rule of refusing a target that is not
-    /// on screen; a terminal one, like a local terminal ask, waits hidden until its session is shown.
+    /// showReplicaAsk shows an ask `id`'s origin handed over in the row's own ask slot. A terminal one waits hidden
+    /// until its row is shown. A GUI one is refused for a target not on screen, unless the origin is headless and
+    /// has no screen to take it back to.
     private func showReplicaAsk(_ ask: PresentationAsk, forSession id: UUID) -> Bool {
         guard let store = library.store(forSession: id) else { return false }
-        if ask.style == .gui {
+        if ask.style == .gui, store.session(withID: id)?.remotePresentation?.binding.originHeadless != true {
             guard let windowID = library.windowID(for: store), guiTargetShown(id, in: store, windowID: windowID) else {
                 return false
             }
@@ -122,7 +123,7 @@ extension ControlServer {
         let pool = catalogPool(forSession: id)
         let path = pool?.lease("job:\(overlay.job)")
         guard let store = library.store(forSession: id), let host = store.session(withID: id)?.remoteHost,
-              let argv = try? RemoteSession.runJobCommand(host: host, job: overlay.job, controlPath: path) else {
+              let argv = try? RemoteSession.runJobCommand(host: host, job: overlay.job, token: overlay.token, controlPath: path) else {
             pool?.release("job:\(overlay.job)")
             return false
         }

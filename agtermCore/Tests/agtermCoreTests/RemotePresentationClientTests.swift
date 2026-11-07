@@ -126,6 +126,43 @@ struct RemotePresentationClientTests {
         #expect(recorder.connections == [.connecting])
     }
 
+    private func pendingAsk(_ id: String, title: String = "deploy?") -> PresentationAsk {
+        PresentationAsk(PendingAsk(id: id, title: title, buttons: [ControlAskButton(id: "yes", label: "Yes")]), pane: nil, owner: 2)
+    }
+
+    @Test func pendingChunksApplyInOrderOnlyAtTheirCommit() throws {
+        let client = makeClient()
+        client.start()
+        connect(client)
+        let asks = [pendingAsk("a1"), pendingAsk("a2", title: String(repeating: "x", count: 150 * 1024)), pendingAsk("a3")]
+        let chunks = try PresentationPendingBatch.chunks(asks.map { .askRequest($0) })
+        #expect(chunks.count > 1)
+
+        for (index, chunk) in chunks.enumerated() { transport.deliver(line(.pendingChunk(chunk), rev: 2 + index)) }
+        #expect(recorder.asks.isEmpty)
+        transport.deliver(line(.pendingCommit, rev: 2 + chunks.count))
+
+        #expect(recorder.asks == asks)
+    }
+
+    @Test func chunksALostStreamLeftUncommittedApplyNothing() throws {
+        let client = makeClient()
+        client.start()
+        connect(client)
+        let chunks = try PresentationPendingBatch.chunks([.askRequest(pendingAsk("a1")),
+                                                          .askRequest(pendingAsk("a2", title: String(repeating: "x", count: 150 * 1024)))])
+
+        transport.deliver(line(.pendingChunk(chunks[0]), rev: 2))
+        transport.close("gone")
+        clock.now = clock.now.addingTimeInterval(60)
+        client.tick()
+        connect(client, gen: 8)
+        for (index, chunk) in chunks.dropFirst().enumerated() { transport.deliver(line(.pendingChunk(chunk), gen: 8, rev: 2 + index)) }
+        transport.deliver(line(.pendingCommit, gen: 8, rev: 2 + chunks.count))
+
+        #expect(recorder.asks.isEmpty)
+    }
+
     @Test func theSnapshotsContextIsAppliedThenEachChangeBehindIt() {
         let client = makeClient()
         client.start()

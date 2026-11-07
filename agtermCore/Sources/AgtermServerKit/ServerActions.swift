@@ -41,6 +41,8 @@ public final class ServerActions: ControlActions {
 
     public func claimOverlayJob(_ job: String) -> ControlResponse { streams.claimJobStream(job) }
 
+    public func claimOverlayJob(_ job: String, token: String?) -> ControlResponse { streams.claimJobStream(job, token: token) }
+
     public func claimPageServe(_ token: String) -> ControlResponse { streams.claimPageStream(token) }
 
     public func controlTree(window: String?) -> ControlResponse {

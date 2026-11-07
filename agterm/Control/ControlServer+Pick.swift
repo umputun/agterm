@@ -5,6 +5,12 @@ import agtermCore
 /// `ControlDispatcher`; this layer resolves the target window and drives its registered controller.
 extension ControlServer {
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse {
+        timed(openWindowPick(pick, window: window, follow: follow), deadline: pick.deadline) { [weak self] in
+            _ = self?.cancelPick(pick.id, window: nil)
+        }
+    }
+
+    private func openWindowPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse {
         withPickController(window: window) { controller, windowID in
             guard controller.open(pick) else {
                 return ControlResponse(ok: false, error: controller.pendingAsk != nil ? "ask already pending" : "pick already pending")
@@ -24,6 +30,12 @@ extension ControlServer {
     /// openPick bound to a session: its presenter draws it when the session presents remotely, otherwise the
     /// session's own window does, whichever window is frontmost.
     func openPick(_ pick: PendingPick, session target: String, window: String?, follow: Bool) -> ControlResponse {
+        timed(openSessionPick(pick, session: target, window: window, follow: follow), deadline: pick.deadline) { [weak self] in
+            _ = self?.cancelPick(pick.id, window: nil)
+        }
+    }
+
+    private func openSessionPick(_ pick: PendingPick, session target: String, window: String?, follow: Bool) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else { return ControlResponse(ok: false, error: "no such session") }
             let windowID = library.windowID(for: store)
@@ -55,11 +67,13 @@ extension ControlServer {
                                         window: windowID)
     }
 
-    /// Shows a pick `id`'s origin handed over in the window holding the attached row.
+    /// showReplicaPick shows a pick `id`'s origin handed over in the window holding the attached row. A busy
+    /// window refuses it, unless the origin is headless and has no screen to take it back to: there it waits.
     func showReplicaPick(_ pick: PresentationPick, forSession id: UUID) -> Bool {
-        guard let store = library.store(forSession: id), store.session(withID: id)?.remotePresentation != nil,
+        guard let store = library.store(forSession: id), let binding = store.session(withID: id)?.remotePresentation?.binding,
               let windowID = library.windowID(for: store),
-              let controller = PickRegistry.shared.controller(for: windowID) else { return false }
+              let controller = PickRegistry.shared.controller(for: windowID),
+              binding.originHeadless || !controller.modalPending else { return false }
         let shown = SessionPickBook.shared.openReplica(pick, session: id, window: windowID, controller: controller) { [weak self] body in
             self?.remoteClients[id]?.answer(body)
         }

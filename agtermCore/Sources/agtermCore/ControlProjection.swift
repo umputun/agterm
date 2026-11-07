@@ -258,6 +258,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let pending: String?
     /// scratchBacked is true while a remote window row's scratch is the server's daemon; omitted otherwise.
     public let scratchBacked: Bool?
+    /// interactions are the asks, picks, pages and jobs the session holds for a presenter, omitted when there are none.
+    public let interactions: [ControlInteraction]?
     /// What the session is FOR: `Session.effectiveContext`, so the local `session.context` value or, on an
     /// attached row without one, the origin's mirrored context. Nil/omitted when neither is set.
     public let context: String?
@@ -402,6 +404,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 overlayHeight: Double? = nil, paneOverlays: [String]? = nil,
                 hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, pick: ControlSessionPick? = nil,
                 scratch: Bool = false, flagged: Bool = false, ended: Bool? = nil, pending: String? = nil, scratchBacked: Bool? = nil,
+                interactions: [ControlInteraction]? = nil,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
@@ -448,6 +451,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.ended = ended
         self.pending = pending
         self.scratchBacked = scratchBacked
+        self.interactions = interactions
         self.context = context
         self.commandWait = commandWait
         self.splitCommandWait = splitCommandWait

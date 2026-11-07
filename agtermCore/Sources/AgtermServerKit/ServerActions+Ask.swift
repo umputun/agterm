@@ -14,14 +14,24 @@ extension ServerActions {
             case .rejected(let response):
                 return response
             case let .resolved(identity, pane):
+                // a request no frame can carry would wait for a presenter forever
+                guard PresentationAsk(ask, pane: identity.map { .identity($0) }, owner: .max).fitsFrames() else {
+                    return ControlResponse(ok: false, error: "ask is too large to send to a Mac")
+                }
+                let opened = ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue))
                 switch store.openRemoteAsk(ask, in: session, paneIdentity: identity, window: catalog.id) {
-                case .opened: return ControlResponse(ok: true, result: ControlResult(id: ask.id, pane: pane?.rawValue))
+                case .opened:
+                    armDeadline(ask.id, ask.deadline)
+                    return opened
                 case .slotTaken: return ControlResponse(ok: false, error: "ask already pending")
-                case .notPresented: return ControlResponse(ok: false, error: "no connected Mac to show the ask")
-                case .formUnsupported: return ControlResponse(ok: false, error: "the connected Mac cannot show a form ask")
-                case .otherUnsupported:
-                    return ControlResponse(ok: false, error: "the connected Mac cannot show a choice with an Other field")
                 case .tooLarge: return ControlResponse(ok: false, error: "ask is too large to send to the connected Mac")
+                case .notPresented, .formUnsupported, .otherUnsupported:
+                    // held until a presenter that can show it takes the session, or its deadline
+                    guard store.openUnpresentedAsk(ask, in: session, paneIdentity: identity, window: catalog.id) else {
+                        return ControlResponse(ok: false, error: "ask already pending")
+                    }
+                    armDeadline(ask.id, ask.deadline)
+                    return opened
                 }
             }
         }

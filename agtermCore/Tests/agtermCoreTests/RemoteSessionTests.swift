@@ -141,6 +141,20 @@ struct RemoteSessionTests {
         #expect(try fake.calls() == [["session", "overlay", "run-job", "j1;rm"]])
     }
 
+    @Test func runJobPassesTheOfferTokenAndRefusesAnUnplainOne() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.runJobCommand(host: "buildbox", job: "j1", token: "t-1"))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["session", "overlay", "run-job", "j1", "--token", "t-1"]])
+        #expect(throws: RemoteSession.InvocationError.invalidSession) {
+            try RemoteSession.runJobCommand(host: "buildbox", job: "j1", token: "t 1")
+        }
+    }
+
     @Test(arguments: ["", "j 1", "j1\u{1B}[31m"])
     func runJobRefusesAJobThatIsNotAPlainToken(_ job: String) {
         #expect(throws: RemoteSession.InvocationError.invalidSession) {

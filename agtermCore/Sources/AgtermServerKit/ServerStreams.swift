@@ -15,10 +15,12 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     var overlayJobStreams: [String: OverlayJobStream] = [:]
     var pendingJobCancels: Set<String> = []
     var pageServeStreams: [UUID: PageServeStream] = [:]
-    var pendingPageClaims: [UUID: PageServeClaim] = [:]
+    var pendingPageClaims: [String: PendingPageClaim] = [:]
     /// originEpoch names this server run in respawn counts, so a viewer never reads a restarted counter as older.
     let originEpoch = UUID().uuidString
     private var respawnGenerations: [UUID: [String: Int]] = [:]
+    /// now is the clock pending deadlines are checked against at an offer or an answer.
+    var now: @MainActor () -> Date = Date.init
     /// dispatch runs a page's bridge request through the server's own dispatcher.
     var dispatch: ((ControlRequest) async -> ControlResponse)?
     var catalogStreams: [CatalogStream] = []
@@ -37,8 +39,13 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         store.presentationHub = presentationHub
         store.overlayJobs = overlayJobs
         presentationHub.onPresenterLost = { [weak self] session in self?.presenterLost(session) }
+        presentationHub.onPresenterGranted = { [weak self] session in self?.presenterGranted(session) }
         presentationHub.onPresenterFrame = { [weak self] session, body in self?.receivePresenterFrame(body, forSession: session) }
         RemotePageEnds.shared.onEnd = { [weak self] page in self?.pageServeStreams[page]?.shutdown() }
+        RemotePageEnds.shared.onWithdrawn = { [weak self] page in
+            self?.pendingPageClaims = self?.pendingPageClaims.filter { $0.value.page != page } ?? [:]
+            self?.pageServeStreams.removeValue(forKey: page)?.shutdown()
+        }
         overlayJobs.onFinished = { [weak self] job in
             self?.pendingJobCancels.remove(job.id)
             self?.store.finishRemoteOverlay(job)
@@ -67,24 +74,37 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
                                 session: session)
     }
 
-    // a headless origin has nowhere to draw what its presenter dropped: an ask or pick ends cancelled, and the
-    // overlays it held end as they do on the Mac
+    // a headless origin has nowhere to draw what its presenter dropped: an ask, pick, page or unclaimed job waits for
+    // the next presenter, and a claimed or running job keeps its slot until its helper reports
     private func presenterLost(_ session: UUID) {
-        if store.session(withID: session)?.askPresentedRemotely == true { store.failHandback(forSession: session) }
-        SessionPickBook.shared.handBack(session: session, refused: nil, to: nil, window: catalogID)
+        store.returnAskToPending(forSession: session)
+        SessionPickBook.shared.returnToPending(session: session)
         store.remoteOverlayPresenterLost(forSession: session)
+    }
+
+    // pending work goes only to a presenter that takes it and its job tokens; an older one sees only what opens
+    // while it holds the session
+    private func presenterGranted(_ session: UUID) {
+        guard presentationHub.presenterSupports(PresentationHub.pendingSnapshotKind, session: session),
+              presentationHub.presenterSupports(PresentationHub.jobTokenKind, session: session) else { return }
+        presentationHub.batchToPresenter(session: session) { store.offerPendingInteractions(forSession: session, now: now()) }
+        scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
+        schedulePageClaimExpiry(after: AppStore.pageClaimWindow)
     }
 
     func receivePresenterFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID) {
         switch body {
         case .askResolve(let answer):
+            // an answer past the deadline ends the ask instead, whether or not its expiry ran yet
+            guard !store.expireInteraction(answer.id, now: now()) else { return }
             store.resolveRemoteAsk(answer, forSession: sessionID)
         case .askRejected(let ref) where store.isPresentingRemotely(ref, forSession: sessionID):
-            store.failHandback(forSession: sessionID)
+            store.returnAskToPending(forSession: sessionID)
         case .pickResolve(let answer):
+            guard !store.expireInteraction(answer.id, now: now()) else { return }
             SessionPickBook.shared.resolveRemote(answer, session: sessionID)
         case .pickRejected(let ref):
-            SessionPickBook.shared.handBack(session: sessionID, refused: ref, to: nil, window: catalogID)
+            SessionPickBook.shared.returnToPending(session: sessionID, refused: ref)
         case .overlayRejected(let change):
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):
@@ -111,6 +131,10 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         }
         return nil
     }
+
+    func pageChannelLost(_ page: UUID) { store.withdrawRemotePage(page) }
+
+    func isCurrentPageClaim(_ page: UUID, token: String) -> Bool { store.remotePageClaimToken(page) == token }
 
     func endRemotePage(_ page: UUID) {
         for session in store.workspaces.flatMap(\.sessions) {
@@ -165,12 +189,14 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             }
             adoptOverlayJobStream(descriptor: conn, job: job)
         case .sessionOverlayPageServe:
-            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)) else { return false }
-            guard written else {
-                pageClaimUnanswered(page)
+            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)), let token = request.target else {
                 return false
             }
-            adoptPageServeStream(descriptor: conn, page: page)
+            guard written else {
+                pageClaimUnanswered(page, token: token)
+                return false
+            }
+            adoptPageServeStream(descriptor: conn, page: page, token: token)
         default:
             return false
         }

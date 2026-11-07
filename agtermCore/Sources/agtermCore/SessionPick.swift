@@ -31,7 +31,7 @@ public struct PresentationPick: Codable, Equatable, Sendable {
     }
 
     /// fitsFrame is whether the request encodes under the frame cap; a thousand long rows may not.
-    var fitsFrame: Bool {
+    public var fitsFrame: Bool {
         (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pickRequest(self)))) != nil
     }
 }
@@ -101,6 +101,8 @@ public final class SessionPickBook {
         case presenter(owner: Int)
         /// drawn in this window's modal slot
         case local(WindowInfo.ID)
+        /// held by a headless origin until a presenter can show it
+        case unpresented
     }
 
     private struct Entry {
@@ -109,6 +111,7 @@ public final class SessionPickBook {
         var placement: Placement
         var window: WindowInfo.ID?
         var dismiss: (@MainActor () -> Void)?
+        var follow = false
     }
 
     private struct Replica {
@@ -121,6 +124,8 @@ public final class SessionPickBook {
     private var entries: [String: Entry] = [:]
     private var retained: [(id: String, result: ControlPickResult, window: WindowInfo.ID?)] = []
     private var replicas: [String: Replica] = [:]
+    /// queued are replicas waiting, oldest first, for their window's modal slot.
+    private var queued: [(request: PresentationPick, replica: Replica)] = []
 
     init() {}
 
@@ -138,14 +143,62 @@ public final class SessionPickBook {
         return nil
     }
 
-    /// openRemote books `pick` as drawn by the session's presenter; `dismiss` tells that presenter the pick ended
-    /// here. False when the session already has one.
-    func openRemote(_ pick: PendingPick, session: UUID, owner: Int, window: WindowInfo.ID?,
+    /// openRemote books `pick` as drawn by the session's presenter, described by `request`; `dismiss` tells that
+    /// presenter the pick ended here. False when the session already has one.
+    func openRemote(_ pick: PendingPick, as request: PresentationPick, session: UUID, window: WindowInfo.ID?,
                     dismiss: @escaping @MainActor () -> Void) -> Bool {
         guard placement(forSession: session) == nil else { return false }
-        entries[pick.id] = Entry(session: session, pick: pick, placement: .presenter(owner: owner), window: window,
-                                 dismiss: dismiss)
+        entries[pick.id] = Entry(session: session, pick: pick, placement: .presenter(owner: request.owner), window: window,
+                                 dismiss: dismiss, follow: request.follow == true)
         return true
+    }
+
+    /// openUnpresented books `pick` as held until `session` has a presenter that can show it. False when the session
+    /// already has one.
+    public func openUnpresented(_ pick: PendingPick, session: UUID, follow: Bool) -> Bool {
+        guard placement(forSession: session) == nil else { return false }
+        entries[pick.id] = Entry(session: session, pick: pick, placement: .unpresented, window: nil, follow: follow)
+        return true
+    }
+
+    func unpresented(forSession session: UUID) -> (pick: PendingPick, follow: Bool)? {
+        entries.values.first { $0.session == session && $0.placement == .unpresented }.map { ($0.pick, $0.follow) }
+    }
+
+    /// offer marks `session`'s unpresented pick as handed to the presenter under `owner`.
+    func offer(session: UUID, owner: Int, dismiss: @escaping @MainActor () -> Void) {
+        guard let (id, _) = entries.first(where: { $0.value.session == session && $0.value.placement == .unpresented }) else { return }
+        entries[id]?.placement = .presenter(owner: owner)
+        entries[id]?.dismiss = dismiss
+    }
+
+    /// returnToPending takes `session`'s presenter-held pick back as unpresented after its presenter was lost or
+    /// refused it (`refused`, which must name it under its owner); an answer from that presenter is then stale.
+    public func returnToPending(session: UUID, refused: PresentationPickRef? = nil) {
+        guard let (id, entry) = entries.first(where: { $0.value.session == session }),
+              case .presenter(let held) = entry.placement,
+              refused.map({ $0.id == id && $0.owner == held }) ?? true else { return }
+        entries[id]?.placement = .unpresented
+        entries[id]?.dismiss = nil
+    }
+
+    /// expire cancels the pick `id` once its deadline passed; false while it has time left or is not booked.
+    @discardableResult
+    public func expire(_ id: String, now: Date) -> Bool {
+        guard let deadline = entries[id]?.pick.deadline, deadline <= now else { return false }
+        return cancel(id)
+    }
+
+    /// interaction is `session`'s pick as the tree lists it while a presenter holds it or one is awaited.
+    func interaction(forSession session: UUID) -> ControlInteraction? {
+        guard let (id, entry) = entries.first(where: { $0.value.session == session }) else { return nil }
+        let state: String
+        switch entry.placement {
+        case .presenter: state = ControlInteraction.offered
+        case .unpresented: state = ControlInteraction.unpresented
+        case .local: return nil
+        }
+        return ControlInteraction(kind: "pick", id: id, state: state, deadline: entry.pick.deadline?.timeIntervalSince1970)
     }
 
     /// resolveRemote applies the presenter's answer. Refused unless it is for the pick `session`'s presenter holds
@@ -154,7 +207,7 @@ public final class SessionPickBook {
     public func resolveRemote(_ answer: PresentationPickAnswer, session: UUID) -> Bool {
         guard let entry = entries[answer.id], entry.session == session, entry.placement == .presenter(owner: answer.owner),
               let result = entry.pick.validatedResult(item: answer.item, query: answer.query) else { return false }
-        finish(answer.id, result)
+        finish(answer.id, entry.pick.expired(at: Date()) ? ControlPickResult(result: .cancelled) : result)
         return true
     }
 
@@ -180,6 +233,13 @@ public final class SessionPickBook {
     /// cancelled in its window. False for an id the book never held; a retained one is a successful no-op.
     @discardableResult
     public func cancel(_ id: String) -> Bool {
+        if let index = queued.firstIndex(where: { $0.request.id == id }) {
+            let waiting = queued.remove(at: index).replica
+            let cancelled = ControlPickResult(result: .cancelled)
+            retain(id, cancelled, window: waiting.window)
+            waiting.answer(.pickResolve(PresentationPickAnswer(id: id, owner: waiting.owner, result: cancelled)))
+            return true
+        }
         guard let entry = entries[id] else { return retained.contains { $0.id == id } }
         if case .local(let window) = entry.placement, let controller = PickRegistry.shared.controller(for: window),
            controller.pending?.id == id {
@@ -201,12 +261,13 @@ public final class SessionPickBook {
 
     /// window is the window the pick `id` was opened for, booked or retained; nil on a headless origin.
     public func window(of id: String) -> WindowInfo.ID? {
-        entries[id].map(\.window) ?? retained.last { $0.id == id }?.window
+        if let waiting = queued.first(where: { $0.request.id == id }) { return waiting.replica.window }
+        return entries[id].map(\.window) ?? retained.last { $0.id == id }?.window
     }
 
-    /// result is the pick `id`'s outcome: pending while booked, then the retained answer.
+    /// result is the pick `id`'s outcome: pending while booked or queued, then the retained answer.
     public func result(for id: String) -> ControlPickResult? {
-        if entries[id] != nil { return ControlPickResult(result: .pending) }
+        if entries[id] != nil || queued.contains(where: { $0.request.id == id }) { return ControlPickResult(result: .pending) }
         return retained.last { $0.id == id }?.result
     }
 
@@ -216,7 +277,8 @@ public final class SessionPickBook {
             guard case .presenter = entry.placement else { return ControlSessionPick(id: id) }
             return ControlSessionPick(id: id, remote: true)
         }
-        return replicas.first { $0.value.session == session }.map { ControlSessionPick(id: $0.key, replica: true) }
+        if let shown = replicas.first(where: { $0.value.session == session }) { return ControlSessionPick(id: shown.key, replica: true) }
+        return queued.first { $0.replica.session == session }.map { ControlSessionPick(id: $0.request.id, replica: true) }
     }
 
     /// controllerResolved is a window controller's report that pick `id` left its slot: a choice, a custom answer,
@@ -231,18 +293,33 @@ public final class SessionPickBook {
     // MARK: - Viewer
 
     /// openReplica shows the pick an origin handed over in `controller`, the modal slot of the window holding the
-    /// attached row; its outcome goes back through `answer`. False when the slot is taken, which the caller reports
-    /// as a refusal.
+    /// attached row, or queues it there until the slot frees; its outcome goes back through `answer`. False only
+    /// for an id this Mac already holds.
     public func openReplica(_ request: PresentationPick, session: UUID, window: WindowInfo.ID, controller: PickController,
                             answer: @escaping @MainActor (PresentationFrame.Body) -> Void) -> Bool {
-        guard replicas[request.id] == nil, controller.open(request.pending) else { return false }
-        replicas[request.id] = Replica(session: session, owner: request.owner, window: window, answer: answer)
+        guard replicas[request.id] == nil, !queued.contains(where: { $0.request.id == request.id }) else { return false }
+        let replica = Replica(session: session, owner: request.owner, window: window, answer: answer)
+        guard controller.open(request.pending) else {
+            queued.append((request, replica))
+            return true
+        }
+        replicas[request.id] = replica
         return true
+    }
+
+    /// drain shows the oldest replica queued for `controller`'s window once its modal slot is free.
+    func drain(_ controller: PickController) {
+        guard !controller.modalPending,
+              let index = queued.firstIndex(where: { PickRegistry.shared.controller(for: $0.replica.window) === controller }) else { return }
+        let next = queued.remove(at: index)
+        guard controller.open(next.request.pending) else { return queued.insert(next, at: index) }
+        replicas[next.request.id] = next.replica
     }
 
     /// dismissReplica takes the replica `ref` names down without answering, once its origin ended the pick. A
     /// dismissal under another owner, or for a pick no longer shown, changes nothing.
     public func dismissReplica(_ ref: PresentationPickRef, session: UUID) {
+        queued.removeAll { $0.request.id == ref.id && $0.replica.session == session && $0.replica.owner == ref.owner }
         guard let replica = replicas[ref.id], replica.session == session, replica.owner == ref.owner else { return }
         closeReplica(ref.id, in: replica.window)
     }
@@ -250,7 +327,15 @@ public final class SessionPickBook {
     /// dropReplicas takes down `session`'s replica without answering: its stream is gone, and the origin takes the
     /// pick back on its own.
     public func dropReplicas(forSession session: UUID) {
+        queued.removeAll { $0.replica.session == session }
         for (id, replica) in replicas where replica.session == session { closeReplica(id, in: replica.window) }
+    }
+
+    /// windowClosing detaches the replicas shown or queued in `window` without answering, before its modal slot
+    /// is cancelled: the origin takes them back when the window's streams end.
+    func windowClosing(_ window: WindowInfo.ID) {
+        queued.removeAll { $0.replica.window == window }
+        for (id, replica) in replicas where replica.window == window { replicas[id] = nil }
     }
 
     private func closeReplica(_ id: String, in window: WindowInfo.ID) {
@@ -260,7 +345,10 @@ public final class SessionPickBook {
     }
 
     private func finish(_ id: String, _ result: ControlPickResult) {
-        let window = entries.removeValue(forKey: id)?.window
+        retain(id, result, window: entries.removeValue(forKey: id)?.window)
+    }
+
+    private func retain(_ id: String, _ result: ControlPickResult, window: WindowInfo.ID?) {
         retained.removeAll { $0.id == id }
         retained.append((id: id, result: result, window: window))
         if retained.count > Self.retainedResultLimit { retained.removeFirst(retained.count - Self.retainedResultLimit) }
@@ -277,16 +365,34 @@ extension AppStore {
                                     follow: Bool = false) -> Bool? {
         guard let hub = presentationHub, hub.hasPresenter(session: session.id), presentsRemotely(session, paneIdentity: nil),
               hub.presenterSupports("pick.request", session: session.id) else { return nil }
+        // an expired pick is never shown: the caller holds it and its deadline ends it
+        guard !pick.expired(at: Date()) else { return nil }
         let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationPick(pick, owner: owner, follow: follow)
         guard request.fitsFrame else { return nil }
-        let booked = SessionPickBook.shared.openRemote(pick, session: session.id, owner: owner,
+        let booked = SessionPickBook.shared.openRemote(pick, as: request, session: session.id,
                                                        window: window) { [weak hub, id = session.id] in
             hub?.sendToPresenter(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), session: id)
         }
         guard booked else { return false }
         // booked first: a presenter dropped by this send is taken back through onPresenterLost
         hub.sendToPresenter(.pickRequest(request), session: session.id)
+        return true
+    }
+
+    /// offerPendingPick hands `id`'s unpresented pick to its presenter under the current generation; false when
+    /// there is none, or the presenter cannot show it and it stays unpresented.
+    @discardableResult
+    public func offerPendingPick(forSession id: UUID) -> Bool {
+        guard let hub = presentationHub, hub.hasPresenter(session: id), hub.presenterSupports("pick.request", session: id),
+              let (pick, follow) = SessionPickBook.shared.unpresented(forSession: id) else { return false }
+        let owner = hub.presenterGeneration(session: id)
+        let request = PresentationPick(pick, owner: owner, follow: follow)
+        guard request.fitsFrame else { return false }
+        SessionPickBook.shared.offer(session: id, owner: owner) { [weak hub] in
+            hub?.sendToPresenter(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), session: id)
+        }
+        hub.sendToPresenter(.pickRequest(request), session: id)
         return true
     }
 }

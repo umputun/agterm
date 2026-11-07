@@ -27,9 +27,11 @@ final class OverlayJobRunner: @unchecked Sendable {
     }
 
     /// Sends the claim and returns the launch context. Throws the app's refusal, having launched nothing.
-    func claim(_ job: String) throws -> OverlayLaunchContext {
+    func claim(_ job: String, token: String? = nil) throws -> OverlayLaunchContext {
+        var args = ControlArgs()
+        args.token = token
         try StreamBridge(socket: socket, input: -1, output: -1)
-            .open(ControlRequest(cmd: .sessionOverlayJobRun, target: job))
+            .open(ControlRequest(cmd: .sessionOverlayJobRun, target: job, args: token == nil ? nil : args))
         guard let line = readLine(), case .context(let context)? = try? JSONDecoder().decode(OverlayJobFrame.self, from: line) else {
             throw SocketClientError("the app sent no launch context")
         }
@@ -248,6 +250,9 @@ extension Session.Overlay {
         @Argument(help: "The job id the other Mac was handed.")
         var job: String
 
+        @Option(name: .long, help: "The offer token the other Mac was handed with the job.")
+        var token: String?
+
         @OptionGroup var options: BasicOptions
 
         func run() throws {
@@ -256,7 +261,7 @@ extension Session.Overlay {
             let runner = OverlayJobRunner(socket: socket)
             let context: OverlayLaunchContext
             do {
-                context = try runner.claim(job)
+                context = try runner.claim(job, token: token)
             } catch {
                 FileHandle.standardError.write(Data("error: \(error)\n".utf8))
                 throw ExitCode.failure

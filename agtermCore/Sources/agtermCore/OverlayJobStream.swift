@@ -68,8 +68,8 @@ public final class OverlayJobStream {
 extension OverlayJobStreamHost {
     /// claimJobStream answers `session.overlay.job.run`: the request is the claim, so an ok here is the one winner
     /// of the race against the job's launch deadline.
-    public func claimJobStream(_ job: String) -> ControlResponse {
-        let claimed = overlayJobs.claim(job) { [weak self] in self?.cancelJobHelper(job) }
+    public func claimJobStream(_ job: String, token: String? = nil) -> ControlResponse {
+        let claimed = overlayJobs.claim(job, token: token) { [weak self] in self?.cancelJobHelper(job) }
         guard claimed != nil else { return ControlResponse(ok: false, error: "job not claimable") }
         scheduleOverlayJobExpiry(after: OverlayJobs.startWindow)
         return ControlResponse(ok: true, result: ControlResult(id: job))

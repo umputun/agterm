@@ -21,24 +21,63 @@ extension AppStore {
     /// locally and has to tell its caller why.
     public func openRemoteAsk(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
                               window: WindowInfo.ID) -> RemoteAskOpening {
-        guard let hub = presentationHub, hub.hasPresenter(session: session.id),
+        // an expired ask is never shown: the caller holds it and its deadline ends it
+        guard let hub = presentationHub, hub.hasPresenter(session: session.id), !ask.expired(at: Date()),
               presentsRemotely(session, paneIdentity: paneIdentity) else { return .notPresented }
         let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
-        if request.needsFormSupport {
-            guard hub.presenterSupports(PresentationHub.askFormKind, session: session.id) else { return .formUnsupported }
-            guard request.fitsFrames() else { return .tooLarge }
-        }
-        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session.id) {
-            return .otherUnsupported
-        }
+        if let refusal = askOfferRefusal(request, session: session.id, hub: hub) { return refusal }
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return .slotTaken }
         AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
-        session.onRemoteAskEnded = { [weak hub, id = session.id] askID in
+        handOver(request, in: session, hub: hub)
+        return .opened
+    }
+
+    /// openUnpresentedAsk books an ask a headless origin holds until a presenter can show it. False when the
+    /// session's ask slot is taken.
+    public func openUnpresentedAsk(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?, window: WindowInfo.ID) -> Bool {
+        guard session.openAsk(ask, paneIdentity: paneIdentity) else { return false }
+        AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
+        return true
+    }
+
+    /// offerPendingAsk hands `id`'s unpresented ask to its presenter under the current generation; false when there
+    /// is none, or the presenter cannot show it and it stays unpresented.
+    @discardableResult
+    public func offerPendingAsk(forSession id: UUID) -> Bool {
+        guard let hub = presentationHub, hub.hasPresenter(session: id), let session = session(withID: id),
+              let ask = session.askPending, !session.askPresentedRemotely, !session.askReplica else { return false }
+        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) },
+                                      owner: hub.presenterGeneration(session: id))
+        guard askOfferRefusal(request, session: id, hub: hub) == nil else { return false }
+        session.askRemoteOwner = request.owner
+        handOver(request, in: session, hub: hub)
+        return true
+    }
+
+    /// returnAskToPending takes `id`'s handed-over ask back as unpresented after its presenter was lost or refused
+    /// it; an answer from that presenter is then stale.
+    public func returnAskToPending(forSession id: UUID) {
+        guard let session = session(withID: id), session.askPresentedRemotely else { return }
+        session.takeAskBack()
+    }
+
+    private func askOfferRefusal(_ request: PresentationAsk, session: UUID, hub: PresentationHub) -> RemoteAskOpening? {
+        if request.needsFormSupport {
+            guard hub.presenterSupports(PresentationHub.askFormKind, session: session) else { return .formUnsupported }
+            guard request.fitsFrames() else { return .tooLarge }
+        }
+        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session) {
+            return .otherUnsupported
+        }
+        return nil
+    }
+
+    private func handOver(_ request: PresentationAsk, in session: Session, hub: PresentationHub) {
+        session.onRemoteAskEnded = { [weak hub, id = session.id, owner = request.owner] askID in
             hub?.sendToPresenter(.askDismiss(PresentationAskRef(id: askID, owner: owner)), session: id)
         }
         hub.sendToPresenter(.askRequest(request), session: session.id)
-        return .opened
     }
 
     /// Applies the presenter's answer. Refused unless it is for the ask this session is presenting under that

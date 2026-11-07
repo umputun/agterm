@@ -243,11 +243,13 @@ final class ControlServerRemotePageTests: XCTestCase {
         _ = try present(fix, page(file))
         fix.launcher.helpers[1].exit()
         XCTAssertFalse(fix.session.overlayActive)
-        XCTAssertEqual(closedNotices(fix), 2)
+        XCTAssertEqual(fix.transport.sent.last, .pageClosed(PresentationPageChange(page: Self.origin.uuidString,
+                                                                                   reason: PresentationPageChange.channelLost)))
+        XCTAssertEqual(closedNotices(fix), 1)
 
         _ = try present(fix, page(file))
         fix.store.closeOverlay(fix.session.id)
-        XCTAssertEqual(closedNotices(fix), 3)
+        XCTAssertEqual(closedNotices(fix), 2)
         XCTAssertTrue(fix.launcher.helpers[2].terminated)
 
         _ = try present(fix, page(file))

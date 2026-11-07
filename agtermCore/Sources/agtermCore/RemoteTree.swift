@@ -105,7 +105,7 @@ public enum RemoteTreeMerger {
     /// candidates joins the windows' sessions with `daemons`, each session's running daemon by pane (`left`,
     /// `right`), for a host that knows them without a zmx inventory: agterm-server.
     public static func candidates(windows: [RemoteWindowProjection], daemons running: [String: [String: String]],
-                                  endpoint: ControlZmxEndpoint) -> ControlRemoteTree {
+                                  endpoint: ControlZmxEndpoint, headless: Bool = false) -> ControlRemoteTree {
         // this command promises every row it returns is attachable, so a name `zmx attach` would
         // deterministically refuse must not reach the caller
         let daemons = running.mapValues { $0.filter { ZmxSupport.isDaemonName($0.value) } }
@@ -137,7 +137,7 @@ public enum RemoteTreeMerger {
             }
         }
         return ControlRemoteTree(host: nil, endpoint: endpoint, sessions: terminals + pages,
-                                 presentation: PresentationCodec.version)
+                                 presentation: PresentationCodec.version, headless: headless ? true : nil)
     }
 
     /// Reads back what the far side's own `zmx tree` printed. The caller must reject a nonzero exit BEFORE

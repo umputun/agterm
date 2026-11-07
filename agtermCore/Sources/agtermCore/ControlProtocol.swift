@@ -180,6 +180,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var panes: [String]?
     /// scratch is the target session's scratch identity, or `none`, when a scratch operation was decided.
     public var scratch: String?
+    /// timeout is how many seconds an `ask.open` or `pick.open` waits for an answer before its origin cancels it.
+    public var timeout: Double?
+    /// token is the offer token a `session.overlay.job.run` helper claims its job with.
+    public var token: String?
     /// New name for `workspace.new`/`workspace.rename`/`session.rename`; the initial `session.new` name
     /// (blank/omitted leaves the auto basename); the `theme.set` theme (omitted/empty = ghostty's built-in
     /// colors / "default ghostty", NOT the seeded `agterm` app default).

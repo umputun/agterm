@@ -1519,10 +1519,9 @@ struct CommandsTests {
             ControlRequest(cmd: .pickCancel, target: "pick-1", args: ControlArgs(window: "w1")))
     }
 
-    @Test func pickOpenHasNoTimeoutOption() {
-        #expect(throws: (any Error).self) {
-            try Agtermctl.parseAsRoot(["pick", "--timeout", "60"])
-        }
+    @Test func pickOpenTakesATimeoutFromTheRoot() throws {
+        let command = try #require(try Agtermctl.parseAsRoot(["pick", "--timeout", "60"]) as? Pick.Open)
+        #expect(try command.makeRequest(input: Data("a\n".utf8)).args?.timeout == 60)
     }
 
     // MARK: - dashboard

@@ -131,7 +131,7 @@ final class ControlServerCompanionPageTests: XCTestCase {
 
         let fresh = try attach(page)
         let claimed = try XCTUnwrap(server.claimPageServe(fresh.token).result?.id.flatMap(UUID.init(uuidString:)))
-        server.pageClaimUnanswered(claimed)
+        server.pageClaimUnanswered(claimed, token: fresh.token)
 
         XCTAssertNotNil(store.session(withID: page.id))
         XCTAssertTrue(server.pendingCompanionClaims.isEmpty)

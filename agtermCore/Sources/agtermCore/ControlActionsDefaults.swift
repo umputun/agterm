@@ -188,6 +188,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.remote.open"))
     }
 
+    func claimOverlayJob(_ job: String, token: String?) -> ControlResponse {
+        token == nil ? claimOverlayJob(job) : ControlResponse(ok: false, error: "job not claimable")
+    }
+
     func claimOverlayJob(_: String) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.job.run"))
     }

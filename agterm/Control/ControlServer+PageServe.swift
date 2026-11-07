@@ -44,6 +44,10 @@ extension ControlServer: PageServeHost {
         }
     }
 
+    func isCurrentPageClaim(_ page: UUID, token: String) -> Bool {
+        openStores.lazy.compactMap { $0.remotePageClaimToken(page) }.first == token
+    }
+
     /// remotePagePlace finds where page `page` is reserved now, nil once it ended or its presenter changed: a swap
     /// moves the slot, and a new presenter generation means the page belongs to a stream that is gone.
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {

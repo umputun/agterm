@@ -19,6 +19,35 @@ struct ControlDispatcherAskTests {
         #expect(placement.paneID == paneID)
     }
 
+    @Test(arguments: [0, -1, 86400.5, .infinity, .nan] as [Double])
+    func anInvalidTimeoutNeverReachesTheHost(timeout: Double) async {
+        let actions = MockControlActions()
+        var args = ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Choose")
+        args.timeout = timeout
+
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+
+        #expect(response == ControlResponse(ok: false, error: ControlInteraction.timeoutError))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func aTimeoutBecomesTheAsksDeadline() async throws {
+        let actions = MockControlActions()
+        var args = ControlArgs(buttons: [ControlAskButton(id: "ok", label: "OK")], title: "Choose")
+        args.timeout = 30
+        let before = Date()
+
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .askOpen, args: args))
+
+        guard case let .askOpen(ask, _, _, _, _) = try #require(actions.calls.first) else {
+            Issue.record("expected ask.open")
+            return
+        }
+        let deadline = try #require(ask.deadline)
+        #expect(deadline.timeIntervalSince(before) >= 30)
+        #expect(deadline.timeIntervalSince(before) < 31)
+    }
+
     @Test(arguments: [-1, 0, 9, 101, Int.max])
     func invalidWidthNeverReachesHost(width: Int) async {
         let actions = MockControlActions()

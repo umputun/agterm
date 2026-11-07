@@ -229,6 +229,6 @@ extension AppStore {
             RemoteBinding.Origin(host: host, endpoint: $0.endpoint, sessionName: entry.id.uuidString)
         }
         return RemoteBinding(remoteSessionID: entry.id.uuidString, daemonsByLocalPane: daemons,
-                             presentationVersion: protocolVersion, origin: origin, catalogOwned: true)
+                             presentationVersion: protocolVersion, origin: origin, catalogOwned: true, originHeadless: true)
     }
 }

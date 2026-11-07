@@ -6,6 +6,8 @@ import agtermCore
 extension ControlServer: OverlayJobStreamHost {
     func claimOverlayJob(_ job: String) -> ControlResponse { claimJobStream(job) }
 
+    func claimOverlayJob(_ job: String, token: String?) -> ControlResponse { claimJobStream(job, token: token) }
+
     /// Hands an overlay to the viewer presenting the session, or returns nil for the caller to handle locally.
     /// The launch context is built as a local overlay's would be, from this Mac's session.
     func openRemoteOverlay(in store: AppStore, sessionID: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {

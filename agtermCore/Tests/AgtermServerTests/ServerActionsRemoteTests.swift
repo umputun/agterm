@@ -29,6 +29,7 @@ struct ServerActionsRemoteTests {
 
         #expect(tree.endpoint == ControlZmxEndpoint(executable: harness.panes.configuration.zmxPath,
                                                     socketDirectory: harness.panes.configuration.zmxSocketDirectory))
+        #expect(tree.headless == true)
         let listed = try #require(tree.sessions.first { $0.id == session.id.uuidString })
         #expect(listed.windowID == harness.catalog.id.uuidString)
         #expect(Dictionary(uniqueKeysWithValues: listed.panes.map { ($0.pane, $0.daemon) })

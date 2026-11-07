@@ -26,18 +26,34 @@ struct ServerActionsOverlayTests {
         return path
     }
 
-    @Test func aProgramWithNoConnectedMacIsRefusedAndLeavesTheSlotFree() throws {
+    private func interactions(_ session: Session) -> [ControlInteraction]? {
+        harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.interactions
+    }
+
+    @Test func aProgramWithNoConnectedMacWaitsAndHoldsItsSlot() throws {
         let session = try newSession()
 
-        #expect(open(session) == ControlResponse(ok: false, error: "no connected Mac to show the overlay"))
+        #expect(open(session).ok)
+
+        let slot = try #require(session.remoteOverlays.slot(nil))
+        #expect(slot.owner == nil)
+        #expect(harness.actions.streams.overlayJobs.job(slot.job)?.state == .unpresented)
+        #expect(interactions(session) == [ControlInteraction(kind: "job", id: slot.job, state: ControlInteraction.unpresented)])
+        #expect(open(session) == ControlResponse(ok: false, error: "overlay already open"))
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
         #expect(session.remoteOverlays.slot(nil) == nil)
     }
 
-    @Test func aPageWithNoConnectedMacIsRefused() throws {
+    @Test func aPageWithNoConnectedMacWaitsAndHoldsItsSlot() throws {
         let session = try newSession()
         let path = try file("page.html", Array("<p>hi</p>".utf8))
 
-        #expect(open(session, page: .file(path: path, grantRoot: nil)) == ControlResponse(ok: false, error: "no connected Mac to show the page"))
+        let reply = open(session, page: .file(path: path, grantRoot: nil))
+
+        #expect(reply.ok)
+        let slot = try #require(session.remoteOverlays.slot(nil))
+        #expect(slot.owner == nil)
+        #expect(interactions(session) == [ControlInteraction(kind: "page", id: slot.job, state: ControlInteraction.unpresented)])
     }
 
     @Test func aFilePageIsJudgedOnTheServerBeforeAnyMacIsAsked() throws {

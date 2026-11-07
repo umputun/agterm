@@ -4,6 +4,23 @@ import agtermCore
 extension ControlServer {
     func openAsk(_ ask: PendingAsk, target: String?, window: String?,
                  placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
+        timed(openAskNow(ask, target: target, window: window, placement: placement, follow: follow), deadline: ask.deadline) { [weak self] in
+            _ = self?.cancelAsk(ask.id, window: nil)
+        }
+    }
+
+    /// timed ends an ask or pick that opened at its `--timeout` deadline, through `cancel`, when it is still pending.
+    func timed(_ response: ControlResponse, deadline: Date?, cancel: @escaping @MainActor () -> Void) -> ControlResponse {
+        guard response.ok, let deadline else { return response }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(max(deadline.timeIntervalSinceNow, 0) * 1_000_000_000))
+            cancel()
+        }
+        return response
+    }
+
+    private func openAskNow(_ ask: PendingAsk, target: String?, window: String?,
+                            placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
         if ask.style == .terminal {
             return resolver.resolveSession(target, window: window) { store, id in
                 presentTerminalAsk(ask, in: store, sessionID: id, placement: placement, follow: follow)

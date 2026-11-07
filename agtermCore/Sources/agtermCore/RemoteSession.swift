@@ -60,10 +60,12 @@ public enum RemoteSession {
     /// One ssh invocation running the helper for `job`, an overlay the origin handed to this Mac, for as long
     /// as the overlay is up. `-tt` because the program is the user's and reads the pty; `exec` so the helper's
     /// hangup check sees the ssh session's own pty close.
-    public static func runJobCommand(host: String, job: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
+    public static func runJobCommand(host: String, job: String, token: String? = nil, connectTimeout: Int = 5,
+                                     controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        guard isPlain(job) else { throw InvocationError.invalidSession }
-        let chain = cliPathPrefix + " && exec agtermctl session overlay run-job " + CommandRestore.shellQuotedLine([job])
+        guard isPlain(job), token.map(isPlain) ?? true else { throw InvocationError.invalidSession }
+        let chain = cliPathPrefix + " && exec agtermctl session overlay run-job "
+            + CommandRestore.shellQuotedLine([job] + (token.map { ["--token", $0] } ?? []))
         let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true, controlPath: controlPath) + [remote]
     }

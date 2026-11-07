@@ -9,14 +9,19 @@ private let pageLog = CoreLog(category: "PageServe")
 public protocol PageServeHost: AnyObject, SendableMetatype {
     /// pageServeStreams are the channels presenters opened for pages handed over, by page id.
     var pageServeStreams: [UUID: PageServeStream] { get set }
-    /// pendingPageClaims are pages whose claim was answered ok and whose connection is not adopted yet.
-    var pendingPageClaims: [UUID: PageServeClaim] { get set }
+    /// pendingPageClaims are claims answered ok whose connection is not adopted yet, by the token that claimed.
+    var pendingPageClaims: [String: PendingPageClaim] { get set }
     /// claimRemotePage admits `token` once: the page it names and what that page serves, nil for no such claim.
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)?
     /// remotePagePlace finds where page `page` is reserved now, nil once it ended or its presenter changed.
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     /// endRemotePage ends page `page` wherever its reservation sits, which also tells the presenter.
     func endRemotePage(_ page: UUID)
+    /// pageChannelLost handles page `page`'s registered channel ending without a close: a Mac ends the page, a headless
+    /// origin keeps it for the next presenter.
+    func pageChannelLost(_ page: UUID)
+    /// isCurrentPageClaim is whether `token` is still the claim page `page` is offered under.
+    func isCurrentPageClaim(_ page: UUID, token: String) -> Bool
     /// dispatchPageBridge runs one bridge request as a local page's would run; nil when control is unavailable.
     func dispatchPageBridge(_ request: ControlRequest) async -> ControlResponse?
     /// pageMimeType names a served file's type, read off the main actor.
@@ -29,7 +34,15 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func pageAttachmentClosed(_ attachment: PageServeStream.Attachment)
 }
 
+/// PendingPageClaim is a page channel claim answered ok, waiting for its connection.
+public struct PendingPageClaim: Sendable {
+    public let page: UUID
+    public let served: PageServeClaim
+}
+
 extension PageServeHost {
+    public func pageChannelLost(_ page: UUID) { endRemotePage(page) }
+    public func isCurrentPageClaim(_: UUID, token _: String) -> Bool { true }
     public func claimPageAttachment(_ token: String) -> ControlResponse? { nil }
     public func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool { false }
     public func dropPageAttachmentClaim(_ claim: UUID) -> Bool { false }
@@ -186,9 +199,11 @@ public final class PageServeStream {
             host?.pageAttachmentClosed(attachment)
             return
         }
-        if host?.pageServeStreams[page] === self { host?.pageServeStreams[page] = nil }
-        guard !ending else { return }
-        host?.endRemotePage(page)
+        // a channel replaced by a later claim, or retired, closes without ending the page the new one serves
+        let registered = host?.pageServeStreams[page] === self
+        if registered { host?.pageServeStreams[page] = nil }
+        guard !ending, registered else { return }
+        host?.pageChannelLost(page)
     }
 
     private nonisolated func failOnMain(_ reason: String) {
@@ -199,7 +214,7 @@ public final class PageServeStream {
         guard !ending else { return }
         pageLog.error("ending a page whose channel sent \(reason)")
         ending = true
-        if attachment == nil { host?.endRemotePage(page) }
+        if attachment == nil, host?.pageServeStreams[page] === self { host?.endRemotePage(page) }
         shutdown()
     }
 
@@ -362,25 +377,28 @@ extension PageServeHost {
     public func claimPageStream(_ token: String) -> ControlResponse {
         if let attachment = claimPageAttachment(token) { return attachment }
         guard let claim = claimRemotePage(token: token) else { return ControlResponse(ok: false, error: "page not claimable") }
-        pendingPageClaims[claim.page] = claim.served
+        pendingPageClaims[token] = PendingPageClaim(page: claim.page, served: claim.served)
         return ControlResponse(ok: true, result: ControlResult(id: claim.page.uuidString))
     }
 
-    /// adoptPageServeStream takes over the connection of a page whose claim was just answered ok.
-    public func adoptPageServeStream(descriptor: Int32, page: UUID) {
+    /// adoptPageServeStream takes over the connection of a page whose claim under `token` was just answered ok. A claim
+    /// the page was re-offered past gets no channel.
+    public func adoptPageServeStream(descriptor: Int32, page: UUID, token: String) {
         if adoptPageAttachment(descriptor: descriptor, claim: page) { return }
-        let served = pendingPageClaims.removeValue(forKey: page)
-        let live = served != nil && remotePagePlace(page) != nil
-        guard let stream = PageServeStream.adopt(descriptor: descriptor, page: page, source: live ? served?.source : nil,
-                                                 links: served?.links, attachment: nil, host: self) else { return }
+        let claim = pendingPageClaims.removeValue(forKey: token)
+        let live = claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token)
+        guard let stream = PageServeStream.adopt(descriptor: descriptor, page: page, source: live ? claim?.served.source : nil,
+                                                 links: claim?.served.links, attachment: nil, host: self) else { return }
         pageServeStreams[page] = stream
     }
 
-    /// pageClaimUnanswered ends a page whose claim reply never reached the helper, which leaves nobody to load it.
-    public func pageClaimUnanswered(_ page: UUID) {
+    /// pageClaimUnanswered handles a claim whose reply never reached its helper, which leaves nobody to load the page,
+    /// unless the page was re-offered past that claim meanwhile.
+    public func pageClaimUnanswered(_ page: UUID, token: String) {
         // an attachment that never connected leaves the page and its other viewers alone
         if dropPageAttachmentClaim(page) { return }
-        pendingPageClaims[page] = nil
-        endRemotePage(page)
+        pendingPageClaims[token] = nil
+        guard isCurrentPageClaim(page, token: token) else { return }
+        pageChannelLost(page)
     }
 }

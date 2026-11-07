@@ -578,8 +578,9 @@ struct SocketClient {
                 let overlayHidden = session.hiddenOverlays?.contains("session") == true
                 let overlayTag = session.overlay ? (overlayHidden ? " (overlay hidden)" : " (overlay)") : ""
                 let pendingTag = session.pending.map { $0 == "unknown" ? " (outcome unknown)" : " (pending)" } ?? ""
+                let interactionTag = session.interactions.map { " (\($0.count) interaction\($0.count == 1 ? "" : "s"))" } ?? ""
                 let tags = splitTag + realizedTag + overlayTag
-                    + (session.scratch ? " (scratch)" : "") + pendingTag
+                    + (session.scratch ? " (scratch)" : "") + pendingTag + interactionTag
                 let splitCwdSuffix = session.splitCwd.map { $0 == session.cwd ? "" : "  split cwd: \($0)" } ?? ""
                 let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
                 let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""

@@ -13,6 +13,9 @@ struct ReplicaPageRecord {
     var appliedSeq = 0
     /// poolUser is the ssh channel a catalog row's page holds for as long as it is shown.
     var poolUser: String?
+    /// channelLost marks a page taken down because its channel ended rather than closed by anyone; the origin decides
+    /// what that ends.
+    var channelLost = false
 }
 
 extension ControlServer {
@@ -53,7 +56,10 @@ extension ControlServer {
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
                                             replica: channel.map { Self.link($0) })
         if let channel, let argv {
-            channel.onClose = { [weak store] in store?.closeHtmlOverlay(local) }
+            channel.onClose = { [weak self, weak store] in
+                self?.replicaPages[local]?.channelLost = true
+                store?.closeHtmlOverlay(local)
+            }
             if let pool, let path {
                 let launcher = pageLauncher
                 Task { @MainActor [weak self] in
@@ -75,7 +81,8 @@ extension ControlServer {
         guard let record = replicaPages.removeValue(forKey: local) else { return }
         record.poolUser.map { catalogPool(forSession: record.session)?.release($0) }
         pendingReplicaStates.remove(local)
-        remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(page: origin.uuidString)))
+        remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(
+            page: origin.uuidString, reason: record.channelLost ? PresentationPageChange.channelLost : nil)))
         record.channel?.onClose = nil
         record.channel?.close("page closed")
     }

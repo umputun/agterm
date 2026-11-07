@@ -360,7 +360,7 @@ public final class Session: Identifiable {
     public private(set) var askPaneIdentity: UUID?
     /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
     /// presented ask keeps the slot and its result here but is neither drawn nor answered on this Mac.
-    public private(set) var askRemoteOwner: Int?
+    public internal(set) var askRemoteOwner: Int?
     /// Tells the presenter a handed-over ask ended here. Set with the handover, run once when it resolves.
     @ObservationIgnored var onRemoteAskEnded: (@MainActor (String) -> Void)?
 
@@ -416,7 +416,8 @@ public final class Session: Identifiable {
     /// Retains a registered ask's terminal outcome before clearing its slot; stale ids are ignored.
     @discardableResult
     public func resolveAsk(id: String, _ result: ControlAskResult) -> Bool {
-        guard askPending?.id == id, result.result != .pending else { return false }
+        guard let ask = askPending, ask.id == id, result.result != .pending else { return false }
+        let result = ask.expired(at: Date()) ? ControlAskResult(result: .cancelled) : result
         if case let .session(sessionID, windowID) = AskRegistry.shared.owner(for: id), sessionID == self.id {
             AskRegistry.shared.retain(id: id, result: result, window: windowID)
         }

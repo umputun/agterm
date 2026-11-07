@@ -479,10 +479,15 @@ struct Pick: ParsableCommand {
         @Option(name: .long, help: "Item id to open highlighted; a --query that hides it falls back to the first row.")
         var select: String?
         @Flag(name: .long, help: "Raise the target window when the picker opens.") var follow = false
+        @Option(name: .long, help: "Cancel the picker unanswered after this many seconds (at most 86400).") var timeout: Double?
         @Flag(name: .long, help: "Print the picker id and return without waiting for a result.") var noBlock = false
         @Option(name: .long, help: "Bind the picker to a session: it shows wherever that session is presented.")
         var session: String?
         @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if let timeout, !ControlInteraction.isValidTimeout(timeout) { throw ValidationError(ControlInteraction.timeoutError) }
+        }
 
         func makeRequest() throws -> ControlRequest {
             try makeRequest(input: FileHandle.standardInput.readDataToEndOfFile())
@@ -490,7 +495,7 @@ struct Pick: ParsableCommand {
 
         /// Build the open request from injected stdin bytes, so tests never block on the process's real stdin.
         func makeRequest(input: Data, session bound: String? = nil) throws -> ControlRequest {
-            let args = ControlArgs(
+            var args = ControlArgs(
                 follow: follow ? true : nil,
                 items: try Self.parseItems(input),
                 prompt: prompt,
@@ -498,6 +503,7 @@ struct Pick: ParsableCommand {
                 allowCustom: allowCustom ? true : nil,
                 selection: select
             )
+            args.timeout = timeout
             return ControlRequest(cmd: .pickOpen, target: bound ?? session, args: options.withWindow(args))
         }
 

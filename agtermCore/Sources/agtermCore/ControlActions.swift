@@ -280,6 +280,8 @@ public protocol ControlActions {
     var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
     func claimOverlayJob(_ job: String) -> ControlResponse
+    /// claimOverlayJob with the offer token the helper was handed, which a tokened offer requires.
+    func claimOverlayJob(_ job: String, token: String?) -> ControlResponse
     /// claimPageServe claims a handed-over page's channel with its single-use token. After an ok answer the
     /// connection carries page channel frames.
     func claimPageServe(_ token: String) -> ControlResponse

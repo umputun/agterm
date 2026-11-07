@@ -553,23 +553,23 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/Control/ControlServer+RemotePresentation.swift`
 - Create: tests in `agtermCoreTests` and `AgtermServerTests`
 
-- [ ] ask/pick `--timeout` end to end: CLI flag, `ControlArgs` deadline, dispatcher validation, server expiry
-- [ ] a new negotiated hello kind for pending interactions; the snapshot carries unpresented asks, picks, pages and
+- [x] ask/pick `--timeout` end to end: CLI flag, `ControlArgs` deadline, dispatcher validation, server expiry
+- [x] a new negotiated hello kind for pending interactions; the snapshot carries unpresented asks, picks, pages and
       unclaimed jobs with their deadlines, sent as chunks plus a commit frame when it exceeds the frame cap
-- [ ] read-back: each session's `tree` node lists its pending interactions with kind, state (`unpresented`,
+- [x] read-back: each session's `tree` node lists its pending interactions with kind, state (`unpresented`,
       `offered`, `claimed`) and deadline
-- [ ] with no presenter, the server keeps them pending; the next presenter is offered each under its generation;
+- [x] with no presenter, the server keeps them pending; the next presenter is offered each under its generation;
       answers from an old generation are rejected; a job's claim window starts at handoff
-- [ ] per-offer claim tokens: each job offer carries a token bound to the presenter generation, `OverlayJobs.claim`
+- [x] per-offer claim tokens: each job offer carries a token bound to the presenter generation, `OverlayJobs.claim`
       and the run-job helper validate it before releasing launch context, and presenter loss invalidates it
       atomically; job identity stays separate from offer identity
-- [ ] presenter loss mid-interaction returns it to pending instead of handing it back locally; a claimed or unknown
+- [x] presenter loss mid-interaction returns it to pending instead of handing it back locally; a claimed or unknown
       job reports an honest outcome and is never launched again
-- [ ] deadlines and cancellation withdraw pending work before any replay; server restart cancels all of them and the
+- [x] deadlines and cancellation withdraw pending work before any replay; server restart cancels all of them and the
       waiting `agtermctl` call fails with an error
-- [ ] a presenter without the kind is never offered pending work: interactions stay pending on a headless origin
+- [x] a presenter without the kind is never offered pending work: interactions stay pending on a headless origin
       until a capable presenter or their deadline, and a Mac origin keeps today's behavior
-- [ ] tests: each state transition, generation rejection, deadline expiry and `--timeout` validation, restart
+- [x] tests: each state transition, generation rejection, deadline expiry and `--timeout` validation, restart
       cancellation, an old presenter's helper claiming while unpresented and after a re-offer (both refused),
       presenter loss racing a successful claim, an old presenter left without pending offers, a chunked pending snapshot applied only at
       commit, `tree` read-back; ➕ (moved from Task 8) an ask open when its session is detached returns to pending

@@ -26,7 +26,7 @@ extension ServerActions {
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)
         return ControlResponse(ok: true, result: ControlResult(remote: RemoteTreeMerger.candidates(windows: [window], daemons: daemons,
-                                                                                                    endpoint: endpoint)))
+                                                                                                    endpoint: endpoint, headless: true)))
     }
 
     /// openPresentation answers `zmx.present`; the stream starts once this reply is on the wire.

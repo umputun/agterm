@@ -382,6 +382,18 @@ struct AppStoreReplicaPageTests {
         #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
     }
 
+    @Test func aPictureSizedHereKeepsItsFloatingSizeUnderAReplayedPointOverride() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: ImagePage.basePercent, points: OverlayPointSize(width: 640, height: 480)),
+                                         forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: ImagePage.basePercent,
+                                points: OverlayPointSize(width: 300), merge: true)
+
+        #expect(session.overlaySizePercent == ImagePage.basePercent)
+        #expect(session.overlayPoints == OverlayPointSize(width: 300, height: 480))
+    }
+
     @Test func aMergingResizeKeepsTheAxisItDoesNotNameAndAPlainOneReplacesIt() throws {
         let (store, session) = try attached()
         #expect(store.presentReplicaPage(page(size: 95, points: OverlayPointSize(width: 400, height: 300)), forSession: session.id) == nil)

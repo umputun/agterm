@@ -98,6 +98,7 @@ final class RemoteCatalogMirrorTests {
         #expect(row.remoteHost == "box")
         #expect(row.customName == "build")
         #expect(row.remotePresentation?.binding.catalogOwned == true)
+        #expect(row.remotePresentation?.binding.originHeadless == true)
         #expect(effects.added == [split.id, single.id])
         #expect(mirror.state == .connected)
     }

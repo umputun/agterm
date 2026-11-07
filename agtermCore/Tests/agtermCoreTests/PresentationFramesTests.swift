@@ -313,6 +313,17 @@ struct PresentationFramesTests {
         #expect(line.count <= PresentationCodec.maxFrameBytes)
     }
 
+    @Test func aPendingBatchWithAChunkOutOfOrderYieldsNothing() throws {
+        let chunks = try PresentationPendingBatch.chunks([.notify(PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024),
+                                                                                    pane: nil, source: "osc"))])
+        var batch = PresentationPendingBatch()
+        batch.add(chunks[1])
+        batch.add(chunks[0])
+
+        #expect(throws: PresentationPendingBatch.Failure.outOfOrder(1)) { try batch.commit() }
+        #expect(try batch.commit().isEmpty)
+    }
+
     @Test func aFrameThatWouldEncodeOversizeIsRefused() {
         let body = String(repeating: "x", count: PresentationCodec.maxFrameBytes)
         let frame = PresentationFrame(gen: 1, rev: 1, body: .notify(PresentationNotify(

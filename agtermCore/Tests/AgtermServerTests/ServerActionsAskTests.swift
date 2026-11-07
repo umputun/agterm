@@ -19,14 +19,81 @@ struct ServerActionsAskTests {
         PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")], style: style)
     }
 
-    @Test func anAskWithNoConnectedMacIsRefusedAndLeavesTheSlotFree() throws {
+    @Test func anAskWithNoConnectedMacWaitsUnpresented() throws {
         let session = try newSession()
+        let pending = ask()
+
+        let reply = harness.actions.openAsk(pending, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(),
+                                            follow: false)
+
+        #expect(reply.ok)
+        #expect(session.askPending?.id == pending.id)
+        #expect(!session.askPresentedRemotely)
+        #expect(harness.actions.askResult(pending.id, window: nil).result?.ask?.result == .pending)
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.interactions == [ControlInteraction(kind: "ask", id: pending.id, state: ControlInteraction.unpresented)])
+    }
+
+    @Test func anAskNoFrameCanCarryIsRefusedBeforeBooking() throws {
+        let session = try newSession()
+        let huge = PendingAsk(id: UUID().uuidString, title: "deploy?", message: String(repeating: "x", count: 300 * 1024),
+                              buttons: [ControlAskButton(id: "yes", label: "Yes")])
+
+        let reply = harness.actions.openAsk(huge, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(),
+                                            follow: false)
+
+        #expect(reply == ControlResponse(ok: false, error: "ask is too large to send to a Mac"))
+        #expect(session.askPending == nil)
+    }
+
+    @Test func aSecondAskWhileOneWaitsIsRefused() throws {
+        let session = try newSession()
+        _ = harness.actions.openAsk(ask(), target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
 
         let reply = harness.actions.openAsk(ask(), target: session.id.uuidString, window: nil, placement: ControlAskPlacement(),
                                             follow: false)
 
-        #expect(reply == ControlResponse(ok: false, error: "no connected Mac to show the ask"))
+        #expect(reply == ControlResponse(ok: false, error: "ask already pending"))
+    }
+
+    @Test func aWaitingAskEndsAtItsDeadline() async throws {
+        let session = try newSession()
+        var timed = ask()
+        timed.deadline = Date().addingTimeInterval(0.1)
+        _ = harness.actions.openAsk(timed, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.interactions?.first?.deadline == timed.deadline?.timeIntervalSince1970)
+
+        let ended = await eventually { harness.actions.askResult(timed.id, window: nil).result?.ask?.result == .cancelled }
+        #expect(ended, "\(String(describing: harness.actions.askResult(timed.id, window: nil))), pending \(String(describing: session.askPending?.id))")
         #expect(session.askPending == nil)
+    }
+
+    private func eventually(_ condition: () -> Bool) async -> Bool {
+        for _ in 0..<100 {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return condition()
+    }
+
+    @Test func aCancelledWaitingAskEnds() throws {
+        let session = try newSession()
+        let pending = ask()
+        _ = harness.actions.openAsk(pending, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
+
+        #expect(harness.actions.cancelAsk(pending.id, window: nil).ok)
+
+        #expect(harness.actions.askResult(pending.id, window: nil).result?.ask?.result == .cancelled)
+    }
+
+    @Test func anAskOfAnEarlierRunIsUnknownToANewOne() throws {
+        let session = try newSession()
+        let pending = ask()
+        _ = harness.actions.openAsk(pending, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
+        let restarted = try ServerHarness()
+
+        #expect(restarted.actions.askResult(pending.id, window: nil) == ControlResponse(ok: false, error: "unknown ask: \(pending.id)"))
     }
 
     @Test func aWindowAskWithNoSessionIsRefused() {

@@ -45,6 +45,7 @@ struct Ask: ParsableCommand {
         @Option(name: .long, help: "Anchor to the session's left or right pane. GUI style requires --target.") var pane: String?
         @Option(name: .customLong("pane-id"), help: "Stable pane token; overrides --pane. GUI style requires --target.") var paneID: String?
         @Flag(name: .long, help: "Raise the owning window.") var follow = false
+        @Option(name: .long, help: "Cancel the dialog unanswered after this many seconds (at most 86400).") var timeout: Double?
         @Flag(name: .long, help: "Print the dialog id and return without waiting.") var noBlock = false
         @OptionGroup var options: ClientOptions
 
@@ -52,6 +53,7 @@ struct Ask: ParsableCommand {
             guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw ValidationError("ask.open requires a title")
             }
+            if let timeout, !ControlInteraction.isValidTimeout(timeout) { throw ValidationError(ControlInteraction.timeoutError) }
             if style == "gui", pane != nil || paneID != nil, target == nil {
                 throw ValidationError("--pane requires a session")
             }
@@ -71,7 +73,9 @@ struct Ask: ParsableCommand {
                                    pane: pane, paneID: paneID, title: title, width: try parsedWidth(), value: value,
                                    cancelButton: cancelButton, input: input, placeholder: placeholder, choices: try parsedChoices(),
                                    multiple: multiple ? true : nil, checked: checked.isEmpty ? nil : checked, other: other)
-            return ControlRequest(cmd: .askOpen, target: target, args: options.withWindow(args))
+            var timed = args
+            timed.timeout = timeout
+            return ControlRequest(cmd: .askOpen, target: target, args: options.withWindow(timed))
         }
 
         private func parsedWidth() throws -> Int? {
