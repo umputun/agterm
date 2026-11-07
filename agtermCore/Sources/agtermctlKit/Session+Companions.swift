@@ -37,6 +37,36 @@ extension Session {
         }
     }
 
+    /// `--companion` is required so the verb names what the session becomes, the CLI form of Convert to Companion.
+    struct Convert: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Convert a session into a companion of a fresh session opened in its place; prints the fresh session's id.")
+        @Flag(name: .long, help: "Nest the session, with its companions, under a fresh session in its directory and slot.")
+        var companion = false
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if !companion { throw ValidationError("session convert needs --companion") }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow())
+        }
+
+        func run() throws {
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for convert")
+            let reply = try send(try makeRequest())
+            if options.json || !reply.response.ok {
+                SocketClient.printResponse(reply, json: options.json)
+            } else if let parent = reply.response.result?.parent {
+                print(parent)
+            }
+            if !reply.response.ok { throw ExitCode.failure }
+        }
+    }
+
     struct Expand: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Unfold a parent session's companions in the sidebar tree.")
         @OptionGroup var target: TargetOptions

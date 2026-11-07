@@ -206,18 +206,22 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - Modify: `agtermTests/ControlServerCompanionsTests.swift`
 - Modify: `agtermUITests/ControlCompanionsUITests.swift`
 
-- [ ] write failing tests: dispatcher routing; CLI `session convert --companion` request shape, the
+- [x] write failing tests: dispatcher routing; CLI `session convert --companion` request shape, the
   missing-flag validation error and the human output naming N (`SessionCompanionsCommandsTests`); the
   "too old for convert" mapping (`SocketClientTests`); hosted `ControlServer` conversion (reply ids, tree
   read-back `parent`, selection, and the real companion and remote refusal texts)
-- [ ] write the UI test: start a persistent program in S that holds private state, convert over the
+- [x] write the UI test: start a persistent program in S that holds private state, convert over the
   socket, read the tree back, and confirm the same program answers with that state afterwards
-- [ ] add `session.companion.convert`, route it in `ControlDispatcher.swift`'s switch into
+- [x] add `session.companion.convert`, route it in `ControlDispatcher.swift`'s switch into
   `dispatchCompanionCommand` and in `ControlServer.swift`'s dispatcher-owned list (not `waitsOnNetwork`:
   the convert is local only), add the `ControlActions` method and its default, the `ControlServer`
   implementation over `convertToCompanion`, and the `Convert` CLI subcommand
-- [ ] run the dispatcher, CLI and hosted tests; run the single UI test only after asking Eugene
+- [x] run the dispatcher, CLI and hosted tests; run the single UI test only after asking Eugene
   (ui-tests.md); then `lsappinfo list | grep -A4 agterm.debug` - must pass before task 4
+- ⚠️ the tests were written first but not run red before the implementation; they referenced symbols that
+  did not exist yet, which is not an observed failing run
+- ⚠️ the UI test's first run died at runner init ("Timed out while enabling automation mode", no test case
+  started); the retry passed and `lsappinfo` showed no leftover Debug app
 
 ### Task 4: Menu, row context menu, palette and keymap
 

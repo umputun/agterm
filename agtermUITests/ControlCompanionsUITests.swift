@@ -75,6 +75,19 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertEqual(try typeUntilMarker("echo alive > '\(marker.path)'\n", target: parent, file: marker, select: false), "alive")
     }
 
+    func testConvertNestsTheRunningSessionUnderAFreshParentWithItsShellIntact() throws {
+        let task = try activeSessionID()
+        let set = stateDir.appendingPathComponent("convert-set.marker")
+        let kept = stateDir.appendingPathComponent("convert-kept.marker")
+        XCTAssertEqual(try typeUntilMarker("CONVERT_TOKEN=kept-7f3; echo set > '\(set.path)'\n", target: task, file: set, select: false), "set")
+
+        let fresh = try cliOutput(["session", "convert", "--companion", "--target", task])
+
+        XCTAssertEqual(try sessionNode(id: task)["parent"] as? String, fresh)
+        XCTAssertNil(try sessionNode(id: fresh)["parent"])
+        XCTAssertEqual(try typeUntilMarker("echo $CONVERT_TOKEN > '\(kept.path)'\n", target: task, file: kept, select: false), "kept-7f3")
+    }
+
     func testACommandParentRespawnsAsAPlainShellInTheDirectoryItMovedTo() throws {
         let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"/bin/zsh -l"}}"#)
         let parent = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
