@@ -267,9 +267,9 @@
 - [x] run the touched tests (3 core; 5 ControlServerRemoteLinkClickTests and 46 ControlServerRemotePresentationTests)
 
 ### Task 6: Verify acceptance criteria
-- [ ] every Overview item holds; each refusal reports exactly once and its HUD clears itself; local panes unchanged
-- [ ] `cd agtermCore && swift test`, `make test-app`, `make lint`, Debug build
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
+- [x] every Overview item holds; each refusal reports exactly once and its HUD clears itself; local panes unchanged
+- [x] `cd agtermCore && swift test`, `make test-app` (1872, 0 failures), `make lint`, Release build
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
 
 ### Task 7: [Final] Update documentation
 - [x] `site/docs.html`: replace "In a session attached from another Mac, a plain path names a file on that Mac,
@@ -279,7 +279,7 @@
       control API exemption), the `.remotePane` routing sentence, and a lenient-decode line in the stream bullet
 - [x] `plugins/agterm/skills/agterm/SKILL.md` (:834, :884 "in a local pane"); `site/commands.html` states neither
       remote-click behavior nor presentation kinds, and README, ARCHITECTURE.md, llms.txt and index.html neither
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Manual verification**
