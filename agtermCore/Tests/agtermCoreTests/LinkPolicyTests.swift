@@ -254,6 +254,33 @@ struct LinkPolicyTests {
         #expect(route == .markdown(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false), session: Self.session, sizePercent: percent))
     }
 
+    @Test(arguments: [
+        ("/tmp/agdoc/pr.html", "/tmp/agdoc/pr.html"),
+        ("/tmp/INDEX.HTM", "/tmp/INDEX.HTM"),
+        ("~/page.html", "/Users/me/page.html"),
+        ("file:///tmp/a%20b.html", "/tmp/a b.html"),
+    ])
+    func localHtmlPathsOpenAsDocuments(_ raw: String, _ path: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts, home: Self.home)
+            == .document(URL(fileURLWithPath: path, isDirectory: false)))
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, [LinkPolicy.ClickOrigin.pane(session), .scratch(session)])
+    func documentOpensOnTheOwningSessionAtItsModeSize(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
+        let url = URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)
+        let percent = mode == .browser ? 95 : mode.overlaySizePercent
+        for raw in ["/tmp/pr.html", "file:///tmp/pr.html"] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin, localHosts: Self.localHosts, home: Self.home)
+                == .document(url, session: Self.session, sizePercent: percent))
+        }
+    }
+
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
+    func sessionlessOriginsRevealDocuments(_ origin: LinkPolicy.ClickOrigin) {
+        #expect(LinkPolicy.route(for: "/tmp/pr.html", mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
+            == .reveal(URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)))
+    }
+
     // a bare path in a pane attached from another Mac names a file on that Mac
     @Test func remotePaneIgnoresBarePathsAndRevealsFileLinks() throws {
         let origin = LinkPolicy.ClickOrigin.remotePane(Self.session)
@@ -265,6 +292,8 @@ struct LinkPolicyTests {
         #expect(route("file:///tmp/shot.png") == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
         #expect(route("/tmp/notes.md") == .ignore)
         #expect(route("file:///tmp/notes.md") == .reveal(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)))
+        #expect(route("/tmp/pr.html") == .ignore)
+        #expect(route("file:///tmp/pr.html") == .reveal(URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)))
         let web = try #require(URL(string: "https://example.com/a"))
         #expect(route("https://example.com/a") == .overlay(web, session: Self.session, sizePercent: nil))
     }
@@ -560,6 +589,7 @@ struct LinkPolicyTests {
         let session = Self.session
         #expect(LinkPolicy.Route.image(file, session: session).localFile == file)
         #expect(LinkPolicy.Route.markdown(file, session: session, sizePercent: 95).localFile == file)
+        #expect(LinkPolicy.Route.document(file, session: session, sizePercent: 95).localFile == file)
         #expect(LinkPolicy.Route.text(LinkPolicy.TextLink(url: file, line: 3, session: session, sizePercent: nil)).localFile == file)
         #expect(LinkPolicy.Route.reveal(file).localFile == file)
         #expect(LinkPolicy.Route.browser(web).localFile == nil)

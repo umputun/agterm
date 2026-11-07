@@ -26,6 +26,8 @@ public enum LinkPolicy {
         case markdown(URL)
         /// text is a local file `TextPage` accepts, shown read-only at `line` instead of revealed.
         case text(URL, line: Int?)
+        /// document is a local file with a `DocumentPage.extensions` extension, shown as an unprivileged page.
+        case document(URL)
         case ignore
     }
 
@@ -111,6 +113,9 @@ public enum LinkPolicy {
         case markdown(URL, session: UUID, sizePercent: Int?)
         /// text shows a local text file over its session; a refused open reveals it instead.
         case text(TextLink)
+        /// document shows a local HTML file over `session` at `sizePercent`, nil for full size; a refused open reveals
+        /// it instead.
+        case document(URL, session: UUID, sizePercent: Int?)
         case reveal(URL)
         case ignore
 
@@ -118,7 +123,7 @@ public enum LinkPolicy {
         /// web route and for an ignored link.
         public var localFile: URL? {
             switch self {
-            case .image(let url, _), .markdown(let url, _, _), .reveal(let url): return url
+            case .image(let url, _), .markdown(let url, _, _), .document(let url, _, _), .reveal(let url): return url
             case .text(let link): return link.url
             case .browser, .overlay, .ignore: return nil
             }
@@ -193,7 +198,7 @@ public enum LinkPolicy {
     }
 
     /// disposition maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a local path → `.image`,
-    /// `.markdown`, `.text` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
+    /// `.markdown`, `.document`, `.text` or `.reveal` (`localPath`); a `file://` with a non-local host, or any other scheme, schemeless or
     /// unparseable input → `.ignore`. A local path is a LOCAL `file://` link (empty host, or a host in
     /// `localHosts`), host-stripped so Finder never leans on the original authority, or a bare path
     /// (`isBarePath`) taken literally with `~/` expanded against `home`. Both are injected so the decision
@@ -219,7 +224,7 @@ public enum LinkPolicy {
     }
 
     /// localPath classifies a decoded local path: `.image` for an `imageExtensions` file, `.markdown` for a
-    /// `markdownExtensions` one, `.text` for a `TextPage`-eligible one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
+    /// `markdownExtensions` one, `.document` for a `DocumentPage.extensions` one, `.text` for a `TextPage`-eligible one, `.reveal` for anything else, and `.ignore` for an empty or relative path (which `URL(fileURLWithPath:)` would
     /// resolve against the process directory), a UNC-style `//` path (a remote target the host check cannot
     /// see), or an auto-mount path. The automount check runs after LEXICAL `..` collapsing, so
     /// `/tmp/../net/x` cannot sneak through and the classifier never stats the path it is about to deny.
@@ -231,6 +236,7 @@ public enum LinkPolicy {
         let ext = url.pathExtension.lowercased()
         if imageExtensions.contains(ext) { return .image(url) }
         if markdownExtensions.contains(ext) { return .markdown(url) }
+        if DocumentPage.extensions.contains(ext) { return .document(url) }
         return TextPage.isEligible(file: normalized) ? .text(url, line: line) : .reveal(url)
     }
 
@@ -351,8 +357,8 @@ public enum LinkPolicy {
     /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
     /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
-    /// markdown file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
-    /// A remote pane ignores bare paths and reveals `file://` pictures, markdown and text files, since all name files
+    /// markdown or HTML file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
+    /// A remote pane ignores bare paths and reveals `file://` pictures, markdown, HTML and text files, since all name files
     /// on another Mac.
     /// Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
@@ -380,6 +386,12 @@ public enum LinkPolicy {
             switch origin {
             case .pane(let session), .scratch(let session):
                 return .markdown(url, session: session, sizePercent: pageSize)
+            case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
+            }
+        case .document(let url):
+            switch origin {
+            case .pane(let session), .scratch(let session):
+                return .document(url, session: session, sizePercent: pageSize)
             case .remotePane, .hud, .programOverlay, .quick: return .reveal(url)
             }
         case .text(let url, let line):

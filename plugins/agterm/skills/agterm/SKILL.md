@@ -817,6 +817,9 @@ link opens in the browser after the user confirms. The user gets the same view b
 local pane, so printing the absolute path of a plan or report you wrote is often enough there; for a user watching
 from another Mac, open it with `--markdown`. Read back `markdown` in `htmlOverlays`.
 
+A ⌘-clicked `.html` or `.htm` path shows as a page with scripts off, no tagged controls, no access to other
+files and no network loads, read back as `document`. A page that needs its scripts, its controls or files beside it opens with `--html`.
+
 ## Showing a source file or log at a line
 
 Show a source, config, text or log file read-only with `--text`, scrolled to and marking `--line`:

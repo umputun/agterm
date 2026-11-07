@@ -229,7 +229,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
     // restored page closes at its next mount
     private var closeRequested = false
-    // an image, markdown or text page reads its file off the main actor; a result is applied only while this still
+    // an image, markdown, text or document page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
     private var textLoad = 0
     private(set) var textPage: TextPageBridge?
@@ -406,16 +406,16 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var bridged: Bool { Self.bridged(overlay.source, linked: replica != nil) }
 
     private static func styled(_ source: HtmlSource, linked: Bool) -> Bool {
-        source.kind == .markdown || source.kind == .text || bridged(source, linked: linked)
+        [.markdown, .text, .document].contains(source.kind) || bridged(source, linked: linked)
     }
 
-    // only a page its author wrote drives the control API; a markdown or text file comes from untrusted output
+    // only a page its author wrote drives the control API; a markdown, text or clicked HTML file comes from untrusted output
     private static func bridged(_ source: HtmlSource, linked: Bool) -> Bool {
         switch source {
         case .file: return true
         case .replica(_, .html): return linked
         case .replica: return false
-        case .url, .image, .markdown, .text: return false
+        case .url, .image, .markdown, .text, .document: return false
         }
     }
 
@@ -453,6 +453,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
             if case .markdown = overlay.source { return OverlayHtmlError.markdownInOverlay }
             if case .text = overlay.source { return OverlayHtmlError.textInOverlay }
+            if case .document = overlay.source { return OverlayHtmlError.documentInOverlay }
             guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
         case .finder:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
@@ -496,12 +497,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
-    // a file page without a grant and an image, markdown or text page are loaded from text: they sit at
+    // a file page without a grant and an image, markdown, text or document page are loaded from text: they sit at
     // about:blank and cannot navigate, so the file they came from is both the current page and what the user
     // is looking at
     private var textLoaded: Bool {
         switch overlay.source {
-        case .file(_, nil), .image, .markdown, .text: return true
+        case .file(_, nil), .image, .markdown, .text, .document: return true
         case .replica(_, let content): return content != .html
         default: return false
         }
@@ -534,39 +535,37 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                 guard let page = await self?.replicaContentPage(path: path, content: content), let self, textLoad == load else { return }
                 switch page {
                 case .failure(let failure): fail(failure.message)
-                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
+                case .success(let html): await show(html, load: load)
                 }
             }
         case .image(let path):
-            textLoad += 1
-            let load = textLoad
-            Task { @MainActor [weak self] in
-                let page = await Task.detached(priority: .userInitiated) {
-                    ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) }
-                }.value
-                guard let self, textLoad == load else { return }
-                switch page {
-                case .failure(let failure): fail(failure.description)
-                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
-                }
-            }
+            loadBuilt { ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) } }
         case .markdown(let path):
-            textLoad += 1
-            let load = textLoad
             let style = MarkdownAssets.shared.style
-            Task { @MainActor [weak self] in
-                let page = await Task.detached(priority: .userInitiated) {
-                    MarkdownProbe.load(path: path).map { MarkdownPage.html(markdown: $0.markdown, images: $0.images, style: style) }
-                }.value
-                guard let self, textLoad == load else { return }
-                switch page {
-                case .failure(let failure): fail(failure.description)
-                case .success(let html): webView.loadHTMLString(html, baseURL: nil)
-                }
-            }
+            loadBuilt { MarkdownProbe.load(path: path).map { MarkdownPage.html(markdown: $0.markdown, images: $0.images, style: style) } }
         case .text:
             textPage?.loadDocument(fresh: true)
+        case .document(let path): loadBuilt { DocumentProbe.load(path: path) }
         }
+    }
+
+    private func loadBuilt<Failure: Error & CustomStringConvertible>(_ build: @escaping @Sendable () -> Result<String, Failure>) {
+        textLoad += 1
+        let load = textLoad
+        Task { @MainActor [weak self] in
+            let page = await Task.detached(priority: .userInitiated) { build() }.value
+            guard let self, textLoad == load else { return }
+            switch page {
+            case .failure(let failure): fail(failure.description)
+            case .success(let html): await show(html, load: load)
+            }
+        }
+    }
+
+    private func show(_ html: String, load: Int) async {
+        let filtered = overlay.source.kind != .document ? true : await DocumentRules.shared.install(on: webView.configuration.userContentController)
+        guard textLoad == load else { return }
+        if filtered { webView.loadHTMLString(html, baseURL: nil) } else { fail(DocumentRules.unavailable) }
     }
 
     private struct ReplicaContentFailure: Error {
@@ -619,6 +618,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                     .map { TextPage.html(text: $0, language: TextPage.language(forFile: path), line: line, style: style) }
                     .mapError { ReplicaContentFailure(message: $0.description) }
             }.value
+        case .document:
+            let fetched = await fetchReplica(path, limit: DocumentPage.maxBytes, local: (DocumentProbe.Failure.tooLarge(path).description, DocumentProbe.Failure.unreadable(path).description))
+            guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
+            return await Task.detached(priority: .userInitiated) { DocumentProbe.html(data, path: path).mapError { ReplicaContentFailure(message: $0.description) } }.value
         }
     }
 
@@ -646,7 +649,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // policy keeps to HTTP(S)
     private var browserURL: URL {
         switch overlay.source {
-        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _):
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path)
         case .url(let original):
             let shown = overlay.browse ? shownURL : webView.url
@@ -704,7 +707,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
         switch overlay.source {
-        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _):
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path)
         case .url(let url): return url
         }

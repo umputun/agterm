@@ -155,6 +155,10 @@ struct agtermApp: App {
             guard let controlServer else { return done(false) }
             controlServer.openTextLink(link, completion: done)
         }
+        LinkOpener.shared.document = { [weak controlServer] url, session, percent, done in
+            guard let controlServer else { return done(false) }
+            controlServer.openDocumentLink(url, session: session, sizePercent: percent, completion: done)
+        }
         let liveReset = LiveResetCoordinator(settingsModel: settingsModel,
                                              selection: { [weak controlServer] in controlServer?.liveResetSelection() })
         controlServer.liveReset = liveReset

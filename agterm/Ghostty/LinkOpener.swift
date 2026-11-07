@@ -21,6 +21,9 @@ struct LinkOpener {
     /// text shows a local text file over its session and reports through its completion whether it did; false
     /// reveals the file.
     var text: (LinkPolicy.TextLink, @escaping @MainActor (Bool) -> Void) -> Void = { _, done in done(false) }
+    /// document shows a local HTML file over the session at the given size percent (nil for full size), with no file
+    /// grant or bridge, and reports through its completion whether it did; false reveals the file.
+    var document: (URL, UUID, Int?, @escaping @MainActor (Bool) -> Void) -> Void = { _, _, _, done in done(false) }
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
     /// exists answers for one candidate `LinkPolicy.locations` offered; it runs off the main actor.
@@ -57,6 +60,9 @@ struct LinkOpener {
         case .text(let link):
             let reveal = reveal
             text(link) { shown in if !shown { reveal(link.url) } }
+        case .document(let url, let session, let percent):
+            let reveal = reveal
+            document(url, session, percent) { shown in if !shown { reveal(url) } }
         case .reveal(let url): reveal(url)
         case .ignore: return
         }

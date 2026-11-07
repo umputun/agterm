@@ -283,6 +283,29 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertNil(session.htmlOverlay)
     }
 
+    func testAClickedHtmlFileOpensAsADocumentAndAnUnreadableOneOpensNothing() async throws {
+        let (store, session) = try addSession()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let page = stateDir.appendingPathComponent("pr.html")
+        try Data("<title>pr</title>".utf8).write(to: page)
+        let binary = stateDir.appendingPathComponent("blob.html")
+        try Data([0x3C, 0x00]).write(to: binary)
+
+        let missing = await openDocument(stateDir.appendingPathComponent("missing.html"), session: session.id, sizePercent: nil)
+        let unreadable = await openDocument(binary, session: session.id, sizePercent: nil)
+        XCTAssertFalse(missing)
+        XCTAssertFalse(unreadable)
+        XCTAssertNil(session.htmlOverlay)
+
+        let shown = await openDocument(page, session: session.id, sizePercent: 75)
+        XCTAssertTrue(shown)
+        XCTAssertEqual(session.htmlOverlay?.source, .document(path: page.path))
+        XCTAssertEqual(session.htmlOverlay?.javascript, false)
+        XCTAssertEqual(session.htmlOverlay?.clicked, true)
+        XCTAssertEqual(session.overlaySizePercent, 75)
+        store.closeOverlay(session.id)
+    }
+
     func testAClickedLogOpensAsAFollowingLogPageAndItsLocationAsTheStaticPage() async throws {
         let (store, session) = try addSession()
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
@@ -543,6 +566,12 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         let link = LinkPolicy.TextLink(url: url, line: line, session: id, sizePercent: sizePercent)
         return await withCheckedContinuation { continuation in
             server.openTextLink(link) { continuation.resume(returning: $0) }
+        }
+    }
+
+    private func openDocument(_ url: URL, session id: UUID, sizePercent: Int?) async -> Bool {
+        await withCheckedContinuation { continuation in
+            server.openDocumentLink(url, session: id, sizePercent: sizePercent) { continuation.resume(returning: $0) }
         }
     }
 
