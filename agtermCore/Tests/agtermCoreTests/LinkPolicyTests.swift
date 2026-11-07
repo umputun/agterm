@@ -281,21 +281,33 @@ struct LinkPolicyTests {
             == .reveal(URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)))
     }
 
-    // a bare path in a pane attached from another Mac names a file on that Mac
-    @Test func remotePaneIgnoresBarePathsAndRevealsFileLinks() throws {
-        let origin = LinkPolicy.ClickOrigin.remotePane(Self.session)
+    // regression: a pane attached from another Mac revealed this Mac's same-named file for a local-host file:// link
+    @Test(arguments: ["/tmp/shot.png", "~/notes.txt", "/tmp/notes.md", "/tmp/pr.html", "/tmp/x.bin", "./report.html",
+                      "src/main.py:42", "file:///tmp/shot.png", "file://localhost/tmp/notes.md", "file://myhost/tmp/pr.html",
+                      "file://buildbox/tmp/a.go", "file:///tmp/x.bin"])
+    func remotePaneForwardsEveryFilePathAsTyped(_ raw: String) {
+        let route = LinkPolicy.route(for: raw, mode: .overlay, origin: .remotePane(Self.session), localHosts: Self.localHosts,
+                                     home: Self.home)
+        #expect(route == .forwardRemote(raw, session: Self.session))
+        #expect(route.localFile == nil)
+    }
+
+    @Test func remotePaneKeepsWebLinksAndIgnoresTheRest() throws {
         let route = { (raw: String) in
-            LinkPolicy.route(for: raw, mode: .overlay, origin: origin, localHosts: Self.localHosts, home: Self.home)
+            LinkPolicy.route(for: raw, mode: .overlay, origin: .remotePane(Self.session), localHosts: Self.localHosts, home: Self.home)
         }
-        #expect(route("/tmp/shot.png") == .ignore)
-        #expect(route("~/notes.txt") == .ignore)
-        #expect(route("file:///tmp/shot.png") == .reveal(URL(fileURLWithPath: "/tmp/shot.png", isDirectory: false)))
-        #expect(route("/tmp/notes.md") == .ignore)
-        #expect(route("file:///tmp/notes.md") == .reveal(URL(fileURLWithPath: "/tmp/notes.md", isDirectory: false)))
-        #expect(route("/tmp/pr.html") == .ignore)
-        #expect(route("file:///tmp/pr.html") == .reveal(URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)))
         let web = try #require(URL(string: "https://example.com/a"))
         #expect(route("https://example.com/a") == .overlay(web, session: Self.session, sizePercent: nil))
+        let local = try #require(URL(string: "http://localhost:3000"))
+        #expect(route("http://localhost:3000") == .overlay(local, session: Self.session, sizePercent: nil))
+        #expect(route("x-custom://run") == .ignore)
+        #expect(route("/tmp/a\u{07}.md") == .ignore)
+        #expect(route("report.md") == .ignore)
+    }
+
+    @Test func aLocationFromARemotePaneIsIgnored() {
+        #expect(LinkPolicy.route(for: Self.loc("/x/a.go", 42), mode: .overlay, origin: .remotePane(Self.session)) == .ignore)
+        #expect(LinkPolicy.route(for: Self.loc("/x/a.png"), mode: .overlay, origin: .remotePane(Self.session)) == .ignore)
     }
 
     // MARK: localHostNames / expandedHostNames (the default-parameter source)
@@ -328,6 +340,7 @@ struct LinkPolicyTests {
 
     static let session = UUID()
     static let origins: [LinkPolicy.ClickOrigin] = [.pane(session), .remotePane(session), .scratch(session), .hud, .programOverlay, .quick]
+    static let localOrigins: [LinkPolicy.ClickOrigin] = [.pane(session), .scratch(session), .hud, .programOverlay, .quick]
 
     @Test(arguments: ["http://example.com/a", "https://example.com/a?q=1"], origins)
     func browserModeSendsWebLinksToTheBrowser(_ raw: String, _ origin: LinkPolicy.ClickOrigin) throws {
@@ -378,7 +391,7 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.route(for: raw, mode: mode, origin: .pane(Self.session), localHosts: Self.localHosts) == .browser(url))
     }
 
-    @Test(arguments: LinkOpenMode.allCases, origins)
+    @Test(arguments: LinkOpenMode.allCases, localOrigins)
     func fileLinksRevealAndOtherSchemesStayIgnoredInEveryMode(_ mode: LinkOpenMode, _ origin: LinkPolicy.ClickOrigin) {
         #expect(LinkPolicy.route(for: "file:///tmp/x.bin", mode: mode, origin: origin, localHosts: Self.localHosts)
             == .reveal(URL(fileURLWithPath: "/tmp/x.bin", isDirectory: false)))
@@ -529,6 +542,18 @@ struct LinkPolicyTests {
         #expect(route("src/a.go:42") == .ignore)
     }
 
+    @Test func aResolvedRouteTakesTheFirstExistingCandidateElseTheTypedRoute() {
+        let candidates = Self.locations("/x/a.go:42")
+        let found = LinkPolicy.resolvedRoute(for: "/x/a.go:42", candidates: candidates, mode: .overlay, origin: .pane(Self.session)) {
+            $0 == "/x/a.go"
+        }
+        #expect(found == .text(LinkPolicy.TextLink(url: URL(fileURLWithPath: "/x/a.go", isDirectory: false), line: 42,
+                                                   session: Self.session, sizePercent: nil)))
+        let missing = LinkPolicy.resolvedRoute(for: "/x/a.go:42", candidates: candidates, mode: .overlay,
+                                               origin: .pane(Self.session)) { _ in false }
+        #expect(missing == .reveal(URL(fileURLWithPath: "/x/a.go:42", isDirectory: false)))
+    }
+
     @Test(arguments: LinkOpenMode.allCases)
     func aFoundLocationOpensAsTextAtItsLineFromAPaneOrTheScratch(_ mode: LinkOpenMode) {
         let size = mode == .browser ? 95 : mode.overlaySizePercent
@@ -541,7 +566,7 @@ struct LinkPolicyTests {
             == .text(LinkPolicy.TextLink(url: url, line: nil, session: Self.session, sizePercent: size)))
     }
 
-    @Test(arguments: [LinkPolicy.ClickOrigin.remotePane(session), .hud, .programOverlay, .quick])
+    @Test(arguments: [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick])
     func aTextFileFromAnotherOriginIsRevealed(_ origin: LinkPolicy.ClickOrigin) {
         let url = URL(fileURLWithPath: "/x/a.go", isDirectory: false)
         #expect(LinkPolicy.route(for: Self.loc("/x/a.go", 42), mode: .overlay, origin: origin) == .reveal(url))

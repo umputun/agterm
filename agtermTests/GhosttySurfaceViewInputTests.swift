@@ -294,17 +294,75 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(followed.opened.isEmpty)
     }
 
-    func testARemotePaneIgnoresABarePath() {
+    private final class Forwarded {
+        var clicks: [RemoteLinkClick] = []
+        var refusals: [(UUID, RemoteLinkRefusal)] = []
+    }
+
+    private func recordForwards(answer: RemoteLinkRefusal?) -> Forwarded {
+        let forwarded = Forwarded()
+        LinkOpener.shared.forward = { click in
+            forwarded.clicks.append(click)
+            return answer
+        }
+        LinkOpener.shared.refuse = { forwarded.refusals.append(($0, $1)) }
+        return forwarded
+    }
+
+    func testARemotePaneForwardsAFilePathAndOpensNothingHere() {
         let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         let pane = bareSurface()
         pane.session = session
+        let followed = recordLinks(mode: .overlay75, overlayOpens: true)
+        let forwarded = recordForwards(answer: nil)
 
-        let followed = recordLinks(mode: .overlay, overlayOpens: true)
         pane.openLink("/tmp/shot.png", intent: .normal)
+        pane.openLink("src/main.py:42", intent: .normal)
+        pane.openLink("file:///tmp/notes.md", intent: .browser)
+
+        XCTAssertEqual(forwarded.clicks, [
+            RemoteLinkClick(raw: "/tmp/shot.png", session: session.id, pane: session.paneIdentity, mode: .overlay75),
+            RemoteLinkClick(raw: "src/main.py:42", session: session.id, pane: session.paneIdentity, mode: .overlay75),
+            RemoteLinkClick(raw: "file:///tmp/notes.md", session: session.id, pane: session.paneIdentity, mode: .browser),
+        ])
+        XCTAssertTrue(forwarded.refusals.isEmpty)
+        XCTAssertTrue(followed.images.isEmpty && followed.markdowns.isEmpty && followed.texts.isEmpty)
+        XCTAssertTrue(followed.revealed.isEmpty && followed.opened.isEmpty)
+    }
+
+    func testARemotePaneReportsARefusedForwardAndARevealChordOnce() {
+        let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let forwarded = recordForwards(answer: .originTooOld)
+
         pane.openLink("/tmp/notes.md", intent: .normal)
-        XCTAssertTrue(followed.images.isEmpty)
-        XCTAssertTrue(followed.markdowns.isEmpty)
-        XCTAssertTrue(followed.revealed.isEmpty)
+        pane.openLink("/tmp/notes.md", intent: .reveal)
+        pane.openLink("x-custom://run", intent: .normal)
+
+        XCTAssertEqual(forwarded.clicks.map(\.raw), ["/tmp/notes.md"])
+        XCTAssertEqual(forwarded.refusals.map(\.1), [.originTooOld, .revealIntent])
+        XCTAssertEqual(forwarded.refusals.map(\.0), [session.id, session.id])
+        XCTAssertTrue(followed.revealed.isEmpty && followed.opened.isEmpty && followed.markdowns.isEmpty)
+    }
+
+    func testAClickNamesThePaneItsSurfaceShows() {
+        let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        session.splitPaneIdentity = UUID()
+        let primary = bareSurface()
+        primary.session = session
+        let split = bareSurface()
+        split.session = session
+        split.isSplitPane = true
+        let forwarded = recordForwards(answer: nil)
+        _ = recordLinks(mode: .overlay, overlayOpens: true)
+
+        primary.openLink("/tmp/a.md", intent: .normal)
+        split.openLink("/tmp/b.md", intent: .normal)
+
+        XCTAssertEqual(forwarded.clicks.map(\.pane), [session.paneIdentity, session.splitPaneIdentity])
+        XCTAssertNil(bareSurface().linkClickPane)
     }
 
     func testAPaneLinkGoesToTheOverlayInOverlayModeAndToTheBrowserWhenItCannotOpen() throws {

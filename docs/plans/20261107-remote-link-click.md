@@ -117,11 +117,13 @@
   LinkLocation, …)` returns `.ignore` for `.remotePane` (no location is offered for one). `locations` keeps
   returning `[]` for a remote pane. `ClickOrigin` and `route`'s signature are unchanged (public, the
   agterm-linux fork uses them); the clicked pane identity travels as a separate argument to `follow`.
-- Shared resolve step: `LinkPolicy.resolve(_ raw:, origin:, cwd:, mode:, exists:) async -> Route` holds the
-  candidate probe and route `LinkOpener.follow` runs today (:39-46); `follow` and the origin both call it.
+- Shared resolve step: `LinkPolicy.resolvedRoute(for:candidates:mode:origin:exists:) -> Route` holds the
+  candidate probe and route `LinkOpener.follow` ran inline; `follow` and the origin both call it off the main
+  actor, and a link with no candidate routes synchronously as before.
 - Frames (`PresentationFrames.swift`): `link.click` body `PresentationLinkClick {raw: String, pane: UUID (origin
   identity), mode: String}`, decoded with `LinkOpenMode(rawValue:) ?? .overlay` so an unknown value never fails;
-  `link.refused` body `PresentationLinkRefusal {reason: String}`. Size-capped like other frames.
+  `link.refused` body `PresentationLinkRefusal {reason: String}` carrying a `RemoteLinkRefusal` raw value, an
+  unknown one read as `notOpened`. Size-capped like other frames.
   `PresentationHub.linkClickKind = "link.click"` joins `supportedKinds`.
 - Hub: `.linkClick` joins the presenter-only branch (`PresentationHub.swift:182`).
 - Client: `RemotePresentationClient` retains the origin hello's `kinds`, reset on link drop, and exposes
@@ -130,8 +132,8 @@
 - Refusal reasons: one agtermCore enum `RemoteLinkRefusal` owns the wording, for example `notPresenter`,
   `originTooOld`, `paneNotAttached`, `revealIntent`, `hidden` (HUD/zoom/cover on this Mac), `notFound`,
   `notAPage` (reveal, ignore or web route on the origin), `notOpened` (any `open*Link` helper `false`: busy slot,
-  mixed lead, probe failure). Its `message(host:)` builds the text; the HUD passes it through
-  `CommandFailure.message`, since the origin's string is remote text and a direct `openHud` skips validation.
+  mixed lead, probe failure). Its `message(host:)` builds the text on the presenting Mac from the raw value and
+  the session's own `remoteHost`, so no wording from the other Mac reaches the HUD and no cleaning is needed.
 - Viewer builder: `AppStore.linkClickRequest(session:, localPane:, raw:, mode:, originSupportsClick:)
   -> Result<PresentationLinkClick, RemoteLinkRefusal>` (option struct if it grows past four inputs).
 - Origin resolver: `AppStore.forwardedClickTarget(session:, pane:) -> (cwd: String?)?` returns nil for a pane
@@ -160,25 +162,28 @@
 - Modify: `agterm/Ghostty/LinkOpener.swift`
 - Modify: `agterm/Ghostty/GhosttySurfaceView+Input.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/LinkPolicyTests.swift`
-- Create: `agtermTests/LinkOpenerTests.swift`
-- Modify: `agtermTests/GhosttySurfaceViewInputTests.swift`
+- Modify: `agtermTests/GhosttySurfaceViewInputTests.swift` (the existing home of the `LinkOpener` click tests,
+  which drive `openLink` on a surface; no separate `LinkOpenerTests.swift`)
 - Create: `agtermCore/Sources/agtermCore/RemoteLinkRefusal.swift` and `agtermCoreTests/RemoteLinkRefusalTests.swift`
 
-- [ ] `RemoteLinkRefusal` with `message(host:)` and a test per reason (the opener's `refuse` closure needs it)
-- [ ] `.forwardRemote` route with the remote-pane rules above, `isRelativeSpelling` split out of
-      `relativePath`, `LinkPolicy.resolve` factored out of `follow`; brief godoc stating the current contract
-- [ ] `LinkOpener`: `forward` closure (raw, session, clicked pane identity, mode) and `refuse` closure (session,
-      `RemoteLinkRefusal`); `.forwardRemote` → forward, or refuse with `revealIntent` when revealing; `.ignore`
-      stays silent
-- [ ] surface passes the clicked pane identity (primary or split) into `follow`
-- [ ] update remote expectations in `LinkPolicyTests` (:285-296, :381-386, :544-548); add hostless, `localhost`,
+- [x] `RemoteLinkRefusal` with `message(host:)` and a test per reason (the opener's `refuse` closure needs it);
+      ➕ it travels by raw value and the presenting Mac builds the text, so no remote wording reaches the HUD;
+      ➕ `RemoteLinkClick` (raw, session, local pane, mode) is the value the opener hands on
+- [x] `.forwardRemote` route with the remote-pane rules above, `isRelativeSpelling` split out of
+      `relativePath`; ➕ the shared step is the synchronous `LinkPolicy.resolvedRoute(for:candidates:…)`, which
+      the caller runs off the main actor, so a link with no candidate keeps routing synchronously
+- [x] `LinkOpener`: `forward` closure (`RemoteLinkClick` → refusal or nil) and `refuse` closure (session,
+      `RemoteLinkRefusal`, default beep); `.forwardRemote` → forward, or refuse with `revealIntent` when revealing;
+      `.ignore` stays silent
+- [x] surface passes the clicked pane identity (primary or split) into `follow` (`linkClickPane`)
+- [x] update remote expectations in `LinkPolicyTests` (:285-296, :381-386, :544-548); add hostless, `localhost`,
       injected this-host and origin-host `file://` cases (all forwarded), a `.bin` case, relative
       `./report.html` and `src/main.py:42` forwarded as typed, `http://localhost:3000` still a web link,
-      `route(for: LinkLocation)` from a remote pane is `.ignore`; `resolve` cases for local panes unchanged
-- [ ] `LinkOpenerTests`: forward is called once and nothing opens or reveals locally; reveal intent refuses
-      once; unsupported scheme is silent; local pane behavior unchanged
-- [ ] `GhosttySurfaceViewInputTests`: a split pane's click carries the split identity, the primary its own
-- [ ] run the touched tests
+      `route(for: LinkLocation)` from a remote pane is `.ignore`; `resolvedRoute` cases for a local pane
+- [x] `GhosttySurfaceViewInputTests`: forward is called once and nothing opens or reveals locally; reveal intent
+      and a refused forward refuse once; unsupported scheme is silent; a split pane's click carries the split
+      identity, the primary its own
+- [x] run the touched tests (66 core, 34 hosted in GhosttySurfaceViewInputTests)
 
 ### Task 2: Presentation protocol
 **Files:**
@@ -222,7 +227,7 @@
 - [ ] `forwardedClickTarget` in agtermCore; `openRemotePage` in forwarded mode admits a hidden clicked remote
       occupant at its slot check and closes it through the existing remote page close path only after every
       other check passed, immediately before the new reservation
-- [ ] `receivePresenterFrame` handles `.linkClick`: capture the presenter generation, target, `resolve` off the
+- [ ] `receivePresenterFrame` handles `.linkClick`: capture the presenter generation, target, `resolvedRoute` off the
       main actor, page routes through the helpers; recheck the generation after each await and before the
       close and reservation, dropping a stale click silently; every other outcome and every helper `false`
       sends one `link.refused` to the captured generation; nothing reveals or opens a browser here
@@ -249,8 +254,8 @@
       calls the builder, then `answer(.linkClick)` or `refuse`
 - [ ] `refuse` beeps when the session already shows a HUD (local or mirrored), its window has a zoomed terminal,
       or a cover overlay holds the slot; otherwise it opens `HudSpec(message:, hideAfter:
-      AppActions.remoteAttachErrorSeconds)` through `openHud` with the text cleaned by `CommandFailure.message`,
-      and beeps if that open fails; `effects.linkRefused` calls the same `refuse` with live state
+      AppActions.remoteAttachErrorSeconds)` through `openHud` with `RemoteLinkRefusal.message(host:)`, and beeps
+      if that open fails; `effects.linkRefused` calls the same `refuse` with live state
 - [ ] core tests: each refusal reason and the success frame with the origin pane identity and mode
 - [ ] hosted tests: a refusal sends nothing; a `link.refused` frame opens one self-hiding HUD; with an agent HUD
       up the refusal beeps and the original HUD stays unchanged; a zoomed terminal and a busy slot beep
