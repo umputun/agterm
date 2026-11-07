@@ -85,6 +85,9 @@ key and logs every call, so the master starts can be counted.
 |---|---|---|
 | open | COUNT sessions on the server, one split; `window remote open` | the window `connected`, COUNT rows, every row's presentation `connected`; every server daemon has one client |
 | reconnect | every master killed with SIGKILL, as a network loss would | the same, and no connection started twice |
+| forward-pages | `busybox httpd` on the server's 127.0.0.1:8099; two sessions open `--url http://localhost:8099/` | each row's page is `http://localhost:<own port>/` |
+| forward-reaches | `curl` through both local ports, polled up to 30 s | both return the server's file |
+| forward-cancel | one page closed on the server | its port refuses connections (curl exit 7) within 15 s; the other still answers; master pids unchanged |
 | ended | a session's daemon killed on the server | the row stays, `ended`, still realized |
 | promoted | the split session's primary daemon killed | the row stays with no split, not ended |
 | shell-exit | `exit` typed into a session | the row is gone |
@@ -104,6 +107,7 @@ sessions: every asserted step passed, exit 0. Masters left by the stopped instan
 |---|---|
 | open | 20 rows connected over 6 masters for 42 counted channels; 21 daemons with one client each |
 | reconnect | every row and pane back after every master was killed; 8 starts, each path once (the reconnect probes' own leases opened 2 slots) |
+| forward-pages, forward-reaches, forward-cancel | 2026-11-07: both loopback pages served through pooled forwards on their own local ports; closing one refused its port while the other answered and every master pid stayed the same |
 | ended, promoted, shell-exit | pass |
 | unreachable, back | Disconnected with all 19 rows kept, then connected |
 

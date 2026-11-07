@@ -324,6 +324,18 @@ struct PresentationFramesTests {
         #expect(try batch.commit().isEmpty)
     }
 
+    @Test func aForwardedPageSourceSurvivesAFrame() throws {
+        let page = PresentationPage(page: UUID().uuidString, token: "t", source: .forwarded("https://localhost:8443/app"),
+                                    identity: "localhost:8443", chromeless: false, javascript: true, navigation: false,
+                                    browse: false, persistent: false, backgroundColor: nil, pane: nil, sizePercent: nil,
+                                    follow: false)
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .pageRequest(page)))
+
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .pageRequest(page))
+        #expect(!PresentationPageSource.forwarded("http://localhost/").usesChannel)
+        #expect(!PresentationPageSource.forwarded("http://localhost/").isContent)
+    }
+
     @Test func aFrameThatWouldEncodeOversizeIsRefused() {
         let body = String(repeating: "x", count: PresentationCodec.maxFrameBytes)
         let frame = PresentationFrame(gen: 1, rev: 1, body: .notify(PresentationNotify(

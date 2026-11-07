@@ -827,6 +827,50 @@ struct ServerStreamsTests {
         #expect(fresh.page == shown.page)
     }
 
+    private func loopbackPage() throws -> HtmlSource {
+        .url(try #require(URL(string: "http://localhost:3000/app")))
+    }
+
+    @Test func aLoopbackPageReachesAPresenterThatForwardsAsAForward() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+
+        #expect(openOverlay(on: session, page: try loopbackPage()).ok)
+
+        let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let page)? = offered else { Issue.record("no page offer"); return }
+        #expect(page.source == .forwarded("http://localhost:3000/app"))
+    }
+
+    @Test func aLoopbackPageIsRefusedForAConnectedPresenterThatCannotForward() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageForwardKind })
+        defer { close(viewer.fd) }
+
+        let reply = openOverlay(on: session, page: try loopbackPage())
+
+        #expect(!reply.ok)
+        #expect(reply.error?.contains("loopback") == true)
+        #expect(session.remoteOverlays.slots.isEmpty)
+    }
+
+    @Test func aHeldLoopbackPageWaitsPastAPresenterThatCannotForward() async throws {
+        let session = try newSession()
+        #expect(openOverlay(on: session, page: try loopbackPage()).ok)
+        let older = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageForwardKind })
+
+        let skipped = await offPool { older.first(within: 0.5) { if case .pageRequest = $0 { true } else { false } } }
+        #expect(skipped == nil)
+        await drop(older, from: session)
+        let next = try await presenter(for: session)
+        defer { close(next.fd) }
+
+        let offered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let page)? = offered else { Issue.record("no page offer"); return }
+        #expect(page.source == .forwarded("http://localhost:3000/app"))
+    }
+
     @Test func aPageThePresenterClosesEnds() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)

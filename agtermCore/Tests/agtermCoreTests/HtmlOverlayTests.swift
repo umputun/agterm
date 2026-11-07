@@ -4,6 +4,23 @@ import Testing
 
 @MainActor
 struct HtmlOverlayTests {
+    @Test func aPinnedFailureOutlastsLaterLoadReportsAndRefusesAReload() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir))
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5001/"))))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+
+        store.failHtmlOverlay(page.id, error: "the port forward failed")
+        store.setHtmlLoadState(page.id, state: .loaded, error: nil)
+
+        #expect(session.htmlOverlay?.loadState == .failed)
+        #expect(session.htmlOverlay?.loadError == "the port forward failed")
+        #expect(store.reloadHtmlOverlay(session.id, pane: nil) == .pinned("the port forward failed"))
+        #expect(session.htmlOverlay?.loadState == .failed)
+    }
+
     final class Sink: PresentationSink {
         var frames: [PresentationFrame] = []
 

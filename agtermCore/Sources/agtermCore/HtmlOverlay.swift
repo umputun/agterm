@@ -247,6 +247,9 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var textChanges: TextChanges?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
+    /// loadFailurePinned keeps a failure the page cannot load past, such as its port forward ending, over every
+    /// later load report and reload.
+    public internal(set) var loadFailurePinned = false
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
     /// finishes and after a reload of the original file.
     public var current: HtmlPageInfo?

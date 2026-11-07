@@ -82,7 +82,7 @@ UNIT
   cat >"$ctx/Dockerfile" <<DOCKERFILE
 FROM ubuntu:24.04
 RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-      systemd systemd-sysv dbus dbus-user-session openssh-server zsh fish bash procps jq >/dev/null \
+      systemd systemd-sysv dbus dbus-user-session openssh-server zsh fish bash procps jq busybox >/dev/null \
     && rm -rf /var/lib/apt/lists/* /etc/ssh/ssh_host_*
 RUN useradd -m -s /bin/zsh agterm && mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/agterm
 COPY ssh_host_ed25519_key ssh_host_ed25519_key.pub /etc/ssh/

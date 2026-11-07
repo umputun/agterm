@@ -101,8 +101,9 @@ final class ControlServer {
     /// remoteLinkRefusalHuds are the slot generations of the refusal panels a forwarded click opened, which a mirrored
     /// HUD may replace; `ControlServer+RemoteLinkClick` owns them.
     var remoteLinkRefusalHuds: [UUID: Int] = [:]
-    /// pageLauncher starts a file page's channel helper; injectable so a hosted test needs no ssh.
+    /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
+    var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
 

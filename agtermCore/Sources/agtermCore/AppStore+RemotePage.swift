@@ -10,7 +10,8 @@ public enum RemotePageOpen: Equatable, Sendable {
     case paneMissing
     /// unsupported: the presenter cannot show pages, so the page is refused.
     case unsupported
-    /// loopback: a URL on this Mac's loopback names a server the presenter cannot reach.
+    /// loopback: a URL on the origin's loopback names a server the presenter cannot reach: a Mac origin's always,
+    /// and a headless origin's when its connected presenter cannot forward it.
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
@@ -58,15 +59,20 @@ extension AppStore {
         let pane = options.pane
         // a headless origin holds the page for a presenter to come; a Mac shows it here
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID) || headless, let session = session(withID: sessionID),
-              let source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
+              var source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
         let replaces = options.forwarded && holdsHiddenClickedRemotePage(pane, in: session)
         guard session.remoteOverlays.slot(pane) == nil || replaces, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .local }
+        // a headless origin's loopback URL is reached through the presenter's own forward; a Mac's stays refused
+        if headless, case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
+            source = .forwarded(url.absoluteString)
+        }
         let shows = presenterShows(source, session: sessionID)
         if !shows, !headless { return .unsupported }
-        if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
+        if case .url(let url) = source, HtmlSource.isLoopback(url) { return .loopback }
+        if case .forwarded = source, hub.hasPresenter(session: sessionID), !shows { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
         let points = size == nil ? OverlayPointSize() : options.points
@@ -107,6 +113,7 @@ extension AppStore {
               PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return false }
         if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return false }
         if case .document = source { return hub.presenterSupports(PresentationHub.pageDocumentKind, session: sessionID) }
+        if case .forwarded = source { return hub.presenterSupports(PresentationHub.pageForwardKind, session: sessionID) }
         return true
     }
 

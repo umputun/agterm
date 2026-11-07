@@ -584,13 +584,13 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Create: `agterm/Control/RemotePortForward.swift`
 - Create: tests in `agtermCoreTests` and `agtermTests`
 
-- [ ] a new presenter capability for forwarded loopback pages; a headless origin sends a loopback URL page only to a
+- [x] a new presenter capability for forwarded loopback pages; a headless origin sends a loopback URL page only to a
       presenter that advertises it, as a forward request rather than a plain `.url` source, and refuses it for an
       older presenter, which would otherwise load its own 127.0.0.1
-- [ ] the Mac opens `ssh -L` with `ExitOnForwardFailure` on a free local port for the page's lifetime, rewrites the
+- [x] the Mac opens `ssh -L` with `ExitOnForwardFailure` on a free local port for the page's lifetime, rewrites the
       URL to it, and shows a visible error when the forward fails; the forward closes with the page
-- [ ] a Mac origin keeps refusing loopback URLs for remote handoff, as today
-- [ ] tests: capability gating and old-presenter refusal, URL rewrite, forward lifetime tied to the page, failure
+- [x] a Mac origin keeps refusing loopback URLs for remote handoff, as today
+- [x] tests: capability gating and old-presenter refusal, URL rewrite, forward lifetime tied to the page, failure
       path, Mac-origin refusal unchanged
 
 ### Task 12: Server install and agent setup

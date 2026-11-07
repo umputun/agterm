@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # remote window gate against scripts/server-container.sh: a 20-session catalog under stock sshd (MaxSessions 10),
-# reconnect after dropped masters, an ended row, a promoted split, a shell exit, and an unreachable server.
+# reconnect after dropped masters, loopback pages through pooled forwards, an ended row, a promoted split, a shell
+# exit, and an unreachable server.
 # docs/remote-linux-gate.md says what each step checks.
 #
 # usage: AGTERM_STATE_DIR=/tmp/agw scripts/remote-window-gate.sh [COUNT]
@@ -145,12 +146,12 @@ launch
 reply="$(ctl window remote open "$HOST" --json)"
 WINDOW="$(jq -r '.result.id // empty' <<<"$reply")"
 [[ -n "$WINDOW" ]] || die "window remote open failed: $reply"
-check open "$(sed "s/\\\$n/$COUNT/" <<<"$all_up")" 120
+check open "${all_up//\$n/$COUNT}" 120
 masters=0
 for path in $(own_paths); do [[ -z "$(master_pid "$path")" ]] || masters=$((masters + 1)); done
 attached="$(zmx_list | grep -c 'clients=1' || true)"
 record RECORDED masters "$masters live masters, $(starts) starts, $attached daemons with one client"
-(( attached == COUNT + 1 )) && record PASS attached "every pane has its client" || record FAIL attached "$attached of $((COUNT + 1))"
+if (( attached == COUNT + 1 )); then record PASS attached "every pane has its client"; else record FAIL attached "$attached of $((COUNT + 1))"; fi
 
 # --- drop every master as a network loss would, then expect one start per master and every pane back
 before="$(starts)"
@@ -159,15 +160,64 @@ for path in $(own_paths); do
   [[ -z "$pid" ]] || kill -9 "$pid" 2>/dev/null || true
 done
 sleep 5
-check reconnect "$(sed "s/\\\$n/$COUNT/" <<<"$all_up")" 120
+check reconnect "${all_up//\$n/$COUNT}" 120
 after="$(starts)"
 attached="$(zmx_list | grep -c 'clients=1' || true)"
 # reconnect probes hold counted leases too, so a full pool may open new slots; each path still starts once
 twice="$(grep -- '-f -N -M' "$STATE/ssh-calls.log" | tail -n +$((before + 1)) | sed -E 's/.*ControlPath=([^ ]+).*/\1/' \
   | sort | uniq -d | wc -l | tr -d ' ')"
 record RECORDED restarts "$((after - before)) starts after the drop for $masters masters, $attached daemons with one client"
-(( twice == 0 )) && record PASS one-start-each "no connection started twice" || record FAIL one-start-each "$twice started twice"
-(( attached == COUNT + 1 )) && record PASS reattached "every pane has its client" || record FAIL reattached "$attached of $((COUNT + 1))"
+if (( twice == 0 )); then record PASS one-start-each "no connection started twice"; else record FAIL one-start-each "$twice started twice"; fi
+if (( attached == COUNT + 1 )); then record PASS reattached "every pane has its client"; else record FAIL reattached "$attached of $((COUNT + 1))"; fi
+
+# --- a page on the server's loopback reaches this Mac through a forward on the pooled master; closing one page cancels
+# its forward alone
+FWD_A="${ids[3]}" FWD_B="${ids[4]}"
+remote "mkdir -p /tmp/gate-www && echo agterm-forward-gate > /tmp/gate-www/index.html && (busybox httpd -p 127.0.0.1:8099 -h /tmp/gate-www || true)" >/dev/null
+for target in "$FWD_A" "$FWD_B"; do remote "agtermctl session overlay open --target $target --url http://localhost:8099/" >/dev/null; done
+pages="$rows | map(select(.id == \"$FWD_A\" or .id == \"$FWD_B\")) | map(.htmlOverlays[0].url // \"\")"
+check forward-pages "$pages | length == 2 and all(test(\"^http://localhost:[0-9]+/$\")) and .[0] != .[1]"
+local_port() {
+  ctl tree --window "$WINDOW" --json \
+    | jq -r --arg s "$1" '.result.tree.workspaces[].sessions[] | select(.id == $s) | .htmlOverlays[0].url // ""' \
+    | sed -E 's|^http://localhost:([0-9]+)/$|\1|'
+}
+fetch() { curl -s --max-time 5 "http://localhost:$1/" 2>/dev/null || true; }
+# curl exits 7 only when every address localhost resolves to refused the connection
+# shellcheck disable=SC2329 # runs through within
+refused() {
+  local status=0
+  curl -s -o /dev/null --max-time 5 "http://localhost:$1/" 2>/dev/null || status=$?
+  (( status == 7 ))
+}
+# a predicate polled until it holds or `limit` seconds pass
+within() {
+  local limit="$1" end
+  shift
+  end=$((SECONDS + limit))
+  until "$@"; do
+    (( SECONDS < end )) || return 1
+    sleep 1
+  done
+}
+# shellcheck disable=SC2329 # runs through within
+both_answer() { [[ "$(fetch "$port_a")" == agterm-forward-gate && "$(fetch "$port_b")" == agterm-forward-gate ]]; }
+port_a="$(local_port "$FWD_A")" port_b="$(local_port "$FWD_B")"
+if within 30 both_answer; then
+  record PASS forward-reaches "both local ports return the server's page"
+else
+  record FAIL forward-reaches "ports $port_a $port_b"
+fi
+masters_before="$(for path in $(own_paths); do master_pid "$path"; done | sort | tr '\n' ' ')"
+remote "agtermctl session overlay close --target $FWD_A" >/dev/null
+if within 15 refused "$port_a"; then closed=yes; else closed=no; fi
+masters_after="$(for path in $(own_paths); do master_pid "$path"; done | sort | tr '\n' ' ')"
+if [[ "$closed" == yes && "$(fetch "$port_b")" == agterm-forward-gate && "$masters_before" == "$masters_after" ]]; then
+  record PASS forward-cancel "the closed page's port refuses connections, the other answers, the masters are the same"
+else
+  record FAIL forward-cancel "refused $closed on $port_a, $port_b answer, masters $masters_before / $masters_after"
+fi
+remote "agtermctl session overlay close --target $FWD_B" >/dev/null
 
 # --- a killed daemon ends its row, which keeps its screen
 daemon="$(remote 'agtermctl zmx tree --json' | jq -r --arg s "$ENDS" '.result.remote.sessions[] | select(.id == $s) | .panes[0].daemon')"
@@ -200,9 +250,13 @@ check back "(.remote.state == \"connected\")" 120
 stray=0
 while read -r pid path; do
   [[ "$(master_pid "$path")" == "$pid" ]] || stray=$((stray + 1))
-done < <(ps -axo pid=,command= | grep -- "-F $STATE/ssh_config -f -N -M" | grep -v grep \
-  | sed -E 's/^ *([0-9]+) .*ControlPath=([^ ]+).*/\1 \2/')
-(( stray == 0 )) && record PASS no-stray-ssh "every running start is its path's master" \
-  || record FAIL no-stray-ssh "$stray starts running as plain sessions"
+done < <(for start in $(pgrep -f -- "-F $STATE/ssh_config -f -N -M"); do
+  ps -o pid=,command= -p "$start" | sed -E 's/^ *([0-9]+) .*ControlPath=([^ ]+).*/\1 \2/'
+done)
+if (( stray == 0 )); then
+  record PASS no-stray-ssh "every running start is its path's master"
+else
+  record FAIL no-stray-ssh "$stray starts running as plain sessions"
+fi
 
 exit "$FAILED"

@@ -3,6 +3,26 @@ import Testing
 @testable import agtermCore
 
 struct RemoteSessionTests {
+    @Test func aForwardOfItsOwnSwitchesMultiplexingOffAndFailsOnABusyPort() throws {
+        #expect(try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000") == [
+            "ssh", "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ControlMaster=no", "-o", "ControlPath=none",
+            "-o", "ExitOnForwardFailure=yes", "-L", "localhost:5001:localhost:3000", "box",
+        ])
+        #expect(throws: (any Error).self) { try RemoteSession.forwardCommand(host: "-oProxyCommand=x", spec: "a") }
+    }
+
+    @Test func aPooledForwardIsAddedCancelledAndCheckedThroughItsControlSocket() throws {
+        #expect(try RemoteSession.forwardControlCommand("forward", host: "box", controlPath: "/tmp/m", spec: "s") ==
+            ["ssh", "-O", "forward", "-o", "ControlPath=/tmp/m", "-L", "s", "box"])
+        #expect(try RemoteSession.forwardControlCommand("check", host: "box", controlPath: "/tmp/m") ==
+            ["ssh", "-O", "check", "-o", "ControlPath=/tmp/m", "box"])
+    }
+
+    @Test func theConnectionsPidIsReadFromItsCheck() {
+        #expect(RemoteSession.connectionPID("Master running (pid=4242)\r\n") == 4242)
+        #expect(RemoteSession.connectionPID("Control socket connect(/tmp/m): No such file or directory") == nil)
+    }
+
     private let daemon = ZmxSupport.daemonName(for: UUID())
     private let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/Contents/Resources/zmx/zmx",
                                               socketDirectory: "/tmp/agterm-zmx-abc123")

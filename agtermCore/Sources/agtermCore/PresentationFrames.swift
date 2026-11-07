@@ -294,17 +294,22 @@ public enum PresentationPageSource: Codable, Equatable, Sendable {
     case text(path: String, line: Int?)
     /// document goes only to a presenter also listing `PresentationHub.pageDocumentKind`, for the same reason.
     case document(path: String)
+    /// forwarded is a URL on a headless origin's own loopback, which the presenter reaches through an ssh forward
+    /// it opens; only a presenter listing `page.forward` is sent one.
+    case forwarded(String)
 
     /// usesChannel says the viewer fetches this page over a page channel, which a single-use claim opens.
     public var usesChannel: Bool {
-        if case .url = self { return false }
-        return true
+        switch self {
+        case .url, .forwarded: return false
+        case .file, .image, .markdown, .text, .document: return true
+        }
     }
 
     /// isContent says this is a page the viewer builds from fetched bytes rather than loads as HTML.
     public var isContent: Bool {
         switch self {
-        case .file, .url: return false
+        case .file, .url, .forwarded: return false
         case .image, .markdown, .text, .document: return true
         }
     }

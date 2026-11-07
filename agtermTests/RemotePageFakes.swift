@@ -206,3 +206,55 @@ final class ScriptedRunner: RemoteCommandRunner, @unchecked Sendable {
         }
     }
 }
+
+@MainActor
+final class FakeForwardLauncher: RemoteForwardLauncher {
+    final class Process: RemoteForwardProcess {
+        private(set) var terminated = false
+        var onExit: (@MainActor (String) -> Void)?
+        var listener: Int32 = -1
+
+        func terminate() {
+            terminated = true
+            if listener >= 0 { close(listener) }
+            listener = -1
+        }
+    }
+
+    var listens = true
+    private(set) var launches: [[String]] = []
+    private(set) var processes: [Process] = []
+
+    func launch(_ argv: [String], onExit: @escaping @MainActor (String) -> Void) throws -> RemoteForwardProcess {
+        launches.append(argv)
+        let process = Process()
+        process.onExit = onExit
+        if listens, let index = argv.firstIndex(of: "-L"), let port = Int(argv[index + 1].split(separator: ":")[1]) {
+            process.listener = Self.listen(port)
+        }
+        processes.append(process)
+        return process
+    }
+
+    var localPort: Int? {
+        launches.last.flatMap { argv in argv.firstIndex(of: "-L").flatMap { Int(argv[$0 + 1].split(separator: ":")[1]) } }
+    }
+
+    static func listen(_ port: Int) -> Int32 {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        guard bound == 0, Darwin.listen(fd, 4) == 0 else {
+            close(fd)
+            return -1
+        }
+        return fd
+    }
+}

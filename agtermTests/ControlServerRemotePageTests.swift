@@ -54,12 +54,14 @@ final class ControlServerRemotePageTests: XCTestCase {
         let session: Session
         let transport: Transport
         let launcher: FakePageLauncher
+        let forwards: FakeForwardLauncher
     }
 
     private static let origin = UUID(uuidString: "BBBBBBBB-0000-0000-0000-000000000002")!
     private var stateDir: URL!
     private var servers: [ControlServer] = []
     private var launchers: [FakePageLauncher] = []
+    private var forwardLaunchers: [FakeForwardLauncher] = []
     private var windows: [NSWindow] = []
     private var savedBrowser: (any HtmlBrowser)?
 
@@ -82,6 +84,8 @@ final class ControlServerRemotePageTests: XCTestCase {
         servers.removeAll()
         for launcher in launchers { launcher.closeAll() }
         launchers.removeAll()
+        for forwards in forwardLaunchers { forwards.processes.forEach { $0.terminate() } }
+        forwardLaunchers.removeAll()
         if let savedBrowser { HtmlOverlayRegistry.shared.browser = savedBrowser }
         try? FileManager.default.removeItem(at: stateDir)
         try await super.tearDown()
@@ -102,6 +106,9 @@ final class ControlServerRemotePageTests: XCTestCase {
         launcher.reply = reply
         launchers.append(launcher)
         server.pageLauncher = launcher
+        let forwards = FakeForwardLauncher()
+        forwardLaunchers.append(forwards)
+        server.forwardLauncher = forwards
         let transport = Transport()
         server.remoteTransport = transport
         let store = try XCTUnwrap(library.activeStore)
@@ -112,7 +119,7 @@ final class ControlServerRemotePageTests: XCTestCase {
         server.startRemotePresentation(for: session)
         try transport.feed(.hello(PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)))
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)))
-        return Fixture(server: server, store: store, session: session, transport: transport, launcher: launcher)
+        return Fixture(server: server, store: store, session: session, transport: transport, launcher: launcher, forwards: forwards)
     }
 
     private func page(_ source: PresentationPageSource, javascript: Bool = true) -> PresentationPage {
@@ -202,6 +209,65 @@ final class ControlServerRemotePageTests: XCTestCase {
         fix.store.closeOverlay(fix.session.id)
 
         XCTAssertEqual(closedNotices(fix), 1)
+    }
+
+    private func waitUntil(_ what: String, _ condition: () -> Bool) {
+        let deadline = Date().addingTimeInterval(10)
+        while !condition(), Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertTrue(condition(), what)
+    }
+
+    func testAForwardedPageLoadsItsOwnHostAtALocalPortAndReloadsOnceTheForwardAnswers() throws {
+        let fix = try fixture()
+
+        _ = try present(fix, page(.forwarded("https://localhost:8443/app?x=1")))
+
+        let port = try XCTUnwrap(fix.forwards.localPort)
+        let argv = try XCTUnwrap(fix.forwards.launches.first)
+        XCTAssertEqual(Array(argv.suffix(3)), ["-L", "localhost:\(port):localhost:8443", "buildbox"])
+        XCTAssertTrue(argv.contains("ControlPath=none"))
+        XCTAssertEqual(fix.session.htmlOverlay?.source, .url(try XCTUnwrap(URL(string: "https://localhost:\(port)/app?x=1"))))
+        let before = try XCTUnwrap(fix.session.htmlOverlay?.reloadRevision)
+        waitUntil("the page reloads once the forward answers") { fix.session.htmlOverlay?.reloadRevision == before + 1 }
+    }
+
+    func testAForwardEndingAfterItAnsweredPinsTheFailure() throws {
+        let fix = try fixture()
+        _ = try present(fix, page(.forwarded("http://localhost:3000/")))
+        let before = try XCTUnwrap(fix.session.htmlOverlay?.reloadRevision)
+        waitUntil("the forward answers") { fix.session.htmlOverlay?.reloadRevision == before + 1 }
+
+        fix.forwards.processes[0].onExit?("channel 2: open failed: connect failed: Connection refused\n")
+        fix.store.setHtmlLoadState(try XCTUnwrap(fix.session.htmlOverlay?.id), state: .loaded, error: nil)
+
+        XCTAssertEqual(fix.session.htmlOverlay?.loadState, .failed)
+        XCTAssertEqual(fix.session.htmlOverlay?.loadError, "the port forward ended: channel 2: open failed: connect failed: Connection refused")
+    }
+
+    func testClosingAForwardedPageBeforeItsForwardAnswersStopsIt() throws {
+        let fix = try fixture()
+        fix.forwards.listens = false
+        _ = try present(fix, page(.forwarded("http://localhost:3000/")))
+
+        fix.store.closeOverlay(fix.session.id)
+        let port = try XCTUnwrap(fix.forwards.localPort)
+        let late = FakeForwardLauncher.listen(port)
+        defer { close(late) }
+        RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+
+        XCTAssertTrue(fix.forwards.processes[0].terminated)
+        XCTAssertEqual(closedNotices(fix), 1)
+        XCTAssertNil(fix.session.htmlOverlay)
+    }
+
+    func testAForwardedPageTheStoreRefusesStartsNoForward() throws {
+        let fix = try fixture()
+        XCTAssertTrue(fix.store.openOverlay(fix.session.id, command: "htop"))
+
+        try fix.transport.feed(.pageRequest(page(.forwarded("http://localhost:3000/"))))
+
+        XCTAssertTrue(fix.forwards.launches.isEmpty)
+        XCTAssertTrue(fix.server.replicaPages.isEmpty)
     }
 
     func testFinderAndBrowserAreRefusedOnAFileReplicaButBrowserOpensAUrlReplica() throws {

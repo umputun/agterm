@@ -16,12 +16,15 @@ struct ReplicaPageRecord {
     /// channelLost marks a page taken down because its channel ended rather than closed by anyone; the origin decides
     /// what that ends.
     var channelLost = false
+    /// forward is the port forward a page on the origin's loopback is loaded through.
+    var forward: PageForward?
 }
 
 extension ControlServer {
     /// showReplicaPage presents `page` for session `id`'s origin; nil when shown, otherwise the refusal reason.
     func showReplicaPage(_ page: PresentationPage, forSession id: UUID) -> String? {
         guard let store = library.store(forSession: id), let session = store.session(withID: id) else { return "no such session" }
+        if case .forwarded(let address) = page.source { return showForwardedPage(page, address: address, in: store, session: session) }
         var page = page
         var argv: [String]?
         let pool = page.source.usesChannel ? catalogPool(forSession: id) : nil
@@ -75,10 +78,52 @@ extension ControlServer {
         return nil
     }
 
+    /// showForwardedPage shows a page on a headless origin's loopback at a free local port, then opens the forward
+    /// that port reaches the origin through: a page the store refuses never starts one.
+    private func showForwardedPage(_ page: PresentationPage, address: String, in store: AppStore, session: Session) -> String? {
+        guard let host = session.remoteHost, let forwarded = ForwardedPage(address) else { return "invalid url" }
+        guard let port = RemotePortForward.freePort(host: forwarded.host), let local = forwarded.url(localPort: port) else {
+            return "no free local port for the page's forward"
+        }
+        var shown = page
+        shown.source = .url(local.absoluteString)
+        if let reason = store.presentReplicaPage(shown, forSession: session.id) { return reason }
+        guard let slot = store.replicaPage(page.page, forSession: session.id), let origin = slot.page.replicaOf else {
+            return "page not shown"
+        }
+        let pageID = slot.page.id
+        replicaPages[pageID] = ReplicaPageRecord(session: session.id, origin: origin, channel: nil)
+        _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor, replica: nil)
+        let spec = forwarded.spec(localPort: port)
+        let onEvent: @MainActor (PortForwardEvent) -> Void = { [weak self, weak store] event in
+            guard let store, self?.replicaPages[pageID]?.forward != nil else { return }
+            switch event {
+            case .ready:
+                if let place = store.htmlOverlaySlot(pageID) { _ = store.reloadHtmlOverlay(place.session.id, pane: place.pane) }
+            case .failed(let reason): store.failHtmlOverlay(pageID, error: reason)
+            }
+        }
+        let forward: PageForward
+        if let pool = catalogPool(forSession: session.id) {
+            let runner = remoteRunner
+            forward = PooledForward(pool: pool, user: "forward:\(page.token)", spec: spec,
+                                    runner: { await runner.run($0, deadline: 15) }, onEvent: onEvent)
+        } else if let argv = try? RemoteSession.forwardCommand(host: host, spec: spec) {
+            forward = RemotePortForward(argv: argv, host: forwarded.host, port: port, launcher: forwardLauncher, onEvent: onEvent)
+        } else {
+            store.failHtmlOverlay(pageID, error: "the port forward to \(host) cannot be started")
+            return nil
+        }
+        replicaPages[pageID]?.forward = forward
+        forward.start()
+        return nil
+    }
+
     /// replicaPageReleased tells the origin a page shown here left its slot, whatever closed it, and stops its
     /// channel. Runs once per page, from the model's release signal.
     func replicaPageReleased(_ local: UUID, origin: UUID) {
         guard let record = replicaPages.removeValue(forKey: local) else { return }
+        record.forward?.stop()
         record.poolUser.map { catalogPool(forSession: record.session)?.release($0) }
         pendingReplicaStates.remove(local)
         remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(

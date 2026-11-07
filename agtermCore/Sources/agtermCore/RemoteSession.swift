@@ -79,6 +79,26 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
     }
 
+    /// forwardCommand is a forward of its own for a row with no pooled master: ControlMaster and ControlPath are
+    /// switched off over any ssh_config, so the listener lives in this process and ends with it.
+    public static func forwardCommand(host: String, spec: String, connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        return ["ssh", "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=\(connectTimeout)", "-o", "ControlMaster=no",
+                "-o", "ControlPath=none", "-o", "ExitOnForwardFailure=yes", "-L", spec, host]
+    }
+
+    /// forwardControlCommand adds (`forward`), removes (`cancel`) or, with no spec, checks the master at `controlPath`.
+    public static func forwardControlCommand(_ operation: String, host: String, controlPath: String, spec: String? = nil) throws -> [String] {
+        try validate(host: host)
+        return ["ssh", "-O", operation, "-o", "ControlPath=" + controlPath] + (spec.map { ["-L", $0] } ?? []) + [host]
+    }
+
+    /// connectionPID reads the pid `ssh -O check` reports for a running master, nil when it reports none.
+    public static func connectionPID(_ output: String) -> Int32? {
+        guard let start = output.range(of: "(pid=")?.upperBound, let end = output[start...].firstIndex(of: ")") else { return nil }
+        return Int32(output[start..<end])
+    }
+
     /// One ssh invocation running the far side's `agtermctl` with `arguments` plus `--json`, so the reply is the
     /// server's own response line. Arguments carry user text, so the outer layer is quoted for any login shell.
     /// `operands` follow a `--`, so one starting with `-` is never read as an option.
