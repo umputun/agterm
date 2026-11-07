@@ -47,6 +47,31 @@ final class AppActionsCompanionsTests: XCTestCase {
         XCTAssertTrue(opened.spec.message.contains(RefusingDuplicator.reason), opened.spec.message)
         XCTAssertEqual(opened.spec.hideAfter, AppActions.remoteAttachErrorSeconds)
     }
+
+    func testConvertToCompanionNestsTheSessionUnderAFreshParentAndKeepsItSelected() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+
+        actions.convertToCompanion(session.id, in: store)
+
+        let parent = try XCTUnwrap(store.parent(of: session))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(store.selectedSessionID, session.id)
+        XCTAssertTrue(huds.opened.isEmpty)
+    }
+
+    func testARefusedConvertShowsTheReasonInATimedHudOverTheSession() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let companion = try store.addCompanion(to: session.id).get()
+
+        actions.convertToCompanion(companion.id, in: store)
+
+        let opened = try XCTUnwrap(huds.opened.first)
+        XCTAssertEqual(opened.session, companion.id.uuidString)
+        XCTAssertTrue(opened.spec.message.contains(ConvertRefusal.alreadyCompanion.message), opened.spec.message)
+        XCTAssertEqual(companion.parentID, session.id)
+    }
 }
 
 private final class RefusingDuplicator: CompanionDuplicating {

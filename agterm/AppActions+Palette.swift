@@ -46,7 +46,9 @@ extension AppActions {
             dashboardOpen: frontmostDashboard?.isOpen == true,
             pickerActive: pickActive(for: library.activeWindowID),
             activeSessionHasOverlay: activeStore?.activeSession?.hideableOverlaySlots(nil).isEmpty == false,
-            activeSessionIsPage: activeStore?.activeSession?.content == .page
+            activeSessionIsPage: activeStore?.activeSession?.content == .page,
+            activeSessionIsCompanion: activeStore?.activeSession?.parentID != nil,
+            activeSessionIsRemote: activeStore?.activeSession?.remoteHost != nil
         )
     }
 
@@ -79,6 +81,7 @@ extension AppActions {
         case .duplicateSession: duplicateActiveSession()
         case .newCompanion: newCompanionOfActiveSession()
         case .duplicateCompanion: duplicateActiveSessionAsCompanion()
+        case .convertCompanion: convertActiveSessionToCompanion()
         case .renameWorkspace: renameActiveWorkspace()
         case .closeSession: closeActiveSession()
         case .reopenRecent: openLatestRecentClosed()

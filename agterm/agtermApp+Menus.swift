@@ -166,6 +166,9 @@ extension agtermApp {
                 Button("Duplicate as Companion") { actions.duplicateActiveSessionAsCompanion() }
                     .keyboardShortcut(shortcut(for: .duplicateCompanion))
                     .disabled(!PaletteCommand.duplicateCompanion.isEnabled(in: context))
+                Button("Convert to Companion") { actions.convertActiveSessionToCompanion() }
+                    .keyboardShortcut(shortcut(for: .convertCompanion))
+                    .disabled(!PaletteCommand.convertCompanion.isEnabled(in: context))
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {

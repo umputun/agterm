@@ -122,6 +122,14 @@ extension WorkspaceSidebar.Coordinator {
                     copy.representedObject = node
                     menu.addItem(copy)
                 }
+                if let session = store.session(withID: node.id), session.parentID == nil {
+                    let convert = NSMenuItem(title: "Convert to Companion", action: #selector(menuConvertCompanion(_:)),
+                                             keyEquivalent: "")
+                    convert.target = self
+                    convert.representedObject = node
+                    convert.isEnabled = session.remoteHost == nil
+                    menu.addItem(convert)
+                }
             }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
@@ -297,6 +305,11 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuDuplicateCompanion(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
         actions.duplicateAsCompanion(node.id, in: store)
+    }
+
+    @objc private func menuConvertCompanion(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        actions.convertToCompanion(node.id, in: store)
     }
 
     @objc private func menuNewCompanion(_ sender: NSMenuItem) {

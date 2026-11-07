@@ -138,8 +138,9 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - Row context menu item after Duplicate as Companion, inside the single-selection (`sessionCount == 1`)
   block. It is omitted on companion rows, as Duplicate as Companion is on page rows, and disabled on
   remote rows.
-- `AppActions.convertToCompanion(_:in:)` shared by all three; a refusal goes to `notifyCommandFailure`
-  with the `ConvertRefusal` message.
+- `AppActions.convertToCompanion(_:in:)` shared by all three; a refusal shows the `ConvertRefusal` message in
+  the timed `RemoteAttachHud` over the session, as Duplicate as Companion's refusal does, falling back to
+  `notifyCommandFailure`.
 
 ## What Goes Where
 - **Implementation Steps**: code, tests and docs in this repo.
@@ -238,16 +239,17 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - Modify: `agtermTests/AppActionsCompanionsTests.swift`
 - Modify: `agtermTests/WorkspaceSidebarCompanionsTests.swift`
 
-- [ ] write failing tests: `convert_companion` parses and is keyless (`BuiltinActionTests` `allCases`
-  count 54 to 55); the palette row exists (`PaletteCatalogTests` count 61 to 62 and its title list) and
+- [x] write failing tests: `convert_companion` parses and is keyless (`BuiltinActionTests` `allCases`
+  count 54 to 55, plus the two tables that pin every action); the palette row exists (`PaletteCatalogTests` count 61 to 62 and its title list) and
   `isEnabled(in:)` refuses a companion, a remote and a page session; the `keymap list` expected output in
   `SocketClientTests` gains `convert_companion`; `AppActions.convertToCompanion` converts and selects, and
   a refusal notifies with the store's message; the context menu shows the item on a single top-level row,
   omits it on a companion row, and disables it on a remote row
-- [ ] add the builtin action, the `PaletteContext` terms and `isEnabled(in:)` case, the `terminalOnly`
+- [x] add the builtin action, the `PaletteContext` terms and `isEnabled(in:)` case, the `terminalOnly`
   entry, the palette row, `AppActions` entries, the Session menu item and the row context menu item
-- [ ] run the affected core and hosted tests, then `lsappinfo list | grep -A4 agterm.debug` - must pass
+- [x] run the affected core and hosted tests, then `lsappinfo list | grep -A4 agterm.debug` - must pass
   before task 5
+- ⚠️ as in Task 3, the tests were written first but failed only at compile time against the missing symbols
 
 ### Task 5: Docs, skill and rules
 
