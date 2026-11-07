@@ -67,6 +67,12 @@ extension AppStore {
         session.parentID.flatMap(self.session(withID:))
     }
 
+    /// groupRoot is the parent a session restored under `recordedParent` joins: the recorded parent, or its own
+    /// parent once Convert to Companion has made it a companion. Nesting is one level, so one hop is enough.
+    func groupRoot(of recordedParent: UUID) -> UUID {
+        session(withID: recordedParent)?.parentID ?? recordedParent
+    }
+
     /// addCompanion creates a companion after the parent's last one; a companion target means its parent.
     @discardableResult
     public func addCompanion(to targetID: UUID, options: CompanionOptions = CompanionOptions()) -> Result<Session, CompanionRefusal> {

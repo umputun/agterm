@@ -22,7 +22,8 @@ extension AppStore {
             // the id occupied means that lookup missed. Refuse rather than build the second object.
             guard !occupiedElsewhere.contains(recent.snapshot.id) else { return .failed }
             let index: Int
-            if let parentID = recent.snapshot.parentID {
+            let parentID = recent.snapshot.parentID.map(groupRoot(of:))
+            if let parentID {
                 // a lone companion goes under its parent wherever the parent lives now, never on its own
                 guard let parent = location(ofSession: parentID) else { return .failed }
                 index = parent.workspaceIndex
@@ -34,6 +35,7 @@ extension AppStore {
                 index = insertAt
             }
             let session = session(from: recent.snapshot)
+            session.parentID = parentID
             let insertAt = insertionIndex(for: session, near: recent.sessionIndex, in: workspaces[index].sessions)
             workspaces[index].sessions.insert(session, at: insertAt)
             emitSessionCreated(session, workspace: workspaces[index].id)

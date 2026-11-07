@@ -679,6 +679,29 @@ struct AppStoreCompanionsTests {
         #expect(sessions[1...2].allSatisfy { $0.parentID == fresh.id })
     }
 
+    @Test func anUndoneCompanionCloseFollowsItsParentIntoTheConvertedGroup() throws {
+        let g = try CompanionGroup()
+        #expect(g.store.softCloseSession(g.first.id, grace: 60))
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.store.undoPendingClose())
+
+        #expect(g.first.parentID == fresh.id)
+        #expect(Set(g.store.companions(of: fresh.id).map(\.id)) == [g.parent.id, g.first.id, g.second.id])
+    }
+
+    @Test func aConvertedGroupsHardCloseEndsTheUndoOfCompanionsParkedUnderTheConvertedSession() throws {
+        let g = try CompanionGroup()
+        #expect(g.store.softCloseSession(g.first.id, grace: 60))
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        g.store.closeSession(fresh.id)
+
+        #expect(g.store.pendingCloseSession(withID: g.first.id) == nil)
+        #expect(!g.store.undoPendingClose())
+        #expect(g.store.session(withID: g.first.id) == nil)
+    }
+
     @Test func aSoftClosedConvertedGroupUndoesWhole() throws {
         let g = try CompanionGroup()
         let fresh = try g.store.convertToCompanion(g.parent.id).get()

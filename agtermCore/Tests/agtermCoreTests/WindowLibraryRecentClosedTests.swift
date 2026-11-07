@@ -174,4 +174,81 @@ final class WindowLibraryRecentClosedTests {
         #expect(store.session(withID: companion.id) == nil)
         #expect(library.recentClosedItems.map(\.id) == [companionEntry.id])
     }
+
+    @Test func aCompanionClosedBeforeItsParentConvertedReopensUnderTheFreshParent() throws {
+        let c = try ConvertedAfterClose(directory: directory)
+        let (library, store, workspace, task, closed) = (c.library, c.store, c.workspace, c.task, c.closed)
+        let fresh = try #require(store.parent(of: task))
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == closed.id })
+
+        #expect(library.reopenRecentClosedOutcome(entry.id)?.complete == true)
+
+        let reopened = try #require(store.session(withID: closed.id))
+        #expect(reopened.parentID == fresh.id)
+        #expect(Set(store.companions(of: fresh.id).map(\.id)) == [task.id, closed.id])
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.first?.id == fresh.id)
+    }
+
+    @Test func aCompanionOfAClosedConvertedSessionReopensUnderTheFreshParent() throws {
+        let c = try ConvertedAfterClose(directory: directory)
+        let (library, store, task, closed) = (c.library, c.store, c.task, c.closed)
+        let fresh = try #require(store.parent(of: task))
+        store.closeSession(task.id)
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == closed.id })
+
+        #expect(library.reopenRecentClosedOutcome(entry.id)?.complete == true)
+
+        #expect(store.session(withID: task.id)?.parentID == fresh.id)
+        #expect(store.session(withID: closed.id)?.parentID == fresh.id)
+        #expect(Set(store.companions(of: fresh.id).map(\.id)) == [task.id, closed.id])
+    }
+
+    @Test func aCompanionOfAConvertedSessionInAClosedGroupReopensThatGroupFirst() throws {
+        let c = try ConvertedAfterClose(directory: directory)
+        let (library, store, task, closed) = (c.library, c.store, c.task, c.closed)
+        let fresh = try #require(store.parent(of: task))
+        store.closeSession(fresh.id)
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == closed.id })
+        #expect(!library.recentClosedItemLacksParent(entry.id))
+
+        #expect(library.reopenRecentClosedOutcome(entry.id)?.complete == true)
+
+        #expect(store.session(withID: task.id)?.parentID == fresh.id)
+        #expect(store.session(withID: closed.id)?.parentID == fresh.id)
+        #expect(library.recentClosedItems.isEmpty)
+    }
+
+    @Test func aCompanionOfAConvertedSessionInARemovedWorkspaceReopensThatWorkspaceFirst() throws {
+        let c = try ConvertedAfterClose(directory: directory)
+        let (library, store, workspace, task, closed) = (c.library, c.store, c.workspace, c.task, c.closed)
+        let fresh = try #require(store.parent(of: task))
+        _ = store.addWorkspace(name: "keep")
+        store.removeWorkspace(workspace.id)
+        let entry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == closed.id })
+        #expect(!library.recentClosedItemLacksParent(entry.id))
+
+        #expect(library.reopenRecentClosedOutcome(entry.id)?.complete == true)
+
+        #expect(store.session(withID: task.id)?.parentID == fresh.id)
+        #expect(store.session(withID: closed.id)?.parentID == fresh.id)
+    }
+
+}
+
+@MainActor private struct ConvertedAfterClose {
+    let library: WindowLibrary
+    let store: AppStore
+    let workspace: Workspace
+    let task: Session
+    let closed: Session
+
+    init(directory: URL) throws {
+        library = WindowLibrary(directory: directory)
+        store = try #require(library.activeStore)
+        workspace = store.addWorkspace(name: "project")
+        task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/project"))
+        closed = try store.addCompanion(to: task.id).get()
+        store.closeSession(closed.id)
+        _ = try store.convertToCompanion(task.id).get()
+    }
 }

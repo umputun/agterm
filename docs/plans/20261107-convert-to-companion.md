@@ -169,22 +169,23 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
+- Modify: `agtermCore/Sources/agtermCore/AppStore+Companions.swift` (`groupRoot(of:)`)
 - Modify: `agtermCore/Sources/agtermCore/AppStore+RecentClosed.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+PendingClose.swift`
 - Modify: `agtermCore/Sources/agtermCore/WindowLibrary+RecentClosed.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/RecentClosedTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStorePendingCloseTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreCompanionsTests.swift` (the pending-close cases sit beside
+  the existing parked-companion tests there, not in `AppStorePendingCloseTests`)
 - Modify: `agtermCore/Tests/agtermCoreTests/WindowLibraryRecentClosedTests.swift`
 
-- [ ] write failing tests for the four reopen sequences in Technical Details, the pending-close undo case,
-  and "soft-close C, convert S, hard-close N: C's pending close is final" (`AppStorePendingCloseTests`);
-  confirm each fails on the current code (C lands at a second level, comes back top-level, or the reopen
-  is refused)
-- [ ] add the parent-resolution helper and apply it in both restore paths before insertion and the event
-- [ ] finalize parked companions over the whole closing group in `closeSession`
-- [ ] widen `holdsTopLevelSession` to companion snapshots and every workspace member, renamed to match
-- [ ] confirm `recentClosedItemLacksParent` follows the widened lookup (the `recent.open` error text stays)
-- [ ] run the three test classes - must pass before task 3
+- [x] write failing tests for the four reopen sequences in Technical Details, the pending-close undo case,
+  and "soft-close C, convert S, hard-close N: C's pending close is final"; confirm each fails on the
+  current code (C lands at a second level, comes back top-level, or the reopen is refused)
+- [x] add the parent-resolution helper and apply it in both restore paths before insertion and the event
+- [x] finalize parked companions over the whole closing group in `closeSession`
+- [x] widen `holdsTopLevelSession` to companion snapshots and every workspace member, renamed
+  `restoresSession`
+- [x] confirm `recentClosedItemLacksParent` follows the widened lookup (the `recent.open` error text stays)
+- [x] run the affected test classes - must pass before task 3
 
 ### Task 3: Control command and CLI
 
