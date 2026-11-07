@@ -173,4 +173,21 @@ final class ControlServerTextPageTests: XCTestCase {
         let remote = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("a"))
         XCTAssertEqual(remote.error, TextSearchFailure.remote.message)
     }
+
+    func testAChangesStepNeedsALoadedDiffPage() async throws {
+        let (_, session) = try addSession()
+        let empty = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: true)
+        XCTAssertEqual(empty.error, OverlayHtmlError.noOverlay)
+
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+        let plain = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: true)
+        XCTAssertEqual(plain.error, TextChangesFailure.notDiff.message)
+        XCTAssertTrue(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+
+        let patch = stateDir.appendingPathComponent("a.diff")
+        try Data("@@ -1 +1 @@\n-a\n+b\n".utf8).write(to: patch)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(patch.path, log: nil)).ok)
+        let notLoaded = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: false)
+        XCTAssertEqual(notLoaded.error, TextChangesFailure.notLoaded.message)
+    }
 }

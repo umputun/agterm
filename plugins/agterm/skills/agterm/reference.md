@@ -1186,6 +1186,14 @@ error keeps those names for compatibility.
   Wire `text` and `to` (`next`, `prev`, `close`). Read back `htmlOverlays[].text.search`: `{query, matches,
   current}`, current from 1 and 0 with no match, omitted with no query. The page's own field (`/` or ⌘F, `n`/`N`,
   Esc) sets the same query.
+- `session overlay changes --next | --prev [--pane left|right] [--target] [--window W]`
+  - step the `.diff` or `.patch` page in the addressed slot to its next or previous change, a change being one run of
+  removed and added lines inside a hunk; it wraps, and after the user scrolled away it goes on from the view. Returns
+  `result.text` as `N of M`. Refused `no diff page` for any other page, `no changes` for a patch without any,
+  `page not loaded` before the page exists, and `remote page: step it on the Mac that shows it` for a slot handed to
+  the presenting Mac. Wire `to` (`next`, `prev`). Read back `htmlOverlays[].text.changes`: `{count, current}`,
+  current 0 before any step, omitted on any other page and until the page reports. The page's own buttons and the
+  `]`/`[` keys step the same way.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,

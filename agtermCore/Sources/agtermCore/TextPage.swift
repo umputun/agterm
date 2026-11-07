@@ -14,6 +14,7 @@ public enum TextPage {
     /// maxTailBytes bounds what a log page reads from the file's end, so one huge line cannot pull in the file.
     public static let maxTailBytes = 2 << 20
     private static let logExtensions: Set<String> = ["log", "out"]
+    private static let diffLanguage = "diff"
 
     private static let languages: [String: String] = [
         "swift": "swift", "go": "go", "py": "python", "rb": "ruby", "rs": "rust",
@@ -23,7 +24,7 @@ public enum TextPage {
         "lua": "lua", "r": "r", "sql": "sql", "css": "css", "scss": "scss", "less": "less", "graphql": "graphql",
         "sh": "bash", "bash": "bash", "zsh": "bash", "json": "json", "yaml": "yaml", "yml": "yaml",
         "toml": "ini", "ini": "ini", "cfg": "ini", "conf": "ini", "xml": "xml", "plist": "xml",
-        "diff": "diff", "patch": "diff", "mk": "makefile", "vb": "vbnet",
+        "diff": diffLanguage, "patch": diffLanguage, "mk": "makefile", "vb": "vbnet",
     ]
     private static let plainExtensions: Set<String> = ["txt", "text", "log", "out", "csv", "tsv", "env", "lock"]
     private static let basenameLanguages: [String: String] = [
@@ -46,6 +47,11 @@ public enum TextPage {
         let name = (path as NSString).lastPathComponent
         return language(forFile: path) != nil || plainExtensions.contains((name as NSString).pathExtension.lowercased())
             || plainBasenames.contains(name)
+    }
+
+    /// isDiff says whether `path` names a patch, whose plain page steps between its changes.
+    public static func isDiff(file path: String) -> Bool {
+        language(forFile: path) == diffLanguage
     }
 
     /// isLog says whether a plain click on `path` opens it as a log page, following its end.
@@ -79,9 +85,15 @@ public enum TextPage {
     /// is a `div`: the parser drops a newline right after `<pre>`, which would shift every line number.
     /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter; `anchor`
     /// is the scroll offset a rebuilt page reopens at, a paused log page's or a plain page's.
+    /// A plain page of a diff is marked whatever its size, so change navigation outlives the highlighting limit;
+    /// `change` is the change a rebuilt page reopens on, from 1.
     public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
-                            anchor: Double? = nil, search: SearchState? = nil) -> String {
+                            anchor: Double? = nil, search: SearchState? = nil, change: Int? = nil) -> String {
         var attributes = ""
+        if log == nil, language == diffLanguage {
+            attributes += " data-diff"
+            if let change, change > 0 { attributes += " data-change=\"\(change)\"" }
+        }
         if let search {
             attributes += " data-revision=\"\(search.revision)\""
             if !search.query.isEmpty {

@@ -1034,4 +1034,57 @@ struct HtmlOverlayTests {
 
         #expect(text.search == ControlTextSearchNode(query: "main()", matches: 4, current: 2))
     }
+
+    @Test func aChangesReportIsKeptClearedAndEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextChangesReport(page.id, changes: TextChanges(count: 7, current: 3))
+        #expect(session.htmlOverlay?.textChanges == TextChanges(count: 7, current: 3))
+        store.setTextChangesReport(page.id, changes: nil)
+        #expect(session.htmlOverlay?.textChanges == nil)
+        #expect(events.count == opened)
+    }
+
+    @Test func aChangesStepAddressesOnlyALocalDiffPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
+
+        let plain = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: plain, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.notDiff))
+        #expect(store.closeOverlay(session.id))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.notDiff))
+        store.setTextChangesReport(markdown.id, changes: TextChanges(count: 1, current: 0))
+        #expect(session.htmlOverlay?.textChanges == nil)
+        #expect(store.closeOverlay(session.id))
+
+        let patch = HtmlOverlay(source: .text(path: "/tmp/a.patch", line: 3))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: patch, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil).map(\.id) == .success(patch.id))
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.page(.notHtml)))
+        #expect(TextChangesFailure.notDiff.message == "no diff page")
+    }
+
+    @Test func aTextPageNodeReportsItsChangesOnlyOnceReported() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let before = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = String(data: try JSONEncoder().encode(before), encoding: .utf8) ?? ""
+        #expect(!json.contains("changes"))
+
+        store.setTextChangesReport(page.id, changes: TextChanges(count: 11, current: 2))
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.changes == ControlTextChangesNode(count: 11, current: 2))
+    }
 }

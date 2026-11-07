@@ -869,6 +869,8 @@ git diff --no-color HEAD~3 HEAD -- src/app.go > /tmp/src_app.go.diff
 
 Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file, since a multi-file patch shows as one stream
 with no file list. Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
+The page steps between changes with `]`/`[` or `agtermctl session overlay changes --next|--prev`, which prints
+`N of M`; read back `text.changes` (`{count, current}`).
 
 ## Displaying an image inline
 
