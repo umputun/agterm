@@ -22,6 +22,7 @@ RECIPE = Path(
 HOOK = Path(
     os.environ.get("CODEX_RESUME_HOOK", HERE / "codex-resume-hook.zsh")
 ).resolve()
+TRANSCRIPT = "/tmp/rollout-2026-08-30T00-00-00-01900000-0000-7000-8000-000000000001.jsonl"
 OWN = ["--no-daemon", "-c", 'shell_environment_policy.set.CODEX_AGTERM_TAB=""']
 
 
@@ -80,6 +81,13 @@ class CodexResumeTest(unittest.TestCase):
             )
             + "\n"
         )
+        return path
+
+    def write_compressed_rollout(self, rollout_id):
+        # only the name matters: the function never reads a compressed rollout
+        self.sessions.mkdir(parents=True, exist_ok=True)
+        path = self.sessions / f"rollout-2026-08-30T00-00-00-{rollout_id}.jsonl.zst"
+        path.write_bytes(b"\x28\xb5\x2f\xfd")
         return path
 
     def run_codex_logged(self, *args, foreign_rollout=False):
@@ -230,9 +238,61 @@ class CodexResumeTest(unittest.TestCase):
 
         self.assertEqual([[*OWN, "resume", ROOT_ID]], calls)
 
+    def test_typed_no_daemon_is_not_passed_twice(self):
+        fresh = self.run_codex("--no-daemon", "--yolo")
+        self.write_rollout(ROOT_ID, ROOT_ID)
+        self.map_to(ROOT_ID)
+        resumed = self.run_codex("--no-daemon")
+
+        self.assertEqual([*OWN, "--yolo"], fresh[0])
+        self.assertEqual([*OWN, "resume", ROOT_ID], resumed[1])
+
+    def test_typed_no_daemon_after_another_flag_is_dropped(self):
+        calls = self.run_codex("--yolo", "--no-daemon")
+
+        self.assertEqual([[*OWN, "--yolo"]], calls)
+
+    def test_no_daemon_after_the_prompt_marker_is_prompt_text(self):
+        calls = self.run_codex("--no-daemon", "--", "--no-daemon")
+
+        self.assertEqual([[*OWN, "--", "--no-daemon"]], calls)
+
+    def test_queue_passes_through(self):
+        self.write_rollout(ROOT_ID, ROOT_ID)
+        self.map_to(ROOT_ID)
+        args = ["queue", "--thread", ROOT_ID, "--message", "hi"]
+
+        calls = self.run_codex_logged(*args)
+
+        self.assertEqual([{"argv": args, "tab": None}], calls)
+
+    def test_compressed_mapped_rollout_resumes_the_mapped_id(self):
+        self.write_compressed_rollout(CHILD_ID)
+        self.map_to(CHILD_ID)
+
+        calls = self.run_codex()
+
+        self.assertEqual([[*OWN, "resume", CHILD_ID]], calls)
+        self.assertEqual(CHILD_ID, self.map_file.read_text().strip())
+
+    def test_child_with_a_compressed_root_resumes_the_root(self):
+        self.write_compressed_rollout(ROOT_ID)
+        self.write_rollout(CHILD_ID, ROOT_ID, ROOT_ID)
+        self.map_to(CHILD_ID)
+
+        calls = self.run_codex()
+
+        self.assertEqual([[*OWN, "resume", ROOT_ID]], calls)
+        self.assertEqual(ROOT_ID, self.map_file.read_text().strip())
+
     def test_hook_records_the_session_for_the_tab(self):
         event = json.dumps(
-            {"session_id": ROOT_ID, "source": "startup", "hook_event_name": "SessionStart"},
+            {
+                "session_id": ROOT_ID,
+                "transcript_path": TRANSCRIPT,
+                "source": "startup",
+                "hook_event_name": "SessionStart",
+            },
             separators=(",", ":"),
         )
 
@@ -243,23 +303,51 @@ class CodexResumeTest(unittest.TestCase):
         self.assertEqual(ROOT_ID, self.map_file.read_text().strip())
 
     def test_hook_reads_a_session_id_with_spaces_around_the_colon(self):
-        result = self.run_hook(json.dumps({"source": "startup", "session_id": ROOT_ID}))
+        event = json.dumps(
+            {"source": "startup", "transcript_path": TRANSCRIPT, "session_id": ROOT_ID}
+        )
+
+        result = self.run_hook(event)
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(ROOT_ID, self.map_file.read_text().strip())
 
     def test_hook_replaces_the_mapping_when_the_tab_switches_conversation(self):
         self.map_to(ROOT_ID)
-        event = json.dumps({"session_id": OTHER_ID, "source": "clear"}, separators=(",", ":"))
+        event = json.dumps(
+            {"session_id": OTHER_ID, "transcript_path": TRANSCRIPT, "source": "clear"},
+            separators=(",", ":"),
+        )
 
         result = self.run_hook(event)
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(OTHER_ID, self.map_file.read_text().strip())
 
+    def test_hook_skips_the_memory_session(self):
+        self.map_to(ROOT_ID)
+        null = json.dumps(
+            {
+                "session_id": OTHER_ID,
+                "transcript_path": None,
+                "cwd": str(self.home / ".codex" / "memories"),
+                "source": "startup",
+            }
+        )
+        missing = json.dumps({"session_id": OTHER_ID, "source": "startup"})
+
+        for event in (null, missing):
+            with self.subTest(event=event):
+                result = self.run_hook(event)
+
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertEqual(ROOT_ID, self.map_file.read_text().strip())
+
     def test_hook_leaves_the_mapping_alone_without_the_tab(self):
         self.map_to(ROOT_ID)
-        event = json.dumps({"session_id": OTHER_ID}, separators=(",", ":"))
+        event = json.dumps(
+            {"session_id": OTHER_ID, "transcript_path": TRANSCRIPT}, separators=(",", ":")
+        )
 
         unset = self.run_hook(event, tab=None)
         blank = self.run_hook(event, tab="")
@@ -269,7 +357,9 @@ class CodexResumeTest(unittest.TestCase):
         self.assertEqual(ROOT_ID, self.map_file.read_text().strip())
 
     def test_hook_refuses_a_tab_that_is_not_an_id(self):
-        event = json.dumps({"session_id": ROOT_ID}, separators=(",", ":"))
+        event = json.dumps(
+            {"session_id": ROOT_ID, "transcript_path": TRANSCRIPT}, separators=(",", ":")
+        )
 
         result = self.run_hook(event, tab="../../escape")
 
@@ -277,7 +367,11 @@ class CodexResumeTest(unittest.TestCase):
         self.assertFalse((self.home / ".codex" / "agterm").exists())
 
     def test_hook_refuses_an_event_without_a_session_id(self):
-        result = self.run_hook('{"source":"startup"}')
+        event = json.dumps(
+            {"source": "startup", "transcript_path": TRANSCRIPT}, separators=(",", ":")
+        )
+
+        result = self.run_hook(event)
 
         self.assertEqual(1, result.returncode)
         self.assertFalse(self.map_file.exists())

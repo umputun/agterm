@@ -16,6 +16,12 @@ if [[ ! $tab =~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 fi
 
 event=$(cat)
+# Codex's background memory session fires SessionStart in the same codex process, with a
+# transcript_path of null and a session id that has no rollout. Recording it would point the tab
+# at a conversation the next codex cannot resume, so an event without a transcript is skipped.
+if [[ ! $event =~ '"transcript_path"[[:space:]]*:[[:space:]]*"[^"]' ]]; then
+  exit 0
+fi
 # The first `"session_id": "<uuid>"` pair in the event, whitespace around the colon allowed.
 if [[ ! $event =~ '"session_id"[[:space:]]*:[[:space:]]*"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"' ]]; then
   print -ru2 -- "codex-resume-hook: no session id in the SessionStart event"
