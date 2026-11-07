@@ -72,7 +72,7 @@ final class AppDelegateCaptureTests: XCTestCase {
         let executable = root.appendingPathComponent("slow-zmx")
         try """
         #!/bin/sh
-        /bin/sleep 0.15
+        /bin/sleep 0.12
         printf 'name=\(ZmxSupport.daemonName(for: paneID))\\tpid=40\\tclients=1\\tcreated=1\\n'
         """.write(to: executable, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
