@@ -272,13 +272,13 @@
 - [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
 
 ### Task 7: [Final] Update documentation
-- [ ] `site/docs.html`: replace "In a session attached from another Mac, a plain path names a file on that Mac,
+- [x] `site/docs.html`: replace "In a session attached from another Mac, a plain path names a file on that Mac,
       so it is ignored" with the forwarded behavior, the refusal panel, and the ⌘⌥ refusal
-- [ ] `.claude/rules/control-api.md`: presentation bullets (new kind, presenter-only, refusal frame, placement
-      refusal), the click-path bullets (:720-721, :729: forwarded mode, hidden-page replacement, no Finder
-      fallback), and the control API exemption
-- [ ] `plugins/agterm/skills/agterm/SKILL.md` (:834, :884 "in a local pane") and `site/commands.html` where
-      they state remote-click behavior or presentation kinds
+- [x] `.claude/rules/control-api.md`: a forwarded-click bullet beside the click paths (kind, presenter-only,
+      origin pane identity, forwarded mode, hidden-page replacement, refusal frame and panel, no Finder fallback,
+      control API exemption), the `.remotePane` routing sentence, and a lenient-decode line in the stream bullet
+- [x] `plugins/agterm/skills/agterm/SKILL.md` (:834, :884 "in a local pane"); `site/commands.html` states neither
+      remote-click behavior nor presentation kinds, and README, ARCHITECTURE.md, llms.txt and index.html neither
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

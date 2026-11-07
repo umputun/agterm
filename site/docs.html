@@ -3392,7 +3392,10 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               in a log stays text. A picture, markdown, HTML or text file clicked
               from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too; a hidden page an
               earlier click opened is replaced instead, as with a web link. In a session
-              attached from another Mac, a plain path names a file on that Mac, so it is ignored. A terminal renders untrusted
+              attached from another Mac, a path names a file on that Mac, so the click goes there: that Mac opens the picture,
+              markdown, text or HTML page and it shows here, a relative path looked up in that pane's directory there. A click
+              it cannot open, a ⌘⌥-click, and a click while that Mac runs an older agterm show a short panel saying why, or
+              beep when the panel cannot be shown. A terminal renders untrusted
               program output, so a link could point at a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.app</span> or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.command</span>; revealing selects the file
