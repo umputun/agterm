@@ -279,11 +279,15 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - [x] run `swift test --filter SkillInstallTests`
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify every Overview requirement, including selection and existing companions
-- [ ] `cd agtermCore && swift test`
-- [ ] `make test-app`
-- [ ] `make lint` with zero findings
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
+- [x] verify every Overview requirement, including selection and existing companions
+- [x] `cd agtermCore && swift test`
+- [x] `make test-app`
+- [x] `make lint` with zero findings
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
+- ➕ `make test-app` failed once on `AppDelegateCaptureTests/testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
+  (from master, unrelated): its fake zmx sleep of 0.15 s left too little margin under the suite's load. Lowered to
+  0.12 s in its own commit; the revised test still fails 3 of 3 against the old 100 ms timeout, and the rerun gate
+  passed (1,878 tests, 2 skips by design: fish login shell, and the below-macOS-27 sidebar gate)
 
 ### Task 7: [Final] Update documentation
 - [ ] update README.md if needed (it is a synopsis; likely no change)
