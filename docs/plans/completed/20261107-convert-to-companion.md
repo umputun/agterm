@@ -284,15 +284,17 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - [x] `make test-app`
 - [x] `make lint` with zero findings
 - [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted and UI runs
-- ➕ `make test-app` failed once on `AppDelegateCaptureTests/testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
-  (from master, unrelated): its fake zmx sleep of 0.15 s left too little margin under the suite's load. Lowered to
-  0.12 s in its own commit; the revised test still fails 3 of 3 against the old 100 ms timeout, and the rerun gate
-  passed (1,878 tests, 2 skips by design: fish login shell, and the below-macOS-27 sidebar gate)
+- ➕ `make test-app` failed on `AppDelegateCaptureTests/testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
+  (from master, unrelated) in two of four full runs. Its fake zmx (`/bin/sh` plus `/bin/sleep`) finished as late as
+  287 ms against the 300 ms budget under the suite's load; lowering the sleep to 0.12 s did not hold. It is now one
+  `zsh -f` process waiting 120 ms with the `zselect` builtin, which still fails 3 of 3 against the old 100 ms
+  budget; the final gate passed. The cause, a slow child or a late termination callback, was not observed at a
+  failure, and the production budget is unchanged. 2 skips are by design (fish login shell, below-macOS-27 gate)
 
 ### Task 7: [Final] Update documentation
-- [ ] update README.md if needed (it is a synopsis; likely no change)
-- [ ] update CLAUDE.md if new patterns discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md if needed (its Companion line was corrected in Task 5)
+- [x] update CLAUDE.md if new patterns discovered (none: the rule files carry the new contracts)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
