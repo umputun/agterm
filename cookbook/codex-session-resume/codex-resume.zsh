@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # Sourced, not executed: paste both functions into ~/.zshrc, or source this file from there.
-# See README.md.
+# The mapping they read is written by codex-resume-hook.zsh, a Codex SessionStart hook. See README.md.
 
 # Codex CLI: per-agterm-tab session resume.
 # Maps the tab's own uuid (AGTERM_SESSION_ID) to a codex session id under ~/.codex/agterm/,
@@ -26,6 +26,21 @@ codex() {
   local sid=${AGTERM_SESSION_ID:l}
   [[ -z $sid ]] && { command codex "$@"; return; }
 
+  # Every codex this function starts gets these. The hook records a conversation only for a codex
+  # whose environment carries CODEX_AGTERM_TAB, and the -c blanks it for that codex's own tool
+  # commands, so a `codex exec` started inside the conversation records nothing. --no-daemon keeps
+  # the hook in this codex process: a shared background server would run it with the environment
+  # of whichever pane started that server.
+  local -a own=(--no-daemon -c 'shell_environment_policy.set.CODEX_AGTERM_TAB=""')
+
+  # agterm replays the argv the pane was running, which starts with `own`. Drop it, and the
+  # `resume <id>` this function added after it, so the replay is decided again from the mapping
+  # rather than passed through as an explicit resume.
+  if [[ $1 == $own[1] && $2 == $own[2] && $3 == $own[3] ]]; then
+    shift 3
+    [[ $1 == resume && $2 == ????????-????-????-????-???????????? ]] && shift 2
+  fi
+
   local a
   for a in "$@"; do
     case $a in
@@ -44,17 +59,9 @@ codex() {
     local -a roots=(~/.codex/sessions/**/rollout-*-$rid.jsonl(N))
     if [[ -n $rid ]] && (( $#roots )); then
       [[ $rid != $cid ]] && print -r -- $rid > $mapf
-      command codex resume "$rid" "$@"; return
+      CODEX_AGTERM_TAB=$sid command codex $own resume "$rid" "$@"; return
     fi
   fi
 
-  local before=$(mktemp)
-  command codex "$@"; local rc=$?
-  local -a new=(~/.codex/sessions/**/rollout-*.jsonl(N.om))
-  if (( $#new )) && [[ $new[1] -nt $before ]]; then
-    local uuid=$(_codex_rollout_root_id $new[1])
-    [[ -n $uuid ]] && { mkdir -p ${mapf:h}; print -r -- $uuid > $mapf; }
-  fi
-  command rm -f $before
-  return $rc
+  CODEX_AGTERM_TAB=$sid command codex $own "$@"
 }
