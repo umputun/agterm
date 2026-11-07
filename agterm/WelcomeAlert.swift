@@ -27,9 +27,10 @@ enum WelcomeAlert {
     private static func present() {
         let built = makeAlert()
         guard built.alert.runModal() == .alertFirstButtonReturn else { return }
-        // each installer runs its own result alert, so they queue behind one another
-        if built.skill.state == .on { SkillInstaller.run() }
-        if built.hooks.state == .on { AgentHooksInstaller.run() }
+        let skill = built.skill.state == .on
+        let hooks = built.hooks.state == .on
+        // Each installer shows its own result alert; the coordinator waits for skill dismissal before hooks.
+        Task { await AgentInstallers.run(skill: skill, hooks: hooks) }
     }
 
     /// The alert and its two option checkboxes, laid out and aligned. Split out of `present()` so a hosted

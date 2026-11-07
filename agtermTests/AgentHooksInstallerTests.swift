@@ -19,6 +19,24 @@ final class AgentHooksInstallerTests: XCTestCase {
         }
     }
 
+    func testEveryDefaultCodexMessageAndItsCustomPathVariant() {
+        let approve = "Run /hooks in Codex to review and approve them before they take effect."
+        let manual = "See the Add Codex hooks by hand section of the agterm docs for the block to add, then run /hooks in Codex."
+        let expected = [
+            "Codex lifecycle hooks merged into ~/.codex/config.toml (any old codex-notify.sh notify line was removed). " + approve,
+            "Codex lifecycle hooks are already present in ~/.codex/config.toml. " + approve,
+            "Your ~/.codex/config.toml already defines its own hooks, so agterm left it untouched. " + manual,
+            "Your ~/.codex/config.toml isn't valid TOML, so agterm left it untouched. Fix it and run this again. " + manual,
+            "Your ~/.codex/config.toml exists but couldn't be read, so agterm left it untouched.",
+            "No ~/.codex found, so Codex hooks were skipped. Install Codex, then run this again.",
+        ]
+        for (result, text) in zip(allCodexResults, expected) {
+            XCTAssertEqual(AgentHooksInstaller.codexText(result), text)
+            XCTAssertEqual(AgentHooksInstaller.codexText(result, codexHome: "/custom/codex home"),
+                           text.replacingOccurrences(of: "~/.codex", with: "/custom/codex home"))
+        }
+    }
+
     func testOnlyTheManualMergeOutcomesOfferTheDocsButton() {
         for result in allCodexResults {
             let expected = result == .hooksExist || result == .unparseable

@@ -64,17 +64,103 @@ final class OpenCodeEnvironmentProbeTests: XCTestCase {
 
     func testTimeoutBoundsInteractiveShellStartup() async throws {
         let start = Date()
-        let version = try await probe(script: "printf '2.0.12\\n'", startup: "trap '' TERM\nwhile :; do :; done", timeout: 0.1)
-        XCTAssertNil(version)
+        let result = try await probeResult(script: "printf '2.0.12\\n'",
+                                           startup: "export CODEX_HOME='/custom/codex'; trap '' TERM\nwhile :; do :; done", timeout: 0.1)
+        XCTAssertNil(result)
         XCTAssertLessThan(Date().timeIntervalSince(start), 2)
     }
 
     func testMissingExecutableNeedsManualSelection() async {
-        let version = await OpenCodeEnvironmentProbe.detect(environment: [:], executableURL: URL(fileURLWithPath: "/no/such/agterm-probe"))
-        XCTAssertNil(version)
+        let result = await OpenCodeEnvironmentProbe.detect(environment: ["CODEX_HOME": "/custom/codex"],
+                                                           executableURL: URL(fileURLWithPath: "/no/such/agterm-probe"))
+        XCTAssertNil(result)
+    }
+
+    func testExportedCodexHomeIsCapturedFromZshAndBashDespiteStartupNoise() async throws {
+        for shell in ["/bin/zsh", "/bin/bash"] {
+            let result = try await probeResult(script: "printf '2.0.12\\n'", startup: """
+            printf 'startup noise without newline'
+            export CODEX_HOME='/custom/codex home'
+            """, shell: shell)
+            XCTAssertEqual(result?.codexHome, "/custom/codex home")
+            XCTAssertEqual(result?.version, .v2)
+        }
+    }
+
+    func testExportedCodexHomeIsCapturedFromFish() async throws {
+        guard let fish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            throw XCTSkip("fish is not installed")
+        }
+        let result = try await probeResult(script: "exit 1", startup: "set -gx CODEX_HOME '/custom/fish codex'", shell: fish)
+        XCTAssertEqual(result?.codexHome, "/custom/fish codex")
+        XCTAssertNil(result?.version)
+    }
+
+    func testEmptyUnsetAndUnexportedCodexHomeUseDefault() async throws {
+        for shell in ["/bin/zsh", "/bin/bash"] {
+            for startup in ["unset CODEX_HOME", "export CODEX_HOME=''", "unset CODEX_HOME; CODEX_HOME='/unexported'"] {
+                let result = try await probeResult(script: "printf '2.0.12\\n'", startup: startup, shell: shell)
+                XCTAssertNotNil(result)
+                XCTAssertNil(result?.codexHome)
+            }
+        }
+    }
+
+    func testEmptyUnsetAndUnexportedFishCodexHomeUseDefault() async throws {
+        guard let fish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+            throw XCTSkip("fish is not installed")
+        }
+        for startup in ["set -e CODEX_HOME", "set -gx CODEX_HOME ''", "set -e CODEX_HOME; set -g CODEX_HOME '/unexported'"] {
+            let result = try await probeResult(script: "exit 1", startup: startup, shell: fish)
+            XCTAssertNotNil(result)
+            XCTAssertNil(result?.codexHome)
+        }
+    }
+
+    func testRelativeCodexHomeUsesCapturedWorkingDirectoryWithoutExpansion() async throws {
+        let result = try await probeResult(script: "exit 1", startup: "cd /; export CODEX_HOME='relative dir/../codex $HOME ~'")
+        XCTAssertEqual(result?.codexHome, "/codex $HOME ~")
+    }
+
+    func testCodexHomeSurvivesMissingFailingAndUnsupportedOpenCode() async throws {
+        for script in [nil, "exit 1", "printf '3.0.0\\n'"] {
+            let result = try await probeResult(script: script, startup: "export CODEX_HOME='/custom/codex'")
+            XCTAssertEqual(result?.codexHome, "/custom/codex")
+            XCTAssertNil(result?.version)
+        }
+    }
+
+    func testTimeoutAfterCaptureDiscardsCodexHome() async throws {
+        let result = try await probeResult(script: "trap '' TERM\nwhile :; do :; done",
+                                           startup: "export CODEX_HOME='/custom/codex'", timeout: 0.3)
+        XCTAssertNotNil(result)
+        XCTAssertNil(result?.codexHome)
+        XCTAssertNil(result?.version)
+    }
+
+    func testFailedStartupDiscardsCodexHome() async throws {
+        let result = try await probeResult(script: nil, startup: "export CODEX_HOME='/custom/codex'; exit 0")
+        XCTAssertNil(result)
+    }
+
+    func testMalformedCaptureDiscardsCodexHome() async throws {
+        let executable = FileManager.default.temporaryDirectory.appendingPathComponent("malformed-probe-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: executable) }
+        try #"""
+        #!/bin/sh
+        marker=$(/usr/bin/printf '%s' "$2" | /usr/bin/sed -n 's/.*\(agterm-opencode-version-[A-F0-9-]*\).*/\1/p')
+        /usr/bin/printf '\n%s\ntruncated\000' "$marker"
+        """#.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        let result = await OpenCodeEnvironmentProbe.detect(environment: ["CODEX_HOME": "/custom/codex"], executableURL: executable)
+        XCTAssertNil(result)
     }
 
     private func probe(script: String?, startup: String = "", shell: String = "/bin/zsh", timeout: TimeInterval = 3) async throws -> AgentHooksInstall.OpenCode.Version? {
+        try await probeResult(script: script, startup: startup, shell: shell, timeout: timeout)?.version
+    }
+
+    private func probeResult(script: String?, startup: String = "", shell: String = "/bin/zsh", timeout: TimeInterval = 3) async throws -> OpenCodeEnvironmentProbe.Result? {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("opencode-probe-\(UUID().uuidString)")
         let inheritedBin = directory.appendingPathComponent("inherited-bin")
         let fm = FileManager.default
@@ -100,6 +186,6 @@ final class OpenCodeEnvironmentProbeTests: XCTestCase {
         return await OpenCodeEnvironmentProbe.detect(environment: [
             "PATH": inheritedBin.path, "HOME": directory.path, "ZDOTDIR": directory.path,
             "XDG_CONFIG_HOME": directory.path, "SHELL": shell, "AGTERM_SESSION_ID": "not-a-live-session",
-        ], timeout: timeout)?.version
+        ], timeout: timeout)
     }
 }

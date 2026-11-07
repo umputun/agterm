@@ -31,12 +31,17 @@ public enum SkillInstall {
     /// and/or Codex), falling back to creating Claude Code's (the primary) when NEITHER is, so the install
     /// is never a no-op. The caller supplies the existence flags (a filesystem check), keeping this pure.
     public static func installTargets(home: String, claudeExists: Bool, codexExists: Bool) -> [Target] {
+        installTargets(home: home, claudeExists: claudeExists, codexExists: codexExists, codexHome: home + "/.codex")
+    }
+
+    /// Uses the resolved Codex root; `codexExists` describes that root, not the default directory.
+    public static func installTargets(home: String, claudeExists: Bool, codexExists: Bool, codexHome: String) -> [Target] {
         var targets: [Target] = []
         if claudeExists {
             targets.append(Target(agent: "Claude Code", skillDirectory: skillDirectory(home: home, base: ".claude")))
         }
         if codexExists {
-            targets.append(Target(agent: "Codex", skillDirectory: skillDirectory(home: home, base: ".codex")))
+            targets.append(Target(agent: "Codex", skillDirectory: codexHome + "/skills/" + skillName))
         }
         if targets.isEmpty {
             targets.append(Target(agent: "Claude Code", skillDirectory: skillDirectory(home: home, base: ".claude")))

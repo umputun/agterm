@@ -34,6 +34,59 @@ final class WelcomeAlertTests: XCTestCase {
         XCTAssertEqual(built.alert.buttons.map(\.title), ["Install", "Later"])
     }
 
+    func testCombinedInstallationProbesOnceAndFinishesSkillBeforeHooks() async {
+        let captured = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: "/opencode", codexHome: "/custom/codex")
+        var events: [String] = []
+        await AgentInstallers.run(skill: true, hooks: true, probe: {
+            events.append("probe")
+            await Task.yield()
+            return captured
+        }, installSkill: { result in
+            XCTAssertEqual(result?.codexHome, captured.codexHome)
+            events.append("skill result dismissed")
+        }, installHooks: { result in
+            XCTAssertEqual(result?.codexHome, captured.codexHome)
+            XCTAssertEqual(result?.v2ConfigurationDirectory, captured.v2ConfigurationDirectory)
+            XCTAssertEqual(events.last, "skill result dismissed")
+            events.append("hooks result dismissed")
+        })
+        XCTAssertEqual(events, ["probe", "skill result dismissed", "hooks result dismissed"])
+    }
+
+    func testInstallationGuardsReentryAndDoesNotCacheAcrossActions() async {
+        var probes = 0
+        var skills = 0
+        for _ in 0..<2 {
+            await AgentInstallers.run(skill: true, hooks: false, probe: {
+                probes += 1
+                await AgentInstallers.run(skill: true, hooks: true, probe: {
+                    XCTFail("reentry must not probe")
+                    return nil
+                }, installSkill: { _ in XCTFail("reentry must not show a skill result") },
+                   installHooks: { _ in XCTFail("reentry must not show a hooks result") })
+                return nil
+            }, installSkill: { result in
+                XCTAssertNil(result)
+                skills += 1
+            }, installHooks: { _ in XCTFail("unchecked hooks must not install") })
+        }
+        XCTAssertEqual(probes, 2)
+        XCTAssertEqual(skills, 2)
+    }
+
+    func testHooksOnlyProbesOnceAndNoSelectionDoesNotProbe() async {
+        var probes = 0
+        var hooks = 0
+        for selected in [false, true] {
+            await AgentInstallers.run(skill: false, hooks: selected, probe: {
+                probes += 1
+                return nil
+            }, installSkill: { _ in XCTFail("unchecked skill must not install") }, installHooks: { _ in hooks += 1 })
+        }
+        XCTAssertEqual(probes, 1)
+        XCTAssertEqual(hooks, 1)
+    }
+
     private func firstTextField(in view: NSView, matching value: String) -> NSTextField? {
         for subview in view.subviews {
             if let field = subview as? NSTextField, field.stringValue == value { return field }

@@ -25,12 +25,15 @@ enum SkillInstaller {
 
     /// Run the install and show a result alert.
     static func run() {
+        Task { await AgentInstallers.run(skill: true, hooks: false) }
+    }
+
+    static func run(probe: OpenCodeEnvironmentProbe.Result?) {
         do {
-            let report = try install()
-            let problem = report.installed.isEmpty || !report.skipped.isEmpty
-            present(style: problem ? .warning : .informational,
-                    title: report.installed.isEmpty ? "Skill Not Installed" : "Agent Skill Installed",
-                    text: message(report))
+            let result = try install(codexHome: probe?.codexHome)
+            present(style: result.warning ? .warning : .informational,
+                    title: result.installed ? "Agent Skill Installed" : "Skill Not Installed",
+                    text: result.text)
         } catch let error as InstallError {
             present(style: .warning, title: "Install Failed", text: error.message)
         } catch {
@@ -38,16 +41,24 @@ enum SkillInstaller {
         }
     }
 
-    private static func install() throws -> Report {
-        guard let source = bundledFolder, FileManager.default.fileExists(atPath: source.path) else {
+    // Internal so hosted fixtures can install into temporary roots without opening a modal.
+    static func install(home: String = FileManager.default.homeDirectoryForCurrentUser.path,
+                        codexHome: String? = nil, source: URL? = bundledFolder) throws -> (installed: Bool, warning: Bool, text: String) {
+        guard let source, FileManager.default.fileExists(atPath: source.path) else {
             throw InstallError(message: "The agent skill is not bundled in this build.")
         }
         let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
+        let codexDirectory = codexHome ?? home + "/.codex"
+        let codexExists = fm.fileExists(atPath: codexDirectory)
+        let skipPrefixes = codexHome.map { ["Codex": $0 + "/skills/" + SkillInstall.skillName + ": "] } ?? [:]
         let targets = SkillInstall.installTargets(home: home,
                                                   claudeExists: fm.fileExists(atPath: home + "/.claude"),
-                                                  codexExists: fm.fileExists(atPath: home + "/.codex"))
+                                                  codexExists: codexExists,
+                                                  codexHome: codexDirectory)
         var report = Report()
+        if codexHome != nil, !codexExists {
+            report.skipped.append(("Codex", "no \(codexDirectory) found"))
+        }
         for target in targets {
             let destination = URL(fileURLWithPath: target.skillDirectory)
             // refuse to clobber a same-named skill the user authored (a present dir whose SKILL.md is
@@ -58,7 +69,8 @@ enum SkillInstaller {
             let directoryExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
             let existingSKILL = try? String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8)
             guard SkillInstall.mayOverwrite(directoryExists: directoryExists, existingSKILL: existingSKILL) else {
-                report.skipped.append((target.agent, "a different '\(SkillInstall.skillName)' skill is already there — left untouched"))
+                let reason = "a different '\(SkillInstall.skillName)' skill is already there — left untouched"
+                report.skipped.append((target.agent, skipPrefixes[target.agent, default: ""] + reason))
                 continue
             }
             do {
@@ -69,10 +81,10 @@ enum SkillInstaller {
                 try fm.copyItem(at: source, to: destination)
                 report.installed.append((target.agent, destination.path))
             } catch {
-                report.skipped.append((target.agent, error.localizedDescription))
+                report.skipped.append((target.agent, skipPrefixes[target.agent, default: ""] + error.localizedDescription))
             }
         }
-        return report
+        return (!report.installed.isEmpty, report.installed.isEmpty || !report.skipped.isEmpty, message(report))
     }
 
     private static func message(_ report: Report) -> String {
