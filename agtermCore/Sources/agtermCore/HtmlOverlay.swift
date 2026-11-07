@@ -149,6 +149,18 @@ public struct TextLogState: Equatable, Sendable {
     }
 }
 
+/// TextChanges is a diff page's count of changes, a change being one run of removed and added lines, and the one it
+/// last stepped to, from 1 and 0 before any step.
+public struct TextChanges: Equatable, Sendable {
+    public let count: Int
+    public let current: Int
+
+    public init(count: Int, current: Int) {
+        self.count = count
+        self.current = current
+    }
+}
+
 /// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
 /// with no match.
 public struct TextSearch: Equatable, Sendable {
@@ -219,6 +231,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// page report naming another revision is dropped.
     public internal(set) var textSearch: TextSearch?
     public internal(set) var searchRevision = 0
+    /// textChanges is a diff page's last report on its changes, nil until it reports and on any other page.
+    public internal(set) var textChanges: TextChanges?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load

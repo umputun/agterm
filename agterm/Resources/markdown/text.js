@@ -60,28 +60,31 @@
     const anchor = Number(source.dataset.anchor);
     if (Number.isFinite(anchor)) scrollTo(anchor);
   }
+  const changes = !log && source.dataset.diff !== undefined ? startChanges(text.split('\n')) : null;
   finder.start();
   window.addEventListener('keydown', keys);
   send({ ready: true });
 
+  function glyph(path) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    line.setAttribute('d', path);
+    svg.append(line);
+    return svg;
+  }
+
+  function control(path, title) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    button.append(glyph(path));
+    return button;
+  }
+
+  // matches TerminalSearchBar: change the two together
   function startSearch() {
-    // matches TerminalSearchBar: change the two together
-    const glyph = (path) => {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', '0 0 16 16');
-      const line = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      line.setAttribute('d', path);
-      svg.append(line);
-      return svg;
-    };
-    const control = (path, title) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.title = title;
-      button.setAttribute('aria-label', title);
-      button.append(glyph(path));
-      return button;
-    };
     const box = document.createElement('div');
     box.className = 'agterm-search';
     const field = document.createElement('input');
@@ -349,6 +352,122 @@
     };
   }
 
+  // a change is one run of removed and added rows inside a hunk; the hunk's counts say where it ends, so the
+  // file headers between hunks never count and a removed row reading `--- x` stays a removal
+  function changeBlocks(rows) {
+    const blocks = [];
+    let old = 0, added = 0, first = -1, last = -1;
+    const close = () => {
+      if (first >= 0) blocks.push([first, last]);
+      first = last = -1;
+    };
+    rows.forEach((row, index) => {
+      if (old > 0 || added > 0) {
+        // the no-newline marker belongs to the row before it and counts on neither side
+        if (row.startsWith('\\')) return;
+        if (row.startsWith('-') || row.startsWith('+')) {
+          if (row.startsWith('-')) old -= 1; else added -= 1;
+          if (first < 0) first = index;
+          last = index;
+        } else {
+          close();
+          old -= 1;
+          added -= 1;
+        }
+        if (old <= 0 && added <= 0) {
+          old = added = 0;
+          close();
+        }
+        return;
+      }
+      const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(row);
+      if (!hunk) return;
+      old = hunk[1] === undefined ? 1 : Number(hunk[1]);
+      added = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    });
+    close();
+    return blocks;
+  }
+
+  function startChanges(rows) {
+    const blocks = changeBlocks(rows);
+    let current = -1;
+    const saved = Number(source.dataset.change);
+    if (Number.isInteger(saved) && saved >= 1 && saved <= blocks.length) current = saved - 1;
+    const report = () => send({ changes: { count: blocks.length, current: current + 1 } });
+    if (!blocks.length) {
+      report();
+      return null;
+    }
+
+    const group = document.createElement('div');
+    group.className = 'agterm-changes';
+    const previous = control('M3.5 10.5 8 6l4.5 4.5', 'Previous change ([)');
+    const next = control('M3.5 5.5 8 10l4.5-4.5', 'Next change (])');
+    const label = document.createElement('span');
+    group.append(previous, next, label);
+    bar.prepend(group);
+    const band = document.createElement('div');
+    band.className = 'agterm-change';
+    band.hidden = true;
+    page.prepend(band);
+
+    // rows never wrap, so a row's place is its index times the line height
+    const style = getComputedStyle(pre);
+    const height = parseFloat(style.lineHeight);
+    const inset = parseFloat(style.paddingTop);
+    // in document coordinates, which scrollTop measures; the band sits in the page, whose own top is the bar's room
+    const origin = () => page.offsetTop + pre.offsetTop + inset;
+    const topOf = (block) => origin() + block[0] * height;
+    const bottomOf = (block) => origin() + (block[1] + 1) * height;
+    const view = () => ({ top: scroller.scrollTop + bar.offsetHeight, bottom: scroller.scrollTop + scroller.clientHeight });
+    const visible = (block) => {
+      const { top, bottom } = view();
+      return bottomOf(block) > top && topOf(block) < bottom;
+    };
+
+    const draw = () => {
+      const count = blocks.length;
+      label.textContent = current < 0 ? `${count} ${count === 1 ? 'change' : 'changes'}` : `change ${current + 1} of ${count}`;
+      band.hidden = current < 0;
+      if (current < 0) return;
+      band.style.top = `${pre.offsetTop + inset + blocks[current][0] * height}px`;
+      band.style.height = `${(blocks[current][1] - blocks[current][0] + 1) * height}px`;
+    };
+    // the change is brought into view only when its first row is not shown below the bar
+    const reveal = () => {
+      const { top, bottom } = view();
+      const start = topOf(blocks[current]);
+      if (start < top || start + height > bottom) scrollTo(start - bar.offsetHeight - (scroller.clientHeight - bar.offsetHeight) / 3);
+    };
+    // a step goes on from the current change while it is on screen, and from the view's top once the user scrolled
+    // it away, so Next never jumps back to a change above what is shown
+    const step = (forward) => {
+      const count = blocks.length;
+      if (current >= 0 && visible(blocks[current])) {
+        current = (current + (forward ? 1 : count - 1)) % count;
+      } else {
+        const { top } = view();
+        const below = blocks.findIndex((block) => topOf(block) >= top);
+        if (forward) {
+          current = below < 0 ? 0 : below;
+        } else {
+          current = (below < 0 ? count : below) - 1;
+          if (current < 0) current = count - 1;
+        }
+      }
+      draw();
+      reveal();
+      report();
+      return { count, current: current + 1 };
+    };
+    previous.addEventListener('click', () => step(false));
+    next.addEventListener('click', () => step(true));
+    draw();
+    report();
+    return { step };
+  }
+
   function startLog() {
     following = source.dataset.following === 'true';
     let state = { clipped: source.hasAttribute('data-clipped'), waiting: source.hasAttribute('data-waiting'),
@@ -458,6 +577,8 @@
       }
       if (event.key === 'n' && finder.hasQuery()) { finder.jump(true); return true; }
       if (event.key === 'N' && finder.hasQuery()) { finder.jump(false); return true; }
+      if (event.key === ']' && changes) { changes.step(true); return true; }
+      if (event.key === '[' && changes) { changes.step(false); return true; }
       if (!logControls) return false;
       if (event.key === 'F') { logControls.toggle(); return true; }
       if (event.key === 'G' || event.key === 'End') { logControls.bottom(); return true; }
@@ -469,6 +590,7 @@
 
   window.agtermTextSearchSet = (query, revision, typed) => finder.set(query, revision, typed === true);
   window.agtermTextSearchStep = (forward, query, revision) => finder.step(forward, query, revision);
+  window.agtermTextChangeStep = (forward) => (changes ? changes.step(forward) : { count: 0, current: 0 });
   window.agtermTextFocusSearch = () => {
     finder.field.focus();
     finder.field.select();

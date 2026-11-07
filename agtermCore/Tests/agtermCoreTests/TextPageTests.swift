@@ -46,6 +46,29 @@ struct TextPageTests {
         #expect(!TextPage.html(text: overCap, language: "go", line: nil, style: "").contains("data-language"))
     }
 
+    @Test func aDiffIsMarkedPastTheHighlightCapWithTheChangeItReopensOn() {
+        let overCap = String(repeating: "a", count: TextPage.maxHighlightBytes + 1)
+
+        let html = TextPage.html(text: overCap, language: "diff", line: nil, style: "", change: 4)
+
+        #expect(html.contains(#"hidden data-diff data-change="4">"#))
+        #expect(!html.contains("data-language"))
+        #expect(!TextPage.html(text: "x", language: "diff", line: nil, style: "", change: 0).contains("data-change"))
+    }
+
+    @Test func onlyAPlainDiffPageIsMarked() {
+        let log = TextPage.html(text: "x", language: "diff", line: nil, style: "", log: TextLogState(following: true), change: 2)
+
+        #expect(!log.contains("data-diff"))
+        #expect(!log.contains("data-change"))
+        #expect(!TextPage.html(text: "x", language: "go", line: nil, style: "", change: 2).contains("data-diff"))
+    }
+
+    @Test(arguments: [("a.diff", true), ("/x/b.PATCH", true), ("a.txt", false), ("a.go", false), ("diff", false)])
+    func isDiffFollowsTheExtension(_ path: String, _ expected: Bool) {
+        #expect(TextPage.isDiff(file: path) == expected)
+    }
+
     @Test(arguments: [
         ("a.swift", "swift"), ("a.go", "go"), ("a.py", "python"), ("a.rb", "ruby"), ("a.rs", "rust"),
         ("a.js", "javascript"), ("a.mjs", "javascript"), ("a.cjs", "javascript"), ("a.ts", "typescript"),

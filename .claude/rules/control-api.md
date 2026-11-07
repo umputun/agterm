@@ -173,7 +173,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.hud.open`, `.hud.update`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -788,6 +788,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   same model, and the bridge marks the revisions that field produced, so their pushes never overwrite its typing.
   An empty slot and a program keep the slot lookup's own refusals; any other page, a replica included, is refused
   `no text page`, and a slot `pageBelongsRemote` hands to the presenter `remote page`. Read back `htmlOverlays[].text.search`, omitted with no query.
+- A plain `.diff`/`.patch` page (`TextPage.isDiff`) steps between its changes (`session.overlay.changes --to next|prev`).
+  `TextPage.html` marks it `data-diff` outside the highlight cap, since a full-context patch is the large case. The page
+  parses changes from hunk counts, so headers between hunks never count, and posts `{count, current}` on ready and each
+  step into `HtmlOverlay.textChanges` (`setTextChangesReport`, never emitted); a fresh read clears it first, and a theme
+  rebuild passes the current change back as `data-change`. A step is a one-shot push like a search step.
+  Read back `htmlOverlays[].text.changes`, omitted until the page reports.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
