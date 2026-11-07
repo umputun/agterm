@@ -70,7 +70,8 @@ zmx_list() { remote "ZMX_DIR=\$(agtermctl zmx tree --json | jq -r .result.remote
 starts() { grep -c -- '-f -N -M' "$STATE/ssh-calls.log" || true; }
 # the pool directory is shared by every remote window of this user, so only the paths this run's ssh used are its own
 own_paths() { grep -o 'ControlPath=[^ ]*' "$STATE/ssh-calls.log" | sed 's/^ControlPath=//' | sort -u; }
-master_pid() { /usr/bin/ssh -O check -o ControlPath="$1" "$HOST" 2>&1 | sed -n 's/.*pid=\([0-9]*\).*/\1/p'; }
+# no master at the path is an empty answer, and under pipefail its ssh status would end the gate
+master_pid() { /usr/bin/ssh -O check -o ControlPath="$1" "$HOST" 2>&1 | sed -n 's/.*pid=\([0-9]*\).*/\1/p' || true; }
 
 # a predicate over the remote window's tree, polled until it holds or the deadline passes
 wait_tree() {
