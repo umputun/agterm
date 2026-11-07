@@ -183,7 +183,8 @@ renumbering. Do not reintroduce a count anywhere.
   `notify`
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
-  `.fullscreen`, `.minimize`
+  `.fullscreen`, `.minimize`, `.remote.open`, `.remote.dismiss`
+- `session.detach`, `session.reattach`, `workspace.detach`, `workspace.reattach`: a remote window's rows only
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
@@ -2131,6 +2132,44 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
   existing status, context, notification, HUD and pane paths those suites already cover. `ControlServerRemotePresentationTests`
   runs both roles in one process over the real bridge binary instead.
+## agterm-server and remote windows
+
+`site/docs.html#remote-server` owns the user contract and `site/commands.html#remote` the commands.
+
+- agterm-server (`AgtermServerKit`, product `agterm-server`) keeps a windowless `AppStore` on Linux.
+  Every pane is a zmx daemon in a systemd user scope of its own, so a server restart or crash keeps it.
+- `ServerCommandPolicy.served` is default-deny: a protocol command reaches the server's store only once it
+  is listed there, and `HeadlessCommandPolicy` gives the physical-window reason for the rest.
+- The Linux rendezvous is `ControlResolve.defaultStateDirectory`: `$XDG_STATE_HOME/agterm` (absolute only)
+  or `~/.local/state/agterm`, so a bare `agtermctl` over ssh finds the socket. zmx sockets live under
+  `XDG_RUNTIME_DIR`, and the server refuses to start without one (`ServerConfiguration`).
+- `catalog.subscribe` hands its descriptor to a stream like `zmx.present`: a hello with `CatalogVersions`,
+  a snapshot carrying `epoch`, `rev` and `catalogID`, then diffs (`CatalogHub`, `CatalogDiff`).
+  A snapshot clears an applied receipt once it reaches that receipt's epoch and revision
+  (`RemoteCatalogActions.catalogMoved`); it never settles a lost reply.
+- A structural command with `opID` and `epoch` answers `CatalogReceipt` (`ServerActions+Receipts`) and runs
+  once while its receipt is among the 512 the table keeps (`CatalogOperationTable.capacity`); another epoch is
+  refused. `--expect-panes` and `--expect-scratch` refuse it
+  when the target changed under it. `catalog.op` reads the table and fences an id it does not hold, so
+  the command arriving later is refused. The remote window never resends: a lost reply becomes `unknown`,
+  settled through `catalog.op` or dropped once its target leaves the catalog.
+- Asks, picks, pages and overlay jobs on the server wait unpresented until a presenter that can show them
+  takes the session (`AppStore+Interactions`, `ServerStreams`). Only ask and pick take `--timeout`
+  (`armDeadline`); a page or job's claim window starts when it is offered, a claimed job is never
+  relaunched, and a restart forgets everything still waiting.
+- A viewer tells a headless origin from a Mac by `RemoteBinding.originHeadless`, from `zmx.tree`'s
+  `headless`. Only for such a row does a GUI ask for an offscreen row wait hidden and a busy window queue a
+  pick. `version` reports `headless`, and the CLI binds an untargeted pick to `AGTERM_SESSION_ID` only then.
+- A remote window's store is filled by `RemoteCatalogMirror` from `RemoteCatalogClient`'s stream, over
+  `SshConnectionPool` masters of at most eight channels each, below stock sshd's `MaxSessions 10`.
+  Structural actions go to the server through `RemoteCatalogActions` and are disabled while disconnected,
+  never queued; `RemoteWindowViewState` keeps what this Mac detached and its kept views.
+- A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
+  `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
+- Under musl every `ServerProcess` spawn re-execs the server as `CleanExec`, which closes inherited
+  descriptors in the single-threaded child: musl has no closefrom file action, and Foundation opens files
+  without `O_CLOEXEC`.
+
 ## Pane lead
 
 - zmx keeps one leader per daemon and applies only its grid. Stock zmx moves the lead to whichever client

@@ -1511,6 +1511,43 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 
+## remote server
+
+A remote window mirrors agterm-server's catalog on a Linux host (docs: agterm.com/docs#remote-server). The
+window commands run on the Mac; `catalog` is served only by agterm-server.
+
+- `window remote open HOST`: open a window mirroring HOST's agterm-server (an ssh destination), or raise
+  the one already showing it; prints the window id. The window's node in `tree` and `window list` carries
+  `remote`: `host`, `catalogID`, `state` (`connecting`, `connected`, `disconnected`, `refused`, with
+  `reason` for the last two; omitted for a closed window), `detachedSessions`, `detachedWorkspaces` and
+  `operations` (`{id, action, session?, workspace?, state}` for an action still on its way or whose outcome
+  was lost), each omitted when empty. Its session rows add `ended` (the server lost the primary and split panes; a
+  scratch may still run),
+  `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon).
+- `window remote dismiss [ID]`: drop the marks for actions whose outcome was lost; it neither undoes nor
+  resends them. The window settles a mark through `catalog op` by itself when the server still knows it.
+- `session detach [--target T ...]` / `workspace detach [--target T]`: hide a remote window's rows on this
+  Mac, leaving them running on the server; a parent takes its companions. `session close` ends them instead.
+- `session reattach --target ID` / `workspace reattach --target ID`: show a detached row again; ID as
+  `remote.detachedSessions` / `detachedWorkspaces` list it (`active` and an ended session are refused;
+  `session close` removes an ended one).
+- `catalog subscribe`: the stream a remote window runs over ssh; not for use by hand.
+- `catalog op OPID [--epoch E --rev N]`: what became of an operation id: `applied` (with its revision),
+  `noop`, `refused` (with the error), `fenced` or `unknown`; an id the server does not hold is recorded so
+  the command is refused if it arrives later.
+- Operation ids: the session and workspace structure commands take `--op-id ID --epoch E`; the server keeps
+  the last 512 receipts, so the same id within them is not run twice, and answers `result.receipt` `{opID, epoch, outcome, rev?, error?}`; `--expect-panes ID,ID` and `session
+  scratch --expect-scratch ID|none` refuse a target that changed; all need `--op-id`. A Mac app refuses an
+  operation id.
+- On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available
+  on agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap,
+  quick, dashboard, zoom and more; `window list` and the presenter bridges `zmx present`, `run-job` and
+  `page-serve` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick
+  needs a session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held
+  until a Mac presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an
+  ask or pick ends unanswered, at its `--timeout`. `version` adds `headless: true` and
+  `versions`.
+
 ## surface
 
 `agtermctl surface zoom [show|hide|toggle] [--target SURFACE_ID|active|quick] [--window W]` — zoom one

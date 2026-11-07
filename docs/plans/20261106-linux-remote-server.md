@@ -629,16 +629,16 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
       `agtermctl`; the hoisted installer leaves the Mac's install unchanged
 
 ### Task 13: Update documentation
-- [ ] `site/docs.html`: a Remote server section (install, open a remote window, what runs where, disconnect, close)
+- [x] `site/docs.html`: a Remote server section (install, open a remote window, what runs where, disconnect, close)
       and the scratch/custom-command rules in a remote window
-- [ ] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, `session detach|reattach`
+- [x] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, `session detach|reattach`
       and `workspace detach|reattach`, pick `--session`,
       ask/pick `--timeout`, the new `tree` fields, and which commands a server refuses
-- [ ] `site/index.html`: the remote server as a major feature
-- [ ] `.claude/rules/control-api.md` (catalog protocol, receipts, pending interactions, headless presenter rule,
+- [x] `site/index.html`: the remote server as a major feature
+- [x] `.claude/rules/control-api.md` (catalog protocol, receipts, pending interactions, headless presenter rule,
       Linux rendezvous), `windows.md` (window sources), `ci.md` (Linux job); `ARCHITECTURE.md` module map
-- [ ] `plugins/agterm/skills/agterm/` SKILL.md trigger and reference for remote windows and the server
-- [ ] `README.md` synopsis line and `site/llms.txt` index entry; delete `docs/remote-agent-server.md`
+- [x] `plugins/agterm/skills/agterm/` SKILL.md trigger and reference for remote windows and the server
+- [x] `README.md` synopsis line and `site/llms.txt` index entry; delete `docs/remote-agent-server.md`
 
 ### Task 14: [Final] Verify acceptance criteria
 - [ ] every Overview requirement works end to end against the container server through an isolated Debug instance:
