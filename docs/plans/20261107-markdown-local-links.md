@@ -169,19 +169,20 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/MarkdownPageTests.swift`
 - Modify: `agtermTests/MarkdownPageRenderingTests.swift`
 
-- [ ] write failing tests for `linkGrant`: canonical path and folder; nil for `/`, home, and a symlinked
+- [x] write failing tests for `linkGrant`: canonical path and folder; nil for `/`, home, and a symlinked
       alias of home; a symlinked first file yields its target's folder
-- [ ] write failing tests for `linkedDocument`: nested file allowed; `..` escape, absolute outside root,
-      percent-encoded `..`, root itself, non-markdown canonical suffix, and an in-root `guide.md -> .env`
-      symlink all refused; a symlink to an in-root `.md` allowed
-- [ ] write failing tests: `remoteImageReferences` skips markdown-spelled references; `html` without
+- [x] write failing tests for `linkedDocument`: nested file allowed; `..` escape, absolute outside root,
+      root itself, non-markdown canonical suffix, and an in-root `guide.md -> .env` symlink all refused; a
+      symlink to an in-root `.md` allowed (a percent-encoded `..` arrives decoded from the URL, so Task 3's
+      policy tests cover it)
+- [x] write failing tests: `remoteImageReferences` skips markdown-spelled references; `html` without
       `links:` writes no flag
-- [ ] implement `MarkdownLinkGrant`, `linkGrant`, `linkedDocument`, the `links:` flag and the reference filter
-- [ ] write failing hosted tests for the render.js filter: relative `.md`, `.markdown`, `x.md#h` kept with
+- [x] implement `MarkdownLinkGrant`, `linkGrant`, `linkedDocument`, the `links:` flag and the reference filter
+- [x] write failing hosted tests for the render.js filter: relative `.md`, `.markdown`, `x.md#h` kept with
       the flag; `/abs.md`, `//host/x.md`, `x.txt`, `file:`, `javascript:` stripped; nothing local kept
       without the flag
-- [ ] implement the render.js filter
-- [ ] run the touched tests - must pass before Task 2
+- [x] implement the render.js filter
+- [x] run the touched tests - must pass before Task 2
 
 ### Task 2: Prove native history and scroll restoration on a scheme-served markdown page
 
@@ -210,7 +211,8 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`, `agtermTests/MarkdownPageRenderingTests.swift`
 
 - [ ] write failing policy tests: own-host markdown URL inside the grant allowed; no grant, other host,
-      non-markdown path, escaping path, subframe and new window refused; web links unchanged
+      non-markdown path, escaping path (plain and percent-encoded `..`), subframe and new window refused;
+      web links unchanged
 - [ ] write failing tests: `identity` names the committed markdown file; `markdown` read-back keeps the
       original; a refused root opens with `navigation: false`; clicked and forwarded markdown open with
       `navigation: true` and a grant

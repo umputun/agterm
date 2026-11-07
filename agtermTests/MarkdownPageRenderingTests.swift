@@ -136,6 +136,20 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         XCTAssertLessThan(clock.now - started, .seconds(10))
     }
 
+    func testALinkPageKeepsOnlyRelativeLinksToNeighbouringMarkdown() async throws {
+        let source = "[a](sub/b.md) [b](c.MARKDOWN) [c](x.md#h) [k](x.md?q=1) [d](/abs.md) [e](//host/x.md) "
+            + "[f](x.txt) [g](x.md/) [h](https://example.com/x.md) [j](#frag) [l](..%5Cx.md)\n"
+        let view = linkPageView()
+        view.loadHTMLString(MarkdownPage.html(markdown: source, images: .init(), style: "", links: true), baseURL: nil)
+        try await waitForScript("document.querySelectorAll('a').length", in: view) { $0 == "11" }
+
+        let hrefs = try await view.evaluateJavaScript("""
+            [...document.querySelectorAll('a')].map(a => a.textContent + '=' + (a.getAttribute('href') ?? '')).join(',')
+            """)
+        XCTAssertEqual(hrefs as? String,
+                       "a=sub/b.md,b=c.MARKDOWN,c=x.md#h,k=x.md?q=1,d=,e=,f=,g=,h=https://example.com/x.md,j=#frag,l=..%5Cx.md")
+    }
+
     func testAMarkdownPageLinksHeadingsAndKeepsOtherTargetsInert() async throws {
         let source = "# Intro & Setup!\n\n## Usage\n\n## Usage\n\n## Usage-1\n\n"
             + "[a](#usage-1) [b](about:blank) [c](other.md) [d](https://example.com/x)\n"
@@ -213,6 +227,15 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
 
         try await waitFor("failed") { self.current?.loadState == .failed }
         XCTAssertEqual(current?.loadError, MarkdownProbe.Failure.unreadable(overlay.source.markdownPath ?? "").description)
+    }
+
+    private func linkPageView() -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.userContentController.addUserScript(WKUserScript(
+            source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true,
+            in: WKContentWorld.world(name: "agterm-markdown")))
+        return WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: configuration)
     }
 
     private func openMarkdown(_ name: String, _ text: String) throws -> HtmlOverlay {
