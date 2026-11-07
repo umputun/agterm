@@ -310,11 +310,12 @@ paths:
   size in Appearance, which `testSidebarDensityPickerPersistsAndTheAppearanceTabFits` keeps from scrolling.
   The control catalog carries it as `sidebar.density`.
 - `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
-  `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while the key
-  window's first responder is a live `GhosttySurfaceView` or sits inside an `HtmlOverlayWebView`, page form
-  fields included, reselects on every source-change notification, and
-  restores the earlier source when that stops being true and in `applicationWillTerminate`.
-  It keys on key-window and responder changes, never app activation, because the quick terminal takes key
+  `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while any
+  agterm window is key, whatever holds first responder there (terminals, pages, palettes, ask dialogs,
+  rename fields, Settings, alerts), reselects on every source-change notification, and
+  restores the earlier source when no agterm window is key and in `applicationWillTerminate`.
+  One app-wide rule, because a responder-scoped lock released in some text fields and not others.
+  It keys on key-window changes, never app activation, because the quick terminal takes key
   while agterm stays inactive. The source-change notification is delivered to an inactive app (measured
   with the quick panel key), so the observer needs no suspension override.
   Selection is system-wide and macOS restores nothing itself (measured with the per-document input source

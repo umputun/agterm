@@ -289,8 +289,8 @@ final class SettingsModel {
         persistAndApply()
     }
 
-    /// Persist the keyboard input source held while a terminal has the keyboard, nil for off, and apply it
-    /// to the current focus.
+    /// setTerminalInputSource persists the keyboard input source held while an agterm window has the
+    /// keyboard, nil for off, and applies it at once.
     func setTerminalInputSource(_ id: String?) {
         guard id != settings.terminalInputSource else { return }
         settings.terminalInputSource = id
