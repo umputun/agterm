@@ -2,6 +2,8 @@
 
 A Claude Code session's row reports what is still running when the turn ends, and a sweeper clears the glyphs nothing backs, bar a `blocked` row it never saw an agent behind.
 
+Author: [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91)
+
 ## What it does
 
 The stock hooks map Stop to `completed --auto-reset` unconditionally, which is right for a session that finished and wrong for one that did not. Three cases go wrong in agent-heavy use:

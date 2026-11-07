@@ -2,6 +2,8 @@
 
 Pick a directory in agterm's own fuzzy picker and have its path typed into the shell you pressed the key in.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Press the key and the picker agterm draws for its own palettes opens in the current window, listing the directories under your search roots. Type to filter, press Return, and the path is typed into that session without a Return of its own, so it arrives as an argument to whatever you were already writing. Type `cd ` first and the pick finishes the command. Esc closes the picker and types nothing.

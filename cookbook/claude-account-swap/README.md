@@ -2,6 +2,8 @@
 
 Pick another Claude Code account and carry the left pane's conversation into it as a summary.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 The custom command opens an account picker. Selecting an account quits Claude in the left pane and

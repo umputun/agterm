@@ -2,7 +2,7 @@
 
 After a restart each tab reopens its own codex conversation instead of the shared most-recent one.
 
-Contributed by [@brusnigin](https://github.com/brusnigin), from [discussion #71](https://github.com/umputun/agterm/discussions/71#discussioncomment-17515571).
+Author: [@brusnigin](https://github.com/brusnigin), from [discussion #71](https://github.com/umputun/agterm/discussions/71#discussioncomment-17515571).
 
 ## What it does
 

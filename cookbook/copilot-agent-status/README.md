@@ -2,6 +2,8 @@
 
 Copilot CLI sessions report active, blocked, and completed onto their sidebar row via the bundled agent-status hooks package and Copilot CLI's native hook support.
 
+Author: [@rychkov](https://github.com/rychkov)
+
 ## What it does
 
 Gives GitHub Copilot CLI the same per-session sidebar glyph behavior the installer already wires up for Claude Code: the row pulses active while Copilot works, goes blocked while it is waiting on a permission prompt, and flashes completed at the end of the turn, clearing when you visit the session. This recipe adds that mapping through Copilot CLI's own `hooks/*.json` support; agterm itself needs no code change, and the bundled installer does not currently set Copilot hooks up for you.

@@ -2,7 +2,7 @@
 
 After a restart each tab reopens its own opencode conversation instead of starting a fresh one.
 
-Contributed by [@cherkale](https://github.com/cherkale), from [discussion #71](https://github.com/umputun/agterm/discussions/71#discussioncomment-17845561).
+Author: [@cherkale](https://github.com/cherkale), from [discussion #71](https://github.com/umputun/agterm/discussions/71#discussioncomment-17845561).
 
 ## What it does
 

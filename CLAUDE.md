@@ -327,10 +327,13 @@ C-boundary concurrency before changing the bridge.
   social tags insert `macOS` for search intent, and `site/llms.txt` carries a libghostty-based variant.
 - `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
   every command, arguments, and read-back field.
-- `cookbook/` is not a synchronized surface. Recipes pin a minimum version and are fixed reactively;
+- `cookbook/` is not a synchronized surface. Recipes pin a minimum version;
   its CI checks structure and shell hygiene, not current API parity.
-- Cookbook recipes are third-party work published by their author, not code the project owns.
-  Review asks only three things: it does no harm, deliberately or accidentally; it does what it claims;
+- Every recipe names its author on an `Author:` line and in the index's author column.
+  A recipe by another author is his published work, not code the project owns.
+  An issue asking to fix or change one gets a pointer to `cookbook/CONTRIBUTING.md#bugs-and-improvements` and is
+  closed; bugs in @umputun's recipes follow normal bug handling.
+  Review of a contributed recipe asks only three things: it does no harm, deliberately or accidentally; it does what it claims;
   and it follows `cookbook/CONTRIBUTING.md`.
   Edge cases, minor bugs, and other small findings never block the PR: approve and merge, leaving a note
   for the contributor. That note is where a recipe finding ends: never file it in `docs/backlog/`, which

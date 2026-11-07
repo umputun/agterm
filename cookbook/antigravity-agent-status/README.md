@@ -2,6 +2,8 @@
 
 Antigravity CLI (`agy`) sessions report active, blocked, and completed onto their sidebar row via `agy` lifecycle hooks and the bundled agent-status script.
 
+Author: [@stn1slv](https://github.com/stn1slv)
+
 ## What it does
 
 Gives Antigravity CLI (`agy`) per-turn sidebar status indicators matching the built-in Claude Code hook mapping: the session row pulses `active` while the model runs and after each tool call, switches to `blocked` when `agy` asks a question or requests a scoped permission via tool call, and sets `completed` when `Stop` reports `fullyIdle: true`.

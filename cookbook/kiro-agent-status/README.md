@@ -2,6 +2,8 @@
 
 Kiro CLI sessions report active, blocked, and completed onto their sidebar row, from a shell function and the stock status script.
 
+Author: [@bitcldr](https://github.com/bitcldr)
+
 ## What it does
 
 Gives kiro the same per-session status glyph the installer wires up for Claude Code, Codex, Pi, and OpenCode: the row pulses active while kiro works, goes blocked while a real approval dialog is up, and flashes completed at the end of each turn, clearing when you visit the session. Turn, not session — a long `kiro-cli chat` reports every turn separately and stays quiet between them.

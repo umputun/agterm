@@ -2,6 +2,8 @@
 
 Report a Claude Code (or any hook-driven agent) session's status onto its sidebar row when that agent runs inside a container instead of on the host.
 
+Author: [@nquo](https://github.com/nquo)
+
 ## What it does
 
 The installer's `Help ▸ Install Agent Status Hooks…` wires an agent's lifecycle hooks straight to `agtermctl` over the local control socket, which only works when the agent and agterm share an OS — the socket does not exist inside a Linux container. This recipe replaces that one hop with two: a small script inside the container turns each hook event into a JSON line and sends it over TCP to the host, and a listener on the host turns each line back into the same `agtermctl session status` call the installer's hooks would have made directly. The row pulses active while the agent works, goes blocked on a real permission prompt, and flashes completed at the end of a turn — the same behavior as a native session, one network hop removed.

@@ -1040,7 +1040,8 @@ subsystem `com.umputun.agterm`. If it turns out to be a bug, offer to help file 
 
 **Filing is opt-in and draft-first.** Never run a `gh` command without the user's explicit approval.
 Decide first whether it is a bug (a supported feature misbehaving → a GitHub **issue**) or something
-not supported / a question / an idea (→ a GitHub **Discussion**, category `Ideas` or `Q&A`). Draft the
+not supported / a question / an idea (→ a GitHub **Discussion**, category `Ideas` or `Q&A`); a
+cookbook recipe by another author takes a pull request instead (`troubleshooting.md`). Draft the
 title and body, show it to the user, scrub anything private (tokens, hostnames, usernames in paths,
 selection/clipboard text), and only post after an explicit go-ahead. If `gh` is missing or not
 authenticated, hand the user the prefilled text plus the new-issue / new-discussion URL instead.

@@ -2,6 +2,8 @@
 
 Claude Code keeps the git state of the repository it works in on a line under the session's sidebar row: branch, changed files, commits ahead of and behind the upstream.
 
+Author: [@umputun](https://github.com/umputun)
+
 <img src="screenshot.png" alt="sidebar rows with git info lines under each session" width="283">
 
 ## What it does

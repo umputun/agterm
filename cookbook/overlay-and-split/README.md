@@ -2,6 +2,8 @@
 
 A split toggle that reads the current state before deciding, plus three TUIs on leader keys, all as `keymap.conf` lines.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Four entries, no script files.

@@ -2,6 +2,8 @@
 
 Ask Claude Code for a page about the issue, PR, plan, change or topic in hand, and read it in an overlay over the session.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 `/agdoc` turns whatever the session is working on into one static HTML page and opens it over the session as a floating panel. With no arguments it works out the subject itself: the issue or PR under discussion, the plan being executed, the change just made, or the current branch. When more than one fits, it asks, offering the likely subjects. With arguments it takes them as the brief, audience included:

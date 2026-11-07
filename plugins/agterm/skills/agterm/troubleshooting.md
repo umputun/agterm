@@ -394,6 +394,10 @@ there: link detection follows the program's mouse request, not that setting.
 
 ## Reporting: decide bug vs unsupported FIRST
 
+- A bug or a wanted change **in a cookbook recipe** whose Author line names someone other than @umputun →
+  a pull request against the recipe, never an issue; see
+  <https://github.com/umputun/agterm/blob/master/cookbook/CONTRIBUTING.md#bugs-and-improvements>. Bugs in
+  @umputun's recipes, and agterm bugs a recipe exposes, are reported as below.
 - A **supported** thing misbehaves (a documented command/feature does the wrong thing, a crash, a parse
   bug) → a GitHub **issue**.
 - The user wants something **not supported**, or it is a question / idea / "can it do X" → a GitHub

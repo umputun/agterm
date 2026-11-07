@@ -2,7 +2,7 @@
 
 After a restart each tab reopens its own Claude Code conversation instead of a shared most-recent one.
 
-Contributed by [@ssgreg](https://github.com/ssgreg), from [discussion #71](https://github.com/umputun/agterm/discussions/71). Fish port by [@Arelav](https://github.com/Arelav).
+Author: [@ssgreg](https://github.com/ssgreg), from [discussion #71](https://github.com/umputun/agterm/discussions/71). Fish port by [@Arelav](https://github.com/Arelav).
 
 ## What it does
 

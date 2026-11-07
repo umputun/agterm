@@ -2,6 +2,8 @@
 
 Let a coding agent install [cronn](https://github.com/umputun/cronn), schedule and inspect jobs on your Mac, and run jobs that open agterm sessions for you.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 cronn is a cron replacement with a web dashboard and a local API. This recipe runs it as a per-user launchd agent and gives Claude Code a skill for it, so scheduling becomes a conversation:

@@ -2,6 +2,8 @@
 
 Open the image paths printed on a pane's screen in a gallery, also when the session is attached from another Mac.
 
+Author: [@wildsurfer](https://github.com/wildsurfer)
+
 ## What it does
 
 An agent such as Claude Code often prints the path of a screenshot it made. In a session attached with `agtermctl zmx attach`, this file is on the other Mac, and ⌘-click does not open a bare path in an attached pane. This recipe adds one chord that finds the image paths on the screen, copies the files to this Mac when the session is attached, and shows them in an overlay with a large image and a thumbnail strip. The chord works in a local session too.
