@@ -212,8 +212,8 @@
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Create: `agterm/Control/ControlServer+LinkOverlay.swift`
 
-- [ ] move `openLinkOverlay`, `canShowLinkOverlay` and the helpers only they call, unchanged
-- [ ] build and run `ControlServerLinkOverlayTests`; commit on its own
+- [x] move `openLinkOverlay`, `canShowLinkOverlay` and the helpers only they call, unchanged
+- [x] build and run `ControlServerLinkOverlayTests` (25 passed); commit on its own
 
 ### Task 4: Origin carries out a forwarded click
 **Files:**
