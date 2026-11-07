@@ -111,6 +111,9 @@ struct PresentationFramesTests {
             page: "p8", token: "t8", source: .document(path: "/tmp/agdoc/pr.html"), identity: "pr.html",
             chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
             pane: nil, sizePercent: 95, follow: false))),
+        PresentationFrame(gen: 1, rev: 52, body: .linkClick(PresentationLinkClick(
+            raw: "src/main.py:42", pane: UUID(), mode: .overlay75))),
+        PresentationFrame(gen: 1, rev: 53, body: .linkRefused(PresentationLinkRefusal(reason: .notFound))),
     ]
 
     @Test(arguments: [
@@ -175,6 +178,25 @@ struct PresentationFramesTests {
         #expect(state.error?.count == PresentationPageState.maxError)
         #expect(try PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageState(state))).count
             < PresentationCodec.maxFrameBytes)
+    }
+
+    @Test func aLinkClickWithAnUnknownModeDecodesAsOverlay() throws {
+        let line = Data(#"{"kind":"link.click","gen":1,"rev":2,"link":{"raw":"/a.md","pane":"6F9619FF-8B86-D011-B42D-00C04FC964FF","mode":"overlay33"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .linkClick(let click) = frame.body else {
+            Issue.record("not a link click: \(frame.body)")
+            return
+        }
+        #expect(click.mode == .overlay)
+        #expect(click.raw == "/a.md")
+    }
+
+    @Test func aLinkRefusalWithAnUnknownReasonDecodesAsNotOpened() throws {
+        let line = Data(#"{"kind":"link.refused","gen":1,"rev":2,"link":{"reason":"futureReason"}}"#.utf8)
+
+        #expect(try PresentationCodec.decode(line).body == .linkRefused(PresentationLinkRefusal(reason: .notOpened)))
     }
 
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {

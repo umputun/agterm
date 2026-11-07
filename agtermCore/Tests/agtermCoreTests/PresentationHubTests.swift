@@ -235,6 +235,25 @@ struct PresentationHubTests {
         #expect(sink.bodies.last == ask)
     }
 
+    @Test func onlyThePresentersLinkClickReachesTheHost() throws {
+        let hub = makeHub()
+        var received: [PresentationFrame.Body] = []
+        hub.onPresenterFrame = { _, body in received.append(body) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.linkClickKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let click = PresentationFrame.Body.linkClick(PresentationLinkClick(raw: "/a.md", pane: UUID(), mode: .overlay))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: click), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: click), from: presenter)
+
+        #expect(received == [click])
+        #expect(presenterSink.bodies.first == .hello(hello))
+    }
+
     @Test(arguments: [true, false])
     func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
         let hub = makeHub()

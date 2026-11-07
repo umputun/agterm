@@ -49,6 +49,7 @@ struct RemotePresentationClientTests {
         var overlayCloses: [PresentationOverlayChange] = []
         var overlayResizes: [PresentationOverlayChange] = []
         var respawns: [(PresentationRespawns, Bool)] = []
+        var linkRefusals: [RemoteLinkRefusal] = []
         var warnings: [String] = []
     }
 
@@ -88,6 +89,7 @@ struct RemotePresentationClientTests {
             overlayResize: { recorder.overlayResizes.append($0) },
             sound: { recorder.sounds.append($0) },
             respawns: { recorder.respawns.append(($0, $1)) },
+            linkRefused: { recorder.linkRefusals.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -98,8 +100,8 @@ struct RemotePresentationClientTests {
     }
 
     func connect(_ client: RemotePresentationClient, snapshot: PresentationSnapshot? = nil, gen: Int = 7,
-                 mode: PresentationMode = .mirror) {
-        let answer = PresentationHello(version: 1, kinds: ["status", "hud", "notify"], mode: mode)
+                 mode: PresentationMode = .mirror, kinds: [String] = ["status", "hud", "notify"]) {
+        let answer = PresentationHello(version: 1, kinds: kinds, mode: mode)
         transport.deliver(line(.hello(answer), gen: gen, rev: 0))
         transport.deliver(line(.snapshot(snapshot ?? PresentationSnapshot(status: nil, hud: nil)), gen: gen, rev: 1))
     }
@@ -299,6 +301,34 @@ struct RemotePresentationClientTests {
         client.answer(answer)
 
         #expect(transport.links[0].sent.map(\.body).last == answer)
+    }
+
+    @Test func theOriginsAgreedKindsHoldOnlyForTheLinkTheyCameWith() {
+        let client = makeClient()
+        client.start()
+        #expect(!client.originSupports(PresentationHub.linkClickKind))
+
+        connect(client, mode: .presenter, kinds: ["status", PresentationHub.linkClickKind])
+        #expect(client.originSupports(PresentationHub.linkClickKind))
+        #expect(!client.originSupports(PresentationHub.askFormKind))
+
+        transport.close("exit 255")
+        #expect(!client.originSupports(PresentationHub.linkClickKind))
+
+        clock.now = clock.now.addingTimeInterval(2)
+        client.tick()
+        connect(client, gen: 8, mode: .presenter)
+        #expect(!client.originSupports(PresentationHub.linkClickKind))
+    }
+
+    @Test func anOriginsLinkRefusalReachesTheApp() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter, kinds: [PresentationHub.linkClickKind])
+
+        transport.deliver(line(.linkRefused(PresentationLinkRefusal(reason: .notFound)), rev: 2))
+
+        #expect(recorder.linkRefusals == [.notFound])
     }
 
     @Test func anAnswerWithTheStreamDownIsDropped() {

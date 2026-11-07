@@ -190,20 +190,22 @@
 - Modify: `agtermCore/Sources/agtermCore/PresentationFrames.swift`
 - Modify: `agtermCore/Sources/agtermCore/PresentationHub.swift`
 - Modify: `agtermCore/Sources/agtermCore/RemotePresentationClient.swift`
-- Modify: `agtermCore/Sources/agtermCore/RemotePresentationState.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/{PresentationFramesTests,PresentationHubTests,RemotePresentationClientTests}.swift`
 
-- [ ] `link.click` / `link.refused` bodies, codec, `kind`, lenient mode, `linkClickKind` in `supportedKinds`
-- [ ] hub routes `.linkClick` only from the current presenter
-- [ ] client retains and resets origin kinds, `originSupports(_:)`, applies `.linkRefused` (defaulted effect)
-- [ ] `remotePane(forLocal:)` public
-- [ ] tests: codec round-trip and size cap, an unknown mode decodes to `.overlay`, older peer skips the kinds,
-      hub drops a non-presenter's click, client kinds before hello and after a drop, `.linkRefused` reaches
-      effects
-- [ ] shallow-clone agterm-linux into `/tmp`, list its exhaustive switches on `PresentationFrame.Body` and
-      `LinkPolicy.Route` and its constructors of the changed types; record what it must add under Post-Completion;
-      remove the clone
-- [ ] run the touched tests
+- [x] `link.click` / `link.refused` bodies, codec, `kind`, lenient mode, `linkClickKind` in `supportedKinds`;
+      ➕ the refusal's reason decodes leniently too, an unknown one as `notOpened`
+- [x] hub routes `.linkClick` only from the current presenter
+- [x] client retains and resets origin kinds, `originSupports(_:)`, applies `.linkRefused` (defaulted effect)
+- [x] ➕ `remotePane(forLocal:)` stays internal: the viewer builder lives in agtermCore (Task 5), so no export
+- [x] tests: codec round-trip, an unknown mode decodes to `.overlay`, an unknown reason to `notOpened`, hub drops
+      a non-presenter's click, client kinds before hello, after a drop and on a reconnect without the kind,
+      `.linkRefused` reaches effects; an older peer skipping the kinds is the existing unknown-kind and
+      hello-intersection coverage
+- [x] agterm-linux (melonamin/agterm-linux, shallow clone): its Linux port routes clicks through
+      `LinkPolicy.disposition`, unchanged, and its frame switches end in `default`; `linkRefused` is defaulted,
+      so it needs no change; its copy of the macOS `LinkOpener` predates `.text`/`.document` and gains
+      `.forwardRemote` with them on its next upstream merge
+- [x] run the touched tests (692 core tests)
 
 ### Task 3: Move the link helpers out of the long file
 **Files:**
@@ -287,6 +289,6 @@
 - origin on an older build: a click is refused here and nothing opens on either Mac
 
 **External**
-- agterm-linux: add what Task 2's clone review records
+- agterm-linux: nothing required (Task 2); its Linux port could adopt forwarding through the same frames later
 
 Smells pre-check: skipped — non-Go project

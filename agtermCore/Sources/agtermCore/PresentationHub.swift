@@ -65,7 +65,8 @@ public final class PresentationHub {
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
-                                        overlayPointsKind, pageContentKind, pageDocumentKind, statusShapesKind] + pageKinds
+                                        overlayPointsKind, pageContentKind, pageDocumentKind, statusShapesKind,
+                                        linkClickKind] + pageKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -83,6 +84,8 @@ public final class PresentationHub {
     public static let pageDocumentKind = "page.document"
     /// statusShapesKind advertises the expanded status-shape set.
     public static let statusShapesKind = "status.shapes"
+    /// linkClickKind advertises forwarded clicks and the refusal frame that answers one.
+    public static let linkClickKind = "link.click"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
@@ -172,7 +175,7 @@ public final class PresentationHub {
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-        case .askResolve, .askRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState:
+        case .askResolve, .askRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState, .linkClick:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break
