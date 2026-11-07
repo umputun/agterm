@@ -146,6 +146,20 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(group.store.selectedSessionID, group.after.id)
     }
 
+    func testCompanionItemsSitInTheirOwnSectionOnParentAndCompanionRows() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        for (id, last) in [(group.after.id, "Convert to Companion"), (group.first.id, "Duplicate as Companion")] {
+            group.store.setSidebarSelection([id])
+            let items = try XCTUnwrap(coordinator.menu(forRow: try row(id))).items
+            let first = try XCTUnwrap(items.firstIndex { $0.title == "New Companion" }, "\(items.map(\.title))")
+            let end = try XCTUnwrap(items.firstIndex { $0.title == last }, "\(items.map(\.title))")
+            XCTAssertTrue(items[first - 1].isSeparatorItem, "\(items.map(\.title))")
+            XCTAssertTrue(items[end + 1].isSeparatorItem, "\(items.map(\.title))")
+        }
+    }
+
     func testConvertIsOmittedOnACompanionRowAndDisabledOnARemoteRow() throws {
         let group = try seed()
         let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", remoteHost: "far"))

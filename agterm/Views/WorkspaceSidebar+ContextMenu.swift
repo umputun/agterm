@@ -111,6 +111,7 @@ extension WorkspaceSidebar.Coordinator {
                 menu.addItem(duplicate)
             }
             if sessionCount == 1 {
+                menu.addItem(.separator())
                 let companion = NSMenuItem(title: "New Companion", action: #selector(menuNewCompanion(_:)), keyEquivalent: "")
                 companion.target = self
                 companion.representedObject = node
@@ -130,6 +131,7 @@ extension WorkspaceSidebar.Coordinator {
                     convert.isEnabled = session.remoteHost == nil
                     menu.addItem(convert)
                 }
+                menu.addItem(.separator())
             }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
