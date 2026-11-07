@@ -147,6 +147,8 @@ C-boundary concurrency before changing the bridge.
   set's artifact and stamp links before setup runs and let it build locally. `setup.sh` writes stamps
   through symlinks while replacing linked artifacts with local files and directories, so a linked build
   leaves the main checkout claiming a build its artifacts never came from.
+- A contributor PR is built on master's dependency pins, never its own older ones: merge fetched
+  `origin/master` into its local branch before setup, and match stamps against that merged tree.
 - After merge, verify the PR merge commit on fetched `origin/master`, then remove the worktree without
   changing the main checkout's branch. Squash/rebase makes removal report unmerged commits; after
   verification, discard the worktree safely. Native removal may leave a renamed branch, which must be
