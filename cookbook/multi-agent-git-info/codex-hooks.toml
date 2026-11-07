@@ -1,0 +1,23 @@
+[[hooks.SessionStart]]
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = 'python3 "$HOME/.local/bin/agterm-git-info.py"'
+timeout = 5
+
+[[hooks.PostToolUse]]
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'python3 "$HOME/.local/bin/agterm-git-info.py"'
+timeout = 5
+
+[[hooks.Stop]]
+[[hooks.Stop.hooks]]
+type = "command"
+command = 'python3 "$HOME/.local/bin/agterm-git-info.py"'
+timeout = 5
+
+[[hooks.SessionEnd]]
+[[hooks.SessionEnd.hooks]]
+type = "command"
+command = 'python3 "$HOME/.local/bin/agterm-git-info.py"'
+timeout = 3
