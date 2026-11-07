@@ -2,6 +2,8 @@
 
 Review a plan, a document or a draft as a rendered page over the session, and hand your notes back to Claude Code.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 `/webrev docs/plan.md` opens the file as a rendered page in a floating panel over the session. Markdown is rendered with headings, tables and highlighted code; any other file is shown as plain text. Click a paragraph, a table row or a code line to attach a note to it, or use the File note button for the whole file, then press Submit. Claude Code gets the notes as annotation records, each block note with its source line range, answers the ones phrased as questions, applies the rest to the file, and opens the page again so you can check the result. The loop stops when you submit with no notes or cancel.

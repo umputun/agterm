@@ -2,6 +2,8 @@
 
 Pick a session running on another Mac and attach it here, marked remote in the sidebar.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Lists what another Mac has to offer, shows it in agterm's native picker, and attaches whatever you

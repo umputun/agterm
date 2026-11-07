@@ -79,7 +79,7 @@ paths:
   changed; its Swift membership also runs macOS jobs.
 - The cookbook job builds nothing. It compares the `cookbook/README.md` table and recipe directories in
   both directions; requires kebab-case directories, a `README.md` with all six exact
-  (`grep -qxF`) headings, and shebangs for `.sh`/`.zsh`/`.fish`/`.py`; runs `shellcheck` on `.sh`; parses
+  (`grep -qxF`) headings and an `Author: [@login](https://github.com/login)` line, and shebangs for `.sh`/`.zsh`/`.fish`/`.py`; runs `shellcheck` on `.sh`; parses
   `.zsh` with `zsh -n` and `.fish` with `fish --no-execute`; runs `ruff check` on `.py`; and runs every
   `test_*.py` regression script through `python3`. `shellcheck` is preinstalled. Install absent `zsh` and `fish`
   together before the shell gates, and install `ruff` through `pipx` because the runner's python is

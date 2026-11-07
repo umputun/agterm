@@ -2,7 +2,7 @@
 
 Jump straight to a window by number, or pick one from a list that shows which windows have sessions waiting for you.
 
-Grew out of [discussion #592](https://github.com/umputun/agterm/discussions/592).
+Author: [@anadale](https://github.com/anadale), grew out of [discussion #592](https://github.com/umputun/agterm/discussions/592).
 
 ## What it does
 

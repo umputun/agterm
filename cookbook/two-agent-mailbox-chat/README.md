@@ -2,6 +2,8 @@
 
 Let two coding agents in one agterm split talk to each other through agterm's pane mailboxes.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Two agents run side by side in a split session, one per pane, and talk to each other directly: Claude Code and Codex, or two of the same kind. You watch both halves of the exchange without relaying anything by hand. The value is disagreement: an agent working alone accepts its own reasoning, while a second one with its own context attacks it first, whether the subject is a plan, a diff, a bug or a long investigation.

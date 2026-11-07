@@ -398,6 +398,9 @@ jobs:
                 echo "::error::$name README is missing the '$h' heading"; fail=1
               fi
             done
+            if ! grep -qE '^Author: \[@[A-Za-z0-9-]+\]\(https://github\.com/[A-Za-z0-9-]+\)' "$d/README.md"; then
+              echo "::error::$name README has no 'Author: [@login](https://github.com/login)' line"; fail=1
+            fi
           done
 
           # every script carries a shebang

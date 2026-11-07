@@ -2,6 +2,8 @@
 
 Mark up whatever the pane just printed in [revdiff](https://github.com/umputun/revdiff), and get your notes back at the prompt with the lines they point at.
 
+Author: [@umputun](https://github.com/umputun)
+
 The sibling [annotate-claude-replies](../annotate-claude-replies/) recipe does the same for a Claude Code answer, and does it better where it applies: it reads Claude's own transcript, so it gets every reply of the exchange in full, formatted, however far it has scrolled. This one reads the terminal instead. That costs the transcript's fidelity — you get the screen as the terminal drew it, wrapped where it wrapped — and buys everything else: any agent, any program, any command output, and no hook to install.
 
 ## What it does

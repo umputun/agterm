@@ -2,7 +2,7 @@
 
 Give each project its own window, then switch between them by parking the rest in the Dock.
 
-Ported from [discussion #293](https://github.com/umputun/agterm/discussions/293).
+Author: [@umputun](https://github.com/umputun), ported from [discussion #293](https://github.com/umputun/agterm/discussions/293).
 
 ## What it does
 

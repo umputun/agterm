@@ -2,6 +2,8 @@
 
 One chord duplicates the session as a tinted companion and asks what to call it; leave the name blank and the companion's Claude Code names it from its task.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Duplicate as Companion copies the session's split layout and starts another copy of each pane's program, nested under the parent in the sidebar. The copy comes up without a name of its own, so a few of them under one parent are hard to tell apart.

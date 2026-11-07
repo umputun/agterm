@@ -2,6 +2,8 @@
 
 One chord lists the sessions whose agents reported a status lately, lets you untick any, and flags the rest.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 With a dozen sessions open, the ones that matter right now are the ones an agent touched in the last half hour: the one working, the one that just finished, the one waiting on you. `agt-flag-recent.sh` finds them and shows them in a checkbox dialog, all ticked, with each session's status, how long ago it was set, and its title-bar context line when it has one. Press Return to accept, or untick what you do not care about first. OK replaces the window's flagged set with the ticked sessions and switches the sidebar to the flagged view; Cancel or Esc changes nothing.

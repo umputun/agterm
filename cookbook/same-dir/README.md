@@ -2,6 +2,8 @@
 
 Sync the active pane's working directory into the opposite split pane.
 
+Author: [@vladislav-yevtushenko](https://github.com/vladislav-yevtushenko)
+
 ## What it does
 
 One key chord syncs your current working directory to the opposite split pane (`cd <cwd>`).

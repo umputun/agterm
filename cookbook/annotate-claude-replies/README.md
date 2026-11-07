@@ -2,6 +2,8 @@
 
 Mark up a long Claude Code answer the way you would mark up a diff, and send the notes back to the prompt you are sitting at.
 
+Author: [@p4elkin](https://github.com/p4elkin)
+
 ## What it does
 
 One chord opens everything Claude has said since your last prompt in [revdiff](https://github.com/umputun/revdiff), inside an overlay on the session you pressed it in. You put a note on any line you do not follow or disagree with. On quit the notes are put at that session's prompt and sent, so annotating and quitting is the whole interaction.

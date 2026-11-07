@@ -2,6 +2,8 @@
 
 Bind named groups of workspaces to keys and switch the sidebar between them, one chord per group.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 A set is a named list of workspace names, written into the script rather than passed to it. `agt-sets.sh work` marks exactly the workspaces in the `work` set, unmarks everything else, and applies the sidebar filter, so the tree shows that group alone. Bind one keymap entry per set and each group is one chord away. Nothing is closed.

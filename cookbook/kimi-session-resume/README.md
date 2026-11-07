@@ -2,6 +2,8 @@
 
 After a restart each tab reopens its own Kimi Code conversation instead of a fresh one.
 
+Author: [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91)
+
 ## What it does
 
 Same idea as the other session-resume recipes: each tab reopens its own conversation after a restart.

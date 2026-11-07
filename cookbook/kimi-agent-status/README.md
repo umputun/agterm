@@ -2,6 +2,8 @@
 
 Kimi Code sessions report active, blocked, and completed onto their sidebar row, from four `[[hooks]]` entries and the stock status script.
 
+Author: [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91)
+
 ## What it does
 
 Wires Kimi Code's own lifecycle hooks to agterm's per-session status glyph, the same signal the installer sets up for Claude Code, Codex, Pi, and OpenCode: the row shows active (pulsing) while kimi works, amber blocked when it is waiting on a real approval, and a one-shot completed when the turn ends. Kimi needs none of the installer's app-side machinery — the stock `agterm-agent-status.sh` works unmodified, so the whole recipe is a config snippet.

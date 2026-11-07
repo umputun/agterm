@@ -2,6 +2,8 @@
 
 A Claude Code session's sidebar row counts the subagents its agent started and stays active until the last one finishes, and a chord pages any one subagent's transcript over the session.
 
+Author: [@bubakanov](https://github.com/bubakanov)
+
 ## What it does
 
 From the sidebar a session running subagents looks the same as one that does not: there is one status per session, and Claude Code shows its subagents only inside the chat. Worse, the stock `Stop` hook posts `completed` when the parent's turn ends, while background subagents keep working.

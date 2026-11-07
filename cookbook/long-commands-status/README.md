@@ -2,6 +2,8 @@
 
 Wrap a long-running shell command so the session's row reports `active` while it runs and `completed` or `blocked` when it finishes — without an agent's hooks.
 
+Author: [@Rulexec](https://github.com/Rulexec)
+
 ## What it does
 
 `agst` is the wrapper for the rest of your shell. `make test`, `cargo build`, a database restore: prefix it with `agst` and the row goes active while the command runs, then `completed --auto-reset` on success or `blocked --auto-reset` on failure. Both end states clear once you visit the session.

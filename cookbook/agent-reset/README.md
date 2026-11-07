@@ -2,6 +2,8 @@
 
 One chord clears the coding agent running in the pane you pressed it in, and does nothing at all when no agent is running there.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Starting a fresh conversation is the thing you do most often and the thing that is most annoying to reach: the context is long, the reply is slow, and you have to click into the right pane first. This binds it to a chord.

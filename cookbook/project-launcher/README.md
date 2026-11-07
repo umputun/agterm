@@ -2,6 +2,8 @@
 
 Press one key anywhere, pick a project from the native fuzzy picker, and get a new session in that project's workspace — created on the spot when it does not exist yet. With a command configured, typing a prompt after the project's name hands it to that command, so one line starts an agent already working.
 
+Author: [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91)
+
 ## What it does
 
 Press the key and the picker agterm draws for its own palettes opens over the current window, listing your projects: every direct subdirectory of the roots you name. Type a few letters, press Return, and a new session opens in that project's directory, inside a workspace named after the project. The workspace is created if the sidebar does not have it yet and reused if it does, so pressing the key twice for the same project stacks a second session into the same workspace rather than making a second workspace.

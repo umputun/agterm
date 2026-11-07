@@ -2,6 +2,8 @@
 
 Pick one of the repo's written-down deferred items in the native picker and hand it to the Claude Code run sitting in the pane.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 A backlog is a directory of markdown files at the repo root, `docs/backlog/`, one file per item: a defect a change did not introduce, drift with no user-visible symptom, a fix whose blast radius exceeded its value. Writing an item down is cheap. Coming back to it is not, because by then you have to find it, read it, decide whether it still applies, and then explain it to the agent.

@@ -2,6 +2,8 @@
 
 One chord lists the past Claude Code conversations of this session's directory, each under a name of what it was about, and resumes the one you pick in the pane you pressed it in.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 `claude --resume` gives you a list of conversations labelled by their opening prompt. After a week in one repository that is a column of "fix the test", "look at this", "continue" — accurate and useless. This recipe lists the same conversations named by what they turned out to be about, in the native picker, and sends the resume into the pane the chord fired from.

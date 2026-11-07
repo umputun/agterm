@@ -2,6 +2,8 @@
 
 Paste a screenshot into a program running in a remote session, such as Claude Code on another Mac.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 In a session attached with `agtermctl zmx attach`, Claude Code and codex on the far Mac read that Mac's

@@ -2,6 +2,8 @@
 
 Press one key, pick a workspace from a searchable list, and get a new session in it — creating the workspace too if it does not exist yet.
 
+Author: [@skripalschikov](https://github.com/skripalschikov)
+
 ## What it does
 
 Press the key and a 60% floating overlay opens over the current session, running three fzf prompts in sequence:
