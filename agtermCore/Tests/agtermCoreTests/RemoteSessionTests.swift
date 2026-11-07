@@ -4,11 +4,34 @@ import Testing
 
 struct RemoteSessionTests {
     @Test func aForwardOfItsOwnSwitchesMultiplexingOffAndFailsOnABusyPort() throws {
-        #expect(try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000") == [
-            "ssh", "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ControlMaster=no", "-o", "ControlPath=none",
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 0, config: "serveraliveinterval 15")
+        let command = try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000")
+        #expect(command.prefix(2) == ["/bin/sh", "-c"])
+        _ = try fake.runShell(command[2])
+
+        #expect(try fake.sshCalls().last == [
+            "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ControlMaster=no", "-o", "ControlPath=none",
             "-o", "ExitOnForwardFailure=yes", "-L", "localhost:5001:localhost:3000", "box",
         ])
         #expect(throws: (any Error).self) { try RemoteSession.forwardCommand(host: "-oProxyCommand=x", spec: "a") }
+    }
+
+    // regression: a forward of its own with no keepalive outlives a half-open link with the page's port dead
+    @Test(arguments: zip(["serveraliveinterval 0", "serveraliveinterval 15", ""], [true, false, false]))
+    func aForwardOfItsOwnGetsKeepAliveOnlyWhenTheUsersConfigSetsNone(config: String, added: Bool) throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 0, config: config)
+        let command = try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000")
+        _ = try fake.runShell(command[2])
+
+        let calls = try fake.sshCalls()
+        #expect(calls.count == 2)
+        #expect(calls.first?.prefix(3) == ["-G", "-T", "-N"], "the check sees the forward's own options")
+        #expect((calls.last ?? []).contains("ServerAliveInterval=5") == added)
+        #expect(calls.last?.suffix(3) == ["-L", "localhost:5001:localhost:3000", "box"])
     }
 
     @Test func aPooledForwardIsAddedCancelledAndCheckedThroughItsControlSocket() throws {

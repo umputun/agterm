@@ -80,11 +80,14 @@ public enum RemoteSession {
     }
 
     /// forwardCommand is a forward of its own for a row with no pooled master: ControlMaster and ControlPath are
-    /// switched off over any ssh_config, so the listener lives in this process and ends with it.
+    /// switched off over any ssh_config, so the listener lives in this process and ends with it. It takes the pane
+    /// attach's keepalive, or a half-open link would leave it running with the page's port dead.
     public static func forwardCommand(host: String, spec: String, connectTimeout: Int = 5) throws -> [String] {
         try validate(host: host)
-        return ["ssh", "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=\(connectTimeout)", "-o", "ControlMaster=no",
-                "-o", "ControlPath=none", "-o", "ExitOnForwardFailure=yes", "-L", spec, host]
+        let options = ["-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=\(connectTimeout)", "-o", "ControlMaster=no",
+                       "-o", "ControlPath=none", "-o", "ExitOnForwardFailure=yes"]
+        let ssh = CommandRestore.shellQuotedLine(["ssh"] + options) + " $ka " + CommandRestore.shellQuotedLine(["-L", spec, host])
+        return ["/bin/sh", "-c", keepAliveCheck(options + [host]) + "; exec " + ssh]
     }
 
     /// forwardControlCommand adds (`forward`), removes (`cancel`) or, with no spec, checks the master at `controlPath`.
@@ -171,6 +174,14 @@ public enum RemoteSession {
         return argv
     }
 
+    /// keepAliveCheck is shell that sets `$ka` to the ServerAlive options when `ssh -G` with `arguments` reports
+    /// none configured, and to nothing otherwise. When and why: control-api.md, Remote sessions.
+    static func keepAliveCheck(_ arguments: [String]) -> String {
+        "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G"] + arguments)
+            + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
+            + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
+    }
+
     /// The pane's command: the attach, then one line saying what died. `commandWait` holds the pane on
     /// Ghostty's own press-any-key prompt, so this sits under the last remote screen until it is read.
     ///
@@ -187,10 +198,8 @@ public enum RemoteSession {
                                          connectTimeout: Int = 5, controlPath: String? = nil) throws -> String {
         let argv = try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
                                      connectTimeout: connectTimeout, controlPath: controlPath)
-        // $ka is unquoted on purpose: four words or none. When and why the check: control-api.md, Remote sessions
-        let keepAlive = "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G"] + argv.dropFirst())
-            + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
-            + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
+        // $ka is unquoted on purpose: four words or none
+        let keepAlive = keepAliveCheck(Array(argv.dropFirst()))
         let attach = CommandRestore.shellQuotedLine(Array(argv.dropLast(2))) + " $ka "
             + CommandRestore.shellQuotedLine(Array(argv.suffix(2)))
         let label = CommandRestore.shellQuotedLine(

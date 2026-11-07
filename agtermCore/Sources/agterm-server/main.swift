@@ -18,7 +18,7 @@ struct ServerCommand: ParsableCommand {
 struct Serve: ParsableCommand {
     static let configuration = CommandConfiguration(abstract: "Serve the catalog and its sessions (the default).")
 
-    @Option(name: .long, help: "State directory; defaults to AGTERM_STATE_DIR, then ~/.local/state/agterm.")
+    @Option(name: .long, help: "State directory; defaults to AGTERM_STATE_DIR, then $XDG_STATE_HOME/agterm, then ~/.local/state/agterm.")
     var stateDir: String?
     @Option(name: .long, help: "The zmx binary; defaults to zmx beside agterm-server.")
     var zmx: String?

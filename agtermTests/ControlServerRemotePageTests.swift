@@ -223,9 +223,9 @@ final class ControlServerRemotePageTests: XCTestCase {
         _ = try present(fix, page(.forwarded("https://localhost:8443/app?x=1")))
 
         let port = try XCTUnwrap(fix.forwards.localPort)
-        let argv = try XCTUnwrap(fix.forwards.launches.first)
-        XCTAssertEqual(Array(argv.suffix(3)), ["-L", "localhost:\(port):localhost:8443", "buildbox"])
-        XCTAssertTrue(argv.contains("ControlPath=none"))
+        let script = try XCTUnwrap(fix.forwards.launches.first?.last)
+        XCTAssertTrue(script.hasSuffix("'-L' 'localhost:\(port):localhost:8443' 'buildbox'"))
+        XCTAssertTrue(script.contains("'ControlPath=none'"))
         XCTAssertEqual(fix.session.htmlOverlay?.source, .url(try XCTUnwrap(URL(string: "https://localhost:\(port)/app?x=1"))))
         let before = try XCTUnwrap(fix.session.htmlOverlay?.reloadRevision)
         waitUntil("the page reloads once the forward answers") { fix.session.htmlOverlay?.reloadRevision == before + 1 }

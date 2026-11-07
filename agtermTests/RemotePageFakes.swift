@@ -229,7 +229,7 @@ final class FakeForwardLauncher: RemoteForwardLauncher {
         launches.append(argv)
         let process = Process()
         process.onExit = onExit
-        if listens, let index = argv.firstIndex(of: "-L"), let port = Int(argv[index + 1].split(separator: ":")[1]) {
+        if listens, let port = Self.forwardPort(argv) {
             process.listener = Self.listen(port)
         }
         processes.append(process)
@@ -237,7 +237,15 @@ final class FakeForwardLauncher: RemoteForwardLauncher {
     }
 
     var localPort: Int? {
-        launches.last.flatMap { argv in argv.firstIndex(of: "-L").flatMap { Int(argv[$0 + 1].split(separator: ":")[1]) } }
+        launches.last.flatMap(Self.forwardPort)
+    }
+
+    static func forwardPort(_ argv: [String]) -> Int? {
+        let words = argv.first == "/bin/sh" && argv.count == 3
+            ? argv[2].components(separatedBy: " ").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "'")) }
+            : argv
+        guard let index = words.lastIndex(of: "-L"), index + 1 < words.count else { return nil }
+        return Int(words[index + 1].split(separator: ":")[1])
     }
 
     static func listen(_ port: Int) -> Int32 {

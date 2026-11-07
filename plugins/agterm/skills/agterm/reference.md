@@ -1657,10 +1657,12 @@ Invalid invocations error (rejected at the CLI and re-checked server-side): `--f
 
 ## pick
 
-`agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--follow] [--window W] [--no-block]`
+`agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--session S] [--timeout SECONDS] [--follow] [--window W] [--no-block]`
 reads choices from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open
 subcommand, so `agtermctl pick open` is not required. Stdin is read unconditionally, so a call that supplies
-no items needs `< /dev/null` or it blocks.
+no items needs `< /dev/null` or it blocks. `--session S` binds the picker to a session, so it shows wherever
+that session is presented, a remote window included, and reads back as `pick` on the session row.
+`--timeout SECONDS` (at most 86400) cancels it unanswered after that long.
 
 The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
 `id` and `label` strings plus an optional `subtitle` and an optional trailing status glyph: `status`
@@ -1730,6 +1732,7 @@ precedence over the role, and the pane must be laid out by its session at open.
 terminal area, excluding the sidebar. An explicit GUI target must be selected in its window;
 GUI pane selectors require it. Terminal asks can coexist with GUI asks and picks.
 `--window W` selects the window; `--follow` raises it without changing session selection.
+`--timeout SECONDS` (at most 86400) cancels the dialog unanswered after that long.
 
 Supply one to six buttons with unique ids and nonempty labels; a question with a field or a list may omit
 them. A token without `=` is both id and label;

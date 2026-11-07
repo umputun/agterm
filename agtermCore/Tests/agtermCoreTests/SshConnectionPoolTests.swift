@@ -273,6 +273,59 @@ final class SshConnectionPoolTests {
     @Test func aStartRemovesTheSocketADeadConnectionLeft() {
         let command = SshConnectionPool.startCommand(host: "box", path: "/tmp/p-0")
 
-        #expect(command[2].hasPrefix("rm -f '/tmp/p-0'; exec "))
+        #expect(command[2].hasPrefix("rm -f '/tmp/p-0'; "))
+        #expect(command[2].components(separatedBy: "; exec ").count == 2)
+    }
+
+    // regression: panes joined to a master ignore their own keepalive, so a master without one never notices a dead link
+    @Test(arguments: zip(["serveraliveinterval 0", "serveraliveinterval 15", ""], [true, false, false]))
+    func theSharedConnectionGetsKeepAliveOnlyWhenTheUsersConfigSetsNone(config: String, added: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("pool-keepalive-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = directory.appendingPathComponent("calls")
+        try """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> '\(log.path)'
+        if [ "$1" = -G ]; then printf '%s\\n' '\(config)'; fi
+        """.writeExecutable(to: directory.appendingPathComponent("ssh"))
+        let command = SshConnectionPool.startCommand(host: "box", path: directory.appendingPathComponent("p-0").path)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: command[0])
+        process.arguments = Array(command.dropFirst())
+        process.environment = ["PATH": directory.path + ":/usr/bin:/bin"]
+        try process.run()
+        process.waitUntilExit()
+
+        let calls = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map(String.init)
+        #expect(calls.count == 2)
+        #expect(calls.first?.hasPrefix("-G -N -o BatchMode=yes") == true, "the check sees the master's own options")
+        #expect(calls.last?.hasPrefix("-f -N -M") == true)
+        #expect(calls.last?.contains("-o ServerAliveInterval=5 -o ServerAliveCountMax=2 box") == added)
+    }
+
+    // regression: a check without -N reads a `Match sessiontype` block for another session type than the master's
+    @Test func theKeepAliveCheckAnswersForTheSharedConnectionsSessionType() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("pool-sessiontype-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = directory.appendingPathComponent("calls")
+        try """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> '\(log.path)'
+        if [ "$1" = -G ]; then
+          case " $* " in *" -N "*) echo 'serveraliveinterval 0' ;; *) echo 'serveraliveinterval 15' ;; esac
+        fi
+        """.writeExecutable(to: directory.appendingPathComponent("ssh"))
+        let command = SshConnectionPool.startCommand(host: "box", path: directory.appendingPathComponent("p-0").path)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: command[0])
+        process.arguments = Array(command.dropFirst())
+        process.environment = ["PATH": directory.path + ":/usr/bin:/bin"]
+        try process.run()
+        process.waitUntilExit()
+
+        let calls = try String(contentsOf: log, encoding: .utf8).split(separator: "\n").map(String.init)
+        #expect(calls.last?.contains("-o ServerAliveInterval=5 -o ServerAliveCountMax=2 box") == true)
     }
 }

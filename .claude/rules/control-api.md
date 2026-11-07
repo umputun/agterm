@@ -2162,6 +2162,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   pick. `version` reports `headless`, and the CLI binds an untargeted pick to `AGTERM_SESSION_ID` only then.
 - A remote window's store is filled by `RemoteCatalogMirror` from `RemoteCatalogClient`'s stream, over
   `SshConnectionPool` masters of at most eight channels each, below stock sshd's `MaxSessions 10`.
+  A pane joined to a master ignores its own ServerAlive options, so the master runs the pane attach's
+  `RemoteSession.keepAliveCheck` itself; without it a half-open link keeps passing `ssh -O check`. The
+  standalone `RemoteSession.forwardCommand` runs it too, or its forward outlives the link with the page's port dead.
   Structural actions go to the server through `RemoteCatalogActions` and are disabled while disconnected,
   never queued; `RemoteWindowViewState` keeps what this Mac detached and its kept views.
 - A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone

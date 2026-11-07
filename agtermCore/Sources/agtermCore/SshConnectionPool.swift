@@ -101,13 +101,15 @@ public final class SshConnectionPool {
 
     /// startCommand starts a background master; its stdio goes nowhere, or the master would keep the runner's
     /// pipes open for as long as it lives. It runs only after a failed check, so a socket at `path` is a dead
-    /// master's: left there, ssh -M finds the path taken and connects without multiplexing.
+    /// master's: left there, ssh -M finds the path taken and connects without multiplexing. A pane joining the master
+    /// keeps the master's keepalive, never its own, so the master takes the pane attach's default.
     static func startCommand(host: String, path: String) -> [String] {
-        let ssh = CommandRestore.shellQuotedLine([
-            "ssh", "-f", "-N", "-M", "-E", path + ".log", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
-            "-o", "ControlPersist=60", "-o", "ControlPath=" + path, host,
-        ])
-        return ["/bin/sh", "-c", "rm -f " + CommandRestore.shellQuotedLine([path]) + "; exec " + ssh + " </dev/null >/dev/null 2>&1"]
+        let options = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ControlPersist=60", "-o", "ControlPath=" + path]
+        let ssh = CommandRestore.shellQuotedLine(["ssh", "-f", "-N", "-M", "-E", path + ".log"] + options) + " $ka "
+            + CommandRestore.shellQuotedLine([host])
+        // -N rides into the check: a `Match sessiontype` block answers the master's own session type
+        return ["/bin/sh", "-c", "rm -f " + CommandRestore.shellQuotedLine([path]) + "; " + RemoteSession.keepAliveCheck(["-N"] + options + [host])
+            + "; exec " + ssh + " </dev/null >/dev/null 2>&1"]
     }
 
     private func addSlot() -> Slot {

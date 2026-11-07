@@ -235,12 +235,26 @@ remote "agtermctl session type --target $EXITS 'exit
 '" >/dev/null
 check shell-exit "$rows | map(select(.id == \"$EXITS\")) | length == 0"
 
-# --- an unreachable server leaves the window Disconnected with its rows, and comes back
+# --- an unreachable server leaves the window Disconnected with its rows, its masters end, and it comes back
 rows_before="$(ctl tree --window "$WINDOW" --json | jq "[.result.tree.workspaces[].sessions[]] | length")"
 (( rows_before > 0 )) || record FAIL unreachable "the window shows no rows to keep"
+old_masters="$(for path in $(own_paths); do master_pid "$path"; done | sort -u | tr '\n' ' ')"
 docker pause "$CONTAINER" >/dev/null
 PAUSED=1
 check unreachable "(.remote.state == \"disconnected\") and ($rows | length) == $rows_before" 90
+# a master answers its local check for as long as TCP holds, so only its keepalive ends it on a paused server
+live=0
+for _ in $(seq 60); do
+  live=0
+  for pid in $old_masters; do ! kill -0 "$pid" 2>/dev/null || live=$((live + 1)); done
+  (( live == 0 )) && break
+  sleep 1
+done
+if [[ -n "$old_masters" ]] && (( live == 0 )); then
+  record PASS masters-end "every master the window held ended while the server was paused"
+else
+  record FAIL masters-end "masters [${old_masters}] with $live still running after 60 s on a paused server"
+fi
 docker unpause "$CONTAINER" >/dev/null
 PAUSED=""
 check back "(.remote.state == \"connected\")" 120
