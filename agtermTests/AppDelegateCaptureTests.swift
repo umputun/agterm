@@ -62,6 +62,38 @@ final class AppDelegateCaptureTests: XCTestCase {
         XCTAssertEqual(session.splitForegroundCommand, ["worker", "21"])
     }
 
+    // #915: a listing slower than 100 ms timed out and left every reattached pane with no command
+    func testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds() throws {
+        let paneID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-slow-list-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let executable = root.appendingPathComponent("slow-zmx")
+        try """
+        #!/bin/sh
+        /bin/sleep 0.15
+        printf 'name=\(ZmxSupport.daemonName(for: paneID))\\tpid=40\\tclients=1\\tcreated=1\\n'
+        """.write(to: executable, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executable.path)
+        let client = ZmxClient(executablePath: executable.path, socketDirectory: root.path)
+        let resolver = ZmxForegroundResolver(
+            leaderProvider: { client.sessionLeaderPIDs(timeout: $0) }, leaderProbe: { .foreground($0 + 1) })
+        let session = Session(initialCwd: "/tmp", paneIdentity: paneID)
+        session.surface = GhosttySurfaceView(
+            workingDirectory: "/tmp", env: ["AGTERM_PANE_ID": paneID.uuidString], backedByZmx: true)
+
+        let count = AppDelegate.captureForegroundCommands(
+            sessions: [session], zmxResolver: resolver, preserveUnconsumedPending: true,
+            commandReader: { view, _, snapshot in
+                let pid = view.zmxSessionName.flatMap { snapshot?.foregroundPID(sessionName: $0) }
+                return pid.map { ["claude", String($0)] }
+            })
+
+        XCTAssertEqual(count, 1)
+        XCTAssertEqual(session.foregroundCommand, ["claude", "41"])
+    }
+
     func testHiddenNonLiveSplitStaysNilWhileShownNonLivePanesKeepTheOldPath() {
         let hidden = Session(initialCwd: "/tmp")
         hidden.splitSurface = GhosttySurfaceView(workingDirectory: "/tmp")
