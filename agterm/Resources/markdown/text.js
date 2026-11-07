@@ -12,6 +12,7 @@
 
   const pre = document.createElement('pre');
   const code = document.createElement('code');
+  const escape = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const render = (value, lang) => {
     code.textContent = value;
     // highlight.js escapes the text it returns, which makes its value the page's one markup sink
@@ -19,7 +20,8 @@
       try { code.innerHTML = hljs.highlight(value, { language: lang, ignoreIllegals: true }).value; } catch (_) { code.textContent = value; }
     }
   };
-  render(text, language);
+  const rows = !log && source.dataset.diff !== undefined ? diffRows(text.split('\n')) : null;
+  if (rows) renderDiff(text.split('\n'), rows); else render(text, language);
   pre.appendChild(code);
 
   const scroller = document.scrollingElement || document.documentElement;
@@ -48,6 +50,7 @@
     gutter.className = 'agterm-gutter';
     gutter.textContent = lines.map((_, i) => i + 1).join('\n');
     page.append(gutter, pre);
+    if (rows) paintRows(rows);
     if (Number.isInteger(target) && target >= 1 && target <= lines.length) {
       const style = getComputedStyle(pre);
       const band = document.createElement('div');
@@ -60,7 +63,7 @@
     const anchor = Number(source.dataset.anchor);
     if (Number.isFinite(anchor)) scrollTo(anchor);
   }
-  const changes = !log && source.dataset.diff !== undefined ? startChanges(text.split('\n')) : null;
+  const changes = rows ? startChanges(rows) : null;
   finder.start();
   window.addEventListener('keydown', keys);
   send({ ready: true });
@@ -352,40 +355,125 @@
     };
   }
 
-  // a change is one run of removed and added rows inside a hunk; the hunk's counts say where it ends, so the
-  // file headers between hunks never count and a removed row reading `--- x` stays a removal
-  function changeBlocks(rows) {
-    const blocks = [];
-    let old = 0, added = 0, first = -1, last = -1;
-    const close = () => {
-      if (first >= 0) blocks.push([first, last]);
-      first = last = -1;
-    };
-    rows.forEach((row, index) => {
+  // a row's kind is ' ', '-' or '+' inside a hunk, '\\' for the no-newline marker, and '' outside hunks; the hunk
+  // counts decide where a hunk ends, so a changed row that reads like a header stays a change. `file` counts the
+  // `+++` headers, and `lang` is that file's language from the page's path map.
+  function diffRows(lines) {
+    let files = new Map();
+    try { files = new Map(Object.entries(JSON.parse(source.dataset.files || '{}'))); } catch (_) {}
+    let old = 0, added = 0, file = 0, from = '', lang = null;
+    return lines.map((row) => {
       if (old > 0 || added > 0) {
         // the no-newline marker belongs to the row before it and counts on neither side
-        if (row.startsWith('\\')) return;
-        if (row.startsWith('-') || row.startsWith('+')) {
-          if (row.startsWith('-')) old -= 1; else added -= 1;
-          if (first < 0) first = index;
-          last = index;
-        } else {
-          close();
-          old -= 1;
-          added -= 1;
-        }
-        if (old <= 0 && added <= 0) {
-          old = added = 0;
-          close();
-        }
-        return;
+        if (row.startsWith('\\')) return { kind: '\\', file, lang };
+        const kind = row.startsWith('-') || row.startsWith('+') ? row[0] : ' ';
+        if (kind !== '+') old -= 1;
+        if (kind !== '-') added -= 1;
+        if (old <= 0 && added <= 0) old = added = 0;
+        return { kind, file, lang };
+      }
+      const path = row.slice(4).split('\t')[0];
+      if (row.startsWith('--- ')) {
+        from = path;
+        lang = null;
+      } else if (row.startsWith('+++ ')) {
+        file += 1;
+        lang = files.get(path) || files.get(from) || null;
       }
       const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(row);
-      if (!hunk) return;
-      old = hunk[1] === undefined ? 1 : Number(hunk[1]);
-      added = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      if (hunk) {
+        old = hunk[1] === undefined ? 1 : Number(hunk[1]);
+        added = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      }
+      return { kind: '', file, lang: null };
     });
-    close();
+  }
+
+  // every row is escaped or highlight.js output, which keeps the text exactly what the file holds; each file's two
+  // sides are highlighted whole, so a comment or string opened on an earlier row keeps its color
+  function renderDiff(lines, rows) {
+    const marker = (row) => (row ? `<span class="agterm-marker">${escape(row.charAt(0))}</span>` : '');
+    const html = lines.map((row, i) => {
+      const { kind } = rows[i];
+      if (kind === '') return row ? `<span class="hljs-meta">${escape(row)}</span>` : '';
+      return kind === '\\' ? escape(row) : marker(row) + escape(row.slice(1));
+    });
+    const sides = new Map();
+    rows.forEach((row, i) => {
+      if (!row.lang || row.kind === '' || row.kind === '\\') return;
+      if (!sides.has(row.file)) sides.set(row.file, { lang: row.lang, old: [], new: [] });
+      const side = sides.get(row.file);
+      if (row.kind !== '+') side.old.push(i);
+      if (row.kind !== '-') side.new.push(i);
+    });
+    for (const side of sides.values()) {
+      const highlight = (indexes) => highlightRows(indexes.map((i) => lines[i].slice(1)).join('\n'), side.lang);
+      const old = highlight(side.old);
+      side.old.forEach((i, n) => { if (rows[i].kind === '-') html[i] = marker(lines[i]) + old[n]; });
+      const updated = highlight(side.new);
+      side.new.forEach((i, n) => { html[i] = marker(lines[i]) + updated[n]; });
+    }
+    code.innerHTML = html.join('\n');
+  }
+
+  // highlight.js spans can cross rows, so each row closes what is open at its end and reopens it on the next
+  function highlightRows(value, lang) {
+    let html;
+    try { html = hljs.highlight(value, { language: lang, ignoreIllegals: true }).value; } catch (_) { return value.split('\n').map(escape); }
+    const out = [];
+    const open = [];
+    let row = '';
+    for (const m of html.matchAll(/<span class="([^"]*)">|<\/span>|\n|[^<\n]+/g)) {
+      if (m[0] === '\n') {
+        out.push(row + '</span>'.repeat(open.length));
+        row = open.map((c) => `<span class="${c}">`).join('');
+        continue;
+      }
+      if (m[0] === '</span>') open.pop();
+      if (m[1] !== undefined) open.push(m[1]);
+      row += m[0];
+    }
+    out.push(row + '</span>'.repeat(open.length));
+    return out;
+  }
+
+  // rows never wrap, so a run of added or removed rows is one band at its first row's offset
+  function paintRows(rows) {
+    page.classList.add('agterm-diff');
+    const style = getComputedStyle(pre);
+    const height = parseFloat(style.lineHeight);
+    const inset = parseFloat(style.paddingTop);
+    const bands = document.createDocumentFragment();
+    for (let first = 0; first < rows.length; first++) {
+      const kind = rows[first].kind;
+      if (kind !== '-' && kind !== '+') continue;
+      let last = first;
+      while (last + 1 < rows.length && rows[last + 1].kind === kind) last++;
+      const band = document.createElement('div');
+      band.className = kind === '+' ? 'agterm-added' : 'agterm-removed';
+      band.style.top = `${pre.offsetTop + inset + first * height}px`;
+      band.style.height = `${(last - first + 1) * height}px`;
+      bands.append(band);
+      first = last;
+    }
+    page.prepend(bands);
+  }
+
+  // a change is one run of removed and added rows inside a hunk
+  function changeBlocks(rows) {
+    const blocks = [];
+    let first = -1, last = -1;
+    rows.forEach(({ kind }, index) => {
+      if (kind === '\\') return;
+      if (kind === '-' || kind === '+') {
+        if (first < 0) first = index;
+        last = index;
+        return;
+      }
+      if (first >= 0) blocks.push([first, last]);
+      first = -1;
+    });
+    if (first >= 0) blocks.push([first, last]);
     return blocks;
   }
 

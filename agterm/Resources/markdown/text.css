@@ -59,6 +59,14 @@ body { padding-top: 35px; }
   background: color-mix(in srgb, var(--agterm-color-12, #6ca0dc) 4%, transparent);
   box-shadow: inset 4px 0 0 var(--agterm-color-12, #6ca0dc);
 }
+/* positioned, so the row bands drawn before them in the page paint under the text */
+.agterm-diff > pre, .agterm-diff > .agterm-gutter { position: relative; }
+/* zero width rather than removed, so search, copy and change stepping still read the file as written; an inherited
+   line height on the empty box would grow every row past the 20px the bands assume */
+.agterm-marker { font-size: 0; line-height: 0; }
+.agterm-added, .agterm-removed { position: absolute; left: 0; right: 0; pointer-events: none; }
+.agterm-added { background: color-mix(in srgb, var(--agterm-color-2, #5fb36a) 16%, transparent); }
+.agterm-removed { background: color-mix(in srgb, var(--agterm-color-1, #c8463c) 16%, transparent); }
 .agterm-changes { display: flex; gap: 6px; align-items: center; flex: none; }
 .agterm-changes button {
   display: flex; padding: 2px 4px; color: var(--fg); background: var(--tint); border: 1px solid var(--rule);
