@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.41.1 - 2026-11-07
+
+### Improved
+
+- **Diff pages color code by language and step between changes.** A `.diff` or `.patch` page colors each file's code in its own language over green and red row bands, where it used to color whole lines green and red. Previous and next buttons in the bar, or `]` and `[`, step from change to change with a "change 3 of 7" counter. `agtermctl session overlay changes --next|--prev` is the control form, and `htmlOverlays[].text.changes` reads back `{count, current}` #916 #921 @umputun
+- ⌘-click on a local `.html` or `.htm` path opens the page over its session, as markdown and text files do, instead of revealing it in Finder. The page runs no script and makes no network connection; a missing or binary file, or one over 4 MiB, is revealed as before. `tree` reports it as `htmlOverlays[].document` #917 @umputun
+- an animated window title, such as an agent's spinner, costs less: the hidden OS window title updates at most twice a second, and the visible title no longer re-lays out the titlebar on every frame #817 @dimonb
+- a program writing the same title over and over queues one title update per pane at a time, not one per write #911 @umputun
+- every cookbook recipe names its author, and a fix to another author's recipe comes as a pull request to it #920 @umputun
+
+### Bug Fixes
+
+- in Live mode, a clean quit with many busy panes could save them with no running command, so the next reboot restored bare shells #918 @umputun #915
+- right after launch File ▸ Attach Remote… could stay disabled, so ⌘⇧R typed `R` into the terminal #912 @umputun
+- the sidebar Tint submenu started every untinted row on the icon, so a Show On pick never carried to the next row. A new tint now starts on the last Show On pick of the app run #910 @umputun
+
 ## v0.41.0 - 2026-11-06
 
 ### New Features
