@@ -129,6 +129,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         /// Root workspace nodes in store order, rebuilt from the store on each reload from cached instances.
         private var roots: [SidebarNode] = []
+        private var deferredRebuild = false
+        private var deferredRenameNodes: [UUID: SidebarNode] = [:]
         /// Cache of node instances keyed by id, so identity is stable across reloads.
         var nodeCache: [UUID: SidebarNode] = [:]
         /// Guards `syncSelection` against re-entering the store via the selection-change callback it fires.
@@ -221,15 +223,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastSidebarDensity = GhosttyApp.shared.sidebarDensity
             lastChevronsHidden = chevronsHidden
             renameController.onRenameEnded = { [weak self] node in
-                guard let self, !renameController.isEditing, !renameController.isCommitting else { return }
-                if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
-                    outline.reloadItem(node)
-                }
-                // row updates were skipped while the editor was open, and a cancel changes no model value to retrigger them
-                reconcile()
-                syncSelection()
-                focusActiveTerminal()
+                guard let self else { return }
+                if let node { deferredRenameNodes[node.id] = node }
+                flushDeferredRenameUpdates()
             }
+            renameController.onMouseTrackingEnded = { [weak self] in self?.flushDeferredRenameUpdates() }
             // the menu/palette can't reach the inline editor directly, so they post a notification. Scoped
             // by `object: store`: the handlers' selected-session guard is NOT a per-window scope, so an
             // `object: nil` pairing starts an inline edit in EVERY window — each leaving an unopened editor
@@ -321,12 +319,28 @@ struct WorkspaceSidebar: NSViewRepresentable {
             let size = GhosttyApp.shared.sidebarFontSize
             let density = GhosttyApp.shared.sidebarDensity
             guard size != lastSidebarFontSize || density != lastSidebarDensity || chevronsHidden != lastChevronsHidden else { return }
+            guard !renameController.isEditing, !renameController.isCommitting, !renameController.isTrackingMouse else { return }
             lastSidebarFontSize = size
             lastSidebarDensity = density
             lastChevronsHidden = chevronsHidden
             outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size, density: density)
             outlineView?.indentationPerLevel = density.indentPerLevel
             rebuildAndReload()
+        }
+
+        private func flushDeferredRenameUpdates() {
+            guard !renameController.isEditing, !renameController.isCommitting, !renameController.isTrackingMouse else { return }
+            applySidebarMetricsIfChanged()
+            if deferredRebuild { rebuildAndReload() }
+            if let outline = outlineView {
+                for node in deferredRenameNodes.values where outline.row(forItem: node) >= 0 {
+                    outline.reloadItem(node)
+                }
+            }
+            deferredRenameNodes.removeAll()
+            reconcile()
+            syncSelection()
+            focusActiveTerminal()
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change
@@ -470,7 +484,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// delta takes a per-row `reloadItem`, which re-renders at the row's stable frame, so a name/cwd
         /// update never re-lays-out the tree. Skipped mid-rename so it can't drop an in-progress edit.
         private func reloadChangedContentRows() {
-            guard let outline = outlineView, !renameController.isCommitting, !renameController.isEditing else { return }
+            guard let outline = outlineView, !renameController.isCommitting, !renameController.isEditing,
+                  !renameController.isTrackingMouse else { return }
             func reloadIfChanged(_ id: UUID, _ content: RowContent) {
                 let previous = lastRowContent[id]
                 guard content != previous else { return }
@@ -539,6 +554,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// identity and expansion state stay stable, then reloads the outline preserving expansion.
         func rebuildAndReload() {
             guard let outline = outlineView else { return }
+            guard !renameController.isEditing, !renameController.isCommitting, !renameController.isTrackingMouse else {
+                deferredRebuild = true
+                return
+            }
+            deferredRebuild = false
             // a mode or layout switch moves the selected row, possibly under a collapsed workspace, while the
             // selected id stays the same: forget the last reveal so the next `syncSelection` reveals it again.
             // Only a switch does this. Any other rebuild must leave a deliberate fold alone.
@@ -726,6 +746,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Workspace rows are never auto-selected.
         func syncSelection() {
             guard let outline = outlineView else { return }
+            guard !renameController.isEditing, !renameController.isCommitting, !renameController.isTrackingMouse else { return }
             applyingSelection = true
             defer { applyingSelection = false }
             guard let selectedID = store.selectedSessionID, let node = nodeCache[selectedID], node.kind == .session else {
@@ -819,7 +840,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// cover owns the keyboard and hides the pane, so focusing a pane would starve the overlay/scratch
         /// program of input and send keystrokes to a surface the user can't see.
         func focusActiveTerminal(attempt: Int = 0) {
-            if renameController.isEditing { return }
+            if renameController.isEditing || renameController.isCommitting || renameController.isTrackingMouse { return }
             let window = outlineView?.window
             if let window, window.firstResponder is NSText { return }
             if let session = store.activeSession, HtmlOverlayRegistry.shared.focusCover(of: session) { return }

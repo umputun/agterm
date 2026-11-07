@@ -62,6 +62,7 @@ extension WorkspaceSidebar.Coordinator {
         let cell = (outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarCellView) ?? makeCell(identifier: identifier)
 
         let field = cell.textField!
+        (field.cell as? SidebarNameFieldCell)?.renameController = renameController
         cell.titleCenter?.constant = -GhosttyApp.shared.sidebarDensity.titleLift
         field.delegate = renameController
         // a reused cell may carry editing state from a prior rename; reset to label
@@ -214,7 +215,7 @@ extension WorkspaceSidebar.Coordinator {
         let iconWidth = icon.widthAnchor.constraint(equalToConstant: SidebarCellView.iconWidth)
         cell.iconWidthConstraint = iconWidth
 
-        let field = NSTextField(labelWithString: "")
+        let field = SidebarNameField(labelWithString: "")
         field.translatesAutoresizingMaskIntoConstraints = false
         field.lineBreakMode = .byTruncatingTail
         field.isEditable = false
