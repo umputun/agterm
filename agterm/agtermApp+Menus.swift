@@ -160,12 +160,17 @@ extension agtermApp {
                 Button("Duplicate Session") { actions.duplicateActiveSession() }
                     .keyboardShortcut(shortcut(for: .duplicateSession))
                     .disabled(!PaletteCommand.duplicateSession.isEnabled(in: context))
+                Divider()
                 Button("New Companion") { actions.newCompanionOfActiveSession() }
                     .keyboardShortcut(shortcut(for: .newCompanion))
                     .disabled(!PaletteCommand.newCompanion.isEnabled(in: context))
                 Button("Duplicate as Companion") { actions.duplicateActiveSessionAsCompanion() }
                     .keyboardShortcut(shortcut(for: .duplicateCompanion))
                     .disabled(!PaletteCommand.duplicateCompanion.isEnabled(in: context))
+                Button("Convert to Companion") { actions.convertActiveSessionToCompanion() }
+                    .keyboardShortcut(shortcut(for: .convertCompanion))
+                    .disabled(!PaletteCommand.convertCompanion.isEnabled(in: context))
+                Divider()
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {

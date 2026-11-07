@@ -23,6 +23,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.duplicate"))
     }
 
+    func convertToCompanion(_: String?, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.convert"))
+    }
+
     func createPageCompanion(_: String?, window _: String?, options _: ControlSessionOverlayOpenOptions) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page"))
     }

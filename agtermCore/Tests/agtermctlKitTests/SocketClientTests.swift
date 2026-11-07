@@ -307,6 +307,7 @@ struct SocketClientTests {
             duplicate_session           -
             new_companion               -
             duplicate_companion         -
+            convert_companion           -
             close_session               cmd+w
             reopen_recent               cmd+shift+t
             undo_close                  cmd+z
@@ -403,6 +404,43 @@ struct SocketClientTests {
         #expect(run.status == 1)
         #expect(run.out.isEmpty)
         #expect(server.received?.cmd == .sessionCompanionNew)
+    }
+
+    @Test func anAppTooOldForConvertIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.companion.convert"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "convert", "--companion", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for convert\n")
+        #expect(server.received?.cmd == .sessionCompanionConvert)
+    }
+
+    @Test func aConvertPrintsTheFreshParentItCreated() throws {
+        let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "S1", parent: "N1")))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "convert", "--companion", "--target", "S1", "--socket", server.path])
+
+        #expect(run.status == 0)
+        #expect(run.out == Data("N1\n".utf8))
+    }
+
+    @Test func aRefusedConvertReportsTheReasonAndFails() throws {
+        let server = StubServer(response: ControlResponse(ok: false, error: "already a companion"))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "convert", "--companion", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self).contains("already a companion"))
     }
 
     @Test func anAppTooOldForCompanionsKeepsTheRawReplyUnderJSON() throws {

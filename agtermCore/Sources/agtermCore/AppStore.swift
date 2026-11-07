@@ -592,7 +592,8 @@ public final class AppStore {
             closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
         closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: companions)
-        finalizeParkedCompanions(of: [sessionID])
+        // a converted companion can still own a parked companion recorded under it
+        finalizeParkedCompanions(of: [sessionID] + companions.map(\.id))
     }
 
     private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [Session] = []) {

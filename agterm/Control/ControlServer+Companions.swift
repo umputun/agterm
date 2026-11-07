@@ -104,6 +104,21 @@ extension ControlServer {
         }
     }
 
+    func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        switch store.convertToCompanion(id) {
+        case .failure(let refusal):
+            return ControlResponse(ok: false, error: refusal.message)
+        case .success(let parent):
+            if store === library.activeStore { actions.focusActiveSession() }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parent.id.uuidString))
+        }
+    }
+
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {

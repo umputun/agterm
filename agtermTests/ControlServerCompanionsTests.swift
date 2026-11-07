@@ -250,6 +250,33 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertEqual(uncovered.error, "left pane is not realized; nothing was created", "a hidden overlay does not block the copy")
     }
 
+    func testConvertNestsTheTargetUnderAFreshParentSelectsItAndAnswersWithBoth() throws {
+        let (store, task) = try addSession()
+        let (_, other) = try addSession()
+        store.selectSession(other.id)
+
+        let reply = server.convertToCompanion(task.id.uuidString, window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.id, task.id.uuidString)
+        let fresh = try XCTUnwrap(reply.result?.parent.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(task.parentID, fresh.id)
+        XCTAssertEqual(store.selectedSessionID, task.id)
+        let node = server.buildTree(in: store).workspaces.flatMap(\.sessions).first { $0.id == task.id.uuidString }
+        XCTAssertEqual(node?.parent, fresh.id.uuidString)
+    }
+
+    func testConvertRefusesACompanionAndARemoteRowWithTheirReasons() throws {
+        let (store, parent, children) = try group()
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), remoteHost: "far"))
+
+        XCTAssertEqual(server.convertToCompanion(children[0].id.uuidString, window: nil).error, "already a companion")
+        XCTAssertEqual(server.convertToCompanion(remote.id.uuidString, window: nil).error, "convert it on the Mac it runs on")
+        XCTAssertEqual(children[0].parentID, parent.id)
+        XCTAssertNil(remote.parentID)
+    }
+
     private func addSession() throws -> (AppStore, Session) {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

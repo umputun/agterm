@@ -36,7 +36,8 @@ public struct ControlDispatcher {
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
-        case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
+        case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCompanionConvert,
+                .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
             return await dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,

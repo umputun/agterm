@@ -30,7 +30,7 @@ extension WindowLibrary {
         // a lone companion reopens only under its parent: a live one, or the entry holding the parent reopened
         // first, the parent's own or its removed workspace's
         if let parentID = item.session?.snapshot.parentID, openStores().allSatisfy({ $0.session(withID: parentID) == nil }) {
-            guard let parentItem = recentClosedItems.first(where: { $0.holdsTopLevelSession(parentID) }),
+            guard let parentItem = recentClosedItems.first(where: { $0.restoresSession(parentID) }),
                   reopenRecentClosedOutcome(parentItem.id, into: targetStore) != nil else { return nil }
             refreshRecentClosedItems()
         }
@@ -50,7 +50,7 @@ extension WindowLibrary {
     public func recentClosedItemLacksParent(_ itemID: UUID) -> Bool {
         guard let parentID = recentClosedItems.first(where: { $0.id == itemID })?.session?.snapshot.parentID,
               openStores().allSatisfy({ $0.session(withID: parentID) == nil }) else { return false }
-        return !recentClosedItems.contains { $0.holdsTopLevelSession(parentID) }
+        return !recentClosedItems.contains { $0.restoresSession(parentID) }
     }
 
     /// `reopenRecentClosedReportingWindow` over the newest entry.
@@ -118,10 +118,11 @@ extension WindowLibrary {
 }
 
 private extension RecentClosedItem {
-    func holdsTopLevelSession(_ id: UUID) -> Bool {
+    // a recorded parent may sit inside an entry as a companion: Convert to Companion nests it after the record
+    func restoresSession(_ id: UUID) -> Bool {
         switch kind {
-        case .session: session?.snapshot.id == id
-        case .workspace: workspace?.snapshot.sessions.contains { $0.id == id && $0.parentID == nil } == true
+        case .session: session?.snapshot.id == id || session?.companions?.contains { $0.id == id } == true
+        case .workspace: workspace?.snapshot.sessions.contains { $0.id == id } == true
         }
     }
 }

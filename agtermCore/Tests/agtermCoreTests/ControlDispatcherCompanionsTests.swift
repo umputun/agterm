@@ -142,4 +142,16 @@ struct ControlDispatcherCompanionsTests {
         let request = try JSONDecoder().decode(ControlRequest.self, from: Data(#"{"cmd":"session.companion.page","target":"p1"}"#.utf8))
         #expect(request.cmd == .sessionCompanionPage)
     }
+
+    @Test func companionConvertRoutesTargetAndWindow() async throws {
+        let actions = MockControlActions()
+
+        let response = await ControlDispatcher(actions: actions).dispatch(
+            ControlRequest(cmd: .sessionCompanionConvert, target: "s1", args: ControlArgs(window: "win")))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.companionConvert(target: "s1", window: "win")])
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(#"{"cmd":"session.companion.convert"}"#.utf8))
+        #expect(decoded.cmd == .sessionCompanionConvert)
+    }
 }

@@ -131,6 +131,48 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(group.store.selectedSessionID, companions.last?.id)
     }
 
+    func testRowMenuConvertToCompanionNestsTheRowUnderAFreshParent() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+        group.store.setSidebarSelection([group.after.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(group.after.id)))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Convert to Companion" }, "menu had \(menu.items.map(\.title))")
+        XCTAssertTrue(item.isEnabled)
+        coordinator.perform(item.action, with: item)
+
+        let parent = try XCTUnwrap(group.store.parent(of: group.after))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(group.store.selectedSessionID, group.after.id)
+    }
+
+    func testCompanionItemsSitInTheirOwnSectionOnParentAndCompanionRows() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        for (id, last) in [(group.after.id, "Convert to Companion"), (group.first.id, "Duplicate as Companion")] {
+            group.store.setSidebarSelection([id])
+            let items = try XCTUnwrap(coordinator.menu(forRow: try row(id))).items
+            let first = try XCTUnwrap(items.firstIndex { $0.title == "New Companion" }, "\(items.map(\.title))")
+            let end = try XCTUnwrap(items.firstIndex { $0.title == last }, "\(items.map(\.title))")
+            XCTAssertTrue(items[first - 1].isSeparatorItem, "\(items.map(\.title))")
+            XCTAssertTrue(items[end + 1].isSeparatorItem, "\(items.map(\.title))")
+        }
+    }
+
+    func testConvertIsOmittedOnACompanionRowAndDisabledOnARemoteRow() throws {
+        let group = try seed()
+        let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", remoteHost: "far"))
+        buildSidebar(for: group.store)
+
+        let companionMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
+        XCTAssertNil(companionMenu.items.first { $0.title == "Convert to Companion" }, "\(companionMenu.items.map(\.title))")
+        group.store.setSidebarSelection([remote.id])
+        let remoteMenu = try XCTUnwrap(coordinator.menu(forRow: try row(remote.id)))
+        let item = try XCTUnwrap(remoteMenu.items.first { $0.title == "Convert to Companion" }, "\(remoteMenu.items.map(\.title))")
+        XCTAssertFalse(item.isEnabled)
+    }
+
     // a cached parent node kept its nested rows into the flat flagged list
     func testSwitchingToAFlatFlaggedLayoutDropsTheParentsNestedRows() throws {
         let group = try seed()

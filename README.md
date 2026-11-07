@@ -56,7 +56,7 @@ A split session, two panes side by side on different color themes:
 - **Workspace.** A named group of sessions for one project or context.
 - **Session.** One running shell with a name, a working directory, and its own scrollback. It is the row you see in the sidebar, and it keeps running while you work in another one.
 - **Split and scratch.** A session can split into two shells side by side or top and bottom, both sharing the one sidebar row, and it can open a scratch terminal over itself for a quick aside.
-- **Companion.** A session pinned for life under another one, listed and folded with it in the sidebar, and closed with it.
+- **Companion.** A session pinned under another one, listed and folded with it in the sidebar, and closed with it. A running session can become one later: Convert to Companion nests it under a fresh shell in its place.
 - **Overlay.** One program running in a temporary terminal over a session. It disappears when the program exits and leaves the shell underneath unchanged.
 
 ## Install

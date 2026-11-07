@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.page.attach`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -382,7 +382,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `agtermctl` through `RemoteSession.controlCommand`, whose outer quoting every login shell reads alike, polls the
   origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
   Creation is never retried or done locally; a created but unattached companion is named in the error. The three
-  companion commands are in `waitsOnNetwork`, local ones included.
+  creation commands are in `waitsOnNetwork`, local ones included; `session.companion.convert` is local only and is not.
 - A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view: a
   per-claim token in `companionPageTokens`, claimed through `claimPageServe` into a `PageServeStream` in companion mode,
   keyed by claim in `companionPageStreams`. A claim, an expired token, an unanswered reply or EOF ends only that view,
@@ -428,6 +428,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the image is the fallback. A bare name whose image is gone, as after an upgrade removed it, starts its own PATH's
   first executable entry, and with no PATH read it is refused. Otherwise nothing executable refuses the pane; the restart checks see the path and image. An argument with a backslash is refused: libghostty's split and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
+- `session.companion.convert` is its own wire command for the same older-app reason, with a CLI too-old text of its
+  own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
+  slot, then the target and its companions re-pointed at it, keeping every `Session` object. `ConvertRefusal.message`
+  is the refusal text both surfaces show, and a remote row is refused, never forwarded to its origin.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
   window's zoom target, and never refuses a zoom hide, which stays idempotent.
