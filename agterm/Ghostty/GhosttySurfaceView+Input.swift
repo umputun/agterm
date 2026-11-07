@@ -635,10 +635,15 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         }
     }
 
-    /// Acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); the scheme/host decision lives in the
-    /// host-free `LinkPolicy`. A `file://` link is REVEALED in Finder, never opened — reveal executes nothing.
+    /// openLink acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); what happens to it is the host-free
+    /// `LinkPolicy`'s decision.
     func openLink(_ raw: String, intent: LinkPolicy.ClickIntent) {
-        LinkOpener.shared.follow(raw, from: linkClickOrigin, cwd: linkClickCwd, intent: intent)
+        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent)
+    }
+
+    /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns.
+    var linkClickPane: UUID? {
+        session.flatMap { isSplitPane ? $0.splitPaneIdentity : $0.paneIdentity }
     }
 
     /// The directory a relative link names a file in: this pane's reported cwd. Nil for the scratch, quick and

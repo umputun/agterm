@@ -56,7 +56,8 @@ extension AppStore {
         let pane = options.pane
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID), let session = session(withID: sessionID),
               let source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
-        guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
+        let replaces = options.forwarded && holdsHiddenClickedRemotePage(pane, in: session)
+        guard session.remoteOverlays.slot(pane) == nil || replaces, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
@@ -76,6 +77,8 @@ extension AppStore {
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
+        // last, so a refused open never costs the page it would replace
+        if replaces { closeRemoteOverlay(sessionID, pane: pane) }
         if pane == nil, session.hudActive { closeHud(sessionID) }
         let page = RemotePage(overlay: overlay, token: token, claimDeadline: now.addingTimeInterval(Self.pageClaimWindow))
         // the presenter sizes an unsized picture itself as a floating panel at the base percent, so the slot records
@@ -187,6 +190,13 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return false }
         return session.followsRemotely(paneIdentity: identity.flatMap { $0 })
+    }
+
+    /// holdsHiddenClickedRemotePage says whether `pane`'s slot holds a clicked page the presenting Mac hides, the one
+    /// occupant a forwarded click replaces.
+    func holdsHiddenClickedRemotePage(_ pane: OverlayPane?, in session: Session) -> Bool {
+        guard let page = session.remoteOverlays.slot(pane)?.page else { return false }
+        return page.overlay.clicked && page.effectiveHidden
     }
 
     /// endRemotePage drops the page's reservation and records it dismissed unless it was already answered.

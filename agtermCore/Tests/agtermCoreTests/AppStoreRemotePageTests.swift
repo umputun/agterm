@@ -587,6 +587,63 @@ struct AppStoreRemotePageTests {
         #expect(HtmlPageOutcomes.shared.outcome(for: filePage.id)?.outcome == .dismissed)
     }
 
+    @Test func aForwardedClickReplacesAHiddenClickedPage() throws {
+        let (session, _) = try origin()
+        let old = clicked("/tmp/a.md")
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+        let new = clicked("/tmp/b.md")
+
+        #expect(open(session, new, forwarded: true) == .opened)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == new.id)
+        #expect(presenter.bodies.contains(.pageClose(PresentationPageChange(page: old.id.uuidString))))
+    }
+
+    @Test func aForwardedClickLeavesAShownOrUnclickedPageInPlace() throws {
+        let (session, _) = try origin()
+        let shown = clicked("/tmp/a.md")
+        #expect(open(session, shown) == .opened)
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .slotTaken)
+        #expect(store.closeRemoteOverlay(session.id, pane: nil))
+
+        let unclicked = HtmlOverlay(source: .markdown(path: "/tmp/c.md"))
+        #expect(open(session, unclicked) == .opened)
+        report(unclicked, session, hidden: true)
+        #expect(open(session, clicked("/tmp/d.md"), forwarded: true) == .slotTaken)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == unclicked.id)
+    }
+
+    @Test func aRefusedForwardedClickKeepsTheHiddenPage() throws {
+        let (session, _) = try origin(split: true)
+        let old = clicked("/tmp/a.md")
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+
+        let huge = HtmlOverlay(source: .markdown(path: "/" + String(repeating: "a", count: 300_000)), clicked: true)
+        #expect(open(session, huge, forwarded: true) == .tooLarge)
+        setLead(.leader, pane: try #require(session.splitPaneIdentity))
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .local)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == old.id)
+        #expect(!presenter.bodies.contains(.pageClose(PresentationPageChange(page: old.id.uuidString))))
+    }
+
+    @Test func aForwardedClickAPresenterCannotShowKeepsTheHiddenPage() throws {
+        let (session, _) = try origin(kinds: PresentationHub.pageKinds)
+        let old = HtmlOverlay(source: .file(path: "/tmp/docs/a.html", grantRoot: "/tmp/docs"), clicked: true)
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .unsupported)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == old.id)
+    }
+
+    private func clicked(_ path: String) -> HtmlOverlay {
+        HtmlOverlay(source: .markdown(path: path), clicked: true)
+    }
+
     private func origin(kinds: [String] = PresentationHub.supportedKinds,
                         split: Bool = false) throws -> (Session, PresentationHub.SubscriberID?) {
         store.presentationHub = hub
@@ -606,10 +663,11 @@ struct AppStoreRemotePageTests {
         return (session, id)
     }
 
-    private func open(_ session: Session, _ page: HtmlOverlay, pane: OverlayPane? = nil, size: Int? = nil) -> RemotePageOpen {
+    private func open(_ session: Session, _ page: HtmlOverlay, pane: OverlayPane? = nil, size: Int? = nil,
+                      forwarded: Bool = false) -> RemotePageOpen {
         store.openRemotePage(session.id, overlay: page, options: ControlSessionOverlayOpenOptions(
-            command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil, follow: true, pane: pane),
-                             now: Self.start)
+            command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil, follow: true, pane: pane,
+            forwarded: forwarded), now: Self.start)
     }
 
     private func file() -> HtmlOverlay {

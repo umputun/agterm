@@ -706,7 +706,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The five click paths mark their pages `HtmlOverlay.clicked` (read back as `htmlOverlays[].clicked`; the
   dispatcher never sets it, presentation frames never carry it), and a click replaces the session-wide page
   only when it is marked and its `overlayHidden` bit is set: `AppStore.releaseHiddenClickedPage`, which also leaves a
-  slot `pageBelongsRemote` hands to the presenter. The read-back's `hidden` is `overlayOutOfSight` and a remote page
+  slot `pageBelongsRemote` hands to the presenter; only a forwarded click replaces that one (below). The read-back's
+  `hidden` is `overlayOutOfSight` and a remote page
   keeps its marker, so `clicked` plus `hidden` does not by itself mean the next click replaces it. Each path releases after every check that could still refuse its
   open (the probe, the HUD and zoom recheck, the saved store for a web link), so a refused click keeps the old
   page. A shown page, a hidden program and any CLI page keep the browser fallback.
@@ -717,8 +718,24 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `markdownExtensions` extension routes to `ControlServer.openMarkdownLink` the same way, at the mode's size, 95 in
   browser mode (`Route.markdown` carries it), one with a `DocumentPage.extensions` extension routes to
   `openDocumentLink` the same way, and one `TextPage.isEligible` accepts routes to `openTextLink` the same
-  way; any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare paths name files
-  on the far Mac and are ignored, while its scratch stays `.scratch` because that shell is local.
+  way; any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare, relative and
+  `file://` paths (any host) name files on the far Mac and route to `.forwardRemote`, which reveals nothing here; every
+  other local route from it is `.ignore`. Its scratch stays `.scratch` because that shell is local.
+- A forwarded click (`ControlServer+RemoteLinkClick`, `+ForwardedClick`) travels as `link.click` only while this Mac
+  presents the session and the origin agreed the `link.click` kind (`RemotePresentationClient.originSupports`), with the
+  ORIGIN's pane identity (`AppStore.linkClickRequest`). The origin resolves it with that pane's cwd and opens only page
+  routes, through the four click helpers in forwarded mode: the zoom check is skipped, the presenter generation captured
+  at receipt is rechecked after every probe, `openHtmlOverlay` refuses `.local` instead of opening on the origin, and
+  `openRemotePage` replaces a hidden clicked remote page only after every other check passed. Refusals return
+  `link.refused` only to that presenter generation; the reason travels as a `RemoteLinkRefusal` raw value and is worded
+  on the presenting Mac. A
+  refusal there opens a HUD hiding after `remoteAttachErrorSeconds`, or plays the system alert when a HUD other than
+  that refusal panel is already up (`openHud` would replace it), a cover or zoom would hide it, or a hidden page of this
+  Mac's own holds the slot (only a hidden replica page is the origin's to replace); the click itself refuses on the
+  same terms before anything is sent. A mirrored HUD replaces that panel while it is still the
+  one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
+  sent. The click is a
+  gesture with no control command: its page reads back as the replica page on the session node.
 - libghostty keeps a `:line[:column]` suffix in the path it hands over and resolves a relative path only when that
   exact path exists, so `./main.go:42` arrives raw. `LinkPolicy.locations` lists the candidates for such a link, the
   literal path first so a file named with a colon wins, then the path without the suffix. libghostty keeps a sentence's
@@ -1914,6 +1931,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a subscriber BEFORE it takes the snapshot and holds deltas until the snapshot is sent, so nothing falls
   between the two. A viewer drops a frame from another generation or an old revision, and skips an unknown
   kind without ending the stream, which is what lets a later kind reach an older viewer.
+  The origin closes the stream on a frame it cannot decode, so `link.click`'s mode and `link.refused`'s reason
+  decode leniently; the forwarded-click bullet under the click paths owns their contract.
 - `zmx.tree` advertises `presentation`, the protocol version. A viewer never launches the bridge against an
   origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
 - Read-back is `presentation {state, mode, error}` on the viewer's session node and `presenters {mirrors}`

@@ -831,8 +831,9 @@ agtermctl session overlay open --text /path/to/main.go --line 42 --size-percent 
 It is highlighted when its name maps to a known language, up to 256 KB, and plain above; a file over 4 MB is
 refused. FILE is taken literally,
 never as `path:line`. The page runs nothing, loads nothing and has no links. Markdown, HTML and SVG are not text
-pages. The user gets the same view by ⌘-clicking a path or a `path:line` location in a local pane, and reveals any
-file in Finder with ⌘⌥-click; for a user watching from another Mac, open it with `--text`. Read back `text`
+pages. The user gets the same view by ⌘-clicking a path or a `path:line` location, and reveals a file on their own Mac
+in Finder with ⌘⌥-click. A click in a session attached from another Mac opens the page from the Mac the session runs
+on when both run an agterm that forwards clicks; `--text` shows it there with older ones. Read back `text`
 (`{file, language?, line?}`) in `htmlOverlays`.
 
 To watch a log, open its end and follow it as it grows:
@@ -881,10 +882,10 @@ Show a png, jpg, gif or webp picture with `--image`; the panel takes the picture
 agtermctl session overlay open --image /tmp/shot.png --target "$AGTERM_SESSION_ID"
 ```
 
-The user can open the same view by ⌘-clicking a picture's path in a local pane, so printing the absolute
-path of an image you produced is often enough there. When the user watches your session from another Mac,
-a click on a printed path does nothing; open it with `--image`, which shows it on that Mac, as `--markdown`
-and `--text` pages do. When `--image` is rejected, by an older CLI as an unknown option, by an older app, or
+The user can open the same view by ⌘-clicking a picture's path, so printing the absolute path of an image you
+produced is often enough. When the user watches your session from another Mac, that click works only when both
+Macs run an agterm that forwards clicks; `--image` shows it on that Mac either way, as `--markdown` and `--text`
+pages do. When `--image` is rejected, by an older CLI as an unknown option, by an older app, or
 by a presenting Mac too old for these pages (`a viewer presents this session`), fall back to the script below.
 
 This skill also bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the

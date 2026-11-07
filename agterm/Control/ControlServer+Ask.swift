@@ -161,6 +161,8 @@ extension ControlServer {
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
         case .pageState, .pageClosed, .pageRejected:
             receiveRemotePageFrame(body, in: store, forSession: sessionID)
+        case .linkClick(let click):
+            receiveForwardedClick(click, forSession: sessionID)
         default:
             break
         }

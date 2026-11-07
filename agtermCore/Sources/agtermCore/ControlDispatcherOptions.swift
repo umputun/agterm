@@ -40,13 +40,17 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let imagePixels: ImagePixels?
     /// textLog makes a text page a log page (`--tail`, `--follow-file`).
     public let textLog: TextLog?
+    /// forwarded marks a page a click on the presenting Mac asked for: it opens there or not at all, and replaces a
+    /// hidden clicked page there. The app sets it and the dispatcher never does.
+    public let forwarded: Bool
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
                 points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil,
-                textLog: TextLog? = nil) {
+                textLog: TextLog? = nil, forwarded: Bool = false) {
         self.textLog = textLog
+        self.forwarded = forwarded
         self.clicked = clicked
         self.imagePixels = imagePixels
         self.command = command
@@ -71,7 +75,7 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
                                          navigation: navigation, javascript: javascript, chromeless: chromeless,
                                          persistent: persistent, browse: browse, points: points, clicked: clicked,
-                                         imagePixels: imagePixels, textLog: textLog)
+                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded)
     }
 }
 

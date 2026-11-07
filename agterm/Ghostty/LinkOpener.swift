@@ -28,26 +28,37 @@ struct LinkOpener {
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
     /// exists answers for one candidate `LinkPolicy.locations` offered; it runs off the main actor.
     var exists: @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    /// forward hands a path clicked in a remote pane to the Mac it names a file on; nil when sent, else why not.
+    var forward: (RemoteLinkClick) -> RemoteLinkRefusal? = { _ in .originTooOld }
+    /// refuse reports a remote click that was not carried out.
+    var refuse: (UUID, RemoteLinkRefusal) -> Void = { _, _ in NSSound.beep() }
 
-    /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link. A link that
-    /// only the filesystem can resolve is looked up off the main actor, the first existing candidate winning, and
-    /// one with no candidate on disk keeps the route it has as typed. A reveal intent selects the file a local
-    /// route names in Finder after that guarded routing, and leaves a web link to its web route.
-    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, cwd: String?, intent: LinkPolicy.ClickIntent) {
-        let mode = intent == .browser ? LinkOpenMode.browser : mode()
-        let reveals = intent == .reveal
+    private struct Click {
+        let pane: UUID?
+        let mode: LinkOpenMode
+        let reveals: Bool
+    }
+
+    /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link, and `pane` its
+    /// identity, which a remote pane's forwarded click names. A link that only the filesystem can resolve is looked up
+    /// off the main actor, the first existing candidate winning, and one with no candidate on disk keeps the route it
+    /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
+    /// leaves a web link to its web route.
+    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent) {
+        let click = Click(pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(), reveals: intent == .reveal)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
-        guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: mode, origin: origin), revealing: reveals) }
+        guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists
         Task { @MainActor in
-            let found = await Task.detached(priority: .userInitiated) { candidates.first { exists($0.path) } }.value
-            carryOut(found.map { LinkPolicy.route(for: $0, mode: mode, origin: origin) }
-                ?? LinkPolicy.route(for: raw, mode: mode, origin: origin), revealing: reveals)
+            let route = await Task.detached(priority: .userInitiated) {
+                LinkPolicy.resolvedRoute(for: raw, candidates: candidates, mode: click.mode, origin: origin, exists: exists)
+            }.value
+            carryOut(route, click)
         }
     }
 
-    private func carryOut(_ route: LinkPolicy.Route, revealing: Bool) {
-        if revealing, let file = route.localFile { return reveal(file) }
+    private func carryOut(_ route: LinkPolicy.Route, _ click: Click) {
+        if click.reveals, let file = route.localFile { return reveal(file) }
         switch route {
         case .browser(let url): open(url)
         case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
@@ -64,6 +75,11 @@ struct LinkOpener {
             let reveal = reveal
             document(url, session, percent) { shown in if !shown { reveal(url) } }
         case .reveal(let url): reveal(url)
+        case .forwardRemote(let raw, let session):
+            if click.reveals { return refuse(session, .revealIntent) }
+            if let refusal = forward(RemoteLinkClick(raw: raw, session: session, pane: click.pane, mode: click.mode)) {
+                refuse(session, refusal)
+            }
         case .ignore: return
         }
     }

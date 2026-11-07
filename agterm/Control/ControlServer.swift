@@ -97,6 +97,9 @@ final class ControlServer {
     var remoteTick: Task<Void, Never>?
     /// replicaPages are the pages this Mac shows for origins, by local page id; `ControlServer+RemotePage` owns them.
     var replicaPages: [UUID: ReplicaPageRecord] = [:]
+    /// remoteLinkRefusalHuds are the slot generations of the refusal panels a forwarded click opened, which a mirrored
+    /// HUD may replace; `ControlServer+RemoteLinkClick` owns them.
+    var remoteLinkRefusalHuds: [UUID: Int] = [:]
     /// pageLauncher starts a file page's channel helper; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
     var pendingReplicaStates: Set<UUID> = []
