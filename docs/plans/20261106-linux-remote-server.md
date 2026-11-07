@@ -641,7 +641,7 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - [x] `README.md` synopsis line and `site/llms.txt` index entry; delete `docs/remote-agent-server.md`
 
 ### Task 14: [Final] Verify acceptance criteria
-- [ ] every Overview requirement works end to end against the container server through an isolated Debug instance:
+- [x] every Overview requirement works end to end against the container server through an isolated Debug instance:
       new session, split, swap, rename, close, companions, status, context, HUD, ask, pick, program overlay, all
       page kinds, localhost URL page, scratch, disconnect and reconnect, server restart, Mac relaunch
 - [ ] per-session attach to a Mac behaves exactly as before (agterm-linux attach is left to its maintainer; see
