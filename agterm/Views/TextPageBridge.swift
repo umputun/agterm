@@ -73,17 +73,16 @@ final class TextPageBridge {
             // a shown page reopens where it was, so a theme change or a reload never moves the view
             let top = self?.text == nil ? nil : await self?.scrollTop()
             if fresh || self?.text == nil {
-                // the file may now hold other changes, so the old report goes before the read
-                if let self {
-                    change = 0
-                    store?.setTextChangesReport(pageID, changes: nil)
-                }
+                // the file may now hold other changes; the old page can still step during the read, so the change
+                // the new one opens on resets only after it
+                if let self { store?.setTextChangesReport(pageID, changes: nil) }
                 let read = await Task.detached(priority: .userInitiated) { TextProbe.load(path: path) }.value
                 guard let self, load == documentLoad else { return }
                 switch read {
                 case .failure(let failure): return onFail(failure.description)
                 case .success(let text): self.text = text
                 }
+                change = 0
             }
             guard let self, load == documentLoad, let text else { return }
             let html = TextPage.html(text: text, language: TextPage.language(forFile: path), line: line,

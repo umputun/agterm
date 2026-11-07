@@ -1046,6 +1046,23 @@ extension TextPageRenderingTests {
         XCTAssertEqual(controls as? Int, 0)
     }
 
+    func testAReloadOfAPatchThatStillHasChangesStartsBeforeTheFirst() async throws {
+        let (page, window) = try shown(try openText("a.diff", Self.patch(changes: [10, 100, 190])))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "3 changes" }
+        _ = try await stepChange(true, on: page)
+        _ = try await stepChange(true, on: page)
+        try await waitFor("the step report") { self.current?.textChanges?.current == 2 }
+
+        try Self.patch(changes: [20, 60, 120, 170]).write(to: pages.appendingPathComponent("a.diff"), atomically: true, encoding: .utf8)
+        XCTAssertNil(registry.reload(page.id, target: .current, store: store))
+
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "4 changes" }
+        let band = try await page.webView.evaluateJavaScript(Self.bandRows)
+        XCTAssertEqual(band as? String, "")
+        try await waitFor("the fresh report") { self.current?.textChanges == TextChanges(count: 4, current: 0) }
+    }
+
     func testAPatchPastTheHighlightCapStillSteps() async throws {
         let text = Self.patch(changes: [5, 25000], lines: 30000)
         XCTAssertGreaterThan(text.utf8.count, TextPage.maxHighlightBytes)
