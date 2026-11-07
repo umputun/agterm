@@ -201,7 +201,7 @@ session not laid out yet),
 `paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
 `["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
 independently of the session-wide `overlay` flag, which a pane overlay never sets),
-`htmlOverlays` (the pages in the overlay slots, see `session overlay open --html`, `--url`, `--image`, `--markdown` and `--text`; `overlay` and
+`htmlOverlays` (the pages in the overlay slots, see `session overlay open --html`, `--url`, `--image`, `--markdown` and `--text`, plus `document` for a ⌘-clicked `.html` file; `overlay` and
 `paneOverlays` count them as covers too),
 `hud` (the message panel occupying the session-wide overlay slot — the read side of `session hud`; omitted
 when none is up. A
@@ -2097,7 +2097,7 @@ it was ⌘⇧-clicked in a program that does not capture the mouse, when it was 
 session's window has a zoomed terminal, when the session-wide overlay slot is taken, when the saved
 browser store cannot be used, or when the overlay cannot be opened. The exception is a slot holding a page an earlier
 click opened (`clicked` in `htmlOverlays`) that was hidden on this Mac with ⇧⌘J or `session overlay hide`: the click
-replaces it and shows the new page, and a clicked picture, markdown or text file does the same. A page that is only out
+replaces it and shows the new page, and a clicked picture, markdown, HTML or text file does the same. A page that is only out
 of sight under a newer pane overlay, or one the presenting Mac shows, is not replaced.
 A plain `http` link uses the overlay
 only for a host the page could load: an unqualified name such as `localhost`, a `.local` name, or an IP
@@ -2399,7 +2399,7 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - An image, markdown or text page (`--image`, `--markdown`, `--text`) follows the same rule. The presenting Mac
   fetches the file over the same channel, the origin serving only that file, or a markdown file's pictures in its
   own folder, under the same size limits, and shows the same page with no bridge; an image opened without a size
-  is sized for that Mac's screen. Its `htmlOverlays` lists `image`, `markdown` or `text` with `replica: true`.
+  is sized for that Mac's screen. Its `htmlOverlays` lists `image`, `markdown`, `document` or `text` with `replica: true`.
   A presenting Mac too old for these pages keeps the refusal (`a viewer presents this session`). A log page
   (`--tail`, `--follow-file`) is refused there, and a clicked `.log` opens as the plain text page.
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,

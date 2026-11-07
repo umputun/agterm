@@ -81,6 +81,7 @@ struct AppStoreRemotePageTests {
         (HtmlSource.image(path: "/tmp/shot.png"), PresentationPageSource.image(path: "/tmp/shot.png", width: 640, height: 480)),
         (.markdown(path: "/tmp/notes/README.md"), .markdown(path: "/tmp/notes/README.md")),
         (.text(path: "/tmp/src/main.go", line: 3), .text(path: "/tmp/src/main.go", line: 3)),
+        (.document(path: "/tmp/agdoc/pr.html"), .document(path: "/tmp/agdoc/pr.html")),
     ])
     func aContentPageOpensOnAPresenterThatBuildsIt(source: HtmlSource, sent: PresentationPageSource) throws {
         let (session, _) = try origin()
@@ -95,6 +96,17 @@ struct AppStoreRemotePageTests {
         #expect(request.sizePercent == nil)
         #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == page.id)
         #expect(!session.overlayActive)
+    }
+
+    // a presenter that predates document pages cannot decode one and would drop its whole stream
+    @Test func aPresenterWithoutDocumentPagesIsNotHandedOne() throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageDocumentKind })
+        let page = HtmlOverlay(source: .document(path: "/tmp/agdoc/pr.html"))
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil)
+
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .unsupported)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
     }
 
     @Test(arguments: [HtmlSource.image(path: "/tmp/shot.png"), .markdown(path: "/tmp/a.md"), .text(path: "/tmp/a.go", line: nil)])

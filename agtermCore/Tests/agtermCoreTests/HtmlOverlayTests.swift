@@ -287,6 +287,32 @@ struct HtmlOverlayTests {
         #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)
     }
 
+    @Test(arguments: [
+        ("https://example.com/", HtmlNavigationTarget.mainFrame, true, HtmlNavigationDecision.openExternal),
+        ("https://example.com/", .mainFrame, false, .cancel),
+        ("https://example.com/", .subframe, false, .cancel),
+        ("about:blank", .mainFrame, false, .allow),
+        ("file:///tmp/agdoc/other.html", .mainFrame, true, .cancel),
+        ("file:///etc/passwd", .subframe, false, .cancel),
+        ("javascript:alert(1)", .mainFrame, true, .cancel),
+        ("data:text/html,x", .mainFrame, true, .cancel),
+    ])
+    func documentPagePolicyHandsWebLinksOutAndKeepsEverythingElse(_ url: String, _ target: HtmlNavigationTarget,
+                                                                  _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+        for source in [HtmlSource.document(path: "/tmp/agdoc/pr.html"), .replica(path: "/tmp/agdoc/pr.html", content: .document)] {
+            let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
+            #expect(HtmlNavigationPolicy.decide(action, overlay: HtmlOverlay(source: source)) == expected)
+        }
+    }
+
+    @Test func aDocumentPageIsNamedByItsFileNeverTheTitle() {
+        var overlay = HtmlOverlay(source: .document(path: "/tmp/agdoc/pr.html"))
+        overlay.current = HtmlPageInfo(page: "/tmp/agdoc/pr.html", title: "enter your password", canGoBack: false, canGoForward: false)
+        #expect(overlay.identity == "pr.html")
+        #expect(overlay.source.kind == .document)
+        #expect(HtmlSource.replica(path: "/tmp/agdoc/pr.html", content: .document).kind == .document)
+    }
+
     @Test func aMarkdownPageIsNamedByItsFileNeverTheTitle() {
         var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
         overlay.current = HtmlPageInfo(page: "/tmp/notes/readme.md", title: "enter your password", canGoBack: false, canGoForward: false)

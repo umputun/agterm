@@ -277,6 +277,8 @@ public enum PresentationPageSource: Codable, Equatable, Sendable {
     case image(path: String, width: Int, height: Int)
     case markdown(path: String)
     case text(path: String, line: Int?)
+    /// document goes only to a presenter also listing `PresentationHub.pageDocumentKind`, for the same reason.
+    case document(path: String)
 
     /// usesChannel says the viewer fetches this page over a page channel, which a single-use claim opens.
     public var usesChannel: Bool {
@@ -288,7 +290,7 @@ public enum PresentationPageSource: Codable, Equatable, Sendable {
     public var isContent: Bool {
         switch self {
         case .file, .url: return false
-        case .image, .markdown, .text: return true
+        case .image, .markdown, .text, .document: return true
         }
     }
 }

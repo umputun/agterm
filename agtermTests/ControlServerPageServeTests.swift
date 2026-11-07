@@ -657,6 +657,21 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(answer, .failure(id: 4, error: "this page has no bridge"))
     }
 
+    func testADocumentPageHasNoBridge() throws {
+        let fix = try fixture()
+        let page = docs.appendingPathComponent("pr.html")
+        try Data("<title>pr</title>".utf8).write(to: page)
+        _ = try openContent(fix, .document(path: page.path))
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let answer = offMain { () -> PageServeFrame? in
+            client.send(.bridge(id: 4, request: #"{"cmd":"tree"}"#))
+            return client.frame()
+        } ?? nil
+
+        XCTAssertEqual(answer, .failure(id: 4, error: "this page has no bridge"))
+    }
+
     func testLosingTheHelperEndsOnlyThePage() throws {
         let fix = try fixture()
         let page = try openFile(fix)

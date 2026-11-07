@@ -71,6 +71,7 @@ struct AppStoreReplicaPageTests {
         (PresentationPageSource.image(path: "/shots/a.png", width: 800, height: 600), ReplicaContent.image(width: 800, height: 600)),
         (.markdown(path: "/docs/README.md"), .markdown),
         (.text(path: "/src/main.go", line: 12), .text(line: 12)),
+        (.document(path: "/docs/pr.html"), .document),
     ])
     func aContentPageIsShownAsAReplicaOfItsKind(source: PresentationPageSource, content: ReplicaContent) throws {
         let (store, session) = try attached()

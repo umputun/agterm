@@ -21,6 +21,9 @@ public enum HtmlSource: Equatable, Sendable {
     /// text is a source, config or log file shown read-only, scrolled to `line` when one is set: no file
     /// grant, bridge, link or navigation, but themed.
     case text(path: String, line: Int?)
+    /// document is an HTML file a terminal click named, so untrusted: the app reads its text and loads it with no
+    /// file grant or bridge, themed like a file page.
+    case document(path: String)
 
     /// kind is what the page shows, a replica counted as the kind its origin opened.
     public var kind: HtmlPageKind {
@@ -30,12 +33,14 @@ public enum HtmlSource: Equatable, Sendable {
         case .image: return .image
         case .markdown: return .markdown
         case .text: return .text
+        case .document: return .document
         case .replica(_, let content):
             switch content {
             case .html: return .file
             case .image: return .image
             case .markdown: return .markdown
             case .text: return .text
+            case .document: return .document
             }
         }
     }
@@ -76,17 +81,18 @@ public enum HtmlSource: Equatable, Sendable {
 }
 
 /// ReplicaContent is the kind of page a replica's origin opened: an HTML file it loads as is, or a picture,
-/// markdown or text file this Mac builds a page from. An image carries its oriented pixel size for sizing.
+/// markdown, text or clicked HTML file this Mac builds a page from. An image carries its oriented pixel size for sizing.
 public enum ReplicaContent: Equatable, Sendable {
     case html
     case image(width: Int, height: Int)
     case markdown
     case text(line: Int?)
+    case document
 }
 
 /// HtmlPageKind is what a page shows, independent of which Mac read its file.
 public enum HtmlPageKind: Equatable, Sendable {
-    case file, url, image, markdown, text
+    case file, url, image, markdown, text, document
 }
 
 /// HtmlOrigin is a web page's origin: lowercase scheme and host plus the effective port, so an omitted
@@ -284,7 +290,8 @@ extension HtmlOverlay {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, .html): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
-        case .image(let path), .markdown(let path), .text(let path, _): return URL(fileURLWithPath: path).lastPathComponent
+        case .image(let path), .markdown(let path), .text(let path, _), .document(let path):
+            return URL(fileURLWithPath: path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -415,7 +422,7 @@ public enum HtmlNavigationPolicy {
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
         case .image, .replica(_, .image):
             return .cancel
-        case .markdown, .replica(_, .markdown):
+        case .markdown, .replica(_, .markdown), .document, .replica(_, .document):
             return web && action.userActivated ? .openExternal : .cancel
         case .replica(_, .text):
             return .cancel

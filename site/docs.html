@@ -3353,7 +3353,10 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.md</span> or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.markdown</span> file as a page in
               the terminal's theme at the link-open size (95% when links open in the browser), shows a source, config, text or
-              log file the same way, read-only and highlighted when its language is known, and
+              log file the same way, read-only and highlighted when its language is known, shows an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.html</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.htm</span> file as a page with its scripts off and no
+              access to other files, loading nothing from the network and handing a web link to the browser only after
+              asking, and
               <strong style="color: #e6e1d7">reveals</strong> any other file in Finder instead of opening it. A location such as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">./main.go:42:7</span>, as compilers
               and test runners print it, opens the file at that line; a relative one is looked up in the pane's own directory.
@@ -3380,7 +3383,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               file shows a leading YAML frontmatter block as code, the pictures kept in its own folder and the alt text of any
               other, runs none of its own script, and
               hands a web link to the browser only after asking. A text page runs nothing, loads nothing and links nowhere: a URL
-              in a log stays text. A picture, markdown or text file clicked
+              in a log stays text. A picture, markdown, HTML or text file clicked
               from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too; a hidden page an
               earlier click opened is replaced instead, as with a web link. In a session
               attached from another Mac, a plain path names a file on that Mac, so it is ignored. A terminal renders untrusted
