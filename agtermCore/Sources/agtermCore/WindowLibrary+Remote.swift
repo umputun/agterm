@@ -74,7 +74,63 @@ extension WindowLibrary {
     /// remoteNode is `id`'s server and connection for `tree` and `window.list`; nil for a local window.
     public func remoteNode(for id: UUID) -> ControlRemoteWindow? {
         guard let source = windows.first(where: { $0.id == id })?.source else { return nil }
-        return ControlRemoteWindow(host: source.host, catalogID: source.catalogID, state: stores[id]?.catalogState)
+        let store = stores[id]
+        return ControlRemoteWindow(host: source.host, catalogID: source.catalogID, state: store?.catalogState,
+                                   detachedSessions: store?.catalogDetachedSessions ?? [],
+                                   detachedWorkspaces: store?.catalogDetachedWorkspaces ?? [],
+                                   operations: store?.remoteActions?.marks ?? [])
+    }
+
+    /// CloseTarget is where a `session.close` id or prefix lands once hidden rows count: a local window's row (closed
+    /// there as before), a remote window's row shown or hidden, or the resolver's error.
+    public enum CloseTarget {
+        case local
+        case remote(AppStore, UUID)
+        case refused(String)
+        case unresolvedWindow
+    }
+
+    /// resolveCloseTarget resolves `target` once over every session a close can reach: local windows' rows and remote
+    /// windows' whole catalogs, detached rows included, in `window` alone when one is named. A window that does not
+    /// resolve is left to the ordinary resolver's error, never widened to every window.
+    public func resolveCloseTarget(_ target: String, window: String?) -> CloseTarget {
+        var scope: UUID?
+        if let window = window?.trimmingCharacters(in: .whitespaces), !window.isEmpty {
+            guard case .resolved(let id) = resolveWindow(window), stores[id] != nil else { return .unresolvedWindow }
+            scope = id
+        }
+        var candidates: [UUID: AppStore] = [:]
+        for (id, store) in stores where scope == nil || id == scope {
+            let sessions = store.isRemoteWindow ? store.remoteActions?.mirror.catalog?.workspaces.flatMap(\.sessions).map(\.id) ?? []
+                : store.workspaces.flatMap { $0.sessions.map(\.id) }
+            for session in sessions { candidates[session] = store }
+        }
+        let resolution = ControlResolve.resolve(target, candidates: Array(candidates.keys), active: nil)
+        guard case .resolved(let id) = resolution, let store = candidates[id] else {
+            return .refused(ControlResolve.errorMessage(noun: "session", target: target, resolution: resolution))
+        }
+        return store.isRemoteWindow ? .remote(store, id) : .local
+    }
+
+    /// DetachedKind names which of a remote window's detached sets a reattach looks in.
+    public enum DetachedKind: Sendable {
+        case session, workspace
+    }
+
+    /// resolveDetached finds a detached `target` (id or unique prefix) among the open remote windows, or in `window`
+    /// alone, answering its store and id or the resolver's error.
+    public func resolveDetached(_ target: String, kind: DetachedKind, window: UUID?) -> Result<(AppStore, UUID), DetachedResolutionError> {
+        let owners = stores.filter { id, store in store.isRemoteWindow && (window == nil || id == window) }.values
+        var candidates: [UUID: AppStore] = [:]
+        for store in owners {
+            for id in kind == .session ? store.catalogDetachedSessions : store.catalogDetachedWorkspaces { candidates[id] = store }
+        }
+        let noun = kind == .session ? "detached session" : "detached workspace"
+        let resolution = ControlResolve.resolve(target, candidates: Array(candidates.keys), active: nil)
+        guard case .resolved(let id) = resolution, let store = candidates[id] else {
+            return .failure(DetachedResolutionError(message: ControlResolve.errorMessage(noun: noun, target: target, resolution: resolution)))
+        }
+        return .success((store, id))
     }
 
     func remoteStoreClosing(_ id: UUID) {
@@ -139,17 +195,52 @@ extension WindowInfo {
     public var isRemote: Bool { source != nil }
 }
 
+/// ControlRemoteOperation is one action a remote window sent its server: `state` is `pending` while on its way or
+/// `unknown` when its outcome was lost; `session` or `workspace` names the row it acts on, neither for a new workspace.
+public struct ControlRemoteOperation: Codable, Sendable, Equatable {
+    public let id: String
+    public let action: String
+    public let session: String?
+    public let workspace: String?
+    public let state: String
+
+    init(mark: RemoteOperationMark) {
+        id = mark.opID
+        action = mark.label
+        switch mark.target {
+        case .session(let id)?: (session, workspace) = (id.uuidString, nil)
+        case .workspace(let id)?: (session, workspace) = (nil, id.uuidString)
+        case nil: (session, workspace) = (nil, nil)
+        }
+        state = mark.unknown ? "unknown" : "pending"
+    }
+}
+
+/// DetachedResolutionError is why a reattach target matched no single detached row.
+public struct DetachedResolutionError: Error, Equatable, Sendable {
+    public let message: String
+}
+
 /// ControlRemoteWindow is a remote window's read-back: the server it mirrors, the catalog it is bound to, and
 /// its connection, `state` being connecting, connected, disconnected or refused with `reason` for the last two.
+/// `detachedSessions` and `detachedWorkspaces` are what it hides and leaves running, and `operations` the actions
+/// still on their way to its server or whose outcome it could not learn; each is omitted when empty.
 public struct ControlRemoteWindow: Codable, Sendable, Equatable {
     public let host: String
     public let catalogID: String?
     public let state: String?
     public let reason: String?
+    public let detachedSessions: [String]?
+    public let detachedWorkspaces: [String]?
+    public let operations: [ControlRemoteOperation]?
 
-    public init(host: String, catalogID: UUID?, state: RemoteCatalogMirror.State?) {
+    public init(host: String, catalogID: UUID?, state: RemoteCatalogMirror.State?, detachedSessions: Set<UUID> = [],
+                detachedWorkspaces: Set<UUID> = [], operations: [RemoteOperationMark] = []) {
         self.host = host
         self.catalogID = catalogID?.uuidString
+        self.detachedSessions = detachedSessions.isEmpty ? nil : detachedSessions.map(\.uuidString).sorted()
+        self.detachedWorkspaces = detachedWorkspaces.isEmpty ? nil : detachedWorkspaces.map(\.uuidString).sorted()
+        self.operations = operations.isEmpty ? nil : operations.map(ControlRemoteOperation.init(mark:))
         switch state {
         case nil: (self.state, reason) = (nil, nil)
         case .connecting: (self.state, reason) = ("connecting", nil)

@@ -105,6 +105,15 @@ public enum Command: String, Codable, Sendable {
     case windowMinimize = "window.minimize"
     /// windowRemoteOpen opens a window mirroring the agterm-server on `host`, or raises the one already showing it.
     case windowRemoteOpen = "window.remote.open"
+    /// windowRemoteDismiss drops a remote window's marks for actions whose outcome it could not learn.
+    case windowRemoteDismiss = "window.remote.dismiss"
+    /// sessionDetach hides a remote window's sessions on this Mac and leaves them running on its server; a parent
+    /// takes its companions with it. sessionReattach shows a detached one again.
+    case sessionDetach = "session.detach"
+    case sessionReattach = "session.reattach"
+    /// workspaceDetach and workspaceReattach do the same for a remote window's workspace and everything in it.
+    case workspaceDetach = "workspace.detach"
+    case workspaceReattach = "workspace.reattach"
     case keymapReload = "keymap.reload"
     case keymapList = "keymap.list"
     case keymapRun = "keymap.run"
@@ -165,6 +174,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var opID: String?
     /// epoch is the catalog epoch the caller last saw, sent with `opID`; another epoch refuses the command.
     public var epoch: String?
+    /// rev is the catalog revision the caller had when it sent an operation, given to `catalog.op` with `epoch`.
+    public var rev: Int?
+    /// panes are the target session's pane identities when the operation was decided; other panes refuse it.
+    public var panes: [String]?
     /// New name for `workspace.new`/`workspace.rename`/`session.rename`; the initial `session.new` name
     /// (blank/omitted leaves the auto basename); the `theme.set` theme (omitted/empty = ghostty's built-in
     /// colors / "default ghostty", NOT the seeded `agterm` app default).

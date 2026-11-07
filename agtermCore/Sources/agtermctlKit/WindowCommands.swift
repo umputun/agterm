@@ -140,7 +140,7 @@ struct Window: ParsableCommand {
 
     struct Remote: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Windows mirroring an agterm-server.",
-                                                        subcommands: [Open.self])
+                                                        subcommands: [Open.self, Dismiss.self])
 
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(

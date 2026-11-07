@@ -137,6 +137,98 @@ struct ServerActionsReceiptsTests {
         #expect(arrival.result?.receipt?.outcome == .fenced)
     }
 
+    private func lookup(_ opID: String, sent: CatalogPosition?) async -> ControlResponse {
+        var args = ControlArgs()
+        args.epoch = sent?.epoch
+        args.rev = sent?.rev
+        return await plain(.catalogOp, target: opID, args)
+    }
+
+    private func fillTable(droppingAt position: CatalogPosition) {
+        var table = harness.store.catalogOperations ?? CatalogOperationTable()
+        for index in 0...CatalogOperationTable.capacity {
+            table.record(CatalogReceipt(opID: "filler\(index)", epoch: position.epoch, outcome: .noop), at: position)
+        }
+        harness.store.catalogOperations = table
+    }
+
+    @Test func aMissTheTablesDropCouldCoverIsUnknownAndStaysUnknown() async throws {
+        let sent = CatalogPosition(epoch: hub.epoch, rev: hub.rev)
+        fillTable(droppingAt: sent)
+        let count = sessionCount
+
+        let first = await lookup("lost", sent: sent)
+        let again = await lookup("lost", sent: sent)
+        let arrival = await serve(.sessionNew, op: "lost")
+        let onDisk = try PersistenceStore(directory: URL(fileURLWithPath: harness.scratch.state)).loadChecked().catalogOperations
+
+        #expect(first.ok)
+        #expect(first.result?.receipt == CatalogReceipt(opID: "lost", epoch: hub.epoch, outcome: .unknown))
+        #expect(again.result?.receipt?.outcome == .unknown)
+        #expect(!arrival.ok)
+        #expect(arrival.result?.receipt?.outcome == .unknown)
+        #expect(sessionCount == count)
+        #expect(onDisk?.receipt("lost")?.outcome == .unknown)
+    }
+
+    @Test func aMissSentAfterTheLastDropIsFenced() async throws {
+        hub.refresh()
+        fillTable(droppingAt: CatalogPosition(epoch: hub.epoch, rev: hub.rev))
+        _ = await plain(.sessionNew)
+        hub.refresh()
+
+        let reply = await lookup("late", sent: CatalogPosition(epoch: hub.epoch, rev: hub.rev))
+
+        #expect(reply.result?.receipt?.outcome == .fenced)
+    }
+
+    @Test func aPanePinnedCommandRunsOnTheSameShapedSession() async throws {
+        let session = try harness.session(await plain(.sessionNew))
+        _ = await plain(.sessionSplit, target: session.id.uuidString, ControlArgs(mode: "on"))
+        let split = try #require(harness.store.session(withID: session.id)?.splitPaneIdentity)
+        var args = ControlArgs()
+        args.panes = [session.paneIdentity.uuidString, split.uuidString]
+
+        let reply = await serve(.sessionSwap, target: session.id.uuidString, args, op: "swap")
+
+        #expect(reply.ok)
+        #expect(reply.result?.receipt?.outcome == .applied)
+    }
+
+    @Test(arguments: [true, false])
+    func aStalePanePinIsRefusedWhateverFormTheTargetTakes(_ prefix: Bool) async throws {
+        let session = try harness.session(await plain(.sessionNew))
+        harness.store.selectSession(session.id)
+        _ = await plain(.sessionSplit, target: session.id.uuidString, ControlArgs(mode: "on"))
+        let split = try #require(harness.store.session(withID: session.id)?.splitPaneIdentity)
+        var args = ControlArgs()
+        args.panes = [session.paneIdentity.uuidString, UUID().uuidString]
+        let target = prefix ? String(session.id.uuidString.prefix(8)) : "active"
+
+        let reply = await serve(.sessionSplitClose, target: target, args, op: "close-split")
+
+        #expect(reply.result?.receipt?.outcome == .refused)
+        #expect(harness.store.session(withID: session.id)?.splitPaneIdentity == split)
+    }
+
+    @Test func aPanePinnedCommandIsRefusedOnceThePanesChanged() async throws {
+        let session = try harness.session(await plain(.sessionNew))
+        _ = await plain(.sessionSplit, target: session.id.uuidString, ControlArgs(mode: "on"))
+        let seen = try #require(harness.store.session(withID: session.id)?.splitPaneIdentity)
+        _ = await plain(.sessionSplitClose, target: session.id.uuidString)
+        _ = await plain(.sessionSplit, target: session.id.uuidString, ControlArgs(mode: "on"))
+        let replacement = try #require(harness.store.session(withID: session.id)?.splitPaneIdentity)
+        var args = ControlArgs()
+        args.panes = [session.paneIdentity.uuidString, seen.uuidString]
+
+        let reply = await serve(.sessionSplitClose, target: session.id.uuidString, args, op: "close-split")
+
+        #expect(!reply.ok)
+        #expect(reply.result?.receipt?.outcome == .refused)
+        #expect(reply.error == "the session's panes changed; take the catalog again")
+        #expect(harness.store.session(withID: session.id)?.splitPaneIdentity == replacement)
+    }
+
     @Test func aLookupAnswersARecordedOperation() async throws {
         let applied = await serve(.workspaceNew, ControlArgs(name: "dev"), op: "ws")
 

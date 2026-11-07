@@ -6,7 +6,7 @@ import agtermCore
 struct Workspace: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Workspace commands.",
-        subcommands: [New.self, Rename.self, Delete.self, Select.self, Go.self, Move.self, Focus.self, Filter.self,
+        subcommands: [New.self, Rename.self, Delete.self, Detach.self, Reattach.self, Select.self, Go.self, Move.self, Focus.self, Filter.self,
                       FlagCommand.self, Collapse.self, Expand.self, Tint.self]
     )
 

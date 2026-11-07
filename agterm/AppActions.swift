@@ -108,11 +108,15 @@ final class AppActions {
     func newWorkspace() {
         guard uiActionsEnabled else { return }
         guard let store else { return }
+        if performRemote(.newWorkspace(name: nil), in: store) { return }
         store.addWorkspace(name: store.defaultWorkspaceName)
     }
 
     func newSession() {
         guard uiActionsEnabled else { return }
+        if let store, store.remoteActions != nil, let workspaceID = store.currentWorkspaceID {
+            return newRemoteSession(inWorkspace: workspaceID, of: store)
+        }
         guard let store, let workspaceID = store.currentWorkspaceID,
               let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(),
                                              at: resolvedNewSessionIndex(in: workspaceID, store: store))
@@ -140,7 +144,7 @@ final class AppActions {
 
     func openDirectory() {
         guard uiActionsEnabled else { return }
-        guard let store, let workspaceID = store.currentWorkspaceID else { return }
+        guard let store, store.remoteActions == nil, let workspaceID = store.currentWorkspaceID else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -161,6 +165,10 @@ final class AppActions {
     /// NOT `uiActionsEnabled` gated: an external OS command, like a socket command, must land through a modal
     /// zoom/dashboard. Returns whether one was created, so the delegate's drain retries until a store resolves.
     func openSession(atDirectory directory: String) -> Bool {
+        if store?.remoteActions != nil {
+            NotificationManager.shared.notifyCommandFailure(name: "Open Directory", detail: "a remote window shows only its server's sessions")
+            return true
+        }
         guard let store, let workspaceID = store.currentWorkspaceID,
               let session = store.addSession(toWorkspace: workspaceID, cwd: directory)
         else { return false }
@@ -174,6 +182,11 @@ final class AppActions {
     /// like the other sidebar row actions, so a background window's context menu acts on its own row. Adds
     /// the select + focus New Session does; the control path calls `store.duplicateSession` for the id.
     func duplicateSession(_ id: UUID, in store: AppStore) {
+        if store.remoteActions != nil, let workspace = store.sessionLocation(ofSession: id)?.workspace {
+            let shell = RemoteShellOptions(cwd: store.session(withID: id)?.focusedCwd)
+            performRemote(.newSession(workspace: workspace, anchor: .after(id), shell: shell), in: store, select: true)
+            return
+        }
         guard let session = store.duplicateSession(id) else { return }
         store.noteUserActivity()
         store.selectSession(session.id)
@@ -247,6 +260,10 @@ final class AppActions {
         // through and closes the SESSION. An overlay on the other pane is not in front of the user, so it
         // does not intercept — that pane stays live and ⌘W keeps its ordinary meaning.
         if let pane = session.focusedOverlayPane { store.closePaneOverlay(session.id, pane: pane); return true }
+        if closeRemote([session.id], in: store) {
+            focusActiveSession()
+            return true
+        }
         // handled either way — returning true on cancel keeps the File menu from closing the whole window.
         guard confirmCloseSession(session, companions: store.companions(of: session.id)) else { return true }
         closeSessionAfterConfirmation(session.id, in: store)
@@ -302,6 +319,7 @@ final class AppActions {
 
     private func confirmAndCloseSession(_ id: UUID, in store: AppStore) {
         guard let session = store.session(withID: id) else { return }
+        if closeRemote([id], in: store) { return }
         guard confirmCloseSession(session, companions: store.companions(of: session.id)) else { return }
         closeSessionAfterConfirmation(id, in: store)
     }
@@ -460,6 +478,7 @@ final class AppActions {
     /// renders no sidebar while its zoom or dashboard is up, so the row menu is unreachable in exactly the
     /// state the gate covers, and a frontmost modal must not block a background window's row.
     func deleteWorkspace(_ workspaceID: UUID, in store: AppStore) {
+        if closeRemoteWorkspace(workspaceID, in: store) { return }
         guard store.canRemoveWorkspace,
               let workspace = store.workspaces.first(where: { $0.id == workspaceID }) else { return }
         if !workspace.sessions.isEmpty, !confirmDeleteWorkspace(workspace) { return }
@@ -502,8 +521,9 @@ final class AppActions {
 
     /// Move a session to another workspace (used by the palette's "Move Session to …" items).
     func moveSession(_ sessionID: UUID, toWorkspace workspaceID: UUID) {
-        guard uiActionsEnabled else { return }
-        store?.moveSession(sessionID, toWorkspace: workspaceID)
+        guard uiActionsEnabled, let store else { return }
+        if performRemote(.moveSession(sessionID, to: .workspace(workspaceID)), in: store) { return }
+        store.moveSession(sessionID, toWorkspace: workspaceID)
     }
 
     // MARK: - Sidebar tree expansion
@@ -724,6 +744,8 @@ final class AppActions {
         guard !session.fullOverlayVisible else { return }
         // the deck's `scratchActive` onChange reclaims first responder for the pane, as it does for ⌘J.
         if session.scratchActive { store.toggleScratch(session.id); return }
+        let shown = !(session.isSplit && (axis == nil || axis == session.splitAxis))
+        if performRemote(.setSplit(session.id, shown: shown, axis: axis?.rawValue), in: store) { return }
         store.toggleSplit(session.id, axis: axis)
         focusSplitPane(session, wantSplit: session.splitFocused)
     }
@@ -738,6 +760,7 @@ final class AppActions {
         guard let store, let session = store.activeSession else { return }
         guard session.hasSplit, !session.fullOverlayVisible else { return }
         if session.scratchActive { store.toggleScratch(session.id); return }
+        if performRemote(.closeSplit(session.id), in: store) { return }
         store.closeSplit(session.id)
         focusSplitPane(session, wantSplit: false)
     }
@@ -786,6 +809,7 @@ final class AppActions {
     func swapActiveSessionPanes() {
         guard PaletteCommand.swapPanes.isEnabled(in: paletteContext),
               let store, let session = store.activeSession else { return }
+        if performRemote(.swap(session.id), in: store) { return }
         Task { @MainActor in
             _ = await swapSessionPanes(session.id, in: store)
         }

@@ -687,6 +687,15 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test(arguments: [(nil, "/srv/app", nil), ("home", "/srv/app", nil), ("custom", "/srv/app", "/Users/me/work"),
+                      ("currentSession", "/srv/app", "/srv/app"), ("currentSession", "", nil), ("currentSession", nil, nil)]
+          as [(String?, String?, String?)])
+    func aRemoteNewSessionSendsTheCurrentRowsOrTheCustomDirectory(_ mode: String?, _ current: String?, _ expected: String?) {
+        let settings = AppSettings(newSessionDirectory: mode, newSessionCustomDirectory: "/Users/me/work")
+
+        #expect(settings.remoteNewSessionCwd(currentSessionCwd: current) == expected)
+    }
+
     @Test func resolveNewSessionCwdHomeIsDefault() {
         #expect(AppSettings().resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
         #expect(AppSettings(newSessionDirectory: "home").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")

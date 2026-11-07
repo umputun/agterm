@@ -73,6 +73,7 @@ extension WorkspaceSidebar.Coordinator {
         // glyph: each branch assigns it in full, and an idle round-trip restarts the blink on reload.
         applyBadge(toCell: cell, count: 0)
         cell.setAddButtonVisible(false)
+        cell.addButton?.isEnabled = !store.serverActionsBlocked
         cell.notice = nil
         cell.setIconVisible(!GhosttyApp.shared.hiddenInterfaceElements.contains(node.kind.iconElement))
         switch node.kind {
@@ -320,6 +321,14 @@ extension WorkspaceSidebar.Coordinator {
 
         NSLayoutConstraint.activate(constraints)
         return cell
+    }
+
+    /// applyAddButtonEnabled sets every shown workspace row's "+" to whether a new session can be made now.
+    func applyAddButtonEnabled(_ enabled: Bool) {
+        guard let outline = outlineView else { return }
+        for row in 0..<outline.numberOfRows {
+            (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView)?.addButton?.isEnabled = enabled
+        }
     }
 
     private func makeAddSessionButton() -> NSButton {

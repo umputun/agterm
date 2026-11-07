@@ -168,7 +168,17 @@ public extension ControlActions {
         ControlResponse(ok: false, error: "catalog.subscribe is served only by agterm-server")
     }
 
-    func catalogOperation(_: String) -> ControlResponse {
+    func detachSessions(_: [String], window _: String?) -> ControlResponse { Self.remoteWindowOnly("session.detach") }
+    func reattachSession(_: String, window _: String?) -> ControlResponse { Self.remoteWindowOnly("session.reattach") }
+    func detachWorkspace(_: String?, window _: String?) -> ControlResponse { Self.remoteWindowOnly("workspace.detach") }
+    func reattachWorkspace(_: String, window _: String?) -> ControlResponse { Self.remoteWindowOnly("workspace.reattach") }
+    func dismissRemoteUnknown(window _: String?) -> ControlResponse { Self.remoteWindowOnly("window.remote.dismiss") }
+
+    static func remoteWindowOnly(_ command: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "\(command) acts only on a remote window")
+    }
+
+    func catalogOperation(_: String, sent _: CatalogPosition?) -> ControlResponse {
         ControlResponse(ok: false, error: "catalog.op is served only by agterm-server")
     }
 

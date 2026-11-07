@@ -8,6 +8,16 @@ struct CatalogRowContext {
 }
 
 extension AppStore {
+    /// isRemoteWindow is whether this store mirrors a server's catalog.
+    public var isRemoteWindow: Bool { catalogState != nil }
+
+    /// serverActionsBlocked is whether a remote window's server cannot be asked for an action now.
+    public var serverActionsBlocked: Bool { catalogState.map { $0 != .connected } ?? false }
+
+    /// canCloseWorkspace is whether Delete Workspace can run: a remote window can detach any shown workspace, its last
+    /// included; a local window keeps its last workspace.
+    public var canCloseWorkspace: Bool { isRemoteWindow ? !workspaces.isEmpty : canRemoveWorkspace }
+
     /// prepareCatalogWorkspaces removes the rows of sessions the catalog no longer has and adds or renames its
     /// workspaces. Workspaces it no longer has leave in `finishCatalogWorkspaces`, once their surviving rows
     /// have moved out.

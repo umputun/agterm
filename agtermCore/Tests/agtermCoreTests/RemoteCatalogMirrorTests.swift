@@ -508,4 +508,57 @@ final class RemoteCatalogMirrorTests {
         #expect(!row.splitFocused)
         #expect(store.selectedSessionID == entry.id)
     }
+
+    @Test func aCreatedRowIsSelectedWhenTheCatalogBringsIt() {
+        let existing = session(panes: [pane()])
+        _ = open([existing])
+        store.selectSession(existing.id)
+        let created = session(panes: [pane()])
+
+        mirror.selectWhenShown(created.id, from: existing.id)
+        let before = store.selectedSessionID
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 1))
+
+        #expect(before == existing.id)
+        #expect(store.selectedSessionID == created.id)
+    }
+
+    @Test func aCreatedRowThatArrivedFirstIsSelectedWhenTheSelectionStayed() {
+        let existing = session(panes: [pane()])
+        _ = open([existing])
+        store.selectSession(existing.id)
+        let created = session(panes: [pane()])
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 1))
+
+        mirror.selectWhenShown(created.id, from: existing.id)
+
+        #expect(store.selectedSessionID == created.id)
+    }
+
+    @Test func aCreatedRowThatArrivedFirstIsNotSelectedOnceTheUserMovedOn() {
+        let existing = session(panes: [pane()])
+        let other = session(panes: [pane()])
+        _ = open([existing, other])
+        store.selectSession(other.id)
+        let created = session(panes: [pane()])
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 2))
+
+        mirror.selectWhenShown(created.id, from: existing.id)
+
+        #expect(store.selectedSessionID == other.id)
+    }
+
+    @Test func aCreatedRowIsNotSelectedOnceTheUserMovedOn() throws {
+        let existing = session(panes: [pane()])
+        let other = session(panes: [pane()])
+        _ = open([existing, other])
+        store.selectSession(existing.id)
+        let created = session(panes: [pane()])
+
+        mirror.selectWhenShown(created.id, from: existing.id)
+        store.selectSession(other.id)
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 2))
+
+        #expect(store.selectedSessionID == other.id)
+    }
 }

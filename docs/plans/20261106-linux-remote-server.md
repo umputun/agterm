@@ -477,35 +477,35 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/Control/ControlTargetResolver.swift`, `agterm/Control/ControlServer+SessionActions.swift`
 - Create: tests in `agtermCoreTests`, `agtermTests`, `agtermUITests`
 
-- [ ] one action seam scoped by window source: new session, split on/off/close, swap, rename (inline too), reorder,
+- [x] one action seam scoped by window source: new session, split on/off/close, swap, rename (inline too), reorder,
       move between workspaces, companions, workspace create/rename/delete and session/workspace close go to the
       server as control commands in a remote window, and stay local in a local window
-- [ ] per-operation pending and unknown states cleared by their own receipts compared on `(epoch, rev)`, repeat
+- [x] per-operation pending and unknown states cleared by their own receipts compared on `(epoch, rev)`, repeat
       actions held while pending, an unknown outcome settled only by `catalog op` lookup, before or after a server
       restart, never from a snapshot, and left visibly unknown when the table no longer holds it; ssh runs off the
       main thread
-- [ ] mutations disabled while Disconnected; drag between a remote and a local window refused
-- [ ] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
+- [x] mutations disabled while Disconnected; drag between a remote and a local window refused
+- [x] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
       the host, Detach the default button; Terminate ends it on the server, scoped from the full catalog including
       detached children, with no undo grace and no Reopen Closed entry; app quit never finalizes server state
-- [ ] ➕ (moved from Task 7) closing an Ended row skips the sheet and removes the ended records only when nothing in
+- [x] ➕ (moved from Task 7) closing an Ended row skips the sheet and removes the ended records only when nothing in
       the affected group runs, and otherwise opens the Detach/Terminate sheet
-- [ ] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
+- [x] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
       those panes' attach clients and releases their presenter; running program overlays close as their ssh
       terminal ends; it works while Disconnected and sends nothing to the server (detaching scratch is verified in
       Task 9, pending work following the no-Mac-connected rules in Task 10)
-- [ ] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
+- [x] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
       a detached parent is hidden with it; a detached session that becomes `ended` stays hidden, and an id is pruned
       from the set only when its record is removed from the catalog; nothing detached is ever relaunched
-- [ ] "Detached Sessions" picker in the remote window (File menu and palette) lists the detached sessions and
+- [x] "Detached Sessions" picker in the remote window (File menu and palette) lists the detached sessions and
       workspaces whose records still exist, ended ones marked as ended; it reattaches a live one, and offers an
       ended one only for record cleanup under the Ended close rule
-- [ ] control coverage: new commands `session.detach` and `session.reattach` (and `workspace.detach`/
+- [x] control coverage: new commands `session.detach` and `session.reattach` (and `workspace.detach`/
       `workspace.reattach`) for remote-window rows only, refused elsewhere, with dispatcher, `ControlActions` defaults
       and `agtermctl session detach|reattach`; `session.close` keeps its terminating meaning everywhere, so recipes
       such as `close-tab-when-done` and agents on the server are unchanged; `tree` lists the remote window's detached
       ids
-- [ ] the local control API targets a remote window's sessions through the same seam, and `tree` reports
+- [x] the local control API targets a remote window's sessions through the same seam, and `tree` reports
       per-session pending state
 - [ ] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
       delta before reply, lost reply settled by lookup, an unchanged snapshot followed by delayed execution (fenced),

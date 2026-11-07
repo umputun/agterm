@@ -245,4 +245,108 @@ final class WindowLibraryRemoteTests {
         #expect(localStore.workspaces.contains { $0.id == closing.id })
         #expect(remoteStore.workspaces.isEmpty)
     }
+
+    @Test func aDetachedTargetResolvesByPrefixAcrossRemoteWindowsOrInTheNamedOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let first = library.newRemoteWindow(host: "a")
+        let second = library.newRemoteWindow(host: "b")
+        let local = library.newWindow()
+        let (mirrorA, _) = try mirror(library, window: first.id, host: "a")
+        let (mirrorB, _) = try mirror(library, window: second.id, host: "b")
+        let session = UUID(), other = UUID()
+        try #require(library.store(for: first.id)).catalogDetachedSessions = [session]
+        try #require(library.store(for: second.id)).catalogDetachedSessions = [other]
+        _ = (mirrorA, mirrorB, local)
+
+        let found = library.resolveDetached(String(session.uuidString.prefix(8)), kind: .session, window: nil)
+        let scoped = library.resolveDetached(session.uuidString, kind: .session, window: second.id)
+        let workspace = library.resolveDetached(session.uuidString, kind: .workspace, window: nil)
+
+        guard case .success(let (store, id)) = found else { Issue.record("not found"); return }
+        #expect(id == session)
+        #expect(store === library.store(for: first.id))
+        guard case .failure = scoped, case .failure = workspace else { Issue.record("resolved outside its window or kind"); return }
+    }
+
+    @Test func theRemoteNodeReportsDetachedIdsAndOmitsEmptyOnes() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "a")
+        let (kept, _) = try mirror(library, window: remote.id, host: "a")
+        let store = try #require(library.store(for: remote.id))
+        let session = UUID(), workspace = UUID()
+        let before = library.remoteNode(for: remote.id)
+
+        store.catalogDetachedSessions = [session]
+        store.catalogDetachedWorkspaces = [workspace]
+        let after = library.remoteNode(for: remote.id)
+        _ = kept
+
+        #expect(before?.detachedSessions == nil)
+        #expect(before?.detachedWorkspaces == nil)
+        #expect(before?.operations == nil)
+        #expect(after?.detachedSessions == [session.uuidString])
+        #expect(after?.detachedWorkspaces == [workspace.uuidString])
+    }
+
+    /// RemoteFixture holds what a remote window's store reaches only weakly, for as long as a test runs.
+    private struct RemoteFixture {
+        let window: WindowInfo
+        let mirror: RemoteCatalogMirror
+        let store: AppStore
+        let actions: RemoteCatalogActions
+    }
+
+    private func remoteWithCatalog(_ library: WindowLibrary, host: String, sessions: [UUID]) throws -> RemoteFixture {
+        let window = library.newRemoteWindow(host: host)
+        let (catalogMirror, _) = try mirror(library, window: window.id, host: host)
+        let store = try #require(library.store(for: window.id))
+        let actions = RemoteCatalogActions(mirror: catalogMirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+        let workspace = CatalogWorkspace(id: UUID(), name: "w", sessions: sessions.map {
+            CatalogSession(fields: CatalogSessionFields(id: $0, name: "s", parent: nil, cwd: "/", primary: UUID(), axis: nil, shown: false,
+                                                        lifecycle: .live), panes: [])
+        })
+        _ = catalogMirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
+                                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
+                                                            workspaces: [workspace])))
+        return RemoteFixture(window: window, mirror: catalogMirror, store: store, actions: actions)
+    }
+
+    @Test func aCloseTargetReachesAHiddenRowInARemoteCatalogAndKeepsItsWindowScope() throws {
+        let library = WindowLibrary(directory: directory)
+        let hidden = UUID(), shown = UUID()
+        let remote = try remoteWithCatalog(library, host: "a", sessions: [hidden, shown])
+        remote.mirror.detach(sessions: [hidden])
+        let other = try remoteWithCatalog(library, host: "b", sessions: [])
+
+        let found = library.resolveCloseTarget(String(hidden.uuidString.prefix(8)), window: nil)
+        let scoped = library.resolveCloseTarget(hidden.uuidString, window: remote.window.id.uuidString)
+        let elsewhere = library.resolveCloseTarget(hidden.uuidString, window: other.window.id.uuidString)
+        let missingWindow = library.resolveCloseTarget(hidden.uuidString, window: "no-such-window")
+
+        guard case .remote(let owner, let id) = found, case .remote = scoped else { Issue.record("hidden row not reached"); return }
+        #expect(owner === remote.store)
+        #expect(id == hidden)
+        guard case .refused = elsewhere, case .unresolvedWindow = missingWindow else {
+            Issue.record("a close left its window or widened a missing one")
+            return
+        }
+    }
+
+    @Test func aPrefixSharedByAShownLocalRowAndAHiddenRemoteRowIsAmbiguous() throws {
+        let library = WindowLibrary(directory: directory)
+        let local = library.newWindow()
+        let localStore = try #require(library.store(for: local.id))
+        let workspace = localStore.addWorkspace(name: "w")
+        let row = try #require(localStore.addSession(toWorkspace: workspace.id, cwd: "/"))
+        let prefix = String(row.id.uuidString.prefix(4))
+        let twin = try #require(UUID(uuidString: prefix + String(UUID().uuidString.dropFirst(4))))
+        let remote = try remoteWithCatalog(library, host: "a", sessions: [twin, UUID()])
+        remote.mirror.detach(sessions: [twin])
+
+        let shared = library.resolveCloseTarget(prefix, window: nil)
+        let localOnly = library.resolveCloseTarget(row.id.uuidString, window: nil)
+
+        guard case .refused = shared, case .local = localOnly else { Issue.record("the two windows' rows were not weighed together"); return }
+    }
 }

@@ -63,6 +63,8 @@ extension WorkspaceSidebar.Coordinator {
         menu.autoenablesItems = false
         let sessionTargets = node.kind == .session ? store.sidebarSelectionTargets(forContextSession: node.id) : []
         let sessionCount = sessionTargets.count
+        // a remote window's rows change only on its server, which cannot be asked while the window is not connected
+        let serverBlocked = store.serverActionsBlocked
 
         // "Clear Status" sits first for a session row with a status, the `agtermctl session status idle` effect;
         // "Mark for Attention" is its idle-row counterpart, `session status completed` on the idle targets.
@@ -89,6 +91,7 @@ extension WorkspaceSidebar.Coordinator {
             let rename = NSMenuItem(title: "Rename", action: #selector(menuRename(_:)), keyEquivalent: "")
             rename.target = self
             rename.representedObject = node
+            rename.isEnabled = !serverBlocked
             menu.addItem(rename)
         }
 
@@ -108,6 +111,7 @@ extension WorkspaceSidebar.Coordinator {
                 let duplicate = NSMenuItem(title: "Duplicate Session", action: #selector(menuDuplicate(_:)), keyEquivalent: "")
                 duplicate.target = self
                 duplicate.representedObject = node
+                duplicate.isEnabled = !serverBlocked
                 menu.addItem(duplicate)
             }
             if sessionCount == 1 {
@@ -115,8 +119,9 @@ extension WorkspaceSidebar.Coordinator {
                 let companion = NSMenuItem(title: "New Companion", action: #selector(menuNewCompanion(_:)), keyEquivalent: "")
                 companion.target = self
                 companion.representedObject = node
+                companion.isEnabled = !serverBlocked
                 menu.addItem(companion)
-                if store.session(withID: node.id)?.content == .terminal {
+                if store.session(withID: node.id)?.content == .terminal, !store.isRemoteWindow {
                     let copy = NSMenuItem(title: "Duplicate as Companion", action: #selector(menuDuplicateCompanion(_:)),
                                           keyEquivalent: "")
                     copy.target = self
@@ -147,6 +152,7 @@ extension WorkspaceSidebar.Coordinator {
                     submenu.addItem(item)
                 }
                 moveTo.submenu = submenu
+                moveTo.isEnabled = !serverBlocked
                 menu.addItem(moveTo)
             }
             // "Flag"/"Unflag" toggles flagged working-set membership; the label reflects the current state.
@@ -178,10 +184,12 @@ extension WorkspaceSidebar.Coordinator {
             let newSession = NSMenuItem(title: "New Session", action: #selector(menuNewSession(_:)), keyEquivalent: "")
             newSession.target = self
             newSession.representedObject = node
+            newSession.isEnabled = !serverBlocked
             menu.addItem(newSession)
             let openSession = NSMenuItem(title: "Open Directory…", action: #selector(menuOpenSession(_:)), keyEquivalent: "")
             openSession.target = self
             openSession.representedObject = node
+            openSession.isEnabled = !store.isRemoteWindow
             menu.addItem(openSession)
             // the one per-row fold that survives a hidden chevron with row click turned off.
             let fold = NSMenuItem(title: outline.isItemExpanded(node) ? "Collapse Workspace" : "Expand Workspace",
@@ -220,7 +228,7 @@ extension WorkspaceSidebar.Coordinator {
             let delete = NSMenuItem(title: "Delete Workspace", action: #selector(menuDeleteWorkspace(_:)), keyEquivalent: "")
             delete.target = self
             delete.representedObject = node
-            delete.isEnabled = store.canRemoveWorkspace
+            delete.isEnabled = store.canCloseWorkspace
             menu.addItem(delete)
         }
         return menu
@@ -268,6 +276,10 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuMove(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest, let targetID = request.targetID else { return }
+        if store.remoteActions != nil {
+            for id in request.sessionIDs { actions.performRemote(.moveSession(id, to: .workspace(targetID)), in: store) }
+            return
+        }
         store.moveSessions(request.sessionIDs, toWorkspace: targetID)
     }
 
@@ -371,6 +383,7 @@ extension WorkspaceSidebar.Coordinator {
     /// addNewSession shares the directory and placement settings of `AppActions.newSession()`
     /// with the workspace row's New Session and "+".
     private func addNewSession(toWorkspace workspaceID: UUID) {
+        if store.remoteActions != nil { return actions.newRemoteSession(inWorkspace: workspaceID, of: store) }
         addSession(toWorkspace: workspaceID, cwd: actions.resolvedNewSessionCwd(),
                    at: actions.resolvedNewSessionIndex(in: workspaceID, store: store))
     }
@@ -387,6 +400,7 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     private func openDirectoryAndAddSession(toWorkspace workspaceID: UUID) {
+        guard !store.isRemoteWindow else { return }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false

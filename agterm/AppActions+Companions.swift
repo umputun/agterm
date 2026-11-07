@@ -16,6 +16,7 @@ extension AppActions {
     /// Opens a companion of `id`, a sibling when `id` is itself a companion, and selects it. Store-scoped like
     /// `duplicateSession(_:in:)`.
     func newCompanion(_ id: UUID, in store: AppStore) {
+        if performRemote(.newCompanion(parent: id), in: store, select: true) { return }
         if store.session(withID: id)?.remoteHost != nil {
             return createRemoteCompanion(.terminal(CompanionOptions()), of: id, in: store, action: "New Companion")
         }
@@ -38,6 +39,7 @@ extension AppActions {
     }
 
     func duplicateAsCompanion(_ id: UUID, in store: AppStore) {
+        guard store.remoteActions == nil else { return }
         if store.session(withID: id)?.remoteHost != nil {
             return createRemoteCompanion(.duplicate, of: id, in: store, action: "Duplicate as Companion")
         }

@@ -22,6 +22,34 @@ struct CatalogCommandsTests {
         #expect(throws: (any Error).self) { try Catalog.Operation.parse(["a b"]) }
     }
 
+    @Test func catalogOpCarriesWhereTheOperationWasSent() throws {
+        let op = try Catalog.Operation.parse(["op-1", "--epoch", "e1", "--rev", "7"])
+
+        let request = op.makeRequest()
+
+        #expect(request.args?.epoch == "e1")
+        #expect(request.args?.rev == 7)
+    }
+
+    @Test(arguments: [["op-1", "--epoch", "e1"], ["op-1", "--rev", "7"]])
+    func catalogOpTakesEpochAndRevTogether(_ words: [String]) {
+        #expect(throws: (any Error).self) { try Catalog.Operation.parse(words) }
+    }
+
+    @Test func aStructuralCommandCarriesTheExpectedPanes() throws {
+        let first = UUID().uuidString
+        let second = UUID().uuidString
+        let swap = try Session.Swap.parse(["--target", "s1", "--op-id", "op-1", "--epoch", "e1", "--expect-panes", "\(first),\(second)"])
+
+        #expect(try swap.makeRequest().args?.panes == [first, second])
+    }
+
+    @Test(arguments: [["--expect-panes", "not-a-uuid", "--op-id", "op-1", "--epoch", "e1"], ["--expect-panes", "", "--op-id", "op-1", "--epoch", "e1"],
+                      ["--expect-panes", "6F9619FF-8B86-D011-B42D-00C04FC964FF"]])
+    func expectedPanesAreIdentitiesSentWithAnOperation(_ flags: [String]) {
+        #expect(throws: (any Error).self) { try Session.Swap.parse(["--target", "s1"] + flags) }
+    }
+
     @Test func aStructuralCommandCarriesItsOperationIdAndEpoch() throws {
         let rename = try Session.Rename.parse(["build", "--target", "s1", "--op-id", "op-1", "--epoch", "e1"])
 

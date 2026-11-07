@@ -347,6 +347,7 @@ struct SocketClientTests {
             dashboard                   cmd+shift+g
             attach_remote               cmd+shift+r
             open_remote_window          -
+            detached_sessions           -
             edit_flagged_sessions       -
             edit_focused_workspaces     -
 
@@ -1263,6 +1264,16 @@ struct SocketClientTests {
         #expect(lines[1] == "  * shell  [s2]  /tmp", "only the failing state earns a tag; nil must stay quiet too")
     }
 
+    @Test(arguments: [("pending", "  * shell (pending)  [s4]  /tmp"), ("unknown", "  * shell (outcome unknown)  [s4]  /tmp")])
+    func formatTreeTagsARowsOperationState(_ state: String, _ expected: String) {
+        let session = ControlSessionNode(id: "s4", name: "shell", cwd: "/tmp", active: true, split: false, backedByZmx: nil, pending: state)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w4", name: "work", active: true, sessions: [session])])
+
+        let lines = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree))).split(separator: "\n").map(String.init)
+
+        #expect(lines[1] == expected)
+    }
+
     @Test func formatTreeShowsScratchTag() {
         let session = ControlSessionNode(id: "s3", name: "shell", cwd: "/tmp", active: true, split: false,
                                          overlay: false, scratch: true)
@@ -1379,6 +1390,7 @@ struct SocketClientTests {
         (CatalogReceipt(opID: "a", epoch: "e1", outcome: .refused, error: "no such session"),
          "operation a: refused in epoch e1: no such session"),
         (CatalogReceipt(opID: "a", epoch: "e1", outcome: .fenced), "operation a: fenced in epoch e1, so it will not run"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .unknown), "operation a: outcome unknown in epoch e1; it will not run now"),
     ])
     func formatsAReceiptAlone(_ receipt: CatalogReceipt, _ expected: String) {
         var result = ControlResult()

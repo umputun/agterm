@@ -53,13 +53,20 @@ public struct ControlDispatcher {
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
+        case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
+            return dispatchDetachCommand(request)
         case .catalogSubscribe:
             return actions.catalogSubscribe()
         case .catalogOp:
             guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
                 return ControlResponse(ok: false, error: "catalog.op requires an operation id")
             }
-            return actions.catalogOperation(opID)
+            let epoch = request.args?.epoch?.trimmedOrNil
+            let rev = request.args?.rev
+            guard (epoch == nil) == (rev == nil) else {
+                return ControlResponse(ok: false, error: "catalog.op takes epoch and rev together")
+            }
+            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
         case .recentList, .recentOpen, .recentClear:

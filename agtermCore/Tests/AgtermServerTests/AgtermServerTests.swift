@@ -98,12 +98,37 @@ struct AgtermServerTests {
         #expect(second.store.workspaces.filter { $0.name == "dev" }.count == 1)
     }
 
+    @Test func anUnknownOutcomeIsStillUnknownAfterARestart() async throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        let first = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        let sent = CatalogPosition(epoch: first.actions.streams.catalogHub.epoch, rev: 0)
+        var table = CatalogOperationTable()
+        for index in 0...CatalogOperationTable.capacity {
+            table.record(CatalogReceipt(opID: "filler\(index)", epoch: sent.epoch, outcome: .noop), at: sent)
+        }
+        first.store.catalogOperations = table
+        var args = ControlArgs()
+        args.epoch = sent.epoch
+        args.rev = sent.rev
+        let before = await first.handle(ControlRequest(cmd: .catalogOp, target: "lost", args: args))
+        first.stop()
+
+        let second = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        defer { second.stop() }
+        let after = await second.handle(ControlRequest(cmd: .catalogOp, target: "lost", args: args))
+
+        #expect(before.result?.receipt?.outcome == .unknown)
+        #expect(after.result?.receipt?.outcome == .unknown)
+    }
+
     @Test func aMarkerItsCommandSavedIsAnsweredAsAppliedAfterARestart() async throws {
         let scratch = try ServerScratch()
         defer { scratch.remove() }
         let first = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
         var table = CatalogOperationTable()
-        table.record(CatalogReceipt(opID: "crashed", epoch: first.actions.streams.catalogHub.epoch, outcome: .applied))
+        let epoch = first.actions.streams.catalogHub.epoch
+        table.record(CatalogReceipt(opID: "crashed", epoch: epoch, outcome: .applied), at: CatalogPosition(epoch: epoch, rev: 0))
         first.store.catalogOperations = table
         first.stop()
 

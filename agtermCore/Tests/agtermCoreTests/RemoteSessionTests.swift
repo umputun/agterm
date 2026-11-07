@@ -239,6 +239,18 @@ struct RemoteSessionTests {
         #expect(try fake.calls() == [arguments + ["--json"]])
     }
 
+    @Test func operandsFollowADoubleDashAfterTheOptions() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.controlCommand(host: "buildbox", arguments: ["session", "rename", "--target", "s1"],
+                                                                  operands: ["-x it's"]))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["session", "rename", "--target", "s1", "--json", "--", "-x it's"]])
+    }
+
     @Test func treeWidensPathWithEveryDocumentedInstallDirectory() throws {
         let remote = try #require(RemoteSession.treeCommand(host: "buildbox").last)
 

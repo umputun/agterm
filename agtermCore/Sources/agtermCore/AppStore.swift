@@ -149,6 +149,17 @@ public final class AppStore {
     /// catalogState is a remote window's connection to its server, nil for a local window. Observed: the window
     /// strip draws it.
     public internal(set) var catalogState: RemoteCatalogMirror.State?
+    /// remoteActions sends a remote window's structural actions to its server; nil for a local window, whose actions
+    /// change this store directly.
+    @ObservationIgnored public weak var remoteActions: RemoteCatalogActions?
+    /// catalogDetachedSessions and catalogDetachedWorkspaces are what a remote window hides and leaves running on its
+    /// server; empty for a local window.
+    public internal(set) var catalogDetachedSessions: Set<UUID> = []
+    public internal(set) var catalogDetachedWorkspaces: Set<UUID> = []
+    /// catalogHiddenViews keeps the view of each row a detach hides, so it comes back on reattach and is saved meanwhile.
+    @ObservationIgnored var catalogHiddenViews: [UUID: RemoteWindowViewState.SessionView] = [:]
+    /// catalogHiddenCollapsed keeps whether each workspace a detach hides was collapsed.
+    @ObservationIgnored var catalogHiddenCollapsed: [UUID: Bool] = [:]
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
     /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
@@ -392,6 +403,7 @@ public final class AppStore {
                                           pick: SessionPickBook.shared.node(forSession: session.id),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           ended: session.ended ? true : nil,
+                                          pending: remoteActions?.pendingState(of: session.id),
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
                                               ? true : nil,

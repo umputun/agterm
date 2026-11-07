@@ -114,6 +114,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // a membership change or a filter flip takes the rebuild branch.
         _ = store.focusedWorkspaceIDs
         _ = store.focusEnabled
+        context.coordinator.applyAddButtonEnabled(!store.serverActionsBlocked)
         context.coordinator.reconcile()
         context.coordinator.syncSelection()
     }
@@ -215,7 +216,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         init(store: AppStore, actions: AppActions) {
             self.store = store
             self.actions = actions
-            self.renameController = SidebarRenameController(store: store)
+            self.renameController = SidebarRenameController(store: store) { [weak actions] operation in
+                actions?.performRemote(operation, in: store) ?? false
+            }
             super.init()
             // seed from the live mirror (SettingsModel applies the persisted size before any sidebar is
             // built) so the first appearanceChanged doesn't rebuild for no change.

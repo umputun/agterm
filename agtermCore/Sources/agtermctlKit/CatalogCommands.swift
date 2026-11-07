@@ -13,11 +13,23 @@ struct OperationOptions: ParsableArguments {
     @Option(name: .long, help: "The catalog epoch the operation was decided at; needs --op-id.")
     var epoch: String?
 
+    @Option(name: .customLong("expect-panes"), help: "Comma-separated pane identities the target session must still have; needs --op-id.")
+    var expectPanes: String?
+
     func validate() throws {
         guard (opID == nil) == (epoch == nil) else { throw ValidationError("--op-id and --epoch go together") }
         if let opID, !CatalogReceipt.isValidOpID(opID) {
             throw ValidationError("--op-id takes 1 to 128 letters, digits, '.', '_', ':' or '-'")
         }
+        guard let expectPanes else { return }
+        guard opID != nil else { throw ValidationError("--expect-panes needs --op-id") }
+        guard !panes(expectPanes).isEmpty, panes(expectPanes).allSatisfy({ UUID(uuidString: $0) != nil }) else {
+            throw ValidationError("--expect-panes takes pane identities separated by commas")
+        }
+    }
+
+    private func panes(_ list: String) -> [String] {
+        list.split(separator: ",", omittingEmptySubsequences: false).map { $0.trimmingCharacters(in: .whitespaces) }
     }
 
     /// stamp adds the operation id and epoch to `request`, and leaves it as it was when neither is set.
@@ -27,6 +39,7 @@ struct OperationOptions: ParsableArguments {
         var args = request.args ?? ControlArgs()
         args.opID = opID
         args.epoch = epoch
+        args.panes = expectPanes.map(panes)
         request.args = args
         return request
     }
@@ -48,12 +61,18 @@ struct Catalog: ParsableCommand {
             abstract: "Ask agterm-server what became of an operation id.",
             discussion: """
             Answers from agterm-server's operation table: applied (with the revision it reached), no change, \
-            refused, or fenced. An id it has not seen is recorded as fenced, so that command is refused if it \
-            arrives later.
+            refused, fenced, or unknown. An id it does not hold is recorded so that command is refused if it \
+            arrives later: fenced, or unknown when the table may have dropped its entry since --epoch and --rev.
             """)
 
         @Argument(help: "The operation id a structural command was sent with.")
         var opID: String
+
+        @Option(name: .long, help: "The catalog epoch the operation was sent at; needs --rev.")
+        var epoch: String?
+
+        @Option(name: .long, help: "The catalog revision the operation was sent at; needs --epoch.")
+        var rev: Int?
 
         @OptionGroup var options: BasicOptions
 
@@ -61,9 +80,15 @@ struct Catalog: ParsableCommand {
             guard CatalogReceipt.isValidOpID(opID) else {
                 throw ValidationError("an operation id is 1 to 128 letters, digits, '.', '_', ':' or '-'")
             }
+            guard (epoch == nil) == (rev == nil) else { throw ValidationError("--epoch and --rev go together") }
         }
 
-        func makeRequest() -> ControlRequest { ControlRequest(cmd: .catalogOp, target: opID) }
+        func makeRequest() -> ControlRequest {
+            var args = ControlArgs()
+            args.epoch = epoch
+            args.rev = rev
+            return ControlRequest(cmd: .catalogOp, target: opID, args: epoch == nil ? nil : args)
+        }
     }
 
     struct Subscribe: ParsableCommand {

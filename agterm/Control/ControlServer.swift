@@ -522,6 +522,23 @@ final class ControlServer {
             return
         }
 
+        // a remote window's structural command is decided here and sent from a worker, so the accept thread
+        // never waits on ssh while local structural commands keep their inline order
+        if let route = runBlocking({ await server.remoteRoute(request) }) {
+            guard case .send = route else {
+                _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
+                return
+            }
+            handedOff = true
+            let worker = Thread {
+                defer { close(conn) }
+                _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
+            }
+            worker.name = "com.umputun.agterm.control.remote"
+            worker.start()
+            return
+        }
+
         // `zmx tree <this machine>` would otherwise deadlock against itself: the far side's own agtermctl
         // waits in this server's backlog while this connection holds the only accept thread.
         if Self.waitsOnNetwork(request.cmd) {
@@ -628,6 +645,8 @@ final class ControlServer {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
         defer { refreshWindowCache() }
+        // every entry, a page's bridge included, reaches a remote window's server the one way the socket does
+        if let route = remoteRoute(request) { return await runRemoteRoute(route) }
         if let refusal = pageCompanionRefusal(request) { return refusal }
         if let response = await ControlDispatcher(actions: self).dispatch(request) {
             return response
@@ -658,7 +677,8 @@ final class ControlServer {
                 .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect, .windowGo,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .windowMinimize, .windowRemoteOpen,
+                .windowFullscreen, .windowMinimize, .windowRemoteOpen, .windowRemoteDismiss,
+                .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
                 .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
                 .recentList, .recentOpen, .recentClear:

@@ -9,6 +9,7 @@ struct RemoteCatalogLink {
     let client: RemoteCatalogClient
     let effects: RemoteCatalogWindow
     let pool: SshConnectionPool
+    let actions: RemoteCatalogActions
 }
 
 extension ControlServer {
@@ -29,11 +30,15 @@ extension ControlServer {
         let effects = RemoteCatalogWindow(window: id, server: self, pool: pool)
         let mirror = RemoteCatalogMirror(host: host, store: store, effects: effects, viewState: library.remoteViewState(for: id),
                                          pool: pool)
-        let client = RemoteCatalogClient(mirror: mirror, transport: remoteTransport, runner: { argv in
+        let run: RemoteCatalogClient.Runner = { argv in
             let result = await runner.run(argv, deadline: 15)
             return (result.status, result.stdout)
-        }, pool: pool)
-        remoteCatalogs[id] = RemoteCatalogLink(client: client, effects: effects, pool: pool)
+        }
+        let client = RemoteCatalogClient(mirror: mirror, transport: remoteTransport, runner: run, pool: pool)
+        let actions = RemoteCatalogActions(mirror: mirror, runner: run, pool: pool)
+        actions.onChange = { [weak self] in self?.refreshWindowCache() }
+        store.remoteActions = actions
+        remoteCatalogs[id] = RemoteCatalogLink(client: client, effects: effects, pool: pool, actions: actions)
         client.start()
     }
 
@@ -59,6 +64,7 @@ extension ControlServer {
     func stopRemoteCatalog(window id: UUID) {
         guard let link = remoteCatalogs.removeValue(forKey: id) else { return }
         link.client.stop()
+        link.actions.stop()
         for session in library.store(for: id)?.workspaces.flatMap(\.sessions) ?? [] { stopRemotePresentation(session.id) }
         let runner = remoteRunner
         for command in link.pool.close() {
@@ -162,7 +168,13 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
         return false
     }
 
+    func catalogViewStateChanged() {
+        _ = server?.library.saveRemoteViewState(for: window)
+        server?.refreshWindowCache()
+    }
+
     func catalogStateChanged(_ state: RemoteCatalogMirror.State) {
+        server?.refreshWindowCache()
         catalogLogger.notice("remote window \(self.window, privacy: .public): \(String(describing: state), privacy: .public)")
     }
 }

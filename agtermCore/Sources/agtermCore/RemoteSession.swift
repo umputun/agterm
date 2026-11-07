@@ -79,9 +79,12 @@ public enum RemoteSession {
 
     /// One ssh invocation running the far side's `agtermctl` with `arguments` plus `--json`, so the reply is the
     /// server's own response line. Arguments carry user text, so the outer layer is quoted for any login shell.
-    public static func controlCommand(host: String, arguments: [String], connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
+    /// `operands` follow a `--`, so one starting with `-` is never read as an option.
+    public static func controlCommand(host: String, arguments: [String], operands: [String] = [], connectTimeout: Int = 5,
+                                      controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"])
+        let tail = operands.isEmpty ? [] : ["--"] + operands
+        let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"] + tail)
         let remote = ["/bin/sh", "-c", chain].map(accountShellQuoted).joined(separator: " ")
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
     }

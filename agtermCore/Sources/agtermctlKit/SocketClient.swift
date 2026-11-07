@@ -367,6 +367,7 @@ struct SocketClient {
         case .noop: return "\(head) no change in epoch \(receipt.epoch)"
         case .refused: return "\(head) refused in epoch \(receipt.epoch): \(receipt.error ?? "no reason given")"
         case .fenced: return "\(head) fenced in epoch \(receipt.epoch), so it will not run"
+        case .unknown: return "\(head) outcome unknown in epoch \(receipt.epoch); it will not run now"
         }
     }
 
@@ -576,8 +577,9 @@ struct SocketClient {
                 let realizedTag = session.realized == false ? " (not realized)" : ""
                 let overlayHidden = session.hiddenOverlays?.contains("session") == true
                 let overlayTag = session.overlay ? (overlayHidden ? " (overlay hidden)" : " (overlay)") : ""
+                let pendingTag = session.pending.map { $0 == "unknown" ? " (outcome unknown)" : " (pending)" } ?? ""
                 let tags = splitTag + realizedTag + overlayTag
-                    + (session.scratch ? " (scratch)" : "")
+                    + (session.scratch ? " (scratch)" : "") + pendingTag
                 let splitCwdSuffix = session.splitCwd.map { $0 == session.cwd ? "" : "  split cwd: \($0)" } ?? ""
                 let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
                 let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""

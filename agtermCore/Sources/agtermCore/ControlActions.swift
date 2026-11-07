@@ -265,8 +265,17 @@ public protocol ControlActions {
     func openPresentation(session: String) -> ControlResponse
     /// catalogSubscribe answers `catalog.subscribe`; after an ok answer the connection carries catalog frames.
     func catalogSubscribe() -> ControlResponse
-    /// catalogOperation answers `catalog.op`: what became of `opID`, fencing an id the host has not seen.
-    func catalogOperation(_ opID: String) -> ControlResponse
+    /// detachSessions hides `targets`, rows of one remote window, on this Mac; reattachSession shows a detached one
+    /// again. A local window's rows refuse both.
+    func detachSessions(_ targets: [String], window: String?) -> ControlResponse
+    func reattachSession(_ target: String, window: String?) -> ControlResponse
+    func detachWorkspace(_ target: String?, window: String?) -> ControlResponse
+    func reattachWorkspace(_ target: String, window: String?) -> ControlResponse
+    /// dismissRemoteUnknown drops window `window`'s marks for actions with an unknown outcome.
+    func dismissRemoteUnknown(window: String?) -> ControlResponse
+    /// catalogOperation answers `catalog.op`: what became of `opID`, sent when the catalog stood at `sent`,
+    /// fencing an id the host has not seen.
+    func catalogOperation(_ opID: String, sent: CatalogPosition?) -> ControlResponse
     /// takesOperationReceipts is whether this host answers a structural command's `opID` with a receipt.
     var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.

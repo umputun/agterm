@@ -18,6 +18,12 @@ public protocol RemoteCatalogEffects: AnyObject {
     /// catalogBound reports the catalog the server named; false stops the mirror, another window showing it.
     func catalogBound(_ catalogID: UUID) -> Bool
     func catalogStateChanged(_ state: RemoteCatalogMirror.State)
+    /// catalogViewStateChanged asks for the window's view state to be saved now: a detach must outlive the app.
+    func catalogViewStateChanged()
+}
+
+extension RemoteCatalogEffects {
+    public func catalogViewStateChanged() {}
 }
 
 /// RemoteCatalogMirror keeps one remote window's store equal to its server's catalog. Frames move the mirrored
@@ -53,12 +59,15 @@ public final class RemoteCatalogMirror {
     public private(set) var catalog: CatalogSnapshot?
     /// needsSnapshot is set by a gap in the revisions; the transport answers by subscribing again.
     public private(set) var needsSnapshot = false
-    private weak var store: AppStore?
-    private weak var effects: (any RemoteCatalogEffects)?
-    private var viewState: RemoteWindowViewState
+    /// onCatalogMoved runs after every revision the mirror takes, with true for a whole snapshot.
+    public var onCatalogMoved: (@MainActor (Bool) -> Void)?
+    weak var store: AppStore?
+    weak var effects: (any RemoteCatalogEffects)?
+    var viewState: RemoteWindowViewState
     private var chunks = CatalogChunks()
     private var helloEpoch: String?
     private let pool: SshConnectionPool?
+    private var pendingSelection: (id: UUID, from: UUID?)?
 
     public init(host: String, store: AppStore, effects: any RemoteCatalogEffects, viewState: RemoteWindowViewState,
                 pool: SshConnectionPool? = nil) {
@@ -68,6 +77,8 @@ public final class RemoteCatalogMirror {
         self.effects = effects
         self.viewState = viewState
         store.catalogState = state
+        store.catalogDetachedSessions = Set(viewState.detachedSessions)
+        store.catalogDetachedWorkspaces = Set(viewState.detachedWorkspaces)
     }
 
     /// checkVersions judges what the server's `version` advertised before anything subscribes. A refusal names
@@ -91,6 +102,20 @@ public final class RemoteCatalogMirror {
             return "\(host) speaks presentation \(versions.protocolVersion), this Mac speaks presentation \(PresentationCodec.version)"
         }
         return nil
+    }
+
+    /// selectedSessionID is the window's selection, the baseline a created row is selected against.
+    var selectedSessionID: UUID? { store?.selectedSessionID }
+
+    /// selectWhenShown selects row `id` once the catalog brings it, unless the selection has moved from `baseline`,
+    /// the one it had when the row was asked for.
+    public func selectWhenShown(_ id: UUID, from baseline: UUID?) {
+        guard let store, store.selectedSessionID == baseline else { return }
+        guard store.session(withID: id) == nil else {
+            store.selectSession(id)
+            return
+        }
+        pendingSelection = (id, baseline)
     }
 
     /// subscribing marks a new stream: until its snapshot arrives the window shows Connecting, keeping its rows.
@@ -129,9 +154,13 @@ public final class RemoteCatalogMirror {
             catalog?.apply(change)
             catalog?.rev = rev
             reconcile()
+            onCatalogMoved?(false)
         case .unknown(_, let epoch, let rev):
             // a newer server's change this Mac cannot read moves the cursor past it; the next snapshot heals it
-            if let epoch, let rev, advance(epoch: epoch, rev: rev) { catalog?.rev = rev }
+            if let epoch, let rev, advance(epoch: epoch, rev: rev) {
+                catalog?.rev = rev
+                onCatalogMoved?(false)
+            }
         case .ping: return .ack
         case .ack: break
         }
@@ -165,6 +194,7 @@ public final class RemoteCatalogMirror {
         store?.catalogMirrored = true
         reconcile()
         setState(.connected)
+        onCatalogMoved?(true)
     }
 
     /// selectRow keeps a selection that still names a row, else takes the saved one, else the first row.
@@ -184,14 +214,20 @@ public final class RemoteCatalogMirror {
 
     // MARK: reconcile
 
-    private func reconcile() {
+    func reconcile() {
         guard let catalog, let store, let effects else { return }
-        store.prepareCatalogWorkspaces(catalog.workspaces, collapsed: Set(viewState.collapsedWorkspaces)) { removed in
+        let shown = shownCatalog(catalog, in: store)
+        var collapsed = Set(viewState.collapsedWorkspaces)
+        for (id, isCollapsed) in store.catalogHiddenCollapsed {
+            if isCollapsed { collapsed.insert(id) } else { collapsed.remove(id) }
+        }
+        store.prepareCatalogWorkspaces(shown, collapsed: collapsed) { removed in
             effects.catalogRowRemoved(removed)
         }
-        defer { store.finishCatalogWorkspaces(catalog.workspaces) }
+        for workspace in shown { store.catalogHiddenCollapsed[workspace.id] = nil }
+        defer { store.finishCatalogWorkspaces(shown) }
         let context = CatalogRowContext(host: host, protocolVersion: catalog.versions.protocolVersion, effects: effects)
-        for workspace in catalog.workspaces {
+        for workspace in shown {
             for (index, session) in workspace.sessions.enumerated() {
                 if let local = store.session(withID: session.id) {
                     store.moveCatalogSession(local, to: workspace.id, at: index)
@@ -201,13 +237,17 @@ public final class RemoteCatalogMirror {
                     continue
                 }
                 let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context)
-                viewState.apply(to: row)
+                if let kept = store.catalogHiddenViews.removeValue(forKey: row.id) { kept.apply(to: row) } else { viewState.apply(to: row) }
                 if !row.ended { effects.catalogRowAdded(row) }
             }
         }
+        if let pending = pendingSelection, store.session(withID: pending.id) != nil {
+            pendingSelection = nil
+            if store.selectedSessionID == pending.from { store.selectSession(pending.id) }
+        }
         selectRow()
         // a pane the catalog dropped gives its channel back; the attaches above leased the ones it lists
-        let panes = catalog.workspaces.flatMap(\.sessions).flatMap(\.panes).map { "pane:\($0.identity)" }
+        let panes = shown.flatMap(\.sessions).flatMap(\.panes).map { "pane:\($0.identity)" }
         pool?.retain(Set(panes), prefix: "pane:")
     }
 }
