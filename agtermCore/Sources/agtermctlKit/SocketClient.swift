@@ -2,6 +2,8 @@
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 import ArgumentParser
 import Foundation
@@ -75,11 +77,7 @@ struct SocketClient {
         guard path.utf8.count < pathCapacity else {
             throw SocketClientError("socket path too long (\(path.utf8.count) bytes): \(path)")
         }
-        #if canImport(Darwin)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        #else
-        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
-        #endif
+        let fd = socket(AF_UNIX, UnixSocket.streamType, 0)
         guard fd >= 0 else { throw SocketClientError("socket() failed: \(String(cString: strerror(errno)))") }
 
         // a write after the server closes the connection (e.g. it rejected an oversized request) would
@@ -155,12 +153,7 @@ struct SocketClient {
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             while offset < data.count {
-                #if canImport(Darwin)
-                let n = write(fd, base + offset, data.count - offset)
-                #else
-                // glibc has no SO_NOSIGPIPE; MSG_NOSIGNAL turns a hung-up server into EPIPE instead of a silent death
-                let n = Glibc.send(fd, base + offset, data.count - offset, Int32(MSG_NOSIGNAL))
-                #endif
+                let n = UnixSocket.write(fd, base + offset, data.count - offset)
                 if n <= 0 { throw SocketClientError("write failed: \(String(cString: strerror(errno)))") }
                 offset += n
             }
@@ -600,9 +593,5 @@ struct SocketClient {
 }
 
 private func systemConnect(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ len: socklen_t) -> Int32 {
-    #if canImport(Darwin)
-    return Darwin.connect(fd, addr, len)
-    #else
-    return Glibc.connect(fd, addr, len)
-    #endif
+    UnixSocket.connect(fd, addr, len)
 }

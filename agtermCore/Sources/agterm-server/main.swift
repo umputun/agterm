@@ -3,11 +3,20 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
+// ahead of everything: a spawn helper must exec before this process starts threads or opens anything
+CleanExec.runIfRequested()
+
 struct ServerCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "agterm-server",
-        abstract: "Run agterm sessions on this host for a Mac's remote window."
+        abstract: "Run agterm sessions on this host for a Mac's remote window.",
+        subcommands: [Serve.self, InstallHooks.self],
+        defaultSubcommand: Serve.self
     )
+}
+
+struct Serve: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Serve the catalog and its sessions (the default).")
 
     @Option(name: .long, help: "State directory; defaults to AGTERM_STATE_DIR, then ~/.local/state/agterm.")
     var stateDir: String?
@@ -17,6 +26,22 @@ struct ServerCommand: ParsableCommand {
     var resources: String?
     @Option(name: .long, help: "The catalog's name; defaults to the host name.")
     var name: String?
+}
+
+struct InstallHooks: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Install the agent status hooks and the agterm skill for this user, pointing at this server's agtermctl."
+    )
+
+    @Option(name: .long, help: "OpenCode's major version, v1 or v2; defaults to what `opencode --version` reports.")
+    var opencode: String?
+    @Option(name: .long, help: "The hook scripts and the skill; defaults to resources/ beside agterm-server.")
+    var resources: String?
+
+    func validate() throws {
+        guard let opencode, AgentHooksInstall.OpenCode.Version(rawValue: opencode) == nil else { return }
+        throw ValidationError("--opencode takes v1 or v2")
+    }
 }
 
 /// The running executable's directory: `/proc/self/exe` or `_NSGetExecutablePath`, resolved, never `argv[0]`.
@@ -35,7 +60,33 @@ func executableDirectory() -> String {
     return (String(cString: resolved) as NSString).deletingLastPathComponent
 }
 
-let command = ServerCommand.parseOrExit()
+// exits 1 when a step was skipped or refused, so an install script can report the hooks as incomplete
+func installHooks(_ command: InstallHooks) -> Never {
+    let directory = executableDirectory()
+    let install = ServerHookInstall(
+        resourcesDirectory: command.resources ?? (directory as NSString).appendingPathComponent("resources"),
+        home: FileManager.default.homeDirectoryForCurrentUser,
+        toolPath: (directory as NSString).appendingPathComponent("agtermctl"),
+        environment: ProcessInfo.processInfo.environment,
+        openCode: command.opencode.flatMap(AgentHooksInstall.OpenCode.Version.init(rawValue:)))
+    do {
+        let report = try install.run()
+        print(report.lines.joined(separator: "\n"))
+        exit(report.complete ? 0 : 1)
+    } catch {
+        FileHandle.standardError.write(Data("agterm-server: \(error)\n".utf8))
+        exit(1)
+    }
+}
+
+let parsed: ParsableCommand
+do {
+    parsed = try ServerCommand.parseAsRoot()
+} catch {
+    ServerCommand.exit(withError: error)
+}
+if let install = parsed as? InstallHooks { installHooks(install) }
+guard let command = parsed as? Serve else { ServerCommand.exit(withError: CleanExit.helpRequest(ServerCommand.self)) }
 // replies and streams write with MSG_NOSIGNAL; this covers the pipes to the zmx processes the server runs
 signal(SIGPIPE, SIG_IGN)
 

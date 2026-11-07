@@ -34,7 +34,7 @@ let package = Package(
             name: "agterm-server",
             dependencies: ["AgtermServerKit", "agtermCore", .product(name: "ArgumentParser", package: "swift-argument-parser")]
         ),
-        .testTarget(name: "AgtermServerTests", dependencies: ["AgtermServerKit"]),
+        .testTarget(name: "AgtermServerTests", dependencies: ["AgtermServerKit", "agterm-server"]),
     ],
     swiftLanguageModes: [.v6]
 )

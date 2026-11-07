@@ -18,6 +18,18 @@ struct UnixSocketTests {
         #expect(info.st_mode & 0o777 == 0o600)
     }
 
+    @Test func bothEndsCloseOnExec() throws {
+        let path = path()
+        defer { unlink(path) }
+        let listener = try UnixSocket.listening(path: path)
+        defer { close(listener) }
+        let client = try #require(UnixSocket.connected(path: path))
+        defer { close(client) }
+
+        #expect(fcntl(listener, F_GETFD) & FD_CLOEXEC != 0)
+        #expect(fcntl(client, F_GETFD) & FD_CLOEXEC != 0)
+    }
+
     @Test func aStaleFileAtThePathIsReplaced() throws {
         let path = path()
         defer { unlink(path) }

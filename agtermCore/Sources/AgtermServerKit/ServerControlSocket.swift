@@ -117,11 +117,7 @@ public final class ServerControlSocket: @unchecked Sendable {
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return true }
             var offset = 0
             while offset < data.count {
-                #if canImport(Darwin)
-                let count = Darwin.write(conn, base + offset, data.count - offset)
-                #else
-                let count = Glibc.send(conn, base + offset, data.count - offset, Int32(MSG_NOSIGNAL))
-                #endif
+                let count = UnixSocket.write(conn, base + offset, data.count - offset)
                 if count < 0, errno == EINTR { continue }
                 guard count > 0 else { return false }
                 offset += count

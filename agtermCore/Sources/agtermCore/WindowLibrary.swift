@@ -64,7 +64,7 @@ public final class WindowLibrary {
     /// Bumped on every open-set change, the observable stand-in for `stores` membership: a background
     /// window opening or closing changes neither `windows` nor (necessarily) `frontmostWindowID`, so a
     /// view reading the attention list or a row's eligibility would otherwise keep its stale answer.
-    internal(set) var openSetVersion = 0
+    var openSetVersion = 0
 
     /// The state directory (AGTERM_STATE_DIR-aware): the index here, per-window files in `windows/`.
     @ObservationIgnored let directory: URL

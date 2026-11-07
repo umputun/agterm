@@ -3,6 +3,28 @@ import Testing
 @testable import AgtermServerKit
 
 struct ServerProcessTests {
+    #if os(Linux)
+    private static var server: String {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(".build/debug/agterm-server").path
+    }
+
+    @Test func cleanExecClosesInheritedDescriptors() throws {
+        let script = "exec 7</dev/null 9</dev/null; exec \"$0\" \(CleanExec.argument) /bin/ls /proc/self/fd"
+        let output = try ServerProcess.run(["/bin/sh", "-c", script, Self.server], environment: [:], timeout: 10)
+
+        #expect(output.status == 0)
+        #expect(output.stdout.split(separator: "\n").sorted() == ["0", "1", "2", "3"])
+    }
+
+    @Test func cleanExecReportsAProgramItCannotRun() throws {
+        let output = try ServerProcess.run([Self.server, CleanExec.argument, "/nonexistent/program"], environment: [:], timeout: 10)
+
+        #expect(output.status == 127)
+        #expect(output.stderr.contains("/nonexistent/program"))
+    }
+    #endif
+
     @Test func outputAndStatusAreCollected() throws {
         let output = try ServerProcess.run(["/bin/sh", "-c", "echo out; echo err >&2; exit 3"], environment: [:], timeout: 5)
 

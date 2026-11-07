@@ -118,11 +118,7 @@ public final class ControlStreamOwner: @unchecked Sendable {
     }
 
     private static func shutdownSocket(_ fd: Int32) {
-        #if canImport(Darwin)
-        _ = Darwin.shutdown(fd, SHUT_RDWR)
-        #else
-        _ = Glibc.shutdown(fd, Int32(SHUT_RDWR))
-        #endif
+        UnixSocket.shutdown(fd)
     }
 
     private func readLoop(onLine: (Data) -> Void) {
@@ -180,11 +176,7 @@ public final class ControlStreamOwner: @unchecked Sendable {
             guard let base = raw.bindMemory(to: UInt8.self).baseAddress else { return true }
             var offset = 0
             while offset < line.count {
-                #if canImport(Darwin)
-                let count = Darwin.write(fd, base + offset, line.count - offset)
-                #else
-                let count = Glibc.send(fd, base + offset, line.count - offset, Int32(MSG_NOSIGNAL))
-                #endif
+                let count = UnixSocket.write(fd, base + offset, line.count - offset)
                 if count < 0, errno == EINTR { continue }
                 guard count > 0 else { return false }
                 offset += count

@@ -9,11 +9,11 @@ import agtermCore
 @MainActor
 final class AgentHooksInstallerTests: XCTestCase {
     private let allCodexResults: [AgentHooksInstaller.CodexResult] =
-        [.merged, .alreadyConfigured, .hooksExist, .unparseable, .unreadable, .noCodex]
+        [.merged, .alreadyConfigured, .hooksExist, .unparseable, .unreadable, .noCodex, .noJq]
 
     func testNoCodexOutcomeEmbedsTheHooksBlock() {
         for result in allCodexResults {
-            let text = AgentHooksInstaller.codexText(result)
+            let text = result.text
             XCTAssertFalse(text.contains("[[hooks."), "\(result) should point at the docs, not inline the block")
             XCTAssertFalse(text.contains("\n"), "\(result) should stay a single line")
         }
@@ -28,7 +28,7 @@ final class AgentHooksInstallerTests: XCTestCase {
 
     func testManualMergeTextNamesTheDocsSection() {
         for result in allCodexResults where result.needsManualMerge {
-            XCTAssertTrue(AgentHooksInstaller.codexText(result).contains("Add Codex hooks by hand"),
+            XCTAssertTrue(result.text.contains("Add Codex hooks by hand"),
                           "\(result) should name the docs section the button opens")
         }
     }
@@ -57,12 +57,12 @@ final class AgentHooksInstallerTests: XCTestCase {
                 .userOwned(version, path: path), .unreadable(version, path: path), .writeFailed(version, path: path),
             ]
             for result in results {
-                let text = AgentHooksInstaller.opencodeText(result)
+                let text = result.text
                 XCTAssertTrue(text.contains("OpenCode \(version.rawValue)"))
                 XCTAssertTrue(text.contains(path))
                 XCTAssertFalse(text.contains("\n"))
             }
-            let installed = AgentHooksInstaller.opencodeText(.installed(version, path: path))
+            let installed = AgentHooksInstaller.OpenCodeResult.installed(version, path: path).text
             XCTAssertTrue(installed.contains(path))
             XCTAssertTrue(installed.contains("Restart OpenCode"))
         }
@@ -70,7 +70,7 @@ final class AgentHooksInstallerTests: XCTestCase {
 
     func testMissingOpenCodeDoesNotNameAVersion() {
         let result = AgentHooksInstaller.OpenCodeResult.noOpenCode(directory: "/custom/opencode")
-        let text = AgentHooksInstaller.opencodeText(result)
+        let text = result.text
         XCTAssertEqual(text, "No /custom/opencode found, so the OpenCode plugin was skipped. Start OpenCode once, then run this again. "
                        + "Coarse shell detection for opencode is off by default.")
         XCTAssertFalse(result.isWarning)
@@ -85,7 +85,7 @@ final class AgentHooksInstallerTests: XCTestCase {
 
     func testSkippedOpenCodeHasNeutralConfirmation() {
         let result = AgentHooksInstaller.OpenCodeResult.skipped
-        let text = AgentHooksInstaller.opencodeText(result)
+        let text = result.text
         XCTAssertFalse(result.isWarning)
         XCTAssertEqual(text, "OpenCode status plugin installation was skipped.")
         XCTAssertFalse(text.contains("\n"))
@@ -99,7 +99,7 @@ final class AgentHooksInstallerTests: XCTestCase {
             (.v1CleanupFailed(path: path), "could not be safely removed"),
         ]
         for (result, reason) in cases {
-            let text = AgentHooksInstaller.opencodeText(result)
+            let text = result.text
             XCTAssertTrue(result.isWarning)
             XCTAssertTrue(text.contains("OpenCode v2 status plugin is installed"))
             XCTAssertTrue(text.contains(path))

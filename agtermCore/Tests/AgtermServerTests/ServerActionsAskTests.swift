@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import AgtermServerKit
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 struct ServerActionsAskTests {
@@ -60,12 +60,22 @@ struct ServerActionsAskTests {
         let session = try newSession()
         var timed = ask()
         timed.deadline = Date().addingTimeInterval(0.1)
-        _ = harness.actions.openAsk(timed, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
+        let opened = harness.actions.openAsk(timed, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(),
+                                             follow: false)
+        try #require(opened.ok)
+        // read at resolution: the registry's retained results are process-wide, and parallel tests can evict this one
+        var resolved: (reply: ControlResponse, owner: AskRegistry.Owner?)?
+        let earlier = session.onRemoteAskEnded
+        session.onRemoteAskEnded = { [harness] id in
+            resolved = (harness.actions.askResult(id, window: nil), AskRegistry.shared.owner(for: id))
+            earlier?(id)
+        }
         let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
         #expect(node?.interactions?.first?.deadline == timed.deadline?.timeIntervalSince1970)
 
-        let ended = await eventually { harness.actions.askResult(timed.id, window: nil).result?.ask?.result == .cancelled }
-        #expect(ended, "\(String(describing: harness.actions.askResult(timed.id, window: nil))), pending \(String(describing: session.askPending?.id))")
+        let ended = await eventually { resolved != nil }
+        #expect(ended, "pending \(String(describing: session.askPending?.id))")
+        #expect(resolved?.reply.result?.ask?.result == .cancelled, "\(String(describing: resolved))")
         #expect(session.askPending == nil)
     }
 

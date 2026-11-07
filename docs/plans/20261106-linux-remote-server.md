@@ -606,22 +606,26 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
   swift-markdown/cmark dependency build; `agtermctlKit` fails only where its Linux branches name `Glibc`
   (`Glibc.send`, `Glibc.accept`/`connect`) or use Glibc's enum-typed `SOCK_STREAM`, which musl's `Musl` module
   spells as a plain `Int32`. A static build is viable once those take a `Musl` branch.
-- [ ] packaging from the Task 2 probe: a static musl build of `agterm-server` and `agtermctl`, or a bundled Swift
+- ➕ Done as: static musl binaries from `scripts/server-build.sh`, installed by `scripts/install-server.sh` into
+  `~/.local/lib/agterm-server` with `~/.local/bin` links (a rename swaps the whole directory on upgrade); the hook
+  scripts and the skill ship as files in its `resources/`, not as SwiftPM resources. Under musl every spawn goes
+  through `CleanExec`, the server re-exec'd to close inherited descriptors, since musl has no closefrom action.
+- [x] packaging from the Task 2 probe: a static musl build of `agterm-server` and `agtermctl`, or a bundled Swift
       runtime when the probe failed
-- [ ] install `agterm-server`, the Linux `agtermctl`, zmx, ghostty's shell integration and terminfo entry, the hook
+- [x] install `agterm-server`, the Linux `agtermctl`, zmx, ghostty's shell integration and terminfo entry, the hook
       scripts and the agent skill on a host over ssh (binaries into `~/.local/bin`), and start the server as a systemd user service
       with lingering enabled (`loginctl enable-linger`), refusing with the reason when linger cannot be enabled,
       since without it the user manager ends the server and every zmx daemon at the last ssh logout; upgrade
       replaces binaries and restarts the server without ending panes
-- [ ] check under the real systemd user manager that the same pane processes survive the last ssh logout,
+- [x] check under the real systemd user manager that the same pane processes survive the last ssh logout,
       `systemctl --user restart`, a crash with `Restart=`, and an upgrade
-- [ ] clean-environment check: a bare `ssh HOST agtermctl tree --json` reaches the server through the Linux
+- [x] clean-environment check: a bare `ssh HOST agtermctl tree --json` reaches the server through the Linux
       default
-- [ ] agent hooks and the agent skill installed on the server by `agterm-server install-hooks` from its own
+- [x] agent hooks and the agent skill installed on the server by `agterm-server install-hooks` from its own
       resources, never from the Mac
-- [ ] the installed service reports its versions through `agtermctl version` (produced in Task 6, refused on
+- [x] the installed service reports its versions through `agtermctl version` (produced in Task 6, refused on
       connect in Task 7)
-- [ ] tests: hook script on Linux; `install-hooks` writes the expected files and points them at the server's
+- [x] tests: hook script on Linux; `install-hooks` writes the expected files and points them at the server's
       `agtermctl`; the hoisted installer leaves the Mac's install unchanged
 
 ### Task 13: Update documentation
