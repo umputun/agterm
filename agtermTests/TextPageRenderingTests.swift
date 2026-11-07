@@ -1034,6 +1034,42 @@ extension TextPageRenderingTests {
         XCTAssertEqual(dom as? String, "true|15|SPAN|true|true|true|true|true|true|0px|")
     }
 
+    func testEachHunkIsHighlightedOnItsOwn() async throws {
+        let text = """
+            --- a/x.go
+            +++ b/x.go
+            @@ -1 +1 @@
+            -var a
+            +/* opened, closed in lines the patch leaves out
+            @@ -40 +40 @@
+            -var b
+            +func c() {}
+
+            """
+        let (page, window) = try shown(try openText("hunks.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "2 changes" }
+
+        let keyword = try await page.webView.evaluateJavaScript("""
+            document.querySelector('pre code').innerHTML.split('\\n')[7].includes('class="hljs-keyword"')
+            """)
+        XCTAssertEqual(keyword as? Bool, true)
+    }
+
+    func testADiffWithNoUnifiedHunkKeepsTheDiffGrammar() async throws {
+        let text = "*** a.c\n--- b.c\n***************\n*** 1,2 ****\n- old\n  same\n--- 1,2 ----\n+ new\n  same\n"
+        let (page, window) = try shown(try openText("context.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript("document.querySelectorAll('pre code .hljs-deletion').length", in: page.webView) { $0 != "0" }
+
+        let dom = try await page.webView.evaluateJavaScript("""
+            [document.querySelector('pre code').textContent === \(try json(text)),
+             document.querySelectorAll('pre code .hljs-addition').length > 0,
+             document.querySelectorAll('pre code .agterm-marker').length].join('|')
+            """)
+        XCTAssertEqual(dom as? String, "true|true|0")
+    }
+
     func testACRLFDiffIsHighlightedInItsFileLanguage() async throws {
         let text = ["diff --git a/x.go b/x.go", "--- a/x.go", "+++ b/x.go", "@@ -1 +1 @@", "-var a", "+func b() {}", ""]
             .joined(separator: "\r\n")

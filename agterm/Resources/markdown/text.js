@@ -15,13 +15,14 @@
   const escape = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
   const render = (value, lang) => {
     code.textContent = value;
-    // highlight.js escapes the text it returns, which makes its value the page's one markup sink
+    // highlight.js escapes the text it returns; it and renderDiff's escaped rows are the page's only markup sinks
     if (lang && typeof hljs !== 'undefined' && hljs.getLanguage(lang)) {
       try { code.innerHTML = hljs.highlight(value, { language: lang, ignoreIllegals: true }).value; } catch (_) { code.textContent = value; }
     }
   };
   const rows = !log && source.dataset.diff !== undefined ? diffRows(text.split('\n')) : null;
-  if (rows) renderDiff(text.split('\n'), rows); else render(text, language);
+  // a patch with no unified hunk (context, normal or combined format) keeps the diff grammar
+  if (rows && rows.some((row) => row.kind !== '')) renderDiff(text.split('\n'), rows); else render(text, language);
   pre.appendChild(code);
 
   const scroller = document.scrollingElement || document.documentElement;
@@ -356,41 +357,42 @@
   }
 
   // a row's kind is ' ', '-' or '+' inside a hunk, '\\' for the no-newline marker, and '' outside hunks; the hunk
-  // counts decide where a hunk ends, so a changed row that reads like a header stays a change. `file` counts the
-  // `+++` headers, and `lang` is that file's language from the page's path map.
+  // counts decide where a hunk ends, so a changed row that reads like a header stays a change. `hunk` counts the
+  // hunks, and `lang` is the language of the file the `+++` header names, from the page's path map.
   function diffRows(lines) {
     let files = new Map();
     try { files = new Map(Object.entries(JSON.parse(source.dataset.files || '{}'))); } catch (_) {}
-    let old = 0, added = 0, file = 0, from = '', lang = null;
+    let old = 0, added = 0, hunk = 0, from = '', lang = null;
     return lines.map((row) => {
       if (old > 0 || added > 0) {
         // the no-newline marker belongs to the row before it and counts on neither side
-        if (row.startsWith('\\')) return { kind: '\\', file, lang };
+        if (row.startsWith('\\')) return { kind: '\\', hunk, lang };
         const kind = row.startsWith('-') || row.startsWith('+') ? row[0] : ' ';
         if (kind !== '+') old -= 1;
         if (kind !== '-') added -= 1;
         if (old <= 0 && added <= 0) old = added = 0;
-        return { kind, file, lang };
+        return { kind, hunk, lang };
       }
       const path = row.slice(4).split('\t')[0];
       if (row.startsWith('--- ')) {
         from = path;
         lang = null;
       } else if (row.startsWith('+++ ')) {
-        file += 1;
         lang = files.get(path) || files.get(from) || null;
       }
-      const hunk = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(row);
-      if (hunk) {
-        old = hunk[1] === undefined ? 1 : Number(hunk[1]);
-        added = hunk[2] === undefined ? 1 : Number(hunk[2]);
+      const counts = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/.exec(row);
+      if (counts) {
+        hunk += 1;
+        old = counts[1] === undefined ? 1 : Number(counts[1]);
+        added = counts[2] === undefined ? 1 : Number(counts[2]);
       }
-      return { kind: '', file, lang: null };
+      return { kind: '', hunk, lang: null };
     });
   }
 
-  // every row is escaped or highlight.js output, which keeps the text exactly what the file holds; each file's two
-  // sides are highlighted whole, so a comment or string opened on an earlier row keeps its color
+  // every row is escaped or highlight.js output, which keeps the text exactly what the file holds; each hunk's two
+  // sides are highlighted whole, so a comment or string opened on an earlier row keeps its color, and none leaks
+  // across the lines a patch leaves out between hunks
   function renderDiff(lines, rows) {
     const marker = (row) => (row ? `<span class="agterm-marker">${escape(row.charAt(0))}</span>` : '');
     const html = lines.map((row, i) => {
@@ -401,8 +403,8 @@
     const sides = new Map();
     rows.forEach((row, i) => {
       if (!row.lang || row.kind === '' || row.kind === '\\') return;
-      if (!sides.has(row.file)) sides.set(row.file, { lang: row.lang, old: [], new: [] });
-      const side = sides.get(row.file);
+      if (!sides.has(row.hunk)) sides.set(row.hunk, { lang: row.lang, old: [], new: [] });
+      const side = sides.get(row.hunk);
       if (row.kind !== '+') side.old.push(i);
       if (row.kind !== '-') side.new.push(i);
     });

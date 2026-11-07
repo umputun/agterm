@@ -56,7 +56,7 @@ public enum TextPage {
 
     /// diffLanguages maps each path a patch's `--- ` or `+++ ` row names, as the row spells it up to a tab, to the
     /// file's language. A changed row can look like a header, so the renderer looks up only rows outside hunks.
-    public static func diffLanguages(in text: String) -> [String: String] {
+    static func diffLanguages(in text: String) -> [String: String] {
         var found: [String: String] = [:]
         for row in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
         where row.hasPrefix("--- ") || row.hasPrefix("+++ ") {
