@@ -77,12 +77,14 @@ extension ControlServer {
     }
 
     /// The surface still holding `pane`, nil once the pane or its row is gone. A row closed within its undo
-    /// window still holds it.
+    /// window still holds it. An ended row's panes keep their last screen and never attach again; only its
+    /// surviving scratch does.
     private func waitingSurface(_ pane: UUID, in sessionID: UUID) -> GhosttySurfaceView? {
         guard let session = heldSession(sessionID) else { return nil }
+        if session.catalogScratch == pane { return session.scratchSurface as? GhosttySurfaceView }
+        guard !session.ended else { return nil }
         let surface = session.paneIdentity == pane ? session.surface
-            : session.splitPaneIdentity == pane ? session.splitSurface
-            : session.catalogScratch == pane ? session.scratchSurface : nil
+            : session.splitPaneIdentity == pane ? session.splitSurface : nil
         return surface as? GhosttySurfaceView
     }
 
