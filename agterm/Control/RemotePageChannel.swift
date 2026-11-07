@@ -161,6 +161,8 @@ final class RemotePageChannel {
     private var slots: [Kind: Slots] = [.resource: Slots(limit: ControlServer.pageServeResourceLimit),
                                         .bridge: Slots(limit: ControlServer.pageServeBridgeLimit)]
     private var closed = false
+    /// startWaiters hold loads waiting for a catalog row's pooled connection.
+    private var startWaiters: [CheckedContinuation<Void, Error>] = []
 
     /// start launches the helper and starts reading; a helper that cannot start closes the channel at once.
     func start(_ argv: [String], launcher: RemotePageLauncher) {
@@ -189,12 +191,22 @@ final class RemotePageChannel {
             onClose: { [weak self] in
                 DispatchQueue.main.async { MainActor.assumeIsolated { self?.close("channel ended") } }
             })
+        let waiters = startWaiters
+        startWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    private func started() async throws {
+        guard !closed else { throw Failure.closed }
+        guard owner == nil else { return }
+        try await withCheckedThrowingContinuation { startWaiters.append($0) }
     }
 
     /// fetch asks for the file at `path` on the origin. `current` says whether the page still shows the load
     /// that asked, and an answer for one it no longer shows is dropped. The returned chunks are pulled one at
     /// a time, so a chunk's inbound permit is held until the page takes it.
     func fetch(_ path: String, current: @escaping @MainActor () -> Bool) async throws -> HtmlPageResource {
+        try await started()
         let id = allocate()
         try await admit(id, into: .resource)
         guard !Task.isCancelled else {
@@ -248,6 +260,7 @@ final class RemotePageChannel {
 
     /// bridge relays a page's request and returns the origin's reply as the JSON text it sent.
     func bridge(_ request: Data) async throws -> String {
+        try await started()
         let id = allocate()
         try await admit(id, into: .bridge)
         do {
@@ -271,6 +284,8 @@ final class RemotePageChannel {
         transfers.removeAll()
         for (_, waiter) in bridges { waiter.resume(throwing: Failure.closed) }
         bridges.removeAll()
+        for waiter in startWaiters { waiter.resume(throwing: Failure.closed) }
+        startWaiters.removeAll()
         for kind in [Kind.resource, .bridge] {
             for entry in slots[kind]?.waiting ?? [] { entry.continuation.resume(throwing: Failure.closed) }
             slots[kind]?.waiting.removeAll()

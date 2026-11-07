@@ -160,6 +160,7 @@ final class FakePageLauncher: RemotePageLauncher {
     var chunkSize = 1024
     var reply: String? = #"{"ok":true,"result":{}}"#
     var holdCancels = false
+    var failsLaunch = false
     private(set) var launches: [[String]] = []
     private(set) var origins: [FakePageOrigin] = []
     private(set) var helpers: [Helper] = []
@@ -167,6 +168,7 @@ final class FakePageLauncher: RemotePageLauncher {
     init(files: [String: (String, Data)] = [:]) { self.files = files }
 
     func launch(_ argv: [String], onExit: @escaping @MainActor () -> Void) throws -> RemotePageHelper {
+        if failsLaunch { throw POSIXError(.ENOENT) }
         var pair: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
         launches.append(argv)
