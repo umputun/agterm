@@ -254,6 +254,7 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 ### Task 5: Docs, skill and rules
 
 **Files:**
+- Modify: `README.md` (its Companion line said "pinned for life")
 - Modify: `site/docs.html`
 - Modify: `site/commands.html`
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`
@@ -264,18 +265,18 @@ attach-time local state and nothing pushes a regroup. Accepted: a later attach r
 - Modify: `.claude/rules/sidebar.md`
 - Modify: `.claude/rules/menu-actions.md`
 
-- [ ] `site/docs.html`: one sentence in the Companions section, and `convert_companion` in the keymap
+- [x] `site/docs.html`: one sentence in the Companions section, and `convert_companion` in the keymap
   action list
-- [ ] `site/commands.html`: `session convert --companion`, its arguments and reply; correct "pinned for
+- [x] `site/commands.html`: `session convert --companion`, its arguments and reply; correct "pinned for
   life to the parent" (around line 1164)
-- [ ] skill: a `reference.md` entry, `convert_companion` in its built-in action list (around line 2046),
+- [x] skill: a `reference.md` entry, `convert_companion` in its built-in action list (around line 2046),
   "pinned for life" corrected in `reference.md` (around 511) and `SKILL.md` (around 371), and the trigger
   ("make this session a companion") in `when_to_use`, since `description` is at its 1024-unit limit
-- [ ] rules: the store seam and the reopen root resolution in `sidebar.md`, plus the new item in its
+- [x] rules: the store seam and the reopen root resolution in `sidebar.md`, plus the new item in its
   single-target list (line 94); in `control-api.md` the Public catalog entry `.companion.convert` and the
   `waitsOnNetwork` sentence, which must exclude the local-only convert; the menu and context-menu placement
   in `menu-actions.md`
-- [ ] run `swift test --filter SkillInstallTests`
+- [x] run `swift test --filter SkillInstallTests`
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify every Overview requirement, including selection and existing companions

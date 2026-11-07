@@ -508,7 +508,7 @@ buys nothing. A caller with no tree uses `version`.
   without `--tint` is refused, and an invalid value creates nothing. `--parent SID` creates a companion
   session instead; see the next entry.
 - `session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]`
-  Create a companion session: an ordinary session pinned for life to the parent SID (id / unique prefix /
+  Create a companion session: an ordinary session pinned to the parent SID (id / unique prefix /
   `active`). A companion SID means its parent, so a companion of a companion is never created: the new one
   becomes a sibling under the same parent. It lands in the parent's workspace right after the parent and
   its earlier companions, indented under the parent in the sidebar tree. `--cwd` defaults to the parent's
@@ -557,6 +557,14 @@ buys nothing. A caller with no tree uses `version`.
   flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
   `result.id` and `result.parent`. GUI twin: Duplicate as Companion in the row context menu and the Session
   menu, a palette row, and the keyless `duplicate_companion` action.
+- `session convert --companion [--target] [--window W]` - Convert to Companion: open a fresh login shell in the
+  target's slot and focused directory and move the target under it as a companion, still running, with its own
+  companions after it; the target keeps its id, name, flag, status and panes, and ends selected. `--companion` is
+  required. Refused `already a companion` for a companion and `convert it on the Mac it runs on` for a session
+  attached from another Mac. Wire command `session.companion.convert`; returns `result.id` (the converted
+  session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
+  nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
+  and the keyless `convert_companion` action.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -2043,7 +2051,7 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
-`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
+`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `convert_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,

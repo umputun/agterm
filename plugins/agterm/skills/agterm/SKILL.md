@@ -17,7 +17,7 @@ when_to_use: >
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -368,7 +368,7 @@ omitted when expanded).
   off its primary pane, where `tree.cwd` reports the primary, or a remote session, where it can read as
   home).
 - `session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select]` - create a
-  companion session: an ordinary session pinned for life to SID, listed right after it in its workspace and
+  companion session: an ordinary session pinned to SID, listed right after it in its workspace and
   indented under it in the sidebar tree (a companion SID means its parent). Use it to keep a related program
   next to a session: `agtermctl session new --parent active --command 'tail -f build.log' --name logs`
   (`--wait` keeps its output after it exits). `--cwd` defaults to the parent's focused directory; it refuses
@@ -377,6 +377,8 @@ omitted when expanded).
   companions. Read back as the tree node's `parent` and `collapsed`; details in reference.md.
   `session duplicate --companion` copies a session's split layout into a new companion and starts another copy of
   each pane's program (Duplicate as Companion); nothing is created when a pane's program cannot be copied.
+  `session convert --companion` turns a running top-level session into a companion of a fresh shell opened in its
+  place, keeping its program, id and companions (Convert to Companion).
   `session overlay open --html FILE --companion` (or `--url URL --companion`) adds a page companion: a row
   under the target session that shows the page and runs no shell. It closes when the page does and is never
   saved, so an `on app.launched` hook recreates it after a relaunch. Read back as the node's `content: "page"`.
