@@ -27,7 +27,7 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "not a page companion")
             }
             if source.isContent {
-                return ControlResponse(ok: false, error: "a markdown or text page companion cannot be shown on another Mac")
+                return ControlResponse(ok: false, error: "a markdown, text or document page companion cannot be shown on another Mac")
             }
             // a loopback address names this Mac's own server, which the other Mac would never reach
             if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {

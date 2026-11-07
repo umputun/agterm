@@ -14,6 +14,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         var images: [(URL, UUID)] = []
         var markdowns: [(URL, UUID, Int?)] = []
         var texts: [LinkPolicy.TextLink] = []
+        var documents: [(URL, UUID, Int?)] = []
     }
 
     private final class ExistsProbe: @unchecked Sendable {
@@ -51,6 +52,10 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
         LinkOpener.shared.text = { link, done in
             followed.texts.append(link)
+            done(overlayOpens)
+        }
+        LinkOpener.shared.document = { url, session, percent, done in
+            followed.documents.append((url, session, percent))
             done(overlayOpens)
         }
         LinkOpener.shared.exists = { _ in false }
@@ -126,6 +131,25 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let refused = recordLinks(mode: .overlay, overlayOpens: false)
         pane.openLink("file:///tmp/notes.md", intent: .normal)
         XCTAssertEqual(refused.markdowns.count, 1)
+        XCTAssertEqual(refused.revealed, [url])
+    }
+
+    func testAPaneHtmlPathOpensAtItsModeSizeAndRevealsWhenItCannot() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let url = URL(fileURLWithPath: "/tmp/pr.html", isDirectory: false)
+
+        let shown = recordLinks(mode: .overlay75, overlayOpens: true)
+        pane.openLink("/tmp/pr.html", intent: .normal)
+        XCTAssertEqual(shown.documents.map(\.0), [url])
+        XCTAssertEqual(shown.documents.map(\.1), [session.id])
+        XCTAssertEqual(shown.documents.map(\.2), [75])
+        XCTAssertTrue(shown.revealed.isEmpty)
+
+        let refused = recordLinks(mode: .overlay, overlayOpens: false)
+        pane.openLink("file:///tmp/pr.html", intent: .normal)
+        XCTAssertEqual(refused.documents.count, 1)
         XCTAssertEqual(refused.revealed, [url])
     }
 

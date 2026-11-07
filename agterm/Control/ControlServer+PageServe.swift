@@ -204,7 +204,7 @@ final class PageServeStream {
     /// queued before its page closed or moved never runs against the old place.
     private func answer(id: Int, request: String) async -> PageServeFrame {
         if companion != nil, case .url = source { return .failure(id: id, error: "a URL page has no bridge") }
-        if [.image, .markdown, .text].contains(source.kind) { return .failure(id: id, error: "this page has no bridge") }
+        if [.image, .markdown, .text, .document].contains(source.kind) { return .failure(id: id, error: "this page has no bridge") }
         guard let server, let place = companion.map(server.companionPagePlace) ?? server.remotePagePlace(page) else {
             return .failure(id: id, error: "page closed")
         }

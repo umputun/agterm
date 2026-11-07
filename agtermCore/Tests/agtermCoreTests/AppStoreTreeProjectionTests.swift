@@ -790,6 +790,22 @@ struct AppStoreTreeProjectionTests {
         #expect(!String(decoding: try JSONEncoder().encode(file), as: UTF8.self).contains("markdown"))
     }
 
+    @Test func aDocumentPageProjectsOnlyItsDocumentSource() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .document(path: "/tmp/agdoc/pr.html"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: 95) == nil)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions[0].htmlOverlays?.first)
+
+        #expect(node == ControlHtmlOverlayNode(pane: nil, document: "/tmp/agdoc/pr.html", state: "loading", error: nil,
+                                               id: page.id.uuidString))
+        let data = try JSONEncoder().encode(node)
+        #expect(try JSONDecoder().decode(ControlHtmlOverlayNode.self, from: data) == node)
+        #expect(String(decoding: data, as: UTF8.self).contains(#""document":"\/tmp\/agdoc\/pr.html""#))
+    }
+
     @Test func aTextPageProjectsItsFileMappedLanguageAndRequestedLine() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

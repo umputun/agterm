@@ -107,6 +107,10 @@ struct PresentationFramesTests {
             page: "p7", token: "t7", source: .text(path: "/tmp/src/main.go", line: 42), identity: "main.go",
             chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
             pane: nil, sizePercent: 60, follow: false))),
+        PresentationFrame(gen: 1, rev: 51, body: .pageRequest(PresentationPage(
+            page: "p8", token: "t8", source: .document(path: "/tmp/agdoc/pr.html"), identity: "pr.html",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 95, follow: false))),
     ]
 
     @Test(arguments: [

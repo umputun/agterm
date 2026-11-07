@@ -48,6 +48,14 @@ struct RemotePageResourcesTests {
         #expect(RemotePageResources.content(docs + "/img/a.png", source: text) == nil)
     }
 
+    @Test func aDocumentPageServesOnlyItsOwnFile() {
+        let document = HtmlSource.document(path: docs + "/index.html")
+        #expect(RemotePageResources.content(docs + "/index.html", source: document)
+            == .init(path: docs + "/index.html", maxBytes: DocumentPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: document) == nil)
+        #expect(RemotePageResources.resolve(docs + "/index.html", source: document) == nil)
+    }
+
     @Test func aMarkdownPageServesItsOwnFileAndPicturesInItsFolder() {
         let markdown = HtmlSource.markdown(path: docs + "/index.html")
         #expect(RemotePageResources.content(docs + "/index.html", source: markdown)

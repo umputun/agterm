@@ -62,6 +62,7 @@ extension AppStore {
         guard session.followsRemotely(paneIdentity: identity.flatMap { $0 }) else { return .local }
         guard PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return .unsupported }
         if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return .unsupported }
+        if case .document = source, !hub.presenterSupports(PresentationHub.pageDocumentKind, session: sessionID) { return .unsupported }
         if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .loopback }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
@@ -211,6 +212,7 @@ extension AppStore {
         case .image(let path): return imagePixels.map { .image(path: path, width: $0.width, height: $0.height) }
         case .markdown(let path): return .markdown(path: path)
         case .text(let path, let line): return .text(path: path, line: line)
+        case .document(let path): return .document(path: path)
         case .replica: return nil
         }
     }

@@ -332,13 +332,15 @@ extension AppStore {
 
     private func htmlOverlayNode(_ page: HtmlOverlay, pane: OverlayPane?, zoom: Double?, hidden: Bool,
                                  remote: Bool = false) -> ControlHtmlOverlayNode {
-        var file: String?, cwd: String?, url: String?, image: String?, markdown: String?, text: ControlTextOverlayNode?
+        var file: String?, cwd: String?, url: String?, image: String?, markdown: String?, document: String?
+        var text: ControlTextOverlayNode?
         switch page.source {
         case .file(let path, let grantRoot): (file, cwd) = (path, grantRoot)
         case .url(let address): url = address.absoluteString
         case .replica(let path, .html): file = path
         case .image(let path), .replica(let path, .image): image = path
         case .markdown(let path), .replica(let path, .markdown): markdown = path
+        case .document(let path), .replica(let path, .document): document = path
         case .text(let path, let line), .replica(let path, .text(let line)):
             let log = page.logState
             text = ControlTextOverlayNode(file: path, language: TextPage.language(forFile: path), line: line,
@@ -350,7 +352,7 @@ extension AppStore {
                                           },
                                           changes: page.textChanges.map { ControlTextChangesNode(count: $0.count, current: $0.current) })
         }
-        return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, text: text,
+        return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, document: document, text: text,
                                       state: page.loadState.rawValue,
                                       error: page.loadError, page: page.current?.page, title: page.current?.title,
                                       canGoBack: page.current?.canGoBack, canGoForward: page.current?.canGoForward,

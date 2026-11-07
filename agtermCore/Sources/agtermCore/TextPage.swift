@@ -42,7 +42,7 @@ public enum TextPage {
     }
 
     /// isEligible says whether a clicked `path` opens as a text page. Markdown, HTML and SVG are not text
-    /// pages: the first has its own page, the others are documents an author may expect rendered.
+    /// pages: the first two have their own pages, and SVG is a document an author may expect rendered.
     public static func isEligible(file path: String) -> Bool {
         let name = (path as NSString).lastPathComponent
         return language(forFile: path) != nil || plainExtensions.contains((name as NSString).pathExtension.lowercased())
