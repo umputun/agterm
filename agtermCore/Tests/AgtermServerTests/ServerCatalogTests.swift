@@ -43,6 +43,32 @@ struct ServerCatalogTests {
         try harness.session(await serve(.sessionNew))
     }
 
+    @Test func theLiveCatalogCarriesTheScratchAndTheSavedStoreDoesNot() async throws {
+        let session = try await newSession()
+        _ = await serve(.sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: "on"))
+        let identity = try #require(session.scratchDaemon?.identity)
+
+        let projected = try #require(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == session.id })
+        let saved = String(decoding: try JSONEncoder().encode(harness.store.snapshot()), as: UTF8.self)
+
+        #expect(projected.fields.scratch?.shown == true)
+        #expect(projected.fields.scratch?.pane.identity == identity)
+        #expect(projected.fields.scratch?.pane.daemon == ZmxSupport.scratchDaemonName(for: identity))
+        #expect(projected.panes.map(\.identity) == [session.paneIdentity])
+        #expect(!saved.contains(identity.uuidString))
+    }
+
+    @Test func hidingTheScratchPublishesASessionChange() async throws {
+        let session = try await newSession()
+        _ = await serve(.sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: "on"))
+        let sink = try subscribe()
+
+        _ = await serve(.sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: "off"))
+
+        guard case .sessionChanged(let fields)? = sink.changes.last else { Issue.record("no session change"); return }
+        #expect(fields.scratch?.shown == false)
+    }
+
     @Test func versionAdvertisesTheServerProtocolAndCatalogVersions() async {
         let reply = await serve(.version)
 

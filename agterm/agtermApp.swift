@@ -904,17 +904,21 @@ struct agtermApp: App {
     static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
                                    suppressAutoFocus: Bool, actions: AppActions) -> GhosttySurfaceView {
         // re-shows are focused via the `scratchActive` onChange (which also defers to those covers).
-        // scratchCommand is run-once: read it for this spawn, then clear so a post-exit respawn is a shell.
+        // scratchCommand is run-once: read it for this spawn, then clear so a local scratch's post-exit respawn is a shell.
         let command = session.scratchCommand
         session.scratchCommand = nil
         let cwd = session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: NSHomeDirectory())
-        let view = GhosttySurfaceView(workingDirectory: cwd,
-                                      fontSize: session.fontSize.map(Float.init),
-                                      command: command,
-                                      autoFocus: !suppressAutoFocus, env: env)
+        // a remote window's scratch is its server's: a stopped attach keeps its screen until it reconnects
+        let catalogScratch = session.catalogScratch
+        let view = GhosttySurfaceView(workingDirectory: cwd, fontSize: session.fontSize.map(Float.init), command: command,
+                                      autoFocus: !suppressAutoFocus,
+                                      env: env.merging(catalogScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 })
         view.watermarkSession = session
         let sessionID = session.id
-        view.onExit = { store.closeScratch(sessionID) }
+        view.onExit = { [weak view] in
+            if let view, PaneLead.scratchStopped?(view) == true { return }
+            store.closeScratch(sessionID)
+        }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)
         // same idle-timer reset as the overlay: an idle auto-follow fire must not hide the scratch mid-typing.
         view.onUserInput = { store.noteUserActivity() }

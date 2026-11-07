@@ -31,7 +31,9 @@ extension AppStore {
         for session in sessions {
             ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
         }
-        let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
+        // a remote window's scratch is its server's daemon, never this Mac's to end
+        let scratches = sessions.filter { $0.remoteHost == nil }.compactMap(\.scratchDaemon?.identity)
+        let identities = (PaneIdentityInventory.identities(in: sessions) + scratches).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
     }
 
@@ -185,6 +187,22 @@ extension AppStore {
         guard session.agentIndicator.status != .idle,
               (session.agentIndicator.statusPane ?? .left) == owner else { return }
         setAgentIndicator(AgentIndicator(), forSession: session.id)
+    }
+
+    /// dropScratchDaemon forgets the server scratch of `sessionID`, whose daemon ended or is being replaced, with the
+    /// state its pane owned, as `closeScratch` does for a surface.
+    public func dropScratchDaemon(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), let scratch = session.scratchDaemon else { return }
+        releaseScratchOwnedState(of: session, token: scratch.identity.uuidString)
+        session.scratchDaemon = nil
+    }
+
+    /// releaseScratchOwnedState drops what a departing scratch owned: a `.scratch`-tagged block (a main/split tag
+    /// survives), its background label, since a respawn runs another program, and its mailbox.
+    func releaseScratchOwnedState(of session: Session, token: String) {
+        clearIndicatorOwnedByPane(.scratch, of: session)
+        dropPaneBackground(.scratch, of: session)
+        disposeMailbox(token: token)
     }
 
     /// clearPaneOwnedState drops what the program in `pane` owned when its shell is replaced in place: its
@@ -653,11 +671,7 @@ extension AppStore {
         // a search bar pinned to the scratch being torn down would stay stuck; guarded on identity so a
         // search owned by the main/split pane survives.
         if session.searchSurface === scratch { session.clearSearch() }
-        // the `.scratch`-tagged block loses its owning surface here; a main/split tag survives (helper guards).
-        clearIndicatorOwnedByPane(.scratch, of: session)
-        // a respawned scratch runs another program, so a label for the old one must not carry over
-        dropPaneBackground(.scratch, of: session)
-        disposeMailbox(token: scratch.paneToken)
+        releaseScratchOwnedState(of: session, token: scratch.paneToken)
         scratch.teardown()
         session.scratchSurface = nil
         session.scratchGeneration += 1

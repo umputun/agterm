@@ -17,7 +17,8 @@ enum RemoteRetryBackoff {
 }
 
 /// The attach wrapper's word that ssh lost the connection, a title under a reserved prefix like
-/// `ZmxLeadNotice`. It carries the pane's lead nonce, so only the pane's current attachment is believed.
+/// `ZmxLeadNotice`. It carries the attach's nonce, its lead nonce or a scratch's link nonce, so only the current
+/// attachment is believed.
 public struct RemoteLinkNotice: Equatable, Sendable {
     static let prefix = "agterm-remote;"
     static let suffix = ":lost"

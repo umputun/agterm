@@ -7,7 +7,7 @@ public enum ServerCommandPolicy {
     static let served: Set<Command> = [
         .tree, .version, .windowList,
         .sessionNew, .sessionRename, .sessionClose, .sessionMove, .sessionSplit, .sessionSplitClose, .sessionSwap,
-        .sessionCompanionNew, .sessionText, .sessionType,
+        .sessionCompanionNew, .sessionText, .sessionType, .sessionScratch,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
         .zmxTree, .zmxPresent, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe,

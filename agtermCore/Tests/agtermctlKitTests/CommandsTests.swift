@@ -427,6 +427,22 @@ struct CommandsTests {
         #expect(try request(["session", "scratch", "off"]) == expected)
     }
 
+    @Test func sessionScratchCarriesTheExpectedScratchWithAnOperation() throws {
+        let identity = UUID().uuidString
+        let args = try request(["session", "scratch", "on", "--command", "htop", "--op-id", "op-1", "--epoch", "e1",
+                                "--expect-scratch", identity]).args
+
+        #expect(args?.scratch == identity)
+        #expect(args?.opID == "op-1")
+        #expect(args?.epoch == "e1")
+        #expect(try request(["session", "scratch", "on", "--op-id", "op-1", "--epoch", "e1", "--expect-scratch", "none"]).args?.scratch == "none")
+    }
+
+    @Test(arguments: [["--expect-scratch", "none"], ["--expect-scratch", "nope", "--op-id", "op-1", "--epoch", "e1"]])
+    func sessionScratchRefusesAnExpectedScratchItCannotSend(_ flags: [String]) {
+        #expect(throws: (any Error).self) { try request(["session", "scratch", "on"] + flags) }
+    }
+
     @Test func sessionFocusDefaultsOther() throws {
         let expected = ControlRequest(cmd: .sessionFocus, target: "active", args: ControlArgs(pane: "other"))
         #expect(try request(["session", "focus"]) == expected)

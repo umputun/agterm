@@ -40,6 +40,8 @@ public enum RemoteOperation: Equatable, Sendable {
     case newSession(workspace: UUID, anchor: RemoteSessionPlacement? = nil, shell: RemoteShellOptions = RemoteShellOptions())
     case newCompanion(parent: UUID, shell: RemoteShellOptions = RemoteShellOptions())
     case setSplit(UUID, shown: Bool, axis: String?)
+    /// setScratch shows or hides the server's scratch; a command replaces the one there is with a scratch running it.
+    case setScratch(UUID, shown: Bool, command: String? = nil)
     case closeSplit(UUID)
     case swap(UUID)
     case renameSession(UUID, name: String)
@@ -55,6 +57,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .newSession: "New Session"
         case .newCompanion: "New Companion"
         case .setSplit(_, let shown, _): shown ? "Show Split" : "Hide Split"
+        case .setScratch(_, let shown, _): shown ? "Show Scratch" : "Hide Scratch"
         case .closeSplit: "Close Split"
         case .swap: "Swap Panes"
         case .renameSession: "Rename Session"
@@ -70,11 +73,17 @@ public enum RemoteOperation: Equatable, Sendable {
     public var target: RemoteOperationTarget? {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
-        case .newCompanion(let id, _), .setSplit(let id, _, _), .closeSplit(let id), .swap(let id), .renameSession(let id, _),
-             .moveSession(let id, _), .closeSession(let id): .session(id)
+        case .newCompanion(let id, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
+             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id): .session(id)
         case .newWorkspace: nil
         case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _): .workspace(id)
         }
+    }
+
+    /// replacesScratch is whether the operation ends the scratch the window saw, which the server must still have.
+    var replacesScratch: Bool {
+        if case .setScratch(_, true, let command?) = self { return !command.isEmpty }
+        return false
     }
 
     /// pinsPanes is whether the server must find the session's panes as the window saw them.
@@ -108,6 +117,8 @@ public enum RemoteOperation: Equatable, Sendable {
         case .newCompanion(let parent, let shell): ["session", "new", "--parent", parent.uuidString] + shell.words
         case .setSplit(let id, let shown, let axis):
             ["session", "split", "visibility", shown ? "on" : "off", "--target", id.uuidString] + (axis.map { ["--axis", $0] } ?? [])
+        case .setScratch(let id, let shown, let command):
+            ["session", "scratch", shown ? "on" : "off", "--target", id.uuidString] + (command.map { ["--command=" + $0] } ?? [])
         case .closeSplit(let id): ["session", "split", "close", "--target", id.uuidString]
         case .swap(let id): ["session", "swap", "--target", id.uuidString]
         case .renameSession(let id, _): ["session", "rename", "--target", id.uuidString]
@@ -144,6 +155,8 @@ public struct PreparedRemoteOperation: Equatable, Sendable {
     public let operation: RemoteOperation
     let sent: CatalogPosition
     let panes: [UUID]?
+    /// scratch is the session's scratch identity, or `none`, when the operation replaces it.
+    let scratch: String?
     /// selection is the window's selected row when the operation was asked for.
     let selection: UUID?
 }
@@ -260,8 +273,13 @@ public final class RemoteCatalogActions {
             }
             panes = session.panes.map(\.identity)
         }
+        var scratch: String?
+        if operation.replacesScratch, case .session(let id)? = operation.target {
+            guard let session = catalog.session(id) else { return .refused(ControlResponse(ok: false, error: "no such session on \(host)")) }
+            scratch = session.fields.scratch?.pane.identity.uuidString ?? "none"
+        }
         return .ready(PreparedRemoteOperation(operation: operation, sent: CatalogPosition(epoch: catalog.epoch, rev: catalog.rev),
-                                              panes: panes, selection: mirror.selectedSessionID))
+                                              panes: panes, scratch: scratch, selection: mirror.selectedSessionID))
     }
 
     /// send runs a prepared operation on the server and answers with the server's reply, the created ids and errors
@@ -276,6 +294,7 @@ public final class RemoteCatalogActions {
         }
         var words = operation.words
         if let panes = prepared.panes { words += ["--expect-panes", panes.map(\.uuidString).joined(separator: ",")] }
+        if let scratch = prepared.scratch { words += ["--expect-scratch", scratch] }
         let opID = UUID().uuidString
         nextOrder += 1
         entries[opID] = Entry(opID: opID, operation: operation, sent: prepared.sent, order: nextOrder, state: .sending)

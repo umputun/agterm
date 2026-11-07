@@ -21,6 +21,16 @@ extension AppActions {
         return true
     }
 
+    /// setScratchShown shows or hides `session`'s scratch: in a remote window the server's, which the window shows
+    /// once the catalog says so, otherwise this Mac's.
+    func setScratchShown(_ shown: Bool, of session: Session, in store: AppStore) {
+        if store.isRemoteWindow {
+            performRemote(.setScratch(session.id, shown: shown), in: store)
+            return
+        }
+        if session.scratchActive != shown { store.toggleScratch(session.id) }
+    }
+
     /// newRemoteSession is New Session in a remote window: the placement setting decides whether it lands after the
     /// selected row, and the directory setting whether it starts in that row's directory or the server's default.
     func newRemoteSession(inWorkspace workspaceID: UUID, of store: AppStore) {

@@ -404,6 +404,7 @@ public final class AppStore {
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           ended: session.ended ? true : nil,
                                           pending: remoteActions?.pendingState(of: session.id),
+                                          scratchBacked: isRemoteWindow && session.scratchDaemon != nil ? true : nil,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
                                               ? true : nil,

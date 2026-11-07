@@ -16,6 +16,8 @@ final class ServerPanes {
     /// The server's own environment, without the variables a pane gets from the server itself.
     let baseEnvironment: [String: String]
     private var startedAt: [UUID: Date] = [:]
+    /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
+    private var scratches: Set<UUID> = []
 
     init(configuration: ServerConfiguration, runner: any ZmxRunner, shellPath: String, catalogID: UUID,
          programVersion: String, environment: [String: String]) {
@@ -44,6 +46,13 @@ final class ServerPanes {
         let pane: StatusPane
         var command: String?
         let directory: String
+        /// scratch starts the pane under `scratchDaemonName` and leaves `daemonBackedPanes` to the session's panes.
+        var scratch = false
+    }
+
+    /// daemonName is `identity`'s daemon: the scratch name for a scratch this run started.
+    func daemonName(for identity: UUID) -> String {
+        scratches.contains(identity) ? ZmxSupport.scratchDaemonName(for: identity) : ZmxSupport.daemonName(for: identity)
     }
 
     /// start creates the pane's daemon. Nil when it is running, otherwise the refusal.
@@ -69,13 +78,13 @@ final class ServerPanes {
         let home = baseEnvironment["HOME"] ?? "/"
         let directory = FileManager.default.fileExists(atPath: start.directory) ? start.directory : home
         startedAt[identity] = Date()
+        let name = start.scratch ? ZmxSupport.scratchDaemonName(for: identity) : ZmxSupport.daemonName(for: identity)
         do {
-            try runner.create(PaneLaunch(name: ZmxSupport.daemonName(for: identity), argv: launch.argv,
-                                         environment: launch.environment, directory: directory))
+            try runner.create(PaneLaunch(name: name, argv: launch.argv, environment: launch.environment, directory: directory))
         } catch {
             return "could not start the pane: \(error)"
         }
-        session.daemonBackedPanes.insert(identity)
+        if start.scratch { scratches.insert(identity) } else { session.daemonBackedPanes.insert(identity) }
         return nil
     }
 
@@ -89,9 +98,29 @@ final class ServerPanes {
     /// restart right after the reply cannot leave one running unbooked. A failed kill is logged; the pane stays
     /// closed, as on the Mac.
     func end(_ identities: [UUID]) {
-        for name in identities.map(ZmxSupport.daemonName(for:)) where !runner.kill(name) {
-            FileHandle.standardError.write(Data("agterm-server: could not end daemon \(name)\n".utf8))
+        for identity in identities {
+            let name = daemonName(for: identity)
+            scratches.remove(identity)
+            if !runner.kill(name) { FileHandle.standardError.write(Data("agterm-server: could not end daemon \(name)\n".utf8)) }
         }
+    }
+
+    /// endUnownedScratches kills every listed scratch daemon this run does not own: one a previous run left, since a
+    /// scratch never outlives its server, or one whose kill failed. A later listing retries it. It returns the rest.
+    func endUnownedScratches(_ records: [ZmxSessionRecord]) -> [ZmxSessionRecord] {
+        let owned = Set(scratches.map(ZmxSupport.scratchDaemonName(for:)))
+        let unowned = records.filter { ZmxSupport.isScratchDaemonName($0.name) && !owned.contains($0.name) }
+        for record in unowned where !runner.kill(record.name) {
+            FileHandle.standardError.write(Data("agterm-server: could not end daemon \(record.name)\n".utf8))
+        }
+        let ended = Set(unowned.map(\.name))
+        return records.filter { !ended.contains($0.name) }
+    }
+
+    /// forgetScratch drops a scratch whose daemon is gone on its own.
+    func forgetScratch(_ identity: UUID) {
+        scratches.remove(identity)
+        startedAt[identity] = nil
     }
 
     /// agtermEnvironment is what a program started for `session` sees of this server: its identities, the state

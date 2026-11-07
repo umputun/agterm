@@ -47,6 +47,26 @@ struct RemoteOperationRequestTests {
                                      select: true))
     }
 
+    @Test(arguments: [(nil, true), ("on", true), ("off", false)] as [(String?, Bool)])
+    func aScratchResolvesItsModeAgainstTheCatalogsScratch(_ mode: String?, _ shown: Bool) {
+        let parsed = parse(.sessionScratch, target: first.id.uuidString) { $0.mode = mode }
+
+        #expect(parsed == .operation(.setScratch(first.id, shown: shown), select: false))
+    }
+
+    @Test func aShownScratchTogglesOffAndAFollowedCommandIsSentAndSelects() {
+        first.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: true)
+
+        #expect(parse(.sessionScratch, target: first.id.uuidString) == .operation(.setScratch(first.id, shown: false), select: false))
+        #expect(parse(.sessionScratch, target: first.id.uuidString) { $0.mode = "on"; $0.command = "htop"; $0.follow = true }
+            == .operation(.setScratch(first.id, shown: true, command: "htop"), select: true))
+    }
+
+    @Test func aScratchRefusesAnExpectedScratchAndABadMode() {
+        #expect(refusal(parse(.sessionScratch) { $0.scratch = "none" }) == "operation receipts are served only by agterm-server")
+        #expect(refusal(parse(.sessionScratch) { $0.mode = "sideways" }) == "invalid scratch mode: sideways")
+    }
+
     @Test func aCompanionLandsUnderTheActiveSession() {
         #expect(parse(.sessionCompanionNew) == .operation(.newCompanion(parent: first.id), select: true))
     }

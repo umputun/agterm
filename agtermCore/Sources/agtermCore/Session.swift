@@ -77,6 +77,33 @@ public final class Session: Identifiable {
         return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
     }
 
+    /// ScratchDaemon is a scratch behind a zmx daemon on agterm-server rather than a surface here.
+    public struct ScratchDaemon: Equatable, Sendable {
+        public var identity: UUID
+        public var shown: Bool
+
+        public init(identity: UUID, shown: Bool) {
+            self.identity = identity
+            self.shown = shown
+        }
+    }
+
+    /// scratchDaemon is the server's scratch: on agterm-server its own state, in a remote window the catalog's, and
+    /// never saved.
+    public var scratchDaemon: ScratchDaemon?
+
+    /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
+    @ObservationIgnored var scratchStoppedGeneration: Int?
+
+    /// catalogScratch is the server scratch a remote window's row attaches, nil for every other row.
+    public var catalogScratch: UUID? {
+        remotePresentation?.binding.catalogOwned == true ? scratchDaemon?.identity : nil
+    }
+
+    /// presentsCatalog is whether a remote window's row keeps its presentation stream: live, or ended with its
+    /// scratch still running.
+    var presentsCatalog: Bool { !ended || scratchDaemon != nil }
+
     /// User-set flagged working-set membership: surfaces the session in the sidebar's cross-workspace
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
@@ -636,7 +663,7 @@ public final class Session: Identifiable {
         case .right:
             return splitSurface?.paneToken ?? splitPaneIdentity.map(daemonToken) ?? ""
         case .scratch:
-            return scratchSurface?.paneToken ?? ""
+            return scratchSurface?.paneToken ?? scratchDaemon?.identity.uuidString ?? ""
         }
     }
 
@@ -814,6 +841,7 @@ public final class Session: Identifiable {
         if scratchSurface?.paneToken == token { return .scratch }
         if surface == nil, daemonToken(paneIdentity) == token { return .left }
         if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
+        if scratchSurface == nil, scratchDaemon?.identity.uuidString == token { return .scratch }
         return nil
     }
 

@@ -528,16 +528,16 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/AppActions*.swift` (scratch toggle), `agterm/Commands/CustomCommandRunner.swift`
 - Create: tests in `AgtermServerTests`, `agtermTests`
 
-- [ ] scratch in a remote window opens an ephemeral server-side zmx daemon attached like any pane; hiding it keeps
+- [x] scratch in a remote window opens an ephemeral server-side zmx daemon attached like any pane; hiding it keeps
       the same shell, as `toggleScratch` does locally; closing the remote window detaches it like every pane; only
       its shell exiting, closing its session, or a server restart ends it; the live catalog shows it, the
       persisted catalog excludes it; scratch daemons use the `agterm-scratch-<uuid>` name shape, so a restarted
       server ends only those and adopts every other daemon
-- [ ] control coverage: `session.scratch` against a remote window's session routes through the seam (protocol,
+- [x] control coverage: `session.scratch` against a remote window's session routes through the seam (protocol,
       dispatcher, `agtermctl`), and the session's `tree` node reports the server scratch's shown and backed state
-- [ ] custom commands keep running on the Mac; `AGT_*` tokens in a remote window name the server session and host,
+- [x] custom commands keep running on the Mac; `AGT_*` tokens in a remote window name the server session and host,
       and their `agtermctl` session operations reach the server through the seam
-- [ ] tests: scratch survives hide and window detach, ends on shell exit, session close and server restart, and a
+- [x] tests: scratch survives hide and window detach, ends on shell exit, session close and server restart, and a
       restart leaves non-scratch daemons running; ➕ (moved from Task 8) `session.detach` stops the scratch's attach
       client and the scratch daemon keeps running;
       `session.scratch` routing and read-back; custom command token values in a remote window

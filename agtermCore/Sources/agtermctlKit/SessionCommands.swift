@@ -301,12 +301,23 @@ struct Session: ParsableCommand {
         @Argument(help: "Mode: on (show), off (hide), or toggle (default). The hidden scratch shell stays alive.") var mode: String = "toggle"
         @Option(name: .long, help: "When showing, run this command as the scratch's process instead of a login shell (run-once; respawns the scratch if one is already open).") var command: String?
         @Flag(name: .long, help: "Select (switch to) the target session when showing its scratch (default: show without switching).") var follow = false
+        @Option(name: .customLong("expect-scratch"), help: "The scratch identity, or none, the target session must still have; needs --op-id.") var expectScratch: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
+
+        func validate() throws {
+            guard let expectScratch else { return }
+            guard operation.opID != nil else { throw ValidationError("--expect-scratch needs --op-id") }
+            guard expectScratch.lowercased() == "none" || UUID(uuidString: expectScratch) != nil else {
+                throw ValidationError("--expect-scratch takes a scratch identity or none")
+            }
+        }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionScratch, target: target.target,
-                           args: options.withWindow(ControlArgs(mode: mode, command: command, follow: follow ? true : nil)))
+            var args = ControlArgs(mode: mode, command: command, follow: follow ? true : nil)
+            args.scratch = expectScratch
+            return operation.stamp(ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(args)))
         }
     }
 

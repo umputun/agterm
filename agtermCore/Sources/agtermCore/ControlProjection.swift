@@ -256,6 +256,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// pending is a remote window row's operation state: `pending` while one is on its way to the server, `unknown`
     /// when one's outcome could not be learned; omitted otherwise.
     public let pending: String?
+    /// scratchBacked is true while a remote window row's scratch is the server's daemon; omitted otherwise.
+    public let scratchBacked: Bool?
     /// What the session is FOR: `Session.effectiveContext`, so the local `session.context` value or, on an
     /// attached row without one, the origin's mirrored context. Nil/omitted when neither is set.
     public let context: String?
@@ -399,7 +401,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 overlay: Bool = false, overlaySizePercent: Int? = nil, overlayWidth: Double? = nil,
                 overlayHeight: Double? = nil, paneOverlays: [String]? = nil,
                 hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, pick: ControlSessionPick? = nil,
-                scratch: Bool = false, flagged: Bool = false, ended: Bool? = nil, pending: String? = nil,
+                scratch: Bool = false, flagged: Bool = false, ended: Bool? = nil, pending: String? = nil, scratchBacked: Bool? = nil,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
@@ -445,6 +447,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.flagged = flagged
         self.ended = ended
         self.pending = pending
+        self.scratchBacked = scratchBacked
         self.context = context
         self.commandWait = commandWait
         self.splitCommandWait = splitCommandWait

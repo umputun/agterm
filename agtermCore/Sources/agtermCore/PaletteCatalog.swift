@@ -194,7 +194,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     /// sentToServer are the actions a remote window asks its server for; close stays, since detaching needs no server.
     private static let sentToServer: Set<PaletteCommand> = [
         .newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes,
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch,
     ]
 
     /// localOnly make a shell or a row on this Mac, which a remote window shows only from its server.

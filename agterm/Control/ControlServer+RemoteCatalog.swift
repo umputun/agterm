@@ -18,6 +18,7 @@ extension ControlServer {
         guard library.onRemoteStoreOpened == nil else { return }
         library.onRemoteStoreOpened = { [weak self] id, store in self?.startRemoteCatalog(window: id, store: store) }
         library.onRemoteStoreClosed = { [weak self] id in self?.stopRemoteCatalog(window: id) }
+        PaneLead.scratchStopped = { [weak self] view in self?.catalogScratchStopped(view) ?? false }
         for (id, store) in library.openRemoteStores { startRemoteCatalog(window: id, store: store) }
     }
 
@@ -149,6 +150,13 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
         }
         ZmxLeadBook.shared.begin(lead, pane: pane.identity)
         return command
+    }
+
+    func scratchAttachCommand(host: String, pane: CatalogPane) -> String {
+        (try? RemoteSession.attachPaneCommand(host: host, endpoint: pane.endpoint, daemon: pane.daemon, session: "scratch",
+                                              pane: .left, linkNonce: ZmxLeadAttachment.makeNonce(), controlPath: pool.lease("pane:\(pane.identity)")))
+            ?? CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c",
+                                               "printf '%s\\n' 'agterm: \(host) listed a scratch agterm cannot address'; exit 1"])
     }
 
     func catalogRowAdded(_ session: Session) { server?.startRemotePresentation(for: session) }

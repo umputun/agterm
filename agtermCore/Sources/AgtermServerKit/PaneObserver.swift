@@ -52,6 +52,7 @@ final class PaneObserver {
     /// then is each session settled, so a promotion never picks a pane that is gone too. A pane started after the
     /// listing began is skipped: it cannot be in it.
     func apply(_ records: [ZmxSessionRecord], listedAt: Date) {
+        let records = panes.endUnownedScratches(records)
         let listed = Dictionary(records.map { ($0.name, $0) }) { first, _ in first }
         var missing: [(session: Session, identities: [UUID])] = []
         for session in store.workspaces.flatMap(\.sessions) where !session.ended {
@@ -68,7 +69,20 @@ final class PaneObserver {
         }
         for (session, gone) in missing { gone.forEach { session.daemonBackedPanes.remove($0) } }
         for (session, gone) in missing { settle(session, gone: gone) }
+        settleScratches(listed, listedAt: listedAt)
         onApplied?()
+    }
+
+    /// settleScratches clears every session's scratch, an ended session's included, whose daemon a listing no longer
+    /// holds: its shell exited or its daemon was lost.
+    private func settleScratches(_ listed: [String: ZmxSessionRecord], listedAt: Date) {
+        for session in store.workspaces.flatMap(\.sessions) {
+            guard let scratch = session.scratchDaemon, listed[ZmxSupport.scratchDaemonName(for: scratch.identity)] == nil,
+                  !panes.started(scratch.identity, since: listedAt) else { continue }
+            _ = consumeExitRecord(scratch.identity)
+            panes.forgetScratch(scratch.identity)
+            store.dropScratchDaemon(session.id)
+        }
     }
 
     private func panesOf(_ session: Session) -> [(UUID, StatusPane)] {

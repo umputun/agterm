@@ -5,7 +5,7 @@ extension ServerActions {
     /// receiptCommands are the served structural commands; any other command refuses an `opID`.
     static let receiptCommands: Set<Command> = [
         .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionMove,
-        .sessionCompanionNew, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
+        .sessionCompanionNew, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
     ]
 
     public var takesOperationReceipts: Bool { true }
@@ -25,7 +25,9 @@ extension ServerActions {
             let refusal = CatalogReceipt(opID: opID, epoch: hub.epoch, outcome: .refused, error: error)
             return save(refusal, into: &table) ? Self.reply(refusal) : Self.unsaved(opID)
         }
-        if let expected = request.args?.panes, let refusal = paneRefusal(request.target, expected: expected) {
+        let refusal = request.args?.panes.flatMap { paneRefusal(request.target, expected: $0) }
+            ?? request.args?.scratch.flatMap { scratchRefusal(request.target, expected: $0) }
+        if let refusal {
             let receipt = CatalogReceipt(opID: opID, epoch: hub.epoch, outcome: .refused, error: refusal)
             return save(receipt, into: &table) ? Self.reply(receipt) : Self.unsaved(opID)
         }

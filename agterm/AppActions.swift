@@ -255,7 +255,7 @@ final class AppActions {
             store.closeOverlay(session.id)
             return true
         }
-        if session.scratchActive { store.toggleScratch(session.id); return true }
+        if session.scratchActive { setScratchShown(false, of: session, in: store); return true }
         // the focused pane's own overlay is the last cover: without this rung ⌘W over one falls straight
         // through and closes the SESSION. An overlay on the other pane is not in front of the user, so it
         // does not intercept — that pane stays live and ⌘W keeps its ordinary meaning.
@@ -743,7 +743,7 @@ final class AppActions {
         guard let store, let session = store.activeSession else { return }
         guard !session.fullOverlayVisible else { return }
         // the deck's `scratchActive` onChange reclaims first responder for the pane, as it does for ⌘J.
-        if session.scratchActive { store.toggleScratch(session.id); return }
+        if session.scratchActive { setScratchShown(false, of: session, in: store); return }
         let shown = !(session.isSplit && (axis == nil || axis == session.splitAxis))
         if performRemote(.setSplit(session.id, shown: shown, axis: axis?.rawValue), in: store) { return }
         store.toggleSplit(session.id, axis: axis)
@@ -759,7 +759,7 @@ final class AppActions {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.activeSession else { return }
         guard session.hasSplit, !session.fullOverlayVisible else { return }
-        if session.scratchActive { store.toggleScratch(session.id); return }
+        if session.scratchActive { setScratchShown(false, of: session, in: store); return }
         if performRemote(.closeSplit(session.id), in: store) { return }
         store.closeSplit(session.id)
         focusSplitPane(session, wantSplit: false)
@@ -821,7 +821,7 @@ final class AppActions {
     func toggleScratch() {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.activeSession else { return }
-        store.toggleScratch(session.id)
+        setScratchShown(!session.scratchActive, of: session, in: store)
     }
 
     /// Show/hide the frontmost window's sidebar. The custom split owns visibility (no system toggle), so this

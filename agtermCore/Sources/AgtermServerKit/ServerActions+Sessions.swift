@@ -143,7 +143,7 @@ extension ServerActions {
             case .success(let resolved): identity = resolved.identity
             case .failure(let refusal): return refusal.response
             }
-            guard let screen = panes.runner.screen(ZmxSupport.daemonName(for: identity), all: options.all) else {
+            guard let screen = panes.runner.screen(panes.daemonName(for: identity), all: options.all) else {
                 return ControlResponse(ok: false, error: "failed to read surface buffer")
             }
             let text = options.lines.map(screen.lastLines) ?? screen.text
@@ -158,7 +158,7 @@ extension ServerActions {
             case .success(let pane): resolved = pane
             case .failure(let refusal): return refusal.response
             }
-            let name = ZmxSupport.daemonName(for: resolved.identity)
+            let name = panes.daemonName(for: resolved.identity)
             let paced = KeystrokeSegments.paced(options.text)
             let bytes = KeystrokeSegments.ptyBytes(paced.head)
             guard bytes.isEmpty || panes.runner.type(name, bytes: bytes) else {
@@ -217,7 +217,11 @@ extension ServerActions {
             return .refused(ControlResponse(ok: false, error: "unknown pane id: \(token ?? "")"))
         }
         let role = resolved ?? .left
-        guard role != .scratch, let identity = session.paneIdentity(for: role), session.daemonBackedPanes.contains(identity) else {
+        if role == .scratch {
+            guard let scratch = session.scratchDaemon else { return .refused(ControlResponse(ok: false, error: "session not realized")) }
+            return .success((scratch.identity, role))
+        }
+        guard let identity = session.paneIdentity(for: role), session.daemonBackedPanes.contains(identity) else {
             return .refused(ControlResponse(ok: false, error: "session not realized"))
         }
         return .success((identity, role))

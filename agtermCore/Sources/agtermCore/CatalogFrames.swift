@@ -50,9 +50,11 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
     /// shown is whether the split is shown.
     public var shown: Bool
     public var lifecycle: CatalogLifecycle
+    /// scratch is the session's server scratch while its daemon runs, an ended session's included.
+    public var scratch: CatalogScratch?
 
     public init(id: UUID, name: String, parent: UUID?, cwd: String, primary: UUID, axis: String?, shown: Bool,
-                lifecycle: CatalogLifecycle) {
+                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
@@ -61,6 +63,18 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
         self.axis = axis
         self.shown = shown
         self.lifecycle = lifecycle
+        self.scratch = scratch
+    }
+}
+
+/// CatalogScratch is a session's scratch on agterm-server: its daemon, attached like a pane, and whether it is shown.
+public struct CatalogScratch: Codable, Equatable, Sendable {
+    public var pane: CatalogPane
+    public var shown: Bool
+
+    public init(pane: CatalogPane, shown: Bool) {
+        self.pane = pane
+        self.shown = shown
     }
 }
 

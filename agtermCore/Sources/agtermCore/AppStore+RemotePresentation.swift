@@ -231,6 +231,8 @@ extension AppStore {
     /// split only, and this Mac's scratch is a different shell.
     private func localStatusPane(_ pane: PresentationPane?, in session: Session) -> (pane: StatusPane?, resolved: Bool) {
         guard let pane else { return (nil, true) }
+        // a remote window's scratch is the origin's own, attached here, so its statuses land on it
+        if let scratch = session.scratchDaemon, pane == .scratch || pane == .identity(scratch.identity) { return (.scratch, true) }
         guard let role = localPane(pane, in: session) else { return (nil, false) }
         return (role == .right ? .right : .left, true)
     }

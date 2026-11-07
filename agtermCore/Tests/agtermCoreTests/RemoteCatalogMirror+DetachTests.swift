@@ -43,6 +43,14 @@ final class RemoteCatalogMirrorDetachTests {
                               panes: ended ? [] : [pane])
     }
 
+    private final class Surface: TerminalSurface {
+        var isRealized = true
+        var paneToken = UUID().uuidString
+        var tornDown = false
+        func teardown() { tornDown = true }
+        func promoteToPrimaryPane() {}
+    }
+
     private func open(_ sessions: [CatalogSession], other: [CatalogSession] = []) {
         let snapshot = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
                                        workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions),
@@ -56,6 +64,27 @@ final class RemoteCatalogMirrorDetachTests {
     }
 
     private var rows: Set<UUID> { Set(store.workspaces.flatMap(\.sessions).map(\.id)) }
+
+    @Test func detachingEndsTheScratchAttachAndReattachingAttachesItAgain() throws {
+        var entry = session()
+        let scratch = UUID()
+        let pane = CatalogPane(identity: scratch, daemon: ZmxSupport.scratchDaemonName(for: scratch), endpoint: Self.endpoint)
+        entry.fields.scratch = CatalogScratch(pane: pane, shown: true)
+        open([entry])
+        let surface = Surface()
+        try #require(store.session(withID: entry.id)).scratchSurface = surface
+
+        mirror.detach(sessions: [entry.id])
+
+        #expect(surface.tornDown)
+        #expect(mirror.catalog?.session(entry.id)?.fields.scratch?.pane.identity == scratch)
+
+        #expect(mirror.reattach(session: entry.id) == nil)
+
+        let row = try #require(store.session(withID: entry.id))
+        #expect(row.scratchActive)
+        #expect(row.scratchCommand == "attach box \(pane.daemon)")
+    }
 
     @Test func aDetachedRowLeavesThisMacAndStaysDetached() {
         let first = session(), second = session()
@@ -198,6 +227,16 @@ final class RemoteCatalogMirrorDetachTests {
 
         #expect(state.detachedSessions.isEmpty)
         #expect(state.detachedWorkspaces.isEmpty)
+    }
+
+    @Test func anEndedRowWithARunningScratchCountsAsLive() {
+        var ended = session(ended: true)
+        let scratch = UUID()
+        ended.fields.scratch = CatalogScratch(pane: CatalogPane(identity: scratch, daemon: ZmxSupport.scratchDaemonName(for: scratch),
+                                                                endpoint: Self.endpoint), shown: false)
+        open([ended])
+
+        #expect(mirror.closeScope(session: ended.id) == RemoteCloseScope(sessions: [ended.id], live: true))
     }
 
     @Test func closingAParentReachesItsCompanionsAndCountsThemAsLive() {

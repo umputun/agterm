@@ -12,9 +12,15 @@ final class RemoteCatalogMirrorTests {
     private static let versions = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1)
     private let catalogID = UUID()
     private let workspaceID = UUID()
+    private let finalized = Finalized()
+
+    final class Finalized: @unchecked Sendable {
+        var ids: [UUID] = []
+    }
 
     init() {
-        store = AppStore(persistence: PersistenceStore(directory: directory), paneFinalizer: nil)
+        let finalized = finalized
+        store = AppStore(persistence: PersistenceStore(directory: directory), paneFinalizer: { finalized.ids += $0 })
         mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState())
     }
 
@@ -560,5 +566,215 @@ final class RemoteCatalogMirrorTests {
         delta(1, .sessionAdded(created, workspace: workspaceID, index: 2))
 
         #expect(store.selectedSessionID == other.id)
+    }
+
+    private func scratchPane(_ id: UUID = UUID()) -> CatalogPane {
+        CatalogPane(identity: id, daemon: ZmxSupport.scratchDaemonName(for: id), endpoint: Self.endpoint)
+    }
+
+    private func withScratch(_ entry: CatalogSession, _ scratch: CatalogPane?, shown: Bool = true, ended: Bool = false) -> CatalogSessionFields {
+        var fields = entry.fields
+        fields.scratch = scratch.map { CatalogScratch(pane: $0, shown: shown) }
+        if ended { fields.lifecycle = .ended }
+        return fields
+    }
+
+    @Test func aShownServerScratchAttachesItsDaemonOnTheRow() throws {
+        let scratch = scratchPane()
+        var entry = session(panes: [pane()])
+        entry.fields = withScratch(entry, scratch)
+
+        _ = open([entry])
+
+        let row = try #require(store.session(withID: entry.id))
+        #expect(row.scratchDaemon == Session.ScratchDaemon(identity: scratch.identity, shown: true))
+        #expect(row.scratchActive)
+        #expect(row.scratchCommand == "attach box \(scratch.daemon)")
+        #expect(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == entry.id.uuidString }?.scratchBacked == true)
+    }
+
+    @Test func aHiddenServerScratchKeepsItsSurfaceAndAGoneOneClosesIt() throws {
+        let scratch = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, scratch)))
+        let row = try #require(store.session(withID: entry.id))
+        let surface = Surface()
+        row.scratchSurface = surface
+
+        delta(2, .sessionChanged(withScratch(entry, scratch, shown: false)))
+
+        #expect(!row.scratchActive)
+        #expect(!surface.tornDown)
+        #expect(row.scratchDaemon?.shown == false)
+
+        delta(3, .sessionChanged(withScratch(entry, nil)))
+
+        #expect(surface.tornDown)
+        #expect(row.scratchSurface == nil)
+        #expect(row.scratchDaemon == nil)
+        #expect(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == entry.id.uuidString }?.scratchBacked == nil)
+    }
+
+    @Test func aReplacedServerScratchClosesTheOldSurfaceAndAttachesTheNewDaemon() throws {
+        let old = scratchPane(), new = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, old)))
+        let row = try #require(store.session(withID: entry.id))
+        let surface = Surface()
+        row.scratchSurface = surface
+        row.scratchCommand = nil
+
+        delta(2, .sessionChanged(withScratch(entry, new)))
+
+        #expect(surface.tornDown)
+        #expect(row.scratchActive)
+        #expect(row.scratchCommand == "attach box \(new.daemon)")
+        #expect(row.scratchDaemon?.identity == new.identity)
+    }
+
+    @Test func anEndedRowKeepsItsPresentationWhileItsScratchRuns() throws {
+        let scratch = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, scratch)))
+
+        delta(2, .sessionChanged(withScratch(entry, scratch, ended: true)))
+
+        #expect(store.session(withID: entry.id)?.ended == true)
+        #expect(effects.ended.isEmpty)
+
+        delta(3, .sessionChanged(withScratch(entry, nil, ended: true)))
+
+        #expect(effects.ended == [entry.id])
+    }
+
+    @Test func anEndedRowWithAScratchStartsItsPresentationWhenItArrives() {
+        var entry = session(panes: [], ended: true)
+        entry.fields = withScratch(entry, scratchPane(), ended: true)
+
+        _ = open([entry])
+
+        #expect(effects.added == [entry.id])
+    }
+
+    @Test(arguments: [true, false])
+    func aServerScratchStatusLandsOnTheScratch(byIdentity: Bool) throws {
+        let scratch = scratchPane()
+        var entry = session(panes: [pane()])
+        entry.fields = withScratch(entry, scratch)
+        _ = open([entry])
+        let pane: PresentationPane = byIdentity ? .identity(scratch.identity) : .scratch
+
+        store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: pane, changedAt: nil),
+                                forSession: entry.id)
+
+        let row = try #require(store.session(withID: entry.id))
+        #expect(row.agentIndicator.statusPane == .scratch)
+        #expect(row.remotePresentation?.statusOwnerResolved == true)
+    }
+
+    @Test func closingARowNeverEndsItsServerScratchHere() throws {
+        let scratch = scratchPane()
+        var entry = session(panes: [pane()])
+        entry.fields = withScratch(entry, scratch)
+        _ = open([entry])
+
+        store.closeSession(entry.id)
+
+        #expect(!finalized.ids.contains(scratch.identity))
+    }
+
+    @Test func anEndedRowKeepsItsScratchStatusAndLosesItWithTheScratch() throws {
+        let scratch = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, scratch)))
+        store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: .scratch, changedAt: nil),
+                                forSession: entry.id)
+        let row = try #require(store.session(withID: entry.id))
+
+        delta(2, .sessionChanged(withScratch(entry, scratch, ended: true)))
+
+        #expect(row.agentIndicator.status == .blocked)
+
+        delta(3, .sessionChanged(withScratch(entry, nil, ended: true)))
+
+        #expect(row.agentIndicator.status == .idle)
+        #expect(effects.ended == [entry.id])
+    }
+
+    @Test func aStoppedScratchAttachKeepsItsScreenAndStatusAndIsReplacedOnce() throws {
+        let scratch = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, scratch)))
+        let row = try #require(store.session(withID: entry.id))
+        let stopped = Surface()
+        row.scratchSurface = stopped
+        row.scratchCommand = nil
+        store.applyRemoteStatus(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: .scratch, changedAt: nil),
+                                forSession: entry.id)
+        let generation = row.scratchGeneration
+
+        #expect(mirror.scratchAttachmentStopped(of: entry.id) == scratch.identity)
+        #expect(!stopped.tornDown)
+        #expect(row.scratchActive)
+
+        #expect(mirror.replaceScratchAttachment(of: entry.id, identity: scratch.identity))
+
+        #expect(stopped.tornDown)
+        #expect(row.scratchSurface == nil)
+        #expect(row.scratchActive)
+        #expect(row.scratchCommand == "attach box \(scratch.daemon)")
+        #expect(row.scratchGeneration == generation + 1)
+        #expect(row.agentIndicator.status == .blocked)
+        #expect(!mirror.replaceScratchAttachment(of: entry.id, identity: scratch.identity))
+
+        delta(2, .sessionChanged(withScratch(entry, nil)))
+
+        #expect(!row.scratchActive)
+        #expect(row.scratchDaemon == nil)
+        #expect(row.agentIndicator.status == .idle)
+    }
+
+    @Test func aHiddenStoppedScratchIsReplacedHiddenAndAttachesWhenShown() throws {
+        let scratch = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, scratch, shown: false)))
+        let row = try #require(store.session(withID: entry.id))
+        row.scratchSurface = Surface()
+
+        _ = mirror.scratchAttachmentStopped(of: entry.id)
+        #expect(mirror.replaceScratchAttachment(of: entry.id, identity: scratch.identity))
+        #expect(!row.scratchActive)
+
+        delta(2, .sessionChanged(withScratch(entry, scratch)))
+
+        #expect(row.scratchActive)
+        #expect(row.scratchCommand == "attach box \(scratch.daemon)")
+    }
+
+    @Test func aStoppedScratchIsNotReplacedOnceItsScratchChangedOrClosed() throws {
+        let old = scratchPane(), new = scratchPane()
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+        delta(1, .sessionChanged(withScratch(entry, old)))
+        let row = try #require(store.session(withID: entry.id))
+        row.scratchSurface = Surface()
+        _ = mirror.scratchAttachmentStopped(of: entry.id)
+
+        store.closeScratch(row.id)
+
+        #expect(!mirror.replaceScratchAttachment(of: entry.id, identity: old.identity))
+
+        row.scratchSurface = Surface()
+        _ = mirror.scratchAttachmentStopped(of: entry.id)
+        delta(2, .sessionChanged(withScratch(entry, new)))
+
+        #expect(!mirror.replaceScratchAttachment(of: entry.id, identity: old.identity))
+        #expect(mirror.scratchAttachmentStopped(of: UUID()) == nil)
     }
 }

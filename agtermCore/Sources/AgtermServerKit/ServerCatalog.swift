@@ -142,11 +142,15 @@ extension ServerActions {
                 let panes = session.ended ? [] : identities.map {
                     CatalogPane(identity: $0, daemon: ZmxSupport.daemonName(for: $0), endpoint: endpoint)
                 }
+                let scratch = session.scratchDaemon.map {
+                    CatalogScratch(pane: CatalogPane(identity: $0.identity, daemon: ZmxSupport.scratchDaemonName(for: $0.identity),
+                                                     endpoint: endpoint), shown: $0.shown)
+                }
                 let fields = CatalogSessionFields(id: session.id, name: session.displayName, parent: session.parentID,
                                                   cwd: session.effectiveCwd, primary: session.paneIdentity,
                                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                                   shown: session.hasSplit && session.isSplit,
-                                                  lifecycle: session.ended ? .ended : .live)
+                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch)
                 return CatalogSession(fields: fields, panes: panes)
             })
         }

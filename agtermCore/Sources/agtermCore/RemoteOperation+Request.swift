@@ -11,7 +11,7 @@ extension RemoteOperation {
     /// structuralCommands are the commands a remote window sends to its server instead of running on this Mac.
     public static let structuralCommands: Set<Command> = [
         .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose,
-        .sessionMove, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
+        .sessionMove, .sessionScratch, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
     ]
 
     /// parse reads `request` against the remote window `store`, resolving its targets there. A field the server
@@ -20,7 +20,7 @@ extension RemoteOperation {
     public static func parse(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
         let args = request.args ?? ControlArgs()
         // the caller's own id and epoch would be replaced by this window's, running what its epoch might refuse
-        if args.opID != nil || args.epoch != nil || args.panes != nil { return refuse("operation receipts are served only by agterm-server") }
+        if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("operation receipts are served only by agterm-server") }
         if let field = unsupportedField(request.cmd, args) { return refuse("\(field) is not available in a remote window") }
         let select = args.noSelect != true
         let shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command)
@@ -54,6 +54,13 @@ extension RemoteOperation {
             return session(request.target, in: store) { id in
                 let shown = mode == .on || (mode == .toggle && store.session(withID: id)?.isSplit != true)
                 return .operation(.setSplit(id, shown: shown, axis: args.axis), select: false)
+            }
+        case .sessionScratch:
+            guard let mode = ControlToggleMode.parse(args.mode) else { return refuse("invalid scratch mode: \(args.mode ?? "toggle")") }
+            return session(request.target, in: store) { id in
+                let shown = mode.desiredValue(current: store.session(withID: id)?.scratchDaemon?.shown == true)
+                let command = shown ? args.command.flatMap { $0.isEmpty ? nil : $0 } : nil
+                return .operation(.setScratch(id, shown: shown, command: command), select: shown && args.follow == true)
             }
         case .sessionSplitClose:
             return session(request.target, in: store) { .operation(.closeSplit($0), select: false) }

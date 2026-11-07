@@ -176,6 +176,77 @@ struct PaneObserverTests {
         #expect(session.splitCwd == "/var/log")
     }
 
+    private func scratch(_ session: Session) throws -> UUID {
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "on", command: nil)
+        return try #require(session.scratchDaemon?.identity)
+    }
+
+    private func scratchRecord(_ identity: UUID) -> ZmxSessionRecord {
+        ZmxSessionRecord(name: ZmxSupport.scratchDaemonName(for: identity), clients: 0, leaderPID: 200)
+    }
+
+    @Test func aScratchWhoseDaemonIsGoneIsClearedAndItsPanesStay() throws {
+        let session = try session()
+        _ = try scratch(session)
+
+        observer.apply([record(session.paneIdentity)], listedAt: later)
+
+        #expect(session.scratchDaemon == nil)
+        #expect(session.daemonBackedPanes == [session.paneIdentity])
+        #expect(!session.ended)
+    }
+
+    @Test func aListedScratchStaysAndIsNeverAdoptedAsAPane() throws {
+        let session = try session()
+        let identity = try scratch(session)
+
+        observer.apply([record(session.paneIdentity), scratchRecord(identity)], listedAt: later)
+
+        #expect(session.scratchDaemon?.identity == identity)
+        #expect(session.daemonBackedPanes == [session.paneIdentity])
+    }
+
+    @Test(arguments: [(StatusPane.scratch, AgentStatus.idle), (.right, .blocked)])
+    func aGoneScratchClearsOnlyAStatusItOwned(owner: StatusPane, after: AgentStatus) throws {
+        let session = try session(split: true)
+        _ = try scratch(session)
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: owner), forSession: session.id)
+        let split = try #require(session.splitPaneIdentity)
+
+        observer.apply([record(session.paneIdentity), record(split)], listedAt: later)
+
+        #expect(session.scratchDaemon == nil)
+        #expect(session.agentIndicator.status == after)
+    }
+
+    @Test func aScratchNoSessionOwnsIsEndedAtAnyListing() throws {
+        let session = try session()
+        let leftover = ZmxSupport.scratchDaemonName(for: UUID())
+        let listing = [record(session.paneIdentity), ZmxSessionRecord(name: leftover, clients: 0, leaderPID: 300)]
+        harness.runner.killFails = true
+
+        observer.apply(listing, listedAt: later)
+        harness.runner.killFails = false
+        observer.apply(listing, listedAt: later)
+
+        #expect(harness.runner.kills == [leftover, leftover])
+        #expect(session.daemonBackedPanes == [session.paneIdentity])
+    }
+
+    @Test func theLastPaneLostLeavesTheSessionEndedWithItsScratchRunning() throws {
+        let session = try session()
+        let identity = try scratch(session)
+
+        observer.apply([scratchRecord(identity)], listedAt: later)
+
+        #expect(session.ended)
+        #expect(session.scratchDaemon?.identity == identity)
+
+        observer.apply([], listedAt: later)
+
+        #expect(session.scratchDaemon == nil)
+    }
+
     @Test(arguments: [
         ("1234 (zsh) S 1 1234 1234 34816 5678 4194560", Int32(5678)),
         ("1234 (my prog) R 1 1234 1234 34816 99 0", Int32(99)),

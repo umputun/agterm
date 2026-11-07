@@ -381,6 +381,31 @@ final class RemoteCatalogActionsTests {
         #expect(line.contains("--expect-panes \(panes[0].uuidString),\(panes[1].uuidString) --op-id"))
     }
 
+    @Test func aReplacingScratchCarriesTheScratchTheWindowSaw() async {
+        let scratch = CatalogPane(identity: UUID(), daemon: ZmxSupport.scratchDaemonName(for: UUID()), endpoint: Self.endpoint)
+        var entry = session(sessionID, panes: panes)
+        entry.fields.scratch = CatalogScratch(pane: scratch, shown: false)
+        install(snapshot(sessions: [entry]))
+        queue(reply(.noop))
+        queue(reply(.noop))
+
+        _ = await send(.setScratch(sessionID, shown: true, command: "-htop"))
+        _ = await send(.setScratch(sessionID, shown: false))
+
+        let lines = script.commandCalls
+        #expect(lines.first?.contains("session scratch on --target \(sessionID.uuidString) --command=-htop --expect-scratch \(scratch.identity.uuidString) --op-id") == true)
+        #expect(lines.last?.contains("--expect-scratch") == false)
+    }
+
+    @Test func aReplacingScratchOnARowWithoutOneExpectsNone() async {
+        install(snapshot())
+        queue(reply(.noop))
+
+        _ = await send(.setScratch(sessionID, shown: true, command: "htop"))
+
+        #expect(script.commandCalls.first?.contains("--expect-scratch none --op-id") == true)
+    }
+
     @Test func aPaneActionKeepsThePanesSeenWhenItWasDecided() async throws {
         install(snapshot())
         queue(reply(.refused))

@@ -86,7 +86,27 @@ extension RemoteCatalogMirror {
         guard let catalog, let entry = catalog.session(id) else { return nil }
         let companions = entry.fields.parent == nil ? catalog.workspaces.flatMap(\.sessions).filter { $0.fields.parent == id } : []
         let group = [entry] + companions
-        return RemoteCloseScope(sessions: group.map(\.id), live: group.contains { $0.fields.lifecycle == .live })
+        // a running scratch is live work, so an ended row that still has one is asked about, never cleaned up
+        return RemoteCloseScope(sessions: group.map(\.id), live: group.contains { $0.fields.lifecycle == .live || $0.fields.scratch != nil })
+    }
+
+    /// scratchAttachmentStopped marks row `id`'s scratch attach as ended while the catalog still lists that scratch,
+    /// answering its identity to reconnect; nil when the catalog no longer has it.
+    public func scratchAttachmentStopped(of id: UUID) -> UUID? {
+        guard let row = store?.session(withID: id), row.scratchSurface != nil, let scratch = catalog?.session(id)?.fields.scratch,
+              row.scratchDaemon?.identity == scratch.pane.identity else { return nil }
+        row.scratchStoppedGeneration = row.scratchGeneration
+        return scratch.pane.identity
+    }
+
+    /// replaceScratchAttachment swaps a stopped scratch attach for a fresh one, leaving the scratch shown or hidden as
+    /// the catalog has it. False when the catalog changed that scratch or another attach already replaced it.
+    public func replaceScratchAttachment(of id: UUID, identity: UUID) -> Bool {
+        guard let store, let effects, let row = store.session(withID: id), let scratch = catalog?.session(id)?.fields.scratch,
+              scratch.pane.identity == identity, row.scratchDaemon?.identity == identity,
+              row.scratchStoppedGeneration == row.scratchGeneration else { return false }
+        store.replaceScratchSurface(row, command: effects.scratchAttachCommand(host: host, pane: scratch.pane))
+        return true
     }
 
     /// shownCatalog is the catalog without what this window detached, after forgetting detached ids whose records the

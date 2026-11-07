@@ -137,13 +137,13 @@ extension AppActions {
         guard session.remotePresentation?.statusOwnerUnknown != true else { focusActiveSession(); return }
         let pane = indicator.statusPane
         // a shown scratch masks a non-scratch block; overlays are deliberately left alone.
-        if pane != .scratch, session.scratchActive { store?.toggleScratch(session.id) }
+        if pane != .scratch, session.scratchActive, let store { setScratchShown(false, of: session, in: store) }
         switch pane {
         case .right where session.splitSurface != nil:
             session.splitFocused = true
             focusSplitPane(session, wantSplit: true)
         case .scratch:
-            if !session.scratchActive { store?.toggleScratch(session.id) }
+            if !session.scratchActive, let store { setScratchShown(true, of: session, in: store) }
             focusActiveSession()
         case .left, .right, .none:
             session.splitFocused = false

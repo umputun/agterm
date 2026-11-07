@@ -457,6 +457,24 @@ struct RemoteSessionTests {
         #expect(run.process.terminationStatus == 255)
     }
 
+    @Test func anAttachWithALinkNonceAndNoLeadWaitsUnderThatNonce() async throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 255)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "scratch", pane: .left, linkNonce: "s1")
+
+        #expect(!command.contains(ZmxLeadAttachment.nonceVariable))
+        let run = try fake.startShell(command)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(run.process.isRunning)
+        try run.input.fileHandleForWriting.close()
+        for await _ in run.exited {}
+        let text = String(decoding: run.output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+
+        #expect(text.contains("\u{1B}]2;agterm-remote;s1:lost\u{07}"))
+    }
+
     @Test(arguments: [0, 1, 23] as [Int32])
     func anyOtherExitKeepsTodaysLineAndStatus(_ code: Int32) throws {
         let fake = try FakeRemote()

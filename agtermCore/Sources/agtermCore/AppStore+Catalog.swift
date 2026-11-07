@@ -90,6 +90,7 @@ extension AppStore {
             workspaces[at].sessions.insert(session, at: min(index, workspaces[at].sessions.count))
             emitSessionCreated(session, workspace: workspaceID)
         }
+        applyCatalogScratch(session, fields.scratch, context: context)
         return session
     }
 
@@ -103,6 +104,8 @@ extension AppStore {
         if session.customName != name { session.customName = name }
         if session.currentCwd != fields.cwd { session.currentCwd = TerminalText.sanitized(fields.cwd) }
         if session.parentID != fields.parent { session.parentID = fields.parent }
+        let presented = session.presentsCatalog
+        applyCatalogScratch(session, fields.scratch, context: context)
         if fields.lifecycle == .ended {
             if !session.ended {
                 session.ended = true
@@ -111,10 +114,14 @@ extension AppStore {
                 if session.hasSplit, session.splitSurface == nil {
                     session.splitInitialCommand = RemoteSession.endedCommand(host: host)
                 }
-                withdrawRemoteReplicas(of: session)
-                context.effects.catalogRowEnded(session.id)
                 scheduleTreeChanged()
             }
+            // the stream outlives the panes while the scratch runs, and what it showed goes with it
+            if presented, !session.presentsCatalog {
+                withdrawRemoteReplicas(of: session)
+                context.effects.catalogRowEnded(session.id)
+            }
+            if !presented, session.presentsCatalog { context.effects.catalogRowAdded(session) }
             return []
         }
         session.ended = false
@@ -168,6 +175,40 @@ extension AppStore {
             if updated != state { session.remotePresentation = updated }
         }
         return Array(Set(needsAttach))
+    }
+
+    /// applyCatalogScratch keeps a row's scratch on the server's: a shown one attaches its daemon, a hidden one keeps
+    /// its surface, and a replaced or gone one closes it.
+    private func applyCatalogScratch(_ session: Session, _ scratch: CatalogScratch?, context: CatalogRowContext) {
+        if let current = session.scratchDaemon, current.identity != scratch?.pane.identity, !closeScratch(session.id) {
+            // between two attaches there is no surface to close, and what the old scratch owned still goes
+            if session.scratchActive { toggleScratch(session.id) }
+            releaseScratchOwnedState(of: session, token: current.identity.uuidString)
+        }
+        if session.scratchDaemon?.identity != scratch?.pane.identity { session.scratchCommand = nil }
+        let next = scratch.map { Session.ScratchDaemon(identity: $0.pane.identity, shown: $0.shown) }
+        if session.scratchDaemon != next {
+            session.scratchDaemon = next
+            scheduleTreeChanged()
+        }
+        guard let scratch else { return }
+        if scratch.shown, session.scratchSurface == nil, session.scratchCommand == nil {
+            session.scratchCommand = context.effects.scratchAttachCommand(host: context.host, pane: scratch.pane)
+        }
+        if session.scratchActive != scratch.shown { toggleScratch(session.id) }
+    }
+
+    /// replaceScratchSurface drops a scratch surface whose attach ended without the scratch's own close, so the deck
+    /// builds the next one from `command`; the scratch keeps its shown state and what its program owns.
+    func replaceScratchSurface(_ session: Session, command: String) {
+        if let old = session.scratchSurface {
+            if session.searchSurface === old { session.clearSearch() }
+            old.teardown()
+        }
+        session.scratchSurface = nil
+        session.scratchStoppedGeneration = nil
+        session.scratchCommand = command
+        session.scratchGeneration += 1
     }
 
     private func addCatalogSplit(_ session: Session, pane: CatalogPane, fields: CatalogSessionFields,

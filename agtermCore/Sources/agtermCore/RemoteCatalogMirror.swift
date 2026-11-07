@@ -5,11 +5,13 @@ import Foundation
 @MainActor
 public protocol RemoteCatalogEffects: AnyObject {
     func attachCommand(host: String, pane: CatalogPane) -> String
-    /// catalogRowAdded starts what a new live row runs beside its panes, its presentation stream. An ended row
-    /// never arrives: the server refuses a stream for a session with no live pane.
+    /// scratchAttachCommand attaches a row's server scratch: no lead, and a lost link keeps its screen for a reconnect.
+    func scratchAttachCommand(host: String, pane: CatalogPane) -> String
+    /// catalogRowAdded starts what a row runs beside its panes, its presentation stream, while it is live or its
+    /// scratch runs: the server refuses a stream for a session with neither.
     func catalogRowAdded(_ session: Session)
     func catalogRowRemoved(_ sessionID: UUID)
-    /// catalogRowEnded stops what a row ran beside its panes once its replicas are withdrawn; the row and its
+    /// catalogRowEnded stops what a row ran beside its panes once it has ended and has no scratch; the row and its
     /// screens stay.
     func catalogRowEnded(_ sessionID: UUID)
     /// catalogPaneNeedsAttach asks for a fresh attach of a pane whose slot holds no live surface for it: its
@@ -24,6 +26,7 @@ public protocol RemoteCatalogEffects: AnyObject {
 
 extension RemoteCatalogEffects {
     public func catalogViewStateChanged() {}
+    public func scratchAttachCommand(host: String, pane: CatalogPane) -> String { attachCommand(host: host, pane: pane) }
 }
 
 /// RemoteCatalogMirror keeps one remote window's store equal to its server's catalog. Frames move the mirrored
@@ -238,7 +241,7 @@ public final class RemoteCatalogMirror {
                 }
                 let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context)
                 if let kept = store.catalogHiddenViews.removeValue(forKey: row.id) { kept.apply(to: row) } else { viewState.apply(to: row) }
-                if !row.ended { effects.catalogRowAdded(row) }
+                if row.presentsCatalog { effects.catalogRowAdded(row) }
             }
         }
         if let pending = pendingSelection, store.session(withID: pending.id) != nil {
@@ -247,7 +250,8 @@ public final class RemoteCatalogMirror {
         }
         selectRow()
         // a pane the catalog dropped gives its channel back; the attaches above leased the ones it lists
-        let panes = shown.flatMap(\.sessions).flatMap(\.panes).map { "pane:\($0.identity)" }
+        let sessions = shown.flatMap(\.sessions)
+        let panes = (sessions.flatMap(\.panes) + sessions.compactMap(\.fields.scratch?.pane)).map { "pane:\($0.identity)" }
         pool?.retain(Set(panes), prefix: "pane:")
     }
 }

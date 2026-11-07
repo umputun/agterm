@@ -129,7 +129,7 @@ public enum RemoteSession {
                                      lead: ZmxLeadAttachment? = nil,
                                      connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        guard ZmxSupport.isDaemonName(daemon) else { throw InvocationError.invalidSession }
+        guard ZmxSupport.isDaemonName(daemon) || ZmxSupport.isScratchDaemonName(daemon) else { throw InvocationError.invalidSession }
         guard isPath(endpoint.executable), isPath(endpoint.socketDirectory) else {
             throw InvocationError.invalidEndpoint
         }
@@ -157,10 +157,11 @@ public enum RemoteSession {
     /// `cat` ends with the app's pty. The mouse and focus reporting a remote program left on is switched off
     /// first, or those reports would echo onto the kept screen, and echo goes with the cursor: a paste or a
     /// wheel scroll would otherwise print under the bar, and Ghostty draws its password lock in place of the
-    /// cursor while echo is off. Without a lead nonce nothing could be believed, so it exits.
+    /// cursor while echo is off. `linkNonce` gives an attach that takes no lead the same wait. Without either nonce,
+    /// the wrapper exits with SSH's status.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
-                                         lead: ZmxLeadAttachment? = nil,
+                                         lead: ZmxLeadAttachment? = nil, linkNonce: String? = nil,
                                          connectTimeout: Int = 5, controlPath: String? = nil) throws -> String {
         let argv = try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
                                      connectTimeout: connectTimeout, controlPath: controlPath)
@@ -180,9 +181,9 @@ public enum RemoteSession {
             : "if agterm_connection_wait; then \(attach); status=$?; else status=255; fi"
         let prelude = controlPath.map { connectionWait(host: host, controlPath: $0) + "; " } ?? ""
         var script = "\(prelude)\(keepAlive); \(run); \(report); exit \"$status\""
-        if let lead {
+        if let nonce = lead?.nonce ?? linkNonce {
             let bar = CommandRestore.shellQuotedLine(["Connection to \(host) lost · reconnecting… · any key retries now"])
-            let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: lead.nonce)])
+            let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: nonce)])
             let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
             script = "\(prelude)\(keepAlive); \(run); if [ \"$status\" -eq 255 ]; then "
                 + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "

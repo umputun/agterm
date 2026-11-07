@@ -17,7 +17,6 @@ extension ServerActions {
     public func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse { unserved("setSessionFlag") }
     public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse { unserved("markSessionSeen") }
     public func setSessionRestore(_ target: String?, window: String?, update: ControlSessionRestoreUpdate) -> ControlResponse { unserved("setSessionRestore") }
-    public func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse { unserved("scratchSession") }
     public func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse { unserved("focusSessionPane") }
     public func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse { unserved("resizeSplit") }
     public func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse { unserved("setSurfaceZoom") }
