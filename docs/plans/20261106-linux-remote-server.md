@@ -649,7 +649,7 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - [ ] on the final tree, once each: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, the
       Linux build and test, and the new `agtermUITests` classes with `-only-testing` against
       `scripts/server-container.sh`
-- [ ] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test process; container stopped
+- [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test process; container stopped
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
