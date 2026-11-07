@@ -92,7 +92,7 @@ extension ControlServer: ControlActions {
         case .loopback: return ControlResponse(ok: false, error: OverlayHtmlError.remoteLoopback)
         case .tooLarge: return ControlResponse(ok: false, error: OverlayHtmlError.remoteTooLarge)
         case .pointsUnsupported: return ControlResponse(ok: false, error: OverlayPointError.remote)
-        case .local: break
+        case .local: if options.forwarded { return ControlResponse(ok: false, error: OverlayHtmlError.presenter) }
         }
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
             return ControlResponse(ok: false, error: alreadyOpen)

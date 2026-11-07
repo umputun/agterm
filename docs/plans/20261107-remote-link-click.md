@@ -224,25 +224,27 @@
 - Modify: `agterm/Control/ControlServer+{ImagePage,MarkdownPage,TextPage,DocumentPage}.swift`
 - Create: `agterm/Control/ControlServer+ForwardedClick.swift` and `agtermTests/ControlServerForwardedClickTests.swift`
 
-- [ ] `forwarded` option carried through `with(imagePixels:)` and the image `sized` rebuild; `openHtmlOverlay`
-      refuses `.local` for it; helpers and `canShowLinkOverlay` take `forwarded` (zoom skipped, HUD kept)
-- [ ] `forwardedClickTarget` in agtermCore; `openRemotePage` in forwarded mode admits a hidden clicked remote
-      occupant at its slot check and closes it through the existing remote page close path only after every
-      other check passed, immediately before the new reservation
-- [ ] `receivePresenterFrame` handles `.linkClick`: capture the presenter generation, target, `resolvedRoute` off the
-      main actor, page routes through the helpers; recheck the generation after each await and before the
-      close and reservation, dropping a stale click silently; every other outcome and every helper `false`
-      sends one `link.refused` to the captured generation; nothing reveals or opens a browser here
-- [ ] core tests: pane primary, split and unknown; a hidden clicked remote page is replaced, a shown one and a
+- [x] `forwarded` option carried through `with(imagePixels:)` and the image `sized` rebuild; `openHtmlOverlay`
+      refuses `.local` for it; helpers take the click's presenter generation (`forward:`) and
+      `canShowLinkOverlay` takes `forwarded` (zoom skipped, HUD kept)
+- [x] `forwardedClickPane` in agtermCore (returns the pane's cwd); `openRemotePage` in forwarded mode admits a hidden
+      clicked remote occupant at its slot check and closes it through `closeRemoteOverlay` only after every other
+      check passed, immediately before the new reservation
+- [x] `receivePresenterFrame` handles `.linkClick` (`receiveForwardedClick`): capture the presenter generation,
+      target, `resolvedRoute` and the file's existence off the main actor, page routes through the helpers, which
+      recheck the generation after their probe; a stale click is dropped silently; every other outcome and every
+      helper `false` sends one `link.refused` to the captured generation; nothing reveals or opens a browser here;
+      ➕ a relative link no candidate matched refuses `notFound`, not `notAPage`
+- [x] core tests: pane primary, split and unknown; a hidden clicked remote page is replaced, a shown one and a
       non-clicked one refuse the slot; a mixed-lead refusal leaves the hidden page in place; a frame-size or
       capability refusal leaves it in place
-- [ ] hosted tests: each page kind reaches the fake presenter; a relative path and `src/x.py:42` resolve against
+- [x] hosted tests: each page kind reaches the fake presenter; a relative path and `src/x.py:42` resolve against
       the primary's and the split's own cwd and open at the line; page size follows the sent mode (browser mode
       95%); missing file, unknown pane, `.bin`, web link, busy slot each produce one refusal and no local page;
       mixed lead refused for every page kind, image included; origin zoom does not block; a hidden forwarded
-      page is replaced, and kept when the click's file is missing or invalid; a delayed probe across a
-      presenter change opens, closes and sends nothing
-- [ ] run the touched tests
+      page is replaced, and kept when the click's file is missing; a presenter change before the probe ends
+      opens, closes and sends nothing
+- [x] run the touched tests (49 core; 10 ControlServerForwardedClickTests and 25 ControlServerLinkOverlayTests hosted)
 
 ### Task 5: Viewer forwarding path
 **Files:**

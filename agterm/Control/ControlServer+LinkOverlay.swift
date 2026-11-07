@@ -15,10 +15,11 @@ extension ControlServer {
         return openSessionOverlay(id.uuidString, window: nil, options: options).ok
     }
 
-    /// canShowLinkOverlay is the up-front HUD and zoom refusal `openLinkOverlay` describes.
-    func canShowLinkOverlay(session id: UUID) -> Bool {
+    /// canShowLinkOverlay is the up-front HUD and zoom refusal `openLinkOverlay` describes. A click forwarded from the
+    /// presenting Mac skips the zoom check: this Mac's zoom is not what that Mac shows.
+    func canShowLinkOverlay(session id: UUID, forwarded: Bool = false) -> Bool {
         guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
-        if let windowID = library.windowID(forSession: id),
+        if !forwarded, let windowID = library.windowID(forSession: id),
            TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
         return true
     }
