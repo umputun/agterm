@@ -56,8 +56,11 @@ extension ControlServer {
                     _ = store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: pane)
                     return
                 }
-                // a row hidden for undo keeps waiting; finalizing its close lets the next due probe drop it
-                guard let store = library.store(forSession: entry.session), PaneLead.reconnect?(view, entry.cover) == true else {
+                // a row hidden for undo keeps waiting; finalizing its close lets the next due probe drop it. A catalog
+                // row also waits for a fresh catalog, which may have ended it while its host was away
+                guard let store = library.store(forSession: entry.session),
+                      view.session?.remotePresentation?.binding.catalogOwned != true || store.catalogState == .connected,
+                      PaneLead.reconnect?(view, entry.cover) == true else {
                     book.wait(pane: pane, session: entry.session, host: entry.host, cover: entry.cover, now: hudClock())
                     return
                 }
