@@ -11,7 +11,8 @@ public final class ServerControlSocket: @unchecked Sendable {
     public typealias Adopter = @Sendable (_ conn: Int32, _ request: ControlRequest, _ response: ControlResponse,
                                           _ written: Bool) -> Bool
 
-    static let streamingCommands: Set<Command> = [.zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe]
+    static let streamingCommands: Set<Command> = [.zmxPresent, .catalogSubscribe, .sessionOverlayJobRun,
+                                                   .sessionOverlayPageServe]
 
     static let readTimeoutSeconds = 5
     static let writeTimeoutSeconds = 5

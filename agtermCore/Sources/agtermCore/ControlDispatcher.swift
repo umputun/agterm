@@ -69,7 +69,8 @@ public struct ControlDispatcher {
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,
-                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize:
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize,
+                .windowRemoteOpen:
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
@@ -698,6 +699,14 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid window minimize mode: \(request.args?.mode ?? "toggle")")
             }
             return await actions.windowMinimize(request.target, mode: mode)
+        case .windowRemoteOpen:
+            guard let host = request.args?.host?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "window.remote.open requires a host")
+            }
+            guard RemoteSession.isHost(host) else {
+                return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
+            }
+            return await actions.windowRemoteOpen(host: host)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

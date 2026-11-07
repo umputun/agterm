@@ -216,6 +216,8 @@ public protocol ControlActions {
     func windowZoom(_ target: String?) -> ControlResponse
     func windowFullscreen(_ target: String?) -> ControlResponse
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
+    /// windowRemoteOpen answers `window.remote.open` with the id of the window showing `host`'s catalog.
+    func windowRemoteOpen(host: String) async -> ControlResponse
     /// Open a native picker. The host owns window resolution, registry lookup, and presentation.
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse
     /// openPick bound to `session`: drawn by the session's presenter or in the session's own window.

@@ -44,7 +44,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.attachRemote.rawValue == "attach_remote")
         #expect(BuiltinAction.editFlaggedSessions.rawValue == "edit_flagged_sessions")
         #expect(BuiltinAction.editFocusedWorkspaces.rawValue == "edit_focused_workspaces")
-        #expect(BuiltinAction.allCases.count == 55)
+        #expect(BuiltinAction.allCases.count == 56)
     }
 
     @Test func rejectsUnknownName() {
@@ -141,6 +141,7 @@ struct BuiltinActionTests {
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
             .dashboard: Chord(mods: [.command, .shift], key: "g"),
             .attachRemote: Chord(mods: [.command, .shift], key: "r"),
+            .openRemoteWindow: nil,
             .editFlaggedSessions: nil,
             .editFocusedWorkspaces: nil,
         ]
@@ -202,7 +203,7 @@ struct BuiltinActionTests {
             .convertCompanion,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
             .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
-            .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces,
+            .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces, .openRemoteWindow,
         ]
         for action in keyless {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")

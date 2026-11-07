@@ -35,6 +35,60 @@ struct RemoteSessionTests {
         #expect(lines.last.map(String.init) == "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin:\(home.path)/.local/bin")
     }
 
+    @Test func aPooledCommandRidesItsConnectionAndAnUnpooledOneIsUnchanged() throws {
+        let pooled = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C", controlPath: "/tmp/p-0")
+        let plain = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C")
+
+        #expect(pooled.prefix(13) == ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                                      "-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/p-0", "-o", "ControlPersist=60",
+                                      "buildbox"])
+        #expect(Array(pooled.suffix(1)) == Array(plain.suffix(1)))
+    }
+
+    @Test func aPooledPaneAttachesOnceItsConnectionAnswers() throws {
+        let bin = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-ssh-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: bin) }
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try """
+        #!/bin/sh
+        case "$*" in *"-O check"*) exit 0;; *" -G "*) exit 0;; esac
+        echo attached; exit 0
+        """.writeExecutable(to: bin.appendingPathComponent("ssh"))
+        let line = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon, session: "s",
+                                                       pane: .left, lead: ZmxLeadAttachment(claim: false),
+                                                       controlPath: "/tmp/p-0")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", line]
+        process.environment = ["PATH": bin.path + ":/usr/bin:/bin"]
+        process.standardInput = FileHandle.nullDevice
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+
+        #expect(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("attached"))
+        #expect(process.terminationStatus == 0)
+        #expect(line.contains("if agterm_connection_wait; then"))
+        #expect(line.contains("else status=255; fi"), "no master is a lost connection, which takes the reconnect path")
+    }
+
+    @Test func anUnpooledPaneScriptHasNoConnectionWait() throws {
+        let line = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon, session: "s",
+                                                       pane: .left, lead: ZmxLeadAttachment(claim: false))
+
+        #expect(!line.contains("agterm_connection_wait"))
+        #expect(!line.contains("ControlPath"))
+    }
+
+    @Test func aJobHelperWaitsForItsConnectionOrSaysThereIsNone() {
+        let line = RemoteSession.waitingForConnection("'ssh' 'job'", host: "buildbox", controlPath: "/tmp/p-0")
+
+        #expect(line.contains("agterm_connection_wait || {"))
+        #expect(line.contains("no connection to buildbox"))
+        #expect(line.contains("exit 255"))
+    }
+
     @Test func presentIsNonInteractiveAndRunsTheBridgeForThatSession() throws {
         let argv = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C")
 

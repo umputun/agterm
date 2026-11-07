@@ -47,6 +47,7 @@ struct PaletteCatalogTests {
             "Actual Font Size",
             "Select Theme…",
             "Attach Remote…",
+            "Open Remote Window…",
             "Edit Keymap",
             "Reload Keymap",
             "Edit Hooks",
@@ -70,7 +71,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 62)
+        #expect(PaletteCommand.allCases.count == 63)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -361,6 +362,13 @@ struct PaletteCatalogTests {
         #expect(!PaletteCommand.attachRemote.isEnabled(
             in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true, pickerActive: true)))
         #expect(PaletteCommand.attachRemote.builtinAction == .attachRemote)
+    }
+
+    @Test func openRemoteWindowNeedsAConfiguredRemoteButNoWorkspace() {
+        #expect(!PaletteCommand.openRemoteWindow.isEnabled(in: PaletteContext(hasCurrentWorkspace: true)))
+        #expect(PaletteCommand.openRemoteWindow.isEnabled(in: PaletteContext(hasRemotes: true)))
+        #expect(!PaletteCommand.openRemoteWindow.isEnabled(in: PaletteContext(hasRemotes: true, pickerActive: true)))
+        #expect(PaletteCommand.openRemoteWindow.builtinAction == .openRemoteWindow)
     }
 
     @Test func workspacePresenceGatesTheWorkspaceEntries() {

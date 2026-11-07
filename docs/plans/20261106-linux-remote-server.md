@@ -433,33 +433,33 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - Modify: `agterm/agtermApp+Menus.swift`, `agterm/AppActions.swift`, `agterm/ContentView.swift`
 - Create: tests in `agtermCoreTests` and `agtermTests`
 
-- [ ] window entries carry a source, local or remote(host, catalogID); a remote entry persists host, catalog id and
+- [x] window entries carry a source, local or remote(host, catalogID); a remote entry persists host, catalog id and
       local view state (selection, focus, font, ratio, frame), never sessions, and is skipped by seed, save,
       finalization and Recent Closed
-- [ ] the mirror reconciles the catalog into its store by identity and revision: creates and removes replica
+- [x] the mirror reconciles the catalog into its store by identity and revision: creates and removes replica
       sessions and panes, attaches each pane with `zmx attach`, keeps local view state, and never starts a local
       shell for a pane whose attach is starting or failed
-- [ ] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
-- [ ] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
+- [x] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
+- [x] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
       screen readable when this Mac held it (a relaunched Mac shows the row without a screen); Disconnected never
       turns a row into Ended; closing an Ended row is Task 8's, which owns close routing and the sheet
-- [ ] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
+- [x] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
       layout are ignored for its rows; per-session attach rows keep today's handling
-- [ ] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
+- [x] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
       attaches, presentation streams, control commands, page serve and forwards; a full pool adds a master, and a dead
       master is replaced once and its users reconnect through the pool
-- [ ] Connecting, Connected and Disconnected states shown in the window; last sidebar and screens kept while
+- [x] Connecting, Connected and Disconnected states shown in the window; last sidebar and screens kept while
       disconnected; reconnect takes a fresh snapshot
-- [ ] protocol check at connect: the Mac reads the server's protocol and catalog versions and refuses an
+- [x] protocol check at connect: the Mac reads the server's protocol and catalog versions and refuses an
       unsupported server, or an origin with no catalog version (a Mac app), with a message naming both
-- [ ] open from File ▸ Open Remote Window (hosts from `remotes.conf`) and from the control API: protocol command
+- [x] open from File ▸ Open Remote Window (hosts from `remotes.conf`) and from the control API: protocol command
       `window.remote.open {host}`, dispatcher, `ControlActions` with a default, `agtermctl window remote open HOST`;
       opening a host or catalog already open raises that window and returns its id; closing the window detaches;
       `tree` reports the window's `remote {host, catalogID, state}`
 - [ ] checkpoint: build and launch an isolated Debug instance against `scripts/server-container.sh` and show Eugene the
       remote window (sidebar, connection state, a disconnected window) before writing its hosted and UI tests;
       adjust from his verdict
-- [ ] tests: source persistence round trip, reconciliation (add, remove, reorder, epoch change), slot settlement,
+- [x] tests: source persistence round trip, reconciliation (add, remove, reorder, epoch change), slot settlement,
       state transitions, no local seed on cold reopen, `window.remote.open` dedup and read-back; an older
       presentation snapshot delivered after a newer catalog split, swap and removal changes nothing; refusal of an
       origin without a catalog version; in the container with stock sshd (`MaxSessions 10`), opening and

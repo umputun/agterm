@@ -117,6 +117,7 @@ extension AppActions {
         case .resetFontSize: resetFontSize()
         case .selectTheme: openThemePalette()
         case .attachRemote: attachRemote()
+        case .openRemoteWindow: openRemoteWindow()
         case .editKeymap: editKeymap()
         case .reloadKeymap: reloadKeymap()
         case .editHooks: editHooks()

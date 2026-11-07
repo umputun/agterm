@@ -103,6 +103,8 @@ public enum Command: String, Codable, Sendable {
     case windowZoom = "window.zoom"
     case windowFullscreen = "window.fullscreen"
     case windowMinimize = "window.minimize"
+    /// windowRemoteOpen opens a window mirroring the agterm-server on `host`, or raises the one already showing it.
+    case windowRemoteOpen = "window.remote.open"
     case keymapReload = "keymap.reload"
     case keymapList = "keymap.list"
     case keymapRun = "keymap.run"

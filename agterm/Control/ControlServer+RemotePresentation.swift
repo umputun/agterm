@@ -13,15 +13,18 @@ extension ControlServer {
         let id = session.id
         guard remoteClients[id] == nil, let host = session.remoteHost,
               let binding = session.remotePresentation?.binding else { return }
+        let pool = catalogPool(forSession: id)
+        let path = pool?.lease("present:\(id)")
         let argv: [String]
         do {
-            argv = try RemoteSession.presentCommand(host: host, session: binding.remoteSessionID)
+            argv = try RemoteSession.presentCommand(host: host, session: binding.remoteSessionID, controlPath: path)
         } catch {
             remoteLogger.error("no presentation stream for \(id, privacy: .public): the origin's session id cannot be sent")
             return
         }
+        let transport = pool.flatMap { pool in path.map { PooledTransport(pool: pool, path: $0, inner: remoteTransport) } }
         let client = RemotePresentationClient(argv: argv, presentationVersion: binding.presentationVersion,
-                                              transport: remoteTransport, effects: remoteEffects(for: id),
+                                              transport: transport ?? remoteTransport, effects: remoteEffects(for: id),
                                               now: hudClock)
         remoteClients[id] = client
         client.start()
@@ -30,6 +33,7 @@ extension ControlServer {
 
     func stopRemotePresentation(_ id: UUID) {
         remoteClients.removeValue(forKey: id)?.stop()
+        catalogPool(forSession: id)?.release("present:\(id)")
     }
 
     func stopRemotePresentations() {
@@ -115,12 +119,21 @@ extension ControlServer {
 
     /// Shows an overlay `id`'s origin handed over, running the job's helper on the origin over ssh.
     private func showReplicaOverlay(_ overlay: PresentationOverlay, forSession id: UUID) -> Bool {
+        let pool = catalogPool(forSession: id)
+        let path = pool?.lease("job:\(overlay.job)")
         guard let store = library.store(forSession: id), let host = store.session(withID: id)?.remoteHost,
-              let argv = try? RemoteSession.runJobCommand(host: host, job: overlay.job) else { return false }
-        let command = CommandRestore.shellQuotedLine(argv)
-        return store.presentReplicaOverlay(overlay, command: command, forSession: id) { [weak self] job in
+              let argv = try? RemoteSession.runJobCommand(host: host, job: overlay.job, controlPath: path) else {
+            pool?.release("job:\(overlay.job)")
+            return false
+        }
+        let line = CommandRestore.shellQuotedLine(argv)
+        let command = path.map { RemoteSession.waitingForConnection(line, host: host, controlPath: $0) } ?? line
+        let shown = store.presentReplicaOverlay(overlay, command: command, forSession: id) { [weak self] job in
+            pool?.release("job:\(job)")
             self?.remoteClients[id]?.answer(.overlayClosed(PresentationOverlayChange(job: job)))
         }
+        if !shown { pool?.release("job:\(overlay.job)") }
+        return shown
     }
 
     private func playRemoteSound(_ sound: PresentationSound, forSession id: UUID) {

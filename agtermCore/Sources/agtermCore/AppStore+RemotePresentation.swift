@@ -65,9 +65,16 @@ extension AppStore {
         session.remotePresentation?.connection = connection
         if state.connection != connection { session.remoteConnectionRevision += 1 }
         guard state.connection == .connected, connection != .connected else { return }
+        withdrawRemoteReplicas(of: session)
+    }
+
+    /// withdrawRemoteReplicas takes down everything the presentation stream put on `session`, its terminals
+    /// excepted: the stream left, or the session ended and no stream will come back.
+    func withdrawRemoteReplicas(of session: Session) {
+        let id = session.id
         applyRemoteContext(nil, forSession: id)
         applyRemoteInfo(nil, forSession: id)
-        if state.statusBridged { setAgentIndicator(AgentIndicator(), forSession: id) }
+        if session.remotePresentation?.statusBridged == true { setAgentIndicator(AgentIndicator(), forSession: id) }
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
         if session.askReplica { session.releaseAsk() }
@@ -235,5 +242,13 @@ extension Session {
     public var remoteConnection: RemotePresentationConnection? {
         _ = remoteConnectionRevision
         return remotePresentation?.connection
+    }
+
+    /// remoteRowNotice is the line under a remote row: an ended session names its host, others say what their
+    /// presentation stream is doing, nil when there is nothing to say.
+    public var remoteRowNotice: String? {
+        guard let host = remoteHost else { return nil }
+        if ended { return "Ended on \(host)" }
+        return remoteConnection?.rowNotice(host: host)
     }
 }

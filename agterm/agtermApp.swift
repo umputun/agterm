@@ -312,6 +312,9 @@ struct agtermApp: App {
                             Self.reattachPane(old, claim: false, cover: cover, services: paneServices)
                         }
                         PaneLead.heldExit = { [weak server = controlServer] view in server?.remotePaneHeld(view) }
+                        PaneLead.catalogChannel = { [weak server = controlServer] session, user in
+                            server?.catalogPool(forSession: session)?.lease(user)
+                        }
                         PaneLead.ownerRespawn = { [weak server = controlServer] session, daemon in
                             let prior = server?.priorLeader(daemon: daemon)
                             return { server?.ownerRespawned(session: session, daemon: daemon, prior: prior) }
@@ -510,7 +513,9 @@ struct agtermApp: App {
             services.zmxForegroundResolver?.noteLifecycleChange()
             ZmxLeadBook.shared.begin(lead, pane: session.paneIdentity)
         }
-        let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
+        let view = GhosttySurfaceView(workingDirectory: session.localWorkingDirectory(reported: session.initialCwd,
+                                                                                   homeDirectory: NSHomeDirectory()),
+                                      fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
         let provider = LaunchSeedProvider.pane(session: session, pane: .left, disposition: disposition,
@@ -637,6 +642,11 @@ struct agtermApp: App {
     static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
                                library: WindowLibrary, alreadyFinalized: UUID? = nil) {
         guard let session = store.session(withID: sessionID), session.surface === view || session.splitSurface === view else { return }
+        // the catalog owns a remote window's panes: an exit here attaches again, or keeps an ended row's screen
+        if session.remotePresentation?.binding.catalogOwned == true {
+            if !session.ended { PaneLead.reattach?(view, false) }
+            return
+        }
         if view.isSplitPane {
             store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {

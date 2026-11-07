@@ -25,6 +25,10 @@ extension CatalogSnapshot {
             }
         case .sessionRemoved(let id):
             removeSession(id)
+        case .sessionMoved(let id, let workspace, let index):
+            guard let moving = session(id), let at = workspaces.firstIndex(where: { $0.id == workspace }) else { return }
+            removeSession(id)
+            workspaces[at].sessions.insert(moving, at: min(max(index, 0), workspaces[at].sessions.count))
         case .sessionOrder(let ids, let workspace):
             guard let at = workspaces.firstIndex(where: { $0.id == workspace }) else { return }
             workspaces[at].sessions = Self.ordered(workspaces[at].sessions, by: ids, id: \.id)
@@ -51,31 +55,35 @@ extension CatalogSnapshot {
             list.append(change)
             state.apply(change)
         }
-        let nextPlace = Dictionary(next.workspaces.flatMap { workspace in workspace.sessions.map { ($0.id, workspace.id) } },
-                                   uniquingKeysWith: { first, _ in first })
-        for workspace in state.workspaces {
-            for session in workspace.sessions where nextPlace[session.id] != workspace.id {
-                emit(.sessionRemoved(session.id))
-            }
+        let nextIDs = Set(next.workspaces.flatMap(\.sessions).map(\.id))
+        for session in state.workspaces.flatMap(\.sessions) where !nextIDs.contains(session.id) {
+            emit(.sessionRemoved(session.id))
         }
-        let nextIDs = Set(next.workspaces.map(\.id))
-        for workspace in state.workspaces where !nextIDs.contains(workspace.id) {
-            emit(.workspaceRemoved(workspace.id))
-        }
+        // a new workspace arrives empty and its sessions follow one by one, so a session moving into it is a
+        // move that keeps its row on the viewer, never a removal and an addition
         for (index, workspace) in next.workspaces.enumerated() {
             guard let current = state.workspaces.first(where: { $0.id == workspace.id }) else {
-                emit(.workspaceAdded(workspace, index: index))
+                emit(.workspaceAdded(CatalogWorkspace(id: workspace.id, name: workspace.name, sessions: []), index: index))
                 continue
             }
             if current.name != workspace.name { emit(.workspaceChanged(id: workspace.id, name: workspace.name)) }
         }
-        if state.workspaces.map(\.id) != next.workspaces.map(\.id) { emit(.workspaceOrder(next.workspaces.map(\.id))) }
+        // every session reaches its workspace before any workspace is reordered, so no order lists a row that is
+        // about to leave
         for workspace in next.workspaces {
             for (index, session) in workspace.sessions.enumerated() {
-                guard let current = state.session(session.id) else {
+                guard state.session(session.id) != nil else {
                     emit(.sessionAdded(session, workspace: workspace.id, index: index))
                     continue
                 }
+                if state.workspaces.first(where: { $0.id == workspace.id })?.sessions.contains(where: { $0.id == session.id }) != true {
+                    emit(.sessionMoved(session.id, workspace: workspace.id, index: index))
+                }
+            }
+        }
+        for workspace in next.workspaces {
+            for session in workspace.sessions {
+                guard let current = state.session(session.id) else { continue }
                 for change in Self.paneChanges(from: current, to: session) { emit(change) }
                 if current.fields != session.fields { emit(.sessionChanged(session.fields)) }
             }
@@ -84,6 +92,11 @@ extension CatalogSnapshot {
                 emit(.sessionOrder(order, workspace: workspace.id))
             }
         }
+        let workspaceIDs = Set(next.workspaces.map(\.id))
+        for workspace in state.workspaces where !workspaceIDs.contains(workspace.id) {
+            emit(.workspaceRemoved(workspace.id))
+        }
+        if state.workspaces.map(\.id) != next.workspaces.map(\.id) { emit(.workspaceOrder(next.workspaces.map(\.id))) }
         return list
     }
 

@@ -18,14 +18,24 @@ extension ControlServer {
         pruneRespawnBook()
         let book = RemoteReconnectBook.shared
         for pane in book.due(now: hudClock()) {
+            // a catalog pane reconnects through its pool, whose master comes back once for all its panes
+            let pool = book.entries[pane].flatMap { catalogPool(forSession: $0.session) }
+            let probe = pool?.leaseOnce()
             guard let entry = book.entries[pane], waitingSurface(pane, in: entry.session) != nil,
-                  let argv = try? RemoteSession.probeCommand(host: entry.host) else {
+                  let argv = try? RemoteSession.probeCommand(host: entry.host, controlPath: probe?.path) else {
+                probe.map { pool?.release($0.user) }
                 book.cancel(pane: pane)
                 continue
             }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let result = await remoteRunner.run(argv, deadline: Self.reconnectProbeDeadline)
+                var result = RemoteCommandResult(status: 255, stdout: "", stderr: "no connection to \(entry.host)")
+                if let pool, let probe, await !pool.ready(probe.path) {
+                    pool.release(probe.user)
+                } else {
+                    result = await remoteRunner.run(argv, deadline: Self.reconnectProbeDeadline)
+                    probe.map { pool?.release($0.user) }
+                }
                 guard let entry = book.finished(pane: pane, ok: result.status == 0, stderr: result.stderr,
                                                 now: hudClock()),
                       let view = waitingSurface(pane, in: entry.session) else { return }

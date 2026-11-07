@@ -7,7 +7,7 @@ struct Window: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Window commands.",
         subcommands: [New.self, List.self, Select.self, Go.self, Close.self, Rename.self, Delete.self, Resize.self,
-                      Move.self, Zoom.self, Fullscreen.self, Minimize.self]
+                      Move.self, Zoom.self, Fullscreen.self, Minimize.self, Remote.self]
     )
 
     struct New: RequestCommand {
@@ -135,6 +135,23 @@ struct Window: ParsableCommand {
                 return ControlRequest(cmd: .windowMinimize, target: "active", args: ControlArgs(mode: id))
             }
             return ControlRequest(cmd: .windowMinimize, target: id, args: ControlArgs(mode: mode ?? "toggle"))
+        }
+    }
+
+    struct Remote: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Windows mirroring an agterm-server.",
+                                                        subcommands: [Open.self])
+
+        struct Open: RequestCommand {
+            static let configuration = CommandConfiguration(
+                abstract: "Open a window mirroring HOST's agterm-server, or raise the one already showing it.")
+            @Argument(help: "The ssh destination running agterm-server.") var host: String
+            @OptionGroup var options: BasicOptions
+            var echoesResultID: Bool { true }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: host))
+            }
         }
     }
 }

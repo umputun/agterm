@@ -64,3 +64,49 @@ Kinds the gate does not assert, checked by hand over the same attach:
 | `overlay open --text FILE --follow-file` | refused: a log page is not shown on another Mac |
 | `overlay open --url http://127.0.0.1:…` | refused: a loopback url names agterm-server's host |
 | `pick open --no-block --session ID` | a replica picker with the origin's id |
+
+# Remote window gate
+
+`scripts/remote-window-gate.sh` checks a remote window (`window remote open HOST`) against
+`scripts/server-container.sh` under stock sshd, whose `MaxSessions` stays at 10. It drives an isolated Debug
+instance, never the live terminal.
+
+```bash
+make build
+scripts/server-container.sh build && scripts/server-container.sh start
+export AGTERM_STATE_DIR=/tmp/agw
+scripts/remote-window-gate.sh [COUNT]        # COUNT server sessions, default 20
+```
+
+The Debug instance's ssh goes through a wrapper in `$AGTERM_STATE_DIR/bin` that adds the container's key and host
+key and logs every call, so the master starts can be counted.
+
+| step | done | asserted |
+|---|---|---|
+| open | COUNT sessions on the server, one split; `window remote open` | the window `connected`, COUNT rows, every row's presentation `connected`; every server daemon has one client |
+| reconnect | every master killed with SIGKILL, as a network loss would | the same, and no connection started twice |
+| ended | a session's daemon killed on the server | the row stays, `ended`, still realized |
+| promoted | the split session's primary daemon killed | the row stays with no split, not ended |
+| shell-exit | `exit` typed into a session | the row is gone |
+| unreachable, back | `docker pause`, then `docker unpause` | `disconnected` with every row kept, then `connected` |
+| no-stray-ssh | after the run | every running master start is its own path's master, none a plain session |
+
+Only the ControlPath values this run's ssh log names are counted or killed: the pool directory is shared by every remote
+window of the user.
+
+## Results
+
+2026-11-06, `scripts/server-container.sh` with agterm-server from this branch and a Debug build of the same tree, 20
+sessions: every asserted step passed, exit 0. Masters left by the stopped instance exited on their own within
+`ControlPersist`'s 60 s.
+
+| step | result |
+|---|---|
+| open | 20 rows connected over 6 masters for 42 counted channels; 21 daemons with one client each |
+| reconnect | every row and pane back after every master was killed; 8 starts, each path once (the reconnect probes' own leases opened 2 slots) |
+| ended, promoted, shell-exit | pass |
+| unreachable, back | Disconnected with all 19 rows kept, then connected |
+
+Two defects the gate found, both fixed: the server closed a `catalog.subscribe` connection after its ok reply
+(`streamingCommands` lacked it), and a killed master's leftover socket made each replacement `ssh -M` run without
+multiplexing, so the pool now removes it before starting one.

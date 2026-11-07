@@ -66,7 +66,7 @@ public struct CatalogRoot: Sendable, Equatable {
 public enum HeadlessCommandPolicy {
     static let physicalWindowCommands: Set<Command> = [
         .windowNew, .windowSelect, .windowGo, .windowClose, .windowRename, .windowDelete, .windowResize,
-        .windowMove, .windowZoom, .windowFullscreen, .windowMinimize,
+        .windowMove, .windowZoom, .windowFullscreen, .windowMinimize, .windowRemoteOpen,
         .sidebar, .sidebarMode, .sidebarFlaggedLayout, .sidebarDensity, .sidebarExpand, .sidebarCollapse,
         .sidebarWidth, .fontInc, .fontDec, .fontReset, .quick, .quickType, .quickText, .dashboard,
         .surfaceZoom, .surfaceCursor, .themeSet, .themeList, .keymapReload, .keymapList, .keymapRun,

@@ -126,6 +126,9 @@ extension agtermApp {
                 Button("Attach Remote…") { actions.attachRemote() }
                     .keyboardShortcut(shortcut(for: .attachRemote))
                     .disabled(!PaletteCommand.attachRemote.isEnabled(in: context))
+                Button("Open Remote Window…") { actions.openRemoteWindow() }
+                    .keyboardShortcut(shortcut(for: .openRemoteWindow))
+                    .disabled(!PaletteCommand.openRemoteWindow.isEnabled(in: context))
                 Menu("Open Recent") {
                     let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
                     let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }

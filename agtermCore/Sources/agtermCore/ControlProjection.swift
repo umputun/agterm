@@ -836,6 +836,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// agent already reading the tree gets its version floor without a second round-trip; `version` answers
     /// the same question for a caller that has no tree, no window, and no JSON parser.
     public let app: AppIdentity?
+    /// remote is the server a remote window mirrors and its connection; nil/omitted for a local window.
+    public var remote: ControlRemoteWindow?
     /// The Live sessions reset state: app-global like `app`, omitted when nothing is pending and no launch
     /// has consumed a marker. The read side of `zmx.reset`.
     public let liveReset: ControlLiveResetReadback?
@@ -935,6 +937,8 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// notifications so ⌘M or a Dock click shows too. A minimized window still reports its `geometry` (where
     /// it comes back to).
     public let minimized: Bool?
+    /// remote is the server a remote window mirrors; its `state` is omitted for a closed window, which has no stream.
+    public var remote: ControlRemoteWindow?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,

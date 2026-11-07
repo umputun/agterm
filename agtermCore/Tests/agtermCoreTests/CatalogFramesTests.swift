@@ -75,7 +75,7 @@ struct CatalogFramesTests {
     @Test func anUnknownKindDecodesAsUnknown() throws {
         let line = Data(#"{"kind":"session.teleported","epoch":"e1","rev":3,"id":"x"}"#.utf8)
 
-        #expect(try CatalogCodec.decode(line) == .unknown("session.teleported"))
+        #expect(try CatalogCodec.decode(line) == .unknown(kind: "session.teleported", epoch: "e1", rev: 3))
     }
 
     @Test func versionsTravelWithTheProtocolKeyword() throws {

@@ -139,6 +139,8 @@ public enum CatalogChange: Equatable, Sendable {
     case sessionAdded(CatalogSession, workspace: UUID, index: Int)
     case sessionChanged(CatalogSessionFields)
     case sessionRemoved(UUID)
+    /// sessionMoved puts a session into another workspace; the viewer keeps its row.
+    case sessionMoved(UUID, workspace: UUID, index: Int)
     case sessionOrder([UUID], workspace: UUID)
     case paneAdded(CatalogPane, session: UUID)
     case paneChanged(CatalogPane, session: UUID)
@@ -153,6 +155,7 @@ public enum CatalogChange: Equatable, Sendable {
         case .sessionAdded: "session.added"
         case .sessionChanged: "session.changed"
         case .sessionRemoved: "session.removed"
+        case .sessionMoved: "session.moved"
         case .sessionOrder: "session.order"
         case .paneAdded: "pane.added"
         case .paneChanged: "pane.changed"
@@ -175,7 +178,7 @@ public struct CatalogHello: Codable, Equatable, Sendable {
 }
 
 /// CatalogFrame is one line of the catalog stream. A delta's kind is its change's kind; an unknown kind decodes
-/// as `.unknown` and is skipped, never an error.
+/// as `.unknown`, keeping the envelope's epoch and revision so a viewer can step past it, and is never an error.
 public enum CatalogFrame: Equatable, Sendable {
     case hello(CatalogHello)
     case snapshot(CatalogSnapshot)
@@ -185,7 +188,7 @@ public enum CatalogFrame: Equatable, Sendable {
     case delta(epoch: String, rev: Int, change: CatalogChange)
     case ping
     case ack
-    case unknown(String)
+    case unknown(kind: String, epoch: String?, rev: Int?)
 }
 
 extension CatalogFrame: Codable {
@@ -209,7 +212,8 @@ extension CatalogFrame: Codable {
         case "ack": self = .ack
         default:
             guard let change = try Self.change(kind, container) else {
-                self = .unknown(kind)
+                self = .unknown(kind: kind, epoch: try container.decodeIfPresent(String.self, forKey: .epoch),
+                                rev: try container.decodeIfPresent(Int.self, forKey: .rev))
                 return
             }
             self = .delta(epoch: try container.decode(String.self, forKey: .epoch), rev: try container.decode(Int.self, forKey: .rev),
@@ -232,6 +236,9 @@ extension CatalogFrame: Codable {
                                  index: try container.decode(Int.self, forKey: .index))
         case "session.changed": return .sessionChanged(try container.decode(CatalogSessionFields.self, forKey: .session))
         case "session.removed": return .sessionRemoved(try container.decode(UUID.self, forKey: .id))
+        case "session.moved":
+            return .sessionMoved(try container.decode(UUID.self, forKey: .id), workspace: try container.decode(UUID.self, forKey: .workspace),
+                                 index: try container.decode(Int.self, forKey: .index))
         case "session.order":
             return .sessionOrder(try container.decode([UUID].self, forKey: .ids), workspace: try container.decode(UUID.self, forKey: .workspace))
         case "pane.added":
@@ -269,7 +276,10 @@ extension CatalogFrame: Codable {
             try Self.encode(change, into: &container)
         case .ping: try container.encode("ping", forKey: .kind)
         case .ack: try container.encode("ack", forKey: .kind)
-        case .unknown(let kind): try container.encode(kind, forKey: .kind)
+        case .unknown(let kind, let epoch, let rev):
+            try container.encode(kind, forKey: .kind)
+            try container.encodeIfPresent(epoch, forKey: .epoch)
+            try container.encodeIfPresent(rev, forKey: .rev)
         }
     }
 
@@ -288,6 +298,10 @@ extension CatalogFrame: Codable {
             try container.encode(workspace, forKey: .workspace)
             try container.encode(index, forKey: .index)
         case .sessionChanged(let fields): try container.encode(fields, forKey: .session)
+        case .sessionMoved(let id, let workspace, let index):
+            try container.encode(id, forKey: .id)
+            try container.encode(workspace, forKey: .workspace)
+            try container.encode(index, forKey: .index)
         case .sessionOrder(let ids, let workspace):
             try container.encode(ids, forKey: .ids)
             try container.encode(workspace, forKey: .workspace)

@@ -24,7 +24,7 @@ final class ControlServer {
     let statusSoundPlayer: StatusSoundPlayer
     let launchRestoreMode: RestoreMode
     let zmxForegroundResolver: ZmxForegroundResolver?
-    private let socketPath: String
+    let socketPath: String
 
     /// The target-resolution query layer: owns the `emptyStore`/`store` frontmost-fallback and wraps the
     /// pure `ControlResolve` matcher with app-side store scoping and the pinned wire-error strings.
@@ -94,6 +94,8 @@ final class ControlServer {
     var remoteClients: [UUID: RemotePresentationClient] = [:]
     var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()
     var remoteTick: Task<Void, Never>?
+    /// remoteCatalogs holds one catalog stream per open remote window; `ControlServer+RemoteCatalog` owns them.
+    var remoteCatalogs: [UUID: RemoteCatalogLink] = [:]
     /// replicaPages are the pages this Mac shows for origins, by local page id; `ControlServer+RemotePage` owns them.
     var replicaPages: [UUID: ReplicaPageRecord] = [:]
     /// remoteLinkRefusalHuds are the slot generations of the refusal panels a forwarded click opened, which a mirrored
@@ -294,6 +296,8 @@ final class ControlServer {
     /// Bind and start listening. Idempotent — the scene `.task` re-runs when a window is recreated and a
     /// second `bind` must not be attempted. Any failure logs and returns, leaving the app to launch.
     func start() {
+        // ahead of the socket: a remote window mirrors its server whether or not this instance serves control
+        wireRemoteCatalogs()
         guard listener == nil else { return }
 
         guard socketPath.utf8.count < 104 else {
@@ -358,6 +362,7 @@ final class ControlServer {
         // or a bind that failed) still holds one and would otherwise keep it for the whole process.
         defer { releaseOwnership() }
         shutdownPresentationStreams()
+        stopRemoteCatalogs()
         stopRemotePresentations()
         guard let loop = listener else { return }
         loop.stop()
@@ -552,7 +557,7 @@ final class ControlServer {
     nonisolated private static func waitsOnNetwork(_ cmd: Command) -> Bool {
         // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket
         [.zmxTree, .zmxAttach, .zmxAttachGroup, .sessionRestart, .sessionCompanionNew, .sessionCompanionDuplicate,
-         .sessionCompanionPage].contains(cmd)
+         .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
     }
 
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
@@ -653,7 +658,7 @@ final class ControlServer {
                 .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect, .windowGo,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .windowMinimize,
+                .windowFullscreen, .windowMinimize, .windowRemoteOpen,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
                 .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
                 .recentList, .recentOpen, .recentClear:
@@ -883,7 +888,7 @@ final class ControlServer {
         // the window's dashboard controller (nil until WindowContentView registers it), read LIVE for the four
         // dashboard read-backs: the keyboard-driven dashboard bypasses the command path, so a cache goes stale.
         let dashboard = DashboardControllerRegistry.shared.controller(for: windowID)
-        return store.controlTree(
+        var tree = store.controlTree(
             paneForeground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
                     ForegroundProcess.running(for: $0, shellBasename: shellBasename,
@@ -939,6 +944,8 @@ final class ControlServer {
             linkOpenMode: settingsModel.settings.effectiveLinkOpenMode,
             sidebarDensity: GhosttyApp.shared.sidebarDensity
         )
+        tree.remote = windowID.flatMap(library.remoteNode(for:))
+        return tree
     }
 
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME, optional

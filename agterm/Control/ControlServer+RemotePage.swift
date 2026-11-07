@@ -11,6 +11,8 @@ struct ReplicaPageRecord {
     let origin: UUID
     let channel: RemotePageChannel?
     var appliedSeq = 0
+    /// poolUser is the ssh channel a catalog row's page holds for as long as it is shown.
+    var poolUser: String?
 }
 
 extension ControlServer {
@@ -19,8 +21,13 @@ extension ControlServer {
         guard let store = library.store(forSession: id), let session = store.session(withID: id) else { return "no such session" }
         var page = page
         var argv: [String]?
+        let pool = page.source.usesChannel ? catalogPool(forSession: id) : nil
+        let poolUser = pool.map { _ in "page:\(page.token)" }
+        let path = poolUser.flatMap { pool?.lease($0) }
         if page.source.usesChannel {
-            guard let host = session.remoteHost, let command = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
+            guard let host = session.remoteHost,
+                  let command = try? RemoteSession.pageServeCommand(host: host, token: page.token, controlPath: path) else {
+                poolUser.map { pool?.release($0) }
                 return "the origin cannot be reached for this page"
             }
             argv = command
@@ -32,18 +39,32 @@ extension ControlServer {
             let points = imagePoints(in: store, sessionID: id, pixels: ImagePixels(width: width, height: height))
             (page.sizePercent, page.width, page.height) = (ImagePage.basePercent, points.width, points.height)
         }
-        if let reason = store.presentReplicaPage(page, forSession: id) { return reason }
+        if let reason = store.presentReplicaPage(page, forSession: id) {
+            poolUser.map { pool?.release($0) }
+            return reason
+        }
         guard let slot = store.replicaPage(page.page, forSession: id), let origin = slot.page.replicaOf else {
+            poolUser.map { pool?.release($0) }
             return "page not shown"
         }
         let local = slot.page.id
         let channel = argv.map { _ in RemotePageChannel() }
-        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel)
+        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
                                             replica: channel.map { Self.link($0) })
         if let channel, let argv {
             channel.onClose = { [weak store] in store?.closeHtmlOverlay(local) }
-            channel.start(argv, launcher: pageLauncher)
+            if let pool, let path {
+                let launcher = pageLauncher
+                Task { @MainActor [weak self] in
+                    let ready = await pool.ready(path)
+                    guard self?.replicaPages[local]?.channel === channel else { return }
+                    guard ready else { return channel.close("no connection to \(pool.host)") }
+                    channel.start(argv, launcher: launcher)
+                }
+            } else {
+                channel.start(argv, launcher: pageLauncher)
+            }
         }
         return nil
     }
@@ -52,6 +73,7 @@ extension ControlServer {
     /// channel. Runs once per page, from the model's release signal.
     func replicaPageReleased(_ local: UUID, origin: UUID) {
         guard let record = replicaPages.removeValue(forKey: local) else { return }
+        record.poolUser.map { catalogPool(forSession: record.session)?.release($0) }
         pendingReplicaStates.remove(local)
         remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(page: origin.uuidString)))
         record.channel?.onClose = nil

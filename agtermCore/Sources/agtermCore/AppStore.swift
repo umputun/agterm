@@ -143,6 +143,12 @@ public final class AppStore {
     @ObservationIgnored let persistence: PersistenceStore
     /// catalogOperations is agterm-server's operation table, written in every save of this store; nil on a Mac.
     @ObservationIgnored public var catalogOperations: CatalogOperationTable?
+    /// catalogMirrored is set once a remote window's store holds its server's catalog; until then its saved view
+    /// state is the only record of how this Mac showed the rows.
+    @ObservationIgnored public internal(set) var catalogMirrored = false
+    /// catalogState is a remote window's connection to its server, nil for a local window. Observed: the window
+    /// strip draws it.
+    public internal(set) var catalogState: RemoteCatalogMirror.State?
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
     /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
@@ -608,6 +614,12 @@ public final class AppStore {
         closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
         // a converted companion can still own a parked companion recorded under it
         finalizeParkedCompanions(of: [sessionID] + companions.map(\.id))
+    }
+
+    /// closeSessionRow closes one row and none of its companions: a catalog row's companions leave only when
+    /// their own catalog sessions do.
+    func closeSessionRow(_ sessionID: UUID) {
+        closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
     }
 
     private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) {

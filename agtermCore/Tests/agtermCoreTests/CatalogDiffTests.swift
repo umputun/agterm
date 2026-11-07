@@ -26,7 +26,7 @@ struct CatalogDiffTests {
 
         let kinds = current.changes(to: next).map(\.kind)
 
-        #expect(kinds == ["session.removed", "workspace.changed", "pane.added", "session.changed", "session.added"])
+        #expect(kinds == ["session.removed", "workspace.changed", "session.added", "pane.added", "session.changed"])
     }
 
     @Test func anUnchangedCatalogHasNoChanges() {

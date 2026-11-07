@@ -105,11 +105,16 @@ extension AppStore {
     /// Exchanges two role-mutable pane slots and every pane-owned field. Layout stays fixed; focus follows the
     /// terminal.
     @discardableResult
-    public func swapPanes(_ sessionID: UUID) -> SwapRefusal? {
+    public func swapPanes(_ sessionID: UUID, allowingUnrealized: Bool = false) -> SwapRefusal? {
         guard let session = session(withID: sessionID) else { return .noSession }
         guard session.hasSplit else { return .noSplit }
-        // a headless store's panes are daemons with no surface, so only the model fields move
-        if !headless {
+        // a catalog row follows a swap its server already made, so a pane whose attach is still starting moves
+        // as a slot, and only the surfaces that exist take their new role
+        if allowingUnrealized {
+            (session.surface as? any PaneRoleMutableSurface)?.setPaneRole(.split)
+            (session.splitSurface as? any PaneRoleMutableSurface)?.setPaneRole(.primary)
+        } else if !headless {
+            // a headless store's panes are daemons with no surface, so only the model fields move
             guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
                 return .slotNotRealized
             }
@@ -279,8 +284,17 @@ extension AppStore {
             closeSession(sessionID, alreadyFinalized: alreadyFinalized)
             return .closed
         }
+        promoteSplit(session)
+        return .promoted
+    }
+
+    /// promoteSplit moves the split pane into the primary slot and leaves the session a single pane, the
+    /// survivor's surface, identity, command and metadata included. The surface may not exist yet: a catalog
+    /// row promotes a pane its server already promoted, whose attach may still be starting.
+    func promoteSplit(_ session: Session) {
+        let survivor = session.splitSurface
         defer { savePaneLayout(session) }
-        if session.hudPaneIdentity == session.paneIdentity { closeHud(sessionID) }
+        if session.hudPaneIdentity == session.paneIdentity { closeHud(session.id) }
         if session.askPaneIdentity == session.paneIdentity { session.cancelPendingAsk() }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
@@ -354,7 +368,6 @@ extension AppStore {
             }
         }
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
-        return .promoted
     }
 
     /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, its

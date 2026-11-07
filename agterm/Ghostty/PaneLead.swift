@@ -19,6 +19,9 @@ enum PaneLead {
     /// Attaches a parked pane again without the claim, covered until its first report when `cover`. False
     /// when nothing was attached.
     static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool) -> Bool)?
+    /// catalogChannel leases a pane of a remote window's row its ssh channel; nil for every other row. Installed by
+    /// the app.
+    static var catalogChannel: ((_ session: UUID, _ user: String) -> String?)?
     /// heldExit hands a remote pane's clean exit to the respawn join. Installed by the app.
     static var heldExit: ((_ view: GhosttySurfaceView) -> Void)?
     /// ownerRespawn reads a daemon's leader before a parent respawns, then returns what publishes the respawn.
@@ -106,7 +109,8 @@ struct PaneReattach {
               let daemon = binding.daemon(forLocalPane: identity),
               let command = try? RemoteSession.attachPaneCommand(
                   host: origin.host, endpoint: origin.endpoint, daemon: daemon, session: origin.sessionName,
-                  pane: old.isSplitPane ? .right : .left, lead: lead)
+                  pane: old.isSplitPane ? .right : .left, lead: lead,
+                  controlPath: PaneLead.catalogChannel?(session.id, "pane:\(identity)"))
         else { return nil }
         return PaneReattach(command: command, wait: true, environment: old.env, workingDirectory: old.workingDirectory)
     }

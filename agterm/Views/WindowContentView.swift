@@ -419,6 +419,18 @@ struct WindowContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // the overlay renders in-deck inside `sessionDetail` (`overlayPanel`), not at this level.
                 .overlay(alignment: .topTrailing) { searchBarLayer }
+                // over the terminals, not above them: a row would resize every pane on each connection change
+                .overlay(alignment: .top) { remoteConnectionLayer }
+        }
+    }
+
+    @ViewBuilder private var remoteConnectionLayer: some View {
+        if let state = store.catalogState, let host = library.windows.first(where: { $0.id == windowID })?.source?.host,
+           let notice = state.windowNotice(host: host) {
+            RemoteConnectionStrip(notice: notice, refused: state.isRefused, chromeText: chromeText,
+                                  terminalColor: terminalColor)
+                .padding(.top, 8)
+                .padding(.horizontal, 8)
         }
     }
 

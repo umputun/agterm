@@ -174,6 +174,10 @@ public extension ControlActions {
 
     var takesOperationReceipts: Bool { false }
 
+    func windowRemoteOpen(host _: String) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.remote.open"))
+    }
+
     func claimOverlayJob(_: String) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.job.run"))
     }

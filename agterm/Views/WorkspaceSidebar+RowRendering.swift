@@ -145,11 +145,8 @@ extension WorkspaceSidebar.Coordinator {
         }
     }
 
-    /// The notice a remote row shows while its presentation stream is not up, nil otherwise.
-    func presentationNotice(for session: Session) -> String? {
-        guard let host = session.remoteHost else { return nil }
-        return session.remoteConnection?.rowNotice(host: host)
-    }
+    /// presentationNotice is the line a remote row shows while it has ended or its stream is not up.
+    func presentationNotice(for session: Session) -> String? { session.remoteRowNotice }
 
     /// Shows the unseen-notification `count` capsule on the row (hidden, zero-width when 0, so the
     /// name reclaims the space). The `notify-badge` accessibility hook lives on `BadgeView`.

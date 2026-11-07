@@ -128,7 +128,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, dashboard, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
-    case attachRemote
+    case attachRemote, openRemoteWindow
     case editKeymap, reloadKeymap, editHooks, reloadHooks, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, editFlaggedSessions, clearFocus, editFocusedWorkspaces
     case addWorkspaceToFocus, toggleWorkspaceFilter
@@ -168,6 +168,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
             return context.canStepWindows
         case .attachRemote:
             return context.hasRemotes && context.hasCurrentWorkspace
+        case .openRemoteWindow:
+            return context.hasRemotes
         default:
             return true
         }
@@ -287,6 +289,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .resetFontSize: return "Actual Font Size"
         case .selectTheme: return "Select Theme…"
         case .attachRemote: return "Attach Remote…"
+        case .openRemoteWindow: return "Open Remote Window…"
         case .editKeymap: return "Edit Keymap"
         case .reloadKeymap: return "Reload Keymap"
         case .editHooks: return "Edit Hooks"
@@ -358,6 +361,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .focusLeftPane: return .focusLeftPane
         case .focusRightPane: return .focusRightPane
         case .attachRemote: return .attachRemote
+        case .openRemoteWindow: return .openRemoteWindow
         case .editFlaggedSessions: return .editFlaggedSessions
         case .editFocusedWorkspaces: return .editFocusedWorkspaces
         case .editKeymap, .reloadKeymap, .editHooks, .reloadHooks, .editGhosttyConfig, .reloadConfig,

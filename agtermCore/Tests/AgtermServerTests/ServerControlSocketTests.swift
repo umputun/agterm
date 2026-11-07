@@ -76,6 +76,20 @@ final class ServerControlSocketTests {
         #expect(adopted.lock.withLock { adopted.calls.map(\.cmd) } == [.zmxPresent])
     }
 
+    // regression: the socket closed a subscribe after its ok reply, so a remote window never got a snapshot
+    @Test func aCatalogSubscribeAnsweredOkKeepsItsConnection() async throws {
+        let adopted = Adopted()
+        try serve(reply: ControlResponse(ok: true), adopted: adopted)
+
+        let (fd, reply) = try await connect(ControlRequest(cmd: .catalogSubscribe))
+        defer { close(fd) }
+        let echo = try await exchange(fd, sending: Data("hello\n".utf8))
+
+        #expect(reply.contains(#""ok":true"#))
+        #expect(echo == "echo:hello")
+        #expect(adopted.lock.withLock { adopted.calls.map(\.cmd) } == [.catalogSubscribe])
+    }
+
     @Test func aRefusedStreamingCommandClosesItsConnection() async throws {
         let adopted = Adopted()
         try serve(reply: ControlResponse(ok: false, error: "no such session"), adopted: adopted)

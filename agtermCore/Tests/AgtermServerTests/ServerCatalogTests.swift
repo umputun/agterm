@@ -101,7 +101,7 @@ struct ServerCatalogTests {
             "pane.removed", "session.changed",
             "workspace.added",
             "workspace.changed",
-            "session.removed", "session.added",
+            "session.moved",
             "workspace.order",
             "session.removed",
             "workspace.removed",
@@ -186,6 +186,14 @@ struct ServerCatalogTests {
 
     @Test func catalogSubscribeIsServed() {
         #expect(ServerCommandPolicy.refusal(.catalogSubscribe) == nil)
+    }
+
+    @Test func aServerOpensNoRemoteWindows() async {
+        let direct = await harness.actions.windowRemoteOpen(host: "buildbox")
+
+        #expect(ServerCommandPolicy.refusal(.windowRemoteOpen)
+            == "window.remote.open is not available on agterm-server: it drives a window on the Mac showing it")
+        #expect(direct.ok == false)
     }
 
     private nonisolated static func readFrame(_ fd: Int32) -> CatalogFrame? {
