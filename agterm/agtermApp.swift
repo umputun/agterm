@@ -140,6 +140,7 @@ struct agtermApp: App {
         actions.remoteAttacher = controlServer
         actions.companionDuplicator = controlServer
         LinkOpener.shared.mode = { settingsModel.settings.effectiveLinkOpenMode }
+        controlServer.installRemoteLinkClicks()
         LinkOpener.shared.overlay = { [weak controlServer] url, session, percent in
             controlServer?.openLinkOverlay(url, session: session, sizePercent: percent) ?? false
         }

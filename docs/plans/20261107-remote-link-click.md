@@ -249,21 +249,22 @@
 ### Task 5: Viewer forwarding path
 **Files:**
 - Modify: `agterm/agtermApp.swift` (one call)
-- Modify: `agterm/Control/ControlServer+RemotePresentation.swift`
+- Modify: `agterm/Control/ControlServer+RemotePresentation.swift` (the `linkRefused` effect)
+- Create: `agterm/Control/ControlServer+RemoteLinkClick.swift` and `agtermTests/ControlServerRemoteLinkClickTests.swift`
 - Create: `agtermCore/Sources/agtermCore/AppStore+LinkClickRequest.swift` and `agtermCoreTests/AppStoreLinkClickRequestTests.swift`
-- Modify: `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] `linkClickRequest` in agtermCore: presenter mode, origin kind, pane mapping, the app's hidden flag
-- [ ] `ControlServer` installs `LinkOpener.forward` and `refuse`; forward reads HUD / zoom / cover on this Mac,
-      calls the builder, then `answer(.linkClick)` or `refuse`
-- [ ] `refuse` beeps when the session already shows a HUD (local or mirrored), its window has a zoomed terminal,
+- [x] `linkClickRequest` in agtermCore: presenter mode, origin kind, pane mapping, the app's hidden flag
+- [x] `ControlServer.installRemoteLinkClicks` installs `LinkOpener.forward` and `refuse`; forward reads HUD / zoom /
+      cover on this Mac, calls the builder, then `answer(.linkClick)` or returns the refusal
+- [x] `refuse` beeps when the session already shows a HUD (local or mirrored), its window has a zoomed terminal,
       or a cover overlay holds the slot; otherwise it opens `HudSpec(message:, hideAfter:
       AppActions.remoteAttachErrorSeconds)` through `openHud` with `RemoteLinkRefusal.message(host:)`, and beeps
-      if that open fails; `effects.linkRefused` calls the same `refuse` with live state
-- [ ] core tests: each refusal reason and the success frame with the origin pane identity and mode
-- [ ] hosted tests: a refusal sends nothing; a `link.refused` frame opens one self-hiding HUD; with an agent HUD
+      if that open fails; `effects.linkRefused` calls the same `refuse` with live state; ➕ the beep is the status
+      sound player's `default` (the system alert), whose alert hosted tests already fake
+- [x] core tests: each refusal reason and the success frame with the origin pane identity and mode
+- [x] hosted tests: a refusal sends nothing; a `link.refused` frame opens one self-hiding HUD; with an agent HUD
       up the refusal beeps and the original HUD stays unchanged; a zoomed terminal and a busy slot beep
-- [ ] run the touched tests
+- [x] run the touched tests (3 core; 5 ControlServerRemoteLinkClickTests and 46 ControlServerRemotePresentationTests)
 
 ### Task 6: Verify acceptance criteria
 - [ ] every Overview item holds; each refusal reports exactly once and its HUD clears itself; local panes unchanged
