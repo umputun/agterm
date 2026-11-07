@@ -150,6 +150,72 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
                        "a=sub/b.md,b=c.MARKDOWN,c=x.md#h,k=x.md?q=1,d=,e=,f=,g=,h=https://example.com/x.md,j=#frag,l=..%5Cx.md")
     }
 
+    func testSchemeServedLinkPagesKeepTheirScrollAcrossHistoryReloadAndThemeRefresh() async throws {
+        let filler = (1...150).map { "paragraph \($0) of filler text that takes up a line or two." }.joined(separator: "\n\n")
+        let docs: [String: Data] = [
+            "/docs/a.md": Data(MarkdownPage.html(markdown: "# A\n\n\(filler)\n\n[to b](sub/b.md#deep)\n", images: .init(),
+                                                 style: MarkdownAssets.shared.style, links: true).utf8),
+            "/docs/sub/b.md": Data(MarkdownPage.html(markdown: "# B\n\n\(filler)\n\n## Deep\n\n\(filler)\n", images: .init(),
+                                                     style: MarkdownAssets.shared.style, links: true).utf8),
+        ]
+        let pageID = UUID()
+        let handler = HtmlPageSchemeHandler(pageID: pageID) { path in
+            guard let data = docs[path] else { throw URLError(.fileDoesNotExist) }
+            return HtmlPageResource(mimeType: "text/html", chunks: AsyncThrowingStream {
+                $0.yield(data)
+                $0.finish()
+            })
+        }
+        let view = linkPageView(handler: handler)
+        let window = try host(view)
+        defer { window.orderOut(nil) }
+        let scroll = { try await view.evaluateJavaScript("Math.round(window.scrollY)") as? Int ?? -1 }
+        view.load(URLRequest(url: try XCTUnwrap(HtmlPageSchemeHandler.url(pageID: pageID, path: "/docs/a.md"))))
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "A" }
+
+        _ = try await view.evaluateJavaScript("window.scrollTo(0, 1500)")
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "1500" }
+        _ = try await view.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitForScript("document.getElementById('deep') ? location.pathname : ''", in: view) { $0 == "/docs/sub/b.md" }
+        try await waitForScript("Math.round(window.scrollY) > 1500 && Math.abs(document.getElementById('deep').getBoundingClientRect().top) < 5",
+                                in: view) { $0 == "true" }
+        let moved = try await scroll() - 900
+        _ = try await view.evaluateJavaScript("window.scrollTo(0, \(moved))")
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
+
+        view.goBack()
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "A" }
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "1500" }
+        view.goForward()
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "B" }
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
+
+        let history = (view.backForwardList.backList.count, view.backForwardList.forwardList.count)
+        let freshB = "!document.documentElement.dataset.stale && document.querySelector('h1')?.textContent === 'B'"
+        _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
+        view.reload()
+        try await waitForScript(freshB, in: view) { $0 == "true" }
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
+        XCTAssertEqual(view.backForwardList.backList.count, history.0)
+        XCTAssertEqual(view.backForwardList.forwardList.count, history.1)
+
+        let controller = view.configuration.userContentController
+        controller.removeAllUserScripts()
+        controller.addUserScript(WKUserScript(source: HtmlOverlayTheme(background: "#000000", foreground: "#ffffff", dark: true).script(themed: true),
+                                              injectionTime: .atDocumentStart, forMainFrameOnly: true, in: WKContentWorld.world(name: "agterm-theme")))
+        controller.addUserScript(markdownScript)
+        _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
+        view.reload()
+        try await waitForScript(freshB, in: view) { $0 == "true" }
+        try await waitForScript("getComputedStyle(document.documentElement).getPropertyValue('--agterm-background').trim()", in: view) {
+            $0 == "#000000"
+        }
+        try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
+        XCTAssertEqual(view.backForwardList.backList.count, history.0)
+        XCTAssertEqual(view.backForwardList.forwardList.count, history.1)
+        XCTAssertEqual(view.url?.path, "/docs/sub/b.md")
+    }
+
     func testAMarkdownPageLinksHeadingsAndKeepsOtherTargetsInert() async throws {
         let source = "# Intro & Setup!\n\n## Usage\n\n## Usage\n\n## Usage-1\n\n"
             + "[a](#usage-1) [b](about:blank) [c](other.md) [d](https://example.com/x)\n"
@@ -229,12 +295,16 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(current?.loadError, MarkdownProbe.Failure.unreadable(overlay.source.markdownPath ?? "").description)
     }
 
-    private func linkPageView() -> WKWebView {
+    private var markdownScript: WKUserScript {
+        WKUserScript(source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true,
+                     in: WKContentWorld.world(name: "agterm-markdown"))
+    }
+
+    private func linkPageView(handler: HtmlPageSchemeHandler? = nil) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
-        configuration.userContentController.addUserScript(WKUserScript(
-            source: MarkdownAssets.shared.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true,
-            in: WKContentWorld.world(name: "agterm-markdown")))
+        configuration.userContentController.addUserScript(markdownScript)
+        if let handler { configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme) }
         return WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: configuration)
     }
 

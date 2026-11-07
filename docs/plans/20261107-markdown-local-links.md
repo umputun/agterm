@@ -189,15 +189,15 @@
 **Files:**
 - Modify: `agtermTests/MarkdownPageRenderingTests.swift`
 
-- [ ] write a hosted test serving two long documents built by `MarkdownPage.html(... links: true)` (`a.md`
+- [x] write a hosted test serving two long documents built by `MarkdownPage.html(... links: true)` (`a.md`
       and `sub/b.md` with a heading) through a test-local `WKURLSchemeHandler`, with production settings:
       content JavaScript off, the CSP, the stylesheet, and render.js as the document-end isolated-world script
-- [ ] assert: clicking `sub/b.md#heading` lands at b's generated heading; Back restores `a.md` at its prior
+- [x] assert: clicking `sub/b.md#heading` lands at b's generated heading; Back restores `a.md` at its prior
       `scrollY`; Forward restores b's position; `webView.reload()` keeps the history list, position and
       scroll; reinstalling the theme script and reloading (the theme-refresh path) keeps the same
-- [ ] if restoration fails, stop and bring the result to Eugene and codex before Task 3 (fallback is the
+- [x] if restoration fails, stop and bring the result to Eugene and codex before Task 3 (fallback is the
       draft's app-side history)
-- [ ] run the test - must pass before Task 3
+- [x] run the test - must pass before Task 3
 
 ### Task 3: Local link pages
 
