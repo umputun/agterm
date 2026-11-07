@@ -55,6 +55,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [kimi-agent-status](kimi-agent-status/) | Kimi Code sessions report agent status onto their sidebar row | 0.3.1, Kimi Code | [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91) |
 | [kiro-agent-status](kiro-agent-status/) | Kiro CLI sessions report active, blocked, and completed onto their sidebar row | 0.7.1, Kiro CLI | [@bitcldr](https://github.com/bitcldr) |
 | [long-commands-status](long-commands-status/) | wrap any long shell command so the row reports active while it runs and completed or blocked when it finishes | 0.17.0 | [@Rulexec](https://github.com/Rulexec) |
+| [multi-agent-git-info](multi-agent-git-info/) | combine Claude Code and Codex Git state on one sidebar line | 0.40.0, python3, git, Claude Code and/or Codex | [@megabyde](https://github.com/megabyde) |
 | [named-companion](named-companion/) | one chord duplicates the session as a tinted companion named from a dialog, or by its Claude Code when left blank | 0.39.0, python3 | [@umputun](https://github.com/umputun) |
 | [remote-claude-session](remote-claude-session/) | one chord runs Claude Code in a tmux session on a remote host, reconnecting and reporting status onto its own tab | 0.22.0, jq, ssh, tmux, Claude Code | [@andr81](https://github.com/andr81) |
 | [scheduled-jobs](scheduled-jobs/) | an agent installs cronn, schedules and reports on jobs, and jobs can open agterm sessions running an agent on a prompt | 0.37.0, Homebrew, jq, Claude Code | [@umputun](https://github.com/umputun) |
