@@ -481,7 +481,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var sidebarDensity: String?
     /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
     public var linkOpenMode: String?
-    /// terminalInputSource is the keyboard input source id held while a terminal has the keyboard; nil = off.
+    /// terminalInputSource is the keyboard input source id held while an agterm window has the keyboard;
+    /// nil = off.
     /// `InputSourceLock` owns when it is selected and restored.
     public var terminalInputSource: String?
     /// htmlOverlayZoom is the page zoom every HTML overlay shows at, nil for actual size; read it through

@@ -928,14 +928,7 @@ final class HtmlOverlayWebView: WKWebView {
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
         if became { onFocus?() }
-        TerminalInputSource.shared.requestRefresh()
         return became
-    }
-
-    override func resignFirstResponder() -> Bool {
-        let resigned = super.resignFirstResponder()
-        TerminalInputSource.shared.requestRefresh()
-        return resigned
     }
 
     // a dropped or pasted file reaches the page's script with its contents, so a drag or paste carrying files

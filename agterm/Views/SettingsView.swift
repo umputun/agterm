@@ -662,7 +662,7 @@ private struct KeyMappingSettingsView: View {
     var body: some View {
         Form {
             Section("Keyboard Layout") {
-                Picker("Lock in terminals", selection: terminalInputSource) {
+                Picker("Lock in agterm", selection: terminalInputSource) {
                     Text("Off").tag(String?.none)
                     ForEach(inputSources, id: \.id) { source in
                         Text(source.name).tag(String?.some(source.id))
