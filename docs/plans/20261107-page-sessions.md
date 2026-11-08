@@ -248,7 +248,16 @@
 - [x] verify edge cases: page parent closed with undo, failed restore row, replica not saved, older snapshot
 - [x] `scripts/build.sh` Release build succeeds
 - [x] run `cd agtermCore && swift test`
-- [x] run `make test-app`
+- [ ] run `make test-app`
+  ⚠️ unresolved. Full runs on the final tree: run 1 passed (1897 tests, before the round 1 fixes), run 2 failed
+  `ControlServerZmxTests.testRealClientPaneChangesFromSupervisorToOrphanedWhileBarePaneReadsApp`, run 3 failed
+  `SessionHostClientTests.testClientQueuedBehindStalledPeersStillJoinsTheHost` (1905 tests, 1 failure each).
+  Both are one mechanism: the session host's own `zmx attach` prints `session ... created`, fails to connect with
+  `FileNotFound`, exits 1, and the client's bare-attach fallback roots the pane at the app. The first test failed
+  0 of 20 times alone and 2 of 20 times beside concurrent core SessionHost tests. Evidence is in
+  `/tmp/agterm-session-host-evidence/*/host.log` and `zmx-logs`. Who unlinks the new socket name is unknown. It
+  matches the dropped item `session-host-sometimes-creates-an-app-rooted-daemon` (removed in 71a9483f); this
+  branch changes no session host or zmx code.
 - [x] run `make lint`
 - [ ] run the targeted UI test once with `-only-testing:`
   ⚠️ blocked while another session's Debug instance (`com.umputun.agterm.debug`, markdown-local-links worktree) runs:
@@ -268,7 +277,8 @@
 ### Task 10: [Final] Update documentation
 - [x] update README.md if the synopsis should mention page sessions
 - [x] update CLAUDE.md if new patterns were discovered
-- [x] move this plan to `docs/plans/completed/`
+- [ ] move this plan to `docs/plans/completed/`
+  ⚠️ implementation complete, validation blocked: the hosted gate above and the targeted UI test are unresolved
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
