@@ -176,7 +176,7 @@ final class ControlServerCompanionsTests: XCTestCase {
                         ControlRequest(cmd: .surfaceCursor, target: id),
                         ControlRequest(cmd: .sessionOverlayResize, target: id, args: ControlArgs(sizePercent: 50)),
                         ControlRequest(cmd: .askOpen, target: id)] {
-            XCTAssertEqual(server.pageCompanionRefusal(request)?.error, "\(request.cmd.rawValue): not available on a page companion")
+            XCTAssertEqual(server.pageCompanionRefusal(request)?.error, "\(request.cmd.rawValue): not available on a page session")
         }
         for request in [ControlRequest(cmd: .sessionRename, target: id), ControlRequest(cmd: .sessionClose, target: id),
                         ControlRequest(cmd: .sessionType, target: parent.id.uuidString),
@@ -216,6 +216,48 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertEqual(page.overlayBackgroundColor, "#112233")
         XCTAssertFalse(parent.overlayActive)
         XCTAssertNotEqual(store.selectedSessionID, page.id)
+    }
+
+    func testAPageSessionLandsAfterTheTargetsGroupAndAnswersWithItsPage() throws {
+        let (store, parent, children) = try group()
+        let (_, after) = try addSession()
+        store.selectSession(after.id)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       follow: true, pane: nil, page: .file(path: "/tmp/p.html", grantRoot: nil))
+
+        let reply = server.createPageSession(children[0].id.uuidString, window: nil, options: options)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let page = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertEqual(page.htmlOverlay?.id.uuidString, reply.result?.pageID)
+        XCTAssertNil(reply.result?.parent)
+        let order = try XCTUnwrap(store.workspaces.first { $0.sessions.contains { $0.id == page.id } }).sessions.map(\.id)
+        XCTAssertEqual(Array(order.drop { $0 != parent.id }), [parent.id] + children.map(\.id) + [page.id, after.id])
+        XCTAssertEqual(store.selectedSessionID, page.id)
+        let node = server.buildTree(in: store).workspaces.flatMap(\.sessions).first { $0.id == page.id.uuidString }
+        XCTAssertEqual(node?.content, "page")
+        XCTAssertNil(node?.parent)
+        XCTAssertEqual(server.pageCompanionRefusal(ControlRequest(cmd: .sessionType, target: page.id.uuidString))?.error,
+                       "session.type: not available on a page session")
+    }
+
+    func testAPageSessionBesideARemoteRowIsLocalAndAnUnknownTargetCreatesNothing() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), remoteHost: "far"))
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: .url(try XCTUnwrap(URL(string: "http://localhost:3000/"))))
+
+        let reply = server.createPageSession(remote.id.uuidString, window: nil, options: options)
+        let before = store.workspaces.flatMap(\.sessions).map(\.id)
+        let missing = server.createPageSession(UUID().uuidString, window: nil, options: options)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let page = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)).flatMap(store.session(withID:)))
+        XCTAssertNil(page.remoteHost)
+        XCTAssertNotEqual(store.selectedSessionID, page.id)
+        XCTAssertFalse(missing.ok)
+        XCTAssertEqual(store.workspaces.flatMap(\.sessions).map(\.id), before)
     }
 
     func testDuplicateAsCompanionRefusesAPageOrUnrealizedSourceAndCreatesNothing() async throws {

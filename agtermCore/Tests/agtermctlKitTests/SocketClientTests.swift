@@ -420,6 +420,31 @@ struct SocketClientTests {
         #expect(server.received?.cmd == .sessionCompanionConvert)
     }
 
+    @Test func anAppTooOldForPageSessionsIsNamedAndNothingElseIsSent() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.page"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "overlay", "open", "--html", "/tmp/p.html", "--page", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for page sessions\n")
+        #expect(server.received?.cmd == .sessionPage)
+    }
+
+    @Test func aPageSessionPrintsTheRowItCreated() throws {
+        let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "PS1", pageID: "P1")))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "overlay", "open", "--url", "https://example.com/", "--page", "--socket", server.path])
+
+        #expect(run.status == 0)
+        #expect(run.out == Data("PS1\n".utf8))
+    }
+
     @Test func aConvertPrintsTheFreshParentItCreated() throws {
         let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "S1", parent: "N1")))
         try server.start()

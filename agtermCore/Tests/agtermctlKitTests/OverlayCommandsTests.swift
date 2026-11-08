@@ -318,6 +318,41 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "result", "--page", "P1", "--pane", "left"]))
     }
 
+    @Test func pageSendsThePageSessionCommandWithItsSourceAndFollow() throws {
+        let file = try request(["session", "overlay", "open", "--html", "/tmp/a/./r.html", "--cwd", "/tmp/a/", "--page", "--follow",
+                                "--js", "--background-color", "#102030", "--target", "p1", "--window", "win"])
+        #expect(file == ControlRequest(cmd: .sessionPage, target: "p1", args: ControlArgs(
+            cwd: "/tmp/a", follow: true, window: "win", color: "#102030", html: "/tmp/a/r.html", javascript: true)))
+        let url = try request(["session", "overlay", "open", "--url", "https://example.com/", "--page", "--persistent"])
+        #expect(url.cmd == .sessionPage)
+        #expect(url.target == "active")
+        #expect(url.args?.url == "https://example.com/")
+        #expect(url.args?.persistent == true)
+        #expect(url.args?.follow == nil)
+        #expect(try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--page", "--block"]).cmd == .sessionPage)
+    }
+
+    @Test(arguments: [
+        ["--html", "/tmp/r.html", "--page", "--companion"],
+        ["revdiff", "--page"],
+        ["--image", "/tmp/a.png", "--page"],
+        ["--markdown", "/tmp/r.md", "--page"],
+        ["--text", "/tmp/a.go", "--page"],
+        ["--html", "/tmp/r.html", "--page", "--pane", "right"],
+        ["--html", "/tmp/r.html", "--page", "--size-percent", "50"],
+        ["--html", "/tmp/r.html", "--page", "--size-percent", "50", "--width", "300"],
+        ["--url", "http://localhost:5173/", "--page", "--block"],
+    ])
+    func pageRefusesAnythingButAFullSizeFileOrURLPageAndCompanion(_ extra: [String]) {
+        #expect(rejects(["session", "overlay", "open"] + extra))
+    }
+
+    @Test func openHelpNamesTheNewRowForFollowAndThePageFlag() {
+        let open = Session.Overlay.Open.helpMessage(columns: 400)
+        #expect(open.contains("--page"))
+        #expect(open.contains("with --companion or --page, the new row"))
+    }
+
     @Test func aPageMayBlockButAUrlMayNot() throws {
         let opened = try request(["session", "overlay", "open", "--html", "/tmp/r.html", "--block"])
         #expect(opened.args?.html == "/tmp/r.html")

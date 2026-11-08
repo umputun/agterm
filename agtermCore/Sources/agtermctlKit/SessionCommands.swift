@@ -648,7 +648,16 @@ struct Session: ParsableCommand {
                 full size, that closes with its page. Refuses --pane, --size-percent, --width and --height.
                 """)
             var companion = false
-            @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
+            @Flag(name: .long, help: """
+                Open the --html/--url page as a top-level page session placed after the target session's group: a sidebar \
+                row of its own that can hold companions. Refuses --pane, --size-percent, --width and --height.
+                """)
+            var page = false
+            @Flag(name: .long, help: """
+                Select (switch to) the target session after opening the overlay; with --companion or --page, the new row \
+                (default: open without switching).
+                """)
+            var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: Overlay.widthHelp) var width: Int?
             @Option(name: .long, help: Overlay.heightHelp) var height: Int?
@@ -671,12 +680,16 @@ struct Session: ParsableCommand {
                 }
             }
 
+            // the flag that makes the page a sidebar row of its own
+            private var rowFlag: String? { companion ? "--companion" : page ? "--page" : nil }
+
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
-                if companion, html == nil && url == nil { throw ValidationError("--companion requires --html or --url") }
-                if companion, pane != nil || sizePercent != nil || width != nil || height != nil {
-                    throw ValidationError("--companion is full size: it takes no --pane, --size-percent, --width or --height")
+                if companion, page { throw ValidationError("--page cannot be combined with --companion") }
+                if let rowFlag, html == nil && url == nil { throw ValidationError("\(rowFlag) requires --html or --url") }
+                if let rowFlag, pane != nil || sizePercent != nil || width != nil || height != nil {
+                    throw ValidationError("\(rowFlag) is full size: it takes no --pane, --size-percent, --width or --height")
                 }
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
                 if [command, html, url, image, markdown, text].compactMap({ $0 }).count != 1 {
@@ -685,15 +698,11 @@ struct Session: ParsableCommand {
                 if line != nil, text == nil { throw ValidationError("--line requires --text") }
                 if let line, line < 1 { throw ValidationError("--line must be 1 or more") }
                 try validateLog()
-                if image != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
-                    throw ValidationError("--image takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
-                }
-                if markdown != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
-                    throw ValidationError("--markdown takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
-                }
-                if text != nil, companion || block || wait || navigation || javascript || chromeless || persistent || browse || cwd != nil {
-                    throw ValidationError("--text takes no --companion, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd")
-                }
+                let pageOnly = [rowFlag != nil, block, wait, navigation, javascript, chromeless, persistent, browse, cwd != nil].contains(true)
+                let pageOnlyFlags = "--companion, --page, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd"
+                if image != nil, pageOnly { throw ValidationError("--image takes no \(pageOnlyFlags)") }
+                if markdown != nil, pageOnly { throw ValidationError("--markdown takes no \(pageOnlyFlags)") }
+                if text != nil, pageOnly { throw ValidationError("--text takes no \(pageOnlyFlags)") }
                 if command == nil, wait || (url != nil && block) { throw ValidationError("a page takes no --wait, and a --url page no --block") }
                 if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
                 if javascript, command != nil { throw ValidationError("--js requires --html or --url") }
@@ -724,7 +733,7 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: companion ? .sessionCompanionPage : .sessionOverlayOpen, target: target.target,
+                ControlRequest(cmd: companion ? .sessionCompanionPage : page ? .sessionPage : .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
@@ -741,11 +750,12 @@ struct Session: ParsableCommand {
             }
 
             func run() throws {
-                if companion, !block { return try runCompanionRequest(makeRequest(), options: options, echoID: true) }
+                let tooOld = page ? "the running app is too old for page sessions" : "the running app is too old for companions"
+                if rowFlag != nil, !block { return try runCompanionRequest(makeRequest(), options: options, echoID: true, tooOld: tooOld) }
                 guard block else { try defaultRun(); return }
                 if html != nil {
                     let send = SocketClient(path: options.socketPath()).send
-                    return try HtmlPageRunner(json: options.json, send: companion ? companionSend(send, json: options.json) : send)
+                    return try HtmlPageRunner(json: options.json, send: rowFlag != nil ? companionSend(send, json: options.json, tooOld: tooOld) : send)
                         .block(makeRequest())
                 }
                 let client = SocketClient(path: options.socketPath())

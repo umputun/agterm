@@ -5,6 +5,8 @@ extension ControlDispatcher {
             return await dispatchCompanionNew(request)
         case .sessionCompanionPage:
             return await dispatchCompanionPage(request)
+        case .sessionPage:
+            return await dispatchPageSession(request)
         case .sessionCompanionDuplicate:
             return await actions.duplicateAsCompanion(request.target, window: request.args?.window,
                                                       select: request.args?.noSelect != true)
@@ -21,23 +23,42 @@ extension ControlDispatcher {
         }
     }
 
-    // a page companion's page is the row, so it is always full size and session-wide
     private func dispatchCompanionPage(_ request: ControlRequest) async -> ControlResponse {
-        let args = request.args
-        let page: HtmlSource
-        switch Self.overlayContent(command: args?.command ?? "", args: args) {
+        switch Self.pageRowOptions(request.args, row: "page companion", needsPage: OverlayHtmlError.companionNeedsPage) {
         case .rejected(let response): return response
-        case .program, .page(.image), .page(.markdown), .page(.text):
-            return ControlResponse(ok: false, error: OverlayHtmlError.companionNeedsPage)
+        case .options(let options): return await actions.createPageCompanion(request.target, window: request.args?.window, options: options)
+        }
+    }
+
+    private func dispatchPageSession(_ request: ControlRequest) async -> ControlResponse {
+        switch Self.pageRowOptions(request.args, row: "page session", needsPage: OverlayHtmlError.pageSessionNeedsPage) {
+        case .rejected(let response): return response
+        case .options(let options): return await actions.createPageSession(request.target, window: request.args?.window, options: options)
+        }
+    }
+
+    private enum PageRowParse {
+        case options(ControlSessionOverlayOpenOptions)
+        case rejected(ControlResponse)
+
+        static func reject(_ error: String) -> PageRowParse { .rejected(ControlResponse(ok: false, error: error)) }
+    }
+
+    // a page row's page is the row, so it is always full size and session-wide
+    private static func pageRowOptions(_ args: ControlArgs?, row: String, needsPage: String) -> PageRowParse {
+        let page: HtmlSource
+        switch overlayContent(command: args?.command ?? "", args: args) {
+        case .rejected(let response): return .rejected(response)
+        case .program, .page(.image), .page(.markdown), .page(.text): return .reject(needsPage)
         case .page(let source): page = source
         }
         if args?.pane != nil || args?.sizePercent != nil || args?.width != nil || args?.height != nil {
-            return ControlResponse(ok: false, error: "a page companion is full size: it takes no --pane, --size-percent, --width or --height")
+            return .reject("a \(row) is full size: it takes no --pane, --size-percent, --width or --height")
         }
         if let color = args?.color, !WatermarkConfig.isValidColorHex(color) {
-            return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            return .reject("invalid color: \(color) (#rrggbb)")
         }
-        return await actions.createPageCompanion(request.target, window: args?.window, options: ControlSessionOverlayOpenOptions(
+        return .options(ControlSessionOverlayOpenOptions(
             command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: args?.color,
             follow: args?.follow ?? false, pane: nil, page: page, navigation: args?.navigation ?? false,
             javascript: args?.javascript ?? false, chromeless: args?.chromeless ?? false,

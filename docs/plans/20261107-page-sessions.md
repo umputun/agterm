@@ -160,18 +160,22 @@
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `ControlDispatcherCompanionsTests.swift`, `HtmlBridgeTests.swift`, `AppStoreCompanionsTests.swift`, `agtermctlKitTests/OverlayCommandsTests.swift` (or the existing overlay CLI test file), `agtermTests/ControlServerCompanionPageTests.swift`, `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] store API creates a top-level page after the anchor's whole group, sharing the overlay-open and
+- [x] store API creates a top-level page after the anchor's whole group, sharing the overlay-open and
       refusal path with `addPageCompanion`; a refused page removes the row again
-- [ ] `session.page` wire command, dispatcher, ControlServer handler, `--follow` selects the new row, a remote
+- [x] `session.page` wire command, dispatcher, ControlServer handler, `--follow` selects the new row, a remote
       anchor creates a local page
-- [ ] `pageCompanionRefusal`'s error names a page session, not a page companion; update its tests
-- [ ] CLI `session overlay --html|--url --page`, exclusive with `--companion`, same source and size/pane refusals
+- [x] `pageCompanionRefusal`'s error names a page session, not a page companion; update its tests
+- [x] CLI `session overlay --html|--url --page`, exclusive with `--companion`, same source and size/pane refusals
       as `--companion`, too-old-app message, help text for `--follow`
-- [ ] write tests: dispatcher success and refusals, placement after a group, bridge default target (test only,
+- [x] write tests: dispatcher success and refusals, placement after a group, bridge default target (test only,
       no bridge code change), CLI request shape and flag conflicts, ControlServer handler
-- [ ] write the targeted UI test: `session overlay --page` then `session new --parent <page>`, read back in
+- [x] write the targeted UI test: `session overlay --page` then `session new --parent <page>`, read back in
       `tree`
-- [ ] run touched tests - must pass before task 4
+- [ ] run touched tests - must pass before task 4 (host-free and hosted pass; the UI test is not run yet)
+- ⚠️ the UI test lives in `agtermUITests/ControlCompanionsUITests.swift`, since `ControlAPIUITests.swift` sits at
+      its 2000-line lint budget; its run was stopped at setUp ("Failed to activate application", state Running
+      Background) while another `com.umputun.agterm.debug` instance from another worktree was running, so it
+      still needs one run with no other Debug instance open
 
 ### Task 4: Page window.close goes through the app session close
 **Files:**
@@ -184,6 +188,11 @@
 - [ ] clear `closeRequested` once the close is handed off, and on a confirmation cancel, so an Undo remount or a
       later mount does not close or prompt again
 - [ ] control `session.overlay.close`/`submit` keep their non-prompting store path
+- [ ] ➕ the failed-page view offers Reload through the existing registry reload path whether or not the page has
+      `--navigation` or is chromeless, so a restored page whose file or server comes back can be retried; hosted
+      test: a restored page with a missing file renders the failure, the file appears, Reload loads it
+- [ ] ➕ Task 2 comment cleanup: drop the PageGroup MARK in `RecentClosedTests.swift` and the `addPageRow` docstring
+      in `AppStoreTestFixtures.swift`; state the save-after-open constraint once and condense `isPersistable`'s doc
 - [ ] write tests: `window.close()` on a page row with companions goes through the session close; undo after it
       does not re-close; cancel does not re-prompt; a terminal overlay closes only the overlay; control close
       stays non-prompting

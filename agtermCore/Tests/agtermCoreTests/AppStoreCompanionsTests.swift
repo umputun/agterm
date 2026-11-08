@@ -775,6 +775,57 @@ struct AppStoreCompanionsTests {
         #expect(store.selectedSessionID == page.id)
     }
 
+    @Test(arguments: [0, 1, 2])
+    func aPageSessionLandsAfterTheAnchorsWholeGroupInItsCwd(anchor: Int) throws {
+        let g = try CompanionGroup()
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))
+
+        let page = try g.store.addPageSession(after: [g.parent, g.first, g.second][anchor].id, overlay: overlay).get()
+
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, page.id, g.after.id])
+        #expect(page.parentID == nil)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(page.initialCwd == ["/parent", "/first", "/second"][anchor])
+        #expect(g.store.selectedSessionID == page.id)
+    }
+
+    @Test func aPageSessionIsSavedOnCreationAndCreatedUnselectedWhenAsked() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let anchor = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/anchor"))
+
+        let page = try store.addPageSession(after: anchor.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                            select: false, backgroundColor: "#112233").get()
+
+        #expect(store.selectedSessionID == anchor.id)
+        #expect(page.overlayBackgroundColor == "#112233")
+        let saved = persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }
+        #expect(saved?.page == PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil), backgroundColor: "#112233"))
+        #expect(saved?.parentID == nil)
+    }
+
+    @Test func aRemoteAnchorPlacesALocalPageSessionBesideIt() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/nowhere-on-this-mac", remoteHost: "buildbox"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let page = try store.addPageSession(after: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id, page.id, after.id])
+        #expect(page.remoteHost == nil)
+        #expect(page.initialCwd == FileManager.default.homeDirectoryForCurrentUser.path)
+    }
+
+    @Test func aPageSessionNeedsAnAnchor() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+
+        #expect(refusal(store.addPageSession(after: UUID(), overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .noSuchSession)
+        #expect(store.workspaces[0].sessions.isEmpty)
+    }
+
     @Test func aRemotePageRowIsRefusedAsAParent() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")
