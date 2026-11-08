@@ -251,8 +251,9 @@ Read it with `active`: an active session is selected right now),
 `parent` (a companion's parent session id, the read side of `session new --parent`; omitted for a
 top-level session), `collapsed` (true only for a parent whose companions are folded, the read side of
 `session collapse`/`expand`; omitted otherwise),
-`content` (`"page"` for a page companion, the read side of `session overlay open --companion`; omitted for a
-terminal session. Such a node has no terminal, so `realized` is false and `cwd` reports the parent's directory),
+`content` (`"page"` for a page session, the read side of `session overlay open --companion` or `--page`; omitted
+for a terminal session. Such a node has no terminal, so `realized` is false and `cwd` reports a companion's parent
+directory, or the directory a top-level page was created in),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
@@ -508,7 +509,7 @@ buys nothing. A caller with no tree uses `version`.
   without `--tint` is refused, and an invalid value creates nothing. `--parent SID` creates a companion
   session instead; see the next entry.
 - `session new --parent SID [--cwd DIR] [--command CMD [--wait]] [--name NAME] [--no-select] [--tint COLOR [--tint-on PARTS]] [--window W]`
-  Create a companion session: an ordinary session pinned for life to the parent SID (id / unique prefix /
+  Create a companion session: an ordinary session pinned to the parent SID (id / unique prefix /
   `active`). A companion SID means its parent, so a companion of a companion is never created: the new one
   becomes a sibling under the same parent. It lands in the parent's workspace right after the parent and
   its earlier companions, indented under the parent in the sidebar tree. `--cwd` defaults to the parent's
@@ -536,7 +537,8 @@ buys nothing. A caller with no tree uses `version`.
   twin is New Companion in the session row's context menu and the Session menu, an action-palette row, and
   the keyless `new_companion` keymap action. Read back from the tree session node's `parent` field.
   A page companion shows an HTML page instead of a terminal and never starts a shell; it is created with
-  `session overlay open --html FILE --companion` or `--url URL --companion` (see that entry).
+  `session overlay open --html FILE --companion` or `--url URL --companion` (see that entry). A top-level page
+  session (`--page`) can be a parent too.
 - `session collapse [--target] [--window W]` - fold a parent's companions in the sidebar tree; returns the
   session id. Persisted. A session without companions errors `session has no companions`. Read back from the
   tree session node's `collapsed` flag. Wire command `session.collapse`. `sidebar expand|collapse` and
@@ -551,12 +553,20 @@ buys nothing. A caller with no tree uses `version`.
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
   foreground or working directory, unreplayable arguments or one containing a backslash, a program started by a
   name that its own PATH or directory no longer holds, a pane under a visible
-  program overlay. A page companion is refused. On a session attached from another Mac, that Mac duplicates its
+  program overlay. A page session is refused. On a session attached from another Mac, that Mac duplicates its
   own session under its own policy, and the copy attaches here as for `session new --parent`.
   `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
   flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
   `result.id` and `result.parent`. GUI twin: Duplicate as Companion in the row context menu and the Session
   menu, a palette row, and the keyless `duplicate_companion` action.
+- `session convert --companion [--target] [--window W]` - Convert to Companion: open a fresh login shell in the
+  target's slot and focused directory and move the target under it as a companion, still running, with its own
+  companions after it; the target keeps its id, name, flag, status and panes, and ends selected. `--companion` is
+  required. Refused `already a companion` for a companion and `convert it on the Mac it runs on` for a session
+  attached from another Mac. Wire command `session.companion.convert`; returns `result.id` (the converted
+  session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
+  nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
+  and the keyless `convert_companion` action.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -1211,20 +1221,36 @@ error keeps those names for compatibility.
   view, and closing it there closes every view. Each view has its own browser state, and the page's own
   reload and navigation act on that view; its other commands run on the other Mac. The row mirrors no
   status, notification or context. A loopback `--url` is refused, since it names a server on the other Mac.
-  `zmx attach HOST ID` shows a page companion again under the one row here attached to its parent.
-  The page and the row end together: when the page closes itself (`window.close()`, a submit) or
-  `session overlay close` runs on it, the row closes at once. The strip's close button and ⌘W close it like
-  any session, with the close confirmation setting and the grace-period undo. A page companion is never
-  saved: it is gone after a relaunch and is not in Recent Closed, so recreate it from an `on app.launched`
-  hook (see hooks). `session overlay hide`/`toggle` answer `no overlay`, `show` succeeds and changes nothing,
+  `zmx attach HOST ID` shows a page companion again under the one row here attached to its parent, and a
+  top-level page session as a top-level row.
+  The page and the row end together: when the page submits or `session overlay close` runs on it, the row
+  closes at once. The page's own `window.close()`, the strip's close button and ⌘W close it like any session,
+  with the close confirmation setting and the grace-period undo. The row is saved and restored like the page
+  session in the next entry. `session overlay hide`/`toggle` answer `no overlay`, `show` succeeds and changes nothing,
   and the strip has no hide button. Terminal commands and anything that would cover, float or replace the
-  page are refused with `<cmd>: not available on a page companion`: `session.type`, `.text`, `.copy`,
+  page are refused with `<cmd>: not available on a page session`: `session.type`, `.text`, `.copy`,
   `.paste`, `.selectall`, `.search`, `.background`, `.lead`, `.swap`, `.focus`, `.resize`, `.split`,
   `.split.close`, `.scratch`, `.restart`, `.restore`, `session.overlay.open`, `session.hud.open`, a floating
   `session.overlay.resize`, a terminal-style `ask.open` (the default), and `surface.zoom`/`surface.cursor` aimed at
   the page explicitly. Close, rename, flag, tint, status, notify, and the page's own reload, navigate,
-  result and submit keep working. The dashboard leaves page companions out. Read back from the tree node's
+  result and submit keep working. The dashboard leaves page sessions out. Read back from the tree node's
   `content`.
+- `session overlay open --html FILE|--url URL --page [page flags] [--follow] [--target] [--window W]` - open the
+  page as a top-level page session: a sidebar row of its own that shows the page and never starts a shell,
+  placed right after the target's group (the target and its companions) in the target's workspace;
+  `session move` puts it anywhere else. It holds companions like any session (`session new --parent`, New
+  Companion, the page's own `session.companion.new`), and Convert to Companion works on it. The page flags,
+  refusals and `--block` are those of `--companion`, which `--page` cannot be combined with; `--follow` selects
+  the new row. A target attached from another Mac only places it: the page is always this Mac's. Wire command
+  `session.page`. Returns `result.id` (the new session; the human output prints it) and `result.pageID`.
+  Against an app too old for page sessions the CLI prints `error: the running app is too old for page
+  sessions`, with nothing created. Read back from the tree node's `content: "page"` with no `parent`.
+  Closing and the refused commands work as for a page companion. Every local page row, top-level or companion,
+  is saved with its source and flags and comes back with its companions after a relaunch, in every restore
+  mode, and from Recent Closed; when its file or server is gone, the row stays with the error and a Reload
+  button. A saved `--js` file page runs its scripts with the full control bridge at every launch and every
+  reopen, with no user action, which is more than a restored `--command` gets (that reruns only in Re-run
+  commands mode); a URL page gets no bridge. A row attached from another Mac is never saved.
 - `session overlay reload [--current] [--pane left|right] [--target] [--window W]` — reload an HTML
   overlay: the file or URL it was opened with (after you rewrote the artifact), or with `--current` the
   page it shows now. Errors `no overlay`, and `the overlay is not an html page` for a program.
@@ -2043,7 +2069,7 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
-`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
+`open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `convert_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
@@ -2288,7 +2314,7 @@ and `sessions`, each with `id`, `name`, `windowID`/`windowName` and `workspaceID
 names, group by the ids — neither is unique, so two windows called `main` merge if you group by name),
 `context` when its owner set one, `cwd`, `splitAxis` when it has a split, `status`/`statusColor`/`statusShape`
 as the far side's `tree` reports them (omitted when idle, and from an app too old to send them), `parent` on a
-companion, `content: "page"` on a page companion, `companions` on a top-level session (every companion in
+companion, `content: "page"` on a page session, `companions` on a top-level session (every companion in
 sidebar order as `{id, name}`, attachable or not; `[]` for none, absent from an older origin), and `panes`
 (`{pane, daemon, foreground}`, the last being the argv that pane is running and omitted when none is
 reported). `host` is the ssh destination the REQUESTING app was given, stamped on after decoding: the far
@@ -2296,10 +2322,11 @@ side has no idea which name reached it.
 
 Only a session whose every pane still has a live daemon is listed: attaching to a name that no longer
 exists would CREATE a daemon and hand back a fresh shell wearing it, so an incomplete one is omitted
-rather than offered half. A page companion has no daemon and is listed with empty `panes` when its parent is
-listed; it attaches only under a row already attached from its parent. An empty list is a successful answer and does NOT diagnose the restore mode —
-`zmx list` does that. The far side must be running in `live` mode, which is what puts a daemon behind each
-pane, and be new enough to answer `zmx tree` at all; an older one is refused by name rather than
+rather than offered half. A page has no daemon and is listed with empty `panes`: a top-level page session
+always, a page companion when its parent is listed, and then it attaches only under a row already attached from
+its parent. A row attached from another Mac is never listed. An empty list is a successful answer and does NOT diagnose the restore mode —
+`zmx list` does that. A terminal session needs the far side in `live` mode, which is what puts a daemon behind
+each pane (a page session needs none), and the far side must be new enough to answer `zmx tree` at all; an older one is refused by name rather than
 half-attached. It also needs `agtermctl` installed by the cask or the Help action: a machine merely
 running agterm has no CLI an ssh command can find, and the read fails with exit 127.
 
@@ -2320,6 +2347,8 @@ pane's ssh joins an existing `ControlMaster` connection, that master's settings 
 
 A terminal companion attached on its own opens under the one row in the destination window attached from
 its parent, in that row's workspace (`result.parent` names it); with no such row, or more than one, it opens on its own.
+A top-level page session opens as a top-level row in the destination window's current workspace, showing that
+Mac's page through its own channel; with `--companions` its companions attach under it.
 `agtermctl zmx attach HOST SESSION --companions` (`zmx.attach.group`) attaches a top-level session and then
 each of its companions under it from one read, in the origin's companion order when reported and in the
 order of its listed rows from an older origin; a companion's id is refused. The
@@ -2337,7 +2366,8 @@ companions when it is a top-level session. It is the
 `zmx tree`, `pick` and `zmx attach --companions` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
-agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
+agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row
+uses its page channel instead and mirrors nothing), and this
 Mac mirrors the origin session's status, its `session context`, its `session info` line, its `notify` notifications, its HUD and
 the layout of panes already attached.
 Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:

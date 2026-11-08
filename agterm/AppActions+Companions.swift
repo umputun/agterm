@@ -71,6 +71,27 @@ extension AppActions {
         }
     }
 
+    /// convertToCompanion shows refusals in a timed HUD, with notification fallback.
+    func convertToCompanion(_ id: UUID, in store: AppStore) {
+        switch store.convertToCompanion(id) {
+        case .failure(let refusal):
+            guard let remoteAttacher, let windowID = library.windowID(for: store) else {
+                return NotificationManager.shared.notifyCommandFailure(name: "Convert to Companion", detail: refusal.message)
+            }
+            RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString,
+                            action: "Convert to Companion").fail(refusal.message)
+        case .success:
+            store.noteUserActivity()
+            focusActiveSession()
+        }
+    }
+
+    func convertActiveSessionToCompanion() {
+        guard uiActionsEnabled else { return }
+        guard let store, let id = store.selectedSessionID else { return }
+        convertToCompanion(id, in: store)
+    }
+
     func duplicateActiveSessionAsCompanion() {
         guard uiActionsEnabled else { return }
         guard let store, let id = store.selectedSessionID else { return }

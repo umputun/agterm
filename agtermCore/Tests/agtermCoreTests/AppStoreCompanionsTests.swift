@@ -9,6 +9,11 @@ struct AppStoreCompanionsTests {
         return nil
     }
 
+    private func convertRefusal(_ result: Result<Session, ConvertRefusal>) -> ConvertRefusal? {
+        if case .failure(let refusal) = result { return refusal }
+        return nil
+    }
+
     @Test func aCompanionLandsAfterTheParentsLastCompanion() throws {
         let g = try CompanionGroup()
         let (store, parent, first, second, after) = (g.store, g.parent, g.first, g.second, g.after)
@@ -60,15 +65,17 @@ struct AppStoreCompanionsTests {
         #expect(page.htmlOverlay != nil)
     }
 
-    @Test func aPageCompanionIsNeverPersistedOrArchived() throws {
-        let (store, recent, _) = makeStoreWithRecentClosed()
+    @Test func aPageCompanionIsSavedOnCreationAndArchivedWithItsParent() throws {
+        let (store, recent, persistence) = makeStoreWithRecentClosed()
         let workspace = store.addWorkspace(name: "work")
         let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        let descriptor = PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil))
 
-        #expect(!store.snapshot().workspaces.flatMap(\.sessions).contains { $0.id == page.id })
+        #expect(persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }?.page == descriptor)
         store.closeSession(parent.id)
-        #expect(recent.load().first?.session?.companions == nil || recent.load().first?.session?.companions?.isEmpty == true)
+        #expect(recent.load().first?.session?.companions?.map(\.id) == [page.id])
+        #expect(recent.load().first?.session?.companions?.first?.page == descriptor)
     }
 
     @Test func closingThePageClosesItsCompanion() throws {
@@ -551,4 +558,320 @@ struct AppStoreCompanionsTests {
         #expect(chained.parentID == nil)
         #expect(companion.parentID == parent.id)
     }
+
+    @Test func convertNestsTheSameSessionUnderAFreshSessionInItsSlot() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let before = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/before"))
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start", name: "task"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        task.currentCwd = "/work/task"
+        store.setFlag(true, forSession: task.id)
+        let surface = SpySurface()
+        task.surface = surface
+        let pane = task.paneIdentity
+        store.selectSession(before.id)
+
+        let fresh = try store.convertToCompanion(task.id).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [before.id, fresh.id, task.id, after.id])
+        #expect(fresh.parentID == nil)
+        #expect(fresh.initialCwd == "/work/task")
+        #expect(fresh.customName == nil)
+        #expect(!fresh.flagged)
+        #expect(fresh.isExpanded)
+        #expect(store.session(withID: task.id) === task)
+        #expect(task.parentID == fresh.id)
+        #expect(task.surface === surface)
+        #expect(task.paneIdentity == pane)
+        #expect(task.displayName == "task")
+        #expect(task.flagged)
+        #expect(store.selectedSessionID == task.id)
+    }
+
+    @Test func convertCarriesTheSessionsCompanionsUnderTheFreshParent() throws {
+        let g = try CompanionGroup()
+
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+        #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
+    }
+
+    @Test func convertRefusesACompanionARemoteRowAndAnUnknownSession() throws {
+        let g = try CompanionGroup()
+        let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "buildbox"))
+        let before = g.order
+
+        #expect(convertRefusal(g.store.convertToCompanion(g.first.id)) == .alreadyCompanion)
+        #expect(convertRefusal(g.store.convertToCompanion(remote.id)) == .remoteSession)
+        #expect(convertRefusal(g.store.convertToCompanion(UUID())) == .noSuchSession)
+        #expect(g.order == before)
+        #expect(g.first.parentID == g.parent.id)
+    }
+
+    @Test func convertRefusalsCarryTheirMessage() {
+        #expect(ConvertRefusal.alreadyCompanion.message == "already a companion")
+        #expect(ConvertRefusal.remoteSession.message == "convert it on the Mac it runs on")
+        #expect(ConvertRefusal.noSuchSession.message == "no such session")
+    }
+
+    @Test func convertAnnouncesOnlyTheFreshSession() throws {
+        let events = CompanionEventKinds()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { events.kinds.append($0.kind) })
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        events.kinds.removeAll()
+
+        _ = try store.convertToCompanion(task.id).get()
+
+        #expect(events.kinds.filter { $0 == .sessionCreated }.count == 1)
+        #expect(!events.kinds.contains(.sessionClosed))
+        #expect(!events.kinds.contains(.sessionSelected))
+        #expect(events.kinds.contains(.treeChanged))
+    }
+
+    @Test func aConvertedSessionClosesOnItsExitWhileTheFreshParentRespawns() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        _ = try store.addCompanion(to: task.id).get()
+        let fresh = try store.convertToCompanion(task.id).get()
+        task.surface = SpySurface()
+        fresh.surface = SpySurface()
+
+        #expect(store.closePrimaryPane(task.id) == .closed)
+        #expect(store.session(withID: task.id) == nil)
+        #expect(store.closePrimaryPane(fresh.id) == .respawned)
+        #expect(store.session(withID: fresh.id) != nil)
+    }
+
+    @Test func aConvertedGroupRoundTripsThroughSnapshot() throws {
+        let g = try CompanionGroup()
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        let restored = makeStore()
+        restored.restore(from: g.store.snapshot())
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect(sessions[0].parentID == nil)
+        #expect(sessions[1...3].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    @Test func aConvertedGroupClosesAndReopensWhole() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let task = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/task"))
+        let other = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/other"))
+        let old = try store.addCompanion(to: task.id).get()
+        let fresh = try store.convertToCompanion(task.id).get()
+
+        store.closeSession(fresh.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [other.id])
+        let item = try #require(recent.load().first)
+        #expect(item.session?.snapshot.id == fresh.id)
+        #expect(item.session?.companions?.map(\.id) == [task.id, old.id])
+        #expect(store.restoreRecentClosed(item))
+        let sessions = store.workspaces[0].sessions
+        #expect(sessions.map(\.id) == [fresh.id, task.id, old.id, other.id])
+        #expect(sessions[1...2].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    @Test func anUndoneCompanionCloseFollowsItsParentIntoTheConvertedGroup() throws {
+        let g = try CompanionGroup()
+        #expect(g.store.softCloseSession(g.first.id, grace: 60))
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.store.undoPendingClose())
+
+        #expect(g.first.parentID == fresh.id)
+        #expect(Set(g.store.companions(of: fresh.id).map(\.id)) == [g.parent.id, g.first.id, g.second.id])
+    }
+
+    @Test func aConvertedGroupsHardCloseEndsTheUndoOfCompanionsParkedUnderTheConvertedSession() throws {
+        let g = try CompanionGroup()
+        #expect(g.store.softCloseSession(g.first.id, grace: 60))
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        g.store.closeSession(fresh.id)
+
+        #expect(g.store.pendingCloseSession(withID: g.first.id) == nil)
+        #expect(!g.store.undoPendingClose())
+        #expect(g.store.session(withID: g.first.id) == nil)
+    }
+
+    @Test func aSoftClosedConvertedGroupUndoesWhole() throws {
+        let g = try CompanionGroup()
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        #expect(g.store.softCloseSession(fresh.id, grace: 60))
+        #expect(g.order == [g.after.id])
+        #expect(g.store.undoPendingClose())
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    private func addTopLevelPage(to store: AppStore, workspace: Workspace) throws -> Session {
+        let page = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/page", content: .page))
+        #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)),
+                                      sizePercent: nil) == nil)
+        return page
+    }
+
+    @Test func aTopLevelPageGroupsTerminalAndPageCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(page.parentID == nil)
+        #expect(terminal.content == .terminal)
+        #expect(nested.content == .page)
+        #expect(store.companions(of: page.id).map(\.id) == [terminal.id, nested.id])
+        #expect(store.parent(of: terminal) === page)
+        #expect(store.parent(of: nested) === page)
+    }
+
+    @Test func aCompanionOfAPageCompanionLandsUnderThePageRoot() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        let sibling = try store.addCompanion(to: nested.id).get()
+
+        #expect(sibling.parentID == page.id)
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, nested.id, sibling.id, after.id])
+    }
+
+    @Test func convertNestsATopLevelPageAndItsCompanionsUnderAFreshTerminal() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let before = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/before"))
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let companion = try store.addCompanion(to: page.id, options: CompanionOptions(select: false)).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        let fresh = try store.convertToCompanion(page.id).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [before.id, fresh.id, page.id, companion.id])
+        #expect(fresh.content == .terminal)
+        #expect(fresh.parentID == nil)
+        #expect(fresh.initialCwd == "/page")
+        #expect(page.parentID == fresh.id)
+        #expect(companion.parentID == fresh.id)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(store.selectedSessionID == page.id)
+    }
+
+    @Test(arguments: [0, 1, 2])
+    func aPageSessionLandsAfterTheAnchorsWholeGroupInItsCwd(anchor: Int) throws {
+        let g = try CompanionGroup()
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))
+
+        let page = try g.store.addPageSession(after: [g.parent, g.first, g.second][anchor].id, overlay: overlay).get()
+
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, page.id, g.after.id])
+        #expect(page.parentID == nil)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(page.initialCwd == ["/parent", "/first", "/second"][anchor])
+        #expect(g.store.selectedSessionID == page.id)
+    }
+
+    @Test func aPageSessionIsSavedOnCreationAndCreatedUnselectedWhenAsked() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let anchor = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/anchor"))
+
+        let page = try store.addPageSession(after: anchor.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                            select: false, backgroundColor: "#112233").get()
+
+        #expect(store.selectedSessionID == anchor.id)
+        #expect(page.overlayBackgroundColor == "#112233")
+        let saved = persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }
+        #expect(saved?.page == PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil), backgroundColor: "#112233"))
+        #expect(saved?.parentID == nil)
+    }
+
+    @Test func aRemoteAnchorPlacesALocalPageSessionBesideIt() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/nowhere-on-this-mac", remoteHost: "buildbox"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let page = try store.addPageSession(after: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id, page.id, after.id])
+        #expect(page.remoteHost == nil)
+        #expect(page.initialCwd == FileManager.default.homeDirectoryForCurrentUser.path)
+    }
+
+    @Test func aPageSessionNeedsAnAnchor() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+
+        #expect(refusal(store.addPageSession(after: UUID(), overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .noSuchSession)
+        #expect(store.workspaces[0].sessions.isEmpty)
+    }
+
+    @Test func aRemotePageRowIsRefusedAsAParent() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/r", remoteHost: "buildbox", content: .page))
+
+        #expect(refusal(store.addCompanion(to: remote.id)) == .remoteParent)
+        #expect(refusal(store.addPageCompanion(to: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .remoteParent)
+        #expect(convertRefusal(store.convertToCompanion(remote.id)) == .remoteSession)
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id])
+        #expect(remote.parentID == nil)
+    }
+
+    @Test func closingAPageRootClosesItsCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        store.closeSession(page.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+        #expect([page.id, terminal.id, nested.id].allSatisfy { store.session(withID: $0) == nil })
+    }
+
+    @Test func softClosingAPageRootIsOneUndoForTheWholeGroup() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        #expect(store.softCloseSession(page.id, grace: 60))
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+
+        #expect(store.undoPendingClose())
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(terminal.parentID == page.id)
+        #expect(nested.parentID == page.id)
+        #expect(page.htmlOverlay?.id == overlay.id)
+    }
+}
+
+private final class CompanionEventKinds {
+    var kinds: [ControlEventKind] = []
 }

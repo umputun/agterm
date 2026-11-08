@@ -45,6 +45,17 @@ struct HtmlBridgeTests {
         }
     }
 
+    @Test func anUntargetedPageSessionFromAPageRowIsPlacedAfterThatRow() throws {
+        let row = HtmlBridgePage(window: "W1", session: session, pane: nil)
+
+        let built = try build(#"{"cmd":"session.page","args":{"url":"https://example.com/"}}"#, from: row).get()
+
+        #expect(built.cmd == .sessionPage)
+        #expect(built.target == session.uuidString)
+        #expect(built.args?.window == nil)
+        #expect(built.args?.pane == nil)
+    }
+
     @Test func explicitTargetsWindowsAndBatchesAreKeptAsGiven() throws {
         let active = try request(#"{"cmd":"session.rename","target":"active","args":{"name":"x"}}"#)
         #expect(active.target == "active")

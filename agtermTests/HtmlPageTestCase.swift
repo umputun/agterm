@@ -64,6 +64,7 @@ class HtmlPageTestCase: XCTestCase {
         registry.sharing = SystemHtmlSharing()
         registry.setZoom(1)
         registry.dispatch = nil
+        registry.closePageSession = nil
         store.closeSession(session.id)
         try await afterSessionClose()
         try? FileManager.default.removeItem(at: directory)

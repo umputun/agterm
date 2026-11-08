@@ -8,8 +8,8 @@ struct KeyboardInputSource: Equatable {
     let name: String
 }
 
-/// Holds the configured keyboard input source while a terminal surface or an HTML overlay page has the
-/// keyboard and puts the earlier one back when neither does. The only owner of Text Input Source selection in the app;
+/// TerminalInputSource holds the configured keyboard input source while any agterm window has the keyboard
+/// and puts the earlier one back when none does. The only owner of Text Input Source selection in the app;
 /// `InputSourceLock` decides, this performs.
 ///
 /// Selection is system-wide, so the restore is what keeps other applications on the user's own source.
@@ -39,9 +39,9 @@ final class TerminalInputSource {
         refresh()
     }
 
-    /// requestRefresh re-evaluates on the next main-queue turn. Responder callbacks run before AppKit
-    /// updates `window.firstResponder`, so a synchronous read there sees the previous owner.
-    func requestRefresh() {
+    // re-evaluates on the next main-queue turn, so the resign/become pair of a key-window handoff between
+    // two agterm windows is one evaluation and never releases and relocks.
+    private func requestRefresh() {
         guard !refreshScheduled, !stopped else { return }
         refreshScheduled = true
         DispatchQueue.main.async { [weak self] in self?.refresh() }
@@ -73,8 +73,8 @@ final class TerminalInputSource {
         guard !stopped, target != nil || lock.baseline != nil, let current = Self.currentID() else { return }
         let enabled = Set(Self.enabledSources().map(\.id))
         // nil at launch: the settings model applies the saved source before the application object exists.
-        let responder = (NSApp as NSApplication?)?.windows.first(where: \.isKeyWindow)?.firstResponder
-        guard let wanted = lock.reconcile(terminalFocused: Self.holdsLock(responder), target: target,
+        let appFocused = (NSApp as NSApplication?)?.windows.contains(where: \.isKeyWindow) ?? false
+        guard let wanted = lock.reconcile(terminalFocused: appFocused, target: target,
                                           enabled: enabled, current: current) else { return }
         if !Self.select(wanted) { lock.selectionFailed() }
     }
@@ -86,14 +86,6 @@ final class TerminalInputSource {
             }
             observers.append((center, token))
         }
-    }
-
-    /// holdsLock reports whether a first responder keeps the configured source: a live terminal surface,
-    /// or anything inside an HTML overlay page, its text fields included.
-    static func holdsLock(_ responder: NSResponder?) -> Bool {
-        if let surface = responder as? GhosttySurfaceView { return surface.surface != nil }
-        guard let view = responder as? NSView else { return false }
-        return sequence(first: view, next: \.superview).contains { $0 is HtmlOverlayWebView }
     }
 
     private static func currentID() -> String? {

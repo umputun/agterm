@@ -34,7 +34,10 @@ public enum Command: String, Codable, Sendable {
     case sessionCollapse = "session.collapse"
     case sessionCompanionNew = "session.companion.new"
     case sessionCompanionPage = "session.companion.page"
+    /// sessionPage creates a top-level page session; its own command so an older app refuses it.
+    case sessionPage = "session.page"
     case sessionCompanionDuplicate = "session.companion.duplicate"
+    case sessionCompanionConvert = "session.companion.convert"
     /// A viewer asking for one attachment of a page companion: a single-use token for `session.overlay.page.serve`
     /// plus what the page shows.
     case sessionCompanionPageAttach = "session.companion.page.attach"
@@ -888,6 +891,7 @@ public enum OverlayHtmlError {
     public static let searchRequest = "session.overlay.search needs text, --next, --prev or --close"
     public static let searchTextWithStep = "session.overlay.search: text cannot be combined with --next, --prev or --close"
     public static let companionNeedsPage = "a page companion needs --html or --url"
+    public static let pageSessionNeedsPage = "a page session needs --html or --url"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"
@@ -900,6 +904,8 @@ public enum OverlayHtmlError {
     public static let textInOverlay = "a text page opens only in its overlay"
     /// documentInOverlay: a clicked HTML file came from terminal output, and a browser would run its scripts.
     public static let documentInOverlay = "a clicked html page opens only in its overlay"
+    /// unreadablePage: a saved page this build could not read has no file or address to hand anywhere.
+    public static let unreadablePage = "the saved page could not be read"
     /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
     public static let remoteFile = "the page's file is on another Mac"
     /// remotePage: Finder and Browser are refused for a file page shown on the presenting Mac.

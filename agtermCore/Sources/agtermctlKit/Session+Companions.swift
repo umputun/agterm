@@ -16,12 +16,9 @@ func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, jso
     }
 }
 
-func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool) throws {
-    let reply = try SocketClient(path: options.socketPath()).send(request)
-    if !options.json, reply.response.refusesUnknown(request.cmd) {
-        FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
-        throw ExitCode.failure
-    }
+func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool,
+                         tooOld: String = "the running app is too old for companions") throws {
+    let reply = try companionSend(SocketClient(path: options.socketPath()).send, json: options.json, tooOld: tooOld)(request)
     SocketClient.printResponse(reply, json: options.json, echoID: echoID)
     if !reply.response.ok { throw ExitCode.failure }
 }
@@ -34,6 +31,36 @@ extension Session {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionCollapse, target: target.target, args: options.withWindow())
+        }
+    }
+
+    /// `--companion` is required so the verb names what the session becomes, the CLI form of Convert to Companion.
+    struct Convert: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Convert a session into a companion of a fresh session opened in its place; prints the fresh session's id.")
+        @Flag(name: .long, help: "Nest the session, with its companions, under a fresh session in its directory and slot.")
+        var companion = false
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if !companion { throw ValidationError("session convert needs --companion") }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow())
+        }
+
+        func run() throws {
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for convert")
+            let reply = try send(try makeRequest())
+            if options.json || !reply.response.ok {
+                SocketClient.printResponse(reply, json: options.json)
+            } else if let parent = reply.response.result?.parent {
+                print(parent)
+            }
+            if !reply.response.ok { throw ExitCode.failure }
         }
     }
 

@@ -167,7 +167,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.page.attach`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -382,7 +382,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `agtermctl` through `RemoteSession.controlCommand`, whose outer quoting every login shell reads alike, polls the
   origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
   Creation is never retried or done locally; a created but unattached companion is named in the error. The three
-  companion commands are in `waitsOnNetwork`, local ones included.
+  creation commands are in `waitsOnNetwork`, local ones included; `session.companion.convert` is local only and is not.
 - A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view: a
   per-claim token in `companionPageTokens`, claimed through `claimPageServe` into a `PageServeStream` in companion mode,
   keyed by claim in `companionPageStreams`. A claim, an expired token, an unanswered reply or EOF ends only that view,
@@ -390,12 +390,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   soft-closed page keeps serving through undo. URL pages get the same channel for lifetime only (no bridge), and a
   loopback URL is refused at both ends. `zmx tree` lists a page companion with no panes when its parent is listed; the
   Attach Remote picker hides those rows, and `zmx attach` places one only under the single row bound to its parent.
+  A top-level page is a group root: listed with no panes and its `companions`, offered by the picker, and attached by
+  `zmx attach` or `zmx.attach.group` as a top-level replica row (`addReplicaPageRoot`) in the destination's current
+  workspace, rechecked after the ssh wait. Its binding carries the origin's host, endpoint and name with an empty
+  daemon map; `attachedParentRows` matches a later companion on its session id and endpoint.
   A terminal companion attached alone joins that row the same way (`attachedParentRows`), in the row's own workspace,
   and stands alone when no row or several match.
-  The viewer row binds the origin page session so New Companion on it makes a sibling there. `HtmlReplicaLink`
+  The viewer row binds the origin page session, so New Companion on a page companion's row makes a sibling there
+  and on a page root's row a companion under that root. `HtmlReplicaLink`
   keeps the page's own reload and navigation on the viewer's copy; every other bridge request goes to the origin.
-  A channel ending while the viewer row is soft-closed finalizes that row alone (`finalizePendingClose(ofSession:)`),
-  so Undo never restores a view of a page that ended.
+  A channel ending while the viewer row is soft-closed finalizes that row, and a page root's parked companions with it
+  (`finalizePendingClose(ofSession:)`), so Undo never restores a view of a page that ended.
 - A Live parent respawned on its origin carries its viewers across. `handlePaneExit` reads the daemon's cached leader
   before `closePrimaryPane` respawns, `ControlServer.ownerRespawned` waits for a different live leader under the same
   name, then counts the respawn in `respawnGenerations` and publishes `pane.respawn`; the snapshot carries every count
@@ -414,6 +419,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
 - A page companion is created by its own wire command, `session.companion.page`, for the same older-app
   reason as `session.companion.new`; it never touches the parent's own overlay slot.
+- `session.page` creates a top-level page session, its own wire command for the same reason, with the CLI
+  too-old text `the running app is too old for page sessions`. `AppStore.addPageSession` places it after the
+  anchor's whole group with the anchor's local focused cwd (`--cwd` stays the file grant) and shares `addPage`,
+  open and refusal included, with `addPageCompanion`. A remote anchor only places it; creation is never
+  forwarded. The reply is `id` and `pageID`; the read-back is `content: "page"` with no `parent`.
 - `session.companion.duplicate` is its own wire command for the same older-app reason.
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
@@ -428,13 +438,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the image is the fallback. A bare name whose image is gone, as after an upgrade removed it, starts its own PATH's
   first executable entry, and with no PATH read it is refused. Otherwise nothing executable refuses the pane; the restart checks see the path and image. An argument with a backslash is refused: libghostty's split and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
+- `session.companion.convert` is its own wire command for the same older-app reason, with a CLI too-old text of its
+  own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
+  slot, then the target and its companions re-pointed at it, keeping every `Session` object. `ConvertRefusal.message`
+  is the refusal text both surfaces show, and a remote row is refused, never forwarded to its origin.
 - `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
   window's zoom target, and never refuses a zoom hide, which stays idempotent.
 - `AppStore.closeOverlay` on a page session closes the session before slot teardown; the strip X and ⌘W go
   through `AppActions.closeSession`, so they keep the close confirmation and the grace-period undo.
-- `Session.content` is a `let` set at init, so the first save already excludes the row
-  (`isPersistable`, `locallyManagedPaneIdentities`).
+- A local page row is saved with a `PageSnapshot` (file or URL, its options) once its page is placed, so the
+  save inside `addSession` leaves it out and `addPageCompanion` saves after the open; a replica row never is.
+  It writes no pane identity, and `persistedClaims` and `PaneIdentityInventory.upgrade` skip it as
+  `locallyManagedPaneIdentities` does. `openRestoredPages` reopens it after its group is placed, in every
+  restart mode and on a Recent Closed reopen, with no source check: a failed load is the row's failed state.
+- A saved `page` key that does not decode, in any shape, restores as `HtmlSource.unreadable`: a page row in the
+  failed state with no pane identity, saved back as `{"unreadable": reason}`, never shared with another Mac.
+  An absent or null page value restores a terminal.
 
 ## Surface input, output, and search
 
@@ -859,8 +879,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   nothing enables it later. User scripts and native `evaluateJavaScript` still run, so the theme survives,
   and a test cannot use evaluation to show page script ran; tests that need page script open with it on.
 - A page's `window.close()` closes its overlay: `HtmlOverlayPage.webViewDidClose` calls `closeHtmlOverlay`,
-  so the outcome is `dismissed`. A URL page can thereby dismiss its overlay without a prompt, and `--js`
-  is the only gate. The callback names no frame, so a same-origin subframe's `top.close()` closes the
+  so the outcome is `dismissed`. On a page row it calls `HtmlOverlayRegistry.closePageSession` instead, which
+  `ControlServer` sets to `AppActions.closePageSession`, since the row can hold terminal companions. Only a
+  picker pending in the page's own window refuses it; the page keeps the request and `retryPageCloses` runs it
+  when that picker resolves. An accepted request is spent, so an Undo remount or a cancelled confirmation does
+  not close again.
+  A URL page can thereby dismiss an overlay without a prompt, and `--js` is the only gate. The callback names no frame, so a same-origin subframe's `top.close()` closes the
   overlay too, unlike a bridge request. WebKit may refuse the call, as it does after `history.pushState`.
   The close is deferred one task because releasing the page clears the delegate WebKit is calling through.
   A session in an undoable close has no slot to find, so the page keeps the request and `apply` finishes
@@ -1758,13 +1782,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   are flat and carry `windowID`/`windowName` and `workspaceID`/`workspaceName`: show the names, group by
   the ids, because neither rename path nor `addWorkspace` enforces uniqueness, so two windows called
   `main` and a `dev` workspace in each are ordinary and name-grouping silently merges them.
-- A session is offered only when the store reports `backedByZmx` AND every pane resolves to a `claimed`
+- A terminal session is offered only when the store reports `backedByZmx` AND every pane resolves to a `claimed`
   daemon observed `running` under an agterm daemon name. A claimed daemon alone proves nothing: a
   requested-live launch that fell back preserves its daemons while showing fresh shells. An incomplete
   split is dropped whole, never offered half. These are ELIGIBILITY rules, not only a defence against a
   race, so losing the two network reads does not retire them: the zmx observation is still a subprocess
   snapshot taken beside the model walk. They now run on whichever side owns the sessions, which is the
-  far side for a remote call.
+  far side for a remote call. A page owns no daemon; the Companions section says which pages are listed, and a
+  row attached from another Mac (`remoteHost`) is never listed.
 - An empty candidate list is a SUCCESSFUL answer and deliberately does not distinguish "not running live"
   from "live with nothing eligible". `zmx list` is the restore-mode diagnostic; no surface may claim the
   empty list diagnoses the mode.
@@ -1925,7 +1950,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
 - Presentation carries status, context, the info line, notifications, the HUD and the layout of attached panes. Such a program runs
   on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
-  Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
+  Every terminal attach opens one; a page row has only its page channel. The viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
   bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
 - The stream is newline-delimited JSON, `PresentationFrame` with `gen`, `rev` and a body. The hub registers
   a subscriber BEFORE it takes the snapshot and holds deltas until the snapshot is sent, so nothing falls

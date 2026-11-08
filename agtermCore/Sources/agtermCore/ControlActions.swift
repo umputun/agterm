@@ -15,8 +15,12 @@ public protocol ControlActions {
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse
     /// Creates a page companion of the target session showing `options.page` full size.
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
+    /// createPageSession opens `options.page` as a top-level page session after the target's group.
+    func createPageSession(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
     /// Creates a companion copying the target's layout and running another copy of each pane's program.
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
+    /// convertToCompanion nests the target and its companions under a fresh session in its slot.
+    func convertToCompanion(_ target: String?, window: String?) -> ControlResponse
     /// Hands out one attachment of the target page companion to another Mac.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.

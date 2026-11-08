@@ -58,6 +58,50 @@ struct AppStoreReplicaPageTests {
         #expect(session.htmlOverlay?.navigation == false)
     }
 
+    @Test func aReplicaPageRootIsATopLevelRowAtTheEndOfItsWorkspace() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
+
+        let row = try store.addReplicaPageRoot(toWorkspace: ws.id, host: "buildbox", name: "dash", page: page(), select: true).get()
+
+        #expect(row.parentID == nil && row.content == .page && row.remoteHost == "buildbox")
+        #expect(row.displayName == "dash")
+        #expect(store.workspace(forSession: row.id)?.id == ws.id)
+        #expect(store.workspaces.first { $0.id == ws.id }?.sessions.map(\.id) == [local.id, row.id])
+        #expect(store.selectedSessionID == row.id)
+        let shown = try #require(row.htmlOverlay)
+        #expect(shown.source == .replica(path: "/docs/index.html", content: .html))
+        #expect(shown.replicaOf == Self.origin)
+        #expect(HtmlPageOutcomes.shared.outcome(for: shown.id)?.outcome == .pending)
+    }
+
+    @Test func aReplicaPageRootAndItsCompanionsAreAbsentFromTheSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
+        let root = try store.addReplicaPageRoot(toWorkspace: ws.id, host: "buildbox", name: nil, page: page(), select: false).get()
+        let child = try store.addReplicaPageCompanion(to: root.id, page: page(id: UUID()), select: false).get()
+        let terminal = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", remoteHost: "buildbox", parentID: root.id))
+
+        let ids = store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.map(\.id)
+
+        #expect(store.companions(of: root.id).map(\.id) == [child.id, terminal.id])
+        #expect(ids == [local.id])
+        #expect(root.pageSnapshot == nil)
+    }
+
+    @Test func aReplicaPageRootIntoAMissingWorkspaceCreatesNothing() throws {
+        let store = makeStore()
+        let before = store.workspaces.flatMap(\.sessions).count
+
+        let result = store.addReplicaPageRoot(toWorkspace: UUID(), host: "buildbox", name: nil, page: page(), select: true)
+
+        guard case .failure(let refusal) = result else { Issue.record("a row was created"); return }
+        #expect(refusal.message == "the workspace here is gone")
+        #expect(store.workspaces.flatMap(\.sessions).count == before)
+    }
+
     @Test func aFilePageIsShownSessionWideUnderItsOwnId() throws {
         let (store, session) = try attached()
 

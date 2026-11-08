@@ -11,6 +11,7 @@ struct PaletteCatalogTests {
             "Duplicate Session",
             "New Companion",
             "Duplicate as Companion",
+            "Convert to Companion",
             "Rename Workspace",
             "Close Session",
             "Reopen Last Closed Item",
@@ -69,7 +70,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 61)
+        #expect(PaletteCommand.allCases.count == 62)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -233,7 +234,7 @@ struct PaletteCatalogTests {
     }
 
     private static let needSession: Set<PaletteCommand> = [
-        .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
+        .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion, .convertCompanion, .clearStatus, .toggleFlag, .toggleSplit, .toggleHorizontalSplit,
         .swapPanes, .toggleScratch, .toggleOverlay, .find,
         .previousSession, .nextSession, .previousAttentionSession, .nextAttentionSession,
         .firstSession, .lastSession,
@@ -277,6 +278,50 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.duplicateCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
         #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
+    }
+
+    @Test func convertToCompanionNeedsALocalTopLevelSession() {
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
+        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext()))
+        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsCompanion: true)))
+        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
+        #expect(PaletteCommand.convertCompanion.isVisible(in: PaletteContext()), "stays listed, inert")
+        #expect(PaletteCommand.convertCompanion.builtinAction == .convertCompanion)
+    }
+
+    struct CompanionRowKind: Sendable, CustomTestStringConvertible {
+        let name: String
+        let context: PaletteContext
+        let newCompanion: Bool
+        let duplicate: Bool
+        let convert: Bool
+
+        var testDescription: String { name }
+    }
+
+    static let companionRowKinds: [CompanionRowKind] = [
+        CompanionRowKind(name: "top-level terminal", context: PaletteContext(hasActiveSession: true),
+                         newCompanion: true, duplicate: true, convert: true),
+        CompanionRowKind(name: "terminal companion", context: PaletteContext(hasActiveSession: true, activeSessionIsCompanion: true),
+                         newCompanion: true, duplicate: true, convert: false),
+        CompanionRowKind(name: "top-level page", context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true),
+                         newCompanion: true, duplicate: false, convert: true),
+        CompanionRowKind(name: "page companion",
+                         context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsCompanion: true),
+                         newCompanion: true, duplicate: false, convert: false),
+        CompanionRowKind(name: "remote terminal", context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true),
+                         newCompanion: true, duplicate: true, convert: false),
+        CompanionRowKind(name: "remote page",
+                         context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsRemote: true),
+                         newCompanion: true, duplicate: false, convert: false),
+    ]
+
+    @Test(arguments: companionRowKinds)
+    func companionCommandsFollowTheActiveRowKind(_ kind: CompanionRowKind) {
+        #expect(PaletteCommand.newCompanion.isEnabled(in: kind.context) == kind.newCompanion)
+        #expect(PaletteCommand.duplicateCompanion.isEnabled(in: kind.context) == kind.duplicate)
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: kind.context) == kind.convert)
     }
 
     @Test func flaggedEditorNeedsAnySessionNotAnActiveOne() {

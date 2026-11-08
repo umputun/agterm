@@ -22,7 +22,8 @@ extension AppStore {
             // the id occupied means that lookup missed. Refuse rather than build the second object.
             guard !occupiedElsewhere.contains(recent.snapshot.id) else { return .failed }
             let index: Int
-            if let parentID = recent.snapshot.parentID {
+            let parentID = recent.snapshot.parentID.map(groupRoot(of:))
+            if let parentID {
                 // a lone companion goes under its parent wherever the parent lives now, never on its own
                 guard let parent = location(ofSession: parentID) else { return .failed }
                 index = parent.workspaceIndex
@@ -34,6 +35,7 @@ extension AppStore {
                 index = insertAt
             }
             let session = session(from: recent.snapshot)
+            session.parentID = parentID
             let insertAt = insertionIndex(for: session, near: recent.sessionIndex, in: workspaces[index].sessions)
             workspaces[index].sessions.insert(session, at: insertAt)
             emitSessionCreated(session, workspace: workspaces[index].id)
@@ -44,6 +46,7 @@ extension AppStore {
                 workspaces[index].sessions.insert(companion, at: Self.groupEnd(from: parent, in: sessions))
                 emitSessionCreated(companion, workspace: workspaces[index].id)
             }
+            openRestoredPages([recent.snapshot] + (recent.companions ?? []))
             appendFlaggedArrivals()
             selectedSessionID = session.id
             replaceSidebarSelection(with: selectedSessionID)
@@ -68,6 +71,7 @@ extension AppStore {
             // workspace back without reshuffling current workspaces.
             workspaces.append(workspace)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
+            openRestoredPages(recent.snapshot.sessions)
             appendFlaggedArrivals()
             if workspace.sessions.isEmpty { scheduleTreeChanged() }
             // re-mark BEFORE the reselect below, so a restored member is inside the set when
@@ -134,6 +138,7 @@ extension AppStore {
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
             for session in missing { emitSessionCreated(session, workspace: workspaces[index].id) }
+            openRestoredPages(recent.snapshot.sessions)
             appendFlaggedArrivals()
             if recent.focusMember == true { markFocusMember(workspaces[index].id) } // before the reselect, as above
             let target = recent.selectedSessionID.flatMap { id in
@@ -204,9 +209,8 @@ extension AppStore {
                                    workspaceIndex: Int,
                                    sessionIndex: Int,
                                    id: UUID = UUID(),
-                                   companions: [Session] = []) -> UUID? {
+                                   companions companionSnapshots: [SessionSnapshot] = []) -> UUID? {
         guard let recentClosedStore, session.isPersistable else { return nil }
-        let companionSnapshots = companions.filter(\.isPersistable).map(sessionSnapshot)
         recentClosedStore.record(RecentClosedItem(
             id: id,
             kind: .session,

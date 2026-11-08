@@ -132,6 +132,8 @@ public enum PaneIdentityInventory {
         for workspaceIndex in snapshot.workspaces.indices {
             for sessionIndex in snapshot.workspaces[workspaceIndex].sessions.indices {
                 var session = snapshot.workspaces[workspaceIndex].sessions[sessionIndex]
+                // a page owns no daemon, matching `Session.locallyManagedPaneIdentities` for an open window
+                guard session.page == nil else { continue }
                 if session.paneIdentity == nil {
                     session.paneIdentity = UUID()
                     changed = true

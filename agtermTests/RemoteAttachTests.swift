@@ -249,6 +249,29 @@ final class RemoteAttachTests: XCTestCase {
         XCTAssertEqual(attacher.attaches.first, FakeAttacher.Attach(host: "studio", session: "c1", window: windowID.uuidString))
     }
 
+    func testThePickerOffersATopLevelPageAsAGroupAndHidesPageCompanions() async throws {
+        let dash = ControlRemoteSession(id: "pr", name: "dash", windowID: "w1", windowName: "main", workspaceID: "ws1",
+                                        workspaceName: "work", cwd: "/srv", splitAxis: nil, panes: [], content: "page",
+                                        companions: [ControlRemoteMember(id: "pg", name: "report")])
+        let report = ControlRemoteSession(id: "pg", name: "report", windowID: "w1", windowName: "main", workspaceID: "ws1",
+                                          workspaceName: "work", cwd: "/srv", splitAxis: nil, panes: [], parent: "pr",
+                                          content: "page")
+        let notes = ControlRemoteSession(id: "pn", name: "notes", windowID: "w1", windowName: "main", workspaceID: "ws1",
+                                         workspaceName: "work", cwd: "/srv", splitAxis: nil, panes: [], parent: "s1",
+                                         content: "page")
+
+        actions.attachRemote("studio", in: windowID)
+        await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
+        attacher.answerTree(listing([build, notes, dash, report]))
+        await waitUntil("the session picker opens") { controller.pending != nil }
+        XCTAssertEqual(controller.pending?.items.map(\.id), ["s1", "pr"])
+        controller.resolve(ControlPickResult(result: .picked, id: "pr", label: "dash", index: 1))
+        await waitUntil("the attach is requested") { attacher.attaches.count == 1 }
+
+        XCTAssertEqual(attacher.attaches.first,
+                       FakeAttacher.Attach(host: "studio", session: "pr", window: windowID.uuidString, group: true))
+    }
+
     func testACompanionWhoseParentIsNotListedKeepsItsBareName() async throws {
         let logs = ControlRemoteSession(id: "c1", name: "logs", windowID: "w1", windowName: "main", workspaceID: "ws1",
                                         workspaceName: "work", cwd: "/repo", splitAxis: nil,

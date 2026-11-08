@@ -20,7 +20,7 @@ public struct CompanionOptions: Equatable, Sendable {
     }
 }
 
-/// SessionContent is what a session shows: a terminal, or an HTML page with no shell under it (a page companion).
+/// SessionContent is what a session shows: a terminal, or an HTML page with no shell under it (a page session).
 public enum SessionContent: Equatable, Sendable {
     case terminal
     case page
@@ -39,6 +39,21 @@ public enum CompanionRefusal: Error, Equatable, Sendable {
     case pageNotOpened(HtmlOverlayOpenFailure)
 }
 
+/// ConvertRefusal is why Convert to Companion changed nothing; `message` is the text every caller shows.
+public enum ConvertRefusal: Error, Equatable, Sendable {
+    case noSuchSession
+    case alreadyCompanion
+    case remoteSession
+
+    public var message: String {
+        switch self {
+        case .noSuchSession: "no such session"
+        case .alreadyCompanion: "already a companion"
+        case .remoteSession: "convert it on the Mac it runs on"
+        }
+    }
+}
+
 extension AppStore {
     /// companions returns a parent's companions in sidebar order, and nothing for a companion.
     public func companions(of parentID: UUID) -> [Session] {
@@ -52,6 +67,12 @@ extension AppStore {
         session.parentID.flatMap(self.session(withID:))
     }
 
+    /// groupRoot is the parent a session restored under `recordedParent` joins: the recorded parent, or its own
+    /// parent once Convert to Companion has made it a companion. Nesting is one level, so one hop is enough.
+    func groupRoot(of recordedParent: UUID) -> UUID {
+        session(withID: recordedParent)?.parentID ?? recordedParent
+    }
+
     /// addCompanion creates a companion after the parent's last one; a companion target means its parent.
     @discardableResult
     public func addCompanion(to targetID: UUID, options: CompanionOptions = CompanionOptions()) -> Result<Session, CompanionRefusal> {
@@ -62,23 +83,62 @@ extension AppStore {
         }
     }
 
+    /// convertToCompanion nests a local top-level session and its companions under a fresh session opened in its
+    /// slot and focused cwd, then selects the converted session. Returns the fresh parent.
+    @discardableResult
+    public func convertToCompanion(_ id: UUID) -> Result<Session, ConvertRefusal> {
+        guard let session = session(withID: id), let location = location(ofSession: id) else { return .failure(.noSuchSession) }
+        guard session.parentID == nil else { return .failure(.alreadyCompanion) }
+        guard session.remoteHost == nil else { return .failure(.remoteSession) }
+        // read before the regroup: companions(of:) answers nothing once the session is itself a companion
+        let group = [session] + companions(of: id)
+        guard let parent = addSession(toWorkspace: workspaces[location.workspaceIndex].id, cwd: session.focusedCwd,
+                                      at: location.sessionIndex, select: false) else { return .failure(.noSuchSession) }
+        group.forEach { $0.parentID = parent.id }
+        if selectedSessionID != id { selectSession(id) }
+        scheduleTreeChanged()
+        save()
+        return .success(parent)
+    }
+
     /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
     /// slot refuses removes the row again.
     @discardableResult
     public func addPageCompanion(to targetID: UUID, overlay: HtmlOverlay, name: String? = nil, select: Bool = true,
                                  backgroundColor: String? = nil) -> Result<Session, CompanionRefusal> {
         companionSlot(for: targetID, cwd: nil).flatMap { slot in
-            guard let page = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, name: name, at: slot.index,
-                                        select: select, parentID: slot.parent, content: .page) else {
-                return .failure(.noSuchSession)
-            }
-            if let failure = openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil,
-                                             backgroundColor: backgroundColor) {
-                closeSession(page.id)
-                return .failure(.pageNotOpened(failure))
-            }
-            return .success(page)
+            addPage(overlay, in: slot, name: name, select: select, backgroundColor: backgroundColor)
         }
+    }
+
+    /// addPageSession creates a top-level page session showing `overlay`, placed right after the anchor's whole
+    /// group in its workspace. A remote anchor only places it: the page is always this Mac's own.
+    @discardableResult
+    public func addPageSession(after anchorID: UUID, overlay: HtmlOverlay, select: Bool = true,
+                               backgroundColor: String? = nil) -> Result<Session, CompanionRefusal> {
+        guard let anchor = session(withID: anchorID),
+              let location = location(ofSession: (parent(of: anchor) ?? anchor).id) else { return .failure(.noSuchSession) }
+        let workspace = workspaces[location.workspaceIndex]
+        let cwd = anchor.localWorkingDirectory(reported: anchor.focusedCwd,
+                                               homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path)
+        let slot = SessionSlot(workspace: workspace.id, index: Self.groupEnd(from: location.sessionIndex, in: workspace.sessions),
+                               parent: nil, cwd: cwd)
+        return addPage(overlay, in: slot, name: nil, select: select, backgroundColor: backgroundColor)
+    }
+
+    private func addPage(_ overlay: HtmlOverlay, in slot: SessionSlot, name: String?, select: Bool,
+                         backgroundColor: String?) -> Result<Session, CompanionRefusal> {
+        guard let page = addSession(toWorkspace: slot.workspace, cwd: slot.cwd, name: name, at: slot.index, select: select,
+                                    parentID: slot.parent, content: .page) else {
+            return .failure(.noSuchSession)
+        }
+        if let failure = openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil,
+                                         backgroundColor: backgroundColor) {
+            closeSession(page.id)
+            return .failure(.pageNotOpened(failure))
+        }
+        save()
+        return .success(page)
     }
 
     /// duplicateAsCompanion creates a companion copying a layout: `left` as its primary pane and, with `right`, a
@@ -122,14 +182,14 @@ extension AppStore {
         return ids
     }
 
-    private struct CompanionSlot {
+    private struct SessionSlot {
         let workspace: UUID
         let index: Int
-        let parent: UUID
+        let parent: UUID?
         let cwd: String
     }
 
-    private func companionSlot(for targetID: UUID, cwd: String?) -> Result<CompanionSlot, CompanionRefusal> {
+    private func companionSlot(for targetID: UUID, cwd: String?) -> Result<SessionSlot, CompanionRefusal> {
         guard let target = session(withID: targetID) else { return .failure(.noSuchSession) }
         let parent = parent(of: target) ?? target
         guard let location = location(ofSession: parent.id) else { return .failure(.noSuchSession) }
@@ -137,7 +197,7 @@ extension AppStore {
         let workspace = workspaces[location.workspaceIndex]
         let cwd = cwd ?? parent.localWorkingDirectory(
             reported: parent.focusedCwd, homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path)
-        return .success(CompanionSlot(workspace: workspace.id, index: Self.groupEnd(from: location.sessionIndex, in: workspace.sessions),
+        return .success(SessionSlot(workspace: workspace.id, index: Self.groupEnd(from: location.sessionIndex, in: workspace.sessions),
                                       parent: parent.id, cwd: cwd))
     }
 

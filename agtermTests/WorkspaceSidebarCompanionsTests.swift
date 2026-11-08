@@ -131,6 +131,48 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(group.store.selectedSessionID, companions.last?.id)
     }
 
+    func testRowMenuConvertToCompanionNestsTheRowUnderAFreshParent() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+        group.store.setSidebarSelection([group.after.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(group.after.id)))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Convert to Companion" }, "menu had \(menu.items.map(\.title))")
+        XCTAssertTrue(item.isEnabled)
+        coordinator.perform(item.action, with: item)
+
+        let parent = try XCTUnwrap(group.store.parent(of: group.after))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(group.store.selectedSessionID, group.after.id)
+    }
+
+    func testCompanionItemsSitInTheirOwnSectionOnParentAndCompanionRows() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        for (id, last) in [(group.after.id, "Convert to Companion"), (group.first.id, "Duplicate as Companion")] {
+            group.store.setSidebarSelection([id])
+            let items = try XCTUnwrap(coordinator.menu(forRow: try row(id))).items
+            let first = try XCTUnwrap(items.firstIndex { $0.title == "New Companion" }, "\(items.map(\.title))")
+            let end = try XCTUnwrap(items.firstIndex { $0.title == last }, "\(items.map(\.title))")
+            XCTAssertTrue(items[first - 1].isSeparatorItem, "\(items.map(\.title))")
+            XCTAssertTrue(items[end + 1].isSeparatorItem, "\(items.map(\.title))")
+        }
+    }
+
+    func testConvertIsOmittedOnACompanionRowAndDisabledOnARemoteRow() throws {
+        let group = try seed()
+        let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", remoteHost: "far"))
+        buildSidebar(for: group.store)
+
+        let companionMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
+        XCTAssertNil(companionMenu.items.first { $0.title == "Convert to Companion" }, "\(companionMenu.items.map(\.title))")
+        group.store.setSidebarSelection([remote.id])
+        let remoteMenu = try XCTUnwrap(coordinator.menu(forRow: try row(remote.id)))
+        let item = try XCTUnwrap(remoteMenu.items.first { $0.title == "Convert to Companion" }, "\(remoteMenu.items.map(\.title))")
+        XCTAssertFalse(item.isEnabled)
+    }
+
     // a cached parent node kept its nested rows into the flat flagged list
     func testSwitchingToAFlatFlaggedLayoutDropsTheParentsNestedRows() throws {
         let group = try seed()
@@ -222,6 +264,51 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         coordinator.reconcile()
 
         XCTAssertTrue(try cell(page.id).imageView?.image === coordinator.flaggedPageSessionIcon)
+    }
+
+    func testRowMenuConvertToCompanionNestsATopLevelPageUnderAFreshParent() throws {
+        let group = try seed()
+        let page = try addTopLevelPage(to: group)
+        buildSidebar(for: group.store)
+        group.store.setSidebarSelection([page.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(page.id)))
+        XCTAssertNil(menu.items.first { $0.title == "Duplicate as Companion" }, "\(menu.items.map(\.title))")
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Convert to Companion" }, "\(menu.items.map(\.title))")
+        XCTAssertTrue(item.isEnabled)
+        coordinator.perform(item.action, with: item)
+
+        let parent = try XCTUnwrap(group.store.parent(of: page))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(parent.content, .terminal)
+        XCTAssertEqual(group.store.selectedSessionID, page.id)
+    }
+
+    func testRowMenuNewCompanionOnAPageCompanionLandsUnderItsPageRoot() throws {
+        let group = try seed()
+        let page = try addTopLevelPage(to: group)
+        let nested = try group.store.addPageCompanion(to: page.id,
+                                                      overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil)),
+                                                      select: false).get()
+        buildSidebar(for: group.store)
+        XCTAssertEqual(try node(page.id).children.map(\.id), [nested.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(nested.id)))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "New Companion" }, "\(menu.items.map(\.title))")
+        coordinator.perform(item.action, with: item)
+
+        let companions = group.store.companions(of: page.id)
+        XCTAssertEqual(companions.count, 2)
+        XCTAssertEqual(companions.first?.id, nested.id)
+        XCTAssertEqual(companions.last?.content, .terminal)
+        XCTAssertEqual(group.store.selectedSessionID, companions.last?.id)
+    }
+
+    private func addTopLevelPage(to group: CompanionRows) throws -> Session {
+        let page = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", select: false, content: .page))
+        XCTAssertNil(group.store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)),
+                                                 sizePercent: nil))
+        return page
     }
 
     private func seed() throws -> CompanionRows {

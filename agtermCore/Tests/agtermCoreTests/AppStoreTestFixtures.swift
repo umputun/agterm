@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 @testable import agtermCore
 
 /// A store backed by a throwaway temp directory so mutation-time saves never
@@ -16,6 +17,13 @@ import Foundation
     let recentClosed = RecentClosedStore(directory: dir)
     let persistence = PersistenceStore(directory: dir)
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
+}
+
+@MainActor func addPageRow(to store: AppStore, workspace: UUID, overlay: HtmlOverlay, cwd: String = "/page",
+                           backgroundColor: String? = nil) throws -> Session {
+    let page = try #require(store.addSession(toWorkspace: workspace, cwd: cwd, content: .page))
+    #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil, backgroundColor: backgroundColor) == nil)
+    return page
 }
 
 @MainActor struct CompanionGroup {

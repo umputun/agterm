@@ -24,6 +24,9 @@ public enum HtmlSource: Equatable, Sendable {
     /// document is an HTML file a terminal click named, so untrusted: the app reads its text and loads it with no
     /// file grant or bridge, themed like a file page.
     case document(path: String)
+    /// unreadable is a saved page row whose descriptor this build cannot use: it loads nothing and shows `reason`
+    /// as its failed state, so the row stays a page instead of restoring as a terminal.
+    case unreadable(reason: String)
 
     /// kind is what the page shows, a replica counted as the kind its origin opened.
     public var kind: HtmlPageKind {
@@ -34,6 +37,7 @@ public enum HtmlSource: Equatable, Sendable {
         case .markdown: return .markdown
         case .text: return .text
         case .document: return .document
+        case .unreadable: return .unreadable
         case .replica(_, let content):
             switch content {
             case .html: return .file
@@ -92,7 +96,7 @@ public enum ReplicaContent: Equatable, Sendable {
 
 /// HtmlPageKind is what a page shows, independent of which Mac read its file.
 public enum HtmlPageKind: Equatable, Sendable {
-    case file, url, image, markdown, text, document
+    case file, url, image, markdown, text, document, unreadable
 }
 
 /// HtmlOrigin is a web page's origin: lowercase scheme and host plus the effective port, so an omitted
@@ -322,6 +326,7 @@ extension HtmlOverlay {
         case .markdown(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .image(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path).lastPathComponent
+        case .unreadable: return "unreadable page"
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -457,9 +462,7 @@ public enum HtmlNavigationPolicy {
             return followsLink(action, overlay: overlay) ? .allow : .cancel
         case .document, .replica(_, .document):
             return web && action.userActivated ? .openExternal : .cancel
-        case .replica(_, .text):
-            return .cancel
-        case .text:
+        case .replica(_, .text), .text, .unreadable:
             return .cancel
         case .url(let original):
             guard web else { return .cancel }
