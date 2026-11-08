@@ -31,3 +31,10 @@ output after zmx's `session "<name>" created` and screen reset: `agterm: session
 reached its `printf` in this run, and the attach client was still not reapable at the last poll. Whether it
 exits late or never, whether the daemon process had ended, and what happened in the earlier run without
 that message, are still open.
+
+A local full parallel `swift test` on 2026-11-07 (branch `linux-remote-server`, a Linux test container running
+beside it) failed it a fourth time: `waitpid` 0, errno 0, `p_stat` SRUN after 3.03 s, an empty exec-error pipe and
+host log, no session in `zmx list`. This time the PTY held zmx's `session "<name>" created`, the screen reset and the
+payload's `agterm: session is gone`, so the payload ran and printed; the attach client kept running, and whether the
+daemon's pid had exited is not recorded (a missing `zmx list` row does not prove it). Five runs of the test alone
+passed in about 1.3 s each.
