@@ -10,7 +10,6 @@ import json
 import multiprocessing
 import os
 import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -202,12 +201,101 @@ class GitInfoTest(unittest.TestCase):
     def test_different_worktrees_stay_distinct(self) -> None:
         self.exercise_panes(different=True)
 
+    def test_hidden_split_without_pane_id_keeps_left_snapshot(self) -> None:
+        node = {"surfaces": [{"paneID": "LEFT", "kind": "left"}, {"kind": "right"}]}
+        published = []
+        original_run = GI.run
+
+        def run(args):
+            if args[0] == "ps":
+                return "codex"
+            if args[0] == "agtermctl":
+                published.append(args[3])
+                return "ok"
+            return original_run(args)
+
+        with (
+            mock.patch.object(GI.tempfile, "gettempdir", return_value=str(self.root)),
+            mock.patch.object(GI, "session_node", return_value=node),
+            mock.patch.object(GI, "run", side_effect=run),
+        ):
+            GI.refresh(
+                {"hook_event_name": "PostToolUse", "session_id": "left", "cwd": str(self.repo)},
+                101,
+                "codex",
+            )
+        self.assertEqual(
+            published, ['**main** ^[✓ clean](color: "green") ^[local only](dim: true)']
+        )
+
+    def test_slow_git_preserves_peer_updates_and_exit_removal(self) -> None:
+        peer = self.root / "other"
+        self.git(self.repo, "worktree", "add", "-b", "peer", str(peer))
+        node = {
+            "surfaces": [{"paneID": "LEFT", "kind": "left"}, {"paneID": "RIGHT", "kind": "right"}]
+        }
+        original_run = GI.run
+        published = []
+        slow = None
+
+        def run(args):
+            if args[0] == "ps":
+                return "codex" if args[2] == "101" else "claude"
+            if args[0] == "agtermctl":
+                published.append(args[3])
+                return "ok"
+            if (
+                args[0] == "git"
+                and slow is not None
+                and Path(args[args.index("-C") + 1]).resolve() == Path(slow).resolve()
+                and operation in args
+            ):
+                raise subprocess.TimeoutExpired(args, 1)
+            return original_run(args)
+
+        for operation in ("rev-parse", "status"):
+            with self.subTest(operation=operation), tempfile.TemporaryDirectory() as directory:
+                published.clear()
+                slow = None
+                with (
+                    mock.patch.object(GI.tempfile, "gettempdir", return_value=directory),
+                    mock.patch.object(GI, "session_node", return_value=node),
+                    mock.patch.object(GI, "run", side_effect=run),
+                ):
+                    event = {
+                        "hook_event_name": "PostToolUse",
+                        "session_id": "left",
+                        "cwd": str(self.repo),
+                    }
+                    os.environ["AGTERM_PANE_ID"] = "LEFT"
+                    GI.refresh(event, 101, "codex")
+                    other = {**event, "session_id": "right", "cwd": str(peer)}
+                    os.environ["AGTERM_PANE_ID"] = "RIGHT"
+                    GI.refresh(other, 102, "claude")
+                    slow = str(peer)
+                    (self.repo / "file").write_text("changed\n")
+                    os.environ["AGTERM_PANE_ID"] = "LEFT"
+                    GI.refresh(event, 101, "codex")
+                    self.assertEqual(
+                        published[-1], '**main** ^[● 1](color: "yellow") ^[local only](dim: true)'
+                    )
+                    slow = str(self.repo)
+                    os.environ["AGTERM_PANE_ID"] = "RIGHT"
+                    GI.refresh({**other, "hook_event_name": "SessionEnd"}, 102, "claude")
+                    self.assertEqual(published[-1], "--clear")
+                    state = next((Path(directory) / f"agterm-git-info-{os.getuid()}").glob("*.json"))
+                    self.assertEqual(set(json.loads(state.read_text())), {"LEFT"})
+                    slow = None
+                    os.environ["AGTERM_PANE_ID"] = "LEFT"
+                    GI.refresh(event, 101, "codex")
+                    self.assertNotIn("peer", published[-1])
+
     def test_hard_killed_process_is_pruned_on_surviving_pane_refresh(self) -> None:
         peer = self.root / "other"
         self.git(self.repo, "worktree", "add", "-b", "peer", str(peer))
         processes = [
             subprocess.Popen(
-                [sys.executable, "-c", "import sys; sys.stdin.buffer.read(1)"],
+                ["/bin/cat"],
                 stdin=subprocess.PIPE,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

@@ -89,7 +89,7 @@ def snapshot(cwd: str) -> tuple[str, str] | None:
             "--untracked-files=all",
             "-z",
         ]).split("\0")
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
         return None
     headers, changed = parse_status(records)
     head = headers.get("branch.head", "")
@@ -178,7 +178,7 @@ def refresh(event: dict[str, Any], pid: int, agent: str) -> None:
         panes = {
             surface["paneID"]: surface["kind"]
             for surface in node["surfaces"]
-            if surface["kind"] in {"left", "right"}
+            if surface["kind"] in {"left", "right"} and surface.get("paneID")
         }
         if pane not in panes:
             return
