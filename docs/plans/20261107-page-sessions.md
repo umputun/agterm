@@ -244,13 +244,15 @@
       card does not
 
 ### Task 7: Verify acceptance criteria and gates
-- [ ] verify every Overview and Solution Overview point is implemented
-- [ ] verify edge cases: page parent closed with undo, failed restore row, replica not saved, older snapshot
-- [ ] `scripts/build.sh` Release build succeeds
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint`
+- [x] verify every Overview and Solution Overview point is implemented
+- [x] verify edge cases: page parent closed with undo, failed restore row, replica not saved, older snapshot
+- [x] `scripts/build.sh` Release build succeeds
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run `make lint`
 - [ ] run the targeted UI test once with `-only-testing:`
+  ⚠️ blocked while another session's Debug instance (`com.umputun.agterm.debug`, markdown-local-links worktree) runs:
+  the runner cannot activate this build under the shared bundle id
 
 ### Task 8: revmux review until clean
 - [ ] run revmux on the branch; fix every gating finding and re-run until a round reports none
