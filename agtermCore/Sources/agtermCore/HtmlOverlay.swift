@@ -219,7 +219,7 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
     public let source: HtmlSource
     /// navigation adds history, reload, browser and source-sharing buttons to the identity strip.
-    public let navigation: Bool
+    public internal(set) var navigation: Bool
     /// javascript lets the page run its own scripts; agterm's theme script runs either way.
     public let javascript: Bool
     /// chromeless drops the identity strip: a file page, or a URL page on a loopback host whose frames stay on
@@ -234,6 +234,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let clicked: Bool
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?
+    /// markdownLinks is what a markdown page may follow links within, set only with navigation.
+    public internal(set) var markdownLinks: MarkdownLinkGrant?
     /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
     public let textLog: TextLog?
     public var logState: TextLogState?
@@ -253,16 +255,20 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
+    /// init drops navigation from a markdown page without `markdownLinks`, so its strip never offers Back and
+    /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
                 persistent: Bool = false, browse: Bool = false, clicked: Bool = false, id: UUID = UUID(),
-                replicaOf: UUID? = nil, textLog: TextLog? = nil) {
+                replicaOf: UUID? = nil, textLog: TextLog? = nil, markdownLinks: MarkdownLinkGrant? = nil) {
         self.id = id
         self.textLog = textLog
         logState = textLog.map { TextLogState(following: $0.follow) }
         self.clicked = clicked
         self.replicaOf = replicaOf
         self.source = source
-        self.navigation = navigation
+        let links = navigation ? markdownLinks : nil
+        self.markdownLinks = links
+        self.navigation = navigation && (source.kind != .markdown || links != nil)
         self.javascript = javascript
         self.chromeless = chromeless
         self.persistent = persistent
@@ -299,6 +305,15 @@ extension HtmlSource {
 }
 
 extension HtmlOverlay {
+    /// withoutLinks is this page with no link grant, as a presenter that cannot follow links is handed it: a
+    /// markdown page loses its Back and Forward with the grant.
+    func withoutLinks() -> HtmlOverlay {
+        var page = self
+        page.markdownLinks = nil
+        page.navigation = navigation && source.kind != .markdown
+        return page
+    }
+
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
     /// page writes and could dress as a prompt: the file shown, the origin a URL page is confined to, or
     /// for a browsing page the origin of the document it shows now. A browsing page on a document with no
@@ -306,9 +321,10 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .replica(let path, .html): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, .html), .replica(let path, .markdown): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
-        case .image(let path), .markdown(let path), .text(let path, _), .document(let path):
+        case .markdown(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .image(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path).lastPathComponent
         case .unreadable: return "unreadable page"
         case .url(let url):
@@ -441,7 +457,10 @@ public enum HtmlNavigationPolicy {
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
         case .image, .replica(_, .image):
             return .cancel
-        case .markdown, .replica(_, .markdown), .document, .replica(_, .document):
+        case .markdown, .replica(_, .markdown):
+            if web { return action.userActivated ? .openExternal : .cancel }
+            return followsLink(action, overlay: overlay) ? .allow : .cancel
+        case .document, .replica(_, .document):
             return web && action.userActivated ? .openExternal : .cancel
         case .replica(_, .text), .text, .unreadable:
             return .cancel
@@ -451,6 +470,16 @@ public enum HtmlNavigationPolicy {
             if action.target == .subframe, !overlay.chromeless { return .allow }
             return action.userActivated ? .openExternal : .cancel
         }
+    }
+
+    // the page's own scheme address of a markdown file inside its grant; the source serving it judges the
+    // canonical file again, so this check is lexical only
+    private static func followsLink(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> Bool {
+        let url = action.url
+        guard let grant = overlay.markdownLinks, action.target == .mainFrame, url.scheme?.lowercased() == HtmlSource.replicaScheme,
+              url.host?.lowercased() == overlay.id.uuidString.lowercased(),
+              LinkPolicy.markdownExtensions.contains(url.pathExtension.lowercased()) else { return false }
+        return MarkdownPage.lexicalPath(url.path, folder: grant.root) != nil
     }
 }
 

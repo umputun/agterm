@@ -170,6 +170,15 @@ final class ControlServerCompanionPageTests: XCTestCase {
                        "a page on this Mac's loopback cannot be shown on another Mac")
     }
 
+    func testAMarkdownPageCompanionIsNotHandedOutEvenWithALinkGrant() throws {
+        let grant = MarkdownLinkGrant(path: docs.appendingPathComponent("a.md").path, root: docs.path)
+        let overlay = HtmlOverlay(source: .markdown(path: grant.path), navigation: true, markdownLinks: grant)
+        let page = try store.addPageCompanion(to: parent.id, overlay: overlay).get()
+
+        XCTAssertEqual(server.attachCompanionPage(page.id.uuidString, window: nil).error,
+                       "a markdown, text or document page cannot be shown on another Mac")
+    }
+
     func testATopLevelPageIsHandedOutWithNoParentAndALoopbackOneIsNot() throws {
         let row = try pageRow()
         let reply = server.attachCompanionPage(row.id.uuidString, window: nil)

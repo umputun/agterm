@@ -109,6 +109,22 @@ struct AppStoreRemotePageTests {
         #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
     }
 
+    @Test(arguments: [true, false])
+    func aLinkGrantReachesOnlyAPresenterThatFollowsLinks(supported: Bool) throws {
+        let kinds = PresentationHub.supportedKinds.filter { supported || $0 != PresentationHub.pageLinksKind }
+        let (session, _) = try origin(kinds: kinds)
+        let grant = MarkdownLinkGrant(path: "/tmp/docs/a.md", root: "/tmp/docs")
+        let page = HtmlOverlay(source: .markdown(path: "/tmp/docs/a.md"), navigation: true, markdownLinks: grant)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil)
+
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .opened)
+        let request = presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last
+        #expect(request?.markdownLinks == (supported ? grant : nil))
+        #expect(request?.navigation == supported)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.markdownLinks == (supported ? grant : nil))
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == page.id)
+    }
+
     @Test(arguments: [HtmlSource.image(path: "/tmp/shot.png"), .markdown(path: "/tmp/a.md"), .text(path: "/tmp/a.go", line: nil)])
     func aPresenterWithoutContentPagesKeepsTheRefusal(source: HtmlSource) throws {
         let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageContentKind })

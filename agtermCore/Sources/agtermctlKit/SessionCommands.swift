@@ -626,7 +626,10 @@ struct Session: ParsableCommand {
                 says otherwise. Not --follow, which selects the session.
                 """)
             var followFile = false
-            @Flag(name: .long, help: "With --html or --url, add back, forward, reload, open in browser, and Show in Finder or Copy Link buttons.")
+            @Flag(name: .long, help: """
+                With --html or --url, add back, forward, reload, open in browser, and Show in Finder or Copy Link buttons. \
+                With --markdown, follow links to markdown files in its folder, with back and forward.
+                """)
             var navigation = false
             @Flag(name: .customLong("js"), help: "With --html or --url, let the page run its own JavaScript (off by default).") var javascript = false
             @Flag(name: .long, help: """
@@ -700,10 +703,12 @@ struct Session: ParsableCommand {
                 let pageOnly = [rowFlag != nil, block, wait, navigation, javascript, chromeless, persistent, browse, cwd != nil].contains(true)
                 let pageOnlyFlags = "--companion, --page, --block, --wait, --navigation, --js, --chromeless, --persistent, --browse or --cwd"
                 if image != nil, pageOnly { throw ValidationError("--image takes no \(pageOnlyFlags)") }
-                if markdown != nil, pageOnly { throw ValidationError("--markdown takes no \(pageOnlyFlags)") }
+                if markdown != nil, [rowFlag != nil, block, wait, javascript, chromeless, persistent, browse, cwd != nil].contains(true) {
+                    throw ValidationError("--markdown takes no --companion, --page, --block, --wait, --js, --chromeless, --persistent, --browse or --cwd")
+                }
                 if text != nil, pageOnly { throw ValidationError("--text takes no \(pageOnlyFlags)") }
                 if command == nil, wait || (url != nil && block) { throw ValidationError("a page takes no --wait, and a --url page no --block") }
-                if navigation, command != nil { throw ValidationError("--navigation requires --html or --url") }
+                if navigation, command != nil { throw ValidationError("--navigation requires --html, --url or --markdown") }
                 if javascript, command != nil { throw ValidationError("--js requires --html or --url") }
                 if chromeless, command != nil { throw ValidationError("--chromeless requires --html or a loopback --url") }
                 if chromeless, navigation { throw ValidationError("--chromeless cannot be combined with --navigation") }

@@ -108,6 +108,19 @@ final class ControlServerForwardedClickTests: XCTestCase {
         XCTAssertEqual(presenter.requests.first?.sizePercent, 75)
     }
 
+    func testAClickedMarkdownFileReachesThePresenterWithNavigationAndItsLinkGrant() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session)
+        let file = try write("a.md", "# a\n")
+
+        click(file, in: session, pane: session.paneIdentity)
+        try await waitUntil { presenter.requests.count == 1 }
+
+        XCTAssertEqual(presenter.requests.first?.navigation, true)
+        XCTAssertEqual(presenter.requests.first?.markdownLinks, MarkdownPage.linkGrant(for: file))
+        XCTAssertNotNil(presenter.requests.first?.markdownLinks)
+    }
+
     func testABrowserModeClickOpensAtNinetyFivePercent() async throws {
         let (_, session) = try addSession()
         let presenter = try present(session)
@@ -257,7 +270,7 @@ final class ControlServerForwardedClickTests: XCTestCase {
         server.attachPresentationHub()
         let sink = Presenter()
         let kinds = PresentationHub.pageKinds + [PresentationHub.pageContentKind, PresentationHub.pageDocumentKind,
-                                                 PresentationHub.linkClickKind]
+                                                 PresentationHub.linkClickKind, PresentationHub.pageLinksKind]
         let id = try server.presentationHub.subscribe(
             session: session.id, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter), sink: sink
         ) { PresentationSnapshot(status: nil, hud: nil) }

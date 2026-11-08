@@ -19,7 +19,7 @@ extension AppStore {
         }
         let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
                                   chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
-                                  replicaOf: origin)
+                                  replicaOf: origin, markdownLinks: page.markdownLinks)
         if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent, points: page.points,
                                          backgroundColor: page.backgroundColor) {
             return failure.message(pane: pane)

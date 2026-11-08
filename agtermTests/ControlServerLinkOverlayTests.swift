@@ -210,6 +210,36 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testAMarkdownFileOpenedWithNavigationOverTheControlPathGetsItsLinkGrantOrNoNavigation() throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+        let notes = stateDir.appendingPathComponent("notes.txt")
+        try Data("# notes\n".utf8).write(to: notes)
+        let disguised = stateDir.appendingPathComponent("disguised.md")
+        try FileManager.default.createSymbolicLink(at: disguised, withDestinationURL: notes)
+        let open = { (path: String, navigation: Bool) in
+            self.server.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
+                command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, page: .markdown(path: path),
+                navigation: navigation))
+        }
+
+        XCTAssertTrue(open(doc.path, true).ok)
+        XCTAssertEqual(session.htmlOverlay?.navigation, true)
+        XCTAssertEqual(session.htmlOverlay?.markdownLinks, MarkdownPage.linkGrant(for: doc.path))
+        XCTAssertNotNil(session.htmlOverlay?.markdownLinks)
+        store.closeOverlay(session.id)
+
+        XCTAssertTrue(open(doc.path, false).ok)
+        XCTAssertEqual(session.htmlOverlay?.navigation, false)
+        XCTAssertNil(session.htmlOverlay?.markdownLinks)
+        store.closeOverlay(session.id)
+
+        XCTAssertTrue(open(disguised.path, true).ok)
+        XCTAssertEqual(session.htmlOverlay?.navigation, false)
+        XCTAssertNil(session.htmlOverlay?.markdownLinks)
+        store.closeOverlay(session.id)
+    }
+
     func testATextFileOpensOverTheControlPathAndAnUnreadableOrBinaryOneOpensNothing() throws {
         let (store, session) = try addSession()
         try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
@@ -253,6 +283,20 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         XCTAssertEqual(session.htmlOverlay?.source, .markdown(path: doc.path))
         XCTAssertEqual(session.overlaySizePercent, 75)
         XCTAssertEqual(store.selectedSessionID, other.id)
+        store.closeOverlay(session.id)
+    }
+
+    func testAClickedMarkdownFileOpensWithNavigationAndItsLinkGrant() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+
+        let shown = await openMarkdown(doc, session: session.id, sizePercent: nil)
+
+        XCTAssertTrue(shown)
+        let canonical = doc.resolvingSymlinksInPath().path
+        XCTAssertEqual(session.htmlOverlay?.navigation, true)
+        XCTAssertEqual(session.htmlOverlay?.markdownLinks,
+                       MarkdownLinkGrant(path: canonical, root: URL(fileURLWithPath: canonical).deletingLastPathComponent().path))
         store.closeOverlay(session.id)
     }
 

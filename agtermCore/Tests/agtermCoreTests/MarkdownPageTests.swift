@@ -120,6 +120,84 @@ struct MarkdownPageTests {
         #expect(MarkdownPage.imageReferences(in: "![s](img/shot.png)", folder: link) == [image("img/shot.png", shot)])
     }
 
+    @Test func aLinkGrantNamesTheCanonicalFileAndItsFolder() throws {
+        let fm = FileManager.default
+        let readme = try touch("README.md")
+        let link = fm.temporaryDirectory.appendingPathComponent("agterm-md-link-\(UUID().uuidString)").path
+        try fm.createSymbolicLink(atPath: link, withDestinationPath: folder)
+        defer { try? fm.removeItem(atPath: link) }
+
+        #expect(MarkdownPage.linkGrant(for: readme) == MarkdownLinkGrant(path: readme, root: folder))
+        #expect(MarkdownPage.linkGrant(for: link + "/README.md") == MarkdownLinkGrant(path: readme, root: folder))
+    }
+
+    @Test func aSymlinkedFirstFileIsGrantedItsTargetsFolder() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: folder + "/docs", withIntermediateDirectories: true)
+        let target = try touch("docs/README.md")
+        try fm.createSymbolicLink(atPath: folder + "/README.md", withDestinationPath: target)
+
+        #expect(MarkdownPage.linkGrant(for: folder + "/README.md") == MarkdownLinkGrant(path: target, root: folder + "/docs"))
+    }
+
+    @Test func noGrantForTheRootOrHomeFolderOrANonMarkdownTarget() throws {
+        let fm = FileManager.default
+        let home = try touch("README.md").replacingOccurrences(of: "/README.md", with: "")
+        let alias = fm.temporaryDirectory.appendingPathComponent("agterm-md-home-\(UUID().uuidString)").path
+        try fm.createSymbolicLink(atPath: alias, withDestinationPath: home)
+        defer { try? fm.removeItem(atPath: alias) }
+        let notes = try touch("notes.txt")
+        try fm.createSymbolicLink(atPath: folder + "/disguised.md", withDestinationPath: notes)
+
+        #expect(MarkdownPage.linkGrant(for: "/README.md") == nil)
+        #expect(MarkdownPage.linkGrant(for: folder + "/README.md", home: home) == nil)
+        #expect(MarkdownPage.linkGrant(for: alias + "/README.md", home: home) == nil)
+        #expect(MarkdownPage.linkGrant(for: folder + "/disguised.md") == nil)
+        #expect(MarkdownPage.linkGrant(for: "README.md") == nil)
+    }
+
+    @Test func aLinkedDocumentInsideTheRootIsReadAtItsNormalizedRequestedPath() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: folder + "/sub", withIntermediateDirectories: true)
+        let grant = MarkdownLinkGrant(path: try touch("README.md"), root: folder)
+        let nested = try touch("sub/b.markdown")
+        try fm.createSymbolicLink(atPath: folder + "/alias.md", withDestinationPath: nested)
+
+        #expect(MarkdownPage.linkedDocument(grant.path, grant: grant) == grant.path)
+        #expect(MarkdownPage.linkedDocument(nested, grant: grant) == nested)
+        #expect(MarkdownPage.linkedDocument(folder + "/sub/../README.md", grant: grant) == folder + "/README.md")
+        #expect(MarkdownPage.linkedDocument(folder + "/alias.md", grant: grant) == folder + "/alias.md")
+    }
+
+    @Test func aLinkedDocumentOutsideTheRootOrNotMarkdownIsRefused() throws {
+        let fm = FileManager.default
+        let grant = MarkdownLinkGrant(path: try touch("README.md"), root: folder)
+        let outside = fm.temporaryDirectory.appendingPathComponent("agterm-md-out-\(UUID().uuidString).md").path
+        try Data("x".utf8).write(to: URL(fileURLWithPath: outside))
+        defer { try? fm.removeItem(atPath: outside) }
+        try fm.createSymbolicLink(atPath: folder + "/out.md", withDestinationPath: outside)
+        let env = try touch(".env")
+        try fm.createSymbolicLink(atPath: folder + "/guide.md", withDestinationPath: env)
+        _ = try touch("notes.txt")
+
+        for requested in [folder + "/../x.md", outside, "/etc/x.md", folder + "/out.md", folder + "/guide.md",
+                          folder + "/notes.txt", folder, folder + "/", "sub/b.md", ""] {
+            #expect(MarkdownPage.linkedDocument(requested, grant: grant) == nil, "\(requested)")
+        }
+    }
+
+    @Test func linksAreFlaggedOnlyWhenAsked() {
+        let flag = #"data-links="local""#
+        #expect(!MarkdownPage.html(markdown: "x", images: .init(), style: "").contains(flag))
+        #expect(MarkdownPage.html(markdown: "x", images: .init(), style: "", links: true).contains(flag))
+    }
+
+    @Test func remoteReferencesSkipAMarkdownSpelledPicture() {
+        let found = MarkdownPage.remoteImageReferences(in: "![d](guide.md) ![m](x.MARKDOWN) ![p](a.png)", folder: "/f")
+
+        #expect(found == [image("a.png", "/f/a.png")])
+    }
+
     @Test func limitsAreSet() {
         #expect(MarkdownPage.maxBytes == 4 << 20)
         #expect(MarkdownPage.maxImageBytes == 32 << 20)

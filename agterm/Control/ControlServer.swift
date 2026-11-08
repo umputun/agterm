@@ -84,8 +84,8 @@ final class ControlServer {
     /// pageServeStreams are the channels presenters opened for pages this Mac handed over, by page id.
     var pageServeStreams: [UUID: PageServeStream] = [:]
     /// pendingPageClaims are pages whose claim was answered ok and whose connection is not adopted yet, with the
-    /// source each serves.
-    var pendingPageClaims: [UUID: HtmlSource] = [:]
+    /// page each serves as it was handed over.
+    var pendingPageClaims: [UUID: HtmlOverlay] = [:]
     var presentationHeartbeat: Task<Void, Never>?
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10

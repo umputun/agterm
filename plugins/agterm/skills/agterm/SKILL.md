@@ -506,7 +506,7 @@ omitted when expanded).
   and `clear --pane` returns the pane to the default. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js] | --image FILE | --markdown FILE | --text FILE [--line N]) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
+- `session overlay open (<command> [--cwd DIR] [--wait] [--block] | --html FILE [--cwd DIR] [--navigation | --chromeless] [--js] [--block] | --url URL [--navigation | --chromeless] [--js] | --image FILE | --markdown FILE [--navigation] | --text FILE [--line N]) [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `session overlay resize (--size-percent N [--width PT] [--height PT] | --width PT [--height PT] | --height PT | --full)` ·
   `session overlay close [--pane left|right]` ·
   `session overlay hide|show|toggle [--pane left|right]` ·
@@ -818,7 +818,9 @@ agtermctl session overlay open --markdown /path/to/plan.md --size-percent 95 --t
 ```
 
 Pictures kept in the file's own folder show; other pictures show their alt text, raw HTML stays text, and a web
-link opens in the browser after the user confirms. The user gets the same view by ⌘-clicking the file's path in a
+link opens in the browser after the user confirms. Add `--navigation` to let a relative link to another `.md`
+file in its folder or below open in the same page with back and forward; a ⌘-clicked file asks for it. A file
+directly in `/` or the home folder opens without it, and so does a page shown on an older agterm on another Mac. The user gets the same view by ⌘-clicking the file's path in a
 local pane, so printing the absolute path of a plan or report you wrote is often enough there; for a user watching
 from another Mac, open it with `--markdown`. Read back `markdown` in `htmlOverlays`.
 

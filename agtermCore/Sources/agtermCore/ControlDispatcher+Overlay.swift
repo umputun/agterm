@@ -249,7 +249,7 @@ extension ControlDispatcher {
 
     private static func markdownContent(_ path: String, args: ControlArgs?) -> OverlayContent {
         let reject = { (error: String) in OverlayContent.rejected(ControlResponse(ok: false, error: error)) }
-        let flags = [args?.wait, args?.navigation, args?.javascript, args?.chromeless, args?.persistent, args?.browse]
+        let flags = [args?.wait, args?.javascript, args?.chromeless, args?.persistent, args?.browse]
         if args?.cwd != nil || flags.contains(true) { return reject(OverlayHtmlError.markdownOptions) }
         guard path.hasPrefix("/") else { return reject(OverlayHtmlError.markdownNotAbsolute) }
         let url = URL(fileURLWithPath: path).standardizedFileURL

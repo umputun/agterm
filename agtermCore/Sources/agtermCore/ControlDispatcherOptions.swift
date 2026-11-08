@@ -43,12 +43,15 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     /// forwarded marks a page a click on the presenting Mac asked for: it opens there or not at all, and replaces a
     /// hidden clicked page there. The app sets it and the dispatcher never does.
     public let forwarded: Bool
+    /// markdownLinks is a markdown page's link grant, computed by the app from the file; the dispatcher never sets it.
+    public let markdownLinks: MarkdownLinkGrant?
 
     public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
                 follow: Bool = false, pane: OverlayPane? = nil, page: HtmlSource? = nil, navigation: Bool = false,
                 javascript: Bool = false, chromeless: Bool = false, persistent: Bool = false, browse: Bool = false,
                 points: OverlayPointSize = OverlayPointSize(), clicked: Bool = false, imagePixels: ImagePixels? = nil,
-                textLog: TextLog? = nil, forwarded: Bool = false) {
+                textLog: TextLog? = nil, forwarded: Bool = false, markdownLinks: MarkdownLinkGrant? = nil) {
+        self.markdownLinks = markdownLinks
         self.textLog = textLog
         self.forwarded = forwarded
         self.clicked = clicked
@@ -75,7 +78,18 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
                                          navigation: navigation, javascript: javascript, chromeless: chromeless,
                                          persistent: persistent, browse: browse, points: points, clicked: clicked,
-                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded)
+                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
+                                         markdownLinks: markdownLinks)
+    }
+
+    /// with returns these options carrying a markdown page's link grant, nil when its links stay text.
+    public func with(markdownLinks: MarkdownLinkGrant?) -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: command, cwd: cwd, wait: wait, sizePercent: sizePercent,
+                                         backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
+                                         navigation: navigation, javascript: javascript, chromeless: chromeless,
+                                         persistent: persistent, browse: browse, points: points, clicked: clicked,
+                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
+                                         markdownLinks: markdownLinks)
     }
 }
 

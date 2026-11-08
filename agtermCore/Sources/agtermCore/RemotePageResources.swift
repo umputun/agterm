@@ -24,8 +24,9 @@ public enum RemotePageResources {
 
     /// content maps `requested` to the file a content page may read, nil when it may not: an image or text page
     /// reads only its own file, as does a document page; a markdown page its own file and the pictures inside its folder, symlinks
-    /// resolved on this Mac. A markdown page's other file is served only as a picture, whatever its name.
-    public static func content(_ requested: String, source: HtmlSource) -> ContentResource? {
+    /// resolved on this Mac. A markdown page's other file is served only as a picture, whatever its name. With `links`,
+    /// a markdown-spelled request is served only through `linkedDocument`, and pictures come from anywhere in its root.
+    public static func content(_ requested: String, source: HtmlSource, links: MarkdownLinkGrant? = nil) -> ContentResource? {
         guard requested.hasPrefix("/") else { return nil }
         switch source {
         case .image(let path):
@@ -34,6 +35,8 @@ public enum RemotePageResources {
             return real(requested) == real(path) ? ContentResource(path: real(path), maxBytes: TextPage.maxBytes, picture: false) : nil
         case .document(let path):
             return real(requested) == real(path) ? ContentResource(path: real(path), maxBytes: DocumentPage.maxBytes, picture: false) : nil
+        case .markdown where links != nil:
+            return links.flatMap { linkContent(requested, grant: $0) }
         case .markdown(let path):
             if real(requested) == real(path) { return ContentResource(path: real(path), maxBytes: MarkdownPage.maxBytes, picture: false) }
             let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
@@ -42,6 +45,13 @@ public enum RemotePageResources {
         case .file, .url, .replica, .unreadable:
             return nil
         }
+    }
+
+    private static func linkContent(_ requested: String, grant: MarkdownLinkGrant) -> ContentResource? {
+        guard !LinkPolicy.markdownExtensions.contains(URL(fileURLWithPath: requested).pathExtension.lowercased()) else {
+            return MarkdownPage.linkedDocument(requested, grant: grant).map { ContentResource(path: $0, maxBytes: MarkdownPage.maxBytes, picture: false) }
+        }
+        return MarkdownPage.localPath(requested, folder: grant.root).map { ContentResource(path: $0, maxBytes: MarkdownPage.maxImageBytes, picture: true) }
     }
 
     private static func real(_ path: String) -> String {
