@@ -136,7 +136,7 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     public let statusShape: String?
     /// parent is the far side's parent session of a companion, omitted for a top-level session.
     public let parent: String?
-    /// content is `page` for a page companion, which has no panes and attaches only under its parent's row.
+    /// content is `page` for a page, which has no panes; a page companion attaches only under its parent's row.
     public let content: String?
     /// companions lists every companion of a top-level session in sidebar order, attachable or not, so a
     /// group attach can keep that order and name a member it could not bring. `[]` means none; nil means

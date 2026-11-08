@@ -70,7 +70,7 @@ paths:
   `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
   planner; a refusal shows in a timed `RemoteAttachHud` over the session, falling back to `notifyCommandFailure`.
 - Convert to Companion (`convert_companion`, keyless) follows Duplicate as Companion in both menus, with a palette row;
-  it is in `terminalOnly`, and `PaletteContext.activeSessionIsCompanion`/`activeSessionIsRemote` disable it.
+  a top-level page takes it too, and `PaletteContext.activeSessionIsCompanion`/`activeSessionIsRemote` disable it.
   `AppActions.convertToCompanion` shares `AppStore.convertToCompanion` with `session.companion.convert`, and a
   refusal reaches the same timed HUD Duplicate as Companion uses.
 

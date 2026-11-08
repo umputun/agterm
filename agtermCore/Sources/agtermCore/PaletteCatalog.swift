@@ -49,7 +49,7 @@ public struct PaletteContext: Sendable, Equatable {
     public let pickerActive: Bool
     /// activeSessionHasOverlay says the active session holds a program or page that can be hidden or shown.
     public let activeSessionHasOverlay: Bool
-    /// activeSessionIsPage says the active session is a page companion, which has no terminal.
+    /// activeSessionIsPage says the active session is a page session, which has no terminal.
     public let activeSessionIsPage: Bool
     /// activeSessionIsCompanion says the active session already sits under a parent.
     public let activeSessionIsCompanion: Bool
@@ -176,7 +176,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [
         .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .find,
-        .focusLeftPane, .focusRightPane, .duplicateCompanion, .convertCompanion,
+        .focusLeftPane, .focusRightPane, .duplicateCompanion,
     ]
 
     /// Whether a cover blocks the command. Most menu items mirror the whole cover; the font sizes, both

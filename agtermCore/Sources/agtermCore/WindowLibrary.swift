@@ -943,7 +943,8 @@ public final class WindowLibrary {
         var claims: [ZmxPaneClaim] = []
         var complete = true
         for workspace in snapshot.workspaces {
-            for session in workspace.sessions {
+            // a page owns no daemon to claim
+            for session in workspace.sessions where session.page == nil {
                 let site = ClaimSite(origin: origin, workspaceID: workspace.id, workspaceName: workspace.name,
                                      sessionID: session.id, sessionName: Self.persistedName(session))
                 // each pane is judged on its own: a session missing its primary identity can still own a

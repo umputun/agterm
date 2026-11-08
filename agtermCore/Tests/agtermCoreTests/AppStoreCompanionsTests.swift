@@ -65,15 +65,17 @@ struct AppStoreCompanionsTests {
         #expect(page.htmlOverlay != nil)
     }
 
-    @Test func aPageCompanionIsNeverPersistedOrArchived() throws {
-        let (store, recent, _) = makeStoreWithRecentClosed()
+    @Test func aPageCompanionIsSavedOnCreationAndArchivedWithItsParent() throws {
+        let (store, recent, persistence) = makeStoreWithRecentClosed()
         let workspace = store.addWorkspace(name: "work")
         let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        let descriptor = PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil))
 
-        #expect(!store.snapshot().workspaces.flatMap(\.sessions).contains { $0.id == page.id })
+        #expect(persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }?.page == descriptor)
         store.closeSession(parent.id)
-        #expect(recent.load().first?.session?.companions == nil || recent.load().first?.session?.companions?.isEmpty == true)
+        #expect(recent.load().first?.session?.companions?.map(\.id) == [page.id])
+        #expect(recent.load().first?.session?.companions?.first?.page == descriptor)
     }
 
     @Test func closingThePageClosesItsCompanion() throws {
@@ -712,6 +714,161 @@ struct AppStoreCompanionsTests {
 
         #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
         #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+    }
+
+    private func addTopLevelPage(to store: AppStore, workspace: Workspace) throws -> Session {
+        let page = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/page", content: .page))
+        #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)),
+                                      sizePercent: nil) == nil)
+        return page
+    }
+
+    @Test func aTopLevelPageGroupsTerminalAndPageCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(page.parentID == nil)
+        #expect(terminal.content == .terminal)
+        #expect(nested.content == .page)
+        #expect(store.companions(of: page.id).map(\.id) == [terminal.id, nested.id])
+        #expect(store.parent(of: terminal) === page)
+        #expect(store.parent(of: nested) === page)
+    }
+
+    @Test func aCompanionOfAPageCompanionLandsUnderThePageRoot() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        let sibling = try store.addCompanion(to: nested.id).get()
+
+        #expect(sibling.parentID == page.id)
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, nested.id, sibling.id, after.id])
+    }
+
+    @Test func convertNestsATopLevelPageAndItsCompanionsUnderAFreshTerminal() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let before = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/before"))
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let companion = try store.addCompanion(to: page.id, options: CompanionOptions(select: false)).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        let fresh = try store.convertToCompanion(page.id).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [before.id, fresh.id, page.id, companion.id])
+        #expect(fresh.content == .terminal)
+        #expect(fresh.parentID == nil)
+        #expect(fresh.initialCwd == "/page")
+        #expect(page.parentID == fresh.id)
+        #expect(companion.parentID == fresh.id)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(store.selectedSessionID == page.id)
+    }
+
+    @Test(arguments: [0, 1, 2])
+    func aPageSessionLandsAfterTheAnchorsWholeGroupInItsCwd(anchor: Int) throws {
+        let g = try CompanionGroup()
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))
+
+        let page = try g.store.addPageSession(after: [g.parent, g.first, g.second][anchor].id, overlay: overlay).get()
+
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, page.id, g.after.id])
+        #expect(page.parentID == nil)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(page.initialCwd == ["/parent", "/first", "/second"][anchor])
+        #expect(g.store.selectedSessionID == page.id)
+    }
+
+    @Test func aPageSessionIsSavedOnCreationAndCreatedUnselectedWhenAsked() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "work")
+        let anchor = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/anchor"))
+
+        let page = try store.addPageSession(after: anchor.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                            select: false, backgroundColor: "#112233").get()
+
+        #expect(store.selectedSessionID == anchor.id)
+        #expect(page.overlayBackgroundColor == "#112233")
+        let saved = persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }
+        #expect(saved?.page == PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil), backgroundColor: "#112233"))
+        #expect(saved?.parentID == nil)
+    }
+
+    @Test func aRemoteAnchorPlacesALocalPageSessionBesideIt() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/nowhere-on-this-mac", remoteHost: "buildbox"))
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let page = try store.addPageSession(after: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id, page.id, after.id])
+        #expect(page.remoteHost == nil)
+        #expect(page.initialCwd == FileManager.default.homeDirectoryForCurrentUser.path)
+    }
+
+    @Test func aPageSessionNeedsAnAnchor() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+
+        #expect(refusal(store.addPageSession(after: UUID(), overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .noSuchSession)
+        #expect(store.workspaces[0].sessions.isEmpty)
+    }
+
+    @Test func aRemotePageRowIsRefusedAsAParent() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/r", remoteHost: "buildbox", content: .page))
+
+        #expect(refusal(store.addCompanion(to: remote.id)) == .remoteParent)
+        #expect(refusal(store.addPageCompanion(to: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .remoteParent)
+        #expect(convertRefusal(store.convertToCompanion(remote.id)) == .remoteSession)
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id])
+        #expect(remote.parentID == nil)
+    }
+
+    @Test func closingAPageRootClosesItsCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        store.closeSession(page.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+        #expect([page.id, terminal.id, nested.id].allSatisfy { store.session(withID: $0) == nil })
+    }
+
+    @Test func softClosingAPageRootIsOneUndoForTheWholeGroup() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        #expect(store.softCloseSession(page.id, grace: 60))
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+
+        #expect(store.undoPendingClose())
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(terminal.parentID == page.id)
+        #expect(nested.parentID == page.id)
+        #expect(page.htmlOverlay?.id == overlay.id)
     }
 }
 

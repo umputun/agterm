@@ -16,12 +16,9 @@ func companionSend(_ send: @escaping (ControlRequest) throws -> SocketReply, jso
     }
 }
 
-func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool) throws {
-    let reply = try SocketClient(path: options.socketPath()).send(request)
-    if !options.json, reply.response.refusesUnknown(request.cmd) {
-        FileHandle.standardError.write(Data("error: the running app is too old for companions\n".utf8))
-        throw ExitCode.failure
-    }
+func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echoID: Bool,
+                         tooOld: String = "the running app is too old for companions") throws {
+    let reply = try companionSend(SocketClient(path: options.socketPath()).send, json: options.json, tooOld: tooOld)(request)
     SocketClient.printResponse(reply, json: options.json, echoID: echoID)
     if !reply.response.ok { throw ExitCode.failure }
 }

@@ -1,23 +1,24 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
+  Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch; run, hide or show overlays;
-  read exit status; show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins;
+  read exit status; show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins or as a
+  page session row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, AGTERM_* variables,
-  attaching sessions and companions from another Mac, cookbook recipes, running/installed version, upgrades, diagnosing
+  attaching sessions from another Mac, cookbook recipes, installed version, upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -380,8 +381,9 @@ omitted when expanded).
   `session convert --companion` turns a running top-level session into a companion of a fresh shell opened in its
   place, keeping its program, id and companions (Convert to Companion).
   `session overlay open --html FILE --companion` (or `--url URL --companion`) adds a page companion: a row
-  under the target session that shows the page and runs no shell. It closes when the page does and is never
-  saved, so an `on app.launched` hook recreates it after a relaunch. Read back as the node's `content: "page"`.
+  under the target session that shows the page and runs no shell. `--page` instead of `--companion` opens a
+  top-level page session after the target's group, which holds companions of its own. Every local page row is
+  saved and comes back after a relaunch. Read back as the node's `content: "page"`; details in reference.md.
 - `session close [--target T ...] [--undoable]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo. `--undoable` gives a single target that grace too, as ⌘W does, so undo (⌘Z) or, for a local
   session, `recent open` inside it brings the running shell back; `result.undoable` says whether it applied (false when Settings turns undo off).
@@ -755,7 +757,7 @@ without one (the bare form is exactly what the remote call runs on the far side)
 `zmx attach` takes plus `windowID`/`windowName`, `workspaceID`/`workspaceName` (show the names, group by
 the ids: neither is unique), `context` when set, `status`/`statusColor`/`statusShape` when not idle, and
 per-pane `foreground`; only a session whose every pane
-still has a live daemon is listed, and an empty list does NOT mean the far side is not in live mode -
+still has a live daemon is listed (a top-level page session, which has none, is listed too), and an empty list does NOT mean the far side is not in live mode -
 `zmx list` reports that · `zmx attach
 HOST SESSION [--window W]` - open one of them here, marked remote and carrying its split, in the
 chosen open local window's current workspace (default: frontmost after discovery). A background target
@@ -763,7 +765,8 @@ keeps the frontmost window unchanged; an invalid or closed target fails. Takes t
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
 never restored after a relaunch. Add `--companions` to attach the group; see
-[details](reference.md#restore). The attached row mirrors the origin session's status, context, `notify`
+[details](reference.md#restore). An attached page row shows the origin's page over its page channel and mirrors
+nothing; an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself
 ([details](reference.md#restore)); read
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. One

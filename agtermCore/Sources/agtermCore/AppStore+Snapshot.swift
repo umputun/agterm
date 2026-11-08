@@ -37,7 +37,14 @@ extension AppStore {
     }
 
     func sessionSnapshot(_ session: Session) -> SessionSnapshot {
-        SessionSnapshot(id: session.id, paneIdentity: session.paneIdentity,
+        // a page owns no pane, so it writes no identity a daemon claim or inventory could read
+        if let page = session.pageSnapshot {
+            return SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
+                                   flagged: session.flagged, context: session.context,
+                                   lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970, tint: session.tint,
+                                   parentID: session.parentID, collapsed: session.isExpanded ? nil : true, page: page)
+        }
+        return SessionSnapshot(id: session.id, paneIdentity: session.paneIdentity,
                         splitPaneIdentity: session.hasSplit ? session.splitPaneIdentity : nil,
                         customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
                         isSplit: session.isSplit, hasSplit: session.hasSplit ? true : nil,
@@ -82,6 +89,7 @@ extension AppStore {
     /// A hidden split keeps its identity and restore state so showing it reattaches the surviving daemon;
     /// focus is intentionally not persisted and therefore returns to the primary pane.
     func session(from snapshot: SessionSnapshot, launchRestore: Bool = false) -> Session {
+        if snapshot.page != nil { return pageSession(from: snapshot) }
         let hasSplit = (snapshot.isSplit ?? false) || (snapshot.hasSplit ?? false)
         let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName,
                               paneIdentity: snapshot.paneIdentity ?? UUID(),
@@ -120,6 +128,31 @@ extension AppStore {
             }
         }
         return session
+    }
+
+    // the page itself opens once the row is in the tree, through `openRestoredPages`
+    private func pageSession(from snapshot: SessionSnapshot) -> Session {
+        let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName, content: .page)
+        session.flagged = snapshot.flagged ?? false
+        session.context = snapshot.context
+        session.tint = snapshot.tint
+        session.parentID = snapshot.parentID
+        session.isExpanded = !(snapshot.collapsed ?? false)
+        session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
+        session.wasRestored = true
+        return session
+    }
+
+    /// openRestoredPages opens the saved page of every restored page row of `snapshots` now in the tree, in any
+    /// restart mode. Nothing checks the source first: a missing file or a failed load leaves the row with its
+    /// page in the failed state and its reload.
+    func openRestoredPages(_ snapshots: [SessionSnapshot]) {
+        for snapshot in snapshots {
+            guard let page = snapshot.page, let session = session(withID: snapshot.id), session.content == .page,
+                  session.htmlOverlay == nil else { continue }
+            _ = openHtmlOverlay(session.id, pane: nil, overlay: page.makeOverlay(), sizePercent: nil,
+                                backgroundColor: page.backgroundColor)
+        }
     }
 
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
@@ -161,6 +194,7 @@ extension AppStore {
         for index in workspaces.indices {
             workspaces[index].sessions = Self.regroupedCompanions(workspaces[index].sessions)
         }
+        openRestoredPages(snapshot.workspaces.flatMap(\.sessions))
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag and `sidebar.width` clamp to the same bounds.
         sidebarWidth = AppStore.clampSidebarWidth(snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault)

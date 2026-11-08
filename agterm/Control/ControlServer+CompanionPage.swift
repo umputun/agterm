@@ -22,12 +22,17 @@ extension ControlServer {
     /// attachCompanionPage answers `session.companion.page.attach`: a token for one `page-serve` claim, and the page.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id), session.content == .page, let overlay = session.htmlOverlay,
-                  let source = AppStore.presentationSource(overlay.source) else {
-                return ControlResponse(ok: false, error: "not a page companion")
+            guard let session = store.session(withID: id), session.content == .page, let overlay = session.htmlOverlay else {
+                return ControlResponse(ok: false, error: "not a page session")
+            }
+            if case .unreadable = overlay.source {
+                return ControlResponse(ok: false, error: "an unreadable saved page cannot be shown on another Mac")
+            }
+            guard let source = AppStore.presentationSource(overlay.source) else {
+                return ControlResponse(ok: false, error: "not a page session")
             }
             if source.isContent {
-                return ControlResponse(ok: false, error: "a markdown, text or document page companion cannot be shown on another Mac")
+                return ControlResponse(ok: false, error: "a markdown, text or document page cannot be shown on another Mac")
             }
             // a loopback address names this Mac's own server, which the other Mac would never reach
             if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {

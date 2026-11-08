@@ -163,6 +163,93 @@ final class RecentClosedTests {
         #expect(reopened.pendingSplitRestoreCommand == nil)
     }
 
+    @MainActor
+    private struct PageGroup {
+        let store: AppStore
+        let recentClosed: RecentClosedStore
+        let workspace: Workspace
+        let root: Session
+        let terminal: Session
+        let nested: Session
+        let url: URL
+
+        init() throws {
+            (store, recentClosed, _) = makeStoreWithRecentClosed()
+            store.addWorkspace(name: "keep")
+            workspace = store.addWorkspace(name: "pages")
+            root = try addPageRow(to: store, workspace: workspace.id,
+                                  overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil), javascript: true))
+            terminal = try store.addCompanion(to: root.id).get()
+            url = try #require(URL(string: "https://example.com"))
+            nested = try store.addPageCompanion(to: root.id, overlay: HtmlOverlay(source: .url(url), navigation: true)).get()
+        }
+
+        var order: [UUID] { store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) ?? [] }
+
+        func expectReopenedWhole() {
+            #expect(order == [root.id, terminal.id, nested.id])
+            #expect(store.session(withID: root.id)?.htmlOverlay?.source == .file(path: "/tmp/root.html", grantRoot: nil))
+            #expect(store.session(withID: root.id)?.htmlOverlay?.javascript == true)
+            #expect(store.session(withID: nested.id)?.htmlOverlay?.source == .url(url))
+            #expect(store.session(withID: nested.id)?.htmlOverlay?.navigation == true)
+            #expect(store.companions(of: root.id).map(\.id) == [terminal.id, nested.id])
+        }
+    }
+
+    @MainActor
+    @Test func closingAPageRootRecordsItsWholeGroupAndReopensItsPages() throws {
+        let g = try PageGroup()
+
+        g.store.closeSession(g.root.id)
+
+        let item = try #require(g.recentClosed.load().first)
+        #expect(item.session?.snapshot.page != nil)
+        #expect(item.session?.companions?.map(\.id) == [g.terminal.id, g.nested.id])
+        #expect(item.session?.companions?.map { $0.page != nil } == [false, true])
+        #expect(g.store.restoreRecentClosed(item))
+        g.expectReopenedWhole()
+    }
+
+    @MainActor
+    @Test func softClosingAPageRootRecordsItsWholeGroup() throws {
+        let g = try PageGroup()
+
+        #expect(g.store.softCloseSession(g.root.id, grace: 60))
+        g.store.finalizeAllPendingCloses()
+
+        let item = try #require(g.recentClosed.load().first)
+        #expect(item.session?.snapshot.id == g.root.id)
+        #expect(item.session?.companions?.map(\.id) == [g.terminal.id, g.nested.id])
+        #expect(g.store.restoreRecentClosed(item))
+        g.expectReopenedWhole()
+    }
+
+    @MainActor
+    @Test func aSeparatelyClosedPageCompanionKeepsItsParentAndReopensUnderIt() throws {
+        let g = try PageGroup()
+
+        g.store.closeSession(g.nested.id)
+
+        let item = try #require(g.recentClosed.load().first)
+        #expect(item.session?.snapshot.parentID == g.root.id)
+        #expect(item.session?.snapshot.page?.source == .url(g.url))
+        #expect(g.store.restoreRecentClosed(item))
+        g.expectReopenedWhole()
+    }
+
+    @MainActor
+    @Test func aClosedWorkspaceCarriesItsPageRowsAndReopensThem() throws {
+        let g = try PageGroup()
+
+        g.store.removeWorkspace(g.workspace.id)
+
+        let item = try #require(g.recentClosed.load().first { $0.kind == .workspace })
+        #expect(item.workspace?.snapshot.sessions.map(\.id) == [g.root.id, g.terminal.id, g.nested.id])
+        #expect(item.subtitle == "3 sessions")
+        #expect(g.store.restoreRecentClosed(item))
+        g.expectReopenedWhole()
+    }
+
     private func sessionItem(id: UUID = UUID(), snapshotID: UUID = UUID(), title: String) -> RecentClosedItem {
         RecentClosedItem(
             id: id,

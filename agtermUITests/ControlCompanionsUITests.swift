@@ -152,11 +152,34 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         XCTAssertEqual(node["realized"] as? Bool, false, "no terminal is ever created under a page companion")
         XCTAssertNotEqual(try sessionNode(id: parent)["overlay"] as? Bool, true, "the parent's overlay slot stays free")
         let typed = try sendCommand(typeRequest(text: "ls\n", target: page, select: false))
-        XCTAssertEqual(typed["error"] as? String, "session.type: not available on a page companion")
+        XCTAssertEqual(typed["error"] as? String, "session.type: not available on a page session")
 
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(page)"}"#)["ok"] as? Bool, true)
         XCTAssertTrue(poll(until: (try? self.sessionNodeIfPresent(id: page)) == nil, timeout: 10),
                       "closing the page ends its row")
+    }
+
+    func testAPageSessionIsATopLevelRowThatHoldsACompanion() throws {
+        let anchor = try activeSessionID()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-page-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("board.html")
+        try "<p>page session</p>".write(to: file, atomically: true, encoding: .utf8)
+
+        let page = try cliOutput(["session", "overlay", "open", "--html", file.path, "--page", "--target", anchor, "--follow"])
+        let companion = try cliOutput(["session", "new", "--parent", page, "--no-select"])
+
+        XCTAssertTrue(poll(until: ((try? self.sessionNode(id: page))?["htmlOverlays"] as? [[String: Any]])?
+            .contains { $0["state"] as? String == "loaded" } == true, timeout: 10), "the page should load")
+        let node = try sessionNode(id: page)
+        XCTAssertEqual(node["content"] as? String, "page")
+        XCTAssertNil(node["parent"])
+        XCTAssertEqual(try sessionNode(id: companion)["parent"] as? String, page)
+        XCTAssertNil(try sessionNode(id: companion)["content"])
+        XCTAssertTrue(pollSessionOrder([anchor, page, companion].compactMap(UUID.init(uuidString:)), timeout: 5))
+        let typed = try sendCommand(typeRequest(text: "ls\n", target: page, select: false))
+        XCTAssertEqual(typed["error"] as? String, "session.type: not available on a page session")
     }
 
     private func cliOutput(_ arguments: [String]) throws -> String {

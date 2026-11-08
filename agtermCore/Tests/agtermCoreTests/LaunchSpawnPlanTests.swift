@@ -36,6 +36,19 @@ struct LaunchSpawnPlanTests {
         #expect(plan.burst.isEmpty)
     }
 
+    @Test func aRestoredPageRowIsNeverExpected() {
+        let terminal = restored()
+        let page = Session(initialCwd: "/tmp", content: .page)
+        page.wasRestored = true
+
+        let plan = LaunchSpawnPlan.make(windows: [
+            LaunchSpawnWindow(selectedSessionID: page.id, sessions: [page, terminal]),
+        ])
+
+        #expect(plan.order == [terminal.paneIdentity])
+        #expect(plan.burst.isEmpty)
+    }
+
     @Test func aLibraryPlanReadsEveryOpenWindowsStore() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

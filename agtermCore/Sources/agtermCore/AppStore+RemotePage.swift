@@ -213,8 +213,8 @@ extension AppStore {
         session.remoteOverlays.slots.compactMap { slot in slot.page.map { (slot.pane, $0) } }
     }
 
-    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica, and
-    /// for an image whose probed size is not given.
+    /// presentationSource is how `source` travels to another Mac; nil for a page that is itself a replica or
+    /// is unreadable, and for an image whose probed size is not given.
     public static func presentationSource(_ source: HtmlSource, imagePixels: ImagePixels? = nil) -> PresentationPageSource? {
         switch source {
         case .file(let path, let grantRoot): return .file(path: path, grantRoot: grantRoot)
@@ -223,7 +223,7 @@ extension AppStore {
         case .markdown(let path): return .markdown(path: path)
         case .text(let path, let line): return .text(path: path, line: line)
         case .document(let path): return .document(path: path)
-        case .replica: return nil
+        case .replica, .unreadable: return nil
         }
     }
 

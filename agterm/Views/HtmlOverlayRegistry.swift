@@ -17,6 +17,8 @@ final class HtmlOverlayRegistry {
     var dispatch: HtmlBridgeDispatch?
     /// windowID names the window a store belongs to, so a page's untargeted request stays in its own window.
     var windowID: (@MainActor (AppStore) -> String?)?
+    /// closePageSession returns whether a page row's close was handled, a cancelled confirmation included.
+    var closePageSession: (@MainActor (AppStore, UUID) -> Bool)?
     /// profile names the saved browser store of this state directory; setting it drops the store built
     /// from the one before.
     var profile: BrowserProfile? { didSet { persistentStore = nil } }
@@ -156,6 +158,11 @@ final class HtmlOverlayRegistry {
         pages[id]?.copyLink()
     }
 
+    /// retryPageCloses asks again for every page row close of `store` that a pending picker refused.
+    func retryPageCloses(in store: AppStore) {
+        for page in pages.values { page.retryClose(in: store) }
+    }
+
     /// reload is the other shared path: the toolbar reloads the current page, `session.overlay.reload` either.
     /// A page already shown reloads now, even with its pane hidden and no host to push the new revision.
     @discardableResult func reload(sessionID: UUID, pane: OverlayPane?, target: HtmlReloadTarget,
@@ -227,7 +234,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // reports its source instead
     private var shownURL: URL?
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
-    // restored page closes at its next mount
+    // restored page closes at its next mount; a page row's stays set while its window's picker refuses the
+    // session close, and is spent once that close accepts it, confirmed or cancelled
     private var closeRequested = false
     // an image, markdown, text or document page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
@@ -415,7 +423,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .file: return true
         case .replica(_, .html): return linked
         case .replica: return false
-        case .url, .image, .markdown, .text, .document: return false
+        case .url, .image, .markdown, .text, .document, .unreadable: return false
         }
     }
 
@@ -454,17 +462,19 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             if case .markdown = overlay.source { return OverlayHtmlError.markdownInOverlay }
             if case .text = overlay.source { return OverlayHtmlError.textInOverlay }
             if case .document = overlay.source { return OverlayHtmlError.documentInOverlay }
-            guard browser.open(browserURL) else { return OverlayHtmlError.noBrowser }
+            guard let url = browserURL else { return OverlayHtmlError.unreadablePage }
+            guard browser.open(url) else { return OverlayHtmlError.noBrowser }
         case .finder:
             if case .replica = overlay.source { return OverlayHtmlError.remoteFile }
-            guard case .file = overlay.source else { return OverlayHtmlError.finderRequiresFile }
-            sharing.reveal(pageURL)
+            guard case .file = overlay.source, let url = pageURL else { return OverlayHtmlError.finderRequiresFile }
+            sharing.reveal(url)
         }
         return nil
     }
 
     func copyLink() {
-        sharing.copy(browserURL.absoluteString)
+        guard let url = browserURL else { return }
+        sharing.copy(url.absoluteString)
     }
 
     /// focusSearch moves the keyboard into a text page's search field, a replica's included.
@@ -546,6 +556,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .text:
             textPage?.loadDocument(fresh: true)
         case .document(let path): loadBuilt { DocumentProbe.load(path: path) }
+        case .unreadable(let reason): fail(reason)
         }
     }
 
@@ -646,9 +657,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     // a file page opens its own file, never one it navigated to; a URL page opens what it shows, which its
-    // policy keeps to HTTP(S)
-    private var browserURL: URL {
+    // policy keeps to HTTP(S); an unreadable page has neither
+    private var browserURL: URL? {
         switch overlay.source {
+        case .unreadable: return nil
         case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path)
         case .url(let original):
@@ -700,7 +712,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         reportPage()
     }
 
-    private var pageURL: URL {
+    private var pageURL: URL? {
         if overlay.browse, case .url(let source) = overlay.source { return shownURL ?? source }
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
         // a replica's scheme address names this Mac's page id; what it shows is that path on the other Mac
@@ -710,12 +722,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path)
         case .url(let url): return url
+        case .unreadable: return nil
         }
     }
 
     private func reportPage() {
-        guard webView.url != nil else { return }
-        let url = pageURL
+        guard webView.url != nil, let url = pageURL else { return }
         let title = webView.title.flatMap { $0.isEmpty ? nil : $0 }
         store?.setHtmlPage(id, HtmlPageInfo(page: url.isFileURL ? url.path : url.absoluteString, title: title,
                                             canGoBack: webView.canGoBack, canGoForward: webView.canGoForward))
@@ -793,9 +805,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                  windowFeatures _: WKWindowFeatures) -> WKWebView? { nil }
 
     /// webViewDidClose closes the overlay of a page whose `window.close()` WebKit accepted, as the panel's
-    /// close button does.
+    /// close button does: a page row through its session close, any other page by closing only its overlay.
     func webViewDidClose(_: WKWebView) {
         closeRequested = true
+        closeIfRequested()
+    }
+
+    /// retryClose asks again for a close this page kept while its window's picker blocked it.
+    func retryClose(in store: AppStore) {
+        guard self.store === store else { return }
         closeIfRequested()
     }
 
@@ -803,8 +821,15 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func closeIfRequested() {
         guard closeRequested else { return }
         Task { [weak self] in
-            guard let self, closeRequested else { return }
-            store?.closeHtmlOverlay(id)
+            guard let self, closeRequested, let store, let slot = store.htmlOverlaySlot(id) else { return }
+            if slot.pane == nil, slot.session.content == .page, let close = HtmlOverlayRegistry.shared.closePageSession {
+                // cleared across the hand-off: its confirmation runs a nested event loop, where `apply` or a retry
+                // would otherwise ask a second time
+                closeRequested = false
+                closeRequested = !close(store, slot.session.id)
+                return
+            }
+            store.closeHtmlOverlay(id)
         }
     }
 
@@ -869,125 +894,5 @@ struct SystemBrowser: HtmlBrowser {
         }
         NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
         return true
-    }
-}
-
-/// HtmlOverlayWebView reports focus and input to the model: a click on a pane page moves split focus like a
-/// click on a pane program does, and typing counts as activity so auto-follow cannot switch sessions.
-final class HtmlOverlayWebView: WKWebView {
-    var pageID: UUID?
-    var onFocus: (() -> Void)?
-    var onClick: (() -> Void)?
-    var onUserInput: (() -> Void)?
-    var onDetach: (() -> Void)?
-    private var parkedDragTypes: [NSPasteboard.PasteboardType] = []
-    private var dropsEnabled = true
-
-    /// setDropsEnabled keeps a page that is not on screen out of drag-destination lookup, which SwiftUI
-    /// opacity does not do; a rejecting `draggingEntered` would still swallow the drop.
-    func setDropsEnabled(_ enabled: Bool) {
-        dropsEnabled = enabled
-        if enabled {
-            guard !parkedDragTypes.isEmpty else { return }
-            registerForDraggedTypes(parkedDragTypes)
-            parkedDragTypes = []
-        } else if !registeredDraggedTypes.isEmpty {
-            parkedDragTypes = registeredDraggedTypes
-            unregisterDraggedTypes()
-        }
-    }
-
-    // a web view answers AppKit's drag-destination lookup for any point in its frame, whatever types it has
-    // registered, so parking them is not enough: an off-screen page declines here and AppKit moves on to the
-    // views stacked beneath it; the selector is absent from the headers, so forwarding uses the base IMP
-    @objc(_hitTest:dragTypes:) func dragDestination(at point: UnsafeMutablePointer<NSPoint>, types: NSSet) -> NSView? {
-        let selector = #selector(dragDestination(at:types:))
-        guard dropsEnabled, let method = class_getInstanceMethod(WKWebView.self, selector) else { return nil }
-        typealias Lookup = @convention(c) (AnyObject, Selector, UnsafeMutablePointer<NSPoint>, NSSet) -> NSView?
-        return unsafeBitCast(method_getImplementation(method), to: Lookup.self)(self, selector, point, types)
-    }
-
-    /// deferFocusToAsk hands the keyboard to a pending ask or picker that owns this page's slot, as a pane
-    /// terminal does, and returns true when it did.
-    func deferFocusToAsk(in session: Session) -> Bool {
-        let pane = OverlayPane.allCases.first { session.paneOverlay($0)?.html?.id == pageID }
-        guard GhosttySurfaceView.pickOwnsFocus(in: window, session: session, pane: pane) else { return false }
-        AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID)?.grabFocus()
-        return true
-    }
-
-    var holdsFocus: Bool {
-        (window?.firstResponder as? NSView)?.isDescendant(of: self) == true
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { onDetach?() }
-    }
-
-    override func becomeFirstResponder() -> Bool {
-        let became = super.becomeFirstResponder()
-        if became { onFocus?() }
-        return became
-    }
-
-    // a dropped or pasted file reaches the page's script with its contents, so a drag or paste carrying files
-    // is refused while text and links still go through; in a terminal the same paste gives only a path
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        Self.carriesFiles(sender.draggingPasteboard) ? [] : super.draggingEntered(sender)
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        Self.carriesFiles(sender.draggingPasteboard) ? [] : super.draggingUpdated(sender)
-    }
-
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        Self.carriesFiles(sender.draggingPasteboard) ? false : super.performDragOperation(sender)
-    }
-
-    // the paste selectors are absent from Swift's WKWebView interface, so forwarding uses the base IMP
-    @objc(paste:) func pasteRefusingFiles(_ sender: Any?) {
-        forwardPaste(#selector(pasteRefusingFiles(_:)), sender)
-    }
-
-    @objc(pasteAsPlainText:) func pasteAsPlainTextRefusingFiles(_ sender: Any?) {
-        forwardPaste(#selector(pasteAsPlainTextRefusingFiles(_:)), sender)
-    }
-
-    @objc(readSelectionFromPasteboard:) func readSelection(from pasteboard: NSPasteboard) -> Bool {
-        let selector = #selector(readSelection(from:))
-        guard !Self.carriesFiles(pasteboard), let method = class_getInstanceMethod(WKWebView.self, selector) else { return false }
-        typealias Read = @convention(c) (AnyObject, Selector, NSPasteboard) -> Bool
-        return unsafeBitCast(method_getImplementation(method), to: Read.self)(self, selector, pasteboard)
-    }
-
-    private func forwardPaste(_ selector: Selector, _ sender: Any?) {
-        guard !Self.carriesFiles(.general), let method = class_getInstanceMethod(WKWebView.self, selector) else {
-            return NSSound.beep()
-        }
-        typealias Paste = @convention(c) (AnyObject, Selector, AnyObject?) -> Void
-        unsafeBitCast(method_getImplementation(method), to: Paste.self)(self, selector, sender as AnyObject?)
-    }
-
-    private static func carriesFiles(_ pasteboard: NSPasteboard) -> Bool {
-        let promises = Set(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
-        return pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-            || pasteboard.types?.contains(where: promises.contains) == true
-    }
-
-    override func keyDown(with event: NSEvent) {
-        onUserInput?()
-        super.keyDown(with: event)
-    }
-
-    // an Esc the page leaves unhandled comes back from WebKit as cancelOperation: up the responder chain,
-    // and the window's own handler takes a full-screen window out of full screen
-    override func cancelOperation(_ sender: Any?) {}
-
-    override func mouseDown(with event: NSEvent) {
-        onUserInput?()
-        onFocus?()
-        onClick?()
-        super.mouseDown(with: event)
     }
 }

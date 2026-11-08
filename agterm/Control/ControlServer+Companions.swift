@@ -6,14 +6,14 @@ extension ControlServer: CompanionDuplicating {}
 extension ControlServer {
     static let companionMoveError = "a companion moves only among its siblings"
 
-    // a page companion's page is the row: these act on a terminal, or would cover or float the page
+    // a page session's page is the row: these act on a terminal, or would cover or float the page
     private static let pageRefusedCommands: Set<Command> = [
         .sessionType, .sessionText, .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionBackground,
         .sessionLead, .sessionSwap, .sessionFocus, .sessionResize, .sessionSplit, .sessionSplitClose, .sessionScratch,
         .sessionRestart, .sessionRestore, .sessionOverlayOpen, .sessionHudOpen,
     ]
 
-    /// pageCompanionRefusal answers a request a page companion cannot take, before any command runs, so a
+    /// pageCompanionRefusal answers a request a page session cannot take, before any command runs, so a
     /// socket client and a page's bridge meet one refusal.
     func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {
         let floats = request.cmd == .sessionOverlayResize && request.args?.full != true
@@ -25,7 +25,7 @@ extension ControlServer {
         let target = request.target.map(Self.sessionPart(ofSurface:))
         guard case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: request.args?.window),
               store.session(withID: id)?.content == .page else { return nil }
-        return ControlResponse(ok: false, error: "\(request.cmd.rawValue): not available on a page companion")
+        return ControlResponse(ok: false, error: "\(request.cmd.rawValue): not available on a page session")
     }
 
     // a `surface:<session>:<slot>` address names its session in the middle
@@ -104,6 +104,27 @@ extension ControlServer {
         }
     }
 
+    /// createPageSession opens a top-level page after the target's group; a remote target only places it.
+    func createPageSession(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard let page = options.page else { return ControlResponse(ok: false, error: OverlayHtmlError.pageSessionNeedsPage) }
+            if options.persistent, let failure = HtmlOverlayRegistry.shared.persistentStoreFailure() {
+                return ControlResponse(ok: false, error: "session.page: \(failure)")
+            }
+            let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
+                                      chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+            switch store.addPageSession(after: id, overlay: overlay, select: options.follow, backgroundColor: options.backgroundColor) {
+            case .failure:
+                return ControlResponse(ok: false, error: "could not create page session")
+            case .success(let session):
+                if options.persistent {
+                    _ = HtmlOverlayRegistry.shared.page(for: overlay, store: store, backgroundColor: options.backgroundColor)
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, pageID: overlay.id.uuidString))
+            }
+        }
+    }
+
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {
@@ -141,7 +162,7 @@ extension ControlServer {
     func duplicateCompanion(of id: UUID, in store: AppStore, select: Bool) -> Result<Session, CompanionDuplicateFailure> {
         guard let source = store.session(withID: id) else { return .failure(.init(message: "no such session")) }
         guard source.remoteHost == nil else { return .failure(.init(message: "companions of a remote session are not supported yet")) }
-        guard source.content == .terminal else { return .failure(.init(message: "a page companion has no terminal to duplicate")) }
+        guard source.content == .terminal else { return .failure(.init(message: "a page session has no terminal to duplicate")) }
         // a visible program over the panes is what the user sees running; copying the covered shell instead is wrong
         guard !source.programOverlayVisible else {
             return .failure(.init(message: "a program overlay covers the session; nothing was created"))

@@ -266,6 +266,51 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertTrue(try cell(page.id).imageView?.image === coordinator.flaggedPageSessionIcon)
     }
 
+    func testRowMenuConvertToCompanionNestsATopLevelPageUnderAFreshParent() throws {
+        let group = try seed()
+        let page = try addTopLevelPage(to: group)
+        buildSidebar(for: group.store)
+        group.store.setSidebarSelection([page.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(page.id)))
+        XCTAssertNil(menu.items.first { $0.title == "Duplicate as Companion" }, "\(menu.items.map(\.title))")
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Convert to Companion" }, "\(menu.items.map(\.title))")
+        XCTAssertTrue(item.isEnabled)
+        coordinator.perform(item.action, with: item)
+
+        let parent = try XCTUnwrap(group.store.parent(of: page))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(parent.content, .terminal)
+        XCTAssertEqual(group.store.selectedSessionID, page.id)
+    }
+
+    func testRowMenuNewCompanionOnAPageCompanionLandsUnderItsPageRoot() throws {
+        let group = try seed()
+        let page = try addTopLevelPage(to: group)
+        let nested = try group.store.addPageCompanion(to: page.id,
+                                                      overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil)),
+                                                      select: false).get()
+        buildSidebar(for: group.store)
+        XCTAssertEqual(try node(page.id).children.map(\.id), [nested.id])
+
+        let menu = try XCTUnwrap(coordinator.menu(forRow: try row(nested.id)))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "New Companion" }, "\(menu.items.map(\.title))")
+        coordinator.perform(item.action, with: item)
+
+        let companions = group.store.companions(of: page.id)
+        XCTAssertEqual(companions.count, 2)
+        XCTAssertEqual(companions.first?.id, nested.id)
+        XCTAssertEqual(companions.last?.content, .terminal)
+        XCTAssertEqual(group.store.selectedSessionID, companions.last?.id)
+    }
+
+    private func addTopLevelPage(to group: CompanionRows) throws -> Session {
+        let page = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", select: false, content: .page))
+        XCTAssertNil(group.store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)),
+                                                 sizePercent: nil))
+        return page
+    }
+
     private func seed() throws -> CompanionRows {
         let store = try XCTUnwrap(library.activeStore)
         let work = store.addWorkspace(name: "work")
