@@ -149,3 +149,9 @@ attempts; it did not reproduce the symptom. On recurrence, a failure-only zmx tr
 final-name delete after it runs, with pid, ppid and site, can identify which instrumented zmx path
 deleted the name; a removal outside zmx stays unobserved. The heavier trace that also logged the create
 path never reproduced.
+
+Eighth sighting, 2026-11-08, in the host-free suite: `SessionHostServerTests`
+`readinessTransitionMeasuresWrittenQuerySeparatelyFromReceivedReply` failed once in 8 loop runs of the suite
+beside a full `make test-app`, with `attach client exited or failed before readiness` and the child
+`exited with wait status 256; output: session "agterm-…" created`. So the route is reachable from
+core `swift test` as well as from hosted tests. No zmx trace was running.
