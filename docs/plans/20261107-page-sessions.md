@@ -171,7 +171,7 @@
       no bridge code change), CLI request shape and flag conflicts, ControlServer handler
 - [x] write the targeted UI test: `session overlay --page` then `session new --parent <page>`, read back in
       `tree`
-- [ ] run touched tests - must pass before task 4 (host-free and hosted pass; the UI test is not run yet)
+- [x] run touched tests - must pass before task 4 (host-free and hosted pass; the UI test passed in Task 7)
 - ⚠️ the UI test lives in `agtermUITests/ControlCompanionsUITests.swift`, since `ControlAPIUITests.swift` sits at
       its 2000-line lint budget; its run was stopped at setUp ("Failed to activate application", state Running
       Background) while another `com.umputun.agterm.debug` instance from another worktree was running, so it
@@ -256,12 +256,11 @@
   `FileNotFound`, exits 1, and the client's bare-attach fallback roots the pane at the app. The first test failed
   0 of 20 times alone and 2 of 20 times beside concurrent core SessionHost tests. Evidence is in
   `/tmp/agterm-session-host-evidence/*/host.log` and `zmx-logs`. Who unlinks the new socket name is unknown. It
-  matches the dropped item `session-host-sometimes-creates-an-app-rooted-daemon` (removed in 71a9483f); this
-  branch changes no session host or zmx code.
+  is the backlog item `session-host-sometimes-creates-an-app-rooted-daemon`, re-filed on master in e72082a1 with
+  these sightings; this branch changes no session host or zmx code.
 - [x] run `make lint`
-- [ ] run the targeted UI test once with `-only-testing:`
-  ⚠️ blocked while another session's Debug instance (`com.umputun.agterm.debug`, markdown-local-links worktree) runs:
-  the runner cannot activate this build under the shared bundle id
+- [x] run the targeted UI test once with `-only-testing:`
+  passed (8.4 s) once no other `com.umputun.agterm.debug` instance was running
 
 ### Task 8: revmux review until clean
 - [x] run revmux on the branch; fix every gating finding and re-run until a round reports none
@@ -278,7 +277,7 @@
 - [x] update README.md if the synopsis should mention page sessions
 - [x] update CLAUDE.md if new patterns were discovered
 - [ ] move this plan to `docs/plans/completed/`
-  ⚠️ implementation complete, validation blocked: the hosted gate above and the targeted UI test are unresolved
+  ⚠️ implementation complete; only the hosted gate above is unresolved, tracked by its backlog item
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
