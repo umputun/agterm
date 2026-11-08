@@ -1011,6 +1011,41 @@ struct ControlDispatcherOverlayTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [("on", ControlToggleMode.on), ("off", .off), ("toggle", .toggle)])
+    func overlayWrapRoutesItsModeAndPane(_ raw: String, _ mode: ControlToggleMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayWrap, target: "session",
+                                                                args: ControlArgs(mode: raw, pane: "right")))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.overlayWrap(target: "session", window: nil, pane: .right, mode: mode)])
+    }
+
+    @Test func overlayWrapDefaultsToToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayWrap, target: "session"))
+
+        #expect(actions.calls == [.overlayWrap(target: "session", window: nil, pane: nil, mode: .toggle)])
+    }
+
+    @Test(arguments: [
+        (ControlArgs(mode: "maybe"), "invalid overlay wrap mode: maybe"),
+        (ControlArgs(mode: "on", pane: "middle"), PaneOverlayError.invalidPane),
+    ])
+    func overlayWrapRejectsBadInputBeforeCallingActions(_ args: ControlArgs, _ error: String) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayWrap, target: "session", args: args))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test(arguments: [
         (ControlArgs(text: "main()"), TextSearchRequest.query("main()")),
         (ControlArgs(to: "next"), .next),

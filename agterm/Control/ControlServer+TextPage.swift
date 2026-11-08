@@ -54,6 +54,20 @@ extension ControlServer {
         }
     }
 
+    /// setSessionOverlayWrap applies `mode` to the text page in the addressed slot; `result.text` is `wrapped` or
+    /// `unwrapped`.
+    func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
+                               mode: ControlToggleMode) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            switch store.setTextWrap(id, pane: pane, mode: mode) {
+            case .failure(let failure):
+                return ControlResponse(ok: false, error: failure.message)
+            case .success(let wrapped):
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: wrapped ? "wrapped" : "unwrapped"))
+            }
+        }
+    }
+
     /// searchSessionOverlay sets or closes the query in the model, which reaches the page whenever it exists; a step
     /// goes to the loaded page once and answers `N of M`.
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,

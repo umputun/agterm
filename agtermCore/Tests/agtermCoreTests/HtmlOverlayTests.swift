@@ -1144,4 +1144,64 @@ struct HtmlOverlayTests {
 
         #expect(text.changes == ControlTextChangesNode(count: 11, current: 2))
     }
+
+    @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
+    func wrapModeSetsTheTextPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextWrap(page.id, wrapped: from)
+        let opened = events.count
+
+        #expect(store.setTextWrap(session.id, pane: nil, mode: mode) == .success(to))
+
+        #expect(session.htmlOverlay?.textWrap == to)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func aWrapThatChangesNothingEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextWrap(page.id, wrapped: true)
+        let wrapped = events.count
+
+        store.setTextWrap(page.id, wrapped: true)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .success(true))
+
+        #expect(session.htmlOverlay?.textWrap == true)
+        #expect(events.count == wrapped)
+    }
+
+    @Test func wrapRefusesEverythingButATextPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.page(.noOverlay)))
+        #expect(store.setTextWrap(UUID(), pane: nil, mode: .on) == .failure(.page(.unknownSession)))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(markdown.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
+        #expect(TextWrapFailure.notText.message == "no text page")
+        #expect(TextWrapFailure.remote.message == "remote page: wrap it on the Mac that shows it")
+    }
+
+    @Test func aTextPageNodeReportsWrapOnlyWhileWrapped() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let before = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = String(data: try JSONEncoder().encode(before), encoding: .utf8) ?? ""
+        #expect(!json.contains("wrap"))
+
+        store.setTextWrap(page.id, wrapped: true)
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.wrap == true)
+    }
 }

@@ -30,6 +30,8 @@ final class TextPageBridge {
     private var documentPending = false
     // a diff page's current change, handed to a rebuild from the same text so a theme change keeps it
     private var change = 0
+    // the wrap the page was last handed or built with
+    private var wrap = false
 
     init(path: String, line: Int?, follower: LogFollower?, pageID: UUID, store: AppStore?, webView: WKWebView?,
          world: WKContentWorld, onFail: @escaping (String) -> Void) {
@@ -54,6 +56,7 @@ final class TextPageBridge {
         let bridge = TextPageBridge(path: path, line: line, follower: follower, pageID: overlay.id, store: store,
                                     webView: webView, world: world, onFail: onFail)
         bridge.search = Self.searchState(of: overlay)
+        bridge.wrap = overlay.textWrap
         let handler = PageHandler()
         handler.bridge = bridge
         webView.configuration.userContentController.add(handler, contentWorld: world, name: handlerName)
@@ -67,7 +70,7 @@ final class TextPageBridge {
     func loadDocument(fresh: Bool) {
         documentLoad += 1
         documentPending = true
-        if let follower { return follower.loadDocument(fresh: fresh, search: search) }
+        if let follower { return follower.loadDocument(fresh: fresh, search: search, wrap: wrap) }
         let load = documentLoad, path = path
         Task { [weak self] in
             // a shown page reopens where it was, so a theme change or a reload never moves the view
@@ -86,7 +89,8 @@ final class TextPageBridge {
             }
             guard let self, load == documentLoad, let text else { return }
             let html = TextPage.html(text: text, language: TextPage.language(forFile: path), line: line,
-                                     style: MarkdownAssets.shared.textStyle, anchor: top, search: search, change: change)
+                                     style: MarkdownAssets.shared.textStyle, anchor: top, search: search, change: change,
+                                     wrap: wrap)
             webView?.loadHTMLString(html, baseURL: nil)
         }
     }
@@ -96,9 +100,13 @@ final class TextPageBridge {
         return (value as? NSNumber)?.doubleValue
     }
 
-    /// apply takes the model's latest value: following for a log page, and a search whose revision moved.
+    /// apply takes the model's latest value: following for a log page, the wrap, and a search whose revision moved.
     func apply(_ overlay: HtmlOverlay) {
         follower?.setFollowing(overlay.logState?.following ?? false)
+        if overlay.textWrap != wrap {
+            wrap = overlay.textWrap
+            if !documentPending { pushWrap() }
+        }
         let next = Self.searchState(of: overlay)
         let moved = next.revision != search.revision
         search = next
@@ -138,6 +146,7 @@ final class TextPageBridge {
         documentPending = false
         follower?.rendererReady()
         pushSearch()
+        pushWrap()
     }
 
     private func report(_ body: [String: Any]) {
@@ -172,13 +181,22 @@ final class TextPageBridge {
                                      in: nil, in: world)
     }
 
+    // only the model is written: its change comes back through apply, so a control call crossing the toggle
+    // still leaves the page on the model's value
+    private func wrapped(_ value: Bool) {
+        store?.setTextWrap(pageID, wrapped: value)
+    }
+
+    private func pushWrap() {
+        webView?.callAsyncJavaScript("agtermTextSetWrap(wrap)", arguments: ["wrap": wrap], in: nil, in: world)
+    }
+
     private static func searchState(of overlay: HtmlOverlay) -> TextPage.SearchState {
         TextPage.SearchState(query: overlay.textSearch?.query ?? "", revision: overlay.searchRevision,
                              current: overlay.textSearch?.current ?? 0)
     }
 
-    // accepts only the page's own reports from its main frame: a new document ready for updates, a user scroll on a
-    // log page, a query typed into the field, the matches the page found, or a diff page's changes
+    // accepts only the page's own reports from its main frame
     private final class PageHandler: NSObject, WKScriptMessageHandler {
         weak var bridge: TextPageBridge?
 
@@ -198,6 +216,10 @@ final class TextPageBridge {
             }
             if let changes = body["changes"] as? [String: Any] {
                 bridge.changesReport(changes)
+                return
+            }
+            if let wrap = body["wrap"] as? Bool {
+                bridge.wrapped(wrap)
                 return
             }
             guard let following = body["following"] as? Bool else { return }

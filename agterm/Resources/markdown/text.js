@@ -42,21 +42,44 @@
   document.body.prepend(bar);
   const finder = startSearch();
 
+  let wrapped = source.dataset.wrap !== undefined;
+  document.body.classList.toggle('agterm-wrapped', wrapped);
+  // the row each line starts on, then the row count; measured on first use while wrapped, dropped by every reflow
+  let lineRows = null;
+  const rowStart = (line) => {
+    if (!wrapped) return line;
+    if (!lineRows) lineRows = measureRows(lineCount());
+    return lineRows[line];
+  };
+  const placers = [];
+
   let following = false;
   const logControls = log ? startLog() : null;
   if (!log) {
-    const lines = text.split('\n');
-    if (lines.length > 1 && lines[lines.length - 1] === '') lines.pop();
+    const count = lineCount();
     const gutter = document.createElement('div');
     gutter.className = 'agterm-gutter';
-    gutter.textContent = lines.map((_, i) => i + 1).join('\n');
+    gutter.textContent = Array.from({ length: count }, (_, i) => i + 1).join('\n');
     page.append(gutter, pre);
+    // a wrapped line's number heads its first row, and blank rows fill the rest
+    const drawGutter = () => {
+      gutter.textContent = Array.from({ length: count }, (_, i) => `${i + 1}${'\n'.repeat(rowStart(i + 1) - rowStart(i) - 1)}`)
+        .join('\n');
+    };
+    if (wrapped) drawGutter();
+    placers.push(drawGutter);
     if (rows) paintRows(rows);
-    if (Number.isInteger(target) && target >= 1 && target <= lines.length) {
+    if (Number.isInteger(target) && target >= 1 && target <= count) {
       const style = getComputedStyle(pre);
       const band = document.createElement('div');
       band.className = 'agterm-band';
-      band.style.top = `${parseFloat(style.paddingTop) + (target - 1) * parseFloat(style.lineHeight)}px`;
+      const placeBand = () => {
+        const height = parseFloat(style.lineHeight);
+        band.style.top = `${parseFloat(style.paddingTop) + rowStart(target - 1) * height}px`;
+        band.style.height = `${(rowStart(target) - rowStart(target - 1)) * height}px`;
+      };
+      placeBand();
+      placers.push(placeBand);
       page.prepend(band);
       band.scrollIntoView({ block: 'center' });
       lastTop = scroller.scrollTop;
@@ -65,9 +88,96 @@
     if (Number.isFinite(anchor)) scrollTo(anchor);
   }
   const changes = rows ? startChanges(rows) : null;
+  const wrapper = startWrap();
   finder.start();
   window.addEventListener('keydown', keys);
+  window.addEventListener('resize', () => {
+    if (!wrapped) return;
+    lineRows = null;
+    placers.forEach((place) => place());
+    if (log && following) scrollTo(scroller.scrollHeight);
+  });
   send({ ready: true });
+
+  // lines as the gutter numbers them: a final line break opens no line of its own
+  function lineCount() {
+    let count = 1;
+    for (let at = text.indexOf('\n'); at >= 0; at = text.indexOf('\n', at + 1)) count += 1;
+    return count > 1 && text.endsWith('\n') ? count - 1 : count;
+  }
+
+  // every row is one line box of the same height, so a line starts one row below the newline that ends the line
+  // before it, and the text ends on the row of the code element's last fragment. A line's first character is never
+  // measured: on a diff row it is the zero-size marker, whose rect is empty.
+  function measureRows(count) {
+    const style = getComputedStyle(pre);
+    const height = parseFloat(style.lineHeight);
+    const origin = pre.getBoundingClientRect().top + parseFloat(style.paddingTop);
+    const rowOf = (rect) => Math.floor((rect.top + rect.height / 2 - origin) / height);
+    const starts = new Int32Array(count + 1);
+    const range = document.createRange();
+    const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let line = 1;
+    for (let node = walker.nextNode(); node && line < count; node = walker.nextNode()) {
+      for (let at = node.data.indexOf('\n'); at >= 0 && line < count; at = node.data.indexOf('\n', at + 1)) {
+        range.setStart(node, at);
+        range.setEnd(node, at + 1);
+        starts[line] = rowOf(range.getBoundingClientRect()) + 1;
+        line += 1;
+      }
+    }
+    const fragments = code.getClientRects();
+    starts[count] = fragments.length ? rowOf(fragments[fragments.length - 1]) + 1 : count;
+    return starts;
+  }
+
+  // a toggle keeps the line under the bar there, or a following log at its end, and moves through scrollTo, so the
+  // reflow never reads as the user scrolling
+  function startWrap() {
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'agterm-wrap';
+    toggle.title = 'Wrap long lines (w)';
+    bar.insertBefore(toggle, bar.querySelector('.agterm-search'));
+    const draw = () => {
+      toggle.textContent = wrapped ? 'Wrap: on' : 'Wrap: off';
+      toggle.setAttribute('aria-pressed', String(wrapped));
+    };
+    const lineTop = (line) => {
+      const style = getComputedStyle(pre);
+      return page.offsetTop + pre.offsetTop + parseFloat(style.paddingTop) + rowStart(line) * parseFloat(style.lineHeight);
+    };
+    const topLine = () => {
+      const view = scroller.scrollTop + bar.offsetHeight;
+      let low = 0, high = lineCount() - 1;
+      while (low < high) {
+        const mid = (low + high + 1) >> 1;
+        if (lineTop(mid) <= view) low = mid; else high = mid - 1;
+      }
+      return low;
+    };
+    const set = (value, own) => {
+      if (value === wrapped) return;
+      const line = topLine();
+      // above the first line, as at the page's top, the gap is kept; inside a line its top goes under the bar
+      const gap = Math.min(0, scroller.scrollTop + bar.offsetHeight - lineTop(line));
+      wrapped = value;
+      lineRows = null;
+      document.body.classList.toggle('agterm-wrapped', wrapped);
+      placers.forEach((place) => place());
+      scrollTo(log && following ? scroller.scrollHeight : lineTop(line) - bar.offsetHeight + gap);
+      draw();
+      if (own) send({ wrap: wrapped });
+      // the app reopens a paused log at the offset it was last told
+      if (log) logControls.post();
+    };
+    toggle.addEventListener('click', () => set(!wrapped, true));
+    draw();
+    return {
+      toggle: () => set(!wrapped, true),
+      set: (value) => set(value, false),
+    };
+  }
 
   function glyph(path) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -218,7 +328,7 @@
     const pick = () => {
       if (!offsets.length) { current = -1; return; }
       if (log && following) { current = offsets.length - 1; return; }
-      // lines never wrap, so a match's top grows with its offset and the first one in view is a binary search
+      // a match's top grows with its offset, wrapped or not, so the first one in view is a binary search
       const top = bar.offsetHeight;
       let low = 0, high = offsets.length;
       while (low < high) {
@@ -439,13 +549,11 @@
     return out;
   }
 
-  // rows never wrap, so a run of added or removed rows is one band at its first row's offset
   function paintRows(rows) {
     page.classList.add('agterm-diff');
     const style = getComputedStyle(pre);
-    const height = parseFloat(style.lineHeight);
-    const inset = parseFloat(style.paddingTop);
     const bands = document.createDocumentFragment();
+    const runs = [];
     for (let first = 0; first < rows.length; first++) {
       const kind = rows[first].kind;
       if (kind !== '-' && kind !== '+') continue;
@@ -453,11 +561,20 @@
       while (last + 1 < rows.length && rows[last + 1].kind === kind) last++;
       const band = document.createElement('div');
       band.className = kind === '+' ? 'agterm-added' : 'agterm-removed';
-      band.style.top = `${pre.offsetTop + inset + first * height}px`;
-      band.style.height = `${(last - first + 1) * height}px`;
+      runs.push({ band, first, last });
       bands.append(band);
       first = last;
     }
+    const place = () => {
+      const height = parseFloat(style.lineHeight);
+      const inset = pre.offsetTop + parseFloat(style.paddingTop);
+      for (const { band, first, last } of runs) {
+        band.style.top = `${inset + rowStart(first) * height}px`;
+        band.style.height = `${(rowStart(last + 1) - rowStart(first)) * height}px`;
+      }
+    };
+    place();
+    placers.push(place);
     page.prepend(bands);
   }
 
@@ -502,14 +619,13 @@
     band.hidden = true;
     page.prepend(band);
 
-    // rows never wrap, so a row's place is its index times the line height
     const style = getComputedStyle(pre);
     const height = parseFloat(style.lineHeight);
     const inset = parseFloat(style.paddingTop);
     // in document coordinates, which scrollTop measures; the band sits in the page, whose own top is the bar's room
     const origin = () => page.offsetTop + pre.offsetTop + inset;
-    const topOf = (block) => origin() + block[0] * height;
-    const bottomOf = (block) => origin() + (block[1] + 1) * height;
+    const topOf = (block) => origin() + rowStart(block[0]) * height;
+    const bottomOf = (block) => origin() + rowStart(block[1] + 1) * height;
     const view = () => ({ top: scroller.scrollTop + bar.offsetHeight, bottom: scroller.scrollTop + scroller.clientHeight });
     const visible = (block) => {
       const { top, bottom } = view();
@@ -521,9 +637,10 @@
       label.textContent = current < 0 ? `${count} ${count === 1 ? 'change' : 'changes'}` : `change ${current + 1} of ${count}`;
       band.hidden = current < 0;
       if (current < 0) return;
-      band.style.top = `${pre.offsetTop + inset + blocks[current][0] * height}px`;
-      band.style.height = `${(blocks[current][1] - blocks[current][0] + 1) * height}px`;
+      band.style.top = `${pre.offsetTop + inset + rowStart(blocks[current][0]) * height}px`;
+      band.style.height = `${(rowStart(blocks[current][1] + 1) - rowStart(blocks[current][0])) * height}px`;
     };
+    placers.push(draw);
     // the change is brought into view only when its first row is not shown below the bar
     const reveal = () => {
       const { top, bottom } = view();
@@ -573,7 +690,15 @@
     page.append(pre);
 
     const drawBar = () => {
-      toggle.textContent = following ? 'Follow: on' : 'Follow: paused - Resume';
+      if (following) {
+        toggle.textContent = 'Follow: on';
+      } else {
+        const prefix = document.createElement('span');
+        prefix.className = 'agterm-prefix';
+        prefix.textContent = 'Follow: paused - ';
+        toggle.replaceChildren(prefix, 'Resume');
+      }
+      toggle.setAttribute('aria-label', toggle.textContent);
       toggle.classList.toggle('agterm-paused', !following);
       const notes = [];
       if (state.clipped) notes.push('first line clipped');
@@ -621,6 +746,7 @@
       // line breaks as the parser left them in the first document, which LogFollower.shift counts the same way
       const value = raw.replace(/\r\n?/g, '\n');
       render(value, lang);
+      lineRows = null;
       state = { clipped, waiting, unreadable };
       finder.update(value, shift || { dropped: 0, cut: false, replaced: false });
       drawBar();
@@ -669,6 +795,7 @@
       if (event.key === 'N' && finder.hasQuery()) { finder.jump(false); return true; }
       if (event.key === ']' && changes) { changes.step(true); return true; }
       if (event.key === '[' && changes) { changes.step(false); return true; }
+      if (event.key === 'w') { wrapper.toggle(); return true; }
       if (!logControls) return false;
       if (event.key === 'F') { logControls.toggle(); return true; }
       if (event.key === 'G' || event.key === 'End') { logControls.bottom(); return true; }
@@ -680,6 +807,7 @@
 
   window.agtermTextSearchSet = (query, revision, typed) => finder.set(query, revision, typed === true);
   window.agtermTextSearchStep = (forward, query, revision) => finder.step(forward, query, revision);
+  window.agtermTextSetWrap = (value) => wrapper.set(value === true);
   window.agtermTextChangeStep = (forward) => (changes ? changes.step(forward) : { count: 0, current: 0 });
   window.agtermTextFocusSearch = () => {
     finder.field.focus();
