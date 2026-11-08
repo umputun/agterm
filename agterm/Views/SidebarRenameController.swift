@@ -3,8 +3,8 @@ import AppKit
 
 /// Owns the sidebar's inline-rename interaction: the `NSTextFieldDelegate` for the outline's editable name
 /// fields, plus the rename reentrancy flags. `WorkspaceSidebar.Coordinator` creates one, points it at the
-/// outline, starts an edit via `beginEditing(node:)`, reads `isEditing`/`isCommitting` to gate its own row
-/// reloads and focus hand-back, and supplies `onRenameEnded` to return keyboard focus to the terminal.
+/// outline, starts an edit via `beginEditing(node:)`, defers its own updates while `isRenameInFlight`, and
+/// supplies `onRenameEnded`/`onMouseTrackingEnded` to apply them and return keyboard focus to the terminal.
 @MainActor
 final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     private let store: AppStore
@@ -14,14 +14,16 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// return focus to the active terminal. Invoked asynchronously from `controlTextDidEndEditing` so the
     /// field editor's resign settles first.
     var onRenameEnded: ((SidebarNode?) -> Void)?
+    var onMouseTrackingEnded: (() -> Void)?
 
     /// Set while an end-editing notification is being processed, to ignore the re-entrant end-editing the
     /// cancel/commit path can trigger.
     private var committing = false
-    /// Set while a rename field is the active first responder (between `beginEditing` and `restore`), so a
-    /// badge tick can't reload the row out from under the in-progress edit. `committing` covers only the
-    /// end-editing instant; this covers the whole typing window.
-    private var editing = false
+    /// The row whose field is the active first responder (between `beginEditing` and `restore`), so a badge
+    /// tick can't reload the row out from under the in-progress edit. `committing` covers only the
+    /// end-editing instant; this covers the whole typing window. End-editing commits to this row, not the
+    /// field's current row, which a workspace collapse removes mid-edit.
+    private var editingNode: SidebarNode?
     /// Set by the Esc handler (`doCommandBy` cancelOperation) so the end-editing that the
     /// manual resign triggers is treated as a cancel — the typed value is discarded.
     private var cancellingRename = false
@@ -30,12 +32,21 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// refreshes the row).
     private var renameOriginalValue: String?
 
-    /// Whether a rename field is being edited (first responder between `beginEditing` and `restore`). Read by
-    /// the Coordinator to skip row reloads and focus hand-back mid-edit.
-    var isEditing: Bool { editing }
-    /// Whether an end-editing notification is being processed. Read by the Coordinator to skip a row reload
-    /// during the commit instant.
-    var isCommitting: Bool { committing }
+    /// Whether a rename field is being edited (first responder between `beginEditing` and `restore`).
+    var isEditing: Bool { editingNode != nil }
+    private var mouseTrackingDepth = 0
+    var isTrackingMouse: Bool { mouseTrackingDepth > 0 }
+    /// Editing, committing, or still tracking a mouse-down in the field editor, which can outlive the edit.
+    /// The Coordinator holds every rebuild, row reload, selection sync and focus hand-back while this is set.
+    var isRenameInFlight: Bool { isEditing || committing || isTrackingMouse }
+
+    func beginMouseTracking() { mouseTrackingDepth += 1 }
+
+    func endMouseTracking() {
+        mouseTrackingDepth -= 1
+        guard mouseTrackingDepth == 0 else { return }
+        DispatchQueue.main.async { [weak self] in self?.onMouseTrackingEnded?() }
+    }
 
     init(store: AppStore) {
         self.store = store
@@ -43,9 +54,15 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     }
 
     /// Puts the row's text field into editing mode and focuses it. Called from the "Rename" menu item and
-    /// from double-click.
+    /// from double-click. A request for another row commits the open edit first, since its end-editing would
+    /// otherwise clear the new edit's state; a repeat for the row being edited keeps that edit.
     func beginEditing(node: SidebarNode) {
-        guard let outline = outlineView else { return }
+        guard !committing, !isTrackingMouse, let outline = outlineView else { return }
+        if let editingNode {
+            guard editingNode.id != node.id else { return }
+            outline.window?.makeFirstResponder(nil)
+            guard !isEditing else { return }
+        }
         let row = outline.row(forItem: node)
         guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
               let field = cell.textField else { return }
@@ -66,12 +83,18 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         field.textColor = theme.terminalForegroundColor ?? .labelColor
         field.backgroundColor = theme.terminalBackgroundColor ?? .textBackgroundColor
         field.setAccessibilityIdentifier("edit-field")
-        field.window?.makeFirstResponder(field)
-        editing = true
+        editingNode = node
         // pause auto-follow while the rename field owns first responder: an armed idle jump would move the
         // outline selection off this row and yank focus into the followed terminal, silently committing the
         // rename mid-edit. balanced by the resume in `restore` when editing ends.
         store.suppressAutoFollow()
+        guard let window = field.window, window.makeFirstResponder(field), isEditing, field.currentEditor() != nil else {
+            if isEditing {
+                restore(field: field, kind: node.kind)
+                DispatchQueue.main.async { [weak self] in self?.onRenameEnded?(node) }
+            }
+            return
+        }
     }
 
     /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`, not the
@@ -79,7 +102,7 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// would leave the field stuck in edit mode. Flag the cancel, resign so `controlTextDidEndEditing` fires,
     /// and consume the command so the no-op default handling doesn't run.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        guard editing, commandSelector == #selector(NSResponder.cancelOperation(_:)),
+        guard isEditing, commandSelector == #selector(NSResponder.cancelOperation(_:)),
               let field = control as? NSTextField else { return false }
         cancellingRename = true
         field.window?.makeFirstResponder(outlineView)
@@ -87,12 +110,11 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     }
 
     func controlTextDidEndEditing(_ notification: Notification) {
-        guard !committing, let field = notification.object as? NSTextField, let outline = outlineView else { return }
+        guard !committing, let field = notification.object as? NSTextField else { return }
         committing = true
         defer { committing = false }
 
-        let row = outline.row(for: field)
-        let node = row >= 0 ? outline.item(atRow: row) as? SidebarNode : nil
+        let node = editingNode
 
         // Escape cancels: via AppKit's cancel text-movement, or via our Esc handler's flag (the
         // manual-resign path the rename field needs, since it never gets the cancel movement).
@@ -120,7 +142,7 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// Returns a renamed/edited field to its non-editable label state and resets its accessibility
     /// identifier to the row identifier for its kind.
     private func restore(field: NSTextField, kind: SidebarNode.Kind?) {
-        editing = false
+        editingNode = nil
         // rename ended (commit or cancel) — lift the suppression `beginEditing` took so auto-follow resumes.
         store.resumeAutoFollow()
         field.isEditable = false
@@ -135,5 +157,39 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         if let cell = field.superview as? SidebarCellView {
             cell.setColors(selected: (cell.superview as? NSTableRowView)?.isSelected ?? false)
         }
+    }
+}
+
+final class SidebarNameField: NSTextField {
+    override static var cellClass: AnyClass? {
+        get { SidebarNameFieldCell.self }
+        set { _ = newValue }
+    }
+}
+
+final class SidebarNameFieldCell: NSTextFieldCell {
+    weak var renameController: SidebarRenameController?
+    private lazy var editor: SidebarNameFieldEditor = {
+        let editor = SidebarNameFieldEditor()
+        editor.isFieldEditor = true
+        return editor
+    }()
+
+    override func fieldEditor(for _: NSView) -> NSTextView? {
+        editor.renameController = renameController
+        return editor
+    }
+}
+
+/// Ignores a mouse-down once detached, where TextKit 2 spins on the main thread. While attached, its tracking
+/// loop holds sidebar updates: a reload mid-drag would detach it under the loop.
+final class SidebarNameFieldEditor: NSTextView {
+    weak var renameController: SidebarRenameController?
+
+    override func mouseDown(with event: NSEvent) {
+        guard window != nil, superview != nil, let renameController else { return }
+        renameController.beginMouseTracking()
+        defer { renameController.endMouseTracking() }
+        super.mouseDown(with: event)
     }
 }
