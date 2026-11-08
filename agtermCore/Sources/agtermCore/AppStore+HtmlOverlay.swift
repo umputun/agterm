@@ -99,6 +99,22 @@ public enum TextChangesFailure: Error, Equatable, Sendable {
     }
 }
 
+/// TextWrapFailure is why a `session.overlay.wrap` request was refused.
+public enum TextWrapFailure: Error, Equatable, Sendable {
+    case page(HtmlOverlayCommandFailure)
+    case notText
+    case remote
+
+    /// message is the control error for this refusal.
+    public var message: String {
+        switch self {
+        case .page(let failure): return failure.message
+        case .notText: return "no text page"
+        case .remote: return "remote page: wrap it on the Mac that shows it"
+        }
+    }
+}
+
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
@@ -299,6 +315,33 @@ extension AppStore {
         }
     }
 
+    /// setTextWrap applies `mode` to the text page in the slot `pane` addresses, with the slot refusals of
+    /// `textSearchPage`, and returns whether it now wraps.
+    public func setTextWrap(_ sessionID: UUID, pane: OverlayPane?, mode: ControlToggleMode) -> Result<Bool, TextWrapFailure> {
+        let page: HtmlOverlay
+        switch textSearchPage(sessionID, pane: pane) {
+        case .success(let found): page = found
+        case .failure(.page(let failure)): return .failure(.page(failure))
+        case .failure(.remote): return .failure(.remote)
+        case .failure: return .failure(.notText)
+        }
+        let wrapped = mode.desiredValue(current: page.textWrap)
+        setTextWrap(page.id, wrapped: wrapped)
+        return .success(wrapped)
+    }
+
+    /// setTextWrap records whether text page `id` wraps long lines, from control or the page's own toggle. A change
+    /// emits `tree.changed`; any other page is left alone.
+    public func setTextWrap(_ id: UUID, wrapped: Bool) {
+        var changed = false
+        updateHtmlOverlay(id) {
+            guard case .text = $0.source, $0.textWrap != wrapped else { return }
+            $0.textWrap = wrapped
+            changed = true
+        }
+        if changed { scheduleTreeChanged() }
+    }
+
     /// htmlOverlaySlot finds the slot holding page `id` in a visible session, nil once the page left it.
     public func htmlOverlaySlot(_ id: UUID) -> (session: Session, pane: OverlayPane?)? {
         for session in workspaces.flatMap(\.sessions) {
@@ -351,7 +394,8 @@ extension AppStore {
                                           search: page.textSearch.map {
                                               ControlTextSearchNode(query: $0.query, matches: $0.matches, current: $0.current)
                                           },
-                                          changes: page.textChanges.map { ControlTextChangesNode(count: $0.count, current: $0.current) })
+                                          changes: page.textChanges.map { ControlTextChangesNode(count: $0.count, current: $0.current) },
+                                          wrap: page.textWrap ? true : nil)
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, document: document, text: text,
                                       state: page.loadState.rawValue,

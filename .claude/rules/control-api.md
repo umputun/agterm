@@ -173,7 +173,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.hud.open`, `.hud.update`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.wrap`, `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -855,6 +855,14 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Under the cap `data-files` carries `TextPage.diffLanguages`, and the page highlights each hunk's two sides whole in
   its file's language, with the marker column kept in the text at zero width; added and removed runs get bands at
   any size. A patch with no unified hunk keeps the `diff` grammar. `text.language` stays `diff`.
+- A text page wraps long lines (`session.overlay.wrap on|off|toggle`, the bar's Wrap button, `w`).
+  `HtmlOverlay.textWrap` lives per page, starts off and is never persisted; a rebuild carries it as `data-wrap`.
+  The bridge records the page's toggle in the model, and `TextPageBridge.apply` pushes every model change back, so a control
+  call crossing a click leaves both on the model's value. Refusals are `textSearchPage`'s; a replica's
+  toggle stays in the page, unrecorded, unreported and dropped by a rebuild, as its search is. Every row is one line box of the same height, so `text.js` places line starts from each line's ending
+  newline and the end from the code element's last fragment: a diff marker's zero-size rect is empty. The gutter,
+  target, diff and change bands all read those rows. A toggle reports a log page's offset, which a rebuild reopens at.
+  Read back `htmlOverlays[].text.wrap`, omitted while unwrapped.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any

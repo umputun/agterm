@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
-  show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, show this HTML page or artifact, make an HTML page or explainer for this and show
+  show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
@@ -867,6 +867,16 @@ Matching is case-insensitive plain text. A step pauses a following log page, so 
 query does not. Read back `text.search` (`{query, matches, current}`). The user has the same search in the page's
 bar: `/` or ⌘F focuses it, `n`/`N` step, Esc clears; on a log page `F` toggles follow, `G`/End goes to the bottom and
 follows, `g`/Home to the top. A step before the page loads is refused `page not loaded`.
+
+Long lines of a text, log or diff page run off its right edge until wrapped:
+
+```bash
+agtermctl session overlay wrap on --target "$AGTERM_SESSION_ID"   # off unwraps, toggle flips; prints the state
+```
+
+The user wraps with the bar's Wrap button or `w`. A page opens unwrapped and keeps its choice until it closes. Read
+back `text.wrap`, true while wrapped and omitted otherwise. On a page shown for another Mac the toggle stays in the
+page: a redraw drops it, `text.wrap` omits it, and the command answers `no text page`.
 
 To show the user changes, write each changed file's diff to its own `.diff` file and list them as links; a ⌘-click
 opens it as a read-only text page:
