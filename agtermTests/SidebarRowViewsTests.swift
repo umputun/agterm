@@ -378,8 +378,7 @@ final class SidebarRowViewsTests: XCTestCase {
         try XCTUnwrap(field.currentEditor() as? NSTextView).string = field.stringValue
 
         outline.collapseItem(try XCTUnwrap(coordinator.workspaceNode(forID: store.workspaces[0].id)))
-        // the edit ends once its row is gone, whether AppKit ends it on the collapse or on the next resign
-        if coordinator.renameController.isEditing { _ = window.makeFirstResponder(nil) }
+        XCTAssertFalse(coordinator.renameController.isEditing)
         await drainRenameCallback()
         XCTAssertFalse(coordinator.renameController.isEditing)
         XCTAssertEqual(session.customName, "renamed")

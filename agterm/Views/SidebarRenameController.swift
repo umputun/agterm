@@ -11,8 +11,8 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     weak var outlineView: NSOutlineView?
 
     /// Called with the edited row after commit or cancel, so the Coordinator can refresh its label and
-    /// return focus to the active terminal. Invoked asynchronously from `controlTextDidEndEditing` so the
-    /// field editor's resign settles first.
+    /// return focus to the active terminal. Invoked asynchronously after end-editing, so the field editor's
+    /// resign settles first, or when `beginEditing` cannot focus the field.
     var onRenameEnded: ((SidebarNode?) -> Void)?
     var onMouseTrackingEnded: (() -> Void)?
 
