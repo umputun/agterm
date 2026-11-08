@@ -84,8 +84,9 @@ public enum RemoteTreeMerger {
     /// taken beside the model walk rather than inside it, so these guards are eligibility rules and not
     /// only a defence against that gap.
     ///
-    /// A page companion owns no daemon, so it is listed with no panes when its parent is: it attaches under that
-    /// parent's row through `session.companion.page.attach`, never on its own.
+    /// A page owns no daemon, so it is listed with no panes. This Mac's own top-level page is always listed, and a page
+    /// companion is when its parent is: it attaches under that parent's row through `session.companion.page.attach`.
+    /// A row attached from another Mac is never offered again.
     ///
     /// An empty result is a successful answer. It cannot be told apart from a store that is simply not
     /// running in `live` mode, and does not try to be: `zmx list` is the restore-mode diagnostic.
@@ -110,11 +111,18 @@ public enum RemoteTreeMerger {
                 }
             }
         }
-        let attachable = Set(terminals.map(\.id))
+        let pageRoots = windows.flatMap { window in
+            window.tree.workspaces.flatMap { workspace in
+                workspace.sessions.filter { $0.content == "page" && $0.parent == nil && $0.remoteHost == nil }.map(\.id)
+            }
+        }
+        let attachable = Set(terminals.map(\.id) + pageRoots)
         let pages = windows.flatMap { window in
             window.tree.workspaces.flatMap { workspace in
                 workspace.sessions.compactMap { node -> ControlRemoteSession? in
-                    guard node.content == "page", let parent = node.parent, attachable.contains(parent) else { return nil }
+                    guard node.content == "page", node.remoteHost == nil else { return nil }
+                    guard let parent = node.parent else { return remotePageRoot(node, window: window, workspace: workspace) }
+                    guard attachable.contains(parent) else { return nil }
                     return ControlRemoteSession(id: node.id, name: node.name, windowID: window.id, windowName: window.name,
                                                 workspaceID: workspace.id, workspaceName: workspace.name, cwd: node.cwd,
                                                 splitAxis: nil, panes: [], parent: parent, content: "page")
@@ -153,15 +161,25 @@ public enum RemoteTreeMerger {
             guard let right = daemons["right"] else { return nil }
             panes.append(ControlRemotePane(pane: "right", daemon: right, foreground: node.splitForeground))
         }
-        // from the unfiltered workspace, so a companion this listing drops is still named as a member
-        let companions = node.parent == nil
-            ? workspace.sessions.filter { $0.parent == node.id }.map { ControlRemoteMember(id: $0.id, name: $0.name) }
-            : nil
         return ControlRemoteSession(id: node.id, name: node.name, windowID: window.id,
                                     windowName: window.name, workspaceID: workspace.id,
                                     workspaceName: workspace.name, context: node.context, cwd: node.cwd,
                                     splitAxis: node.hasSplit == true ? node.splitAxis : nil, panes: panes,
                                     status: node.status, statusColor: node.statusColor,
-                                    statusShape: node.statusShape, parent: node.parent, companions: companions)
+                                    statusShape: node.statusShape, parent: node.parent,
+                                    companions: node.parent == nil ? members(of: node, in: workspace) : nil)
+    }
+
+    private static func remotePageRoot(_ node: ControlSessionNode, window: RemoteWindowProjection,
+                                       workspace: ControlWorkspaceNode) -> ControlRemoteSession {
+        ControlRemoteSession(id: node.id, name: node.name, windowID: window.id, windowName: window.name,
+                             workspaceID: workspace.id, workspaceName: workspace.name, context: node.context,
+                             cwd: node.cwd, splitAxis: nil, panes: [], status: node.status, statusColor: node.statusColor,
+                             statusShape: node.statusShape, content: "page", companions: members(of: node, in: workspace))
+    }
+
+    // from the unfiltered workspace, so a companion this listing drops is still named as a member
+    private static func members(of node: ControlSessionNode, in workspace: ControlWorkspaceNode) -> [ControlRemoteMember] {
+        workspace.sessions.filter { $0.parent == node.id }.map { ControlRemoteMember(id: $0.id, name: $0.name) }
     }
 }

@@ -170,6 +170,19 @@ final class ControlServerCompanionPageTests: XCTestCase {
                        "a page on this Mac's loopback cannot be shown on another Mac")
     }
 
+    func testATopLevelPageIsHandedOutWithNoParentAndALoopbackOneIsNot() throws {
+        let row = try pageRow()
+        let reply = server.attachCompanionPage(row.id.uuidString, window: nil)
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(reply.result?.parent)
+        XCTAssertEqual(reply.result?.companionPage?.page, row.htmlOverlay?.id.uuidString)
+
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:3000/"))
+        let loopback = try store.addPageSession(after: parent.id, overlay: HtmlOverlay(source: .url(url))).get()
+        XCTAssertEqual(server.attachCompanionPage(loopback.id.uuidString, window: nil).error,
+                       "a page on this Mac's loopback cannot be shown on another Mac")
+    }
+
     func testAUrlAttachmentHasALifetimeChannelAndNoBridge() throws {
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .url(try XCTUnwrap(URL(string: "https://example.com/"))))).get()
         let (client, reply) = try claim(try attach(page).token)

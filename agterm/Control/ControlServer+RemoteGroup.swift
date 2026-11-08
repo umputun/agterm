@@ -8,7 +8,7 @@ extension ControlServer {
         guard let remote = tree.sessions.first(where: { $0.id == session }) else {
             return ControlResponse(ok: false, error: "no attachable session \(session) on \(host)")
         }
-        guard remote.parent == nil, remote.content == nil else {
+        guard remote.parent == nil else {
             return ControlResponse(ok: false, error: "\(session) is a companion, not a group's parent")
         }
         let store: AppStore
@@ -19,7 +19,10 @@ extension ControlServer {
         guard let workspace = store.currentWorkspaceID else {
             return ControlResponse(ok: false, error: "no window to attach into")
         }
-        let attached = attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
+        let attached = remote.content == "page"
+            ? await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
+                                     at: .root(store: store, workspace: workspace), select: true)
+            : attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
         guard attached.ok, let parentID = attached.result?.id.flatMap(UUID.init(uuidString:)) else { return attached }
 
         let known = remote.companions != nil
@@ -56,7 +59,8 @@ extension ControlServer {
             return ControlRemoteGroupMember(origin: member.id, error: "unavailable on \(host)")
         }
         let reply = row.content == "page"
-            ? await attachRemotePage(row.id, host: host, parent: parentID, select: false)
+            ? await attachRemotePage(row.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: row.name),
+                                     at: .companion(of: parentID), select: false)
             : attach(row, from: tree, host: host,
                      placement: RemotePlacement(store: store, workspace: workspace, parent: parentID, select: false))
         guard reply.ok, let id = reply.result?.id else {

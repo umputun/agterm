@@ -209,18 +209,23 @@
 - Modify: `agterm/AppActions+RemoteAttach.swift`
 - Modify: `RemoteTreeTests.swift`, `AppStoreReplicaPageTests.swift`, `agtermTests/ControlServerRemotePageTests.swift`, `agtermTests/ControlServerRemoteGroupTests.swift`, `agtermTests/RemoteAttachTests.swift`
 
-- [ ] origin tree lists local page roots without a daemon requirement, excludes replica rows, admits page
+- [x] origin tree lists local page roots without a daemon requirement, excludes replica rows, admits page
       companions under a page root, and reports the root's full companion membership
-- [ ] viewer creates a page root as a top-level replica row, rechecking its window and workspace after the async
+- [x] viewer creates a page root as a top-level replica row, rechecking its window and workspace after the async
       handoff; page bindings record the origin host, endpoint and name with an empty daemon map
-- [ ] `attach.group` accepts a page root and attaches it through the page path before its members; the picker
+- [x] `attach.group` accepts a page root and attaches it through the page path before its members; the picker
       offers page roots and still hides page companions
-- [ ] existing refusals stay: markdown, text, document pages and loopback URLs are not shown remotely
-- [ ] write tests: tree listing including an empty daemon inventory, a replica root never re-exported, root
+- [x] existing refusals stay: markdown, text, document pages and loopback URLs are not shown remotely
+- [x] write tests: tree listing including an empty daemon inventory, a replica root never re-exported, root
       replica placement, destination window or workspace closed during the handoff leaves no row, companion
       auto-attach under a replica page root, group attach with a page root and partial results, picker filtering,
       page-channel EOF while the root and its companions are parked for undo finalizes the group
-- [ ] run touched tests - must pass before task 6
+- [x] run touched tests - must pass before task 6
+- ➕ the store side is `AppStore.addReplicaPageRoot` beside `addReplicaPageCompanion`; `attachRemotePage` takes a
+      `RemotePageSpot` (`.companion(of:)` or `.root(store:workspace:)`) and a `RemoteBinding.Origin`. The single
+      `zmx attach` root and companion auto-attach tests live in `ControlServerRemoteCompanionsTests.swift`, beside its
+      page-attach fixtures, and the origin-side top-level page hand-out in `ControlServerCompanionPageTests.swift`;
+      `ControlServerRemotePageTests.swift` (the presenter path) needed no change
 
 ### Task 6: Product docs, command reference and agent skill
 **Files:**
