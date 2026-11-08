@@ -875,7 +875,8 @@ agtermctl session overlay wrap on --target "$AGTERM_SESSION_ID"   # off unwraps,
 ```
 
 The user wraps with the bar's Wrap button or `w`. A page opens unwrapped and keeps its choice until it closes. Read
-back `text.wrap`, true while wrapped and omitted otherwise.
+back `text.wrap`, true while wrapped and omitted otherwise. On a page shown for another Mac the toggle stays in the
+page: a redraw drops it, `text.wrap` omits it, and the command answers `no text page`.
 
 To show the user changes, write each changed file's diff to its own `.diff` file and list them as links; a ⌘-click
 opens it as a read-only text page:

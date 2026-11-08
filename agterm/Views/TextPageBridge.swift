@@ -30,7 +30,7 @@ final class TextPageBridge {
     private var documentPending = false
     // a diff page's current change, handed to a rebuild from the same text so a theme change keeps it
     private var change = 0
-    // the wrap the page was last handed or built with
+    // the wrap the page shows: last handed, built with, or reported by its own toggle
     private var wrap = false
 
     init(path: String, line: Int?, follower: LogFollower?, pageID: UUID, store: AppStore?, webView: WKWebView?,
@@ -181,9 +181,10 @@ final class TextPageBridge {
                                      in: nil, in: world)
     }
 
-    // only the model is written: its change comes back through apply, so a control call crossing the toggle
-    // still leaves the page on the model's value
+    // the page already shows its own toggle, so apply compares a later model value against it and a control call
+    // crossing the toggle still reaches the page
     private func wrapped(_ value: Bool) {
+        wrap = value
         store?.setTextWrap(pageID, wrapped: value)
     }
 

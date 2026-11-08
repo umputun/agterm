@@ -1365,4 +1365,49 @@ extension TextPageRenderingTests {
         try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
         try await waitForScript("Math.round(document.scrollingElement.scrollTop)", in: page.webView) { $0 == "\(toggled ?? -1)" }
     }
+
+    // regression: a stale wrap cache suppressed a control change after a click
+    func testAControlWrapAfterAClickTheBridgeHasNotAppliedReachesThePage() async throws {
+        let (page, window) = try shown(try openText("a.txt", "short\n\(Self.longLine)\nafter\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        _ = try await inRenderer("document.querySelector('.agterm-wrap').click(); true", page.webView)
+        try await waitFor("the click reaches the model") { self.current?.textWrap == true }
+
+        XCTAssertEqual(store.setTextWrap(session.id, pane: nil, mode: .off), .success(false))
+        page.apply(try XCTUnwrap(current))
+
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+    }
+
+    func testAWrapToggleKeepsTheLineUnderTheBar() async throws {
+        let text = (1...300).map { $0 % 5 == 0 ? "line \($0) \(Self.longLine)" : "line \($0)" }.joined(separator: "\n") + "\n"
+        let (page, window) = try shown(try openText("a.txt", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        let lineUnderBar = """
+            (() => {
+              const bar = document.querySelector('.agterm-bar').getBoundingClientRect();
+              const code = document.querySelector('#agterm-page pre code');
+              const caret = document.caretRangeFromPoint(code.getBoundingClientRect().left + 2, bar.bottom + 4);
+              const before = document.createRange();
+              before.setStart(code, 0);
+              before.setEnd(caret.startContainer, caret.startOffset);
+              return before.toString().split('\\n').length;
+            })()
+            """
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 3000; true", page.webView)
+        try await waitForScript("Math.round(document.scrollingElement.scrollTop)", in: page.webView) { $0 == "3000" }
+        let unwrapped = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+        XCTAssertGreaterThan(unwrapped ?? 0, 100)
+
+        try await press("w", page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        let wrapped = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+        try await press("w", page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        let back = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+
+        XCTAssertEqual([wrapped, back], [unwrapped, unwrapped])
+    }
 }

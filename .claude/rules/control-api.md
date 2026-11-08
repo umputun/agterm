@@ -858,8 +858,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A text page wraps long lines (`session.overlay.wrap on|off|toggle`, the bar's Wrap button, `w`).
   `HtmlOverlay.textWrap` lives per page, starts off and is never persisted; a rebuild carries it as `data-wrap`.
   The bridge records the page's toggle in the model, and `TextPageBridge.apply` pushes every model change back, so a control
-  call crossing a click leaves both on the model's value. Refusals are `textSearchPage`'s; a replica keeps its toggle in
-  the page alone. Every row is one line box of the same height, so `text.js` places line starts from each line's ending
+  call crossing a click leaves both on the model's value. Refusals are `textSearchPage`'s; a replica's
+  toggle stays in the page, unrecorded, unreported and dropped by a rebuild, as its search is. Every row is one line box of the same height, so `text.js` places line starts from each line's ending
   newline and the end from the code element's last fragment: a diff marker's zero-size rect is empty. The gutter,
   target, diff and change bands all read those rows. A toggle reports a log page's offset, which a rebuild reopens at.
   Read back `htmlOverlays[].text.wrap`, omitted while unwrapped.

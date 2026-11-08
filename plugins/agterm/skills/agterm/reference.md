@@ -1214,9 +1214,10 @@ error keeps those names for compatibility.
 - `session overlay wrap on|off|toggle [--pane left|right] [--target] [--window W]`
   - wrap the long lines of the text, log or diff page in the addressed slot, unwrap them, or toggle; returns
   `result.text` `wrapped` or `unwrapped`. A page opens unwrapped and keeps its choice until it closes. Refused
-  `no text page` for any other page and `remote page: wrap it on the Mac that shows it` for a slot handed to the
-  presenting Mac. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while wrapped and omitted otherwise. The
-  page's Wrap button and `w` toggle the same state.
+  `no text page` for any other page, one shown for another Mac included, and `remote page: wrap it on the Mac that
+  shows it` for a slot handed to the presenting Mac. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while
+  wrapped and omitted otherwise. The page's Wrap button and `w` toggle the same state; on a page shown for another Mac
+  that toggle stays in the page, unreported, and a redraw drops it.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,

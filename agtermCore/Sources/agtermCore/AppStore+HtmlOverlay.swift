@@ -325,12 +325,7 @@ extension AppStore {
         case .failure(.remote): return .failure(.remote)
         case .failure: return .failure(.notText)
         }
-        let wrapped: Bool
-        switch mode {
-        case .on: wrapped = true
-        case .off: wrapped = false
-        case .toggle: wrapped = !page.textWrap
-        }
+        let wrapped = mode.desiredValue(current: page.textWrap)
         setTextWrap(page.id, wrapped: wrapped)
         return .success(wrapped)
     }

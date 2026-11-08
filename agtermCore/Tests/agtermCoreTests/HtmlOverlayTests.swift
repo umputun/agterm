@@ -1185,6 +1185,13 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textWrap == false)
         #expect(store.closeOverlay(session.id))
 
+        let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(replica.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
         #expect(store.openOverlay(session.id, command: "less"))
         #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
         #expect(TextWrapFailure.notText.message == "no text page")

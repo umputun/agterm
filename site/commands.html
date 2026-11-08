@@ -2339,8 +2339,8 @@
                 Wrap the long lines of the text, log or diff page in the slot, unwrap them, or toggle between the two, as its
                 bar's Wrap button and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">w</span> do. A page opens
                 unwrapped and keeps its choice until it closes. It is refused <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no text page</span>
-                for any other page and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote page</span> for a slot shown on a
-                presenting Mac. <strong style="color: #bfbab0">Returns</strong>
+                for any other page, one shown for another Mac included, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote page</span> for a slot shown on a
+                presenting Mac; on a page shown for another Mac the bar's toggle stays in the page, unreported, until it redraws. <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">wrapped</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unwrapped</span>; read back
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays[].text.wrap</span>, true while wrapped and omitted otherwise.
