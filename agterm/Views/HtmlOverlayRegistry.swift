@@ -495,9 +495,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.removeFromSuperview()
     }
 
-    // a file page without a grant and an image, markdown, text or document page are loaded from text: they sit at
-    // about:blank and cannot navigate, so the file they came from is both the current page and what the user
-    // is looking at
+    // a file page without a grant and an image, text or document page, or a markdown page without a link grant, are
+    // loaded from text: they sit at about:blank and cannot navigate, so the file they came from is both the current
+    // page and what the user is looking at
     private var textLoaded: Bool {
         switch overlay.source {
         case .file(_, nil), .image, .text, .document: return true
