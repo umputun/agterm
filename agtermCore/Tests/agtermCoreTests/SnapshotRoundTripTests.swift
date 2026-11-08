@@ -806,15 +806,65 @@ struct SnapshotRoundTripTests {
     @Test(arguments: [
         (#"{"file":"/tmp/a.html","javascript":"yes","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .file(path: "/tmp/a.html", grantRoot: nil), navigation: true))),
         (#"{"url":"https://example.com","grantRoot":"/tmp"}"#, PageSnapshot?.some(PageSnapshot(source: .url(URL(string: "https://example.com")!)))),
-        (#"{"url":"ftp://example.com"}"#, PageSnapshot?.none),
-        (#"{"javascript":true}"#, PageSnapshot?.none),
-        (#""page""#, PageSnapshot?.none),
+        (#"{"url":"ftp://example.com"}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"javascript":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#""page""#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"file":42}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"slides":"/tmp/deck.key","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"unreadable":"kept reason","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable("kept reason"), navigation: true))),
     ])
-    func aPageDescriptorDecodesLossilyAndAnUnusableOneReadsAsATerminal(page: String, expected: PageSnapshot?) throws {
+    func aPageDescriptorDecodesLossilyAndAnUnusableOneReadsAsUnreadable(page: String, expected: PageSnapshot?) throws {
         let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","customName":"keep","page":\#(page)}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.page == expected)
         #expect(snap.customName == "keep")
+    }
+
+    @Test(arguments: [#"{"url":"ftp://example.com"}"#, #"{"javascript":true}"#, #"{"file":42}"#, #""page""#,
+                      #"{"slides":"/tmp/deck.key"}"#])
+    func anUnreadablePageDescriptorRestoresAFailedPageRowWithItsCompanions(page: String) throws {
+        let root = UUID(), companion = UUID(), pane = UUID(), workspace = UUID()
+        let json = #"{"id":"\#(root.uuidString)","cwd":"/tmp","customName":"dash","page":\#(page)}"#
+        let unreadable = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        let store = makeStore()
+
+        store.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: workspace, name: "work", sessions: [
+            unreadable,
+            SessionSnapshot(id: companion, paneIdentity: pane, customName: nil, cwd: "/tmp", parentID: root),
+        ])]))
+
+        let row = try #require(store.session(withID: root))
+        let shown = try #require(row.htmlOverlay)
+        #expect(row.content == .page)
+        #expect(row.displayName == "dash")
+        #expect(shown.source == .unreadable(reason: PageSnapshot.unreadableReason))
+        #expect(shown.loadState == .failed)
+        #expect(shown.loadError == PageSnapshot.unreadableReason)
+        #expect(row.locallyManagedPaneIdentities.isEmpty)
+        #expect(store.companions(of: root).map(\.id) == [companion])
+        #expect(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions)) == [pane])
+        #expect(store.htmlOverlayNodes(row, zoom: nil)?.first.map { [$0.file, $0.url, $0.document] } == [nil, nil, nil])
+    }
+
+    @Test func anUnreadablePageRowSurvivesASecondSave() throws {
+        let root = UUID(), companion = UUID()
+        let json = #"{"id":"\#(root.uuidString)","cwd":"/tmp","page":{"url":"ftp://example.com","navigation":true}}"#
+        let first = makeStore()
+        first.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8)),
+            SessionSnapshot(id: companion, paneIdentity: UUID(), customName: nil, cwd: "/tmp", parentID: root),
+        ])]))
+        let second = makeStore()
+
+        second.restore(from: try throughDisk(first.snapshot()))
+        let saved = try throughDisk(second.snapshot()).workspaces[0].sessions
+
+        #expect(saved.map(\.id) == [root, companion])
+        #expect(saved[0].page == PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))
+        #expect(saved[0].paneIdentity == nil)
+        #expect(second.session(withID: root)?.content == .page)
+        #expect(second.session(withID: root)?.htmlOverlay?.loadState == .failed)
+        #expect(second.companions(of: root).map(\.id) == [companion])
     }
 
     @Test func aSnapshotWithoutAPageDescriptorRestoresATerminal() throws {

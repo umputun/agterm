@@ -183,6 +183,16 @@ final class ControlServerCompanionPageTests: XCTestCase {
                        "a page on this Mac's loopback cannot be shown on another Mac")
     }
 
+    func testAnUnreadableSavedPageIsNotHandedOut() throws {
+        let row = try store.addPageSession(after: parent.id, overlay: PageSnapshot(source: .unreadable("bad descriptor")).makeOverlay()).get()
+
+        let reply = server.attachCompanionPage(row.id.uuidString, window: nil)
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "an unreadable saved page cannot be shown on another Mac")
+        XCTAssertTrue(server.companionPageTokens.isEmpty)
+    }
+
     func testAUrlAttachmentHasALifetimeChannelAndNoBridge() throws {
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .url(try XCTUnwrap(URL(string: "https://example.com/"))))).get()
         let (client, reply) = try claim(try attach(page).token)

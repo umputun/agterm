@@ -427,6 +427,21 @@ struct ZmxLifecycleTests {
         #expect(snapshot.workspaces[0].sessions[1].paneIdentity == nil)
     }
 
+    @Test func theIdentityUpgradeLeavesAnUnreadablePageRowWithoutAnIdentity() throws {
+        let pane = UUID()
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/repo","page":{"url":"ftp://example.com"}}"#
+        var snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo"),
+            try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8)),
+        ])])
+
+        let upgrade = PaneIdentityInventory.upgrade(&snapshot)
+
+        #expect(!upgrade.changed)
+        #expect(upgrade.identities == [pane])
+        #expect(snapshot.workspaces[0].sessions[1].paneIdentity == nil)
+    }
+
     @Test func launchInventorySkipsPageRowsInOpenAndClosedWindows() throws {
         let directory = temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

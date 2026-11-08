@@ -293,6 +293,25 @@ final class WindowLibraryClaimsTests {
         #expect(walk.claims.filter { $0.windowID == windowID }.map(\.paneIdentity) == [pane])
     }
 
+    @Test func aClosedWindowsUnreadablePageRowClaimsNoDaemon() throws {
+        let windowID = UUID()
+        let pane = UUID()
+        let page = SessionSnapshot(id: UUID(), customName: nil, cwd: "/tmp", page: PageSnapshot(source: .file(path: "PLACEHOLDER", grantRoot: nil)))
+        try writeIndex([try writeOpenDecoy(), WindowEntry(id: windowID, name: "work", isOpen: false)])
+        try writeWindowFile(windowID, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "workspace 1",
+                                                                              sessions: [session(pane: pane), page])]))
+        let file = windowsDirectory.appendingPathComponent("\(windowID.uuidString).json")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.contains(#""file" : "PLACEHOLDER""#))
+        try text.replacingOccurrences(of: #""file" : "PLACEHOLDER""#, with: #""url" : "ftp://example.com""#)
+            .write(to: file, atomically: true, encoding: .utf8)
+
+        let walk = WindowLibrary(directory: directory).paneClaims()
+
+        #expect(walk.complete)
+        #expect(walk.claims.filter { $0.windowID == windowID }.map(\.paneIdentity) == [pane])
+    }
+
     @Test func anOpenWindowsPageRowClaimsNoDaemon() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.store(for: library.windows[0].id))

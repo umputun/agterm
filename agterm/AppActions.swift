@@ -289,6 +289,19 @@ final class AppActions {
     /// session; ⌘W/menu/palette use `closeActiveSession`, and the control `session.close` never prompts.
     func closeSession(_ id: UUID, in store: AppStore) {
         guard uiActionsEnabled else { return }
+        confirmAndCloseSession(id, in: store)
+    }
+
+    /// Close page row `id` of `store` for its page's `window.close()`. Only a picker pending in the page's own
+    /// window holds it back, returning false so the page asks again; a zoom or dashboard does not, since the
+    /// page asking is what the user is looking at. True once the close ran or its confirmation was cancelled.
+    func closePageSession(_ id: UUID, in store: AppStore) -> Bool {
+        if PickRegistry.shared.controller(for: library.windowID(for: store))?.modalPending == true { return false }
+        confirmAndCloseSession(id, in: store)
+        return true
+    }
+
+    private func confirmAndCloseSession(_ id: UUID, in store: AppStore) {
         guard let session = store.session(withID: id) else { return }
         guard confirmCloseSession(session, companions: store.companions(of: session.id)) else { return }
         closeSessionAfterConfirmation(id, in: store)

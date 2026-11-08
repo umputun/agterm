@@ -39,7 +39,7 @@ public enum RemotePageResources {
             let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
             return MarkdownPage.localPath(requested, folder: folder)
                 .map { ContentResource(path: $0, maxBytes: MarkdownPage.maxImageBytes, picture: true) }
-        case .file, .url, .replica:
+        case .file, .url, .replica, .unreadable:
             return nil
         }
     }

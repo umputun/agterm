@@ -295,7 +295,12 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
         parentID = (try? c.decodeIfPresent(UUID.self, forKey: .parentID)) ?? nil
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
-        page = (try? c.decodeIfPresent(PageSnapshot.self, forKey: .page)) ?? nil
+        // a present descriptor this build cannot use keeps the row a page, so it never spawns a shell or a daemon
+        do {
+            page = try c.decodeIfPresent(PageSnapshot.self, forKey: .page)
+        } catch {
+            page = PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason))
+        }
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil
@@ -308,12 +313,16 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
 }
 
 /// PageSnapshot is a page row's saved page: the file or URL it shows and the options it was opened with, the
-/// only two sources a page row holds.
+/// only two sources a page row holds, or the unreadable marker of a saved one this build could not use.
 public struct PageSnapshot: Codable, Equatable, Sendable {
     public enum Source: Equatable, Sendable {
         case file(path: String, grantRoot: String?)
         case url(URL)
+        case unreadable(String)
     }
+
+    /// unreadableReason is what a page row shows when its saved descriptor could not be read.
+    public static let unreadableReason = "the saved page names no file or http(s) URL this version can open"
 
     public var source: Source
     public var javascript: Bool
@@ -340,6 +349,7 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
         switch overlay.source {
         case .file(let path, let grantRoot): source = .file(path: path, grantRoot: grantRoot)
         case .url(let url): source = .url(url)
+        case .unreadable(let reason): source = .unreadable(reason)
         case .replica, .image, .markdown, .text, .document: return nil
         }
         javascript = overlay.javascript
@@ -350,26 +360,34 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
         self.backgroundColor = backgroundColor
     }
 
-    /// makeOverlay builds the page under a fresh page id.
+    /// makeOverlay builds the page under a fresh page id; an unreadable one starts failed with its reason.
     public func makeOverlay() -> HtmlOverlay {
         let html: HtmlSource
         switch source {
         case .file(let path, let grantRoot): html = .file(path: path, grantRoot: grantRoot)
         case .url(let url): html = .url(url)
+        case .unreadable(let reason): html = .unreadable(reason: reason)
         }
-        return HtmlOverlay(source: html, navigation: navigation, javascript: javascript, chromeless: chromeless,
-                           persistent: persistent, browse: browse)
+        var overlay = HtmlOverlay(source: html, navigation: navigation, javascript: javascript, chromeless: chromeless,
+                                  persistent: persistent, browse: browse)
+        if case .unreadable(let reason) = source {
+            overlay.loadState = .failed
+            overlay.loadError = reason
+        }
+        return overlay
     }
 
     enum CodingKeys: String, CodingKey {
-        case file, grantRoot, url, javascript, navigation, chromeless, persistent, browse, backgroundColor
+        case file, grantRoot, url, unreadable, javascript, navigation, chromeless, persistent, browse, backgroundColor
     }
 
-    // the source is strict, so a descriptor naming neither a file nor a web URL drops and the row reads as a
-    // terminal; the options are lossy like every other snapshot optional
+    // the source is strict and throws on a descriptor naming neither a file nor a web URL, which
+    // `SessionSnapshot` keeps as the unreadable marker; the options are lossy like every other snapshot optional
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        if let path = try c.decodeIfPresent(String.self, forKey: .file) {
+        if let reason = try c.decodeIfPresent(String.self, forKey: .unreadable) {
+            source = .unreadable(reason)
+        } else if let path = try c.decodeIfPresent(String.self, forKey: .file) {
             source = .file(path: path, grantRoot: (try? c.decodeIfPresent(String.self, forKey: .grantRoot)) ?? nil)
         } else if let url = HtmlSource.webURL(try c.decode(String.self, forKey: .url)) {
             source = .url(url)
@@ -393,6 +411,8 @@ public struct PageSnapshot: Codable, Equatable, Sendable {
             try c.encodeIfPresent(grantRoot, forKey: .grantRoot)
         case .url(let url):
             try c.encode(url.absoluteString, forKey: .url)
+        case .unreadable(let reason):
+            try c.encode(reason, forKey: .unreadable)
         }
         let flags: [(CodingKeys, Bool)] = [(.javascript, javascript), (.navigation, navigation), (.chromeless, chromeless),
                                            (.persistent, persistent), (.browse, browse)]

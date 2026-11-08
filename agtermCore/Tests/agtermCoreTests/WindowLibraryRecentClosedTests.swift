@@ -137,6 +137,71 @@ final class WindowLibraryRecentClosedTests {
         #expect(store.session(withID: companion.id)?.parentID == parent.id)
     }
 
+    @Test func aClosedGroupWhoseRootRecordIsUnreadableReopensTheRootAsAPageWithItsCompanions() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let root = try addPageRow(to: store, workspace: workspace.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let terminal = try store.addCompanion(to: root.id).get()
+        let url = try #require(URL(string: "https://example.com"))
+        let nested = try store.addPageCompanion(to: root.id, overlay: HtmlOverlay(source: .url(url))).get()
+        store.closeSession(root.id)
+        try breakRecentPage(of: root.id, in: library)
+        let entry = try #require(library.recentClosedItems.first)
+
+        #expect(library.reopenRecentClosedOutcome(entry.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) == [root.id, terminal.id, nested.id])
+        let reopened = try #require(store.session(withID: root.id))
+        #expect(reopened.content == .page)
+        #expect(reopened.htmlOverlay?.source == .unreadable(reason: PageSnapshot.unreadableReason))
+        #expect(reopened.htmlOverlay?.loadState == .failed)
+        #expect(store.session(withID: terminal.id)?.paneIdentity == terminal.paneIdentity)
+        #expect(store.session(withID: nested.id)?.htmlOverlay?.source == .url(url))
+        #expect(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions)).contains(terminal.paneIdentity))
+        #expect(store.snapshot().workspaces.first { $0.id == workspace.id }?.sessions.first?.paneIdentity == nil)
+    }
+
+    @Test func aLoneCompanionWhoseParentRecordIsUnreadableReopensTheParentFirst() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let parent = try addPageRow(to: store, workspace: workspace.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let companion = try store.addCompanion(to: parent.id).get()
+        store.closeSession(companion.id)
+        store.closeSession(parent.id)
+        try breakRecentPage(of: parent.id, in: library)
+        let companionEntry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+
+        #expect(library.reopenRecentClosedOutcome(companionEntry.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) == [parent.id, companion.id])
+        #expect(store.session(withID: parent.id)?.content == .page)
+        #expect(store.session(withID: parent.id)?.htmlOverlay?.source == .unreadable(reason: PageSnapshot.unreadableReason))
+        #expect(store.session(withID: companion.id)?.parentID == parent.id)
+        #expect(library.recentClosedItems.isEmpty)
+    }
+
+    private func breakRecentPage(of id: UUID, in library: WindowLibrary) throws {
+        let file = directory.appendingPathComponent("recent-closed.json")
+        var broken = 0
+        func rewrite(_ value: Any) -> Any {
+            if var object = value as? [String: Any] {
+                if object["id"] as? String == id.uuidString, object["page"] != nil {
+                    object["page"] = ["url": "ftp://example.com"]
+                    broken += 1
+                }
+                return object.mapValues(rewrite)
+            }
+            if let array = value as? [Any] { return array.map(rewrite) }
+            return value
+        }
+        let json = rewrite(try JSONSerialization.jsonObject(with: Data(contentsOf: file)))
+        try JSONSerialization.data(withJSONObject: json).write(to: file)
+        #expect(broken == 1)
+        library.refreshRecentClosedItems()
+    }
+
     @Test func onlyACompanionWithNoParentAnywhereLacksItsParent() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)

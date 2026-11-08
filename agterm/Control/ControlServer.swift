@@ -278,7 +278,7 @@ final class ControlServer {
             await self?.dispatch(request) ?? ControlResponse(ok: false, error: "control is unavailable")
         }
         HtmlOverlayRegistry.shared.windowID = { [weak library] store in library?.windowID(for: store)?.uuidString }
-        HtmlOverlayRegistry.shared.closePageSession = { [weak actions] store, id in actions?.closeSession(id, in: store) }
+        HtmlOverlayRegistry.shared.closePageSession = { [weak actions] store, id in actions?.closePageSession(id, in: store) ?? false }
     }
 
     /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` wins (tests need it —

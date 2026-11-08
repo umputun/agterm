@@ -218,6 +218,7 @@ struct WindowContentView: View {
                     restoreFocusAfterPick()
                 }
             }
+            if old, !new { HtmlOverlayRegistry.shared.retryPageCloses(in: store) }
         }
         // `GhosttyApp` isn't observable, so re-read every mirror when a settings appearance change posts.
         .onReceive(NotificationCenter.default.publisher(for: .agtermAppearanceChanged)) { _ in

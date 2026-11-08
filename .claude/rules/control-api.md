@@ -452,6 +452,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   It writes no pane identity, and `persistedClaims` and `PaneIdentityInventory.upgrade` skip it as
   `locallyManagedPaneIdentities` does. `openRestoredPages` reopens it after its group is placed, in every
   restart mode and on a Recent Closed reopen, with no source check: a failed load is the row's failed state.
+- A saved `page` key that does not decode, in any shape, restores as `HtmlSource.unreadable`: a page row in the
+  failed state with no pane identity, saved back as `{"unreadable": reason}`, never shared with another Mac.
+  Only an absent key restores a terminal.
 
 ## Surface input, output, and search
 
@@ -877,8 +880,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and a test cannot use evaluation to show page script ran; tests that need page script open with it on.
 - A page's `window.close()` closes its overlay: `HtmlOverlayPage.webViewDidClose` calls `closeHtmlOverlay`,
   so the outcome is `dismissed`. On a page row it calls `HtmlOverlayRegistry.closePageSession` instead, which
-  `ControlServer` sets to `AppActions.closeSession`, since the row can hold terminal companions; the request
-  is cleared at that hand-off, so an Undo remount or a cancelled confirmation does not close again.
+  `ControlServer` sets to `AppActions.closePageSession`, since the row can hold terminal companions. Only a
+  picker pending in the page's own window refuses it; the page keeps the request and `retryPageCloses` runs it
+  when that picker resolves. An accepted request is spent, so an Undo remount or a cancelled confirmation does
+  not close again.
   A URL page can thereby dismiss an overlay without a prompt, and `--js` is the only gate. The callback names no frame, so a same-origin subframe's `top.close()` closes the
   overlay too, unlike a bridge request. WebKit may refuse the call, as it does after `history.pushState`.
   The close is deferred one task because releasing the page clears the delegate WebKit is calling through.

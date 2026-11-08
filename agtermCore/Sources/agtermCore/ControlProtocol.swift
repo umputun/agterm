@@ -904,6 +904,8 @@ public enum OverlayHtmlError {
     public static let textInOverlay = "a text page opens only in its overlay"
     /// documentInOverlay: a clicked HTML file came from terminal output, and a browser would run its scripts.
     public static let documentInOverlay = "a clicked html page opens only in its overlay"
+    /// unreadablePage: a saved page this build could not read has no file or address to hand anywhere.
+    public static let unreadablePage = "the saved page could not be read"
     /// remoteFile: a file page shown for another Mac has no file here to reveal or open.
     public static let remoteFile = "the page's file is on another Mac"
     /// remotePage: Finder and Browser are refused for a file page shown on the presenting Mac.

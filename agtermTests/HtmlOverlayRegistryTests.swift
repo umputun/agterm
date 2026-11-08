@@ -1311,7 +1311,10 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
 
     func testAPageRowClosingItsWindowAsksItsSessionCloseOnceAndACancelIsNotAskedAgain() async throws {
         var asked: [UUID] = []
-        registry.closePageSession = { _, id in asked.append(id) }
+        registry.closePageSession = { _, id in
+            asked.append(id)
+            return true
+        }
         let (row, page) = try openPageRow()
         let companion = try store.addCompanion(to: row.id).get()
         let live = registry.page(for: page, store: store)
@@ -1319,6 +1322,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         live.webViewDidClose(live.webView)
         try await waitFor("the close was asked") { asked == [row.id] }
         live.apply(try XCTUnwrap(row.htmlOverlay))
+        registry.retryPageCloses(in: store)
         try await Task.sleep(for: .milliseconds(100))
 
         XCTAssertEqual(asked, [row.id])
@@ -1332,7 +1336,7 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         var asked: [UUID] = []
         registry.closePageSession = { store, id in
             asked.append(id)
-            _ = store.softCloseSession(id, grace: 60)
+            return store.softCloseSession(id, grace: 60)
         }
         let (row, page) = try openPageRow()
         let companion = try store.addCompanion(to: row.id).get()
@@ -1352,9 +1356,58 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         store.closeSession(row.id)
     }
 
+    func testARefusedPageRowCloseIsKeptUntilARetryIsAcceptedAndThenSpent() async throws {
+        var answers = [false, true]
+        var asked: [UUID] = []
+        registry.closePageSession = { _, id in
+            asked.append(id)
+            return answers.removeFirst()
+        }
+        let (row, page) = try openPageRow()
+        let live = registry.page(for: page, store: store)
+
+        live.webViewDidClose(live.webView)
+        try await waitFor("the close was asked") { asked == [row.id] }
+        registry.retryPageCloses(in: AppStore(persistence: PersistenceStore(directory: directory.appendingPathComponent("other"))))
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(asked, [row.id])
+        registry.retryPageCloses(in: store)
+        try await waitFor("the kept close was asked again") { asked == [row.id, row.id] }
+        registry.retryPageCloses(in: store)
+        live.apply(try XCTUnwrap(row.htmlOverlay))
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(asked, [row.id, row.id])
+        XCTAssertNotNil(registry.existing(page.id))
+        store.closeSession(row.id)
+    }
+
+    func testAnUnreadableSavedPageFailsWithItsReasonOnLoadAndOnReload() async throws {
+        let overlay = PageSnapshot(source: .unreadable("bad descriptor")).makeOverlay()
+        let row = try store.addPageSession(after: session.id, overlay: overlay).get()
+        let live = registry.page(for: overlay, store: store)
+        try await waitFor("failed") { row.htmlOverlay?.loadState == .failed }
+        XCTAssertEqual(row.htmlOverlay?.loadError, "bad descriptor")
+
+        XCTAssertNil(registry.reload(overlay.id, target: .current, store: store))
+        try await waitFor("failed again") { row.htmlOverlay?.loadState == .failed }
+
+        XCTAssertEqual(row.htmlOverlay?.loadError, "bad descriptor")
+        XCTAssertNil(live.webView.url)
+        XCTAssertNil(row.htmlOverlay?.current)
+        XCTAssertEqual(registry.navigate(overlay.id, .browser), OverlayHtmlError.unreadablePage)
+        XCTAssertEqual(registry.navigate(overlay.id, .finder), OverlayHtmlError.finderRequiresFile)
+        XCTAssertTrue(browser.opened.isEmpty)
+        XCTAssertTrue(sharing.revealed.isEmpty)
+        store.closeSession(row.id)
+    }
+
     func testAnOverlayOverATerminalClosingItsWindowClosesOnlyTheOverlay() async throws {
         var asked: [UUID] = []
-        registry.closePageSession = { _, id in asked.append(id) }
+        registry.closePageSession = { _, id in
+            asked.append(id)
+            return true
+        }
         let page = try open(javascript: true)
         let live = registry.page(for: page, store: store)
 

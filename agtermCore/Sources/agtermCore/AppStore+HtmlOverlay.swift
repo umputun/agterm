@@ -341,6 +341,7 @@ extension AppStore {
         case .image(let path), .replica(let path, .image): image = path
         case .markdown(let path), .replica(let path, .markdown): markdown = path
         case .document(let path), .replica(let path, .document): document = path
+        case .unreadable: break
         case .text(let path, let line), .replica(let path, .text(let line)):
             let log = page.logState
             text = ControlTextOverlayNode(file: path, language: TextPage.language(forFile: path), line: line,
