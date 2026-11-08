@@ -269,6 +269,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if case .replica = overlay.source, let fetch = replica?.fetch {
             let handler = HtmlPageSchemeHandler(pageID: overlay.id) { path in try await fetch(path, revision) }
             configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme)
+        } else if case .markdown = overlay.source, let grant = overlay.markdownLinks {
+            let handler = HtmlPageSchemeHandler(pageID: overlay.id, source: MarkdownPageSource.linkSource(grant))
+            configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme)
         }
         webView = HtmlOverlayWebView(frame: .zero, configuration: configuration)
         webView.pageID = overlay.id
@@ -502,7 +505,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // is looking at
     private var textLoaded: Bool {
         switch overlay.source {
-        case .file(_, nil), .image, .markdown, .text, .document: return true
+        case .file(_, nil), .image, .text, .document: return true
+        case .markdown: return overlay.markdownLinks == nil
         case .replica(_, let content): return content != .html
         default: return false
         }
@@ -541,6 +545,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         case .image(let path):
             loadBuilt { ImageProbe.load(path: path).map { probe, data in ImagePage.html(data: data, mimeType: probe.mimeType) } }
         case .markdown(let path):
+            if let grant = overlay.markdownLinks, let url = HtmlPageSchemeHandler.url(pageID: id, path: grant.path) {
+                webView.load(URLRequest(url: url))
+                return
+            }
             let style = MarkdownAssets.shared.style
             loadBuilt { MarkdownProbe.load(path: path).map { MarkdownPage.html(markdown: $0.markdown, images: $0.images, style: style) } }
         case .text:
@@ -590,24 +598,11 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             let fetched = await fetchReplica(path, limit: MarkdownPage.maxBytes,
                                              local: (MarkdownProbe.Failure.tooLarge(path).description, MarkdownProbe.Failure.unreadable(path).description))
             guard case .success(let data) = fetched else { return fetched.map { _ in "" } }
-            let style = MarkdownAssets.shared.style
             let fetch: @Sendable (String, Int) async -> Data? = { [weak self] path, limit in
                 try? await self?.fetchReplica(path, limit: limit, local: ("", "")).get()
             }
-            // parsing, probing, embedding and escaping run detached as the local page's do; only fetches hop back
-            return await Task.detached(priority: .userInitiated) {
-                guard let markdown = String(data: data, encoding: .utf8) else {
-                    return .failure(ReplicaContentFailure(message: MarkdownProbe.Failure.notText(path).description))
-                }
-                var embedding = MarkdownEmbedding()
-                let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path
-                for image in MarkdownPage.remoteImageReferences(in: markdown, folder: folder) {
-                    guard let room = embedding.room(for: image) else { continue }
-                    let bytes = await fetch(image.path, room)
-                    embedding.add(image, bytes.flatMap { bytes in (try? ImageProbe.probe(bytes, path: image.path).get()).map { ($0, bytes) } })
-                }
-                return .success(MarkdownPage.html(markdown: markdown, images: embedding.embedded, style: style))
-            }.value
+            return await MarkdownPageSource.replica(markdown: data, path: path, fetch: fetch)
+                .mapError { ReplicaContentFailure(message: $0.description) }
         case .text(let line):
             let fetched = await fetchReplica(path, limit: TextPage.maxBytes,
                                              local: (TextProbe.Failure.tooLarge(path).description, TextProbe.Failure.unreadable(path).description))
@@ -694,7 +689,9 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // takes its address at commit. A change on the shown origin is taken at once: it cannot change the
     // site named, and a fragment or pushState change has no commit to wait for
     private func urlChanged() {
-        if let url = webView.url, let shownURL, HtmlSource.origin(of: url) == HtmlSource.origin(of: shownURL) {
+        // a link page's pending load names a file not read yet, which may never load
+        if let url = webView.url, let shownURL, HtmlSource.origin(of: url) == HtmlSource.origin(of: shownURL),
+           overlay.markdownLinks == nil || url.path == shownURL.path {
             self.shownURL = url
         }
         reportPage()
@@ -703,6 +700,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var pageURL: URL {
         if overlay.browse, case .url(let source) = overlay.source { return shownURL ?? source }
         if textLoaded, case .file(let path, _) = overlay.source { return URL(fileURLWithPath: path) }
+        if overlay.markdownLinks != nil, let shownURL { return URL(fileURLWithPath: shownURL.path) }
         // a replica's scheme address names this Mac's page id; what it shows is that path on the other Mac
         if let url = webView.url, url.scheme == HtmlSource.replicaScheme { return URL(fileURLWithPath: url.path) }
         if let url = webView.url, url.scheme != "about" { return url }
@@ -773,7 +771,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         // "Frame load interrupted", 102 in the legacy WebKit domain: a policy cancel this page already reported,
         // a clicked link's redirect handed to the browser, or WebKit dropping a response it cannot show; each
         // leaves any document already shown in place
-        if nsError.domain == "WebKitErrorDomain", nsError.code == 102 {
+        // a link page also keeps its document when a followed link cannot be read
+        if nsError.domain == "WebKitErrorDomain" && nsError.code == 102 || overlay.markdownLinks != nil {
             guard loadPending else { return }
             guard committed else { return fail(nsError.localizedDescription) }
             loadPending = false

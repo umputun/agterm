@@ -156,16 +156,17 @@ struct MarkdownPageTests {
         #expect(MarkdownPage.linkGrant(for: "README.md") == nil)
     }
 
-    @Test func aLinkedDocumentInsideTheRootResolvesToItsCanonicalPath() throws {
+    @Test func aLinkedDocumentInsideTheRootIsReadAtItsNormalizedRequestedPath() throws {
         let fm = FileManager.default
         try fm.createDirectory(atPath: folder + "/sub", withIntermediateDirectories: true)
         let grant = MarkdownLinkGrant(path: try touch("README.md"), root: folder)
         let nested = try touch("sub/b.markdown")
         try fm.createSymbolicLink(atPath: folder + "/alias.md", withDestinationPath: nested)
 
+        #expect(MarkdownPage.linkedDocument(grant.path, grant: grant) == grant.path)
         #expect(MarkdownPage.linkedDocument(nested, grant: grant) == nested)
         #expect(MarkdownPage.linkedDocument(folder + "/sub/../README.md", grant: grant) == folder + "/README.md")
-        #expect(MarkdownPage.linkedDocument(folder + "/alias.md", grant: grant) == nested)
+        #expect(MarkdownPage.linkedDocument(folder + "/alias.md", grant: grant) == folder + "/alias.md")
     }
 
     @Test func aLinkedDocumentOutsideTheRootOrNotMarkdownIsRefused() throws {

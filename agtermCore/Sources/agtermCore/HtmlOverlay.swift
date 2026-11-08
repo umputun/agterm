@@ -230,6 +230,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let clicked: Bool
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?
+    /// markdownLinks is what a markdown page may follow links within, set only with navigation.
+    public let markdownLinks: MarkdownLinkGrant?
     /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
     public let textLog: TextLog?
     public var logState: TextLogState?
@@ -249,16 +251,20 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
+    /// init drops navigation from a markdown page without `markdownLinks`, so its strip never offers Back and
+    /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
                 persistent: Bool = false, browse: Bool = false, clicked: Bool = false, id: UUID = UUID(),
-                replicaOf: UUID? = nil, textLog: TextLog? = nil) {
+                replicaOf: UUID? = nil, textLog: TextLog? = nil, markdownLinks: MarkdownLinkGrant? = nil) {
         self.id = id
         self.textLog = textLog
         logState = textLog.map { TextLogState(following: $0.follow) }
         self.clicked = clicked
         self.replicaOf = replicaOf
         self.source = source
-        self.navigation = navigation
+        let links = navigation ? markdownLinks : nil
+        self.markdownLinks = links
+        self.navigation = navigation && (source.kind != .markdown || links != nil)
         self.javascript = javascript
         self.chromeless = chromeless
         self.persistent = persistent
@@ -304,7 +310,8 @@ extension HtmlOverlay {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, .html): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
-        case .image(let path), .markdown(let path), .text(let path, _), .document(let path):
+        case .markdown(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .image(let path), .text(let path, _), .document(let path):
             return URL(fileURLWithPath: path).lastPathComponent
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
@@ -436,7 +443,10 @@ public enum HtmlNavigationPolicy {
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
         case .image, .replica(_, .image):
             return .cancel
-        case .markdown, .replica(_, .markdown), .document, .replica(_, .document):
+        case .markdown, .replica(_, .markdown):
+            if web { return action.userActivated ? .openExternal : .cancel }
+            return followsLink(action, overlay: overlay) ? .allow : .cancel
+        case .document, .replica(_, .document):
             return web && action.userActivated ? .openExternal : .cancel
         case .replica(_, .text):
             return .cancel
@@ -448,6 +458,16 @@ public enum HtmlNavigationPolicy {
             if action.target == .subframe, !overlay.chromeless { return .allow }
             return action.userActivated ? .openExternal : .cancel
         }
+    }
+
+    // the page's own scheme address of a markdown file inside its grant; the source serving it judges the
+    // canonical file again, so this check is lexical only
+    private static func followsLink(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> Bool {
+        let url = action.url
+        guard let grant = overlay.markdownLinks, action.target == .mainFrame, url.scheme?.lowercased() == HtmlSource.replicaScheme,
+              url.host?.lowercased() == overlay.id.uuidString.lowercased(),
+              LinkPolicy.markdownExtensions.contains(url.pathExtension.lowercased()) else { return false }
+        return MarkdownPage.lexicalPath(url.path, folder: grant.root) != nil
     }
 }
 

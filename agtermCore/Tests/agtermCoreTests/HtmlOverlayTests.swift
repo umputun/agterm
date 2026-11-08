@@ -321,6 +321,56 @@ struct HtmlOverlayTests {
         #expect(overlay.source.imagePath == nil)
     }
 
+    @Test func aLinkPageIsNamedByTheFileItShows() {
+        var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true,
+                                  markdownLinks: MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes"))
+        overlay.current = HtmlPageInfo(page: "/tmp/notes/sub/guide.md", title: "enter your password", canGoBack: true, canGoForward: false)
+        #expect(overlay.identity == "guide.md")
+        #expect(overlay.source.markdownPath == "/tmp/notes/readme.md")
+    }
+
+    @Test func aMarkdownPageHasNavigationOnlyWithALinkGrant() {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        #expect(HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant).navigation)
+        #expect(!HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true).navigation)
+        #expect(HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: false, markdownLinks: grant).markdownLinks == nil)
+        #expect(HtmlOverlay(source: .file(path: "/tmp/a/x.html", grantRoot: nil), navigation: true).navigation)
+    }
+
+    @Test(arguments: [
+        ("/tmp/notes/readme.md", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
+        ("/tmp/notes/sub/guide.markdown", .mainFrame, true, .allow),
+        ("/tmp/notes/a/../readme.md", .mainFrame, true, .allow),
+        ("/tmp/notes/../other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/notes/%2e%2e/other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/notes/notes.txt", .mainFrame, true, .cancel),
+        ("/tmp/notes/sub/guide.md", .subframe, true, .cancel),
+        ("/tmp/notes/sub/guide.md", .newWindow, true, .cancel),
+    ])
+    func aLinkPageLoadsOnlyItsOwnMarkdownInsideTheGrant(_ path: String, _ target: HtmlNavigationTarget,
+                                                         _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        let overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant)
+        let url = try #require(URL(string: "agterm-page://\(overlay.id.uuidString.lowercased())\(path)"))
+        let action = HtmlNavigationAction(url: url, target: target, userActivated: userActivated)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)
+    }
+
+    @Test func aLinkPageRefusesAnotherPagesAddressAndAPageWithoutAGrant() throws {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        let linked = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant)
+        let plain = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
+        let other = try #require(URL(string: "agterm-page://\(UUID().uuidString.lowercased())/tmp/notes/readme.md"))
+        let own = try #require(URL(string: "agterm-page://\(plain.id.uuidString.lowercased())/tmp/notes/readme.md"))
+        let web = try #require(URL(string: "https://example.com/x.md"))
+
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: other, target: .mainFrame, userActivated: true), overlay: linked) == .cancel)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: own, target: .mainFrame, userActivated: true), overlay: plain) == .cancel)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: web, target: .mainFrame, userActivated: true), overlay: linked) == .openExternal)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: web, target: .mainFrame, userActivated: false), overlay: linked) == .cancel)
+    }
+
     @Test(arguments: [
         ("about:blank", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
         ("about:blank", .mainFrame, true, .allow),

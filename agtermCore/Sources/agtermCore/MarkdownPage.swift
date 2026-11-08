@@ -71,14 +71,15 @@ public enum MarkdownPage {
         return MarkdownLinkGrant(path: file, root: root)
     }
 
-    /// linkedDocument is the canonical file a link page may load for `requested`, an absolute path already
-    /// percent-decoded; nil unless both the request and its symlink-resolved target are markdown strictly inside
-    /// the grant's root, so a `guide.md` alias of a `.env` is refused.
+    /// linkedDocument is the path a link page reads for `requested`, an absolute path already percent-decoded:
+    /// the request normalized, so its pictures come from the folder its links resolve against. Nil unless both
+    /// the request and its symlink-resolved target are markdown strictly inside the grant's root, so a
+    /// `guide.md` alias of a `.env` is refused.
     public static func linkedDocument(_ requested: String, grant: MarkdownLinkGrant) -> String? {
         guard requested.hasPrefix("/"), isMarkdown(requested),
               let lexical = lexicalPath(requested, folder: grant.root) else { return nil }
         let file = real(lexical)
-        return isMarkdown(file) && file != grant.root && HtmlOverlay.contains(grant.root, file) ? file : nil
+        return isMarkdown(file) && file != grant.root && HtmlOverlay.contains(grant.root, file) ? lexical : nil
     }
 
     private static func isMarkdown(_ path: String) -> Bool {

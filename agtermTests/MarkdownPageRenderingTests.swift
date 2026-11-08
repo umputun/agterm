@@ -150,70 +150,140 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
                        "a=sub/b.md,b=c.MARKDOWN,c=x.md#h,k=x.md?q=1,d=,e=,f=,g=,h=https://example.com/x.md,j=#frag,l=..%5Cx.md")
     }
 
-    func testSchemeServedLinkPagesKeepTheirScrollAcrossHistoryReloadAndThemeRefresh() async throws {
+    func testALinkPageFollowsALinkWithHistoryScrollReloadAndThemeRefresh() async throws {
         let filler = (1...150).map { "paragraph \($0) of filler text that takes up a line or two." }.joined(separator: "\n\n")
-        let docs: [String: Data] = [
-            "/docs/a.md": Data(MarkdownPage.html(markdown: "# A\n\n\(filler)\n\n[to b](sub/b.md#deep)\n", images: .init(),
-                                                 style: MarkdownAssets.shared.style, links: true).utf8),
-            "/docs/sub/b.md": Data(MarkdownPage.html(markdown: "# B\n\n\(filler)\n\n## Deep\n\n\(filler)\n", images: .init(),
-                                                     style: MarkdownAssets.shared.style, links: true).utf8),
-        ]
-        let pageID = UUID()
-        let handler = HtmlPageSchemeHandler(pageID: pageID) { path in
-            guard let data = docs[path] else { throw URLError(.fileDoesNotExist) }
-            return HtmlPageResource(mimeType: "text/html", chunks: AsyncThrowingStream {
-                $0.yield(data)
-                $0.finish()
-            })
-        }
-        let view = linkPageView(handler: handler)
+        let first = try writeMarkdown("a.md", "# A\n\n\(filler)\n\n[to b](sub/b.md#deep)\n")
+        let second = try writeMarkdown("sub/b.md", "# B\n\n\(filler)\n\n## Deep\n\n\(filler)\n")
+        let overlay = try openLinkPage(first)
+        let page = registry.page(for: overlay, store: store)
+        let view = page.webView
         let window = try host(view)
         defer { window.orderOut(nil) }
         let scroll = { try await view.evaluateJavaScript("Math.round(window.scrollY)") as? Int ?? -1 }
-        view.load(URLRequest(url: try XCTUnwrap(HtmlPageSchemeHandler.url(pageID: pageID, path: "/docs/a.md"))))
-        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "A" }
+        try await waitForHeading("A", in: view)
+        try await waitFor("first page reported") { self.current?.current?.page == self.canonical(first) }
 
         _ = try await view.evaluateJavaScript("window.scrollTo(0, 1500)")
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "1500" }
         _ = try await view.evaluateJavaScript("document.querySelector('a').click()")
-        try await waitForScript("document.getElementById('deep') ? location.pathname : ''", in: view) { $0 == "/docs/sub/b.md" }
+        try await waitForScript("document.getElementById('deep') ? 'yes' : ''", in: view) { $0 == "yes" }
         try await waitForScript("Math.round(window.scrollY) > 1500 && Math.abs(document.getElementById('deep').getBoundingClientRect().top) < 5",
                                 in: view) { $0 == "true" }
+        try await waitFor("second page reported") { self.current?.current?.page == self.canonical(second) && self.current?.current?.canGoBack == true }
+        XCTAssertEqual(current?.identity, "b.md")
+        XCTAssertEqual(current?.source.markdownPath, first)
         let moved = try await scroll() - 900
         _ = try await view.evaluateJavaScript("window.scrollTo(0, \(moved))")
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
 
-        view.goBack()
-        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "A" }
+        XCTAssertNil(registry.navigate(overlay.id, .back))
+        try await waitForHeading("A", in: view)
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "1500" }
-        view.goForward()
-        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == "B" }
+        try await waitFor("back reported") { self.current?.current?.page == self.canonical(first) && self.current?.current?.canGoForward == true }
+        XCTAssertNil(registry.navigate(overlay.id, .forward))
+        try await waitForHeading("B", in: view)
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
 
         let history = (view.backForwardList.backList.count, view.backForwardList.forwardList.count)
         let freshB = "!document.documentElement.dataset.stale && document.querySelector('h1')?.textContent === 'B'"
         _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
-        view.reload()
+        XCTAssertNil(registry.reload(overlay.id, target: .current, store: store))
         try await waitForScript(freshB, in: view) { $0 == "true" }
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
         XCTAssertEqual(view.backForwardList.backList.count, history.0)
         XCTAssertEqual(view.backForwardList.forwardList.count, history.1)
 
-        let controller = view.configuration.userContentController
-        controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: HtmlOverlayTheme(background: "#000000", foreground: "#ffffff", dark: true).script(themed: true),
-                                              injectionTime: .atDocumentStart, forMainFrameOnly: true, in: WKContentWorld.world(name: "agterm-theme")))
-        controller.addUserScript(markdownScript)
         _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
-        view.reload()
+        page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
         try await waitForScript(freshB, in: view) { $0 == "true" }
-        try await waitForScript("getComputedStyle(document.documentElement).getPropertyValue('--agterm-background').trim()", in: view) {
-            $0 == "#000000"
-        }
+        try await waitForVariable("--agterm-foreground", "#102030", in: view)
         try await waitForScript("Math.round(window.scrollY)", in: view) { $0 == "\(moved)" }
         XCTAssertEqual(view.backForwardList.backList.count, history.0)
         XCTAssertEqual(view.backForwardList.forwardList.count, history.1)
-        XCTAssertEqual(view.url?.path, "/docs/sub/b.md")
+
+        XCTAssertNil(registry.reload(overlay.id, target: .original, store: store))
+        try await waitForHeading("A", in: view)
+        try await waitFor("original reported") { self.current?.current?.page == self.canonical(first) }
+    }
+
+    func testALinkPageKeepsItsDocumentWhenALinkedFileCannotBeRead() async throws {
+        let first = try writeMarkdown("a.md", "# A\n\n[gone](missing.md) [listed](b.md)\n")
+        let second = try writeMarkdown("b.md", "# B\n")
+        let page = registry.page(for: try openLinkPage(first), store: store)
+        try await waitForHeading("A", in: page.webView)
+        try FileManager.default.removeItem(atPath: second)
+
+        for index in 0..<2 {
+            _ = try await page.webView.evaluateJavaScript("document.querySelectorAll('a')[\(index)].click()")
+            try await waitFor("link \(index) settled") { self.current?.loadState == .loaded && self.current?.loadError == nil }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.loadState, .loaded)
+        XCTAssertNil(current?.loadError)
+        XCTAssertEqual(current?.current?.page, canonical(first))
+        XCTAssertEqual(current?.current?.canGoBack, false)
+        let heading = try await page.webView.evaluateJavaScript("document.querySelector('h1').textContent")
+        XCTAssertEqual(heading as? String, "A")
+    }
+
+    func testALinkPageKeepsItsDocumentWhenItsOwnFileIsRetargetedOutsideTheFolder() async throws {
+        let first = try writeMarkdown("a.md", "# A\n")
+        try "# Outside\n".write(to: directory.appendingPathComponent("outside.md"), atomically: true, encoding: .utf8)
+        let overlay = try openLinkPage(first)
+        let page = registry.page(for: overlay, store: store)
+        try await waitForHeading("A", in: page.webView)
+        try FileManager.default.removeItem(atPath: first)
+        try FileManager.default.createSymbolicLink(atPath: first, withDestinationPath: directory.appendingPathComponent("outside.md").path)
+
+        for target in [HtmlReloadTarget.current, .original] {
+            XCTAssertNil(registry.reload(overlay.id, target: target, store: store))
+            try await waitFor("reload settled") { self.current?.loadState == .loaded }
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let heading = try await page.webView.evaluateJavaScript("document.querySelector('h1').textContent")
+        XCTAssertEqual(heading as? String, "A")
+        XCTAssertNil(current?.loadError)
+    }
+
+    func testALinkedFileAliasResolvesItsLinksAndPicturesFromWhereItWasRequested() async throws {
+        let first = try writeMarkdown("start.md", "# Start\n\n[b](alias.md)\n")
+        _ = try writeMarkdown("sub/b.md", "# B\n\n![p](p.png)\n\n[next](c.md)\n")
+        _ = try writeMarkdown("c.md", "# Root C\n")
+        _ = try writeMarkdown("sub/c.md", "# Sub C\n")
+        _ = try writePNG("p.png", width: 20)
+        try FileManager.default.createSymbolicLink(atPath: pages.appendingPathComponent("alias.md").path,
+                                                   withDestinationPath: pages.appendingPathComponent("sub/b.md").path)
+        let page = registry.page(for: try openLinkPage(first), store: store)
+        try await waitForHeading("Start", in: page.webView)
+
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitForHeading("B", in: page.webView)
+        try await waitForScript("document.querySelectorAll('img[src^=\"data:image/png\"]').length", in: page.webView) { $0 == "1" }
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitForHeading("Root C", in: page.webView)
+    }
+
+    func testALinkPageWhoseFileIsGoneBeforeItsFirstLoadFails() async throws {
+        let first = try writeMarkdown("a.md", "# A\n")
+        let overlay = try openLinkPage(first)
+        try FileManager.default.removeItem(atPath: first)
+        _ = registry.page(for: overlay, store: store)
+
+        try await waitFor("failed") { self.current?.loadState == .failed }
+        XCTAssertNotNil(current?.loadError)
+    }
+
+    func testALinkPageOpenedThroughASymlinkedFolderFollowsItsRelativeLinks() async throws {
+        _ = try writeMarkdown("a.md", "# A\n\n[to b](sub/b.md)\n")
+        let second = try writeMarkdown("sub/b.md", "# B\n")
+        let alias = directory.appendingPathComponent("alias")
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: pages)
+        let page = registry.page(for: try openLinkPage(alias.appendingPathComponent("a.md").path), store: store)
+        try await waitForHeading("A", in: page.webView)
+
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitForHeading("B", in: page.webView)
+        try await waitFor("second page reported") { self.current?.current?.page == self.canonical(second) }
     }
 
     func testAMarkdownPageLinksHeadingsAndKeepsOtherTargetsInert() async throws {
@@ -300,12 +370,31 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
                      in: WKContentWorld.world(name: "agterm-markdown"))
     }
 
-    private func linkPageView(handler: HtmlPageSchemeHandler? = nil) -> WKWebView {
+    private func linkPageView() -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         configuration.userContentController.addUserScript(markdownScript)
-        if let handler { configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme) }
         return WKWebView(frame: NSRect(x: 0, y: 0, width: 600, height: 400), configuration: configuration)
+    }
+
+    private func writeMarkdown(_ name: String, _ text: String) throws -> String {
+        let url = pages.appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        return url.path
+    }
+
+    private func openLinkPage(_ path: String) throws -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .markdown(path: path), navigation: true,
+                                  markdownLinks: try XCTUnwrap(MarkdownPage.linkGrant(for: path)))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
+    }
+
+    private func canonical(_ path: String) -> String? { MarkdownPage.linkGrant(for: path)?.path }
+
+    private func waitForHeading(_ text: String, in view: WKWebView) async throws {
+        try await waitForScript("document.querySelector('h1')?.textContent ?? ''", in: view) { $0 == text }
     }
 
     private func openMarkdown(_ name: String, _ text: String) throws -> HtmlOverlay {

@@ -68,7 +68,8 @@
 - keep plan in sync with actual work done
 
 ## Solution Overview
-- One path for local and remote: a link page loads `agterm-page://<page-id>/<canonical path>`; the handler's
+- One path for local and remote: a link page first loads `agterm-page://<page-id>/<canonical path>`, and a
+  followed link keeps the URL WebKit resolved, a symlinked document included; the handler's
   source builds `MarkdownPage.html` for the requested path off the main actor (local: `MarkdownProbe`;
   presenter: bytes fetched from the origin plus remote pictures). That source, local and replica, lives in
   its own type and file (Eugene approved moving the registry's existing replica markdown branch there);
@@ -82,7 +83,7 @@
   capability is reading more `.md` files. Bounds:
   - a served document must be a regular file whose canonical path lies strictly inside the grant's root and
     itself ends in `.md`/`.markdown`, so a `guide.md -> .env` alias is refused;
-  - one path namespace: the page loads the canonical path and the root is canonical, so links from
+  - one path namespace: the first document loads at its canonical path and the root is canonical, so links from
     `/tmp/docs/a.md` or a symlinked project folder resolve inside the root; the presenter never resolves an
     origin path, it uses the canonical values the origin sends;
   - the check runs in the serving source on whichever Mac reads the file (the origin is the authority for a
@@ -119,9 +120,10 @@
 - agtermCore `MarkdownPage`:
   - `linkGrant(for path: String, home: String = NSHomeDirectory()) -> MarkdownLinkGrant?` - canonical
     original path and canonical folder; nil when that folder is `/` or `home` (compared canonically);
-  - `linkedDocument(_ requested: String, grant: MarkdownLinkGrant) -> String?` - canonical path when
-    `requested` lies lexically and canonically strictly inside the root and the canonical path ends in a
-    markdown extension (`LinkPolicy.markdownExtensions`);
+  - `linkedDocument(_ requested: String, grant: MarkdownLinkGrant) -> String?` - the normalized request
+    when it lies lexically and canonically strictly inside the root and the canonical path ends in a
+    markdown extension (`LinkPolicy.markdownExtensions`); the file is read at that path, so a linked
+    alias takes its pictures from the folder its links resolve against;
   - `html(markdown:images:style:links: Bool = false)` writes `data-links="local"` when true;
   - `remoteImageReferences` skips markdown-spelled references.
 - `MarkdownLinkGrant: Codable, Equatable, Sendable` (agtermCore, public: `PresentationPage` carries it) with
@@ -138,8 +140,10 @@
   Back/Forward arrive as non-link navigations, and the page runs no scripts that could start one.
 - render.js, when `data-links="local"`: keep an href with no scheme, not starting with `/` or `//`, whose
   path part (before `?`/`#`) ends in `.md`/`.markdown`; all other non-web, non-fragment hrefs are stripped.
-- Pictures on a link page come from the folder of the canonical path (a symlinked README embeds pictures
-  beside its target); a page without a grant keeps today's behavior.
+- Pictures on a link page come from the folder of the path it is read at: the canonical path for the first
+  file (a symlinked README embeds pictures beside its target), the normalized request for a linked one; a
+  page without a grant keeps today's behavior. Every request, the first file's included, passes
+  `linkedDocument` when it is read, so a file retargeted after the grant is judged again.
 - Registry hooks: a page with a grant installs `HtmlPageSchemeHandler` backed by the markdown page source;
   `textLoaded` is false for it; reload `--current` and theme refresh go through `webView.reload()`;
   `identity`/`current.page` update only on commit for these pages (`urlChanged` would otherwise name a
@@ -148,8 +152,8 @@
   restores `.loaded` with no error and calls `reportPage()` (the 102 branch pattern); a failed initial load
   still fails; every other page kind keeps today's `reportFailure`.
 - Origin: `openRemotePage` copies the overlay's grant into `PresentationPage`; `claimPageServe` keeps it with
-  the source; `RemotePageResources.content(.markdown)` takes the grant: a markdown-spelled request whose
-  canonical path passes `linkedDocument` (or is the original) is served as text under
+  the source; `RemotePageResources.content(.markdown)` takes the grant: a markdown-spelled request that
+  passes `linkedDocument`, the original included, is read at the path it returns and served as text under
   `MarkdownPage.maxBytes`; every other request is a picture under the signature rule. With a nil grant only
   the original file is served as text, as today.
 - Presenter: `replicaSource` carries the received grant onto the replica `HtmlOverlay`; the replica identity
@@ -210,27 +214,27 @@
   (grant computed off the main actor at open)
 - Modify: `agtermCore/Tests/agtermCoreTests/HtmlOverlayTests.swift`, `agtermTests/MarkdownPageRenderingTests.swift`
 
-- [ ] write failing policy tests: own-host markdown URL inside the grant allowed; no grant, other host,
+- [x] write failing policy tests: own-host markdown URL inside the grant allowed; no grant, other host,
       non-markdown path, escaping path (plain and percent-encoded `..`), subframe and new window refused;
       web links unchanged
-- [ ] write failing tests: `identity` names the committed markdown file; `markdown` read-back keeps the
-      original; a refused root opens with `navigation: false`; clicked and forwarded markdown open with
-      `navigation: true` and a grant
-- [ ] implement the `HtmlOverlay` grant field, policy and `identity` changes, and the clicked-page grant and
+- [x] write failing tests: `identity` names the committed markdown file; `markdown` read-back keeps the
+      original; a refused root opens with `navigation: false`; clicked markdown opens with
+      `navigation: true` and a grant (the forwarded click's grant reaches the presenter in Task 4)
+- [x] implement the `HtmlOverlay` grant field, policy and `identity` changes, and the clicked-page grant and
       navigation default (so the Debug showing below is reachable by a cmd-click)
-- [ ] move the replica markdown branch into `MarkdownPageSource` with no behavior change, then add the
+- [x] move the replica markdown branch into `MarkdownPageSource` with no behavior change, then add the
       local link-page source and the registry hooks; file reads, embedding and HTML building stay off the
       main actor
-- [ ] show Eugene the rendered result in a Debug instance (README with links, a click, Back/Forward) before
+- [x] show Eugene the rendered result in a Debug instance (README with links, a click, Back/Forward) before
       writing the hosted tests below
-- [ ] write hosted tests on production code: a click renders `sub/b.md`, Back/Forward with
+- [x] write hosted tests on production code: a click renders `sub/b.md`, Back/Forward with
       `canGoBack`/`canGoForward` read-back, `page` follows the committed file, scroll restored, bare reload
       returns to the original, reload `--current` and theme refresh keep history, a missing target keeps the
       page with `loadState == .loaded` and no error, a failed initial load fails, a URL page's failed load
       still shows the error panel, a page without a grant keeps links as text, a file opened through `/tmp`
       or a symlinked folder follows its relative links
-- [ ] convert Task 2's test-local handler into these production-path tests
-- [ ] run the touched tests - must pass before Task 4
+- [x] convert Task 2's test-local handler into these production-path tests
+- [x] run the touched tests - must pass before Task 4
 
 ### Task 4: Remote pages follow links too
 
@@ -247,7 +251,8 @@
 - [ ] write failing origin tests: a linked in-root `.md` served as text under 4 MiB; escaping path,
       non-markdown canonical suffix, `.md -> .env` alias refused; `picture.png -> large.md` and a
       picture-spelled alias of the original refused as non-pictures with no text sent; a page without a
-      grant serves only its original file; the grant is the one frozen at presentation
+      grant serves only its original file; the grant is the one frozen at presentation; a forwarded
+      markdown click sends `navigation: true` and the grant on its presenter request
 - [ ] implement the grant on `PresentationPage`, `openRemotePage`, `claimPageServe` and the content rules
 - [ ] write failing presenter tests mirroring Task 3: replica markdown loads the origin's canonical path
       through the scheme handler; a click follows a link; Back/Forward with `canGoBack`/`canGoForward`

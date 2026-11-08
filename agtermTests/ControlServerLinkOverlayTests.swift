@@ -256,6 +256,20 @@ final class ControlServerLinkOverlayTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testAClickedMarkdownFileOpensWithNavigationAndItsLinkGrant() async throws {
+        let (store, session) = try addSession()
+        let doc = try writeMarkdown("doc.md")
+
+        let shown = await openMarkdown(doc, session: session.id, sizePercent: nil)
+
+        XCTAssertTrue(shown)
+        let canonical = doc.resolvingSymlinksInPath().path
+        XCTAssertEqual(session.htmlOverlay?.navigation, true)
+        XCTAssertEqual(session.htmlOverlay?.markdownLinks,
+                       MarkdownLinkGrant(path: canonical, root: URL(fileURLWithPath: canonical).deletingLastPathComponent().path))
+        store.closeOverlay(session.id)
+    }
+
     func testAClickedMarkdownFileIsRefusedUnderAHudAZoomABusySlotOrWhenUnreadable() async throws {
         let (store, session) = try addSession()
         let doc = try writeMarkdown("doc.md")

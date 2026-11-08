@@ -81,7 +81,7 @@ extension ControlServer: ControlActions {
         if let refusal = textLogRefusal(in: store, sessionID: id, options: options) { return refusal }
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
                                   chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
-                                  clicked: options.clicked, textLog: options.textLog)
+                                  clicked: options.clicked, textLog: options.textLog, markdownLinks: options.markdownLinks)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
             if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
