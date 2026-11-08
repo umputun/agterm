@@ -1,17 +1,17 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a native macOS terminal, via agtermctl. Use in an agterm session:
+  Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch; run, hide or show overlays;
-  read exit status; show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins, or as a
-  page session in its own sidebar row that holds companions and survives relaunch;
+  read exit status; show HTML pages, interactive too, URLs or dev servers in an overlay with saved logins or as a
+  page session row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, AGTERM_* variables,
-  attaching sessions and companions from another Mac, cookbook recipes, running/installed version, upgrades, diagnosing
+  attaching sessions from another Mac, cookbook recipes, installed version, upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
