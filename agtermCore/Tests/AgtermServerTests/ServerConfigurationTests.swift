@@ -60,6 +60,22 @@ struct ServerConfigurationTests {
         #expect(fallback.stateDirectory == ControlResolve.defaultStateDirectory(environment: scratch.environment))
     }
 
+    // regression: a relative state directory was exported as is, so a pane in another directory missed the socket
+    @Test func aRelativeStateDirectoryResolvesAgainstTheWorkingDirectory() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        var environment = scratch.environment
+        environment["AGTERM_STATE_DIR"] = "env-state"
+
+        let argument = try ServerConfiguration.resolve(stateDirectory: "alt-state/../alt-state", environment: scratch.environment,
+                                                       executableDirectory: scratch.bin, workingDirectory: scratch.root)
+        let fromEnvironment = try ServerConfiguration.resolve(environment: environment, executableDirectory: scratch.bin,
+                                                              workingDirectory: scratch.root)
+
+        #expect(argument.stateDirectory == scratch.root + "/alt-state")
+        #expect(fromEnvironment.stateDirectory == scratch.root + "/env-state")
+    }
+
     @Test func theSocketAndTheZmxSocketsLiveWhereTheyBelong() throws {
         let scratch = try ServerScratch()
         defer { scratch.remove() }

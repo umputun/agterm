@@ -185,6 +185,17 @@ echo "upgrade under a fish login shell: pane shell $3 and catalog $2 kept"
   output="$(install 2>&1)" || fail "the install with a moved state directory failed: $output"
   [[ "$output" == *"server: "* ]] || fail "the install did not print the moved server's versions"
   remote 'test -S ~/alt-state/agterm.sock' || fail "the moved server has no socket under ~/alt-state"
+  # regression: a relative inherited state dir sent panes to a socket under their own cwd
+  remote 'printf "#!/bin/sh\ncd /tmp\nprintf %%s \"\$AGTERM_STATE_DIR\" >/tmp/pane-state\n\$HOME/.local/bin/agtermctl tree --json >/tmp/pane-tree.json 2>&1\n" >~/pane-probe.sh && chmod +x ~/pane-probe.sh && rm -f /tmp/pane-state /tmp/pane-tree.json'
+  local probe
+  probe="$(remote 'AGTERM_STATE_DIR=$HOME/alt-state ~/.local/bin/agtermctl session new --cwd /tmp --command $HOME/pane-probe.sh --json' | jq -r '.result.id // empty')"
+  [[ -n "$probe" ]] || fail "the moved server did not start a pane"
+  for _ in $(seq 50); do remote 'test -s /tmp/pane-tree.json' && break; sleep 0.2; done
+  [[ "$(remote 'cat /tmp/pane-state')" == /home/agterm/alt-state ]] \
+    || fail "a pane inherited a state directory that is not absolute: $(remote 'cat /tmp/pane-state')"
+  [[ "$(remote "jq -r --arg id $probe '[.result.tree.workspaces[].sessions[].id] | index(\$id) != null' /tmp/pane-tree.json")" == true ]] \
+    || fail "a pane in /tmp did not reach the moved server: $(remote 'cat /tmp/pane-tree.json')"
+  echo "moved state directory: a pane in /tmp reached the server through its inherited AGTERM_STATE_DIR"
   remote 'rm -r ~/.config/systemd/user/agterm-server.service.d && systemctl --user daemon-reload && systemctl --user restart agterm-server'
   step 'served "the state move"'
   echo "moved state directory: the install reached the service's own socket"
