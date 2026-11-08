@@ -437,8 +437,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   window's zoom target, and never refuses a zoom hide, which stays idempotent.
 - `AppStore.closeOverlay` on a page session closes the session before slot teardown; the strip X and ⌘W go
   through `AppActions.closeSession`, so they keep the close confirmation and the grace-period undo.
-- `Session.content` is a `let` set at init, so the first save already excludes the row
-  (`isPersistable`, `locallyManagedPaneIdentities`).
+- A local page row is saved with a `PageSnapshot` (file or URL, its options) once its page is placed, so the
+  save inside `addSession` leaves it out and `addPageCompanion` saves after the open; a replica row never is.
+  It writes no pane identity, and `persistedClaims` and `PaneIdentityInventory.upgrade` skip it as
+  `locallyManagedPaneIdentities` does. `openRestoredPages` reopens it after its group is placed, in every
+  restart mode and on a Recent Closed reopen, with no source check: a failed load is the row's failed state.
 
 ## Surface input, output, and search
 

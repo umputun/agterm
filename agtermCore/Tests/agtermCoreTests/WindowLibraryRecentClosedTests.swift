@@ -233,6 +233,42 @@ final class WindowLibraryRecentClosedTests {
         #expect(store.session(withID: closed.id)?.parentID == fresh.id)
     }
 
+    @Test(arguments: [false, true])
+    func aLoneCompanionOfAClosedPageParentReopensThePageFirst(pageCompanion: Bool) throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        let workspace = store.addWorkspace(name: "project")
+        let root = try addPageRow(to: store, workspace: workspace.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let companion = pageCompanion
+            ? try store.addPageCompanion(to: root.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+            : try store.addCompanion(to: root.id).get()
+        store.closeSession(companion.id)
+        store.closeSession(root.id)
+        let companionEntry = try #require(library.recentClosedItems.first { $0.session?.snapshot.id == companion.id })
+
+        #expect(library.reopenRecentClosedOutcome(companionEntry.id)?.complete == true)
+
+        #expect(store.workspaces.first { $0.id == workspace.id }?.sessions.map(\.id) == [root.id, companion.id])
+        #expect(store.session(withID: root.id)?.htmlOverlay?.source == .file(path: "/tmp/root.html", grantRoot: nil))
+        #expect(store.session(withID: companion.id)?.content == (pageCompanion ? .page : .terminal))
+        #expect(library.recentClosedItems.isEmpty)
+    }
+
+    @Test func aClosedWindowReopensItsPageRows() throws {
+        let library = WindowLibrary(directory: directory)
+        let windowID = library.newWindow().id
+        let store = try #require(library.store(for: windowID))
+        let workspace = try #require(store.workspaces.first)
+        let root = try addPageRow(to: store, workspace: workspace.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let terminal = try store.addCompanion(to: root.id).get()
+        store.save()
+        library.closeWindow(windowID)
+
+        let reopened = try #require(library.loadStore(for: windowID))
+
+        #expect(reopened.companions(of: root.id).map(\.id) == [terminal.id])
+        #expect(reopened.session(withID: root.id)?.htmlOverlay?.source == .file(path: "/tmp/root.html", grantRoot: nil))
+    }
 }
 
 @MainActor private struct ConvertedAfterClose {

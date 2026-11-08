@@ -413,6 +413,50 @@ struct ZmxLifecycleTests {
         #expect(inventories == [nil])
     }
 
+    @Test func theIdentityUpgradeLeavesAPageRowWithoutAnIdentity() {
+        let pane = UUID()
+        var snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo"),
+            pageRow(),
+        ])])
+
+        let upgrade = PaneIdentityInventory.upgrade(&snapshot)
+
+        #expect(!upgrade.changed)
+        #expect(upgrade.identities == [pane])
+        #expect(snapshot.workspaces[0].sessions[1].paneIdentity == nil)
+    }
+
+    @Test func launchInventorySkipsPageRowsInOpenAndClosedWindows() throws {
+        let directory = temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let open = UUID(), closed = UUID()
+        let openPane = UUID(), closedPane = UUID()
+        try writeIndex(WindowsIndex(windows: [
+            WindowEntry(id: open, name: "open", isOpen: true),
+            WindowEntry(id: closed, name: "closed", isOpen: false),
+        ]), directory: directory)
+        for (id, pane) in [(open, openPane), (closed, closedPane)] {
+            try writeWindow(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo"),
+                pageRow(),
+            ])]), id: id, directory: directory)
+        }
+        var inventories: [Set<UUID>?] = []
+
+        let library = WindowLibrary(directory: directory, paneFinalizer: nil,
+                                    launchInventorySink: { inventories.append($0) })
+
+        #expect(inventories == [Set([openPane, closedPane])])
+        let store = try #require(library.store(for: open))
+        #expect(Set(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions))) == [openPane])
+        #expect(store.workspaces[0].sessions[1].htmlOverlay != nil)
+    }
+
+    private func pageRow() -> SessionSnapshot {
+        SessionSnapshot(id: UUID(), customName: nil, cwd: "/repo", page: PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil)))
+    }
+
     private func paneSnapshot(_ pane: UUID) -> Snapshot {
         Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
             SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo"),

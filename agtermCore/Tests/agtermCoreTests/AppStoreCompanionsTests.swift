@@ -65,15 +65,17 @@ struct AppStoreCompanionsTests {
         #expect(page.htmlOverlay != nil)
     }
 
-    @Test func aPageCompanionIsNeverPersistedOrArchived() throws {
-        let (store, recent, _) = makeStoreWithRecentClosed()
+    @Test func aPageCompanionIsSavedOnCreationAndArchivedWithItsParent() throws {
+        let (store, recent, persistence) = makeStoreWithRecentClosed()
         let workspace = store.addWorkspace(name: "work")
         let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/parent"))
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
+        let descriptor = PageSnapshot(source: .file(path: "/tmp/p.html", grantRoot: nil))
 
-        #expect(!store.snapshot().workspaces.flatMap(\.sessions).contains { $0.id == page.id })
+        #expect(persistence.load().workspaces.flatMap(\.sessions).first { $0.id == page.id }?.page == descriptor)
         store.closeSession(parent.id)
-        #expect(recent.load().first?.session?.companions == nil || recent.load().first?.session?.companions?.isEmpty == true)
+        #expect(recent.load().first?.session?.companions?.map(\.id) == [page.id])
+        #expect(recent.load().first?.session?.companions?.first?.page == descriptor)
     }
 
     @Test func closingThePageClosesItsCompanion() throws {

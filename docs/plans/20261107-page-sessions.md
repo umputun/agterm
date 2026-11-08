@@ -134,19 +134,23 @@
 - Modify: `agtermCore/Sources/agtermCore/RecentClosed.swift`, `AppStore+RecentClosed.swift`, `AppStore+PendingClose.swift`, `WindowLibrary+RecentClosed.swift`
 - Modify: `SnapshotRoundTripTests.swift`, `RecentClosedTests.swift`, `WindowLibraryRecentClosedTests.swift`, `AppStoreCompanionsTests.swift`, the zmx claim and identity inventory tests
 
-- [ ] `PageSnapshot` descriptor on `SessionSnapshot` for file and URL pages, written for every local page row and
+- [x] `PageSnapshot` descriptor on `SessionSnapshot` for file and URL pages, written for every local page row and
       never for a replica; older snapshots without it restore as terminals
-- [ ] `isPersistable` admits local page rows; `locallyManagedPaneIdentities`, `persistedClaims` and
+- [x] `isPersistable` admits local page rows; `locallyManagedPaneIdentities`, `persistedClaims` and
       `PaneIdentityInventory.upgrade` skip page descriptors
-- [ ] restore rebuilds the page row directly in every restart mode, after its group is placed; a missing file,
+- [x] restore rebuilds the page row directly in every restart mode, after its group is placed; a missing file,
       refused grant or failed URL leaves a failed page row with its companions and reload
-- [ ] Recent Closed records a page group together, keeps parentID on a separately closed companion so the
+- [x] Recent Closed records a page group together, keeps parentID on a separately closed companion so the
       parent-first reopen recovers the page, and carries the descriptor in session, workspace and window entries
-- [ ] update the control-api.md bullet saying a page row is excluded from the first save
-- [ ] write tests: file and URL round trip with options, a page parent with terminal and page companions,
+- [x] update the control-api.md bullet saying a page row is excluded from the first save
+- [x] write tests: file and URL round trip with options, a page parent with terminal and page companions,
       restore per restart mode, failed load row, Recent Closed group and single-companion reopen, replica rows
       absent from the snapshot, zmx claim walk and identity inventory skipping pages in open and closed windows
-- [ ] run touched tests - must pass before task 3
+- [x] run touched tests - must pass before task 3
+- ➕ `LaunchSpawnPlan` skips a restored page row, whose pane key no surface would ever claim; `addPageCompanion`
+      saves after its page is placed; a hard group close snapshots companions before closing them
+      (`AppStore.swift`), since closing a page companion drops its page. `RecentClosed.swift` and
+      `WindowLibrary+RecentClosed.swift` needed no change
 
 ### Task 3: session.page command and the --page CLI flag
 **Files:**

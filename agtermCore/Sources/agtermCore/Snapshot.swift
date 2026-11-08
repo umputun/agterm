@@ -208,6 +208,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var parentID: UUID?
     /// collapsed is written only when true, so an unfolded tree matches a legacy snapshot.
     public var collapsed: Bool?
+    /// page is a page row's page; nil is a terminal, so a snapshot written before page rows restores unchanged.
+    public var page: PageSnapshot?
 
     public init(id: UUID, paneIdentity: UUID? = nil, splitPaneIdentity: UUID? = nil,
                 customName: String?, cwd: String, isSplit: Bool? = nil, hasSplit: Bool? = nil,
@@ -219,8 +221,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
                 backgroundWatermark: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil,
                 context: String? = nil, lastSelectedAt: Double? = nil, tint: SidebarTint? = nil,
-                parentID: UUID? = nil, collapsed: Bool? = nil) {
+                parentID: UUID? = nil, collapsed: Bool? = nil, page: PageSnapshot? = nil) {
         self.id = id
+        self.page = page
         self.parentID = parentID
         self.collapsed = collapsed
         self.paneIdentity = paneIdentity
@@ -254,7 +257,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         case fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait
         case splitInitialCommand, splitCommandWait, backgroundWatermark, paneBackgrounds
-        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed
+        case restoreCommand, splitRestoreCommand, context, lastSelectedAt, tint, parentID, collapsed, page
     }
 
     /// Custom decode so every optional is LOSSY, matching `Snapshot.init(from:)`: an unknown
@@ -292,6 +295,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
         parentID = (try? c.decodeIfPresent(UUID.self, forKey: .parentID)) ?? nil
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
+        page = (try? c.decodeIfPresent(PageSnapshot.self, forKey: .page)) ?? nil
         // the only field checked for CONTENT, not just type: a hand-edited context carrying a newline or
         // 300 bytes would otherwise reach the title bar and the JSON read-back intact.
         let storedContext = (try? c.decodeIfPresent(String.self, forKey: .context)) ?? nil
@@ -300,5 +304,99 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         } else {
             context = nil
         }
+    }
+}
+
+/// PageSnapshot is a page row's saved page: the file or URL it shows and the options it was opened with, the
+/// only two sources a page row holds.
+public struct PageSnapshot: Codable, Equatable, Sendable {
+    public enum Source: Equatable, Sendable {
+        case file(path: String, grantRoot: String?)
+        case url(URL)
+    }
+
+    public var source: Source
+    public var javascript: Bool
+    public var navigation: Bool
+    public var chromeless: Bool
+    public var persistent: Bool
+    public var browse: Bool
+    /// backgroundColor is the `#rrggbb` painted behind the page; nil is the theme's.
+    public var backgroundColor: String?
+
+    public init(source: Source, javascript: Bool = false, navigation: Bool = false, chromeless: Bool = false,
+                persistent: Bool = false, browse: Bool = false, backgroundColor: String? = nil) {
+        self.source = source
+        self.javascript = javascript
+        self.navigation = navigation
+        self.chromeless = chromeless
+        self.persistent = persistent
+        self.browse = browse
+        self.backgroundColor = backgroundColor
+    }
+
+    /// init describes `overlay`'s page; nil for a source a page row cannot hold.
+    public init?(overlay: HtmlOverlay, backgroundColor: String?) {
+        switch overlay.source {
+        case .file(let path, let grantRoot): source = .file(path: path, grantRoot: grantRoot)
+        case .url(let url): source = .url(url)
+        case .replica, .image, .markdown, .text, .document: return nil
+        }
+        javascript = overlay.javascript
+        navigation = overlay.navigation
+        chromeless = overlay.chromeless
+        persistent = overlay.persistent
+        browse = overlay.browse
+        self.backgroundColor = backgroundColor
+    }
+
+    /// makeOverlay builds the page under a fresh page id.
+    public func makeOverlay() -> HtmlOverlay {
+        let html: HtmlSource
+        switch source {
+        case .file(let path, let grantRoot): html = .file(path: path, grantRoot: grantRoot)
+        case .url(let url): html = .url(url)
+        }
+        return HtmlOverlay(source: html, navigation: navigation, javascript: javascript, chromeless: chromeless,
+                           persistent: persistent, browse: browse)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case file, grantRoot, url, javascript, navigation, chromeless, persistent, browse, backgroundColor
+    }
+
+    // the source is strict, so a descriptor naming neither a file nor a web URL drops and the row reads as a
+    // terminal; the options are lossy like every other snapshot optional
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let path = try c.decodeIfPresent(String.self, forKey: .file) {
+            source = .file(path: path, grantRoot: (try? c.decodeIfPresent(String.self, forKey: .grantRoot)) ?? nil)
+        } else if let url = HtmlSource.webURL(try c.decode(String.self, forKey: .url)) {
+            source = .url(url)
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .url, in: c, debugDescription: "not an http or https url")
+        }
+        let flag = { (key: CodingKeys) in ((try? c.decodeIfPresent(Bool.self, forKey: key)) ?? nil) ?? false }
+        javascript = flag(.javascript)
+        navigation = flag(.navigation)
+        chromeless = flag(.chromeless)
+        persistent = flag(.persistent)
+        browse = flag(.browse)
+        backgroundColor = (try? c.decodeIfPresent(String.self, forKey: .backgroundColor)) ?? nil
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch source {
+        case .file(let path, let grantRoot):
+            try c.encode(path, forKey: .file)
+            try c.encodeIfPresent(grantRoot, forKey: .grantRoot)
+        case .url(let url):
+            try c.encode(url.absoluteString, forKey: .url)
+        }
+        let flags: [(CodingKeys, Bool)] = [(.javascript, javascript), (.navigation, navigation), (.chromeless, chromeless),
+                                           (.persistent, persistent), (.browse, browse)]
+        for (key, value) in flags where value { try c.encode(true, forKey: key) }
+        try c.encodeIfPresent(backgroundColor, forKey: .backgroundColor)
     }
 }

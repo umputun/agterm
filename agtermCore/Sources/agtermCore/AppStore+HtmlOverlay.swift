@@ -102,7 +102,7 @@ public enum TextChangesFailure: Error, Equatable, Sendable {
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
-    /// Mac, which `openRemotePage` serves. NOT persisted.
+    /// Mac, which `openRemotePage` serves. Persisted only as a page row's own page (`PageSnapshot`).
     public func openHtmlOverlay(_ sessionID: UUID, pane: OverlayPane?, overlay: HtmlOverlay, sizePercent: Int?,
                                 points: OverlayPointSize = OverlayPointSize(),
                                 backgroundColor: String? = nil) -> HtmlOverlayOpenFailure? {

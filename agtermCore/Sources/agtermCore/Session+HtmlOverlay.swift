@@ -11,6 +11,13 @@ extension Session {
 
     public func paneOverlayIsHtml(_ pane: OverlayPane) -> Bool { paneOverlay(pane)?.html != nil }
 
+    /// pageSnapshot is the saved form of a local page row's page; nil for a terminal, a replica row, or a row
+    /// whose page is not placed yet.
+    public var pageSnapshot: PageSnapshot? {
+        guard content == .page, remoteHost == nil, let htmlOverlay else { return nil }
+        return PageSnapshot(overlay: htmlOverlay, backgroundColor: overlayBackgroundColor)
+    }
+
     /// htmlCovers checks the slot a `--pane` command addresses, the session-wide one for nil.
     public func htmlCovers(_ pane: OverlayPane?) -> Bool {
         guard let pane else { return htmlOverlayActive }

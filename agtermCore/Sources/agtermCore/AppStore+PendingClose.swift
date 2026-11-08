@@ -183,7 +183,7 @@ extension AppStore {
                 emitSessionClosed(close.session, workspace: close.workspaceID)
                 continue
             }
-            let companions = closes.map(\.session).filter { $0.parentID == close.session.id }
+            let companions = closes.map(\.session).filter { $0.parentID == close.session.id && $0.isPersistable }.map(sessionSnapshot)
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
                                       id: close.recentID, companions: companions)

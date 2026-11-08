@@ -63,9 +63,9 @@ public final class Session: Identifiable {
     public let content: SessionContent
 
     /// Whether this session may be written to disk at all. Every persistence producer gates on it: the
-    /// launch snapshot, the Recent Closed session record, and a closed workspace's record. A page lives
-    /// only as long as the app that shows it.
-    public var isPersistable: Bool { remoteHost == nil && content == .terminal }
+    /// launch snapshot, the Recent Closed session record, and a closed workspace's record. A page row joins once
+    /// its page is placed, so the save inside `addSession` still leaves it out.
+    public var isPersistable: Bool { remoteHost == nil && (content == .terminal || pageSnapshot != nil) }
 
     /// The pane identities this instance's zmx owns — none for a remote session, whose panes run ssh.
     /// Every reader of local daemon ownership goes through this, or a remote pane reports as a claimed
