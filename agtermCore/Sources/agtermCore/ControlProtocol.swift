@@ -854,7 +854,7 @@ public enum OverlayHtmlError {
     /// cwdWithURL: a web page reads no local files, so there is no grant to give it.
     public static let cwdWithURL = "session.overlay.open: --cwd cannot be combined with --url"
     public static let invalidURL = "session.overlay.open: --url must be an absolute http or https URL"
-    public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html or --url"
+    public static let navigationWithoutPage = "session.overlay.open: --navigation requires --html, --url or --markdown"
     public static let javascriptWithoutPage = "session.overlay.open: --js requires --html or --url"
     public static let chromelessRequiresFile = "session.overlay.open: --chromeless requires --html or a loopback --url"
     /// chromelessRequiresLoopback: the strip is what names a URL page's origin, so only this Mac's may drop it.
@@ -872,7 +872,7 @@ public enum OverlayHtmlError {
     public static let imageNotAbsolute = "session.overlay.open: --image must be an absolute path"
     public static let imageType = "session.overlay.open: --image must be a png, jpg, jpeg, gif or webp file"
     public static let markdownOptions =
-        "session.overlay.open: --markdown takes no --wait, --cwd, --navigation, --js, --chromeless, --persistent or --browse"
+        "session.overlay.open: --markdown takes no --wait, --cwd, --js, --chromeless, --persistent or --browse"
     public static let markdownNotAbsolute = "session.overlay.open: --markdown must be an absolute path"
     public static let markdownType = "session.overlay.open: --markdown must be a .md or .markdown file"
     public static let textOptions =

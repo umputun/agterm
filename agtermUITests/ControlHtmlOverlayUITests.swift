@@ -40,14 +40,29 @@ final class ControlHtmlOverlayUITests: ControlAPITestCase {
     func testAMarkdownFileRendersAndTheTreeNamesItsSource() throws {
         let id = try activeSessionID()
         let doc = pageDir.appendingPathComponent("notes.md")
-        try "# Rendered Heading\n\nsome *text*\n".write(to: doc, atomically: true, encoding: .utf8)
-        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"markdownFile":"\#(doc.path)"}}"#)
+        try "# Rendered Heading\n\nsome *text* and [the guide](guide.md)\n".write(to: doc, atomically: true, encoding: .utf8)
+        try "# Guide Heading\n".write(to: pageDir.appendingPathComponent("guide.md"), atomically: true, encoding: .utf8)
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"markdownFile":"\#(doc.path)","navigation":true}}"#)
         XCTAssertEqual(open["ok"] as? Bool, true, "markdown open should succeed: \(open)")
         XCTAssertTrue(pollPage(id: id) {
             ($0["markdown"] as? String)?.hasSuffix("/notes.md") == true && $0["file"] == nil && $0["state"] as? String == "loaded"
-        }, "the tree should name the markdown source")
+                && $0["navigation"] as? Bool == true
+        }, "the tree should name the markdown source and its navigation")
         XCTAssertTrue(app.webViews.staticTexts["Rendered Heading"].waitForExistence(timeout: 10), "the markdown should render")
         XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "notes.md")
+
+        app.webViews.links["the guide"].click()
+        XCTAssertTrue(app.webViews.staticTexts["Guide Heading"].waitForExistence(timeout: 10), "the linked file should render")
+        XCTAssertTrue(pollPage(id: id) {
+            ($0["page"] as? String)?.hasSuffix("/guide.md") == true && $0["canGoBack"] as? Bool == true
+                && ($0["markdown"] as? String)?.hasSuffix("/notes.md") == true
+        }, "the tree should report the linked page and its history while keeping the source")
+        XCTAssertEqual(app.staticTexts["htmlOverlay.identity"].value as? String, "guide.md")
+        let back = try sendCommand(#"{"cmd":"session.overlay.navigate","target":"\#(id)","args":{"to":"back"}}"#)
+        XCTAssertEqual(back["ok"] as? Bool, true, "navigate back should succeed: \(back)")
+        XCTAssertTrue(app.webViews.staticTexts["Rendered Heading"].waitForExistence(timeout: 10), "back should show the first file")
+        XCTAssertTrue(pollPage(id: id) { ($0["page"] as? String)?.hasSuffix("/notes.md") == true && $0["canGoForward"] as? Bool == true },
+                      "the tree should report the first file with forward history")
         app.buttons["htmlOverlay.close"].click()
         XCTAssertTrue(pollOverlay(id: id, expected: false), "the strip's close button should close the page")
     }

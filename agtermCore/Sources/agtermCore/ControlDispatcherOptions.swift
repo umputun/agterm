@@ -81,6 +81,16 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
                                          imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
                                          markdownLinks: markdownLinks)
     }
+
+    /// with returns these options carrying a markdown page's link grant, nil when its links stay text.
+    public func with(markdownLinks: MarkdownLinkGrant?) -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: command, cwd: cwd, wait: wait, sizePercent: sizePercent,
+                                         backgroundColor: backgroundColor, follow: follow, pane: pane, page: page,
+                                         navigation: navigation, javascript: javascript, chromeless: chromeless,
+                                         persistent: persistent, browse: browse, points: points, clicked: clicked,
+                                         imagePixels: imagePixels, textLog: textLog, forwarded: forwarded,
+                                         markdownLinks: markdownLinks)
+    }
 }
 
 public struct ControlSessionBackgroundOptions: Equatable, Sendable {

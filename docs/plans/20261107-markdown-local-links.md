@@ -280,13 +280,13 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift` and the CLI parse tests
 - Modify: `agtermUITests/ControlHtmlOverlayUITests.swift`
 
-- [ ] write failing tests: CLI and dispatcher accept `--markdown --navigation` and still reject the other
+- [x] write failing tests: CLI and dispatcher accept `--markdown --navigation` and still reject the other
       flags; the CLI open computes the grant beside `markdownFileRefusal`; markdown page companions stay
       refused by kind in CLI, dispatcher and remote attachment (no new companion support)
-- [ ] implement the flag, the CLI grant and the error texts
-- [ ] extend the markdown socket test with `navigation: true`, a linked file, `overlay navigate back`, and
+- [x] implement the flag, the CLI grant and the error texts
+- [x] extend the markdown socket test with `navigation: true`, a linked file, `overlay navigate back`, and
       read-back of `navigation`, `page` and `canGoBack`
-- [ ] run the touched unit tests and that one XCUITest method - must pass before Task 6
+- [x] run the touched unit tests and that one XCUITest method - must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
 - [ ] verify every Overview item, locally and on a replica page

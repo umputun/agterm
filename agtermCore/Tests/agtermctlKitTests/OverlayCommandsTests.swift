@@ -159,7 +159,6 @@ struct OverlayCommandsTests {
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--companion"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--block"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--wait"],
-        ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--js"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--chromeless"],
         ["session", "overlay", "open", "--markdown", "/tmp/r.md", "--persistent"],
@@ -201,6 +200,14 @@ struct OverlayCommandsTests {
         #expect(req.args?.cwd == nil)
         #expect(req.args?.sizePercent == nil)
         #expect(req.args?.follow == true)
+    }
+
+    @Test func markdownOpenTakesNavigation() throws {
+        let req = try request(["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation"])
+        #expect(req.args?.markdownFile == "/tmp/r.md")
+        #expect(req.args?.navigation == true)
+        #expect(rejects(["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation", "--companion"]))
+        #expect(rejects(["session", "overlay", "open", "--markdown", "/tmp/r.md", "--navigation", "--chromeless"]))
     }
 
     @Test func markdownOpenSendsTheResolvedPathInItsOwnField() throws {
