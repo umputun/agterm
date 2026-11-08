@@ -255,17 +255,20 @@
   the runner cannot activate this build under the shared bundle id
 
 ### Task 8: revmux review until clean
-- [ ] run revmux on the branch; fix every gating finding and re-run until a round reports none
+- [x] run revmux on the branch; fix every gating finding and re-run until a round reports none
+  round 1 (comprehensive): 1 major, 1 minor, fixed in 63b75b37; round 2 (final): nothing actionable
+- [x] ➕ live check in an isolated instance: a page row's `window.close()` waits while a picker is pending in its
+  window and closes once `pick cancel` ends it, with no remount or session switch
 
 ### Task 9: Local demo
-- [ ] build Debug and launch an isolated instance (short `/tmp` state dir, `windows` marker, clean environment)
-- [ ] stage a top-level page session with `--js`, a terminal companion and a page companion under it
-- [ ] leave it running and describe how to reach it
+- [x] build Debug and launch an isolated instance (short `/tmp` state dir, `windows` marker, clean environment)
+- [x] stage a top-level page session with `--js`, a terminal companion and a page companion under it
+- [x] leave it running and describe how to reach it
 
 ### Task 10: [Final] Update documentation
-- [ ] update README.md if the synopsis should mention page sessions
-- [ ] update CLAUDE.md if new patterns were discovered
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update README.md if the synopsis should mention page sessions
+- [x] update CLAUDE.md if new patterns were discovered
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
