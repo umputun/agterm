@@ -795,9 +795,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `MarkdownPage.imageReferences` contains in the file's folder after resolving symlinks, each canonical file once
   (`MarkdownPage.Embedded`), within a total byte and pixel budget. The renderer, bundled markdown-it and
   highlight.js plus `render.js` (`MarkdownAssets`), runs as a user script in its own content world with page
-  JavaScript off; its image rule emits only app-embedded data URIs, so no authored source reaches WebKit, and it
-  strips every link but http(s) and fragments, since `about:` passes the navigation policy. The click and the
-  control path check only the descriptor; the page load reads pictures, under the shared `textLoad` counter.
+  JavaScript off; its image rule emits only app-embedded data URIs, so no authored source reaches WebKit, and on a
+  page without a link grant it strips every link but http(s) and fragments, since `about:` passes the navigation
+  policy. The click and the control path check only the descriptor; a page without a grant reads pictures at load,
+  under the shared `textLoad` counter, and a link page reads each document through its scheme source instead.
+- A markdown page with `--navigation` carries `HtmlOverlay.markdownLinks`, a `MarkdownLinkGrant` (canonical file and
+  folder) computed by the app at open, nil when that folder is `/` or home, which also drops navigation. A clicked
+  `.md` always asks for it. Render.js then keeps relative `.md`/`.markdown` hrefs, and the page loads through
+  `HtmlPageSchemeHandler` at `agterm-page://<page-id>/<path>`, so WebKit owns history and scroll. The policy allows
+  only that page's own host with a markdown path lexically inside the root; `MarkdownPageSource.linkSource` judges
+  every read again with `MarkdownPage.linkedDocument` and reads at the normalized request, so pictures and links share
+  one base. A link that fails after the first commit keeps the shown page `loaded` with no error.
 - A text page (`HtmlSource.text`, `--text` with `--line`, wire `textFile` and `line`) is built from text too and
   themed, but has no links at all: its arm of `HtmlNavigationPolicy` runs before the shared new-window and `about`
   exits and allows only a main-frame `about:blank`. `TextProbe` reads through `BoundedFile` and refuses invalid UTF-8
@@ -2081,13 +2089,19 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   cannot decode; without it the open keeps `OverlayHtmlError.presenter`. The origin still probes at open and sends
   an image's oriented pixel size (`ImagePixels`); an auto-sized image carries no origin-computed points, the
   presenter sizing it through `ControlServer.imagePoints`, while explicit sizing passes through as for any page. Over the same channel, `RemotePageResources.content` serves an image or text page
-  its own file and a markdown page its own file plus pictures its folder contains after resolving symlinks there,
-  each read whole through `BoundedFile` under its kind's cap, a picture sent only when its bytes carry a picture
+  its own file and a markdown page its own file plus pictures its folder contains after resolving symlinks there
+  (with a link grant: markdown-spelled requests only through `linkedDocument`, the original included, and pictures
+  anywhere in the grant's root), each read whole through `BoundedFile` under its kind's cap, a picture sent only when its bytes carry a picture
   signature; the bridge is refused. The presenter holds it as `HtmlSource.replica(path:content:)`, an origin path
   no local read ever takes, judges the fetched bytes with the local probes, lists markdown pictures lexically
   (`MarkdownPage.remoteImageReferences`) and builds the page off the main actor. Limit: an inward symlink alias
   is a second file there, so aliases count separately toward the picture budgets and one can fall to alt text
-  sooner than locally. A markdown or text page companion of a remote parent stays refused.
+  sooner than locally. A link page's origin serves pictures anywhere in the grant's root, where a local page embeds
+  only those inside each document's own folder, so a picture symlinked out of its subfolder shows remotely and
+  falls to alt text locally. The grant rides `PresentationPage.markdownLinks` only to a presenter listing
+  `PresentationHub.pageLinksKind`; any other gets `HtmlOverlay.withoutLinks()` in the request and in the record the
+  claim serves from, since an older presenter would fetch the original spelling and `.md` pictures. A markdown or
+  text page companion of a remote parent stays refused.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,
   each reply meaning requested, not applied. `navigate browser` reaches it

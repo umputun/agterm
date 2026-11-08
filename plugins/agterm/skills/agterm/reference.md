@@ -1146,17 +1146,24 @@ error keeps those names for compatibility.
   picture over 100 megapixels (`image too large`). The file is read synchronously, so one on slow or network
   storage stalls the app until it is read. On a session another Mac presents it opens there (Remote
   sessions). Read back `image` in `htmlOverlays`.
-- `session overlay open --markdown FILE [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
+- `session overlay open --markdown FILE [--navigation] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   - render a `.md` or `.markdown` file as a page in the terminal theme, the view a user's ⌘-click on its path opens
   (at the link-open size, 95% when links open in the browser). Code is highlighted, task lists show boxes, and
   headings get GitHub-style anchors. Pictures in the file's own folder are embedded, symlinks resolved first;
   any other picture, and any past the first 256, shows its alt text and nothing is fetched. Raw HTML stays text and the page runs no script
   of its own; a web link opens in the browser after the confirmation, a `#heading` link scrolls, any other link
-  is plain text. No bridge; Open in Browser and Show in Finder are refused. Refuses a COMMAND, `--html`,
-  `--url`, `--image`, the page flags, `--cwd`, `--wait`, `--block` and `--companion`; a relative FILE resolves
+  is plain text. With `--navigation` (a ⌘-clicked file asks for it) a relative link to a `.md`/`.markdown`
+  file in its folder or below opens that file in the same page, with back and forward through the strip and
+  `session overlay navigate`; a link leaving the folder or resolving to a non-markdown file stays inert, and a
+  file directly in `/` or the home folder opens with links as text and `navigation` omitted, as does a page
+  shown on an older agterm on another Mac. No bridge; Open in
+  Browser and Show in Finder are refused. Refuses a COMMAND, `--html`, `--url`, `--image`, the other page
+  flags, `--cwd`, `--wait`, `--block` and `--companion`; a relative FILE resolves
   against the caller's directory. Refused: a path that is not a regular readable file (`unreadable markdown
   file`) and a file over 4 MB (`markdown file too large`). The wire field is `markdownFile`, apart from the
-  HUD's `markdown` flag. Opens on a presenting Mac like an image page. Read back `markdown` in `htmlOverlays`.
+  HUD's `markdown` flag. Opens on a presenting Mac like an image page, following links there too unless that
+  agterm is older. Read back `markdown` (the file opened), `navigation`, and `page`, `canGoBack` and
+  `canGoForward` for the file shown, in `htmlOverlays`.
 - `session overlay open --text FILE [--line N | --tail N [--follow-file] | --follow-file] [--size-percent N [--width PT] [--height PT]] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   - show a source, config, text or log file read-only in the terminal theme, the view a user's ⌘-click on its
   path opens (at the link-open size, 95% when links open in the browser), with line numbers. Highlighted when the

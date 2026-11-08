@@ -289,21 +289,21 @@
 - [x] run the touched unit tests and that one XCUITest method - must pass before Task 6
 
 ### Task 6: Verify acceptance criteria
-- [ ] verify every Overview item, locally and on a replica page
-- [ ] `make lint`, `cd agtermCore && swift test`, `make test-app` (each once)
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
+- [x] verify every Overview item, locally and on a replica page
+- [x] `make lint`, `cd agtermCore && swift test`, `make test-app` (each once)
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
 
 ### Task 7: [Final] Update documentation
-- [ ] `site/docs.html` markdown overlay section and `site/commands.html` `--markdown`/`--navigation`
-- [ ] `plugins/agterm/skills/agterm/` reference for `--markdown --navigation`
-- [ ] `.claude/rules/control-api.md`: the markdown-page bullet (~line 772, "strips every link but http(s) and
+- [x] `site/docs.html` markdown overlay section and `site/commands.html` `--markdown`/`--navigation`
+- [x] `plugins/agterm/skills/agterm/` reference for `--markdown --navigation`
+- [x] `.claude/rules/control-api.md`: the markdown-page bullet (~line 772, "strips every link but http(s) and
       fragments") and the remote content-page bullet (~line 2054, "a markdown page its own file plus pictures")
-- [ ] `HtmlPageSchemeHandler` doc comment (:11-12), which names only pages on another Mac
-- [ ] CLAUDE.md "not a browser" line: scope it to what it declines and keep every shipped exception: a page
+- [x] `HtmlPageSchemeHandler` doc comment (:11-12), which names only pages on another Mac
+- [x] CLAUDE.md "not a browser" line: scope it to what it declines and keep every shipped exception: a page
       navigating its own files (HTML grant, markdown root) is in scope, `--browse` pages navigate across
       origins, and a hidden clicked page may be replaced by another terminal click
-- [ ] remove `docs/backlog/markdown-overlay-follows-local-md-links.md`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] remove `docs/backlog/markdown-overlay-follows-local-md-links.md`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Manual verification**:

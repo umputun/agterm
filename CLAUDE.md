@@ -32,8 +32,10 @@ C-boundary concurrency before changing the bridge.
 - For each hideable titlebar/sidebar element, ask whether it should join host-free `InterfaceElement` and
   Settings > Interface. Never add that preference without approval.
   A control enabled there stays visible and is disabled when it cannot act; never show or hide it by state.
-- The HTML overlay displays HTML over a session; it is not a browser. Following links, history and back are the
-  browser's job, so link features that turn the overlay into one are declined.
+- The HTML overlay displays a page over a session; it is not a browser.
+  Moving within what the page was opened with is in scope: an HTML file's grant folder, a markdown file's link
+  root, a URL page's origin, and any origin for a `--browse` page; a terminal click may replace a hidden clicked page.
+  Features that make it a general browser (tabs, an address bar, links followed past those bounds) are declined.
   What a mouse-capturing program does with a click is that program's, not agterm's.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.

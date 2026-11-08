@@ -3109,7 +3109,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               A picture, markdown or text page opened on the other Mac with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--image</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text</span>
-              shows here the same way: this Mac fetches the file and builds the same page, and a picture opened without a size is sized for this
+              shows here the same way: this Mac fetches the file and builds the same page, a markdown page follows its links to
+              the other Mac's files as it would there (an older agterm here keeps them as text), and a picture opened without a size is sized for this
               screen, so an agent there can show you its screenshot. If this Mac's agterm is too old for these pages, the open is refused.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
@@ -3396,7 +3397,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               path in Finder instead, ⌘⌥⇧ while a program captures the mouse, and ⌘⌥-drag still selects a block. A rendered markdown
               file shows a leading YAML frontmatter block as code, the pictures kept in its own folder and the alt text of any
               other, runs none of its own script, and
-              hands a web link to the browser only after asking. A text page runs nothing, loads nothing and links nowhere: a URL
+              hands a web link to the browser only after asking. A relative link to another
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.md</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.markdown</span> file in its folder or
+              below opens that file in the same page, with Back and Forward returning to where you were; a file directly in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/</span> or your home folder keeps
+              its links as text and shows no Back or Forward. A text page runs nothing, loads nothing and links nowhere: a URL
               in a log stays text. A picture, markdown, HTML or text file clicked
               from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too; a hidden page an
               earlier click opened is replaced instead, as with a web link. In a session

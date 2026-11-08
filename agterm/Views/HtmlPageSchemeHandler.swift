@@ -9,7 +9,8 @@ struct HtmlPageResource: Sendable {
 }
 
 /// HtmlPageSchemeHandler serves `agterm-page://<page-id>/<path>` for one page from an async source, so a
-/// page whose files live on another Mac loads through WebKit as if they were local.
+/// page whose files live on another Mac, or a markdown page following its links, loads through WebKit with
+/// real addresses and history.
 /// A request naming another page id, or another scheme, fails without reaching the source.
 @MainActor
 final class HtmlPageSchemeHandler: NSObject, WKURLSchemeHandler {
