@@ -1332,7 +1332,7 @@ extension TextPageRenderingTests {
 
         page.webView.frame.size.width = 250
 
-        try await waitForScript("document.scrollingElement.clientWidth", in: page.webView) { $0 == "250" }
+        try await waitForScript("window.innerWidth", in: page.webView) { $0 == "250" }
         try await waitForScript(Self.atBottom, in: page.webView) { $0 == "true" }
         try await Task.sleep(for: .milliseconds(300))
         XCTAssertEqual(current?.logState?.following, true)
