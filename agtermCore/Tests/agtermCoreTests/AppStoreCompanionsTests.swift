@@ -713,6 +713,110 @@ struct AppStoreCompanionsTests {
         #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
         #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
     }
+
+    private func addTopLevelPage(to store: AppStore, workspace: Workspace) throws -> Session {
+        let page = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/page", content: .page))
+        #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)),
+                                      sizePercent: nil) == nil)
+        return page
+    }
+
+    @Test func aTopLevelPageGroupsTerminalAndPageCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(page.parentID == nil)
+        #expect(terminal.content == .terminal)
+        #expect(nested.content == .page)
+        #expect(store.companions(of: page.id).map(\.id) == [terminal.id, nested.id])
+        #expect(store.parent(of: terminal) === page)
+        #expect(store.parent(of: nested) === page)
+    }
+
+    @Test func aCompanionOfAPageCompanionLandsUnderThePageRoot() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        let sibling = try store.addCompanion(to: nested.id).get()
+
+        #expect(sibling.parentID == page.id)
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, nested.id, sibling.id, after.id])
+    }
+
+    @Test func convertNestsATopLevelPageAndItsCompanionsUnderAFreshTerminal() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let before = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/before"))
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let companion = try store.addCompanion(to: page.id, options: CompanionOptions(select: false)).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        let fresh = try store.convertToCompanion(page.id).get()
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [before.id, fresh.id, page.id, companion.id])
+        #expect(fresh.content == .terminal)
+        #expect(fresh.parentID == nil)
+        #expect(fresh.initialCwd == "/page")
+        #expect(page.parentID == fresh.id)
+        #expect(companion.parentID == fresh.id)
+        #expect(page.content == .page)
+        #expect(page.htmlOverlay?.id == overlay.id)
+        #expect(store.selectedSessionID == page.id)
+    }
+
+    @Test func aRemotePageRowIsRefusedAsAParent() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/r", remoteHost: "buildbox", content: .page))
+
+        #expect(refusal(store.addCompanion(to: remote.id)) == .remoteParent)
+        #expect(refusal(store.addPageCompanion(to: remote.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)))) == .remoteParent)
+        #expect(convertRefusal(store.convertToCompanion(remote.id)) == .remoteSession)
+        #expect(store.workspaces[0].sessions.map(\.id) == [remote.id])
+        #expect(remote.parentID == nil)
+    }
+
+    @Test func closingAPageRootClosesItsCompanions() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+
+        store.closeSession(page.id)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+        #expect([page.id, terminal.id, nested.id].allSatisfy { store.session(withID: $0) == nil })
+    }
+
+    @Test func softClosingAPageRootIsOneUndoForTheWholeGroup() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let page = try addTopLevelPage(to: store, workspace: workspace)
+        let after = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: page.id).get()
+        let nested = try store.addPageCompanion(to: page.id, overlay: HtmlOverlay(source: .file(path: "/tmp/n.html", grantRoot: nil))).get()
+        let overlay = try #require(page.htmlOverlay)
+
+        #expect(store.softCloseSession(page.id, grace: 60))
+        #expect(store.workspaces[0].sessions.map(\.id) == [after.id])
+
+        #expect(store.undoPendingClose())
+        #expect(store.workspaces[0].sessions.map(\.id) == [page.id, terminal.id, nested.id, after.id])
+        #expect(terminal.parentID == page.id)
+        #expect(nested.parentID == page.id)
+        #expect(page.htmlOverlay?.id == overlay.id)
+    }
 }
 
 private final class CompanionEventKinds {

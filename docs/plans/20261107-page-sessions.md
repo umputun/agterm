@@ -120,12 +120,12 @@
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreCompanionsTests.swift`, `agtermCore/Tests/agtermCoreTests/PaletteCatalogTests.swift`
 - Modify: `agtermTests/WorkspaceSidebarCompanionsTests.swift`, `agtermTests/AppActionsCompanionsTests.swift`
 
-- [ ] remove `.convertCompanion` from `PaletteCatalog.terminalOnly` so Convert matches the sidebar on a
+- [x] remove `.convertCompanion` from `PaletteCatalog.terminalOnly` so Convert matches the sidebar on a
       top-level page; Duplicate as Companion stays terminal-only
-- [ ] pin with tests: a companion under a page root, New Companion on a page companion lands under its root,
+- [x] pin with tests: a companion under a page root, New Companion on a page companion lands under its root,
       Convert on a top-level page, group close and undo of a page-rooted group
-- [ ] write tests for refusals and availability: remote page row as parent, palette availability per row kind
-- [ ] run touched tests - must pass before task 2
+- [x] write tests for refusals and availability: remote page row as parent, palette availability per row kind
+- [x] run touched tests - must pass before task 2
 
 ### Task 2: Save and restore every local page row
 **Files:**
