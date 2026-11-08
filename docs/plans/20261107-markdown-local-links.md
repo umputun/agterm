@@ -156,6 +156,10 @@
   passes `linkedDocument`, the original included, is read at the path it returns and served as text under
   `MarkdownPage.maxBytes`; every other request is a picture under the signature rule. With a nil grant only
   the original file is served as text, as today.
+- Mixed versions: the grant goes only to a presenter listing `PresentationHub.pageLinksKind` (`page.links`).
+  Any other presenter is handed `HtmlOverlay.withoutLinks()`, in the request and in the record the claim
+  serves from, so it gets the pre-link rules and no Back/Forward: an older presenter fetches the original
+  spelling and `.md` picture references, which the grant's rules would refuse or answer with text.
 - Presenter: `replicaSource` carries the received grant onto the replica `HtmlOverlay`; the replica identity
   follows `current` like `.replica(_, .html)`.
 
@@ -241,26 +245,30 @@
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/PresentationFrames.swift`, `AppStore+RemotePage.swift`,
   `AppStore+ReplicaPage.swift`, `RemotePageResources.swift`, `HtmlOverlay.swift` (replica identity)
-- Modify: `agterm/Control/ControlServer+PageServe.swift`, `agterm/Views/MarkdownPageSource.swift`
+- Modify: `agterm/Control/ControlServer+PageServe.swift`, `agterm/Control/ControlServer.swift`,
+  `agterm/Views/MarkdownPageSource.swift`
+- Create: `agterm/Views/HtmlReplicaLink.swift` (`HtmlReplicaLink` and its bounded read moved out of the
+  registry, Eugene approved, so the presenter source reads through the same loop)
 - Modify: `agtermCore/Tests/agtermCoreTests/RemotePageResourcesTests.swift`, the presentation-frame codec
   tests, `HtmlOverlayTests.swift`
-- Modify: `agtermTests/ControlServerPageServeTests.swift`, `agtermTests/MarkdownPageRenderingTests.swift`
+- Modify: `agtermTests/ControlServerPageServeTests.swift`, `agtermTests/MarkdownPageRenderingTests.swift`,
+  `agtermTests/ControlServerForwardedClickTests.swift`
 
-- [ ] write failing codec tests: `PresentationPage` round-trips the grant; a frame without it decodes to
+- [x] write failing codec tests: `PresentationPage` round-trips the grant; a frame without it decodes to
       nil; a frame with it decodes under the old shape (unknown key ignored)
-- [ ] write failing origin tests: a linked in-root `.md` served as text under 4 MiB; escaping path,
+- [x] write failing origin tests: a linked in-root `.md` served as text under 4 MiB; escaping path,
       non-markdown canonical suffix, `.md -> .env` alias refused; `picture.png -> large.md` and a
       picture-spelled alias of the original refused as non-pictures with no text sent; a page without a
       grant serves only its original file; the grant is the one frozen at presentation; a forwarded
       markdown click sends `navigation: true` and the grant on its presenter request
-- [ ] implement the grant on `PresentationPage`, `openRemotePage`, `claimPageServe` and the content rules
-- [ ] write failing presenter tests mirroring Task 3: replica markdown loads the origin's canonical path
+- [x] implement the grant on `PresentationPage`, `openRemotePage`, `claimPageServe` and the content rules
+- [x] write failing presenter tests mirroring Task 3: replica markdown loads the origin's canonical path
       through the scheme handler; a click follows a link; Back/Forward with `canGoBack`/`canGoForward`
       read-back; `page` and `identity` follow the committed file; a missing target keeps the page; reload
       `--current` and theme refresh keep history; links stay text with a nil grant (navigation off, or the
       origin refused a root that is its own home); no markdown-spelled picture request
-- [ ] implement `replicaSource` carrying the grant, the replica identity change and the presenter source
-- [ ] run the touched tests - must pass before Task 5
+- [x] implement `replicaSource` carrying the grant, the replica identity change and the presenter source
+- [x] run the touched tests - must pass before Task 5
 
 ### Task 5: Control surface: `--navigation` for markdown and clicked pages
 

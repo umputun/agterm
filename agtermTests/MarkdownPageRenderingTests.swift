@@ -345,6 +345,72 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(bridge as? String, "undefined")
     }
 
+    func testAReplicaLinkPageFollowsALinkWithHistoryReloadAndThemeRefresh() async throws {
+        let first = try writeMarkdown("a.md", "# A\n\n[to b](sub/b.md)\n")
+        let second = try writeMarkdown("sub/b.md", "# B\n")
+        let grant = try XCTUnwrap(MarkdownPage.linkGrant(for: first))
+        let overlay = openReplicaLinkPage(first, grant: grant)
+        let page = registry.page(for: overlay, store: store, replica: replicaLink())
+        let view = page.webView
+        try await waitForHeading("A", in: view)
+        XCTAssertEqual(fetched, [grant.path])
+
+        _ = try await view.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitForHeading("B", in: view)
+        try await waitFor("second page reported") { self.current?.current?.page == self.canonical(second) && self.current?.current?.canGoBack == true }
+        XCTAssertEqual(current?.identity, "b.md")
+
+        XCTAssertNil(registry.navigate(overlay.id, .back))
+        try await waitForHeading("A", in: view)
+        try await waitFor("back reported") { self.current?.current?.page == grant.path && self.current?.current?.canGoForward == true }
+        XCTAssertNil(registry.navigate(overlay.id, .forward))
+        try await waitForHeading("B", in: view)
+
+        let history = (view.backForwardList.backList.count, view.backForwardList.forwardList.count)
+        let freshB = "!document.documentElement.dataset.stale && document.querySelector('h1')?.textContent === 'B'"
+        _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
+        XCTAssertNil(registry.reload(overlay.id, target: .current, store: store))
+        try await waitForScript(freshB, in: view) { $0 == "true" }
+        _ = try await view.evaluateJavaScript("document.documentElement.dataset.stale = '1'")
+        page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
+        try await waitForScript(freshB, in: view) { $0 == "true" }
+        XCTAssertEqual(view.backForwardList.backList.count, history.0)
+        XCTAssertEqual(view.backForwardList.forwardList.count, history.1)
+    }
+
+    func testAReplicaLinkPageKeepsItsDocumentWhenTheOriginCannotServeALink() async throws {
+        let first = try writeMarkdown("a.md", "# A\n\n[gone](missing.md)\n")
+        let page = registry.page(for: openReplicaLinkPage(first, grant: try XCTUnwrap(MarkdownPage.linkGrant(for: first))),
+                                 store: store, replica: replicaLink())
+        try await waitForHeading("A", in: page.webView)
+
+        _ = try await page.webView.evaluateJavaScript("document.querySelector('a').click()")
+        try await waitFor("missing link fetched") { self.fetched.count == 2 }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.loadState, .loaded)
+        XCTAssertNil(current?.loadError)
+        let heading = try await page.webView.evaluateJavaScript("document.querySelector('h1').textContent")
+        XCTAssertEqual(heading as? String, "A")
+    }
+
+    func testAReplicaMarkdownPageKeepsLinksAsTextWithoutAGrantAndNeverFetchesAMarkdownPicture() async throws {
+        let first = try writeMarkdown("a.md", "# A\n\n![p](pic.md) [b](b.md)\n")
+        _ = try writeMarkdown("b.md", "# B\n")
+        let plain = registry.page(for: openReplica(first, .markdown), store: store, replica: replicaLink())
+        try await waitForHeading("A", in: plain.webView)
+        let href = try await plain.webView.evaluateJavaScript("document.querySelector('a').getAttribute('href') ?? ''")
+        XCTAssertEqual(href as? String, "")
+        XCTAssertEqual(current?.navigation, false)
+        XCTAssertEqual(fetched, [first])
+
+        store.closeOverlay(session.id)
+        fetched = []
+        let linked = registry.page(for: openReplicaLinkPage(first, grant: try XCTUnwrap(MarkdownPage.linkGrant(for: first))),
+                                   store: store, replica: replicaLink())
+        try await waitForHeading("A", in: linked.webView)
+        XCTAssertEqual(fetched.map { URL(fileURLWithPath: $0).lastPathComponent }, ["a.md"])
+    }
+
     func testAMarkdownPageStaysInItsOverlay() async throws {
         let overlay = try openMarkdown("doc.md", "# Doc\n")
         _ = registry.page(for: overlay, store: store)
@@ -387,6 +453,12 @@ final class MarkdownPageRenderingTests: HtmlPageTestCase {
     private func openLinkPage(_ path: String) throws -> HtmlOverlay {
         let overlay = HtmlOverlay(source: .markdown(path: path), navigation: true,
                                   markdownLinks: try XCTUnwrap(MarkdownPage.linkGrant(for: path)))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
+    }
+
+    private func openReplicaLinkPage(_ path: String, grant: MarkdownLinkGrant) -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .replica(path: path, content: .markdown), navigation: true, replicaOf: UUID(), markdownLinks: grant)
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
         return overlay
     }

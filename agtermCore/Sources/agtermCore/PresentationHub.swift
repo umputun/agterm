@@ -65,7 +65,7 @@ public final class PresentationHub {
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
-                                        overlayPointsKind, pageContentKind, pageDocumentKind, statusShapesKind,
+                                        overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         linkClickKind] + pageKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -82,6 +82,9 @@ public final class PresentationHub {
     public static let pageContentKind = "page.content"
     /// pageDocumentKind advertises the clicked-HTML document page source.
     public static let pageDocumentKind = "page.document"
+    /// pageLinksKind advertises a markdown page that follows its links under `PresentationPage.markdownLinks`; an older
+    /// presenter would fetch the original spelling and `.md` pictures, so it is handed the page without links.
+    public static let pageLinksKind = "page.links"
     /// statusShapesKind advertises the expanded status-shape set.
     public static let statusShapesKind = "status.shapes"
     /// linkClickKind advertises forwarded clicks and the refusal frame that answers one.

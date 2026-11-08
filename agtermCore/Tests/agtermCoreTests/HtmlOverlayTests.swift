@@ -321,11 +321,18 @@ struct HtmlOverlayTests {
         #expect(overlay.source.imagePath == nil)
     }
 
-    @Test func aLinkPageIsNamedByTheFileItShows() {
-        var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true,
+    @Test(arguments: [HtmlSource.markdown(path: "/tmp/notes/readme.md"), .replica(path: "/tmp/notes/readme.md", content: .markdown)])
+    func aLinkPageIsNamedByTheFileItShows(_ source: HtmlSource) {
+        var overlay = HtmlOverlay(source: source, navigation: true,
                                   markdownLinks: MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes"))
         overlay.current = HtmlPageInfo(page: "/tmp/notes/sub/guide.md", title: "enter your password", canGoBack: true, canGoForward: false)
         #expect(overlay.identity == "guide.md")
+    }
+
+    @Test func aLinkPageKeepsItsOriginalForReadBack() {
+        var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true,
+                                  markdownLinks: MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes"))
+        overlay.current = HtmlPageInfo(page: "/tmp/notes/sub/guide.md", title: nil, canGoBack: true, canGoForward: false)
         #expect(overlay.source.markdownPath == "/tmp/notes/readme.md")
     }
 
@@ -349,7 +356,7 @@ struct HtmlOverlayTests {
         ("/tmp/notes/sub/guide.md", .newWindow, true, .cancel),
     ])
     func aLinkPageLoadsOnlyItsOwnMarkdownInsideTheGrant(_ path: String, _ target: HtmlNavigationTarget,
-                                                         _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+                                                        _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
         let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
         let overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant)
         let url = try #require(URL(string: "agterm-page://\(overlay.id.uuidString.lowercased())\(path)"))

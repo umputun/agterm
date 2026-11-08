@@ -215,7 +215,7 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
     public let source: HtmlSource
     /// navigation adds history, reload, browser and source-sharing buttons to the identity strip.
-    public let navigation: Bool
+    public internal(set) var navigation: Bool
     /// javascript lets the page run its own scripts; agterm's theme script runs either way.
     public let javascript: Bool
     /// chromeless drops the identity strip: a file page, or a URL page on a loopback host whose frames stay on
@@ -231,7 +231,7 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?
     /// markdownLinks is what a markdown page may follow links within, set only with navigation.
-    public let markdownLinks: MarkdownLinkGrant?
+    public internal(set) var markdownLinks: MarkdownLinkGrant?
     /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
     public let textLog: TextLog?
     public var logState: TextLogState?
@@ -301,6 +301,15 @@ extension HtmlSource {
 }
 
 extension HtmlOverlay {
+    /// withoutLinks is this page with no link grant, as a presenter that cannot follow links is handed it: a
+    /// markdown page loses its Back and Forward with the grant.
+    func withoutLinks() -> HtmlOverlay {
+        var page = self
+        page.markdownLinks = nil
+        page.navigation = navigation && source.kind != .markdown
+        return page
+    }
+
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
     /// page writes and could dress as a prompt: the file shown, the origin a URL page is confined to, or
     /// for a browsing page the origin of the document it shows now. A browsing page on a document with no
@@ -308,7 +317,7 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .replica(let path, .html): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, .html), .replica(let path, .markdown): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
         case .markdown(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
         case .image(let path), .text(let path, _), .document(let path):

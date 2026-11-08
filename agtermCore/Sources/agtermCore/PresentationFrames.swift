@@ -315,11 +315,14 @@ public struct PresentationPage: Codable, Equatable, Sendable {
     public var width: Int?
     public var height: Int?
     public var follow: Bool
+    /// markdownLinks is the link grant the origin froze at open; nil, and left out of the frame, for any other page.
+    public var markdownLinks: MarkdownLinkGrant?
 
     public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
                 javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
                 pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
-                follow: Bool) {
+                follow: Bool, markdownLinks: MarkdownLinkGrant? = nil) {
+        self.markdownLinks = markdownLinks
         self.page = page
         self.token = token
         self.source = source

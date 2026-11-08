@@ -42,6 +42,22 @@ struct AppStoreReplicaPageTests {
         #expect(store.session(withID: parent.id) != nil)
     }
 
+    @Test func aMarkdownReplicaKeepsTheOriginsLinkGrantAndNavigationOnlyWithIt() throws {
+        let (store, session) = try attached(split: false)
+        let grant = MarkdownLinkGrant(path: "/docs/README.md", root: "/docs")
+        var linked = page(.markdown(path: "/docs/README.md"))
+        linked.markdownLinks = grant
+
+        #expect(store.presentReplicaPage(linked, forSession: session.id) == nil)
+        #expect(session.htmlOverlay?.markdownLinks == grant)
+        #expect(session.htmlOverlay?.navigation == true)
+
+        #expect(store.closeOverlay(session.id))
+        #expect(store.presentReplicaPage(page(.markdown(path: "/docs/README.md")), forSession: session.id) == nil)
+        #expect(session.htmlOverlay?.markdownLinks == nil)
+        #expect(session.htmlOverlay?.navigation == false)
+    }
+
     @Test func aFilePageIsShownSessionWideUnderItsOwnId() throws {
         let (store, session) = try attached()
 

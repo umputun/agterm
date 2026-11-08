@@ -174,22 +174,6 @@ final class HtmlOverlayRegistry {
     }
 }
 
-/// HtmlReplicaRevision is the load a replica page shows, read when its file answers arrive.
-@MainActor
-final class HtmlReplicaRevision {
-    var value = 0
-}
-
-/// HtmlReplicaLink is how a page shown for another Mac reaches that Mac: `fetch` its files, for the load
-/// `HtmlReplicaRevision` names, and `bridge` a file page's requests, answered with the reply JSON text that Mac sent.
-struct HtmlReplicaLink {
-    /// ownPageCommandsLocal keeps a page's reload and navigation of itself on this Mac: a page companion's viewers each
-    /// show their own copy, so those act on the copy that asked.
-    var ownPageCommandsLocal = false
-    let fetch: @MainActor @Sendable (_ path: String, _ revision: HtmlReplicaRevision) async throws -> HtmlPageResource
-    let bridge: @MainActor @Sendable (_ request: Data) async throws -> String
-}
-
 /// HtmlOverlayPage is one page's web view and the delegates that keep the model in step with it: load
 /// state, the page and title shown, history, and the navigation policy.
 @MainActor
@@ -266,9 +250,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         // the page's own scripts only; the theme user script and app evaluation run either way
         configuration.defaultWebpagePreferences.allowsContentJavaScript = overlay.javascript
-        if case .replica = overlay.source, let fetch = replica?.fetch {
-            let handler = HtmlPageSchemeHandler(pageID: overlay.id) { path in try await fetch(path, revision) }
-            configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme)
+        if case .replica = overlay.source, let replica {
+            var source: HtmlPageSchemeHandler.Source = { path in try await replica.fetch(path, revision) }
+            if overlay.markdownLinks != nil { source = MarkdownPageSource.replicaLinkSource(replica, revision: revision) }
+            configuration.setURLSchemeHandler(HtmlPageSchemeHandler(pageID: overlay.id, source: source), forURLScheme: HtmlPageSchemeHandler.scheme)
         } else if case .markdown = overlay.source, let grant = overlay.markdownLinks {
             let handler = HtmlPageSchemeHandler(pageID: overlay.id, source: MarkdownPageSource.linkSource(grant))
             configuration.setURLSchemeHandler(handler, forURLScheme: HtmlPageSchemeHandler.scheme)
@@ -507,7 +492,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         switch overlay.source {
         case .file(_, nil), .image, .text, .document: return true
         case .markdown: return overlay.markdownLinks == nil
-        case .replica(_, let content): return content != .html
+        case .replica(_, let content): return content != .html && overlay.markdownLinks == nil
         default: return false
         }
     }
@@ -526,8 +511,8 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
             } catch {
                 fail(error.localizedDescription)
             }
-        case .replica(let path, .html):
-            guard replica != nil, let url = HtmlPageSchemeHandler.url(pageID: id, path: path) else {
+        case .replica(let path, let content) where content == .html || overlay.markdownLinks != nil:
+            guard replica != nil, let url = HtmlPageSchemeHandler.url(pageID: id, path: overlay.markdownLinks?.path ?? path) else {
                 return fail(OverlayHtmlError.remoteFile)
             }
             webView.load(URLRequest(url: url))
@@ -576,9 +561,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         if filtered { webView.loadHTMLString(html, baseURL: nil) } else { fail(DocumentRules.unavailable) }
     }
 
-    private struct ReplicaContentFailure: Error {
-        let message: String
-    }
+    private typealias ReplicaContentFailure = HtmlReplicaLink.ReadFailure
 
     // the origin already judged these files, but the bytes are judged again here as a local file's would be, since
     // a file can change between the origin's check and this fetch
@@ -620,24 +603,10 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
-    // reading stops once the bytes pass `limit`, and the dropped stream cancels the transfer on the origin; a refusal
-    // keeps the reason the origin gave, and `local` words every other failure as the local probe would
     private func fetchReplica(_ path: String, limit: Int,
                               local: (tooLarge: String, unreadable: String)) async -> Result<Data, ReplicaContentFailure> {
         guard let replica else { return .failure(ReplicaContentFailure(message: local.unreadable)) }
-        var data = Data()
-        do {
-            let resource = try await replica.fetch(path, revision)
-            for try await chunk in resource.chunks {
-                data.append(chunk)
-                if data.count > limit { return .failure(ReplicaContentFailure(message: local.tooLarge)) }
-            }
-        } catch RemotePageChannel.Failure.refused(let reason) {
-            return .failure(ReplicaContentFailure(message: "\(reason): \(path)"))
-        } catch {
-            return .failure(ReplicaContentFailure(message: local.unreadable))
-        }
-        return .success(data)
+        return await replica.read(path, revision: revision, limit: limit, local: local)
     }
 
     // a file page opens its own file, never one it navigated to; a URL page opens what it shows, which its

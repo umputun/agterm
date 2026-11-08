@@ -139,7 +139,8 @@ final class ControlServerPageServeTests: XCTestCase {
         let presenterID: PresentationHub.SubscriberID
     }
 
-    private func fixture(responseWriter: @escaping ControlServer.ResponseWriter = ControlServer.writeResponse) throws -> Fixture {
+    private func fixture(responseWriter: @escaping ControlServer.ResponseWriter = ControlServer.writeResponse,
+                         kinds: [String] = PresentationHub.supportedKinds) throws -> Fixture {
         let library = WindowLibrary(directory: stateDir)
         let server = ControlServer(
             library: library,
@@ -162,7 +163,7 @@ final class ControlServerPageServeTests: XCTestCase {
         _ = ZmxLeadBook.shared.apply(notice, pane: session.paneIdentity)
         leads.append(session.paneIdentity)
         let presenter = Sink()
-        let hello = PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)
+        let hello = PresentationHello(version: 1, kinds: kinds, mode: .presenter)
         let id = try server.presentationHub.subscribe(session: session.id, hello: hello, sink: presenter) {
             PresentationSnapshot(status: nil, hud: nil)
         }
@@ -180,9 +181,9 @@ final class ControlServerPageServeTests: XCTestCase {
         return try XCTUnwrap(response.result?.pageID.flatMap(UUID.init(uuidString:)))
     }
 
-    private func openContent(_ fix: Fixture, _ page: HtmlSource) throws -> UUID {
+    private func openContent(_ fix: Fixture, _ page: HtmlSource, links: MarkdownLinkGrant? = nil) throws -> UUID {
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
-                                                       backgroundColor: nil, page: page)
+                                                       backgroundColor: nil, page: page, navigation: links != nil, markdownLinks: links)
         let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)
         XCTAssertTrue(response.ok, response.error ?? "")
         return try XCTUnwrap(response.result?.pageID.flatMap(UUID.init(uuidString:)))
@@ -613,6 +614,72 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(answers["notes.txt"]?.2, "not a png, jpg, gif or webp image")
         XCTAssertEqual(answers["notes.txt"]?.1, Data())
         XCTAssertEqual(answers["fake.png"]?.2, "not a png, jpg, gif or webp image")
+    }
+
+    func testALinkPageServesLinkedMarkdownAsTextAndEverythingElseOnlyAsAPicture() throws {
+        let fix = try fixture()
+        let fm = FileManager.default
+        try fm.createDirectory(at: docs.appendingPathComponent("sub"), withIntermediateDirectories: true)
+        for (name, text) in [("a.md", "# a\n"), ("sub/b.md", "# b\n"), ("large.md", "# large\n"), (".env", "SECRET=1\n")] {
+            try Data(text.utf8).write(to: docs.appendingPathComponent(name))
+        }
+        try png(width: 4, height: 4).write(to: docs.appendingPathComponent("sub/plot.png"))
+        try fm.createSymbolicLink(at: docs.appendingPathComponent("picture.png"), withDestinationURL: docs.appendingPathComponent("large.md"))
+        try fm.createSymbolicLink(at: docs.appendingPathComponent("alias.png"), withDestinationURL: docs.appendingPathComponent("a.md"))
+        try fm.createSymbolicLink(at: docs.appendingPathComponent("guide.md"), withDestinationURL: docs.appendingPathComponent(".env"))
+        let grant = try XCTUnwrap(MarkdownPage.linkGrant(for: docs.appendingPathComponent("a.md").path))
+        _ = try openContent(fix, .markdown(path: docs.appendingPathComponent("a.md").path), links: grant)
+        let request = fix.presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last
+        XCTAssertEqual(request?.markdownLinks, grant)
+        XCTAssertEqual(request?.navigation, true)
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let names = ["a.md", "sub/b.md", "sub/plot.png", "picture.png", "alias.png", "guide.md", "../outside.md"]
+        let served = offMain { () -> [String: (String?, Data, String?)] in
+            var answers: [String: (String?, Data, String?)] = [:]
+            for (id, name) in names.enumerated() {
+                client.send(.resource(id: id + 1, path: grant.root + "/" + name))
+                answers[name] = client.body(id + 1)
+            }
+            return answers
+        }
+
+        let answers = try XCTUnwrap(served)
+        XCTAssertEqual(answers["a.md"]?.1, Data("# a\n".utf8))
+        XCTAssertEqual(answers["sub/b.md"]?.1, Data("# b\n".utf8))
+        XCTAssertEqual(answers["sub/plot.png"]?.0, "image/png")
+        for refused in ["picture.png", "alias.png", "guide.md", "../outside.md"] {
+            XCTAssertNotNil(answers[refused]?.2, refused)
+            XCTAssertEqual(answers[refused]?.1, Data(), refused)
+        }
+    }
+
+    func testAPresenterThatCannotFollowLinksIsServedThePageAsBeforeLinks() throws {
+        let fix = try fixture(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageLinksKind })
+        try FileManager.default.createDirectory(at: docs.appendingPathComponent("sub"), withIntermediateDirectories: true)
+        try Data("# real\n".utf8).write(to: docs.appendingPathComponent("sub/real.md"))
+        try Data("# picture text\n".utf8).write(to: docs.appendingPathComponent("sub/pic.md"))
+        let readme = docs.appendingPathComponent("README.md")
+        try FileManager.default.createSymbolicLink(at: readme, withDestinationURL: docs.appendingPathComponent("sub/real.md"))
+        let grant = try XCTUnwrap(MarkdownPage.linkGrant(for: readme.path))
+        _ = try openContent(fix, .markdown(path: readme.path), links: grant)
+        let request = fix.presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last
+        XCTAssertNil(request?.markdownLinks)
+        XCTAssertEqual(request?.navigation, false)
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        let picture = docs.appendingPathComponent("sub/pic.md").path
+
+        let served = offMain { () -> [(String?, Data, String?)] in
+            client.send(.resource(id: 1, path: readme.path))
+            let original = client.body(1)
+            client.send(.resource(id: 2, path: picture))
+            return [original, client.body(2)]
+        }
+
+        let answers = try XCTUnwrap(served)
+        XCTAssertEqual(answers[0].1, Data("# real\n".utf8))
+        XCTAssertNotNil(answers[1].2)
+        XCTAssertEqual(answers[1].1, Data())
     }
 
     func testAContentFileGrownPastItsCapOrReplacedByAFifoIsRefused() throws {
