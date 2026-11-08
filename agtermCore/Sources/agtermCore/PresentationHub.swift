@@ -101,6 +101,7 @@ public final class PresentationHub {
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
+    private let withheldKinds: Set<String>
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
     private var layouts: [UUID: PresentationLayout] = [:]
@@ -115,8 +116,10 @@ public final class PresentationHub {
     /// from any other viewer are dropped before this is reached.
     public var onPresenterFrame: (@MainActor (UUID, PresentationFrame.Body) -> Void)?
 
-    public init(staleTimeout: TimeInterval, now: @escaping () -> Date = Date.init) {
+    /// `withheldKinds` are supported kinds this origin never negotiates, for one that cannot act on them.
+    public init(staleTimeout: TimeInterval, withheldKinds: Set<String> = [], now: @escaping () -> Date = Date.init) {
         self.staleTimeout = staleTimeout
+        self.withheldKinds = withheldKinds
         self.now = now
     }
 
@@ -140,7 +143,7 @@ public final class PresentationHub {
         if layouts[session] == nil { layouts[session] = state.layout }
         let held = subscriber.held ?? []
         subscriber.held = nil
-        let kinds = Self.supportedKinds.filter(hello.kinds.contains)
+        let kinds = Self.supportedKinds.filter { hello.kinds.contains($0) && !withheldKinds.contains($0) }
         subscriber.kinds = Set(kinds)
         // presenter is offered only to a viewer that asked for it, so a slice-1 viewer stays a mirror
         let answer = PresentationHello(version: version, kinds: kinds, mode: hello.mode)

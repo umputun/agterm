@@ -102,6 +102,23 @@ struct ServerStreamsTests {
         return viewer
     }
 
+    // regression: the server advertised link.click from the shared kinds and dropped every forwarded click
+    @Test func theServerNeverNegotiatesForwardedClicks() async throws {
+        let session = try newSession()
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
+        let viewer = Viewer(fd: fds[1])
+        defer { close(viewer.fd) }
+        try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
+                                                 mode: .presenter)))
+
+        let answer = await offPool { viewer.first { if case .hello = $0 { true } else { false } } }
+        guard case .hello(let hello)? = answer else { Issue.record("no hello"); return }
+        #expect(!hello.kinds.contains(PresentationHub.linkClickKind))
+        #expect(hello.kinds.contains(PresentationHub.pageLinksKind))
+    }
+
     @Test func aViewerGetsTheSnapshotThenTheSessionsChanges() async throws {
         let session = try newSession()
         let viewer = try await connect(session)

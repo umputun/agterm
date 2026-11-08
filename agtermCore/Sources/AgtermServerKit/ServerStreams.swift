@@ -7,7 +7,8 @@ import agtermCore
 final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageServeHost {
     let store: AppStore
     let catalogID: UUID
-    let presentationHub = PresentationHub(staleTimeout: 30)
+    // the server opens no clicked file, so a presenter keeps its own refusal
+    let presentationHub = PresentationHub(staleTimeout: 30, withheldKinds: [PresentationHub.linkClickKind])
     let overlayJobs = OverlayJobs()
     var presentationStreams: [PresentationStream] = []
     var presentationHeartbeat: Task<Void, Never>?
