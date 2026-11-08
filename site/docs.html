@@ -944,8 +944,11 @@
                 A <strong style="color: #e6e1d7">page companion</strong> shows an HTML page or URL instead of a shell, labelled with the file name
                 or origin:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session overlay open --html report.html --companion</span>.
-                It closes when the page closes, and it is not saved across a relaunch; recreate it from an
-                <code style="color: #e6e1d7">app.launched</code> <a href="#hooks" style="color: #6d82f3">hook</a>.
+                With <code style="color: #e6e1d7">--page</code> in place of <code style="color: #e6e1d7">--companion</code> the page opens as a
+                <strong style="color: #e6e1d7">top-level page session</strong> of its own, right after the target's group, and holds
+                companions like any session; Convert to Companion works on it too. A page row's own
+                <code style="color: #e6e1d7">window.close()</code> closes it as ⌘W does, with the close confirmation and the undo, and the row
+                comes back after a relaunch (see <a href="#restore" style="color: #6d82f3">Restore &amp; persistence</a>).
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -3041,6 +3044,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx attach --companions</span> brings the session together with its companions, each under it.
               If one cannot be attached, the rest stay and the command fails naming what is missing. A terminal companion attached on its own
               joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.
+              A page session on that Mac is listed too, though it has no daemon: attaching it opens that Mac's page as a top-level row here.
+              A page companion attaches only under the row attached from its parent, so the picker below leaves it out.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
               File ▸ Attach Remote… does the same from the menu. It offers the Macs named in
@@ -4166,6 +4171,19 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 non-idempotent command like
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">claude --resume … --fork-session</span>
                 reattaches on restart instead of forking.
+              </li>
+              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Page sessions come back in every mode.</strong> A page session on this Mac,
+                top-level or a companion, is saved with its file or URL and its flags. It returns with its companions after a
+                relaunch, whatever the restore mode, and when Reopen Closed Item brings its group back. If the file is gone or the
+                server does not answer, the row stays with the error and a Reload button. A file page opened with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span> runs its scripts with the full <a href="#page-bridge" style="color: #6d82f3">control
+                bridge</a> at every launch and every reopen, with nothing to click. That is more than a restored
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span> gets, which runs again only in Re-run commands mode; its reach is the file you
+                named and whatever it loads. A URL page gets no bridge. A page row attached from another Mac is never saved.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

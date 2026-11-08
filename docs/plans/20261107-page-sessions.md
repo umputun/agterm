@@ -233,12 +233,15 @@
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `plugins/agterm/skills/agterm/reference.md`
 - Modify: `.claude/rules/control-api.md`, `.claude/rules/sidebar.md`, `.claude/rules/windows.md` as the contracts change
 
-- [ ] document `--page`, page parents, restore behavior including the launch-time `--js` execution, failed rows,
+- [x] document `--page`, page parents, restore behavior including the launch-time `--js` execution, failed rows,
       and remote attach of page groups
-- [ ] `site/commands.html` mirrors `session.page`, its arguments and read-back
-- [ ] control-api.md: `session.page` in the public catalog and its contract; contract notes updated once,
+- [x] `site/commands.html` mirrors `session.page`, its arguments and read-back
+- [x] control-api.md: `session.page` in the public catalog and its contract; contract notes updated once,
       cross-referenced, no repeated facts
-- [ ] SKILL.md trigger and section for top-level page sessions; reference.md entry
+- [x] SKILL.md trigger and section for top-level page sessions; reference.md entry
+- ➕ refusal strings now name a page session: `not a page session`, `a markdown, text or document page cannot be shown
+      on another Mac`, `a page session has no terminal to duplicate`; `site/llms.txt` names page sessions, `site/index.html`'s
+      card does not
 
 ### Task 7: Verify acceptance criteria and gates
 - [ ] verify every Overview and Solution Overview point is implemented

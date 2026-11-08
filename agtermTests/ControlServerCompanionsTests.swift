@@ -265,7 +265,7 @@ final class ControlServerCompanionsTests: XCTestCase {
         let page = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil))).get()
         let before = store.workspaces.flatMap(\.sessions).map(\.id)
 
-        let cases = [(page.id, "a page companion has no terminal to duplicate"),
+        let cases = [(page.id, "a page session has no terminal to duplicate"),
                      (parent.id, "left pane is not realized; nothing was created")]
         for (id, error) in cases {
             let reply = await server.duplicateAsCompanion(id.uuidString, window: nil, select: true)

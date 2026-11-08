@@ -163,8 +163,8 @@ final class ControlServerCompanionPageTests: XCTestCase {
         XCTAssertEqual(server.companionPagePlace(serving)?.window, window)
     }
 
-    func testOnlyAPageCompanionIsHandedOutAndALoopbackPageIsNot() throws {
-        XCTAssertEqual(server.attachCompanionPage(parent.id.uuidString, window: nil).error, "not a page companion")
+    func testOnlyAPageSessionIsHandedOutAndALoopbackPageIsNot() throws {
+        XCTAssertEqual(server.attachCompanionPage(parent.id.uuidString, window: nil).error, "not a page session")
         let loopback = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .url(try XCTUnwrap(URL(string: "http://localhost:3000/"))))).get()
         XCTAssertEqual(server.attachCompanionPage(loopback.id.uuidString, window: nil).error,
                        "a page on this Mac's loopback cannot be shown on another Mac")

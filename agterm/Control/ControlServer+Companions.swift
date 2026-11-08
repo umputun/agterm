@@ -162,7 +162,7 @@ extension ControlServer {
     func duplicateCompanion(of id: UUID, in store: AppStore, select: Bool) -> Result<Session, CompanionDuplicateFailure> {
         guard let source = store.session(withID: id) else { return .failure(.init(message: "no such session")) }
         guard source.remoteHost == nil else { return .failure(.init(message: "companions of a remote session are not supported yet")) }
-        guard source.content == .terminal else { return .failure(.init(message: "a page companion has no terminal to duplicate")) }
+        guard source.content == .terminal else { return .failure(.init(message: "a page session has no terminal to duplicate")) }
         // a visible program over the panes is what the user sees running; copying the covered shell instead is wrong
         guard !source.programOverlayVisible else {
             return .failure(.init(message: "a program overlay covers the session; nothing was created"))
