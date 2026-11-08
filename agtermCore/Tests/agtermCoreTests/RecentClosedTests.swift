@@ -163,8 +163,6 @@ final class RecentClosedTests {
         #expect(reopened.pendingSplitRestoreCommand == nil)
     }
 
-    // MARK: - page rows
-
     @MainActor
     private struct PageGroup {
         let store: AppStore

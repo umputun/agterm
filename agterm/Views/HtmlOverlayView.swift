@@ -110,26 +110,32 @@ struct HtmlOverlayView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // over the page so a failed load never reads as a blank one; reload replaces it with the loading state
+    // over the page so a failed load never reads as a blank one; its reload is the only retry a page without
+    // `--navigation` has, and replaces it with the loading state
     private var failure: some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
-            Text("The page could not be loaded")
-                .font(.headline)
-            if let error = overlay.loadError {
-                Text(error)
-                    .font(.system(size: 12))
-                    .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
+            VStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 24))
+                Text("The page could not be loaded")
+                    .font(.headline)
+                if let error = overlay.loadError {
+                    Text(error)
+                        .font(.system(size: 12))
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("htmlOverlay.error")
+            button("arrow.clockwise", "Reload", "htmlOverlay.failureReload", enabled: true) {
+                HtmlOverlayRegistry.shared.reload(overlay.id, target: .current, store: store)
             }
         }
         .foregroundStyle(foreground)
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("htmlOverlay.error")
     }
 
     private var sourceText: String {

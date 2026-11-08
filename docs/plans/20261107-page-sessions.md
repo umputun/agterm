@@ -183,20 +183,24 @@
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift` (`closeOverlay` page branch) if the routing needs it
 - Modify: `agtermTests/HtmlOverlayRegistryTests.swift`
 
-- [ ] `webViewDidClose` on a page row calls the app session close (honoring the confirmation setting, grace-period
+- [x] `webViewDidClose` on a page row calls the app session close (honoring the confirmation setting, grace-period
       undo, group close); an overlay covering a terminal keeps closing only the overlay
-- [ ] clear `closeRequested` once the close is handed off, and on a confirmation cancel, so an Undo remount or a
+- [x] clear `closeRequested` once the close is handed off, and on a confirmation cancel, so an Undo remount or a
       later mount does not close or prompt again
-- [ ] control `session.overlay.close`/`submit` keep their non-prompting store path
-- [ ] ➕ the failed-page view offers Reload through the existing registry reload path whether or not the page has
+- [x] control `session.overlay.close`/`submit` keep their non-prompting store path
+- [x] ➕ the failed-page view offers Reload through the existing registry reload path whether or not the page has
       `--navigation` or is chromeless, so a restored page whose file or server comes back can be retried; hosted
       test: a restored page with a missing file renders the failure, the file appears, Reload loads it
-- [ ] ➕ Task 2 comment cleanup: drop the PageGroup MARK in `RecentClosedTests.swift` and the `addPageRow` docstring
+- [x] ➕ Task 2 comment cleanup: drop the PageGroup MARK in `RecentClosedTests.swift` and the `addPageRow` docstring
       in `AppStoreTestFixtures.swift`; state the save-after-open constraint once and condense `isPersistable`'s doc
-- [ ] write tests: `window.close()` on a page row with companions goes through the session close; undo after it
+- [x] write tests: `window.close()` on a page row with companions goes through the session close; undo after it
       does not re-close; cancel does not re-prompt; a terminal overlay closes only the overlay; control close
       stays non-prompting
-- [ ] run touched tests - must pass before task 5
+- [x] run touched tests - must pass before task 5
+- ➕ the hook is `HtmlOverlayRegistry.closePageSession`, wired by `ControlServer` beside `dispatch` to
+      `AppActions.closeSession`; `AppStore+Panes.swift` needed no change. The failure view's Reload lives in
+      `HtmlOverlayView.swift`, tested in the new `agtermTests/HtmlOverlayViewTests.swift`; the wired close and the
+      non-prompting control close are tested in `ControlServerCompanionPageTests.swift`
 
 ### Task 5: Attach a page-rooted group from another Mac
 **Files:**

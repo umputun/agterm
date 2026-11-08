@@ -19,7 +19,6 @@ import Testing
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
 }
 
-/// A top-level page row in `workspace`, its page placed the way a page companion's is.
 @MainActor func addPageRow(to store: AppStore, workspace: UUID, overlay: HtmlOverlay, cwd: String = "/page",
                            backgroundColor: String? = nil) throws -> Session {
     let page = try #require(store.addSession(toWorkspace: workspace, cwd: cwd, content: .page))

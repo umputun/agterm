@@ -34,7 +34,7 @@ public enum Command: String, Codable, Sendable {
     case sessionCollapse = "session.collapse"
     case sessionCompanionNew = "session.companion.new"
     case sessionCompanionPage = "session.companion.page"
-    /// A top-level page session placed after the target's group; its own command so an older app refuses it.
+    /// sessionPage creates a top-level page session; its own command so an older app refuses it.
     case sessionPage = "session.page"
     case sessionCompanionDuplicate = "session.companion.duplicate"
     case sessionCompanionConvert = "session.companion.convert"

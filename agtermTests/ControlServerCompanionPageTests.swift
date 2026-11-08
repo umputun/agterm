@@ -183,6 +183,39 @@ final class ControlServerCompanionPageTests: XCTestCase {
         XCTAssertEqual(answer ?? nil, .failure(id: 4, error: "a URL page has no bridge"))
     }
 
+    func testAPageRowClosingItsWindowSoftClosesItsGroupThroughTheAppClose() throws {
+        let row = try pageRow()
+        let companion = try store.addCompanion(to: row.id).get()
+        let live = HtmlOverlayRegistry.shared.page(for: try XCTUnwrap(row.htmlOverlay), store: store)
+
+        live.webViewDidClose(live.webView)
+
+        waitUntil("the group soft-closed") { self.store.pendingCloseSession(withID: companion.id) != nil }
+        XCTAssertNotNil(store.pendingCloseSession(withID: row.id))
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertTrue(store.undoPendingClose())
+        store.closeSession(row.id)
+    }
+
+    func testAControlCloseOrSubmitOfAPageRowClosesItAtOnceWithNoUndo() throws {
+        let closing = try pageRow()
+        let submitting = try pageRow()
+
+        XCTAssertTrue(server.closeSessionOverlay(closing.id.uuidString, window: nil, pane: nil).ok)
+        XCTAssertTrue(server.submitSessionOverlay(submitting.id.uuidString, window: nil, pane: nil, value: "x").ok)
+
+        for row in [closing, submitting] {
+            XCTAssertNil(store.session(withID: row.id))
+            XCTAssertNil(store.pendingCloseSession(withID: row.id))
+        }
+    }
+
+    private func pageRow() throws -> Session {
+        let index = docs.appendingPathComponent("index.html").path
+        return try store.addPageSession(after: parent.id, overlay: HtmlOverlay(source: .file(path: index, grantRoot: docs.path),
+                                                                               javascript: true)).get()
+    }
+
     private func filePage() throws -> Session {
         let index = docs.appendingPathComponent("index.html").path
         return try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .file(path: index, grantRoot: docs.path))).get()

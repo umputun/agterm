@@ -1309,6 +1309,63 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
         XCTAssertNil(registry.existing(page.id))
     }
 
+    func testAPageRowClosingItsWindowAsksItsSessionCloseOnceAndACancelIsNotAskedAgain() async throws {
+        var asked: [UUID] = []
+        registry.closePageSession = { _, id in asked.append(id) }
+        let (row, page) = try openPageRow()
+        let companion = try store.addCompanion(to: row.id).get()
+        let live = registry.page(for: page, store: store)
+
+        live.webViewDidClose(live.webView)
+        try await waitFor("the close was asked") { asked == [row.id] }
+        live.apply(try XCTUnwrap(row.htmlOverlay))
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(asked, [row.id])
+        XCTAssertEqual(row.htmlOverlay?.id, page.id)
+        XCTAssertNotNil(registry.existing(page.id))
+        XCTAssertEqual(store.parent(of: try XCTUnwrap(store.session(withID: companion.id)))?.id, row.id)
+        store.closeSession(row.id)
+    }
+
+    func testAnUndoneCloseOfAPageRowKeepsItOpenAtItsNextMount() async throws {
+        var asked: [UUID] = []
+        registry.closePageSession = { store, id in
+            asked.append(id)
+            _ = store.softCloseSession(id, grace: 60)
+        }
+        let (row, page) = try openPageRow()
+        let companion = try store.addCompanion(to: row.id).get()
+        let live = registry.page(for: page, store: store)
+
+        live.webViewDidClose(live.webView)
+        try await waitFor("the group soft-closed") { self.store.pendingCloseSession(withID: companion.id) != nil }
+        XCTAssertNotNil(store.pendingCloseSession(withID: row.id))
+        XCTAssertTrue(store.undoPendingClose())
+        live.apply(try XCTUnwrap(row.htmlOverlay))
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(asked, [row.id])
+        XCTAssertNotNil(store.session(withID: row.id))
+        XCTAssertNotNil(store.session(withID: companion.id))
+        XCTAssertEqual(row.htmlOverlay?.id, page.id)
+        store.closeSession(row.id)
+    }
+
+    func testAnOverlayOverATerminalClosingItsWindowClosesOnlyTheOverlay() async throws {
+        var asked: [UUID] = []
+        registry.closePageSession = { _, id in asked.append(id) }
+        let page = try open(javascript: true)
+        let live = registry.page(for: page, store: store)
+
+        live.webViewDidClose(live.webView)
+        try await waitFor("the overlay closed") { !self.session.overlayActive }
+
+        XCTAssertTrue(asked.isEmpty)
+        XCTAssertNotNil(store.session(withID: session.id))
+        XCTAssertNil(registry.existing(page.id))
+    }
+
     func testAPageKeepsTheZoomThroughNavigationAndReloadAndANewPageOpensAtIt() async throws {
         registry.setZoom(1.5)
         let page = try open(grant: pages.path)
@@ -1787,6 +1844,11 @@ final class HtmlOverlayRegistryTests: HtmlPageTestCase {
                                   javascript: javascript)
         XCTAssertNil(store.openHtmlOverlay(session.id, pane: pane, overlay: overlay, sizePercent: nil))
         return overlay
+    }
+
+    private func openPageRow() throws -> (Session, HtmlOverlay) {
+        let overlay = HtmlOverlay(source: .file(path: pages.appendingPathComponent("a.html").path, grantRoot: nil), javascript: true)
+        return (try store.addPageSession(after: session.id, overlay: overlay).get(), overlay)
     }
 
     private func openURL(_ address: String, javascript: Bool = false, persistent: Bool = false,

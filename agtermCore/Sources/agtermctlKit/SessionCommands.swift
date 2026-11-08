@@ -680,7 +680,6 @@ struct Session: ParsableCommand {
                 }
             }
 
-            // the flag that makes the page a sidebar row of its own
             private var rowFlag: String? { companion ? "--companion" : page ? "--page" : nil }
 
             // reject the mutually-exclusive combos + a malformed color at parse time (before any connection),

@@ -17,6 +17,9 @@ final class HtmlOverlayRegistry {
     var dispatch: HtmlBridgeDispatch?
     /// windowID names the window a store belongs to, so a page's untargeted request stays in its own window.
     var windowID: (@MainActor (AppStore) -> String?)?
+    /// closePageSession closes a page row whose page called `window.close()` as the user's own close does, with
+    /// its confirmation and undo, since the row can own terminal companions.
+    var closePageSession: (@MainActor (AppStore, UUID) -> Void)?
     /// profile names the saved browser store of this state directory; setting it drops the store built
     /// from the one before.
     var profile: BrowserProfile? { didSet { persistentStore = nil } }
@@ -227,7 +230,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     // reports its source instead
     private var shownURL: URL?
     // stays set while the session sits in an undoable close, where no slot is found to close, so a
-    // restored page closes at its next mount
+    // restored page closes at its next mount; a page row's is spent once handed to its session close
     private var closeRequested = false
     // an image, markdown, text or document page reads its file off the main actor; a result is applied only while this still
     // counts the load that started it, so a close or a newer reload drops a slow read's late result
@@ -793,7 +796,7 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
                  windowFeatures _: WKWindowFeatures) -> WKWebView? { nil }
 
     /// webViewDidClose closes the overlay of a page whose `window.close()` WebKit accepted, as the panel's
-    /// close button does.
+    /// close button does: a page row through its session close, any other page by closing only its overlay.
     func webViewDidClose(_: WKWebView) {
         closeRequested = true
         closeIfRequested()
@@ -803,8 +806,12 @@ final class HtmlOverlayPage: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func closeIfRequested() {
         guard closeRequested else { return }
         Task { [weak self] in
-            guard let self, closeRequested else { return }
-            store?.closeHtmlOverlay(id)
+            guard let self, closeRequested, let store, let slot = store.htmlOverlaySlot(id) else { return }
+            if slot.pane == nil, slot.session.content == .page, let close = HtmlOverlayRegistry.shared.closePageSession {
+                closeRequested = false
+                return close(store, slot.session.id)
+            }
+            store.closeHtmlOverlay(id)
         }
     }
 
