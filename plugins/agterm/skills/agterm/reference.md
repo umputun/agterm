@@ -2325,8 +2325,8 @@ exists would CREATE a daemon and hand back a fresh shell wearing it, so an incom
 rather than offered half. A page has no daemon and is listed with empty `panes`: a top-level page session
 always, a page companion when its parent is listed, and then it attaches only under a row already attached from
 its parent. A row attached from another Mac is never listed. An empty list is a successful answer and does NOT diagnose the restore mode —
-`zmx list` does that. The far side must be running in `live` mode, which is what puts a daemon behind each
-pane, and be new enough to answer `zmx tree` at all; an older one is refused by name rather than
+`zmx list` does that. A terminal session needs the far side in `live` mode, which is what puts a daemon behind
+each pane (a page session needs none), and the far side must be new enough to answer `zmx tree` at all; an older one is refused by name rather than
 half-attached. It also needs `agtermctl` installed by the cask or the Help action: a machine merely
 running agterm has no CLI an ssh command can find, and the read fails with exit 127.
 
@@ -2366,7 +2366,8 @@ companions when it is a top-level session. It is the
 `zmx tree`, `pick` and `zmx attach --companions` instead.
 
 A program in an attached session runs on the origin and talks to the origin's agterm, so what it asks
-agterm to draw would show there only. Every attach therefore also opens a presentation stream, and this
+agterm to draw would show there only. Every terminal attach therefore also opens a presentation stream (a page row
+uses its page channel instead and mirrors nothing), and this
 Mac mirrors the origin session's status, its `session context`, its `session info` line, its `notify` notifications, its HUD and
 the layout of panes already attached.
 Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to expect:

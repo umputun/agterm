@@ -396,10 +396,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   daemon map; `attachedParentRows` matches a later companion on its session id and endpoint.
   A terminal companion attached alone joins that row the same way (`attachedParentRows`), in the row's own workspace,
   and stands alone when no row or several match.
-  The viewer row binds the origin page session so New Companion on it makes a sibling there. `HtmlReplicaLink`
+  The viewer row binds the origin page session, so New Companion on a page companion's row makes a sibling there
+  and on a page root's row a companion under that root. `HtmlReplicaLink`
   keeps the page's own reload and navigation on the viewer's copy; every other bridge request goes to the origin.
-  A channel ending while the viewer row is soft-closed finalizes that row alone (`finalizePendingClose(ofSession:)`),
-  so Undo never restores a view of a page that ended.
+  A channel ending while the viewer row is soft-closed finalizes that row, and a page root's parked companions with it
+  (`finalizePendingClose(ofSession:)`), so Undo never restores a view of a page that ended.
 - A Live parent respawned on its origin carries its viewers across. `handlePaneExit` reads the daemon's cached leader
   before `closePrimaryPane` respawns, `ControlServer.ownerRespawned` waits for a different live leader under the same
   name, then counts the respawn in `respawnGenerations` and publishes `pane.respawn`; the snapshot carries every count
@@ -1944,7 +1945,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   close would drop the local client while the daemon kept ssh connected with no UI showing it.
 - Presentation carries status, context, the info line, notifications, the HUD and the layout of attached panes. Such a program runs
   on the origin and reaches the origin's socket, so without a stream the viewer sees terminal bytes only.
-  Every attach opens one: the viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
+  Every terminal attach opens one; a page row has only its page channel. The viewer runs `ssh -T <host> agtermctl zmx present <session>`, whose far end
   bridges stdio to a `zmx.present` connection. The far-side `agtermctl` PATH precondition above applies.
 - The stream is newline-delimited JSON, `PresentationFrame` with `gen`, `rev` and a body. The hub registers
   a subscriber BEFORE it takes the snapshot and holds deltas until the snapshot is sent, so nothing falls

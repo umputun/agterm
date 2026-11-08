@@ -2977,9 +2977,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx tree [HOST]</span> lists what
               that machine has to offer across <em>every</em> open window, and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx attach HOST ID [--window W]</span> opens
-              one of them, split included. Both need the far side in
-              <strong style="color: #e6e1d7">Live sessions</strong> mode, since that is what puts a daemon behind each pane, and both
-              run ssh non-interactively — key-based auth has to work for the host already, because a password or host-key prompt is a
+              one of them, split included. A terminal session needs the far side in
+              <strong style="color: #e6e1d7">Live sessions</strong> mode, since that is what puts a daemon behind each pane; a page
+              session needs no daemon. Both commands run ssh non-interactively — key-based auth has to work for the host already, because a password or host-key prompt is a
               failure rather than a question. The far side also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>
               installed by the cask or the Help action: a machine merely running agterm has no CLI an ssh command can find.
               To check the connection before you need it, run
@@ -3060,8 +3060,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               cannot be read, is reported by a notification.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every attach also opens a
-              presentation stream back to it: this Mac mirrors the layout of panes already attached, the session's status, its session context, its sidebar info line, its
+              A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every terminal attach also opens a
+              presentation stream back to it (a page session uses its page channel instead and mirrors none of this): this Mac mirrors the layout of panes already attached, the session's status, its session context, its sidebar info line, its
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> notifications and its HUD. A context set on this Mac's
               row wins over the mirrored one, and clearing it here shows the other Mac's again. A far side running an agterm
               from before context mirroring still connects and mirrors the rest, with no context. It needs nothing beyond
@@ -4182,8 +4182,8 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 server does not answer, the row stays with the error and a Reload button. A file page opened with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span> runs its scripts with the full <a href="#page-bridge" style="color: #6d82f3">control
                 bridge</a> at every launch and every reopen, with nothing to click. That is more than a restored
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span> gets, which runs again only in Re-run commands mode; its reach is the file you
-                named and whatever it loads. A URL page gets no bridge. A page row attached from another Mac is never saved.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span> gets, which runs again only in Re-run commands mode. The file and any scripts it
+                loads have full control of agterm. A URL page gets no bridge. A page row attached from another Mac is never saved.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
