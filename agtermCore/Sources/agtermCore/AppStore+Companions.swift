@@ -137,7 +137,6 @@ extension AppStore {
             closeSession(page.id)
             return .failure(.pageNotOpened(failure))
         }
-        // `addSession` saved before the page was placed, which left the row out
         save()
         return .success(page)
     }

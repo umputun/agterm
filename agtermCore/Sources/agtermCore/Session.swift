@@ -62,9 +62,8 @@ public final class Session: Identifiable {
     /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.
     public let content: SessionContent
 
-    /// Whether this session may be written to disk at all. Every persistence producer gates on it: the
-    /// launch snapshot, the Recent Closed session record, and a closed workspace's record. A page row counts once
-    /// its page is placed.
+    /// isPersistable admits local terminals and page rows with a restorable source; every persistence producer
+    /// gates on it.
     public var isPersistable: Bool { remoteHost == nil && (content == .terminal || pageSnapshot != nil) }
 
     /// The pane identities this instance's zmx owns — none for a remote session, whose panes run ssh.

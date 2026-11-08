@@ -17,8 +17,7 @@ final class HtmlOverlayRegistry {
     var dispatch: HtmlBridgeDispatch?
     /// windowID names the window a store belongs to, so a page's untargeted request stays in its own window.
     var windowID: (@MainActor (AppStore) -> String?)?
-    /// closePageSession closes a page row whose page called `window.close()` as the user's own close does, with
-    /// its confirmation and undo, since the row can own terminal companions.
+    /// closePageSession routes a page row's `window.close()` through the session close and its undo.
     var closePageSession: (@MainActor (AppStore, UUID) -> Void)?
     /// profile names the saved browser store of this state directory; setting it drops the store built
     /// from the one before.
