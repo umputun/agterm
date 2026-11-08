@@ -15,10 +15,9 @@ z2d and zf package build files use removed `Build` fields (`install_prefix`, `ar
 uses `build_root` and `LazyPath.getPath`, and its `src/build/zig.zig` refuses outright (`does not meet the
 required build version of v0.16.0`). Upstream zmx moved to 0.17 on master in `07c89c0d` (2026-10-24,
 unreleased at the time) and moved its ghostty dependency to `22f100c`. So this rides the next `ZMX_REV`
-bump: all four `scripts/zmx-patches` and `ghostty/0001` have to be re-ported to the new trees, and
+bump: all five `scripts/zmx-patches` and `ghostty/0001` have to be re-ported to the new trees, and
 `check.py` re-run.
 
 The bump must also add the compiler to `ZMX_STAMP` and to the three CI `Cache zmx` keys, or a stamp and
 cache built with 0.16 would be served as current. The stamp is the app's zmx build id, so the bump flags
-existing Live sessions as outdated; `da-query-answered-twice-before-attach-init.md` should ship in the same
-bump to share that one migration.
+existing Live sessions as outdated.
