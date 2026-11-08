@@ -292,9 +292,8 @@ final class AppActions {
         confirmAndCloseSession(id, in: store)
     }
 
-    /// Close page row `id` of `store` for its page's `window.close()`. Only a picker pending in the page's own
-    /// window holds it back, returning false so the page asks again; a zoom or dashboard does not, since the
-    /// page asking is what the user is looking at. True once the close ran or its confirmation was cancelled.
+    /// closePageSession closes page row `id` for its page's `window.close()` with the usual confirmation; false
+    /// only while a picker is pending in the page's own window, true once it closed or was cancelled.
     func closePageSession(_ id: UUID, in store: AppStore) -> Bool {
         if PickRegistry.shared.controller(for: library.windowID(for: store))?.modalPending == true { return false }
         confirmAndCloseSession(id, in: store)

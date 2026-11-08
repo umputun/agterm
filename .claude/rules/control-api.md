@@ -454,7 +454,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   restart mode and on a Recent Closed reopen, with no source check: a failed load is the row's failed state.
 - A saved `page` key that does not decode, in any shape, restores as `HtmlSource.unreadable`: a page row in the
   failed state with no pane identity, saved back as `{"unreadable": reason}`, never shared with another Mac.
-  Only an absent key restores a terminal.
+  An absent or null page value restores a terminal.
 
 ## Surface input, output, and search
 
