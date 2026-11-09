@@ -543,7 +543,7 @@ final class ControlServerZmxTests: XCTestCase {
     }
 
     // attach shipped with no focus call, so a teleported session opened with the keyboard still elsewhere
-    func testAttachFocusesTheSplitPaneOnceItsSurfacesMaterialize() async throws {
+    func testAttachFocusesThePrimaryPaneOnceItsSurfacesMaterialize() async throws {
         let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection,
                                                                   stderr: ""))
         let server = makeServer(list: "", remoteRunner: runner)
@@ -567,12 +567,33 @@ final class ControlServerZmxTests: XCTestCase {
             created.surface = primary
             created.splitSurface = split
         }
-        for _ in 0..<20 where window.firstResponder !== split {
+        for _ in 0..<20 where window.firstResponder !== primary {
             try? await Task.sleep(nanoseconds: 30_000_000)
         }
         await realize.value
 
-        XCTAssertTrue(window.firstResponder === split)
+        XCTAssertTrue(window.firstResponder === primary)
+        XCTAssertFalse(created.splitFocused)
+    }
+
+    func testAnUnselectedAttachStoresThePrimaryPaneAsFocused() async throws {
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection,
+                                                                  stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        let store = try XCTUnwrap(library.activeStore)
+        let listing = await server.remoteTree(host: "buildbox")
+        let tree = try XCTUnwrap(listing.result?.remote)
+        let remote = try XCTUnwrap(tree.sessions.first { $0.id == "s1" })
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+
+        let response = server.attach(remote, from: tree, host: "buildbox",
+                                     placement: ControlServer.RemotePlacement(store: store, workspace: workspace,
+                                                                              select: false))
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertTrue(created.hasSplit)
+        XCTAssertFalse(created.splitFocused)
     }
 
     func testListReportsTheEndpointOfTheInjectedClient() throws {
