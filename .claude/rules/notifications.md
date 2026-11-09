@@ -80,22 +80,25 @@ paths:
 
 ## Agent status
 
-- `StatusIconView`, an `NSImageView` beside `BadgeView`, draws every non-idle session as a filled SF Symbol
+- `StatusIconView`, an `NSImageView` beside `BadgeView`, draws every non-idle session as an SF Symbol
   in a 16pt slot at 13pt, with no selected-row hiding. Idle collapses its width to zero; a zero-count badge
   also collapses, with the inter-item gap owned by the badge.
 - Default states share `circle.fill` and differ by tint. Discussion #277 rejected marked circles because
   their interior marks are illegible at row size. `AgentStatus.symbolName(override:configured:)` resolves
   per-call shape, configured status shape, then `circle`; require both arguments so omitted settings fail
   compilation. The set is `circle`, `square`, `triangle`, `triangle-down`, `play`, `diamond`, `capsule`,
-  `seal`, `star`, `bolt`, `bell`. `seal` reads close to circle and `bell` is also the titlebar
+  `seal`, `star`, `bolt`, `bell`, `checkmark`. `seal` reads close to circle and `bell` is also the titlebar
   Attention glyph; both are kept deliberately. `hexagon`/`octagon`/
   `pentagon` resemble circle, `app` duplicates square, `rhombus` duplicates diamond, and `drop` draws
   visibly larger than the rest at this size.
   A raw value is the public name and is never renamed once released; `symbolName` maps it to the symbol,
-  `"<raw>.fill"` except `triangle-down`'s `arrowtriangle.down.fill`, and `displayName` is the picker label.
-  A viewer older than this set throws on a shape it does not know, so `PresentationHub` clears
-  any shape outside `StatusShape.original` for a subscriber that does not advertise `status.shapes`.
-  A shape added later needs the same gate under a new kind.
+  `"<raw>.fill"` except `triangle-down`'s `arrowtriangle.down.fill` and `checkmark`, which has no fill
+  variant (#940). Its stroke is `isStroke` and every renderer draws it heavy: at regular weight it paints
+  about a third of `bolt.fill`, the lightest filled shape, and heavy was picked by eye in a real row.
+  `displayName` is the picker label.
+  A viewer older than a shape throws on it, so `PresentationHub.acceptedShapes` clears a shape outside the
+  set the subscriber's kinds name: `original` without `status.shapes`, `expanded` without
+  `status.checkmark`. A shape added later needs the same gate under a new kind.
   Keep `ControlArgs.shape`, website command docs, and agent skill lists synchronized; CLI and dispatcher
   validation derive from `validNamesList`/`validNamesPhrase`.
 - `GhosttyApp.statusColor(for:override:)` similarly resolves per-call `#rrggbb`, configured status color,

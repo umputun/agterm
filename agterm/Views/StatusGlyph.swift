@@ -15,8 +15,13 @@ struct StatusGlyph: View {
     /// Settings shape, else the default plain circle.
     var shape: StatusShape?
 
+    private var swiftUIWeight: Font.Weight {
+        GhosttyApp.shared.statusSymbolWeight(for: status, override: shape) == .heavy ? .heavy : .regular
+    }
+
     var body: some View {
         Image(systemName: GhosttyApp.shared.statusSymbolName(for: status, override: shape))
+            .fontWeight(swiftUIWeight)
             .foregroundStyle(Color(nsColor: GhosttyApp.shared.statusColor(for: status, override: colorHex)))
     }
 }

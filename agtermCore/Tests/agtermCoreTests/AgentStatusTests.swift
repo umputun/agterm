@@ -198,16 +198,16 @@ struct AgentStatusTests {
         (StatusShape.circle, "circle.fill"), (.square, "square.fill"), (.triangle, "triangle.fill"),
         (.triangleDown, "arrowtriangle.down.fill"), (.play, "play.fill"), (.diamond, "diamond.fill"),
         (.capsule, "capsule.fill"), (.seal, "seal.fill"), (.star, "star.fill"), (.bolt, "bolt.fill"),
-        (.bell, "bell.fill"),
+        (.bell, "bell.fill"), (.checkmark, "checkmark"),
     ])
-    func statusShapeSymbolNamesAreFilledVariants(shape: StatusShape, symbol: String) {
+    func statusShapeSymbolNames(shape: StatusShape, symbol: String) {
         #expect(shape.symbolName == symbol)
     }
 
     @Test(arguments: [
         (StatusShape.circle, "Circle"), (.square, "Square"), (.triangle, "Triangle"), (.triangleDown, "Down Triangle"),
         (.play, "Play"), (.diamond, "Diamond"), (.capsule, "Capsule"), (.seal, "Seal"), (.star, "Star"),
-        (.bolt, "Bolt"), (.bell, "Bell"),
+        (.bolt, "Bolt"), (.bell, "Bell"), (.checkmark, "Checkmark"),
     ])
     func statusShapeDisplayNames(shape: StatusShape, name: String) {
         // the e2e's menu-item titles and its post-relaunch picker value are pinned here, not in the view
@@ -217,9 +217,9 @@ struct AgentStatusTests {
     @Test func statusShapeValidNamesCoverEveryCaseInBothJoinedForms() {
         // the dispatcher's rejection uses the pipe form, the CLI's help and rejection the comma form
         #expect(StatusShape.validNamesList
-            == "circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell")
+            == "circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell|checkmark")
         #expect(StatusShape.validNamesPhrase
-            == "circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell")
+            == "circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell, checkmark")
         for shape in StatusShape.allCases {
             #expect(StatusShape.validNamesList.contains(shape.rawValue))
             #expect(StatusShape.validNamesPhrase.contains(shape.rawValue))
@@ -230,15 +230,29 @@ struct AgentStatusTests {
         #expect(StatusShape.original == [.circle, .square, .triangle, .diamond, .capsule, .star])
     }
 
+    @Test func statusShapeExpandedIsEveryShapeButTheCheckmark() {
+        #expect(StatusShape.expanded == Set(StatusShape.allCases).subtracting([.checkmark]))
+    }
+
+    @Test func statusShapeOnlyTheCheckmarkIsAStroke() {
+        #expect(StatusShape.allCases.filter(\.isStroke) == [.checkmark])
+    }
+
     @Test func statusShapeAllCasesAndRawValues() {
         #expect(StatusShape.allCases
-            == [.circle, .square, .triangle, .triangleDown, .play, .diamond, .capsule, .seal, .star, .bolt, .bell])
+            == [.circle, .square, .triangle, .triangleDown, .play, .diamond, .capsule, .seal, .star, .bolt, .bell, .checkmark])
         #expect(StatusShape(rawValue: "triangle") == .triangle)
         #expect(StatusShape(rawValue: "triangle-down") == .triangleDown)
         #expect(StatusShape(rawValue: "arrowtriangle.down") == nil)
         #expect(StatusShape(rawValue: "hexagon") == nil)
         #expect(StatusShape(rawValue: "Circle") == nil) // case-sensitive
         #expect(StatusShape(rawValue: "") == nil)
+    }
+
+    @Test func shapeResolvesOverrideThenConfiguredThenCircle() {
+        #expect(AgentStatus.completed.shape(override: .checkmark, configured: .star) == .checkmark)
+        #expect(AgentStatus.completed.shape(override: nil, configured: .checkmark) == .checkmark)
+        #expect(AgentStatus.completed.shape(override: nil, configured: nil) == .circle)
     }
 
     @Test func symbolNameOverrideWinsOverConfigured() {
