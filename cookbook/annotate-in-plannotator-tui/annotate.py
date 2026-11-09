@@ -15,7 +15,8 @@ So this starts the viewer's pane entrypoint (`plannotator-tui herdr pane`) in a 
 overlay with HERDR_BIN_PATH pointing at plannotator-host.py beside this file, which answers those
 calls for agterm. The viewer's Send (`E`, or `S` to send and close) lands in the host script's
 outbox, and once the overlay closes this script pastes the last send into the pane the chord came
-from. Pane notes arrive unsent, so they can be edited first; reply notes are submitted.
+from. Pane notes arrive unsent, so they can be edited first; reply notes are submitted, but only
+while Claude still runs in that pane.
 
 Runs as an agterm custom command: the runner exports AGT_SESSION_ID, AGT_PANE, AGT_SELECTION and
 AGT_SOCKET, keeps stdout on /dev/null and starts it with the app's PATH, so progress goes to LOG
@@ -24,8 +25,10 @@ and every binary is resolved to an absolute path. Needs Python 3.9 or later, sta
 
 import json
 import os
+import re
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -44,11 +47,16 @@ OVERLAY_TINT = "#3a2c1e"
 # `session paste` returns once agterm has run the paste, while the agent is still reading the
 # bytes; a Return sent at once can submit half of a long paste.
 SETTLE_SECONDS = 0.4
+# Reply notes are submitted only when an argv element of the pane's foreground matches this, the
+# same test agent-reset uses. Anything else, a shell left after Claude exited included, gets them
+# pasted unsent. Override it for a wrapper launcher, e.g. CLAUDE_FG_MATCH='(^|/)(claude|mywrapper)$'.
+CLAUDE_FG_MATCH = re.compile(os.environ.get("CLAUDE_FG_MATCH") or r"(^|/)claude$")
 
 HERE = Path(os.path.realpath(__file__)).parent
 HOST = HERE / "plannotator-host.py"
 CACHE = Path(os.environ.get("AGTERM_ANNOTATE_DIR") or Path.home() / ".cache" / "agterm-annotate")
-LOG = Path(os.environ.get("AGTERM_ANNOTATE_LOG") or "/tmp/agterm-annotate.log")
+TMP = Path(os.environ.get("TMPDIR") or "/tmp")
+LOG = Path(os.environ.get("AGTERM_ANNOTATE_LOG") or TMP / "agterm-annotate.log")
 
 
 def log(message):
@@ -127,6 +135,11 @@ class Agt:
         return None
 
 
+def runs_claude(foreground):
+    """Whether the foreground argv is Claude Code; an unknown foreground (None) is not."""
+    return bool(foreground) and any(CLAUDE_FG_MATCH.search(arg) for arg in foreground)
+
+
 def fail(agt, message):
     log(message)
     agt.notify(message)
@@ -187,15 +200,19 @@ def main(argv):
     if not PLANNOTATOR_TUI:
         return fail(agt, "plannotator-tui is not installed: brew install plannotator/tap/plannotator-tui")
 
-    room = Path(os.environ.get("TMPDIR") or "/tmp") / "agterm-annotate" / f"{agt.sid}.{agt.pane}"
+    room = TMP / "agterm-annotate" / f"{agt.sid}.{agt.pane}"
     room.mkdir(parents=True, exist_ok=True)
     lock = room / "lock"
     try:
         # One review per pane: a second press while the viewer is open is dropped.
         lock.mkdir()
     except FileExistsError:
-        log("already open for this pane")
+        log(f"already open for this pane: {lock}")
+        # A viewer killed with SIGKILL leaves the lock behind, and then every press lands here.
+        agt.notify(f"An annotate viewer is already open for this pane. If none is, remove {lock}.")
         return 0
+    # SIGTERM unwinds through the finally below, so the lock goes with the script.
+    signal.signal(signal.SIGTERM, lambda signum, _frame: sys.exit(128 + signum))
     try:
         return review(agt, mode, room)
     finally:
@@ -276,10 +293,16 @@ def review(agt, mode, room):
     CACHE.mkdir(parents=True, exist_ok=True)
     # A blind paste can be swallowed when the agent's focus is elsewhere; keep a recovery copy.
     (CACHE / "last-notes.md").write_text(notes, encoding="utf-8")
-    failure = deliver(agt, notes, SUBMIT[mode])
+    # Read again: the viewer can stay open for minutes, and Claude may have exited meanwhile. A
+    # Return sent to the shell left behind would run the notes, and their quoted "> " lines would
+    # truncate files.
+    submit = SUBMIT[mode] and runs_claude(agt.foreground())
+    failure = deliver(agt, notes, submit)
     if failure:
         return fail(agt, f"Could not paste the notes ({failure}). They are in {CACHE / 'last-notes.md'}.")
-    log(f"delivered {len(sends)} send(s), {len(notes)} chars, submit={SUBMIT[mode]}")
+    if SUBMIT[mode] and not submit:
+        agt.notify(f"Claude is not running in the {label}, so the notes were pasted unsent.")
+    log(f"delivered {len(sends)} send(s), {len(notes)} chars, submit={submit}")
     return 0
 
 

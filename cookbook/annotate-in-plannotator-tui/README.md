@@ -21,7 +21,7 @@ Comment on: "$ make test"
 > why does this run twice?
 ```
 
-Pane notes land at the prompt unsent, so you can add to them before pressing Return. Reply notes are submitted for you.
+Pane notes land at the prompt unsent, so you can add to them before pressing Return. Reply notes are submitted for you while Claude still runs in that pane, and land unsent everywhere else.
 
 It covers the same ground as [annotate-pane-output](../annotate-pane-output/) and [annotate-claude-replies](../annotate-claude-replies/), with plannotator-tui in place of revdiff.
 
@@ -42,7 +42,7 @@ chmod +x annotate.py plannotator-host.py save-transcript-path.py
 
 `plannotator-host.py` must sit **beside** `annotate.py`, which finds it in its own directory.
 
-Register the Stop hook by adding an entry to the `Stop` array in `~/.claude/settings.json`, alongside anything already there. If you run [annotate-claude-replies](../annotate-claude-replies/), its hook writes the same record and one of the two is enough.
+Register the Stop hook by adding an entry to the `Stop` array in `~/.claude/settings.json`, alongside anything already there. If you also run [annotate-claude-replies](../annotate-claude-replies/), register only that recipe's hook and skip this one. Its hook serves both recipes: it writes the same record to the same file, plus Claude's last message, which that recipe falls back to when the transcript can't be read. With both registered, whichever runs last wins, and this one drops the message.
 
 ```json
 {
@@ -77,7 +77,8 @@ Settings, read from the environment. Put them in front of the script in the keym
 - `AGTERM_ANNOTATE_LINES` is how many lines the pane chord reads when nothing is selected, 50 by default.
 - `PLANNOTATOR_TUI` and `AGTERMCTL` take an absolute path when either binary is somewhere the script does not look. It tries `PATH`, both Homebrew prefixes and `~/.cargo/bin` for plannotator-tui.
 - `AGTERM_ANNOTATE_DIR` moves the cache the hook writes, `~/.cache/agterm-annotate` by default. Set it for the hook too, or the two stop meeting.
-- `AGTERM_ANNOTATE_LOG` moves the log, `/tmp/agterm-annotate.log` by default.
+- `AGTERM_ANNOTATE_LOG` moves the log, `$TMPDIR/agterm-annotate.log` by default.
+- `CLAUDE_FG_MATCH` is the pattern an argv element of the pane's foreground must match for reply notes to be submitted, `(^|/)claude$` by default. Widen it when you start Claude through a wrapper, e.g. `(^|/)(claude|mywrapper)$`.
 
 Whether each chord submits its notes is the `SUBMIT` table at the top of `annotate.py`.
 
@@ -99,7 +100,7 @@ A capture opens at its top. Scroll with the mouse wheel or PageDown; `G` does no
 
 Outside Herdr, plannotator-tui sends feedback only to the clipboard. Inside Herdr it hands it to the agent by running `$HERDR_BIN_PATH agent prompt <pane> <feedback>`. So `annotate.py` opens `plannotator-tui herdr pane`, the entrypoint Herdr runs in a pane it opens, with `HERDR_ENV=1` and `HERDR_BIN_PATH` pointing at `plannotator-host.py`. The `PLANNOTATOR_TUI_*` variables tell it what to show: `PLANNOTATOR_TUI_TERMINAL_PANE` for a pane review, or `PLANNOTATOR_TUI_HOST`, `PLANNOTATOR_TUI_SESSION` and `PLANNOTATOR_TUI_NEWEST` for a reply. `PLANNOTATOR_TUI_DELIVER_TO` and `PLANNOTATOR_TUI_DELIVER_AGENT` name the target, which labels the Send button ("Send 1 to claude in left pane").
 
-`plannotator-host.py` answers three calls. `pane read` returns the text `annotate.py` captured, `pane get` names the agent for the label, and `agent prompt` appends the feedback to an outbox file. Anything else gets an `unsupported` error in Herdr's own JSON shape, so a plannotator-tui release that calls something new says so in the viewer's footer rather than half working. A refusal works the same way: when the pane holds a bare shell, the host refuses the send, and the viewer keeps the notes, copies them to the clipboard and says why. A shell would read every quoted `> ` line as a redirect.
+`plannotator-host.py` answers three calls. `pane read` returns the text `annotate.py` captured, `pane get` names the agent for the label, and `agent prompt` appends the feedback to an outbox file. Anything else gets an `unsupported` error in Herdr's own JSON shape, so a plannotator-tui release that calls something new says so in the viewer's footer rather than half working. A refusal works the same way: when agterm reports the pane holds a bare shell, the host refuses the send, and the viewer keeps the notes, copies them to the clipboard and says why. A shell would read every quoted `> ` line as a redirect. That report is not always available: agterm exposes no foreground for the scratch pane, and none for a process macOS will not show, such as what `sudo -s` leaves. So the refusal is a first line only. What protects a shell is the submit rule: `annotate.py` reads the foreground again after the viewer closes and presses Return only when an argv element matches `CLAUDE_FG_MATCH`. Any other destination gets the notes pasted unsent.
 
 The paste waits until the overlay closes, because the overlay covers the pane the notes go to. Each send from a pane or reply review carries every note the review holds, so only the last send is pasted; pasting them all would repeat the early notes once per later send.
 
@@ -112,11 +113,13 @@ The gotchas that cost time:
 
 ## Limits
 
-- **It types into your session, and the replies chord sends.** Pane notes are pasted at the prompt of the pane you pressed the chord in. Reply notes are pasted and submitted, so the agent acts on them without you reading them first; set `SUBMIT` in `annotate.py` to stop at the prompt instead.
+- **It types into your session, and the replies chord sends.** Pane notes are pasted at the prompt of the pane you pressed the chord in. Reply notes are pasted and submitted when Claude runs in that pane, so the agent acts on them without you reading them first; set `SUBMIT` in `annotate.py` to stop at the prompt instead.
+- **Scratch replies arrive unsent.** agterm reports no foreground for the scratch pane, so the script cannot tell that Claude runs there and never submits. Press Return yourself.
+- **Unsent means bracketed paste.** The notes arrive unsent against a program with bracketed paste on, which is what an agent CLI, a readline shell prompt and any full-screen editor turn on. A destination with it off, such as macOS `/bin/sh`, a `read` loop or a bare REPL, takes the newlines as Return and runs the lines. That is what a manual ⌘V of the same notes would do there, and nothing in the control API can ask which mode a program is in, so the chord cannot check first.
 - **It uses the clipboard.** What was on it is saved and put back, but only plain text; an image or rich content is lost.
 - **plannotator-tui archives every sent review** under `~/.plannotator/feedback/<project>/`, quoting the text you marked. Turn that off with `"feedbackHistory": false` in `~/.plannotator/config.json`.
 - **The hook writes to `~/.cache/agterm-annotate/` on every finished turn** in every agterm pane, whether or not you press the chord: one small file per session and pane, holding the transcript path. `last-notes.md` there holds the last notes sent. Nothing prunes the directory.
 - It depends on plannotator-tui's Herdr interface, which that project documents for Herdr rather than as a public API. A release that changes it shows up as an error in the viewer's footer.
 - A promoted pane can open the wrong replies. The hook keys its record on the pane the agent's shell started in, while the chord reports the pane it fires from now, and the two diverge after closing the left half of a split promotes the right one.
 - No search inside the viewer, and a reply opens one message at a time rather than everything since your last prompt.
-- One review per pane at a time; pressing the chord again while the viewer is open is dropped. A session that already has an overlay open cannot take another, so the chord says so and stops.
+- One review per pane at a time; pressing the chord again while the viewer is open is dropped with a banner. The script removes its lock on exit and on SIGTERM. A SIGKILL leaves it behind, and the banner then names the lock directory to remove. A session that already has an overlay open cannot take another, so the chord says so and stops.
