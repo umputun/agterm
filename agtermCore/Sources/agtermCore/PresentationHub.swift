@@ -43,20 +43,21 @@ public final class PresentationHub {
         }
 
         @MainActor func decodable(_ body: PresentationFrame.Body) -> PresentationFrame.Body {
-            guard !kinds.contains(PresentationHub.statusShapesKind) else { return body }
+            let accepted = PresentationHub.acceptedShapes(kinds)
+            guard accepted.count < StatusShape.allCases.count else { return body }
             switch body {
             case .status(let status):
-                return .status(status.map(Self.withOriginalShape))
+                return .status(status.map { Self.withShape(in: accepted, $0) })
             case .snapshot(var snapshot):
-                snapshot.status = snapshot.status.map(Self.withOriginalShape)
+                snapshot.status = snapshot.status.map { Self.withShape(in: accepted, $0) }
                 return .snapshot(snapshot)
             default:
                 return body
             }
         }
 
-        private static func withOriginalShape(_ status: PresentationStatus) -> PresentationStatus {
-            guard let shape = status.shape, !StatusShape.original.contains(shape) else { return status }
+        private static func withShape(in accepted: Set<StatusShape>, _ status: PresentationStatus) -> PresentationStatus {
+            guard let shape = status.shape, !accepted.contains(shape) else { return status }
             var status = status
             status.shape = nil
             return status
@@ -66,7 +67,8 @@ public final class PresentationHub {
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
-                                        linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind] + pageKinds + pickKinds
+                                        statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind]
+                                        + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -96,6 +98,16 @@ public final class PresentationHub {
     public static let pageForwardKind = "page.forward"
     /// statusShapesKind advertises the expanded status-shape set.
     public static let statusShapesKind = "status.shapes"
+    /// statusCheckmarkKind advertises `StatusShape.checkmark`, added after `status.shapes` shipped.
+    public static let statusCheckmarkKind = "status.checkmark"
+
+    /// acceptedShapes is the shape set a viewer advertising `kinds` decodes; a shape outside it is cleared, and
+    /// that viewer draws its own Settings shape instead.
+    static func acceptedShapes(_ kinds: Set<String>) -> Set<StatusShape> {
+        var shapes = kinds.contains(statusShapesKind) ? StatusShape.expanded : StatusShape.original
+        if kinds.contains(statusCheckmarkKind) { shapes.insert(.checkmark) }
+        return shapes
+    }
     /// linkClickKind advertises forwarded clicks and the refusal frame that answers one.
     public static let linkClickKind = "link.click"
 

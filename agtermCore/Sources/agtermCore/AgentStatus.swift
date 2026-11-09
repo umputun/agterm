@@ -68,7 +68,12 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     /// Settings shape, else `StatusShape.circle`. `idle` renders no glyph, so its "" is filtered out before use.
     public func symbolName(override: StatusShape?, configured: StatusShape?) -> String {
         guard self != .idle else { return "" }
-        return (override ?? configured ?? .circle).symbolName
+        return shape(override: override, configured: configured).symbolName
+    }
+
+    /// shape resolves the silhouette `symbolName` draws, for renderers that also need the shape's weight.
+    public func shape(override: StatusShape?, configured: StatusShape?) -> StatusShape {
+        override ?? configured ?? .circle
     }
 
     /// Tooltip for a visible status glyph. Idle renders no glyph and therefore has no tooltip.
@@ -102,18 +107,27 @@ public enum StatusPane: String, Codable, Sendable, CaseIterable {
 public enum StatusShape: String, Codable, Sendable, CaseIterable {
     case circle, square, triangle
     case triangleDown = "triangle-down"
-    case play, diamond, capsule, seal, star, bolt, bell
+    case play, diamond, capsule, seal, star, bolt, bell, checkmark
 
     /// original is the shape set accepted without the `status.shapes` capability.
     public static let original: Set<StatusShape> = [.circle, .square, .triangle, .diamond, .capsule, .star]
 
-    /// SF Symbol name for the shape — the `.fill` variant, so every glyph is a solid silhouette, not an outline.
+    /// expanded is the shape set accepted with `status.shapes` but without `status.checkmark`.
+    public static let expanded: Set<StatusShape> = original.union([.triangleDown, .play, .seal, .bolt, .bell])
+
+    /// SF Symbol name for the shape: the `.fill` variant, so the glyph is a solid silhouette. `checkmark` has no
+    /// fill variant and draws its stroke, which `isStroke` tells the renderers to thicken.
     public var symbolName: String {
         switch self {
         case .triangleDown: "arrowtriangle.down.fill"
+        case .checkmark: "checkmark"
         default: "\(rawValue).fill"
         }
     }
+
+    /// isStroke marks a glyph drawn as a line rather than a filled area. At regular weight such a glyph paints
+    /// about a third of the lightest filled shape at 13pt, so renderers draw it heavy.
+    public var isStroke: Bool { self == .checkmark }
 
     /// The human-facing name ("Triangle"): the Settings picker's per-option accessibility label and its value.
     public var displayName: String {

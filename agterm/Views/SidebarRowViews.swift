@@ -278,7 +278,8 @@ final class StatusIconView: NSImageView {
         guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
         // symbol + color come from the shared resolvers, so this glyph and the SwiftUI StatusGlyph stay
         // identical, per-call `--shape`/`--color` overrides included.
-        let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: .regular)
+        let weight = GhosttyApp.shared.statusSymbolWeight(for: status, override: shape)
+        let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: weight)
             .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status, override: colorHex)]))
         let symbol = GhosttyApp.shared.statusSymbolName(for: status, override: shape)
         return NSImage(systemSymbolName: symbol, accessibilityDescription: status.rawValue)?

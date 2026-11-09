@@ -211,6 +211,11 @@ def main(argv):
         # A viewer killed with SIGKILL leaves the lock behind, and then every press lands here.
         agt.notify(f"An annotate viewer is already open for this pane. If none is, remove {lock}.")
         return 0
+    # A viewer that outlived its script, after a SIGTERM or a SIGKILL and a removed lock, can still
+    # write the outbox. Read as this review's send, it would paste old notes, and the replies chord
+    # would submit them.
+    for leftover in ("capture.txt", "outbox.jsonl"):
+        (room / leftover).unlink(missing_ok=True)
     # SIGTERM unwinds through the finally below, so the lock goes with the script.
     signal.signal(signal.SIGTERM, lambda signum, _frame: sys.exit(128 + signum))
     try:
@@ -301,7 +306,7 @@ def review(agt, mode, room):
     if failure:
         return fail(agt, f"Could not paste the notes ({failure}). They are in {CACHE / 'last-notes.md'}.")
     if SUBMIT[mode] and not submit:
-        agt.notify(f"Claude is not running in the {label}, so the notes were pasted unsent.")
+        agt.notify(f"Could not confirm Claude runs in the {label}, so the notes were pasted unsent.")
     log(f"delivered {len(sends)} send(s), {len(notes)} chars, submit={submit}")
     return 0
 

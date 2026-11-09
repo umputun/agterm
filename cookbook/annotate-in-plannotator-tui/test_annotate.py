@@ -84,5 +84,41 @@ class SecondPress(unittest.TestCase):
             self.assertTrue(lock.is_dir(), "a dropped press must leave the open viewer's lock alone")
 
 
+class StaleOutbox(unittest.TestCase):
+    def test_an_outbox_left_by_an_earlier_viewer_is_not_pasted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = Path(tmp) / "calls"
+            fake = Path(tmp) / "agtermctl"
+            # Every call succeeds and prints nothing: the viewer closes without sending.
+            fake.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{calls}"\n', encoding="utf-8")
+            fake.chmod(0o755)
+            tui = Path(tmp) / "plannotator-tui"
+            tui.write_text("#!/bin/sh\n", encoding="utf-8")
+            tui.chmod(0o755)
+            room = Path(tmp) / "agterm-annotate" / "S1.left"
+            room.mkdir(parents=True)
+            (room / "outbox.jsonl").write_text('"old notes"\n', encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "pane"],
+                env={
+                    **os.environ,
+                    "TMPDIR": tmp,
+                    "AGTERMCTL": str(fake),
+                    "PLANNOTATOR_TUI": str(tui),
+                    "AGT_SESSION_ID": "S1",
+                    "AGT_PANE": "left",
+                    "AGT_SELECTION": "some output",
+                },
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            said = calls.read_text(encoding="utf-8")
+            self.assertIn("overlay open", said)
+            self.assertNotIn("session paste", said)
+            self.assertFalse((room / "outbox.jsonl").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
