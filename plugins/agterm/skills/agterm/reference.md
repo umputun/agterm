@@ -166,9 +166,10 @@ dead responsible process, and `unknown` an unavailable reading or an unrelated l
 omitted for non-Live and remote panes; the split field includes hidden splits and is omitted without a
 split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
-local session, and never present after a relaunch because a remote session is never written to disk),
+local session; a remote row is never written to disk, so a per-session attach is gone after a relaunch, while a
+remote window rebuilds its rows from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
-the id `zmx attach` takes; omitted for a local session),
+the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
 origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,

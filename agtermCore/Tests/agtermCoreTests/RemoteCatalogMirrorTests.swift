@@ -14,13 +14,21 @@ final class RemoteCatalogMirrorTests {
     private let workspaceID = UUID()
     private let finalized = Finalized()
 
+    private let events = Events()
+
     final class Finalized: @unchecked Sendable {
         var ids: [UUID] = []
     }
 
+    final class Events: @unchecked Sendable {
+        var drafts: [ControlEventDraft] = []
+    }
+
     init() {
         let finalized = finalized
-        store = AppStore(persistence: PersistenceStore(directory: directory), paneFinalizer: { finalized.ids += $0 })
+        let events = events
+        store = AppStore(persistence: PersistenceStore(directory: directory), controlEventSink: { events.drafts.append($0) },
+                         paneFinalizer: { finalized.ids += $0 })
         mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState())
     }
 
@@ -101,6 +109,20 @@ final class RemoteCatalogMirrorTests {
         #expect(row.remotePresentation?.binding.originHeadless == true)
         #expect(effects.added == [split.id, single.id])
         #expect(mirror.state == .connected)
+    }
+
+    @Test func aCatalogRowReportsItsServerSessionIDFromCreation() throws {
+        let entry = session(panes: [pane()])
+        _ = open([entry])
+
+        let node = try #require(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == entry.id.uuidString })
+        #expect(node.remoteHost == "box")
+        #expect(node.remoteSessionID == entry.id.uuidString)
+        delta(1, .sessionRemoved(entry.id))
+
+        let edges = events.drafts.filter { $0.kind == .remoteOpened || $0.kind == .remoteClosed }
+        #expect(edges.map(\.kind) == [.remoteOpened, .remoteClosed])
+        #expect(edges.allSatisfy { $0.session == entry.id.uuidString && $0.payload.remoteSessionID == entry.id.uuidString })
     }
 
     @Test func aRemovedSessionLosesItsRowAndAnAddedOneGainsOne() {

@@ -71,7 +71,8 @@ extension AppStore {
         let fields = entry.fields
         let session = Session(id: fields.id, initialCwd: TerminalText.sanitized(fields.cwd),
                               customName: TerminalText.sanitized(fields.name).trimmedOrNil,
-                              paneIdentity: entry.panes.first?.identity ?? fields.primary, remoteHost: host)
+                              paneIdentity: entry.panes.first?.identity ?? fields.primary, remoteHost: host,
+                              remoteSessionID: fields.id.uuidString)
         session.parentID = fields.parent
         if fields.lifecycle == .ended {
             session.ended = true

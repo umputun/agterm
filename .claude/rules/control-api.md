@@ -1563,8 +1563,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
   login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
 - `remoteHost` names the machine a teleported session is attached to and is omitted for a local one. It is
-  live-only: a remote session is never persisted, so it cannot survive a relaunch.
+  live-only: a remote row is never persisted, so a per-session attach is gone after a relaunch, while a remote
+  window rebuilds its rows from the server's catalog with both remote fields set.
   `remoteSessionID`, on the node and on `remote.opened` / `remote.closed`, is the origin's id the row shows.
+  A remote window's row carries it too, equal to the row's own id; a re-attach hook skips those rows by their
+  window's `remote` node, since the window restores them itself.
 - `backedByZmx` on a session is true only when every existing primary/split pane is currently backed.
   Primary/split entries in `surfaces` report their own Boolean; scratch and overlays omit it. Older servers
   omit both levels. There is no sidebar indicator.

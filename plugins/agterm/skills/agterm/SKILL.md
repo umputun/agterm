@@ -274,8 +274,8 @@ entries in `surfaces` report their own Boolean, while scratch and overlays omit 
 `liveAttribution` and `splitLiveAttribution` (local Live pane attribution, including hidden splits;
 [values and omission rules](reference.md#tree)),
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
-session, and never present after a relaunch because a remote session is not persisted),
-`remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; omitted for a local session),
+session; a remote row is not persisted, so a per-session attach is gone after a relaunch, while a remote window rebuilds its rows),
+`remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
 `unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
 `presenters` (origin session: `mirrors`, the streams mirroring it without presenting, and `presenter: true`
