@@ -667,9 +667,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         return raw.flatMap(StatusShape.init(rawValue:))
     }
 
-    /// The working directory a new session opens in, resolving `newSessionDirectory` against the active
-    /// session's focused-pane cwd and home. An unknown/nil mode, a blank `currentSessionCwd`, or a blank
-    /// custom path all fall back to home. Host-free so `AppActions` and the tests share one resolution.
+    /// The working directory a new session opens in, resolving `newSessionDirectory` against the supplied
+    /// `currentSessionCwd` (the focused-pane cwd of `AppStore.newSessionDirectorySource`) and home.
+    /// An unknown/nil mode, a blank `currentSessionCwd`, or a blank custom path all fall back to home.
+    /// Host-free so `AppActions` and the tests share one resolution.
     public func resolveNewSessionCwd(currentSessionCwd: String?, home: String) -> String {
         switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
         case .home:

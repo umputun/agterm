@@ -13,7 +13,8 @@ extension AppStore {
 
     /// newSessionDirectorySource is the session whose cwd a "current session" new session in `workspaceID`
     /// inherits. Like placement, it takes the selection only inside that workspace; otherwise it takes the
-    /// workspace's most recent session, and an empty workspace falls back to the selection.
+    /// workspace's most recent session, or its first when none is recent. Only an empty workspace falls
+    /// back to the selection.
     public func newSessionDirectorySource(inWorkspace workspaceID: UUID) -> Session? {
         let sessions = workspaces.first(where: { $0.id == workspaceID })?.sessions ?? []
         guard !sessions.isEmpty else { return activeSession }

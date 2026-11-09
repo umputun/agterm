@@ -242,8 +242,8 @@ paths:
 - `newSessionDirectory` is raw `home|currentSession|custom`, with fixed custom path. Unknown/blank/missing
   values fall back home. Every GUI creation path resolves once from the `focusedCwd` of
   `newSessionDirectorySource`: the selection only when it is in the destination workspace, else that
-  workspace's most recent session, else the selection; setters save only. Control `session.new --cwd`
-  remains explicit and ignores this setting.
+  workspace's most recent session (its first when none is recent); only an empty workspace takes the
+  selection. Setters save only. Control `session.new --cwd` remains explicit and ignores this setting.
 - `cursorStyle` is a raw string that `effectiveCursorStyle` recognizes only as `block|bar|underline`, and
   `cursorBlink` is ghostty's own `?bool`. Unlike the two keys above, neither is emitted unconditionally:
   only a RECOGNIZED style emits `cursor-style`, and `cursorBlink` emits whenever it is non-nil.
