@@ -656,6 +656,9 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
       page kinds, localhost URL page, scratch, disconnect and reconnect, server restart, Mac relaunch
 - [ ] per-session attach to a Mac behaves exactly as before (agterm-linux attach is left to its maintainer; see
       External)
+      ⚠️ Eugene hand-tested this Mac attaching sessions from his other Macs on the final Debug build (2026-11-09) and
+      found it as before. This Mac as the origin was not exercised on branch code: the other Mac's ssh runs the
+      default-socket `agtermctl`, which is the deployed Release app
 - [ ] on the final tree, once each: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, the
       Linux build and test, and the new `agtermUITests` classes with `-only-testing` against
       `scripts/server-container.sh`
