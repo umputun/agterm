@@ -118,17 +118,19 @@
 - Modify: `scripts/install-server.sh`, `scripts/server-build.sh`, `scripts/release.sh`, `.claude/rules/release.md`
 - Modify: `agtermCore/Sources/agterm-server/main.swift`, `agtermCore/Sources/AgtermServerKit/ServerVersion.swift` (doc)
 
-- [ ] `agterm-server --version` (`CommandConfiguration(version: ServerVersion.current)`); `server-build.sh ARCH [VERSION]`
-      stamps VERSION in its throwaway tree and checks `--version` in its container step (x86_64 under
-      `--platform linux/amd64`)
-- [ ] `server-host-install.sh` is the remote heredoc plus the PATH note; `server-package.sh ARCH VERSION` writes the
+- [x] `agterm-server --version` (`CommandConfiguration(version: ServerVersion.current)`); `server-build.sh ARCH [VERSION]`
+      stamps VERSION in its throwaway tree (grep-verified before the build) and runs the built `--version` when the
+      arch is Docker's native one; ⚠️ this Docker Desktop has no amd64 emulation (`exec format error`), so x86_64
+      relies on the source stamp, and Eugene chose that over enabling emulation; the x86_64 binary is first run by
+      the Post-Completion install on a real x86_64 host
+- [x] `server-host-install.sh` is the remote heredoc plus the PATH note; `server-package.sh ARCH VERSION` writes the
       tarball (root entries, no xattrs) with it as `install.sh`, and its `.sha256`
-- [ ] `install-server.sh` packages for the host arch, streams through the one-line unpack, runs
+- [x] `install-server.sh` packages for the host arch, streams through the one-line unpack, runs
       `bash "$HOME/.local/lib/agterm-server/install.sh"`, keeps its exit codes
-- [ ] `release.sh` checks Docker, calls `setup-zmx-linux.sh`, packages both arches before `xcodebuild`, writes
+- [x] `release.sh` checks Docker, calls `setup-zmx-linux.sh`, packages both arches before `xcodebuild`, writes
       `agterm-server.sha256` into the app before the re-seal (Developer ID, or ad-hoc on `SIGNED=0`), and uploads the
       DMG and tarballs in one `gh release upload --clobber`; `release.md` documents it
-- [ ] shellcheck every touched script; `server-container.sh start` and `check` pass on a fresh container
+- [x] shellcheck every touched script; `server-container.sh start` and `check` pass on a fresh container
 
 ### Task 2: `agtermctl server install`
 

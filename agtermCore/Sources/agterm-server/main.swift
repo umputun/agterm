@@ -10,6 +10,7 @@ struct ServerCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "agterm-server",
         abstract: "Run agterm sessions on this host for a Mac's remote window.",
+        version: ServerVersion.current,
         subcommands: [Serve.self, InstallHooks.self],
         defaultSubcommand: Serve.self
     )
