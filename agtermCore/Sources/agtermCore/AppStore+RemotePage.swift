@@ -152,6 +152,7 @@ extension AppStore {
             page.token = request.token
             page.claimDeadline = now.addingTimeInterval(Self.pageClaimWindow)
             page.claimed = false
+            page.withdrawnFrom = nil
         }
         scheduleTreeChanged()
         sendPageRequest(request, job: slot.job, in: session)
@@ -172,9 +173,12 @@ extension AppStore {
             session.remoteOverlays.updatePage(state.page) { changed = $0.apply(state) }
             if changed { scheduleTreeChanged() }
         case .pageRejected(let change), .pageClosed(let change):
-            // only the offer holding the page reports its end; a copy this origin already withdrew says nothing
+            // only the offer holding the page reports its end; a copy this origin already withdrew says nothing, except
+            // a dismissal its presenter sent before seeing the withdrawal, which the channel's end overtook
+            let generation = presentationHub?.presenterGeneration(session: sessionID)
             guard let slot = session.remoteOverlays.slot(job: change.page),
-                  slot.owner == presentationHub?.presenterGeneration(session: sessionID) else { return }
+                  slot.owner == generation || (slot.owner == nil && slot.page?.withdrawnFrom == generation
+                      && change.reason != PresentationPageChange.channelLost) else { return }
             if headless, change.reason == PresentationPageChange.channelLost, let page = UUID(uuidString: change.page) {
                 withdrawRemotePage(page)
             } else {
@@ -310,9 +314,14 @@ extension AppStore {
     public func withdrawRemotePage(_ page: UUID) {
         guard let session = workspaces.flatMap(\.sessions).first(where: { $0.remoteOverlays.slot(job: page.uuidString)?.page != nil }),
               let slot = session.remoteOverlays.slot(job: page.uuidString), slot.owner != nil else { return }
-        presentationHub?.sendToPresenter(.pageClose(PresentationPageChange(page: slot.job)), session: session.id)
+        // tagged, so the presenter's reply to this close is not read as a dismissal
+        presentationHub?.sendToPresenter(.pageClose(PresentationPageChange(page: slot.job, reason: PresentationPageChange.channelLost)),
+                                         session: session.id)
         session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
-        session.remoteOverlays.updatePage(slot.job) { $0.claimed = false }
+        session.remoteOverlays.updatePage(slot.job) { page in
+            page.claimed = false
+            page.withdrawnFrom = slot.owner
+        }
         RemotePageEnds.shared.onWithdrawn?(page)
         scheduleTreeChanged()
     }

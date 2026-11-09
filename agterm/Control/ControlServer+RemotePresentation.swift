@@ -96,7 +96,7 @@ extension ControlServer {
                 guard let self else { return "no such session" }
                 return showReplicaPage(page, forSession: id)
             },
-            pageClose: { [weak self] change in self?.library.store(forSession: id)?.closeReplicaPage(change.page, forSession: id) },
+            pageClose: { [weak self] change in self?.closeOriginPage(change, forSession: id) },
             pageCommand: { [weak self] command in self?.applyReplicaPageCommand(command, forSession: id) },
             respawns: { [weak self] respawns, seed in self?.applyRemoteRespawns(respawns, seed: seed, forSession: id) },
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },

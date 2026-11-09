@@ -53,6 +53,9 @@ public struct RemotePage: Equatable, Sendable {
     /// request is the page as first offered, sent again with a new token at each offer.
     var request: PresentationPage?
     public internal(set) var claimed = false
+    /// withdrawnFrom is the presenter generation a headless origin took the page back from after its channel ended,
+    /// until the next offer: that presenter's close can arrive after the channel's end and still dismiss the page.
+    var withdrawnFrom: Int?
     /// hidden is the visibility the presenter last reported.
     public internal(set) var hidden = false
     /// requested is a visibility sent and not yet echoed back by the presenter.

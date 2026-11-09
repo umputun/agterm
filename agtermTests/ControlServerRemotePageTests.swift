@@ -325,6 +325,18 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertTrue(fix.server.replicaPages.isEmpty)
     }
 
+    // regression: the reply to an origin's withdrawal read as a dismissal, which ended a page the origin still held
+    func testAPageTheOriginWithdrewIsReportedAsALostChannel() throws {
+        let fix = try fixture(files: ["/docs/index.html": html("<p>x</p>")])
+        _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: nil)))
+
+        try fix.transport.feed(.pageClose(PresentationPageChange(page: Self.origin.uuidString, reason: PresentationPageChange.channelLost)))
+
+        XCTAssertFalse(fix.session.overlayActive)
+        XCTAssertEqual(fix.transport.sent.last, .pageClosed(PresentationPageChange(page: Self.origin.uuidString,
+                                                                                   reason: PresentationPageChange.channelLost)))
+    }
+
     func testAnOriginCommandIsAppliedAndReportedWithItsSequence() async throws {
         let fix = try fixture()
         _ = try present(fix, page(.url("http://127.0.0.1:9/a")))

@@ -132,6 +132,16 @@ extension ControlServer {
         record.channel?.close("page closed")
     }
 
+    /// closeOriginPage takes down the page the origin closed; one it withdrew after a lost channel is reported back as
+    /// that loss, since the origin still holds it.
+    func closeOriginPage(_ change: PresentationPageChange, forSession id: UUID) {
+        if change.reason == PresentationPageChange.channelLost,
+           let local = replicaPages.first(where: { $0.value.session == id && $0.value.origin.uuidString == change.page })?.key {
+            replicaPages[local]?.channelLost = true
+        }
+        library.store(forSession: id)?.closeReplicaPage(change.page, forSession: id)
+    }
+
     /// applyReplicaPageCommand runs one origin request on the page shown for it, then reports the page's state
     /// with that request's sequence number.
     func applyReplicaPageCommand(_ command: PresentationPageCommand, forSession id: UUID) {

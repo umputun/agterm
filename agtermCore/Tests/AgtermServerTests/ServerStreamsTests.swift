@@ -813,7 +813,9 @@ struct ServerStreamsTests {
         close(pair[1])
         let kept = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(kept)
-        try first.send(.pageClosed(PresentationPageChange(page: shown.page)))
+        let withdrawal = await offPool { first.first { if case .pageClose = $0 { true } else { false } } }
+        #expect(withdrawal == .pageClose(PresentationPageChange(page: shown.page, reason: PresentationPageChange.channelLost)))
+        try first.send(.pageClosed(PresentationPageChange(page: shown.page, reason: PresentationPageChange.channelLost)))
         try await Task.sleep(for: .milliseconds(200))
         #expect(session.remoteOverlays.slot(nil)?.page != nil)
         await drop(first, from: session)
@@ -823,6 +825,26 @@ struct ServerStreamsTests {
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
         #expect(fresh.page == shown.page)
+    }
+
+    // regression: a close sent after the channel's EOF reached the server was dropped, and the page held its slot
+    @Test func aPageClosedOnThePresenterAfterItsChannelEndedIsEnded() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let shown = try #require(try await offeredPage(session, to: viewer))
+        let page = try #require(UUID(uuidString: shown.page))
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: page, token: shown.token)
+
+        close(pair[1])
+        #expect(await eventually { session.remoteOverlays.slot(nil)?.owner == nil })
+        try viewer.send(.pageClosed(PresentationPageChange(page: shown.page)))
+
+        #expect(await eventually { session.remoteOverlays.slot(nil) == nil })
+        #expect(try await offeredPage(session, to: viewer) != nil)
     }
 
     @Test func aPresenterReportingItsChannelLostBeforeTheServerSeesItKeepsThePage() async throws {
@@ -1015,8 +1037,9 @@ struct ServerStreamsTests {
         return path
     }
 
-    private func click(_ raw: String, on session: Session, pane: UUID? = nil, from viewer: Viewer) throws {
-        try viewer.send(.linkClick(PresentationLinkClick(raw: raw, pane: pane ?? session.paneIdentity, mode: .overlay)))
+    private func click(_ raw: String, on session: Session, pane: UUID? = nil, mode: LinkOpenMode = .overlay,
+                       from viewer: Viewer) throws {
+        try viewer.send(.linkClick(PresentationLinkClick(raw: raw, pane: pane ?? session.paneIdentity, mode: mode)))
     }
 
     private func pageRequest(from viewer: Viewer) async -> PresentationPage? {
@@ -1044,6 +1067,22 @@ struct ServerStreamsTests {
         #expect(page.navigation)
         #expect(page.markdownLinks != nil)
         #expect(session.remoteOverlays.slot(nil)?.page?.overlay.clicked == true)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases)
+    func everyPageKindOpensInEveryLinkMode(mode: LinkOpenMode) async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let pages = [("notes.md", "# notes\n"), ("main.go", "package main\n"), ("page.html", "<!doctype html><p>hi</p>\n")]
+
+        for (name, text) in pages {
+            _ = try write(name, text)
+            try click("./" + name, on: session, mode: mode, from: viewer)
+            let page = await pageRequest(from: viewer)
+            #expect(page != nil, "\(name) in \(mode)")
+            #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok, "\(name) in \(mode)")
+        }
     }
 
     @Test func aClickedTextLocationOpensAtItsLine() async throws {
