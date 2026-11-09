@@ -46,12 +46,15 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
     public var from: String?
     /// The `message` event's message id; the body is never carried.
     public var messageID: String?
+    /// The `remote.opened` / `remote.closed` row's session id on its origin, the id `zmx attach` takes.
+    public var remoteSessionID: String?
 
     public init(name: String? = nil, status: String? = nil, pane: String? = nil,
                 blink: Bool? = nil, color: String? = nil, shape: String? = nil,
                 previous: String? = nil, title: String? = nil, body: String? = nil,
                 host: String? = nil, paneID: String? = nil, parent: String? = nil,
-                from: String? = nil, messageID: String? = nil) {
+                from: String? = nil, messageID: String? = nil, remoteSessionID: String? = nil) {
+        self.remoteSessionID = remoteSessionID
         self.parent = parent
         self.from = from
         self.messageID = messageID

@@ -250,7 +250,8 @@ struct EventCommandsTests {
             ControlEvent(seq: 9, ts: 0, kind: .paneScratch, payload: ControlEventPayload(name: "api", status: "hidden")),
             ControlEvent(seq: 10, ts: 0, kind: .status,
                          payload: ControlEventPayload(name: "api", status: "blocked", pane: "left", previous: "active")),
-            ControlEvent(seq: 11, ts: 0, kind: .remoteOpened, payload: ControlEventPayload(name: "far", host: "buildbox")),
+            ControlEvent(seq: 11, ts: 0, kind: .remoteOpened,
+                         payload: ControlEventPayload(name: "far", host: "buildbox", remoteSessionID: "r1")),
             ControlEvent(seq: 12, ts: 0, kind: .remoteClosed, payload: ControlEventPayload(name: "far", host: "buildbox")),
             ControlEvent(seq: 13, ts: 0, kind: .sessionSelected, payload: ControlEventPayload(name: "api", previous: "before")),
             ControlEvent(seq: 14, ts: 0, kind: .sessionSelected, window: "win"),
@@ -275,8 +276,8 @@ struct EventCommandsTests {
         #expect(human[7] == "00:00:00 pane.split api shown")
         #expect(human[8] == "00:00:00 pane.scratch api hidden")
         #expect(human[9] == "00:00:00 status api blocked previous=active pane=left")
-        #expect(human[10] == "00:00:00 remote.opened far host=buildbox")
-        #expect(human[11] == "00:00:00 remote.closed far host=buildbox")
+        #expect(human[10] == "00:00:00 remote.opened far host=buildbox remote-session-id=r1")
+        #expect(human[11] == "00:00:00 remote.closed far host=buildbox remote-session-id=-")
         #expect(human[12] == "00:00:00 session.selected api previous=before")
         #expect(human[13] == "00:00:00 session.selected win previous=-")
         #expect(human[14] == "00:00:00 app.launched")

@@ -196,7 +196,8 @@ extension ControlServer {
             guard let holder = library.store(forSession: parentID) else {
                 return ControlResponse(ok: false, error: "its parent row here was closed")
             }
-            switch holder.addReplicaPageCompanion(to: parentID, page: page, select: select) {
+            switch holder.addReplicaPageCompanion(to: parentID, page: page, select: select,
+                                                  remoteSessionID: originSession) {
             case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
             case .success(let created): (store, row, parent) = (holder, created, parentID)
             }
@@ -205,7 +206,7 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "the window or workspace to attach into was closed")
             }
             switch holder.addReplicaPageRoot(toWorkspace: workspace, host: host, name: binding.sessionName, page: page,
-                                             select: select) {
+                                             select: select, remoteSessionID: originSession) {
             case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
             case .success(let created): (store, row, parent) = (holder, created, nil)
             }

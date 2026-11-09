@@ -693,7 +693,7 @@ final class AppStoreEventTests {
         let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
         let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "local"))
         let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", name: "far",
-                                                   remoteHost: "buildbox"))
+                                                   remoteHost: "buildbox", remoteSessionID: "r1"))
 
         #expect(store.softCloseSession(remote.id, grace: 60))
         #expect(store.undoPendingClose())
@@ -708,6 +708,7 @@ final class AppStoreEventTests {
         #expect(remoteEdges.map(\.kind) == [.remoteOpened, .remoteClosed, .remoteOpened, .remoteClosed])
         #expect(remoteEdges.allSatisfy { $0.session == remote.id.uuidString && $0.workspace == workspace.id.uuidString })
         #expect(remoteEdges.allSatisfy { $0.payload.name == "far" && $0.payload.host == "buildbox" })
+        #expect(remoteEdges.allSatisfy { $0.payload.remoteSessionID == "r1" })
         for edge in remoteEdges {
             let sessionEdge = try #require(all.items.first { $0.seq == edge.seq - 1 })
             #expect(sessionEdge.kind == (edge.kind == .remoteOpened ? .sessionCreated : .sessionClosed))
