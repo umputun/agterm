@@ -262,6 +262,8 @@ extension ControlServer {
             created.splitCommandWait = true
             store.setSplitVisibility(created.id, shown: true,
                                      axis: remote.splitAxis.flatMap(SplitAxis.init(rawValue:)) ?? .leftRight)
+            // a new split focuses its right pane; an attached session opens on its left one
+            created.splitFocused = false
         }
         var daemons = [created.paneIdentity: left]
         ZmxLeadBook.shared.begin(leads.left, pane: created.paneIdentity)
