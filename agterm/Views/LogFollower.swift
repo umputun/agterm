@@ -66,7 +66,7 @@ final class LogFollower {
     /// loadDocument builds the page from a fresh read, or from the cached snapshot and anchor when `fresh` is false:
     /// an explicit reload reads the file again, a theme change redraws what is shown. A read that failed after the
     /// open was accepted shows an empty page marked waiting or unreadable, which the next good read fills.
-    func loadDocument(fresh: Bool, search: TextPage.SearchState? = nil) {
+    func loadDocument(fresh: Bool, search: TextPage.SearchState? = nil, wrap: Bool = false) {
         documentLoad += 1
         documentPending = true
         let load = documentLoad
@@ -79,7 +79,7 @@ final class LogFollower {
             pageStamp = stamp
             let html = TextPage.html(text: shown.text, language: TextPage.language(forFile: path), line: nil,
                                      style: MarkdownAssets.shared.textStyle, log: TextLogState(following: following, report: report),
-                                     anchor: following ? nil : anchor, search: search)
+                                     anchor: following ? nil : anchor, search: search, wrap: wrap)
             webView?.loadHTMLString(html, baseURL: nil)
         }
     }

@@ -893,8 +893,8 @@ extension TextPageRenderingTests {
         XCTAssertEqual(after, before)
     }
 
-    func testTheBarFitsANarrowPageFollowingAndPaused() async throws {
-        let (overlay, _) = try openLog(Self.manyLines + "x\n")
+    func testTheBarFitsANarrowPageFollowingPausedAndWithANote() async throws {
+        let (overlay, url) = try openLog(Self.manyLines + "x\n")
         let (page, window) = try shown(overlay)
         defer { window.orderOut(nil) }
         try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
@@ -906,7 +906,9 @@ extension TextPageRenderingTests {
               const follow = document.querySelector('.agterm-logbar button').getBoundingClientRect();
               const box = document.querySelector('.agterm-search').getBoundingClientRect();
               const controls = [...document.querySelectorAll('.agterm-search button')].map(e => e.getBoundingClientRect().right);
-              return [follow.right <= box.left, box.right <= width, Math.max(...controls) <= width].join('|');
+              const wrap = document.querySelector('.agterm-wrap');
+              return [follow.right <= wrap.getBoundingClientRect().left, wrap.scrollWidth <= wrap.clientWidth,
+                      box.right <= width, Math.max(...controls) <= width].join('|');
             })()
             """
 
@@ -915,8 +917,15 @@ extension TextPageRenderingTests {
         page.apply(try XCTUnwrap(current))
         try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: paused - Resume") }
         let paused = try await page.webView.evaluateJavaScript(fits)
+        try resume(page)
+        try FileManager.default.removeItem(at: url)
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("waiting for file") }
+        XCTAssertEqual(store.setTextLogFollowing(session.id, pane: nil, mode: .off), .success(false))
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Resume") && $0.contains("waiting for file") }
+        let noted = try await page.webView.evaluateJavaScript(fits)
 
-        XCTAssertEqual([following as? String, paused as? String], ["true|true|true", "true|true|true"])
+        XCTAssertEqual([following, paused, noted].map { $0 as? String }, Array(repeating: "true|true|true|true", count: 3))
     }
 }
 
@@ -1204,5 +1213,201 @@ extension TextPageRenderingTests {
         let controls = try await page.webView.evaluateJavaScript("document.querySelectorAll('.agterm-changes').length")
         XCTAssertEqual(controls as? Int, 0)
         XCTAssertNil(current?.textChanges)
+    }
+}
+
+@MainActor
+extension TextPageRenderingTests {
+    private static let wrapButton = "document.querySelector('.agterm-wrap')?.textContent ?? ''"
+    private static let longLine = String(repeating: "wrap me ", count: 60)
+
+    private static let gutterRows = """
+        (() => {
+          const pre = document.querySelector('#agterm-page pre');
+          const code = pre.querySelector('code');
+          const style = getComputedStyle(pre);
+          const height = parseFloat(style.lineHeight);
+          const origin = pre.getBoundingClientRect().top + parseFloat(style.paddingTop);
+          const rowOf = (rect) => Math.floor((rect.top + rect.height / 2 - origin) / height);
+          const node = code.firstChild;
+          const range = document.createRange();
+          const at = node.data.indexOf('after');
+          range.setStart(node, at);
+          range.setEnd(node, at + 1);
+          const fragments = code.getClientRects();
+          const gutter = document.querySelector('.agterm-gutter').textContent.split('\\n');
+          return [gutter.indexOf('3'), rowOf(range.getBoundingClientRect()), gutter.length,
+                  rowOf(fragments[fragments.length - 1]) + 1,
+                  document.scrollingElement.scrollWidth > document.scrollingElement.clientWidth].join('|');
+        })()
+        """
+
+    func testTheWrapKeyWrapsLongLinesAndTheGutterNumbersTheirFirstRows() async throws {
+        let (page, window) = try shown(try openText("a.txt", "short\n\(Self.longLine)\nafter\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        let unwrapped = try await page.webView.evaluateJavaScript(Self.gutterRows) as? String
+        XCTAssertEqual(unwrapped, "2|2|3|3|true")
+
+        try await press("w", page.webView)
+
+        try await waitFor("the toggle reaches the model") { self.current?.textWrap == true }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        let measured = try await page.webView.evaluateJavaScript(Self.gutterRows) as? String
+        let parts = try XCTUnwrap(measured).split(separator: "|")
+        XCTAssertEqual(parts[0], parts[1])
+        XCTAssertEqual(parts[2], parts[3])
+        XCTAssertGreaterThan(Int(parts[1]) ?? 0, 2)
+        XCTAssertEqual(parts[4], "false")
+
+        _ = try await inRenderer("document.querySelector('.agterm-wrap').click(); true", page.webView)
+        try await waitFor("the click reaches the model") { self.current?.textWrap == false }
+        try await waitForScript(Self.gutterRows, in: page.webView) { $0 == "2|2|3|3|true" }
+    }
+
+    func testAWrapFromTheModelRedrawsThePageAndARebuildKeepsIt() async throws {
+        let (page, window) = try shown(try openText("a.txt", "short\n\(Self.longLine)\nafter\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+
+        XCTAssertEqual(store.setTextWrap(session.id, pane: nil, mode: .on), .success(true))
+        page.apply(try XCTUnwrap(current))
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+        try await waitForVariable("--agterm-foreground", "#e0e0e0", in: page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        let wrapped = try await page.webView.evaluateJavaScript("document.body.classList.contains('agterm-wrapped')")
+        XCTAssertEqual(wrapped as? Bool, true)
+    }
+
+    func testADiffBandCoversEveryRowOfAWrappedLine() async throws {
+        let diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,2 @@\n context\n-old\n+\(Self.longLine)\n"
+        let (page, window) = try shown(try openText("a.diff", diff))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "1 change" }
+        let added = """
+            (() => {
+              const band = document.querySelector('.agterm-added');
+              const gutter = document.querySelector('.agterm-gutter').textContent.split('\\n');
+              const height = parseFloat(getComputedStyle(document.querySelector('#agterm-page pre')).lineHeight);
+              return [parseFloat(band.style.height) / height, gutter.length - gutter.indexOf('6')].join('|');
+            })()
+            """
+        try await waitForScript(added, in: page.webView) { $0 == "1|1" }
+
+        try await press("w", page.webView)
+
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        let measured = try await page.webView.evaluateJavaScript(added) as? String
+        let rows = try XCTUnwrap(measured).split(separator: "|")
+        XCTAssertEqual(rows[0], rows[1])
+        XCTAssertGreaterThan(Int(rows[0]) ?? 0, 1)
+    }
+
+    func testAWrapToggleKeepsAFollowingLogAtItsEnd() async throws {
+        let text = (1...200).map { $0 % 10 == 0 ? "line \($0) \(Self.longLine)" : "line \($0)" }.joined(separator: "\n") + "\n"
+        let (overlay, _) = try openLog(text)
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+
+        try await press("w", page.webView)
+
+        try await waitFor("the toggle reaches the model") { self.current?.textWrap == true }
+        try await waitForScript(Self.atBottom, in: page.webView) { $0 == "true" }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.logState?.following, true)
+    }
+
+    func testAWrappedFollowingLogStaysAtItsEndWhenItNarrows() async throws {
+        let text = (1...200).map { $0 % 10 == 0 ? "line \($0) \(Self.longLine)" : "line \($0)" }.joined(separator: "\n") + "\n"
+        let (overlay, _) = try openLog(text)
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+        try await press("w", page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        try await waitForScript(Self.atBottom, in: page.webView) { $0 == "true" }
+
+        page.webView.frame.size.width = 250
+
+        try await waitForScript("window.innerWidth", in: page.webView) { $0 == "250" }
+        try await waitForScript(Self.atBottom, in: page.webView) { $0 == "true" }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(current?.logState?.following, true)
+    }
+
+    func testAWrapToggleOnAPausedLogIsWhereAThemeRebuildReopens() async throws {
+        let text = (1...200).map { $0 % 10 == 0 ? "line \($0) \(Self.longLine)" : "line \($0)" }.joined(separator: "\n") + "\n"
+        let (overlay, _) = try openLog(text)
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.bar, in: page.webView) { $0.contains("Follow: on") }
+        _ = try await inRenderer("""
+            window.dispatchEvent(new WheelEvent('wheel', { deltaY: -400 }));
+            document.scrollingElement.scrollTop = 600;
+            true;
+            """, page.webView)
+        try await waitFor("pause reaches the model") { self.current?.logState?.following == false }
+        page.apply(try XCTUnwrap(current))
+        try await Task.sleep(for: .milliseconds(400))
+
+        try await press("w", page.webView)
+        try await waitFor("the toggle reaches the model") { self.current?.textWrap == true }
+        page.apply(try XCTUnwrap(current))
+        let toggled = try await page.webView.evaluateJavaScript("Math.round(document.scrollingElement.scrollTop)") as? Int
+        XCTAssertNotEqual(toggled, 600)
+
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+
+        try await waitForVariable("--agterm-foreground", "#e0e0e0", in: page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        try await waitForScript("Math.round(document.scrollingElement.scrollTop)", in: page.webView) { $0 == "\(toggled ?? -1)" }
+    }
+
+    // regression: a stale wrap cache suppressed a control change after a click
+    func testAControlWrapAfterAClickTheBridgeHasNotAppliedReachesThePage() async throws {
+        let (page, window) = try shown(try openText("a.txt", "short\n\(Self.longLine)\nafter\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        _ = try await inRenderer("document.querySelector('.agterm-wrap').click(); true", page.webView)
+        try await waitFor("the click reaches the model") { self.current?.textWrap == true }
+
+        XCTAssertEqual(store.setTextWrap(session.id, pane: nil, mode: .off), .success(false))
+        page.apply(try XCTUnwrap(current))
+
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+    }
+
+    func testAWrapToggleKeepsTheLineUnderTheBar() async throws {
+        let text = (1...300).map { $0 % 5 == 0 ? "line \($0) \(Self.longLine)" : "line \($0)" }.joined(separator: "\n") + "\n"
+        let (page, window) = try shown(try openText("a.txt", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        let lineUnderBar = """
+            (() => {
+              const bar = document.querySelector('.agterm-bar').getBoundingClientRect();
+              const code = document.querySelector('#agterm-page pre code');
+              const caret = document.caretRangeFromPoint(code.getBoundingClientRect().left + 2, bar.bottom + 4);
+              const before = document.createRange();
+              before.setStart(code, 0);
+              before.setEnd(caret.startContainer, caret.startOffset);
+              return before.toString().split('\\n').length;
+            })()
+            """
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 3000; true", page.webView)
+        try await waitForScript("Math.round(document.scrollingElement.scrollTop)", in: page.webView) { $0 == "3000" }
+        let unwrapped = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+        XCTAssertGreaterThan(unwrapped ?? 0, 100)
+
+        try await press("w", page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
+        let wrapped = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+        try await press("w", page.webView)
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+        let back = try await page.webView.evaluateJavaScript(lineUnderBar) as? Int
+
+        XCTAssertEqual([wrapped, back], [unwrapped, unwrapped])
     }
 }

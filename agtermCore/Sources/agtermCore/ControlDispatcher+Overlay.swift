@@ -137,6 +137,15 @@ extension ControlDispatcher {
             case .pane(let pane):
                 return actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
             }
+        case .sessionOverlayWrap:
+            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false, error: "invalid overlay wrap mode: \(request.args?.mode ?? "toggle")")
+            }
+            switch parseOverlayPane(request.args?.pane) {
+            case .rejected(let response): return response
+            case .pane(let pane):
+                return actions.setSessionOverlayWrap(request.target, window: request.args?.window, pane: pane, mode: mode)
+            }
         case .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             let mode: OverlayVisibilityMode = request.cmd == .sessionOverlayHide ? .hide
                 : (request.cmd == .sessionOverlayShow ? .show : .toggle)

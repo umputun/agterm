@@ -62,6 +62,9 @@ public final class Session: Identifiable {
     /// Immutable and set at construction, because the first save happens inside `addSession`: a marker
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
     public let remoteHost: String?
+    /// remoteSessionID is the origin's id for the session this row shows, set at construction because
+    /// `addSession` emits `remote.opened` before `bindRemote` runs.
+    public let remoteSessionID: String?
 
     /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.
     public let content: SessionContent
@@ -582,7 +585,7 @@ public final class Session: Identifiable {
 
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil,
                 paneIdentity: UUID = UUID(), splitPaneIdentity: UUID? = nil,
-                remoteHost: String? = nil, content: SessionContent = .terminal) {
+                remoteHost: String? = nil, remoteSessionID: String? = nil, content: SessionContent = .terminal) {
         self.content = content
         self.id = id
         self.paneIdentity = paneIdentity
@@ -590,6 +593,7 @@ public final class Session: Identifiable {
         self.initialCwd = initialCwd
         self.customName = customName
         self.remoteHost = remoteHost
+        self.remoteSessionID = remoteSessionID
     }
 
     /// The sidebar label: a non-blank `customName` (a manual rename) wins; else the focused pane's non-blank

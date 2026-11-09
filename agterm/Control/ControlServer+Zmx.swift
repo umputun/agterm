@@ -253,7 +253,7 @@ extension ControlServer {
         // cwd through the terminal stream anyway.
         guard let created = store.addSession(toWorkspace: placement.workspace, cwd: NSHomeDirectory(),
                                              command: primary, name: remote.name, wait: true,
-                                             select: placement.select, remoteHost: host,
+                                             select: placement.select, remoteHost: host, remoteSessionID: remote.id,
                                              parentID: placement.parent) else {
             return ControlResponse(ok: false, error: "could not create the session")
         }
@@ -262,6 +262,8 @@ extension ControlServer {
             created.splitCommandWait = true
             store.setSplitVisibility(created.id, shown: true,
                                      axis: remote.splitAxis.flatMap(SplitAxis.init(rawValue:)) ?? .leftRight)
+            // a new split focuses its right pane; an attached session opens on its left one
+            created.splitFocused = false
         }
         var daemons = [created.paneIdentity: left]
         ZmxLeadBook.shared.begin(leads.left, pane: created.paneIdentity)

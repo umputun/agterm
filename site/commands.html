@@ -573,6 +573,8 @@
                 came from, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach</span>; omitted for a
                 local session, and never present after a relaunch because a remote session is not persisted),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span> (the origin's id for the session an attached row shows, the id
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes; omitted for a local session),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (on an attached session only:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connecting</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unsupported</span> or
@@ -715,7 +717,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span>; a swap emits nothing, since the
                 selected terminal stays selected), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.closed</span> (a local row created by <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> entered or
-                left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>; they ride the
+                left the tree, carrying its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span> and the origin's session id as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span>, and the human line reads
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">HH:MM:SS remote.opened NAME host=HOST remote-session-id=ID</span>; they ride the
                 created/closed edges, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.opened</span>, and they say nothing
                 about whether ssh is still connected), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">app.launched</span> (once per app run, with no
                 window or session, after hooks are loaded and the control socket accepts connections), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> (a message was queued for a pane: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span> is the recipient's, the payload carries its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneID</span>, the sender as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">from</span> (absent for a sender outside agterm) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">messageID</span>, never the body). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
@@ -2330,6 +2334,22 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays[].text.changes</span>:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">count</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">current</span> (from 1, 0 before any step), omitted on any other page.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session overlay wrap on|off|toggle [--pane left|right] [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.wrap</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Wrap the long lines of the text, log or diff page in the slot, unwrap them, or toggle between the two, as its
+                bar's Wrap button and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">w</span> do. A page opens
+                unwrapped and keeps its choice until it closes. It is refused <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no text page</span>
+                for any other page, one shown for another Mac included, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote page</span> for a slot shown on a
+                presenting Mac; on a page shown for another Mac the bar's toggle stays in the page, unreported, until it redraws. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">wrapped</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unwrapped</span>; read back
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">htmlOverlays[].text.wrap</span>, true while wrapped and omitted otherwise.
               </p>
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -4383,7 +4403,7 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.attach · zmx.attach.group</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Open one of the sessions <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> listed as a session here, marked remote. It takes the session <em>id</em> from that listing, because remote names are editable and repeat across workspaces. It opens in the destination window's current workspace, selected, carrying the remote session's split when it has one. Returns the new session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; read <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> on its tree node.
+                Open one of the sessions <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> listed as a session here, marked remote. It takes the session <em>id</em> from that listing, because remote names are editable and repeat across workspaces. It opens in the destination window's current workspace, selected, carrying the remote session's split when it has one. Returns the new session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; read <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span> on its tree node.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> takes a local open window ID, unique prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
                 Omitted, it uses the frontmost window after discovery. An invalid or closed destination fails without creating
                 a session. A background target leaves the frontmost window unchanged. A terminal companion opens under the one row in the destination window attached from its parent, in that row's workspace; with no such row, or more than one, it opens on its own. A top-level page session opens as a top-level row showing that Mac's page through its own channel, its companions under it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--companions</span>.

@@ -232,6 +232,12 @@ struct AppStoreRemotePageTests {
         #expect(!store.pageBelongsRemote(UUID(), pane: nil))
     }
 
+    @Test func wrapRefusesAPageThePresenterShows() throws {
+        let (session, _) = try origin()
+
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.remote))
+    }
+
     @Test func aPresenterWithoutPageKindsKeepsTheRefusal() throws {
         let (session, _) = try origin(kinds: [])
         let page = file()

@@ -2,8 +2,10 @@
 .agterm-gutter, #agterm-page pre {
   margin: 0; padding: 12px 16px; font: 13px/20px var(--mono); white-space: pre; border-radius: 0; background: none;
 }
-.agterm-gutter { text-align: right; color: var(--muted); border-right: 1px solid var(--rule); user-select: none; }
+.agterm-gutter { flex: none; text-align: right; color: var(--muted); border-right: 1px solid var(--rule); user-select: none; }
 #agterm-page pre { flex: 1; overflow: visible; }
+.agterm-wrapped #agterm-page, .agterm-wrapped #agterm-page pre { min-width: 0; }
+.agterm-wrapped #agterm-page pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .agterm-band {
   position: absolute; left: 0; right: 0; height: 20px; pointer-events: none;
   background: color-mix(in srgb, var(--agterm-color-11, #d9b45a) 22%, transparent);
@@ -12,16 +14,20 @@
 body { padding-top: 35px; }
 .agterm-bar {
   position: fixed; top: 0; left: 0; right: 0; height: 35px; z-index: 1; display: flex; gap: 12px; align-items: center;
-  box-sizing: border-box; padding: 4px 6px 4px 16px; font: 12px/20px var(--mono); color: var(--muted);
+  box-sizing: border-box; padding: 4px 6px; font: 12px/20px var(--mono); color: var(--muted);
   background: var(--agterm-background, Canvas); border-bottom: 1px solid var(--rule);
   white-space: nowrap; overflow: hidden;
 }
 /* one line at any width: a wrapping bar changes the page height as it scrolls sideways, which moves the view */
-.agterm-logbar, .agterm-search { display: flex; gap: 8px; align-items: center; }
-.agterm-logbar { gap: 12px; flex: 0 1 auto; }
-.agterm-logbar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agterm-search { display: flex; gap: 8px; align-items: center; }
+/* the note is a bar item of its own and shrinks faster than the search box, which keeps room for its controls */
+.agterm-logbar { display: contents; }
+.agterm-logbar > span { flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.agterm-logbar > span:empty { display: none; }
+/* the full paused label, Wrap and the search box's floor need about 460px */
+@media (max-width: 480px) { .agterm-prefix { display: none; } }
 .agterm-bar button { flex: none; }
-.agterm-logbar button {
+.agterm-logbar button, .agterm-wrap {
   font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
   padding: 0 8px; cursor: pointer;
 }

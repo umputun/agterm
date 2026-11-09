@@ -201,6 +201,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(page.remoteHost, "buildbox")
         XCTAssertEqual(page.htmlOverlay?.replicaOf, UUID(uuidString: pageID))
         XCTAssertEqual(page.remotePresentation?.binding.remoteSessionID, created, "New Companion on the row makes a sibling there")
+        XCTAssertEqual(page.remoteSessionID, created)
         let create = try XCTUnwrap(runner.invocations[1].last)
         for word in ["overlay", "open", "--companion", "--html", "/srv/report.html", "--cwd", "/srv", "--js"] {
             XCTAssertTrue(create.contains(word), word)
@@ -344,6 +345,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertNil(row.parentID)
         XCTAssertEqual(row.content, .page)
         XCTAssertEqual(row.remoteHost, "buildbox")
+        XCTAssertEqual(row.remoteSessionID, "page-root")
         XCTAssertEqual(store.workspace(forSession: rowID)?.id, store.currentWorkspaceID)
 
         let terminal = await server.attachRemoteSession(host: "buildbox", session: "c1", window: nil)
@@ -352,6 +354,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertTrue(terminal.ok, terminal.error ?? "")
         XCTAssertTrue(page.ok, page.error ?? "")
         XCTAssertEqual(store.companions(of: rowID).map { $0.remotePresentation?.binding.remoteSessionID }, ["c1", created])
+        XCTAssertEqual(store.companions(of: rowID).map(\.remoteSessionID), ["c1", created])
         XCTAssertEqual(store.companions(of: rowID).map(\.content), [.terminal, .page])
     }
 

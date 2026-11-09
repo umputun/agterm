@@ -68,11 +68,11 @@ The event kinds and payloads are:
   selected split and the primary exiting while selected each emit one; a swap, a hidden split shown again
   and a window coming forward emit nothing, and neither does a reload. The scratch keeps `pane.scratch`
   and a session switch keeps `session.selected`. A session created in or moved into a window starts silent.
-- `remote.opened` / `remote.closed`: session `name` and the ssh destination of a local row created by
-  `zmx attach` as `host`, emitted beside `session.created` / `session.closed` for that session only. They describe the row's
+- `remote.opened` / `remote.closed`: session `name`, the ssh destination of a local row created by
+  `zmx attach` as `host`, and the origin's session id it shows as `remoteSessionID`, emitted beside `session.created` / `session.closed` for that session only. They describe the row's
   presence in the local tree, never the ssh connection: undo re-emits `remote.opened`, and an ssh that
   died leaves the row holding its exit line until it is closed. Closing a remote split pane alone emits
-  neither.
+  neither. The human line reads `HH:MM:SS remote.opened NAME host=HOST remote-session-id=ID`.
 - `app.launched`: an empty payload and no window, workspace or session. Emitted once per app run, after
   `hooks.conf` is loaded and the control socket accepts connections, so a hook on it can call
   `agtermctl` at once. The restored windows and sessions are in the tree by then; their terminals may
@@ -167,6 +167,8 @@ omitted for non-Live and remote panes; the split field includes hidden splits an
 split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session, and never present after a relaunch because a remote session is never written to disk),
+`remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
+the id `zmx attach` takes; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
 origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
@@ -1211,6 +1213,13 @@ error keeps those names for compatibility.
   the presenting Mac. Wire `to` (`next`, `prev`). Read back `htmlOverlays[].text.changes`: `{count, current}`,
   current 0 before any step, omitted on any other page and until the page reports. The page's own buttons and the
   `]`/`[` keys step the same way.
+- `session overlay wrap on|off|toggle [--pane left|right] [--target] [--window W]`
+  - wrap the long lines of the text, log or diff page in the addressed slot, unwrap them, or toggle; returns
+  `result.text` `wrapped` or `unwrapped`. A page opens unwrapped and keeps its choice until it closes. Refused
+  `no text page` for any other page, one shown for another Mac included, and `remote page: wrap it on the Mac that
+  shows it` for a slot handed to the presenting Mac. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while
+  wrapped and omitted otherwise. The page's Wrap button and `w` toggle the same state; on a page shown for another Mac
+  that toggle stays in the page, unreported, and a redraw drops it.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,
@@ -2383,7 +2392,7 @@ the destination window's current workspace, selected, with the remote session's 
 after discovery. An invalid or closed destination fails without creating a session. Targeting a background
 window leaves the frontmost window unchanged. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
-new local session's `id`; read `remoteHost` on its tree node. The remote is resolved AGAIN before anything
+new local session's `id`; read `remoteHost` and `remoteSessionID` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. A connection that
 starts and later drops is an ordinary pane exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself, with ssh's last
 failed-probe message along the pane's bottom edge and on the pane's `reconnect` in `tree`; any other exit prints

@@ -56,6 +56,14 @@ struct TextPageTests {
         #expect(!TextPage.html(text: "x", language: "diff", line: nil, style: "", change: 0).contains("data-change"))
     }
 
+    @Test func aWrappedPageIsMarkedAndAnUnwrappedOneIsNot() {
+        let log = TextLogState(following: true)
+
+        #expect(TextPage.html(text: "x", language: nil, line: nil, style: "", wrap: true).contains(#"hidden data-wrap>"#))
+        #expect(TextPage.html(text: "x", language: nil, line: nil, style: "", log: log, wrap: true).contains("data-wrap"))
+        #expect(!TextPage.html(text: "x", language: nil, line: nil, style: "").contains("data-wrap"))
+    }
+
     @Test func aDiffMapsEachHeaderPathToItsLanguage() {
         let text = """
             diff --git a/main.go b/main.go

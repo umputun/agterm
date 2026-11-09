@@ -174,6 +174,37 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertEqual(remote.error, TextSearchFailure.remote.message)
     }
 
+    func testWrapAnswersTheStateItLeftOnTheModelAndItsReadBack() throws {
+        let (_, session) = try addSession()
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let wrapped = server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
+
+        XCTAssertEqual(wrapped, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: "wrapped")))
+        XCTAssertEqual(try treeText(session)?.wrap, true)
+        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .off).result?.text,
+                       "unwrapped")
+        XCTAssertNil(try treeText(session)?.wrap)
+    }
+
+    func testWrapRefusesAnEmptySlotAndAPresentedPage() throws {
+        let (_, session) = try addSession()
+        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
+                       OverlayHtmlError.noOverlay)
+
+        try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
+                       TextWrapFailure.remote.message)
+    }
+
+    private func treeText(_ session: Session) throws -> ControlTextOverlayNode? {
+        let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
+        let node = try XCTUnwrap(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+        return node.htmlOverlays?.first?.text
+    }
+
     func testAChangesStepNeedsALoadedDiffPage() async throws {
         let (_, session) = try addSession()
         let empty = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: true)

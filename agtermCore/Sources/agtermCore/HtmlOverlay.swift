@@ -245,6 +245,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var searchRevision = 0
     /// textChanges is a diff page's last report on its changes, nil until it reports and on any other page.
     public internal(set) var textChanges: TextChanges?
+    /// textWrap is whether a text page wraps long lines; a replica keeps its own in the page.
+    public internal(set) var textWrap = false
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// loadFailurePinned keeps a failure the page cannot load past, such as its port forward ending, over every
