@@ -58,7 +58,8 @@ public final class Session: Identifiable {
     /// Immutable and set at construction, because the first save happens inside `addSession`: a marker
     /// written afterwards would let one snapshot go to disk carrying the ssh command.
     public let remoteHost: String?
-    /// The origin's id for the session this row shows, set with `remoteHost` for the same reason.
+    /// remoteSessionID is the origin's id for the session this row shows, set at construction because
+    /// `addSession` emits `remote.opened` before `bindRemote` runs.
     public let remoteSessionID: String?
 
     /// What the session shows, fixed at construction for the same first-save reason as `remoteHost`.

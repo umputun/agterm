@@ -72,7 +72,7 @@ The event kinds and payloads are:
   `zmx attach` as `host`, and the origin's session id it shows as `remoteSessionID`, emitted beside `session.created` / `session.closed` for that session only. They describe the row's
   presence in the local tree, never the ssh connection: undo re-emits `remote.opened`, and an ssh that
   died leaves the row holding its exit line until it is closed. Closing a remote split pane alone emits
-  neither.
+  neither. The human line reads `HH:MM:SS remote.opened NAME host=HOST remote-session-id=ID`.
 - `app.launched`: an empty payload and no window, workspace or session. Emitted once per app run, after
   `hooks.conf` is loaded and the control socket accepts connections, so a hook on it can call
   `agtermctl` at once. The restored windows and sessions are in the tree by then; their terminals may
