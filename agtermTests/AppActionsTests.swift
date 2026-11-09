@@ -126,16 +126,34 @@ final class AppActionsTests: XCTestCase {
         return session
     }
 
+    private func activeNewSessionCwd() throws -> String {
+        let store = try XCTUnwrap(library.activeStore)
+        return actions.resolvedNewSessionCwd(in: try XCTUnwrap(store.currentWorkspaceID), store: store)
+    }
+
+    func testNewSessionCwdReadsTheSuppliedBackgroundStore() throws {
+        settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.currentSession.rawValue)
+        let front = try XCTUnwrap(library.activeWindowID)
+        let frontStore = try XCTUnwrap(library.activeStore)
+        try XCTUnwrap(frontStore.activeSession).currentCwd = "/nowhere/front"
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        try XCTUnwrap(backStore.activeSession).currentCwd = "/nowhere/back"
+
+        XCTAssertEqual(actions.resolvedNewSessionCwd(in: backStore.workspaces[0].id, store: backStore), "/nowhere/back")
+    }
+
     func testNewSessionCwdFollowsTheCurrentSessionThroughTheLocalRule() throws {
         settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.currentSession.rawValue)
         let local = try XCTUnwrap(library.activeStore?.activeSession)
         local.currentCwd = "/nowhere/local"
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/local")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/local")
 
         let remote = try remoteActiveSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), home)
+        XCTAssertEqual(try activeNewSessionCwd(), home)
         remote.currentCwd = stateDir.path
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), stateDir.path)
+        XCTAssertEqual(try activeNewSessionCwd(), stateDir.path)
     }
 
     func testNewSessionCwdKeepsTheFocusedSplitPaneAndTheEmptyCwdFallback() throws {
@@ -148,18 +166,18 @@ final class AppActionsTests: XCTestCase {
         local.hasSplit = true
         local.isSplit = true
         local.splitFocused = true
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/split")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/split")
 
         local.splitFocused = false
         local.currentCwd = ""
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), home)
+        XCTAssertEqual(try activeNewSessionCwd(), home)
     }
 
     func testNewSessionCwdCustomModeIgnoresTheActiveSessionsRemoteness() throws {
         settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.custom.rawValue)
         settings.setNewSessionCustomDirectory("/nowhere/custom")
         _ = try remoteActiveSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/custom")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/custom")
     }
 
     func testNewSessionAfterCurrentLandsBehindTheSelectedSession() throws {

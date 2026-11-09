@@ -116,7 +116,7 @@ final class AppActions {
     func newSession() {
         guard uiActionsEnabled else { return }
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID),
+              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(in: workspaceID, store: store),
                                              at: resolvedNewSessionIndex(in: workspaceID, store: store))
         else { return }
         // note activity so the new session buys the full idle grace before auto-follow moves the selection.
@@ -126,12 +126,12 @@ final class AppActions {
     }
 
     /// The cwd for a new session: the new-session-directory setting (home / the current session's cwd / a
-    /// fixed custom dir) resolved against the focused-pane cwd of `workspaceID`'s directory source (the active
-    /// session when nil), home when `settingsModel` isn't wired. Read as the `addSession` argument, so it
+    /// fixed custom dir) resolved against the focused-pane cwd of `workspaceID`'s directory source in the
+    /// supplied store, home when `settingsModel` isn't wired. Read as the `addSession` argument, so it
     /// captures the cwd BEFORE the new session exists.
-    func resolvedNewSessionCwd(in workspaceID: UUID? = nil) -> String {
+    func resolvedNewSessionCwd(in workspaceID: UUID, store: AppStore) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let source = workspaceID.flatMap { store?.newSessionDirectorySource(inWorkspace: $0) } ?? store?.activeSession
+        let source = store.newSessionDirectorySource(inWorkspace: workspaceID)
         let current = source.map { $0.localWorkingDirectory(reported: $0.focusedCwd, homeDirectory: home) }
         return settingsModel?.settings.resolveNewSessionCwd(currentSessionCwd: current, home: home) ?? home
     }
