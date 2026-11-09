@@ -894,8 +894,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedPageSessionIcon = Self.rowIcon("list.bullet.rectangle.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
+        lazy var flaggedRemoteSessionIcon = Self.rowIcon("cloud.fill")
+        lazy var flaggedRemoteSplitSessionIcon = Self.rowIcon("cloud.fill", weight: .bold)
         lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")
         lazy var remoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash", weight: .bold)
+        lazy var flaggedRemoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash.fill")
+        lazy var flaggedRemoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash.fill", weight: .bold)
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)
