@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+UNSET = object()
 TAB_ID = "11111111-2222-4333-8444-555555555555"
 OTHER_ID = "66666666-7777-4888-8999-000000000000"
 HERE = Path(__file__).resolve().parent
@@ -30,7 +31,11 @@ class ClaudeResumeTest(unittest.TestCase):
         self.work = self.home / "work" / "project"
         self.work.mkdir(parents=True)
         self.current_project = self.projects / self.encode_project(self.work)
+        self.alt_config = self.home / ".claude-work"
+        self.alt_projects = self.alt_config / "projects"
+        self.state = self.home / "state"
         self.log = self.home / "claude-args.jsonl"
+        self.config_log = self.home / "claude-config-dir"
         self.bin_dir = self.home / "bin"
         self.bin_dir.mkdir()
         fake_claude = self.bin_dir / "claude"
@@ -47,12 +52,14 @@ class ClaudeResumeTest(unittest.TestCase):
                     return "".join(c if c.isascii() and (c.isalnum() or c == "-") else "-" for c in path)
 
                 args = sys.argv[1:]
+                config = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
                 if args[:1] == ["--session-id"]:
-                    transcript = Path.home() / ".claude" / "projects" / encode(os.getcwd()) / f"{args[1]}.jsonl"
+                    transcript = Path(config) / "projects" / encode(os.getcwd()) / f"{args[1]}.jsonl"
                     if transcript.exists():
                         print(f"session file still exists: {transcript}", file=sys.stderr)
                         raise SystemExit(73)
 
+                Path(os.environ["FAKE_CLAUDE_CONFIG_LOG"]).write_text(config)
                 with Path(os.environ["FAKE_CLAUDE_LOG"]).open("a") as log:
                     print(json.dumps(args), file=log)
                 """
@@ -117,21 +124,41 @@ class ClaudeResumeTest(unittest.TestCase):
         transcript.write_text(text)
         return transcript
 
-    def invocation(self, *args, session_id=TAB_ID):
+    def memo_path(self, session_id=TAB_ID):
+        return self.state / "agterm-claude-resume" / session_id.lower()
+
+    def write_memo(self, directory, session_id=TAB_ID):
+        memo = self.memo_path(session_id)
+        memo.parent.mkdir(parents=True, exist_ok=True)
+        memo.write_text(f"{directory}\n")
+        return memo
+
+    def last_config_dir(self):
+        return self.config_log.read_text()
+
+    def invocation(self, *args, session_id=TAB_ID, config_dir=UNSET):
         self.log.unlink(missing_ok=True)
+        self.config_log.unlink(missing_ok=True)
         env = os.environ.copy()
         env.update(
             {
                 "AGTERM_SESSION_ID": session_id.upper(),
                 "CLAUDE_CONFIG_DIR": str(self.home / ".claude"),
+                "FAKE_CLAUDE_CONFIG_LOG": str(self.config_log),
                 "FAKE_CLAUDE_LOG": str(self.log),
                 "HOME": str(self.home),
                 "LC_ALL": "C",
                 "PATH": f"{self.bin_dir}{os.pathsep}{env['PATH']}",
                 "RECIPE": str(RECIPES[self.shell]),
                 "TERM": "xterm-256color",
+                "XDG_STATE_HOME": str(self.state),
             }
         )
+        if config_dir is not UNSET:
+            if config_dir is None:
+                env.pop("CLAUDE_CONFIG_DIR", None)
+            else:
+                env["CLAUDE_CONFIG_DIR"] = str(config_dir)
         if self.shell == "zsh":
             command = [
                 "zsh",
@@ -151,8 +178,10 @@ class ClaudeResumeTest(unittest.TestCase):
             ]
         return command, env
 
-    def invoke_claude(self, *args, session_id=TAB_ID):
-        command, env = self.invocation(*args, session_id=session_id)
+    def invoke_claude(self, *args, session_id=TAB_ID, config_dir=UNSET):
+        command, env = self.invocation(
+            *args, session_id=session_id, config_dir=config_dir
+        )
         return subprocess.run(
             command,
             env=env,
@@ -162,15 +191,17 @@ class ClaudeResumeTest(unittest.TestCase):
             check=False,
         )
 
-    def run_claude(self, *args, session_id=TAB_ID):
-        result = self.invoke_claude(*args, session_id=session_id)
+    def run_claude(self, *args, session_id=TAB_ID, config_dir=UNSET):
+        result = self.invoke_claude(
+            *args, session_id=session_id, config_dir=config_dir
+        )
         self.assertEqual(0, result.returncode, result.stderr)
         return [json.loads(line) for line in self.log.read_text().splitlines()]
 
-    def assert_call(self, expected, *args, session_id=TAB_ID):
+    def assert_call(self, expected, *args, session_id=TAB_ID, config_dir=UNSET):
         self.assertEqual(
             [expected],
-            self.run_claude(*args, session_id=session_id),
+            self.run_claude(*args, session_id=session_id, config_dir=config_dir),
         )
 
     def test_missing_transcript_starts_tab_session(self):
@@ -302,6 +333,71 @@ class ClaudeResumeTest(unittest.TestCase):
         self.write_transcript(self.message(), project=self.projects / "z-conversation")
 
         self.assert_call(["--resume", TAB_ID])
+
+    def test_non_default_account_is_remembered(self):
+        self.assert_call(["--session-id", TAB_ID], config_dir=self.alt_config)
+
+        self.assertEqual(str(self.alt_config), self.memo_path().read_text().strip())
+
+    def test_default_account_is_not_remembered(self):
+        self.assert_call(["--session-id", TAB_ID], config_dir=self.home / ".claude")
+
+        self.assertFalse(self.memo_path().exists())
+
+    def test_remembered_account_resumes_after_a_restored_launch(self):
+        self.write_transcript(
+            self.message(), project=self.alt_projects / "encoded-project"
+        )
+        self.write_memo(self.alt_config)
+
+        self.assert_call(["--resume", TAB_ID], config_dir=None)
+        self.assertEqual(str(self.alt_config), self.last_config_dir())
+
+    def test_restored_launch_without_a_memo_stays_on_the_default_account(self):
+        self.write_transcript(
+            self.message(), project=self.alt_projects / "encoded-project"
+        )
+
+        self.assert_call(["--session-id", TAB_ID], config_dir=None)
+        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+
+    def test_default_account_keeps_its_conversation_over_a_remembered_one(self):
+        self.write_transcript(self.message())
+        self.write_transcript(
+            self.message(), project=self.alt_projects / "encoded-project"
+        )
+        self.write_memo(self.alt_config)
+
+        self.assert_call(["--resume", TAB_ID], config_dir=None)
+        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+
+    def test_a_set_config_dir_outranks_the_memo(self):
+        self.write_transcript(
+            self.message(), project=self.alt_projects / "encoded-project"
+        )
+        self.write_memo(self.alt_config)
+
+        self.assert_call(
+            ["--session-id", TAB_ID], config_dir=self.home / ".claude"
+        )
+        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+
+    def test_memo_naming_a_directory_without_projects_is_ignored(self):
+        self.write_memo(self.home / "gone")
+
+        self.assert_call(["--session-id", TAB_ID], config_dir=None)
+        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+
+    def test_memo_is_not_read_as_a_path_when_it_holds_junk(self):
+        self.write_memo("")
+
+        self.assert_call(["--session-id", TAB_ID], config_dir=None)
+        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+
+    def test_current_subcommands_pass_through(self):
+        for subcommand in ("agents", "auth", "plugin", "plugins", "rm", "ultrareview"):
+            with self.subTest(subcommand=subcommand):
+                self.assert_call([subcommand], subcommand)
 
 if __name__ == "__main__":
     if "CLAUDE_RESUME_SHELLS" in os.environ:
