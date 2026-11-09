@@ -241,7 +241,7 @@ final class SettingsUITests: XCTestCase {
         let triangle = app.menuItems["Triangle"]
         XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
         let shapes = ["Circle", "Square", "Triangle", "Down Triangle", "Play", "Diamond", "Capsule", "Seal", "Star",
-                      "Bolt", "Bell"]
+                      "Bolt", "Bell", "Checkmark"]
         for shape in shapes {
             XCTAssertTrue(app.menuItems[shape].exists, "the shape picker should offer '\(shape)'")
         }

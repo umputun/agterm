@@ -236,7 +236,7 @@ as `status`, so it is never reported without a `status`), `statusBlink` (`true` 
 set to blink — the `--blink` value; omitted when idle or not blinking), `statusColor` (the `#rrggbb`
 glyph-tint override — the `--color` value; omitted when idle or using the configured color) and
 `statusShape` (the glyph silhouette override — the `--shape` value, one of
-`circle`|`square`|`triangle`|`triangle-down`|`play`|`diamond`|`capsule`|`seal`|`star`|`bolt`|`bell`;
+`circle`|`square`|`triangle`|`triangle-down`|`play`|`diamond`|`capsule`|`seal`|`star`|`bolt`|`bell`|`checkmark`;
 omitted when idle or using the configured shape.
 Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
 absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
@@ -768,7 +768,7 @@ error keeps those names for compatibility.
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
-- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
+- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell|checkmark] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
   set the sidebar agent-status glyph. Every ACCEPTED call stamps the session node's
   `statusChangedAt`, including idle and one that re-pushes the same status, so a poller can read the last
   set time without keeping state of its own; a call refused by the pane-precedence rule
@@ -788,7 +788,7 @@ error keeps those names for compatibility.
   `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
   Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
   `--shape` (`circle`, `square`, `triangle`, `triangle-down`, `play`, `diamond`, `capsule`, `seal`, `star`, `bolt`,
-  `bell`) overrides the glyph SILHOUETTE
+  `bell`, `checkmark`) overrides the glyph SILHOUETTE
   the same way — it rides the status, so the next `session status` without `--shape` reverts to the
   Settings-configured shape, else the built-in plain circle (an unknown name errors, listing the accepted names).
   Shape is a second channel alongside the tint, so a session stays distinguishable at a glance and for a
@@ -2679,9 +2679,9 @@ restore; a `session restore --pane right` on a session with no split also return
 `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound),
 `invalid color (expected #rrggbb)` (session status --color),
-`invalid shape: <value> (circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell)` (session status --shape over the
+`invalid shape: <value> (circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell|checkmark)` (session status --shape over the
 raw socket; the `agtermctl` CLI rejects the same value locally with
-`shape must be one of: circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell`),
+`shape must be one of: circle, square, triangle, triangle-down, play, diamond, capsule, seal, star, bolt, bell, checkmark`),
 `--pane must be left, right, or scratch` (the `--pane` value check; the message intentionally lists the
 canonical read-back names while the role and position aliases documented above are accepted. The
 `agtermctl` CLI rejects a bad pane with this for session status/type/text/paste, and over the raw socket

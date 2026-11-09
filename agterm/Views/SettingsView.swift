@@ -572,7 +572,7 @@ private struct AgentStatusSettingsView: View {
     /// with the status's current color. NON-template — a menu recolors a template symbol to its own text color
     /// and would wash out the previewed tint.
     private static func shapeImage(_ shape: StatusShape, tint: NSColor) -> NSImage {
-        let config = NSImage.SymbolConfiguration(pointSize: StatusIconView.glyphPointSize, weight: .regular)
+        let config = NSImage.SymbolConfiguration(pointSize: StatusIconView.glyphPointSize, weight: GhosttyApp.symbolWeight(shape))
             .applying(NSImage.SymbolConfiguration(paletteColors: [tint]))
         guard let image = NSImage(systemSymbolName: shape.symbolName, accessibilityDescription: shape.displayName)?
             .withSymbolConfiguration(config) else {
