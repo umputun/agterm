@@ -1,0 +1,180 @@
+diff -ruN zmx-orig/src/loop.zig zmx/src/loop.zig
+--- zmx-orig/src/loop.zig
++++ zmx/src/loop.zig
+@@ -374,16 +374,9 @@
+                     daemon.has_pty_output = true;
+                     daemon.screen_revision +%= 1;
+ 
+-                    // When no real terminal client has attached yet, respond to
+-                    // terminal queries (e.g. DA1/DA2) on behalf of the terminal.
+-                    // This prevents fish from waiting 10s for unanswered queries.
+-                    // Only clients that sent .Init (a real zmx attach) count,
+-                    // not a `zmx run` tail-only client.
+-                    if (!daemon.hasTerminalClient() and
+-                        daemon.pty_write_buf.items.len < Daemon.PTY_WRITE_BUF_MAX)
+-                    {
+-                        util.respondToDeviceAttributes(gpa, &daemon.pty_write_buf, buf[0..n]);
+-                    }
++                    const answered = daemon.clientOutput(gpa, buf[0..n]);
++                    defer if (answered) |a| gpa.free(a);
++                    const client_data = answered orelse buf[0..n];
+ 
+                     // In run mode, scan output for exit code marker. The marker
+                     // can straddle two PTY reads (more likely under a throttled
+@@ -418,9 +411,10 @@
+                     // Broadcast data to all clients.
+                     // Rewrite OSC 133;A to include redraw=0 so the outer terminal
+                     // does not clear prompt lines on resize (issue #111).
+-                    const broadcast_data = util.rewritePromptRedraw(gpa, buf[0..n]) orelse buf[0..n];
+-                    defer if (broadcast_data.ptr != buf[0..n].ptr) gpa.free(broadcast_data);
++                    const broadcast_data = util.rewritePromptRedraw(gpa, client_data) orelse client_data;
++                    defer if (broadcast_data.ptr != client_data.ptr) gpa.free(broadcast_data);
+                     for (daemon.clients.items) |client| {
++                        if (broadcast_data.len == 0) break;
+                         ipc.appendMessage(gpa, &client.write_buf, .Output, broadcast_data) catch |err| {
+                             std.log.warn(
+                                 "failed to buffer output for client err={s}",
+@@ -681,6 +675,13 @@
+         try term.resize(gpa, .{ .cols = cols, .rows = rows });
+     }
+ 
++    /// clientOutput answers DA queries while no terminal client is attached and returns the PTY output clients get
++    /// without them, owned by the caller; null sends `data` as it is.
++    fn clientOutput(self: *Daemon, gpa: std.mem.Allocator, data: []const u8) ?[]u8 {
++        if (self.hasTerminalClient() or self.pty_write_buf.items.len >= PTY_WRITE_BUF_MAX) return null;
++        return util.respondToDeviceAttributes(gpa, &self.pty_write_buf, data);
++    }
++
+     /// True while a client that sent .Init (a real `zmx attach`) is connected.
+     fn hasTerminalClient(self: *const Daemon) bool {
+         for (self.clients.items) |c| {
+@@ -1913,3 +1914,33 @@
+     const pay3 = client_req.write_buf.items[@sizeOf(ipc.Header)..];
+     try std.testing.expectEqualStrings("DISPLAY=:99\n", pay3);
+ }
++
++test "a query a client sees before its Init is answered once and not forwarded" {
++    const alloc = std.testing.allocator;
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++    const fds = try lib_posix.pipe2(.{});
++    defer lib_posix.close(fds[1]);
++    try daemon.clients.append(alloc, try testClient(alloc, fds[0], false));
++    defer _ = daemon.closeClient(alloc, daemon.clients.items[0], 0, false);
++
++    const out = daemon.clientOutput(alloc, "x\x1b[cy") orelse return error.TestUnexpectedResult;
++    defer alloc.free(out);
++    try std.testing.expectEqualStrings("xy", out);
++    try std.testing.expectEqualStrings("\x1b[?62;22c", daemon.pty_write_buf.items);
++}
++
++test "after Init a query is forwarded and the daemon leaves it to the terminal" {
++    const alloc = std.testing.allocator;
++    var daemon = testDaemon();
++    defer daemon.clients.deinit(alloc);
++    defer daemon.pty_write_buf.deinit(alloc);
++    const fds = try lib_posix.pipe2(.{});
++    defer lib_posix.close(fds[1]);
++    try daemon.clients.append(alloc, try testClient(alloc, fds[0], true));
++    defer _ = daemon.closeClient(alloc, daemon.clients.items[0], 0, false);
++
++    try std.testing.expect(daemon.clientOutput(alloc, "x\x1b[cy") == null);
++    try std.testing.expectEqualStrings("", daemon.pty_write_buf.items);
++}
+diff -ruN zmx-orig/src/util.zig zmx/src/util.zig
+--- zmx-orig/src/util.zig
++++ zmx/src/util.zig
+@@ -261,7 +261,17 @@
+ const DA1_RESPONSE = "\x1b[?62;22c";
+ const DA2_RESPONSE = "\x1b[>1;10;0c";
+ 
+-pub fn respondToDeviceAttributes(alloc: std.mem.Allocator, buf: *std.ArrayList(u8), data: []const u8) void {
++const da_queries = [_]struct { seq: []const u8, reply: []const u8 }{
++    .{ .seq = DA2_QUERY, .reply = DA2_RESPONSE },
++    .{ .seq = DA2_QUERY_EXPLICIT, .reply = DA2_RESPONSE },
++    .{ .seq = DA1_QUERY, .reply = DA1_RESPONSE },
++    .{ .seq = DA1_QUERY_EXPLICIT, .reply = DA1_RESPONSE },
++};
++
++/// respondToDeviceAttributes returns `data` without the queries it answered, so no client is handed a query that
++/// already has a reply; null when it answered none, or when the copy could not be allocated, and `data` goes out as
++/// it is. A query split across two reads is neither answered nor removed.
++pub fn respondToDeviceAttributes(alloc: std.mem.Allocator, buf: *std.ArrayList(u8), data: []const u8) ?[]u8 {
+     // Scan for DA queries in PTY output and respond on behalf of the terminal.
+     // This handles the case where no client is attached (e.g. zmx run)
+     // and the shell (e.g. fish) sends a DA query that would otherwise go unanswered.
+@@ -276,6 +286,9 @@
+     // DA1 response (from terminal): ESC [ ? ... c  (has '?' after '[')
+     //
+     // We must NOT match DA responses (which contain '?') as queries.
++    var kept: std.ArrayList(u8) = .empty;
++    var start: usize = 0;
++    var answered = false;
+     var i: usize = 0;
+     while (i < data.len) {
+         if (data[i] == '\x1b' and i + 1 < data.len and data[i + 1] == '[') {
+@@ -284,14 +297,35 @@
+                 i += 3;
+                 continue;
+             }
+-            if (matchSeq(data[i..], DA2_QUERY) or matchSeq(data[i..], DA2_QUERY_EXPLICIT)) {
+-                buf.appendSlice(alloc, DA2_RESPONSE) catch {};
+-            } else if (matchSeq(data[i..], DA1_QUERY) or matchSeq(data[i..], DA1_QUERY_EXPLICIT)) {
+-                buf.appendSlice(alloc, DA1_RESPONSE) catch {};
++            const query = for (da_queries) |q| {
++                if (matchSeq(data[i..], q.seq)) break q;
++            } else null;
++            if (query) |q| {
++                buf.appendSlice(alloc, q.reply) catch {
++                    kept.deinit(alloc);
++                    return null;
++                };
++                kept.appendSlice(alloc, data[start..i]) catch {
++                    kept.deinit(alloc);
++                    return null;
++                };
++                answered = true;
++                i += q.seq.len;
++                start = i;
++                continue;
+             }
+         }
+         i += 1;
+     }
++    if (!answered) return null;
++    kept.appendSlice(alloc, data[start..]) catch {
++        kept.deinit(alloc);
++        return null;
++    };
++    return kept.toOwnedSlice(alloc) catch {
++        kept.deinit(alloc);
++        return null;
++    };
+ }
+ 
+ fn matchSeq(data: []const u8, seq: []const u8) bool {
+@@ -2238,3 +2272,23 @@
+     defer alloc.free(result);
+     try testing.expectEqualStrings("", result);
+ }
++
++test "respondToDeviceAttributes answers each query and returns the output without it" {
++    const alloc = testing.allocator;
++    var replies: std.ArrayList(u8) = .empty;
++    defer replies.deinit(alloc);
++    const kept = respondToDeviceAttributes(alloc, &replies, "a\x1b[cb\x1b[>0cc\x1b[0c") orelse return error.TestUnexpectedResult;
++    defer alloc.free(kept);
++    try testing.expectEqualStrings("abc", kept);
++    try testing.expectEqualStrings(DA1_RESPONSE ++ DA2_RESPONSE ++ DA1_RESPONSE, replies.items);
++}
++
++test "respondToDeviceAttributes leaves output without a whole query alone" {
++    const alloc = testing.allocator;
++    var replies: std.ArrayList(u8) = .empty;
++    defer replies.deinit(alloc);
++    for ([_][]const u8{ "plain", DA1_RESPONSE, "\x1b[", "\x1b[>", "\x1b[0", "\x1b[1c" }) |data| {
++        try testing.expect(respondToDeviceAttributes(alloc, &replies, data) == null);
++    }
++    try testing.expectEqualStrings("", replies.items);
++}

@@ -864,14 +864,17 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         let clock = ContinuousClock()
         let windowStart = clock.now
         let attachDeadline = Date().addingTimeInterval(3)
+        var paneOutput = ""
         while !ended, Date() < attachDeadline {
+            // read like a terminal does: unread pty output can block zmx attach's exit
+            paneOutput += Self.available(pane.ptyFD)
             lastWait = waitpid(pane.pid, &status, WNOHANG)
             lastErrno = lastWait == -1 ? errno : 0
             ended = lastWait == pane.pid
             if !ended { Thread.sleep(forTimeInterval: 0.02) }
         }
         let report = ended ? "" : StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: clock.now - windowStart,
-                                                lastWait: lastWait, lastErrno: lastErrno).report(fixture: fixture)
+                                                lastWait: lastWait, lastErrno: lastErrno, output: paneOutput).report(fixture: fixture)
         #expect(ended, "the pane's attach to an ended command kept running\n\(report)")
         if !ended {
             kill(pane.pid, SIGKILL)
@@ -888,6 +891,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
         let elapsed: Duration
         let lastWait: pid_t
         let lastErrno: Int32
+        let output: String
 
         func report(fixture: Fixture) -> String {
             let listing: String
@@ -899,7 +903,7 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             return """
                 pid=\(pane.pid) elapsed=\(elapsed) waitpid=\(lastWait) errno=\(lastErrno) \
                 p_stat=\(SessionHostServerTests.processState(pane.pid)) argv=\(argv) daemon=\(daemon)
-                pty: \(SessionHostServerTests.available(pane.ptyFD).debugDescription)
+                pty: \((output + SessionHostServerTests.available(pane.ptyFD)).debugDescription)
                 exec error: \(SessionHostServerTests.available(pane.execErrorFD).debugDescription)
                 zmx list: \(listing)
                 host log: \(fixture.hostLog())

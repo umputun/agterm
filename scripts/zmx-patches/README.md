@@ -37,6 +37,11 @@ longer apply, and re-running `check.py`.
   on every attach exit, which erases a Live `--command --wait` pane's output under its hold prompt. A client
   with a valid `ZMX_MANAGED` instead turns off the input reports a program may have left on and resets SGR
   and the OSC colors. An unmanaged client and a session switch still write RIS.
+- `0005-da-query-answered-once.patch` keeps a DA query the daemon answered out of the output it forwards.
+  Upstream answers DA1/DA2 itself until it processes a client's `Init`, yet still forwards the query to every
+  connected client, so the creation attach, accepted but not yet initialized, made agterm's session host
+  answer it a second time and the extra reply reached the program's input. A query the daemon leaves
+  unanswered, one split across two reads included, is forwarded as before.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program
