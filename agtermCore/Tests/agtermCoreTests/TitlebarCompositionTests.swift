@@ -83,6 +83,25 @@ struct TitlebarCompositionTests {
         #expect(composed.tail.isEmpty)
     }
 
+    @Test(arguments: [ToolbarMode.normal, .compact])
+    func aWindowNamedAfterTheShownHostIsNotRepeated(mode: ToolbarMode) {
+        let host = "ssh://agterm@127.0.0.1:2222"
+        let composed = compose(window: host, host: host, mode: mode)
+        #expect(composed.title == "alpha")
+        #expect(composed.host == host)
+    }
+
+    @Test func aRenamedRemoteWindowKeepsItsName() {
+        let composed = compose(window: "builds", host: "ssh://agterm@127.0.0.1:2222", mode: .normal)
+        #expect(composed.title == "alpha — builds")
+    }
+
+    @Test func aHostNamedWindowKeepsItsNameWhenTheHostIsHidden() {
+        let composed = compose(window: "ssh://agterm@127.0.0.1:2222", mode: .normal)
+        #expect(composed.title == "alpha — ssh://agterm@127.0.0.1:2222")
+        #expect(composed.host == nil)
+    }
+
     @Test func compactContextKeepsItsSeparatorAfterAHostAlone() {
         let composed = compose(session: nil, context: "PR #517", host: "buildbox", mode: .compact)
         #expect(composed.title.isEmpty)
