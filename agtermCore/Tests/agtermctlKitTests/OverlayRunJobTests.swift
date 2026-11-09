@@ -76,10 +76,19 @@ struct OverlayRunJobTests {
 
     func gone(_ pid: pid_t) -> Bool {
         for _ in 0..<100 {
-            if kill(pid, 0) != 0 { return true }
+            if kill(pid, 0) != 0 || zombie(pid) { return true }
             usleep(20_000)
         }
         return false
+    }
+
+    func zombie(_ pid: pid_t) -> Bool {
+        #if os(Linux)
+        guard let stat = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8) else { return false }
+        return OverlayJobRunner.statusFields(stat)?.state == "Z"
+        #else
+        false
+        #endif
     }
 
     func pidFile() -> String {
@@ -114,6 +123,22 @@ struct OverlayRunJobTests {
 
         #expect(throws: SocketClientError.self) { try runner.claim("job") }
         #expect(origin.frames().isEmpty)
+    }
+
+    @Test(arguments: [
+        ("41 (sleep) Z 1 40 30 0 -1", "Z", 40),
+        ("9 (a) R (b) S 1 77 77 0 -1", "S", 77),
+        ("12 (two words) R 1 12 12", "R", 12),
+    ] as [(String, String, Int32)])
+    func procStatReadsTheStateAndGroupAfterTheName(line: String, state: String, group: Int32) {
+        let fields = OverlayJobRunner.statusFields(line)
+        #expect(fields.map { String($0.state) } == state)
+        #expect(fields?.group == group)
+    }
+
+    @Test(arguments: ["", "no parens 1 2 3", "5 (sh) Z 1", "5 (sh) ZZ 1 5 5", "5 (sh) Z 1 group 5"])
+    func procStatRefusesALineItCannotRead(line: String) {
+        #expect(OverlayJobRunner.statusFields(line) == nil)
     }
 
     @Test func aCancelFromTheAppEndsTheProgramCanceled() throws {

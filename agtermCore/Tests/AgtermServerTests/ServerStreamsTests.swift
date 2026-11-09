@@ -18,37 +18,95 @@ struct ServerStreamsTests {
     }
 
     final class Viewer: @unchecked Sendable {
-        let fd: Int32
-        private(set) var gen = 0
+        private let fd: Int32
+        private let state = NSCondition()
+        private var queue: [PresentationFrame] = []
+        private var storedGen = 0
+        private var ended: String?
+        private var disconnected = false
+        private let writes = NSLock()
+        private let finished = DispatchSemaphore(value: 0)
+
+        private(set) var missed: String?
+
+        var gen: Int { state.withLock { storedGen } }
 
         init(fd: Int32) {
             self.fd = fd
-            var timeout = timeval(tv_sec: 60, tv_usec: 0)
-            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+            Thread { [self] in readFrames() }.start()
         }
 
         func send(_ body: PresentationFrame.Body) throws {
-            try sendNoSignal(fd, try PresentationCodec.encode(PresentationFrame(gen: gen, rev: 0, body: body)))
+            try write(try PresentationCodec.encode(PresentationFrame(gen: gen, rev: 0, body: body)))
         }
 
-        func next() -> PresentationFrame? {
+        func write(_ data: Data) throws {
+            try writes.withLock {
+                guard !disconnected else { throw UnixSocket.Failure.system("viewer disconnected") }
+                try sendNoSignal(fd, data)
+            }
+        }
+
+        func disconnect() {
+            let first = writes.withLock {
+                defer { disconnected = true }
+                return !disconnected
+            }
+            guard first else { return }
+            shutdown(fd, Int32(SHUT_RDWR))
+            finished.wait()
+            close(fd)
+        }
+
+        func next(within seconds: TimeInterval = 60) -> PresentationFrame? {
+            let deadline = Date().addingTimeInterval(seconds)
+            state.lock()
+            defer { state.unlock() }
+            while queue.isEmpty {
+                if let ended {
+                    missed = ended
+                    return nil
+                }
+                guard state.wait(until: deadline) else {
+                    missed = "no frame within \(seconds) s"
+                    return nil
+                }
+            }
+            return queue.removeFirst()
+        }
+
+        private func readFrames() {
             var bytes: [UInt8] = []
             var byte: UInt8 = 0
-            while read(fd, &byte, 1) == 1 {
+            var reason = "end of stream"
+            while true {
+                let count = read(fd, &byte, 1)
+                if count < 0, errno == EINTR { continue }
+                guard count == 1 else {
+                    if count < 0 { reason = "read failed: \(String(cString: strerror(errno)))" }
+                    break
+                }
                 guard byte == UInt8(ascii: "\n") else {
                     bytes.append(byte)
                     continue
                 }
-                let frame = try? PresentationCodec.decode(Data(bytes))
-                bytes.removeAll()
-                switch frame?.body {
-                case .hello?: gen = frame?.gen ?? gen
-                case .ping?: guard (try? send(.ack)) != nil else { return nil }
-                default: break
+                guard let frame = try? PresentationCodec.decode(Data(bytes)) else {
+                    reason = "undecodable frame"
+                    break
                 }
-                return frame
+                bytes.removeAll()
+                if frame.body == .ping { try? send(.ack) }
+                state.withLock {
+                    if case .hello = frame.body { storedGen = frame.gen }
+                    queue.append(frame)
+                    state.broadcast()
+                }
             }
-            return nil
+            state.withLock {
+                ended = reason
+                state.broadcast()
+            }
+            finished.signal()
         }
 
         private(set) var bodies: [PresentationFrame.Body] = []
@@ -68,10 +126,11 @@ struct ServerStreamsTests {
             let deadline = Date().addingTimeInterval(seconds)
             while true {
                 let remaining = deadline.timeIntervalSinceNow
-                guard remaining > 0 else { return nil }
-                var timeout = timeval(tv_sec: Int(remaining), tv_usec: .init(remaining.truncatingRemainder(dividingBy: 1) * 1_000_000))
-                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
-                guard let frame = next() else { return nil }
+                guard remaining > 0 else {
+                    missed = "no match within \(seconds) s"
+                    return nil
+                }
+                guard let frame = next(within: remaining) else { return nil }
                 bodies.append(frame.body)
                 if case .pendingChunk(let chunk) = frame.body {
                     batch.add(chunk)
@@ -108,7 +167,7 @@ struct ServerStreamsTests {
         #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
         streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
         let viewer = Viewer(fd: fds[1])
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
                                                  mode: .presenter)))
 
@@ -120,7 +179,7 @@ struct ServerStreamsTests {
     @Test func aViewerGetsTheSnapshotThenTheSessionsChanges() async throws {
         let session = try newSession()
         let viewer = try await connect(session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         _ = harness.store.setContext("build", forSession: session.id)
 
@@ -131,7 +190,7 @@ struct ServerStreamsTests {
     @Test func aNotificationReachesTheSessionsViewers() async throws {
         let session = try newSession()
         let viewer = try await connect(session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         _ = harness.actions.sendNotification(session.id.uuidString, window: nil, title: "done", body: "build passed")
 
@@ -144,7 +203,7 @@ struct ServerStreamsTests {
     @Test func aHudReachesTheSessionsViewersAndItsCloseWithdrawsIt() async throws {
         let session = try newSession()
         let viewer = try await connect(session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         _ = harness.actions.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "building"))
         let shown = await offPool { viewer.first { if case .hud(let hud) = $0 { hud != nil } else { false } } }
@@ -167,7 +226,7 @@ struct ServerStreamsTests {
         let stopped = DispatchSemaphore(value: 0)
         Thread {
             for _ in 0..<40 {
-                guard stopping.wait(timeout: .now() + 0.05) == .timedOut, (try? sendNoSignal(origin.fd, ping)) != nil else { break }
+                guard stopping.wait(timeout: .now() + 0.05) == .timedOut, (try? origin.write(ping)) != nil else { break }
             }
             stopped.signal()
         }.start()
@@ -180,11 +239,29 @@ struct ServerStreamsTests {
             stopped.wait()
             return (found, waited, origin.first(within: 5) { $0 == .ack })
         }
-        close(fds[0])
-        close(fds[1])
+        origin.disconnect()
+        viewer.disconnect()
 
         #expect(!found)
         #expect(waited < 10)
+        #expect(ack == .ack)
+    }
+
+    // regression: a viewer acked pings only inside a read, so a test slow between two reads lost its presenter
+    @Test func aViewerAcksAPingWhileNoTestIsReading() async throws {
+        let ping = try PresentationCodec.encode(PresentationFrame(gen: 0, rev: 0, body: .ping))
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        let viewer = Viewer(fd: fds[1])
+        let origin = Viewer(fd: fds[0])
+        defer {
+            origin.disconnect()
+            viewer.disconnect()
+        }
+
+        try origin.write(ping)
+        let ack = await offPool { origin.first(within: 5) { $0 == .ack } }
+
         #expect(ack == .ack)
     }
 
@@ -193,9 +270,9 @@ struct ServerStreamsTests {
         streams.presentationHelloDeadline = 0.2
         var fds: [Int32] = [-1, -1]
         #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
-        defer { close(fds[1]) }
         streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
         let viewer = Viewer(fd: fds[1])
+        defer { viewer.disconnect() }
 
         let frame = await offPool { viewer.next() }
 
@@ -205,7 +282,7 @@ struct ServerStreamsTests {
     @Test func aRespawnReachesTheSessionsViewers() async throws {
         let session = try newSession()
         let viewer = try await connect(session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
 
         streams.noteRespawn(session: session.id, daemon: daemon)
@@ -217,7 +294,7 @@ struct ServerStreamsTests {
     }
 
     private func drop(_ viewer: Viewer, from session: Session) async {
-        close(viewer.fd)
+        viewer.disconnect()
         let released = await eventually { !streams.presentationHub.hasPresenter(session: session.id) }
         #expect(released)
     }
@@ -233,12 +310,12 @@ struct ServerStreamsTests {
     @Test func aPickThePresenterAnswersSettles() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let pick = PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")])
 
         #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: false).ok)
         let request = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
-        guard case .pickRequest(let shown)? = request else { Issue.record("no pick request"); return }
+        guard case .pickRequest(let shown)? = request else { Issue.record("no pick request: \(viewer.missed ?? "")"); return }
         try viewer.send(.pickResolve(PresentationPickAnswer(id: shown.id, owner: shown.owner, item: "a")))
 
         let settled = await eventually { harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .picked }
@@ -260,7 +337,7 @@ struct ServerStreamsTests {
         }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let offered = await offPool { next.first { if case .pickRequest = $0 { true } else { false } } }
         guard case .pickRequest(let shown)? = offered else { Issue.record("no pick offer"); return }
@@ -283,7 +360,7 @@ struct ServerStreamsTests {
         #expect(unoffered == nil)
         await drop(older, from: session)
         let capable = try await presenter(for: session)
-        defer { close(capable.fd) }
+        defer { capable.disconnect() }
 
         let offered = await offPool { capable.first { if case .askRequest = $0 { true } else { false } } }
         guard case .askRequest(let shown)? = offered else { Issue.record("no ask offer"); return }
@@ -299,7 +376,7 @@ struct ServerStreamsTests {
         #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: true).ok)
 
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         let offered = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
         guard case .pickRequest(let shown)? = offered else { Issue.record("no pick offer"); return }
@@ -309,7 +386,7 @@ struct ServerStreamsTests {
     @Test func anExpiredAskIsNeverHandedToAConnectedPresenter() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         var late = Self.ask()
         late.deadline = Date().addingTimeInterval(-1)
 
@@ -328,7 +405,7 @@ struct ServerStreamsTests {
         #expect(openOverlay(on: session).ok)
 
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         let commit = await offPool { viewer.first { $0 == .pendingCommit } }
         #expect(commit == .pendingCommit)
@@ -348,7 +425,7 @@ struct ServerStreamsTests {
 
         #expect(unoffered == nil)
         #expect(session.askPending?.id == ask.id)
-        close(plain.fd)
+        plain.disconnect()
     }
 
     @Test func anAskPastItsDeadlineIsNotOfferedAndAnAnswerPastItEndsIt() async throws {
@@ -359,7 +436,7 @@ struct ServerStreamsTests {
         streams.now = { Date().addingTimeInterval(120) }
 
         let capable = try await presenter(for: session)
-        defer { close(capable.fd) }
+        defer { capable.disconnect() }
 
         #expect(askOutcome(late.id)?.result == .cancelled)
         streams.now = Date.init
@@ -389,7 +466,7 @@ struct ServerStreamsTests {
     @Test func anAskThePresenterAnswersSettles() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let ask = Self.ask()
 
         #expect(openAsk(ask, on: session).ok)
@@ -411,7 +488,7 @@ struct ServerStreamsTests {
         let request = await offPool { viewer.first { if case .askRequest = $0 { true } else { false } } }
         guard case .askRequest(let shown)? = request else { Issue.record("no ask request"); return }
 
-        close(viewer.fd)
+        viewer.disconnect()
 
         let returned = await eventually { session.askPending?.id == ask.id && !session.askPresentedRemotely }
         #expect(returned)
@@ -423,7 +500,7 @@ struct ServerStreamsTests {
     @Test func anAskThePresenterRefusesWaitsUnpresented() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let ask = Self.ask()
         #expect(openAsk(ask, on: session).ok)
         let request = await offPool { viewer.first { if case .askRequest = $0 { true } else { false } } }
@@ -439,7 +516,7 @@ struct ServerStreamsTests {
     @Test func aCancelledAskIsWithdrawnFromThePresenter() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let ask = Self.ask()
         #expect(openAsk(ask, on: session).ok)
 
@@ -454,7 +531,7 @@ struct ServerStreamsTests {
     @Test func aFormAskThePresenterCannotDrawWaitsUnpresented() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.askFormKind })
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         let reply = openAsk(Self.ask(form: .input(AskInputForm(mode: .line))), on: session)
 
@@ -474,7 +551,7 @@ struct ServerStreamsTests {
         try Data().write(to: URL(fileURLWithPath: terminfo + "/x/" + TerminfoInstall.entry))
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         #expect(openOverlay(on: session).ok)
 
@@ -491,7 +568,7 @@ struct ServerStreamsTests {
     @Test func closingAnUnclaimedProgramEndsItCancelledAndWithdrawsItFromThePresenter() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(openOverlay(on: session).ok)
 
         #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
@@ -505,7 +582,7 @@ struct ServerStreamsTests {
     @Test func aPictureReachesThePresenterWithItsPixelSize() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = harness.scratch.root + "/shot.png"
         let png: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
                             0, 0, 0x02, 0x80, 0, 0, 0x01, 0xE0, 8, 6, 0, 0, 0, 0, 0, 0, 0]
@@ -523,7 +600,7 @@ struct ServerStreamsTests {
     @Test func aMarkdownPageReachesThePresenterAndItsReloadFollows() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = harness.scratch.root + "/notes.md"
         try Data("# notes\n".utf8).write(to: URL(fileURLWithPath: path))
 
@@ -540,7 +617,7 @@ struct ServerStreamsTests {
     @Test func aHudIsRefusedWhileTheSessionsProgramIsShownOnThePresenter() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(openOverlay(on: session).ok)
 
         let reply = harness.actions.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "building"))
@@ -552,7 +629,7 @@ struct ServerStreamsTests {
     @Test func aHudIsRefusedWhileTheSessionsPageIsShownOnThePresenter() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = harness.scratch.root + "/notes.md"
         try Data("# notes\n".utf8).write(to: URL(fileURLWithPath: path))
         #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
@@ -566,7 +643,7 @@ struct ServerStreamsTests {
     @Test func aProgramReplacesATimedHudAndItsTimer() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(harness.actions.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "done", hideAfter: 60)).ok)
 
         #expect(openOverlay(on: session).ok)
@@ -579,7 +656,7 @@ struct ServerStreamsTests {
     @Test func aHudOpenedAfterAFinishedProgramClearsItsResult() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(openOverlay(on: session).ok)
         let request = await offPool { viewer.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let shown)? = request else { Issue.record("no overlay request"); return }
@@ -597,7 +674,7 @@ struct ServerStreamsTests {
     @Test func aHudOpenedAfterACancelledProgramClearsItsFailure() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let id = session.id.uuidString
         #expect(openOverlay(on: session).ok)
         #expect(harness.actions.closeSessionOverlay(id, window: nil, pane: nil).ok)
@@ -610,7 +687,7 @@ struct ServerStreamsTests {
     @Test func aHudResizeReachesThePresenterWithItsWidthAndDeadline() async throws {
         let session = try newSession()
         let viewer = try await connect(session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let id = session.id.uuidString
         _ = harness.actions.openHud(id, window: nil, spec: HudSpec(message: "building", hideAfter: 600))
         let opened = await offPool { viewer.first { if case .hud(let hud) = $0 { hud != nil } else { false } } }
@@ -631,7 +708,7 @@ struct ServerStreamsTests {
         #expect(streams.claimJobStream(job).ok == false)
 
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         let request = await offPool { viewer.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let shown)? = request, let token = shown.token else { Issue.record("no tokened offer"); return }
@@ -649,12 +726,12 @@ struct ServerStreamsTests {
         let offered = await offPool { first.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let old)? = offered, let oldToken = old.token else { Issue.record("no offer"); return }
 
-        close(first.fd)
+        first.disconnect()
         let withdrawn = await eventually { streams.overlayJobs.job(old.job)?.state == .unpresented }
         #expect(withdrawn)
         #expect(streams.claimJobStream(old.job, token: oldToken).ok == false)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let fresh)? = reoffered, let freshToken = fresh.token else { Issue.record("no re-offer"); return }
@@ -674,7 +751,7 @@ struct ServerStreamsTests {
 
         await drop(first, from: session)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first(within: 0.5) { if case .overlayRequest = $0 { true } else { false } } }
         #expect(reoffered == nil)
@@ -694,11 +771,11 @@ struct ServerStreamsTests {
         let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
         #expect(node?.interactions?.first?.state == ControlInteraction.claimed)
 
-        close(first.fd)
+        first.disconnect()
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
@@ -726,7 +803,7 @@ struct ServerStreamsTests {
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let linked)? = reoffered else { Issue.record("no page re-offer"); return }
@@ -750,11 +827,11 @@ struct ServerStreamsTests {
         defer { close(newPair[1]) }
         #expect(streams.claimPageStream(old.token).ok)
         streams.adoptPageServeStream(descriptor: oldPair[0], page: page, token: old.token)
-        close(first.fd)
+        first.disconnect()
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
         #expect(streams.claimPageStream(fresh.token).ok)
@@ -773,7 +850,7 @@ struct ServerStreamsTests {
         let path = harness.scratch.root + "/page.md"
         try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
         let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let shown)? = offered, let page = UUID(uuidString: shown.page) else { Issue.record("no page offer"); return }
@@ -820,7 +897,7 @@ struct ServerStreamsTests {
         #expect(session.remoteOverlays.slot(nil)?.page != nil)
         await drop(first, from: session)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
@@ -831,7 +908,7 @@ struct ServerStreamsTests {
     @Test func aPageClosedOnThePresenterAfterItsChannelEndedIsEnded() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let shown = try #require(try await offeredPage(session, to: viewer))
         let page = try #require(UUID(uuidString: shown.page))
         var pair: [Int32] = [-1, -1]
@@ -857,7 +934,7 @@ struct ServerStreamsTests {
         #expect(kept)
         await drop(first, from: session)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
@@ -871,7 +948,7 @@ struct ServerStreamsTests {
     @Test func aLoopbackPageReachesAPresenterThatForwardsAsAForward() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         #expect(openOverlay(on: session, page: try loopbackPage()).ok)
 
@@ -883,7 +960,7 @@ struct ServerStreamsTests {
     @Test func aLoopbackPageIsRefusedForAConnectedPresenterThatCannotForward() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session, kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageForwardKind })
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
 
         let reply = openOverlay(on: session, page: try loopbackPage())
 
@@ -901,7 +978,7 @@ struct ServerStreamsTests {
         #expect(skipped == nil)
         await drop(older, from: session)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let offered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let page)? = offered else { Issue.record("no page offer"); return }
@@ -911,7 +988,7 @@ struct ServerStreamsTests {
     @Test func aPageThePresenterClosesEnds() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let shown = try #require(try await offeredPage(session, to: viewer))
 
         try viewer.send(.pageClosed(PresentationPageChange(page: shown.page)))
@@ -932,11 +1009,11 @@ struct ServerStreamsTests {
         #expect(harness.actions.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: nil,
                                                      points: OverlayPointSize(width: 300)).ok)
 
-        close(first.fd)
+        first.disconnect()
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
@@ -955,11 +1032,11 @@ struct ServerStreamsTests {
         let old = try #require(try await offeredPage(session, to: first))
         let page = try #require(UUID(uuidString: old.page))
         #expect(streams.claimPageStream(old.token).ok)
-        close(first.fd)
+        first.disconnect()
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
         #expect(streams.claimPageStream(fresh.token).ok)
@@ -988,14 +1065,14 @@ struct ServerStreamsTests {
                                                         canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0)))
         try await Task.sleep(for: .milliseconds(200))
 
-        close(first.fd)
+        first.disconnect()
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
-        defer { close(next.fd) }
+        defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
-        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer: \(next.missed ?? "")"); return }
         #expect(fresh.sizePercent == 40)
         let hide = await offPool { next.first { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } } }
         #expect(hide != nil)
@@ -1004,7 +1081,7 @@ struct ServerStreamsTests {
     @Test func offeredPagesAndJobsReadBackTheirWindows() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         #expect(openOverlay(on: session).ok)
         let job = try #require(session.remoteOverlays.slot(nil)?.job)
 
@@ -1057,7 +1134,7 @@ struct ServerStreamsTests {
     @Test func aClickedMarkdownFileInThePanesDirectoryOpensAsAClickedPageWithItsLinks() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = try write("notes.md")
 
         try click("./notes.md", on: session, from: viewer)
@@ -1073,14 +1150,14 @@ struct ServerStreamsTests {
     func everyPageKindOpensInEveryLinkMode(mode: LinkOpenMode) async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let pages = [("notes.md", "# notes\n"), ("main.go", "package main\n"), ("page.html", "<!doctype html><p>hi</p>\n")]
 
         for (name, text) in pages {
             _ = try write(name, text)
             try click("./" + name, on: session, mode: mode, from: viewer)
             let page = await pageRequest(from: viewer)
-            #expect(page != nil, "\(name) in \(mode)")
+            #expect(page != nil, "\(name) in \(mode): \(viewer.missed ?? "")")
             #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok, "\(name) in \(mode)")
         }
     }
@@ -1088,7 +1165,7 @@ struct ServerStreamsTests {
     @Test func aClickedTextLocationOpensAtItsLine() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = try write("main.go", "package main\n\nfunc main() {}\n")
 
         try click("./main.go:3", on: session, from: viewer)
@@ -1101,7 +1178,7 @@ struct ServerStreamsTests {
     func aClickThatNamesNoPageIsRefused(raw: String, reason: RemoteLinkRefusal) async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         try Data([0, 1, 2]).write(to: URL(fileURLWithPath: harness.scratch.root + "/data.bin"))
 
         try click(raw, on: session, from: viewer)
@@ -1113,7 +1190,7 @@ struct ServerStreamsTests {
     @Test func aClickInAPaneTheSessionDoesNotHaveIsRefused() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         _ = try write("notes.md")
 
         try click("./notes.md", on: session, pane: UUID(), from: viewer)
@@ -1124,7 +1201,7 @@ struct ServerStreamsTests {
     @Test func aClickWhileTheHudIsUpIsNotOpened() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         _ = try write("notes.md")
         #expect(harness.actions.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "building")).ok)
 
@@ -1151,7 +1228,7 @@ struct ServerStreamsTests {
         #expect(await offPool { entered.wait(timeout: .now() + 60) == .success })
         await drop(first, from: session)
         let second = try await presenter(for: session)
-        defer { close(second.fd) }
+        defer { second.disconnect() }
         release.signal()
 
         let late = await offPool {
@@ -1164,7 +1241,7 @@ struct ServerStreamsTests {
     @Test func aClickReplacesAHiddenClickedPageOnlyOnceTheNewFileChecksOut() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         _ = try write("a.md")
         let replacement = try write("b.md")
         try FileManager.default.createDirectory(atPath: harness.scratch.root + "/broken.md", withIntermediateDirectories: false)
@@ -1174,11 +1251,11 @@ struct ServerStreamsTests {
                                                          canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0)))
 
         try click("./broken.md", on: session, from: viewer)
-        #expect(await refusal(from: viewer) == .notOpened)
+        #expect(await refusal(from: viewer) == .notOpened, "\(viewer.missed ?? "")")
         #expect(session.remoteOverlays.slot(nil)?.job == shown.page)
 
         try click("./b.md", on: session, from: viewer)
-        let next = try #require(await pageRequest(from: viewer))
+        let next = try #require(await pageRequest(from: viewer), "\(viewer.missed ?? "")")
         #expect(next.source == .markdown(path: replacement))
         #expect(session.remoteOverlays.slot(nil)?.job == next.page)
     }
@@ -1186,7 +1263,7 @@ struct ServerStreamsTests {
     @Test func hidingAPageShownOnThePresenterSendsItAndToggleShowsItAgain() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
-        defer { close(viewer.fd) }
+        defer { viewer.disconnect() }
         let path = harness.scratch.root + "/notes.md"
         try Data("# notes\n".utf8).write(to: URL(fileURLWithPath: path))
         #expect(openOverlay(on: session, page: .markdown(path: path)).ok)

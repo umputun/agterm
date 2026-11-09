@@ -110,7 +110,7 @@ final class OverlayJobRunner: @unchecked Sendable {
             // exit must not pass for an ordinary one while its group lives on
             if let tty, lock.withLock({ killAt == nil }), Self.hungUp(tty) { cancel() }
             let deadline = lock.withLock { killAt }
-            if status != nil, deadline == nil || kill(-pid, 0) != 0 { break }
+            if status != nil, deadline == nil || !Self.groupRuns(pid) { break }
             if let deadline, !killed, Date() >= deadline {
                 kill(-pid, SIGKILL)
                 killed = true
@@ -210,6 +210,54 @@ final class OverlayJobRunner: @unchecked Sendable {
         }
         #endif
         return pid
+    }
+
+    // kill(-group, 0) counts zombies, and an orphan's zombie stays for good under a PID 1 that never reaps,
+    // as a container's `tail -f /dev/null`
+    private static func groupRuns(_ group: pid_t) -> Bool {
+        guard kill(-group, 0) == 0 else { return false }
+        #if os(Linux)
+        return !onlyZombies(in: group)
+        #else
+        return true
+        #endif
+    }
+
+    #if os(Linux)
+    // a member that cannot be read is no proof that the group has only zombies left
+    private static func onlyZombies(in group: pid_t) -> Bool {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: "/proc") else { return false }
+        var members = 0
+        for entry in entries where pid_t(entry) != nil {
+            let fd = open("/proc/\(entry)/stat", O_RDONLY)
+            guard fd >= 0 else {
+                if errno == ENOENT || errno == ESRCH { continue }
+                return false
+            }
+            defer { close(fd) }
+            var buffer = [UInt8](repeating: 0, count: 4096)
+            let count = read(fd, &buffer, buffer.count)
+            guard count > 0 else {
+                if count == 0 || errno == ESRCH { continue }
+                return false
+            }
+            guard let fields = statusFields(String(decoding: buffer[..<count], as: UTF8.self)) else { return false }
+            guard fields.group == group else { continue }
+            guard fields.state == "Z" else { return false }
+            members += 1
+        }
+        return members > 0
+    }
+    #endif
+
+    // the command name in parentheses may hold `)` and spaces itself, so the fields start after its last `)`
+    static func statusFields(_ stat: String) -> (state: Character, group: pid_t)? {
+        guard let end = stat.lastIndex(of: ")") else { return nil }
+        let fields = stat[stat.index(after: end)...].split(separator: " ")
+        guard fields.count >= 3, fields[0].count == 1, let state = fields[0].first, let group = pid_t(fields[2]) else {
+            return nil
+        }
+        return (state, group)
     }
 
     /// The program's status once it ended: its exit code, or 128 plus the signal that ended it. Nil when a
