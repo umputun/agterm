@@ -72,8 +72,16 @@ for _ in $(seq 50); do "${ctl[@]}" >/dev/null 2>&1 && break; sleep 0.2; done
 cd "$HOME"
 
 status=0
-# a login shell, so the PATH and OpenCode variables are the ones an agent started in a pane sees
-if ! "${SHELL:-/bin/sh}" -lc "$lib/agterm-server install-hooks"; then
+# a login shell, so the PATH and OpenCode variables are the ones an agent started in a pane sees; csh and tcsh
+# take -l only as their sole flag, so they read the command from stdin
+shell="${SHELL:-/bin/sh}"
+install_hooks() {
+  case "${shell##*/}" in
+    csh | tcsh) printf '%s\n' "$lib/agterm-server install-hooks" | "$shell" -l ;;
+    *) "$shell" -lc "$lib/agterm-server install-hooks" ;;
+  esac
+}
+if ! install_hooks; then
   echo "install-server: the agent hooks install is incomplete; see above, then run ~/.local/bin/agterm-server install-hooks" >&2
   status=3
 fi
