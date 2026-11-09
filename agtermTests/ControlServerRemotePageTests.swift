@@ -165,6 +165,16 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertEqual(node.file, "/docs/index.html")
     }
 
+    func testAReplicaAwaitsItsFirstContentUntilItsChannelDeliversIt() async throws {
+        let fix = try fixture(files: ["/docs/index.html": html("<title>R</title><p>x</p>")])
+
+        _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: "/docs")))
+        XCTAssertEqual(fix.session.htmlOverlay?.awaitsFirstContent, true)
+
+        try await waitFor("the page loaded") { fix.session.htmlOverlay?.loadState == .loaded }
+        XCTAssertEqual(fix.session.htmlOverlay?.awaitsFirstContent, false)
+    }
+
     func testThePageScriptsBridgeRelaysToTheOriginAndKeepsUnknownFields() async throws {
         let fix = try fixture(files: [
             "/docs/index.html": html("<title>R</title><script>agterm.request('tree').then(r => document.title = r.extra.nested)</script>"),

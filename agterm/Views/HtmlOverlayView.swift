@@ -34,6 +34,7 @@ struct HtmlOverlayView: View {
                 .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
                 .overlay {
                     if overlay.loadState == .failed { failure }
+                    if overlay.awaitsFirstContent { loading }
                 }
         }
     }
@@ -133,6 +134,23 @@ struct HtmlOverlayView: View {
             }
         }
         .foregroundStyle(foreground)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
+    }
+
+    // a slow remote load must not look like an ignored click
+    private var loading: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(session.remoteHost.map { "Loading \(overlay.identity) from \($0)" } ?? "Loading \(overlay.identity)")
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("htmlOverlay.loading")
+        .foregroundStyle(foreground.opacity(0.7))
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)

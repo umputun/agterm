@@ -274,6 +274,39 @@ struct HtmlOverlayTests {
         #expect(node.remote == nil)
     }
 
+    @Test func aReplicaAwaitsItsFirstContentUntilItLoadsOnce() throws {
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+
+        store.setHtmlPage(overlay.id, HtmlPageInfo(page: "agterm-page://x/index.html", title: nil, canGoBack: false, canGoForward: false))
+        #expect(session.htmlOverlay?.awaitsFirstContent == true)
+
+        store.setHtmlLoadState(overlay.id, state: .loaded, error: nil)
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
+
+        for target in [HtmlReloadTarget.original, .current] {
+            #expect(store.reloadHtmlOverlay(session.id, pane: nil, target: target) == nil)
+            store.setHtmlLoadState(overlay.id, state: .loading, error: nil)
+            #expect(session.htmlOverlay?.awaitsFirstContent == false)
+        }
+    }
+
+    @Test func aReplicaWhoseFirstLoadFailedNoLongerAwaitsContent() {
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+
+        store.setHtmlLoadState(overlay.id, state: .failed, error: "gone")
+
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
+    }
+
+    @Test func aLocalPageNeverAwaitsContent() {
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
+
+        #expect(session.htmlOverlay?.loadState == .loading)
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
+    }
+
     @Test func aLocalPageNodeOmitsTheRemoteFields() throws {
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
         let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)

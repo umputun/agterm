@@ -250,6 +250,11 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// loadFailurePinned keeps a failure the page cannot load past, such as its port forward ending, over every
     /// later load report and reload.
     public internal(set) var loadFailurePinned = false
+    /// contentShown is set by the first finished load and kept through reloads and navigation, which keep the shown
+    /// document on screen while they load; `current` cannot tell this, a provisional report setting it early.
+    public internal(set) var contentShown = false
+    /// awaitsFirstContent is a replica waiting for its first successful load.
+    public var awaitsFirstContent: Bool { replicaOf != nil && loadState == .loading && !contentShown }
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
     /// finishes and after a reload of the original file.
     public var current: HtmlPageInfo?

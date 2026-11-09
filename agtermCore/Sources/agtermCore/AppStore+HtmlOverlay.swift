@@ -192,6 +192,7 @@ extension AppStore {
             guard !$0.loadFailurePinned else { return }
             $0.loadState = state
             $0.loadError = error
+            if state == .loaded { $0.contentShown = true }
         }
     }
 
