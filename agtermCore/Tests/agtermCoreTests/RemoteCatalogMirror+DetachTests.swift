@@ -35,7 +35,8 @@ final class RemoteCatalogMirrorDetachTests {
             if store?.session(withID: sessionID) != nil { removedWhileListed.append(sessionID) }
         }
         func catalogRowEnded(_: UUID) {}
-        func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
+        var needsAttach: [UUID] = []
+        func catalogPaneNeedsAttach(_ identity: UUID, session _: UUID) { needsAttach.append(identity) }
         func catalogBound(_: UUID) -> Bool { true }
         func catalogStateChanged(_: RemoteCatalogMirror.State) {}
         func catalogViewStateChanged() { saves += 1 }
@@ -122,6 +123,97 @@ final class RemoteCatalogMirrorDetachTests {
 
         #expect(rows.isEmpty)
         #expect(mirror.detachedItems.map(\.id) == [parent.id])
+    }
+
+    @Test func aDetachedParentRespawnedOnTheServerStaysHiddenWithItsCompanionThroughEveryFrame() throws {
+        let parent = session(), companion = session(parent: parent.id)
+        open([parent, companion])
+        mirror.detach(sessions: [parent.id])
+        let added = effects.added
+        let before = CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID, versions: Self.versions,
+                                     workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: [parent, companion]),
+                                                  CatalogWorkspace(id: otherWorkspaceID, name: "other", sessions: [])])
+        var after = before
+        var respawned = parent
+        respawned.fields.cwd = "/home/agterm"
+        after.workspaces[0].sessions[0] = respawned
+        let changes = before.changes(to: after)
+        try #require(!changes.isEmpty)
+
+        var shownAfterFrame: [Set<UUID>] = []
+        for (index, change) in changes.enumerated() {
+            delta(index + 1, change)
+            shownAfterFrame.append(rows)
+        }
+        after.rev = changes.count + 1
+        _ = mirror.receive(.snapshot(after))
+        shownAfterFrame.append(rows)
+
+        #expect(shownAfterFrame == Array(repeating: [], count: changes.count + 1))
+        #expect(effects.added == added)
+        #expect(effects.needsAttach.isEmpty)
+        #expect(mirror.detachedItems == [RemoteDetachedItem(kind: .session, id: parent.id, name: "s", ended: false)])
+    }
+
+    @Test func aDetachedSplitPromotedOnTheServerStaysHiddenThroughEveryFrame() {
+        let left = CatalogPane(identity: UUID(), daemon: "agterm-\(UUID().uuidString)", endpoint: Self.endpoint)
+        let right = CatalogPane(identity: UUID(), daemon: "agterm-\(UUID().uuidString)", endpoint: Self.endpoint)
+        var entry = session()
+        entry.fields.primary = left.identity
+        entry.fields.axis = "vertical"
+        entry.fields.shown = true
+        entry.panes = [left, right]
+        open([entry, session()])
+        mirror.detach(sessions: [entry.id])
+        let added = effects.added
+        var promoted = entry.fields
+        promoted.primary = right.identity
+        promoted.axis = nil
+        promoted.shown = false
+
+        var hiddenAfterFrame: [Bool] = []
+        delta(1, .paneRemoved(left.identity, session: entry.id))
+        hiddenAfterFrame.append(!rows.contains(entry.id))
+        delta(2, .sessionChanged(promoted))
+        hiddenAfterFrame.append(!rows.contains(entry.id))
+
+        #expect(hiddenAfterFrame == [true, true])
+        #expect(effects.added == added)
+        #expect(effects.needsAttach.isEmpty)
+        #expect(mirror.detachedItems.map(\.id) == [entry.id])
+    }
+
+    @Test func aDetachedParentWhoseDaemonIsLostLeavesItsLiveCompanionHiddenUnderAnEndedItem() {
+        let parent = session(), companion = session(parent: parent.id)
+        open([parent, companion])
+        mirror.detach(sessions: [parent.id])
+        let added = effects.added
+
+        var shownAfterFrame: [Set<UUID>] = []
+        delta(1, .paneRemoved(parent.fields.primary, session: parent.id))
+        shownAfterFrame.append(rows)
+        delta(2, .sessionChanged(session(parent.id, ended: true).fields))
+        shownAfterFrame.append(rows)
+
+        #expect(shownAfterFrame == [[], []])
+        #expect(effects.added == added)
+        #expect(mirror.detachedItems == [RemoteDetachedItem(kind: .session, id: parent.id, name: "s", ended: true)])
+        #expect(mirror.closeScope(session: parent.id)?.live == true)
+    }
+
+    @Test func aCompanionThatExitsUnderADetachedParentLeavesTheRestOfTheGroupHidden() {
+        let parent = session(), exiting = session(parent: parent.id), staying = session(parent: parent.id)
+        open([parent, exiting, staying, session()])
+        mirror.detach(sessions: [parent.id])
+        let added = effects.added
+
+        delta(1, .sessionRemoved(exiting.id))
+
+        #expect(rows.isDisjoint(with: [parent.id, exiting.id, staying.id]))
+        #expect(rows.count == 1)
+        #expect(effects.added == added)
+        #expect(mirror.detachedItems.map(\.id) == [parent.id])
+        #expect(mirror.closeScope(session: parent.id)?.sessions == [parent.id, staying.id])
     }
 
     @Test func aDetachedRowStaysHiddenOnceEndedAndIsListedAsEnded() {

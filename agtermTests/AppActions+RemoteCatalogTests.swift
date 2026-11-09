@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import agterm
 import agtermCore
@@ -386,5 +387,75 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertFalse(handled)
         XCTAssertTrue(asked.calls.isEmpty)
         XCTAssertTrue(runner.lines.isEmpty)
+    }
+
+    func testNewSessionInARemoteWindowAsksTheServerAndAddsNoRowHere() throws {
+        let entry = catalogSession()
+        open([entry])
+        _ = store.selectSession(entry.id)
+
+        actions.newSession()
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1)
+        XCTAssertTrue(runner.lines[0].contains("session new --workspace \(workspaceID.uuidString)"))
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testToggleSplitInARemoteWindowAsksTheServerAndLeavesTheRowUnsplit() throws {
+        let entry = catalogSession()
+        open([entry])
+        _ = store.selectSession(entry.id)
+
+        actions.toggleSplit()
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1)
+        XCTAssertTrue(runner.lines[0].contains("session split visibility on --target \(entry.id.uuidString)"))
+        XCTAssertEqual(store.session(withID: entry.id)?.hasSplit, false)
+    }
+
+    func testMovingASessionInARemoteWindowAsksTheServerAndKeepsItsWorkspaceHere() throws {
+        let entry = catalogSession()
+        open([entry], withEmptyWorkspace: true)
+
+        actions.moveSession(entry.id, toWorkspace: emptyWorkspaceID)
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1)
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(entry.id.uuidString)"))
+        XCTAssertTrue(runner.lines[0].contains("-- \(emptyWorkspaceID.uuidString)"))
+        XCTAssertEqual(store.sessionLocation(ofSession: entry.id)?.workspace, workspaceID)
+    }
+
+    func testAnInlineSidebarRenameInARemoteWindowAsksTheServerAndKeepsTheNameHere() throws {
+        let entry = catalogSession()
+        open([entry])
+        _ = store.selectSession(entry.id)
+        let original = try XCTUnwrap(store.session(withID: entry.id)?.displayName)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 300, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        let host = NSHostingView(rootView: WorkspaceSidebar(store: store, actions: actions).frame(width: 300, height: 400))
+        window.contentView = host
+        window.orderFront(nil)
+        host.layoutSubtreeIfNeeded()
+
+        actions.renameActiveSession()
+        let deadline = Date(timeIntervalSinceNow: 5)
+        while !(window.firstResponder is NSTextView), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05)) }
+        let editor = try XCTUnwrap(window.firstResponder as? NSTextView)
+        editor.string = "renamed"
+        window.makeFirstResponder(nil)
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1)
+        XCTAssertTrue(runner.lines[0].contains("session rename --target \(entry.id.uuidString)"))
+        XCTAssertTrue(runner.lines[0].hasSuffix("-- renamed"))
+        XCTAssertEqual(store.session(withID: entry.id)?.displayName, original)
     }
 }

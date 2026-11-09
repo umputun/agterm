@@ -5,6 +5,7 @@ import Testing
 @MainActor
 final class WindowLibraryRemoteTests {
     private let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agts-remote-\(UUID().uuidString)")
+    private let workspaceID = UUID()
 
     deinit { try? FileManager.default.removeItem(at: directory) }
 
@@ -29,13 +30,36 @@ final class WindowLibraryRemoteTests {
                         versions: CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1), workspaces: [])
     }
 
-    private func mirror(_ library: WindowLibrary, window id: UUID, host: String) throws -> (RemoteCatalogMirror, Binder) {
+    private func mirror(_ library: WindowLibrary, window id: UUID, host: String,
+                        viewState: RemoteWindowViewState = RemoteWindowViewState()) throws -> (RemoteCatalogMirror, Binder) {
         let binder = Binder { catalogID in
             if case .duplicate = library.bindCatalog(catalogID, toWindow: id) { return false }
             return true
         }
         let store = try #require(library.store(for: id))
-        return (RemoteCatalogMirror(host: host, store: store, effects: binder, viewState: RemoteWindowViewState()), binder)
+        return (RemoteCatalogMirror(host: host, store: store, effects: binder, viewState: viewState), binder)
+    }
+
+    private func catalogSession(_ id: UUID = UUID(), ended: Bool = false) -> CatalogSession {
+        let pane = CatalogPane(identity: UUID(), daemon: "agterm-\(id.uuidString)",
+                               endpoint: ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx"))
+        return CatalogSession(fields: CatalogSessionFields(id: id, name: "s", parent: nil, cwd: "/srv", primary: pane.identity, axis: nil,
+                                                           shown: false, lifecycle: ended ? .ended : .live),
+                              panes: ended ? [] : [pane])
+    }
+
+    private func snapshot(_ catalogID: UUID, sessions: [CatalogSession], epoch: String = "e1") -> CatalogSnapshot {
+        CatalogSnapshot(epoch: epoch, rev: 0, catalogID: catalogID, versions: CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1),
+                        workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions)])
+    }
+
+    private func relaunch(_ library: WindowLibrary, window id: UUID, catalog: UUID,
+                          sessions: [CatalogSession]) throws -> (WindowLibrary, RemoteCatalogMirror, Binder) {
+        try #require(library.store(for: id)).save()
+        let relaunched = WindowLibrary(directory: directory)
+        let (mirror, binder) = try mirror(relaunched, window: id, host: "buildbox", viewState: relaunched.remoteViewState(for: id))
+        _ = mirror.receive(.snapshot(snapshot(catalog, sessions: sessions, epoch: "e2")))
+        return (relaunched, mirror, binder)
     }
 
     @Test func theHooksBracketARemoteStoreAndALocalWindowFiresNeither() throws {
@@ -184,6 +208,43 @@ final class WindowLibraryRemoteTests {
         let state = WindowLibrary(directory: directory).remoteViewState(for: remote.id)
         #expect(state.selectedSessionID == session.id)
         #expect(state.sessions[session.id]?.fontSize == 14)
+    }
+
+    @Test func aDetachedRowStaysHiddenAfterTheWindowIsSavedAndTheMacRelaunches() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let catalog = UUID()
+        let hidden = catalogSession(), shown = catalogSession()
+        let (first, binder) = try mirror(library, window: remote.id, host: "buildbox")
+        _ = first.receive(.snapshot(snapshot(catalog, sessions: [hidden, shown])))
+        withExtendedLifetime(binder) { first.detach(sessions: [hidden.id]) }
+
+        let (relaunched, mirror, relaunchedBinder) = try relaunch(library, window: remote.id, catalog: catalog, sessions: [hidden, shown])
+
+        let store = try #require(relaunched.store(for: remote.id))
+        #expect(store.workspaces.flatMap(\.sessions).map(\.id) == [shown.id])
+        #expect(withExtendedLifetime(relaunchedBinder) { mirror.detachedItems.map(\.id) } == [hidden.id])
+    }
+
+    @Test func aDetachedRowThatEndedStaysHiddenAndEndedAfterTheMacRelaunches() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let catalog = UUID()
+        let hidden = catalogSession(), shown = catalogSession()
+        let (first, binder) = try mirror(library, window: remote.id, host: "buildbox")
+        _ = first.receive(.snapshot(snapshot(catalog, sessions: [hidden, shown])))
+        withExtendedLifetime(binder) {
+            first.detach(sessions: [hidden.id])
+            _ = first.receive(.delta(epoch: "e1", rev: 1, change: .sessionChanged(catalogSession(hidden.id, ended: true).fields)))
+        }
+
+        let (relaunched, mirror, relaunchedBinder) = try relaunch(library, window: remote.id, catalog: catalog,
+                                                                  sessions: [catalogSession(hidden.id, ended: true), shown])
+
+        let store = try #require(relaunched.store(for: remote.id))
+        #expect(store.workspaces.flatMap(\.sessions).map(\.id) == [shown.id])
+        #expect(withExtendedLifetime(relaunchedBinder) { mirror.detachedItems }
+            == [RemoteDetachedItem(kind: .session, id: hidden.id, name: "s", ended: true)])
     }
 
     @Test func aColdReopenedWindowSavedBeforeItsCatalogKeepsTheSavedViewState() throws {
