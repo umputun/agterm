@@ -18,6 +18,53 @@ struct ServerCommandsTests {
                                                                  jump: "bastion", config: "/cfg"))
     }
 
+    @Test func fromNamesALocalTarball() throws {
+        #expect(try Server.Install.parse(["--from", "/tmp/t.tar.gz", "box"]).source == "/tmp/t.tar.gz")
+        #expect(try Server.Install.parse(["box"]).source == nil)
+    }
+
+    @Test func aLocalTarballIsInstalledFromASnapshotTheOriginalCannotChange() throws {
+        let original = fixture.root.appendingPathComponent("original.tar.gz")
+        let link = fixture.root.appendingPathComponent("link.tar.gz")
+        try Data("release".utf8).write(to: original)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: original)
+        let effects = fixture.effects(probe: "x86_64\n", beforeUnpack: { try? Data("tampered".utf8).write(to: original) })
+
+        #expect(try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: link.path) == 0)
+        #expect(effects.calls.map(\.phase) == ["probe", "unpack", "installer"])
+        #expect(effects.calls[1].detail == "tarball")
+    }
+
+    @Test func aMismatchedLocalTarballNeverUnpacks() throws {
+        let local = fixture.root.appendingPathComponent("local.tar.gz")
+        try Data("other".utf8).write(to: local)
+        let effects = fixture.effects(probe: "x86_64\n")
+
+        #expect(throws: SocketClientError.self) { try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: local.path) }
+        #expect(effects.calls.map(\.phase) == ["probe"])
+    }
+
+    @Test func anOversizeLocalTarballIsRefusedBeforeItIsRead() throws {
+        let local = fixture.root.appendingPathComponent("huge.tar.gz")
+        FileManager.default.createFile(atPath: local.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: local)
+        try handle.truncate(atOffset: UInt64(ServerInstall.downloadLimit + 1))
+        try handle.close()
+        let effects = fixture.effects(probe: "x86_64\n")
+
+        #expect(throws: SocketClientError.self) { try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: local.path) }
+        #expect(effects.calls.map(\.phase) == ["probe"])
+    }
+
+    @Test(arguments: ["absent.tar.gz", ""])
+    func anUnreadableLocalTarballIsRefused(_ name: String) {
+        let effects = fixture.effects(probe: "x86_64\n")
+        let path = fixture.root.appendingPathComponent(name).path
+
+        #expect(throws: SocketClientError.self) { try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: path) }
+        #expect(effects.calls.map(\.phase) == ["probe"])
+    }
+
     @Test func installIsNotAControlCommand() throws {
         #expect(!(try Agtermctl.parseAsRoot(["server", "install", "box"]) is any RequestCommand))
     }
@@ -196,7 +243,8 @@ final class Fixture {
 
     func effects(probe: String, probeOutcome: ForegroundSpawn.Outcome = .exited(0), body: String = "release",
                  downloadFails: Bool = false, unpack: ForegroundSpawn.Outcome = .exited(0),
-                 installer: ForegroundSpawn.Outcome = .exited(0), bundle: Bundle = .release) -> RecordedEffects {
+                 installer: ForegroundSpawn.Outcome = .exited(0), bundle: Bundle = .release,
+                 beforeUnpack: (() -> Void)? = nil) -> RecordedEffects {
         let recorded = RecordedEffects()
         let app = try? makeBundle(bundle)
         recorded.value = ServerInstaller.Effects(
@@ -207,6 +255,7 @@ final class Fixture {
             },
             run: { argv, input in
                 let unpacking = argv.last?.hasPrefix("sh -c") == true
+                if unpacking { beforeUnpack?() }
                 var detail = ""
                 if case .file(let path) = input, (try? String(contentsOfFile: path, encoding: .utf8)) == body { detail = "tarball" }
                 recorded.calls.append(.init(phase: unpacking ? "unpack" : "installer", argv: argv, detail: detail))

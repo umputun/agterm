@@ -21,7 +21,9 @@ struct Server: ParsableCommand {
             Installs the agterm-server release matching this app's version: asks the host for its architecture \
             (aarch64 or x86_64), downloads that release tarball from GitHub, checks it against the sha256 the app \
             was built with, unpacks it into ~/.local/lib/agterm-server and runs its installer, which sets up the \
-            systemd user service, enables linger and installs the agent hooks. Running it again upgrades in place.
+            systemd user service, enables linger and installs the agent hooks. Running it again upgrades in place. \
+            --from FILE uses a tarball already on this Mac instead of downloading one; it must match the same \
+            sha256 for the host's architecture.
 
             The connection is interactive, as with terminfo install: a password or host-key prompt is answered on \
             this terminal, and other settings belong in ~/.ssh/config. Exits 0 when installed, 3 when installed but \
@@ -39,6 +41,10 @@ struct Server: ParsableCommand {
         var jump: String?
         @Option(name: .customShort("F"), help: ArgumentHelp("Per-user ssh configuration file.", valueName: "file"))
         var config: String?
+        @Option(name: .customLong("from"),
+                help: ArgumentHelp("Use a tarball already on this Mac instead of downloading one; it must still match this app's sha256.",
+                                   valueName: "file"))
+        var source: String?
 
         var connection: TerminfoInstall.Connection {
             TerminfoInstall.Connection(destination: destination, port: port, identities: identity, jump: jump,
@@ -47,7 +53,7 @@ struct Server: ParsableCommand {
 
         // a bad destination is a refusal with exit 1 like every other, so it is checked in run, not validate
         func run() throws {
-            let code = try ServerInstaller(effects: .live).install(connection)
+            let code = try ServerInstaller(effects: .live).install(connection, source: source)
             if code != 0 { throw ExitCode(code) }
         }
     }
@@ -81,8 +87,9 @@ struct ServerInstaller {
 
     let effects: Effects
 
-    /// install returns 0 or 3 once the host's installer ran, and throws for every refusal and failure.
-    func install(_ connection: TerminfoInstall.Connection) throws -> Int32 {
+    /// install returns 0 or 3 once the host's installer ran, and throws for every refusal and failure. A `source`
+    /// tarball on this Mac replaces the download and must match the same checksum line.
+    func install(_ connection: TerminfoInstall.Connection, source: String? = nil) throws -> Int32 {
         let probe: [String]
         do {
             probe = try ServerInstall.probeCommand(connection)
@@ -104,11 +111,15 @@ struct ServerInstaller {
                                                     appropriateFor: FileManager.default.temporaryDirectory, create: true)
         defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent(asset)
-        let url = ServerInstall.downloadURL(version: release.version, architecture: architecture)
-        do {
-            try effects.download(url, file, ServerInstall.downloadLimit)
-        } catch {
-            throw SocketClientError("could not download \(url.absoluteString): \(error)")
+        if let source {
+            try snapshot(source, to: file)
+        } else {
+            let url = ServerInstall.downloadURL(version: release.version, architecture: architecture)
+            do {
+                try effects.download(url, file, ServerInstall.downloadLimit)
+            } catch {
+                throw SocketClientError("could not download \(url.absoluteString): \(error)")
+            }
         }
         let actual = try sha256(of: file)
         guard actual == expected else {
@@ -125,6 +136,20 @@ struct ServerInstaller {
         default: throw SocketClientError("the installer on \(connection.destination) failed: \(installed)")
         }
         return code
+    }
+
+    // the bytes are read through one checked descriptor and written to a private file, which alone is hashed and
+    // streamed: a copy of the path would follow a symlink whose target can change between the hash and the unpack
+    private func snapshot(_ source: String, to file: URL) throws {
+        let data: Data
+        switch BoundedFile.read(path: source, maxBytes: ServerInstall.downloadLimit) {
+        case .success(let bytes): data = bytes
+        case .failure(.tooLarge): throw SocketClientError("\(source) is larger than \(ServerInstall.downloadLimit) bytes")
+        case .failure: throw SocketClientError("could not read \(source) as a regular file")
+        }
+        guard FileManager.default.createFile(atPath: file.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
+            throw SocketClientError("could not write \(file.path)")
+        }
     }
 
     private func releaseInfo() throws -> (version: String, checksums: String) {
