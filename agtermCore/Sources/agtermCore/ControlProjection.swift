@@ -351,6 +351,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The host a teleported session is attached to; nil/omitted for a local one. Live-only — a remote
     /// session is never persisted, so this never survives a relaunch.
     public let remoteHost: String?
+    /// The origin's id for the session an attached row shows, the id `zmx attach` takes; omitted for a local one.
+    public let remoteSessionID: String?
 
     /// This Mac's presentation stream to the session's origin, on an attached session only. `state` is
     /// `connecting`, `connected`, `unsupported` for an origin that predates the stream, or `failed` with
@@ -393,7 +395,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
                 tint: String? = nil, tintOn: [String]? = nil, parent: String? = nil, collapsed: Bool? = nil,
-                content: String? = nil, info: SessionInfo? = nil) {
+                content: String? = nil, info: SessionInfo? = nil, remoteSessionID: String? = nil) {
+        self.remoteSessionID = remoteSessionID
         self.content = content
         self.info = info?.source
         self.infoMarkdown = info?.markdown

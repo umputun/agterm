@@ -3038,7 +3038,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               session that has gone in between fails instead of handing back a fresh shell wearing its name. Closing the row here ends
               only this side's connection — the far-side processes keep running, and nothing agterm does from this end can kill them.
               A remote session is never written to disk, so it does not come back after a relaunch. Its tree node carries
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span>.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteSessionID</span>.
               The title bar shows a cloud and the remote host, which you can hide with the Remote host toggle in Settings ▸ Interface.
               The Ctrl-Tab switcher and the title-bar recent and attention lists mark the row with the same cloud and name the host.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx attach --companions</span> brings the session together with its companions, each under it.

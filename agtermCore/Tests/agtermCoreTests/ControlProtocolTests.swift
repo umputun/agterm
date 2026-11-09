@@ -1301,15 +1301,18 @@ struct ControlProtocolTests {
 
     @Test func treeSessionNodeReportsAndOmitsTheRemoteHost() throws {
         let remote = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: true, split: false,
-                                        backedByZmx: nil, remoteHost: "buildbox")
+                                        backedByZmx: nil, remoteHost: "buildbox", remoteSessionID: "r1")
         let encoded = try JSONEncoder().encode(remote)
-        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: encoded).remoteHost == "buildbox")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: encoded)
+        #expect(decoded.remoteHost == "buildbox")
+        #expect(decoded.remoteSessionID == "r1")
 
         let local = ControlSessionNode(id: "s2", name: "shell", cwd: "/tmp", active: false, split: false,
                                        backedByZmx: nil)
         let localJSON = try #require(try JSONSerialization
             .jsonObject(with: try JSONEncoder().encode(local)) as? [String: Any])
         #expect(localJSON["remoteHost"] == nil, "a local session omits the key, never nulls it")
+        #expect(localJSON["remoteSessionID"] == nil)
     }
 
     @Test func treeSessionNodeToleratesMissingSurfaces() throws {

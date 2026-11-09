@@ -253,7 +253,7 @@ extension ControlServer {
         // cwd through the terminal stream anyway.
         guard let created = store.addSession(toWorkspace: placement.workspace, cwd: NSHomeDirectory(),
                                              command: primary, name: remote.name, wait: true,
-                                             select: placement.select, remoteHost: host,
+                                             select: placement.select, remoteHost: host, remoteSessionID: remote.id,
                                              parentID: placement.parent) else {
             return ControlResponse(ok: false, error: "could not create the session")
         }
