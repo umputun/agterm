@@ -179,11 +179,18 @@ public enum LinkPolicy {
     /// deliberately unlisted, backing every real file. The path must already be dot-normalized.
     static func isAutomountPath(_ path: String) -> Bool {
         let lower = path.lowercased()
-        return ["/net", "/network", "/home",
-                "/system/volumes/data/home",
-                "/system/volumes/data/net",
-                "/system/volumes/data/network/servers"].contains { lower == $0 || lower.hasPrefix($0 + "/") }
+        return automountRoots.contains { lower == $0 || lower.hasPrefix($0 + "/") }
     }
+
+    // /home is auto_home only on macOS; on Linux it holds every user's files
+    private static let automountRoots: [String] = {
+        var roots = ["/net", "/network", "/system/volumes/data/home", "/system/volumes/data/net",
+                     "/system/volumes/data/network/servers"]
+        #if os(macOS)
+        roots.append("/home")
+        #endif
+        return roots
+    }()
 
     /// Collapse `.`/`..` in an ABSOLUTE path with a purely LEXICAL, string-only normalizer — no filesystem
     /// access (unlike `URL.standardizedFileURL`, which stats the target) and no symlink resolution, so the
