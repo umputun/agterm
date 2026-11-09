@@ -141,17 +141,17 @@
   (agtermctlKitTests)
 - Modify: `agtermCore/Sources/agtermCore/TerminfoInstall.swift`, `agtermCore/Sources/agtermctlKit/Commands.swift`
 
-- [ ] hoist terminfo's `posix_spawnp` runner into `ForegroundSpawn` (stdin from data or file, stdout captured on
+- [x] hoist terminfo's `posix_spawnp` runner into `ForegroundSpawn` (stdin from data or file, stdout captured on
       request, inherited stderr, Darwin-only); `terminfo install` behavior and tests unchanged
-- [ ] `ServerInstall`: asset name and URL, arch check, checksum-line parsing, ssh argv from `TerminfoInstall.Connection`
+- [x] `ServerInstall`: asset name and URL, arch check, checksum-line parsing, ssh argv from `TerminfoInstall.Connection`
       and its execution options with the remote strings equal to `install-server.sh`'s, exit mapping 0/3/1
-- [ ] `server install [-p -i -J -F] HOST` (macOS only): bundle version and checksum file, arch probe, download under
+- [x] `server install [-p -i -J -F] HOST` (macOS only): bundle version and checksum file, arch probe, download under
       the cap, sha256 check before anything reaches the host, unpack, installer; refusals for no checksum file, bad
       destination, unsupported arch, mismatch, oversize, ssh failure; temp file always removed
-- [ ] tests: the core rules, the runner, injected-effect CLI runs (success, each refusal, exit 3, mismatch never
+- [x] tests: the core rules, the runner, injected-effect CLI runs (success, each refusal, exit 3, mismatch never
       unpacks), and the tty check (`script` + a fake `ssh` that prints `riscv64` only after reading the answer from
       `/dev/tty`, ending at the arch refusal)
-- [ ] the new and affected tests pass on macOS and in the Linux container
+- [x] the new and affected tests pass on macOS and in the Linux container
 
 ### Task 3: Docs and final checks
 
