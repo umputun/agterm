@@ -507,7 +507,7 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
       ids
 - [x] the local control API targets a remote window's sessions through the same seam, and `tree` reports
       per-session pending state
-- [ ] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
+- [x] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
       delta before reply, lost reply settled by lookup, an unchanged snapshot followed by delayed execution (fenced),
       a delayed command crossing a server restart, a create that commits, drops its reply and survives a restart
       (settled as applied by lookup), and a receipt from a newer epoch; disabled-while-disconnected; the sheet's
@@ -520,6 +520,16 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
       local session and `session.close` still terminating; control API read-back; UI tests in `agtermUITests` for
       new session, split, rename, detach, reattach and terminate against `scripts/server-container.sh`, run with
       `-only-testing` and skipped when no server host is configured
+      ➕ done to the scope Eugene chose (missing cases plus key routing) in a0e4d818, cdb5e09d and 915b16bb, not every
+      case above: the close sheet's three answers per session, group, workspace and
+      empty workspace; GUI New Session, split, move and inline rename; control close, split on/off/close, rename,
+      move and new through a real `ControlServer`, background windows included; detach through respawn, promotion,
+      daemon loss, companion exit and a saved relaunch; detach/reattach and pending read-back; the six UI flows,
+      run 6/6 against agterm-server on an Ubuntu VM. ⚠️ Partly covered, listed as PR gaps: duplicate, swap, companion
+      creation, workspace create/rename/reorder and session reorder are pinned by the core route tests but have no
+      app-route test of their own; `aCommandDelayedAcrossARestartIsRefusedAndClears` answers with an immediate canned
+      refusal, with no delay or epoch change, and `aCreateThatCommittedAndLostItsReplyIsAppliedByALookupAfterARestart`
+      simulates the lookup without a joined create, persist and restart
 
 ### Task 9: Server scratch and custom commands in a remote window
 
@@ -649,6 +659,11 @@ gate against `agterm-server`, the origin that ships. Task 1 writes the script an
 - [ ] on the final tree, once each: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, the
       Linux build and test, and the new `agtermUITests` classes with `-only-testing` against
       `scripts/server-container.sh`
+      ⚠️ the non-UI gates ran on 89089014 with one `swift test` failure, the zmx race the shipping plan's gate item
+      names. `RemoteWindowUITests` ran 6/6 on 915b16bb, before af23c692's sidebar merge resolution and ba02f880's New
+      Session folder fix, against agterm-server on an Ubuntu VM (`umputun@192.168.1.156`) that this Mac's ssh reaches
+      without a prompt; the container keeps its host key in its own known_hosts file, which the app's plain ssh does
+      not read
 - [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test process; container stopped
 - [ ] move this plan to `docs/plans/completed/`
 

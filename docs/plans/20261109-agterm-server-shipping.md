@@ -177,6 +177,11 @@
       staple, spctl and the DMG steps were not reached and the new `SIGNED=0` ad-hoc re-seal branch was not exercised;
       Eugene accepted this run as the dry run, notarize, staple and spctl being unchanged here
 - [ ] full gates once: `make build`, `swift test`, `make test-app`, `make lint`, the Linux suite, the container check
+      ⚠️ on 89089014 everything passed except one `swift test` case: `SessionHostServerTests.realHostStartupReplyAndClientlessControl`
+      read `ESC[?62;22c` at `controlMatches`, the zmx race `docs/backlog/da-query-answered-twice-before-attach-init.md`
+      records (about 1 run in 12). The rest: swift test's other runs pass (4921 with master's known `HudHelperTests`
+      issue), test-app 2005 with 2 skipped and 0 failures, lint clean, Linux suite 5847 (1 known issue),
+      `server-container.sh start` and `check` pass, container stopped
 - [ ] move this plan to `docs/plans/completed/`; the parent plan moves too only once its own open items (Mac-origin
       attach parity, the final UI-test gate) are done or Eugene waives them
 
