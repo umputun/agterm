@@ -2619,6 +2619,25 @@ the signal when ssh was killed), and 64 for a usage error. Failures before the c
 - `ssh exited N; xterm-ghostty was not installed` — any other remote failure; ssh's own stderr above it
   says what happened.
 
+## server
+
+`agtermctl server install DESTINATION [--from FILE] [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — macOS only: install or
+upgrade agterm-server on a Linux host. Local-only like `terminfo install`, with the same `DESTINATION`, the
+same four ssh options, the same installer-owned execution settings and the same interactive connection.
+
+- It installs the release matching the app bundle this `agtermctl` belongs to: `uname -m` on the host picks
+  `aarch64` or `x86_64`, the tarball comes from that version's GitHub release, and no archive bytes are
+  sent to the host until its sha256 matches the line in the bundle's `Contents/Resources/agterm-server.sha256`.
+- The tarball unpacks into `~/.local/lib/agterm-server` by rename, so a running server keeps its binary,
+  then its `install.sh` sets up the systemd user service, lingering and the agent hooks.
+- `--from FILE` uses a tarball already on this Mac instead of downloading one: its bytes are read once into a private
+  file, and that copy must match the same sha256 line for the host's architecture.
+- A CLI with no checksum file (a development build, or a copy outside the app) is refused;
+  `scripts/install-server.sh HOST` installs from a checkout.
+- Installation outcomes: exit 0 installed (`installed agterm-server VERSION on DESTINATION`), 3 installed with
+  the agent hooks incomplete, 1 for any refusal or failure with the reason on stderr. A usage error keeps the
+  parser's own exit code.
+
 ## version
 
 `agtermctl version` — which agterm is serving this socket. App-global: no target, no `--window`, and no

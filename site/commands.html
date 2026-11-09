@@ -212,6 +212,7 @@
             <a href="#remote" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">remote server</a>
             <a href="#clipboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">clipboard</a>
             <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
+            <a href="#server" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">server</a>
             <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
@@ -4633,6 +4634,41 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The remote needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tic</span>, which comes with ncurses, and says so when it is missing. Exits with ssh's status; a failure before the connection, such as no entry next to this <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>, is reported without opening one.
+              </p>
+            </div>
+          </section>
+
+          <section id="server" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              server
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Local-only and macOS-only: this group runs ssh and a download on the Mac, never opens the control socket, and needs no running agterm.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl server install DESTINATION [--from FILE] [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]
+              </div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Install or upgrade <a href="/docs#remote-server" style="color: #6d82f3">agterm-server</a> on a Linux host. It asks the host for its architecture (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">aarch64</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">x86_64</span>), downloads the release tarball matching this app's version from GitHub, and refuses it unless its sha256 matches the one the app was built with. Only then does it unpack the tarball into <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.local/lib/agterm-server</span> and run its installer, which sets up the systemd user service, lingering and the agent hooks. Running it again upgrades in place while every pane keeps running.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">DESTINATION</span> and the four options are what <a href="#terminfo" style="color: #6d82f3">terminfo install</a> takes, with the same interactive connection and the same installer-owned execution settings. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--from FILE</span> uses a tarball already on this Mac instead of downloading one, for a Mac without GitHub access or a tarball you fetched and checked yourself; it must still match the sha256 this app was built with for the host's architecture. A development build has no release to install and is refused; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scripts/install-server.sh</span> installs from a checkout.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Exits 0 when installed, 3 when installed but the agent hooks are incomplete, and 1 on installation failure, with the reason on stderr.
               </p>
             </div>
           </section>

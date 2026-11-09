@@ -82,8 +82,8 @@ struct SurfaceTargetOptions: ParsableArguments {
     var target: String = "active"
 }
 
-/// Agtermctl is the root `agtermctl` command. Subcommands mirror the control catalog 1:1, except `terminfo` and
-/// `clipboard`, which run locally and never open the socket.
+/// Agtermctl is the root `agtermctl` command. Subcommands mirror the control catalog 1:1, except `terminfo`,
+/// `clipboard` and the macOS-only `server`, which run locally and never open the socket.
 public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",

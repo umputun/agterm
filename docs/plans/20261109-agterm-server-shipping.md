@@ -152,6 +152,12 @@
       unpacks), and the tty check (`script` + a fake `ssh` that prints `riscv64` only after reading the answer from
       `/dev/tty`, ending at the arch refusal)
 - [x] the new and affected tests pass on macOS and in the Linux container
+- [x] ➕ `--from FILE` installs a tarball on the Mac instead of downloading (Eugene, after weighing the download
+      against bundling 54-56 MB tarballs into a 23 MB DMG): read through `BoundedFile` into a private 0600 file that
+      alone is hashed and streamed, same checksum line; tests pin the symlink snapshot, mismatch, oversize, unreadable
+      ⚠️ staging-bundle acceptance, separate from the signed release-bundle checks: the signed 0.41.1 build's
+      `Info.plist` and `agterm-server.sha256` with a freshly built CLI ran `--from` against the Ubuntu 20.04 x86_64 VM,
+      exit 0, and the active service then reported 0.41.1; a published-download success stays Post-Completion
 
 ### Task 3: Docs and final checks
 
@@ -159,11 +165,17 @@
 - Modify: `site/docs.html`, `site/commands.html`, `site/llms.txt`, `README.md`, `ARCHITECTURE.md`,
   `.claude/rules/control-api.md`, `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`
 
-- [ ] docs, llms.txt, README and ARCHITECTURE lead with `agtermctl server install HOST`, the checkout path kept as the
+- [x] docs, llms.txt, README and ARCHITECTURE lead with `agtermctl server install HOST`, the checkout path kept as the
       developer route; commands.html documents the command as CLI-only; control-api.md counts three exemptions; the
       skill points to it
-- [ ] release dry run on the finished tree (no `--publish`, the manifests' current version): both tarballs built, the
-      ad-hoc sealed bundle's `agtermctl server install --help` works, its checksum file matches the two tarballs
+- [x] partial release dry run on the finished tree (no `--publish`, 0.41.1): both tarballs built, and the Developer
+      ID-signed bundle's `agtermctl server install --help` works and its checksum file matches the two tarballs
+      ⚠️ an identity is in the keychain, so it ran the Developer ID branch: checksum file written before the re-seal,
+      `codesign --verify --deep --strict` passes, `shasum -c` matches both tarballs, and the bundled CLI refused the
+      published v0.41.1's 404 against an x86_64 host with exit 1 (the failure path; a successful released-tarball
+      install stays Post-Completion). Notarization failed with exit 69, as this Mac has no `agterm-notary` profile, so
+      staple, spctl and the DMG steps were not reached and the new `SIGNED=0` ad-hoc re-seal branch was not exercised;
+      Eugene accepted this run as the dry run, notarize, staple and spctl being unchanged here
 - [ ] full gates once: `make build`, `swift test`, `make test-app`, `make lint`, the Linux suite, the container check
 - [ ] move this plan to `docs/plans/completed/`; the parent plan moves too only once its own open items (Mac-origin
       attach parity, the final UI-test gate) are done or Eugene waives them

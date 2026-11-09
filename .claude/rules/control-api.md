@@ -192,13 +192,13 @@ renumbering. Do not reintroduce a count anywhere.
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
 - `catalog.subscribe`, `catalog.op`: served only by agterm-server; a Mac app refuses them and any `opID`
 
-`terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
+`terminfo install` is a CLI-only command with no protocol counterpart, one of the three exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
 nothing for the app to dispatch or read back. `TerminfoInstall` in `agtermCore` owns the argv and the
 pipeline; the CLI owns the typed option surface, deliberately narrower than ssh's so `-G`, `-N`, `-n` and
 `-f` cannot fake a success or hang the install.
 
-`clipboard set` is the other. It prints an OSC 52 write into the caller's own pane through
+`clipboard set` is the second. It prints an OSC 52 write into the caller's own pane through
 `zmx print <ZMX_SESSION>`, run from the `zmx` beside the CLI, and never opens the socket. The socket still
 never writes a clipboard: the write arrives in the pane's bytes, so every attached terminal applies its own
 `clipboard-write` policy, and a session attached from another Mac gets the text on the Mac showing it.
@@ -209,7 +209,13 @@ overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemon
 pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
 may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
 
-`session wait` is not a third exemption but a client-side composite, like `overlay open --block`: it
+`server install` is the third, macOS-only. It installs the agterm-server release matching the app over ssh
+and a download, and opens no socket. `ServerInstall` in `agtermCore` owns the asset naming, the checksum
+rules and the argv on `TerminfoInstall`'s connection surface; `ServerInstaller` in the CLI runs the steps
+over injectable effects, and no archive bytes are sent to the host until the tarball's sha256 matches the app's
+`agterm-server.sha256`. A bad destination is refused in `run`, not `validate`, so every refusal exits 1.
+
+`session wait` is not a fourth exemption but a client-side composite, like `overlay open --block`: it
 opens the socket only for existing reads (`events.read`, `window.list`, `tree`), so there is no
 `session.wait` command and nothing new to read back. It cannot be a server command: the inline accept loop
 would hold the very status writes it waits for. It anchors the cursor BEFORE reading the tree, so a status
