@@ -7,7 +7,7 @@ import os
 final class ZmxClient {
     // zmx list probes daemons one at a time, so its cost grows with the daemon count and their load;
     // timeout plus kill grace stays below the exit budget.
-    nonisolated static let captureInvocationTimeout: TimeInterval = 0.3
+    nonisolated static let captureInvocationTimeout: TimeInterval = 0.4
     nonisolated static let terminationGrace = ProcessOutputCapture.terminationGrace
     nonisolated static let captureWallClockLimit = captureInvocationTimeout + terminationGrace
 
