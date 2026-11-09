@@ -59,7 +59,7 @@ extension AppActions {
     /// removed on the server with no question; otherwise the user picks Detach (hide here, keep running), Terminate (end
     /// on the server) or Cancel. Answers false for a local window, whose close is the caller's.
     @discardableResult
-    func closeRemote(_ ids: [UUID], in store: AppStore) -> Bool {
+    func closeRemote(_ ids: [UUID], in store: AppStore, choose: RemoteCloseChooser? = nil) -> Bool {
         guard let remote = store.remoteActions else { return false }
         // a companion closing with its parent goes with the parent's close on the server
         let roots = ids.filter { id in store.session(withID: id)?.parentID.map { !ids.contains($0) } ?? true }
@@ -72,7 +72,7 @@ extension AppActions {
         }
         let name = roots.count == 1 ? "“\(store.session(withID: roots[0])?.displayName ?? "the session")”" : "\(roots.count) sessions"
         let blocked = connected ? nil : "Terminate needs a connection to \(remote.mirror.host)."
-        switch askDetachOrTerminate(name, host: remote.mirror.host, terminateBlocked: blocked) {
+        switch (choose ?? Self.askDetachOrTerminate)(name, remote.mirror.host, blocked) {
         case .detach: remote.mirror.detach(sessions: roots)
         case .terminate: for id in roots { performRemote(.closeSession(id), in: store) }
         case .cancel: break
@@ -83,7 +83,7 @@ extension AppActions {
     /// closeRemoteWorkspace is Delete Workspace in a remote window: Detach hides the workspace here, Terminate deletes
     /// it on the server with every session in it.
     @discardableResult
-    func closeRemoteWorkspace(_ id: UUID, in store: AppStore) -> Bool {
+    func closeRemoteWorkspace(_ id: UUID, in store: AppStore, choose: RemoteCloseChooser? = nil) -> Bool {
         guard let remote = store.remoteActions else { return false }
         let name = store.workspaces.first { $0.id == id }.map { "“\($0.name)”" } ?? "the workspace"
         let host = remote.mirror.host
@@ -94,7 +94,7 @@ extension AppActions {
         } else {
             nil
         }
-        switch askDetachOrTerminate(name, host: host, terminateBlocked: blocked) {
+        switch (choose ?? Self.askDetachOrTerminate)(name, host, blocked) {
         case .detach: remote.mirror.detach(workspace: id)
         case .terminate: performRemote(.deleteWorkspace(id), in: store)
         case .cancel: break
@@ -140,11 +140,15 @@ extension AppActions {
         if let refusal { NotificationManager.shared.notifyCommandFailure(name: "Detached Sessions", detail: refusal) }
     }
 
-    private enum RemoteCloseChoice {
+    /// RemoteCloseChoice is the answer to a remote close: hide it here, end it on the server, or leave it.
+    enum RemoteCloseChoice {
         case detach, terminate, cancel
     }
 
-    private func askDetachOrTerminate(_ name: String, host: String, terminateBlocked: String?) -> RemoteCloseChoice {
+    /// RemoteCloseChooser asks about closing `name` on `host`; a non-nil `terminateBlocked` says why Terminate is off.
+    typealias RemoteCloseChooser = @MainActor (_ name: String, _ host: String, _ terminateBlocked: String?) -> RemoteCloseChoice
+
+    private static func askDetachOrTerminate(_ name: String, host: String, terminateBlocked: String?) -> RemoteCloseChoice {
         guard !ContentView.shouldBypassCloseConfirmation else { return .detach }
         let alert = NSAlert()
         alert.alertStyle = .warning
