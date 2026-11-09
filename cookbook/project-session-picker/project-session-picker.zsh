@@ -83,7 +83,7 @@ case $selection in
       [.result.tree.workspaces[].sessions[]
         | select(.content != "page")
         | select(($origins[.id] // .cwd) == $cwd)]
-      | max_by(.lastSelectedAt // 0)
+      | max_by([(.lastSelectedAt // 0), .active])
       | .id // empty
     ') || exit 1
     if [[ -z $session_id ]]; then

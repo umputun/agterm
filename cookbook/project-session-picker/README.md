@@ -10,7 +10,7 @@ A key opens Television in an agterm overlay. The list combines the current windo
 
 ## Requirements
 
-- agterm 0.15.2 or later. `session new --no-select` shipped in that release; `tree --json`, `session select`, window targeting, and terminal overlays predate it.
+- agterm 0.39.0 or later. `tree` reports each session's `lastSelectedAt` and `content` from that release; the other commands the script uses predate it.
 - `zsh`, `jq`, [zoxide](https://github.com/ajeetdsouza/zoxide), and [Television](https://github.com/alexpasmantier/television) (`tv`).
 - zoxide must be initialized in your interactive shell and have folders in its database.
 
@@ -30,7 +30,7 @@ Add this line to `~/.config/agterm/keymap.conf` and reload the keymap. Change `c
 command "Projects" cmd+k agtermctl session overlay open "zsh -lc '$HOME/.config/agterm/project-session-picker.zsh $AGT_WINDOW_ID'" --size-percent 90 --follow --target "$AGT_SESSION_ID" --window "$AGT_WINDOW_ID" --socket "$AGT_SOCKET"
 ```
 
-The script prepends `AGT_BIN_PATH` to `PATH`, defaulting to `/opt/homebrew/bin:/usr/local/bin` for common macOS installations. If your tools are elsewhere, set `AGT_BIN_PATH` in `~/.zprofile` to their colon-separated directories. Set `AGTERMCTL` there to the CLI's full path if it is not on `PATH`; `zsh -lc` loads that file. The keymap command itself also needs to find `agtermctl`, so use its full path on the keymap line if necessary.
+The script prepends `AGT_BIN_PATH` to `PATH`, defaulting to `/opt/homebrew/bin:/usr/local/bin` for common macOS installations. If your tools are elsewhere, `export AGT_BIN_PATH` in `~/.zprofile` with their colon-separated directories. `export AGTERMCTL` there with the CLI's full path if it is not on `PATH`. `zsh -lc` loads that file, but the script runs as its child, so a variable set without `export` never reaches it. The keymap command itself also needs to find `agtermctl`, so use its full path on the keymap line if necessary.
 
 ## Usage
 
@@ -38,11 +38,11 @@ Press ⌘K. Type to filter the combined list. Enter chooses a session or folder;
 
 ## How it works
 
-The custom command launches an overlay because Television needs a terminal. The overlay runs the script, and Television calls its `--list` mode to generate rows. Session rows hold agterm IDs; folder rows hold base64-encoded paths so separators and spaces in paths do not alter the selected value.
+The custom command launches an overlay because Television needs a terminal. The overlay runs the script, and Television calls its `--list` mode to generate rows. Session rows hold agterm IDs. Folder rows hold base64-encoded paths so separators and spaces in paths do not alter the selected value.
 
 For a selected folder, the script reads `tree --json` for the window where the key was pressed. Its state file maps session IDs to folders previously selected through this picker. A saved origin takes precedence over a session's current `cwd`; otherwise an unmapped session matches only when its current `cwd` equals the selected folder. Among matches, the most recently selected session wins. The state lives at `${XDG_STATE_HOME:-$HOME/.local/state}/agterm/project-session-picker.json`.
 
-The overlay starts with agterm's app environment, which may lack Homebrew's `PATH`; the script adds the standard Homebrew directories before calling `tv`, `zoxide`, and `jq`. It passes the overlay's socket to `agtermctl` when available.
+The overlay starts with agterm's app environment, which may lack Homebrew's `PATH`; the script adds the standard Homebrew directories before calling `tv`, `zoxide`, and `jq`. It passes the overlay's socket to `agtermctl` when available. If the overlay flashes and closes, a tool is likely missing and its error closed with the overlay; run the script from a shell, passing a window ID from `agtermctl tree --json`, to see it.
 
 ## Limits
 

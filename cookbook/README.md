@@ -16,7 +16,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [new-session-in-workspace](new-session-in-workspace/) | pick a workspace with fzf and start a session in it | 0.8.0, jq, fzf | [@skripalschikov](https://github.com/skripalschikov) |
 | [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq, zsh | [@umputun](https://github.com/umputun) |
 | [project-launcher](project-launcher/) | pick a project anywhere — or type "project + prompt" — and get a session in its workspace | 0.19.0, jq | [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91) |
-| [project-session-picker](project-session-picker/) | pick an agterm session or zoxide folder with Television, reusing the folder's session | 0.15.2, zsh, jq, zoxide, Television | [@sysradium](https://github.com/sysradium) |
+| [project-session-picker](project-session-picker/) | pick an agterm session or zoxide folder with Television, reusing the folder's session | 0.39.0, zsh, jq, zoxide, Television | [@sysradium](https://github.com/sysradium) |
 | [project-switcher](project-switcher/) | show only one project's workspaces in the sidebar | 0.18.0, jq | [@umputun](https://github.com/umputun) |
 | [session-snapshot](session-snapshot/) | snapshot every open session into a browsable page, close them, and restore any one later with its own Claude conversation | 0.7.1, jq, python3 | [@ne0r0mancer](https://github.com/ne0r0mancer) |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq | [@umputun](https://github.com/umputun) |
