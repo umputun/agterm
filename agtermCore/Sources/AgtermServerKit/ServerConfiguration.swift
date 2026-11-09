@@ -62,8 +62,9 @@ public struct ServerConfiguration: Sendable, Equatable {
         }
         let named = stateDirectory ?? environment["AGTERM_STATE_DIR"].flatMap { $0.isEmpty ? nil : $0 }
             ?? ControlResolve.defaultStateDirectory(environment: environment)
-        let base = URL(fileURLWithPath: workingDirectory ?? fileManager.currentDirectoryPath, isDirectory: true)
-        let state = named.hasPrefix("/") ? named : URL(fileURLWithPath: named, relativeTo: base).standardized.path
+        let base = workingDirectory ?? fileManager.currentDirectoryPath
+        // joined before standardizing: Linux Foundation drops a relativeTo base while collapsing `..`
+        let state = named.hasPrefix("/") ? named : URL(fileURLWithPath: base + "/" + named).standardized.path
         let zmx = zmxPath ?? (executableDirectory as NSString).appendingPathComponent("zmx")
         guard fileManager.isExecutableFile(atPath: zmx) else { throw Failure.missingZmx(zmx) }
         let resources = resourcesDirectory ?? (executableDirectory as NSString).appendingPathComponent("resources")
