@@ -384,7 +384,7 @@ extension WorkspaceSidebar.Coordinator {
     /// with the workspace row's New Session and "+".
     private func addNewSession(toWorkspace workspaceID: UUID) {
         if store.remoteActions != nil { return actions.newRemoteSession(inWorkspace: workspaceID, of: store) }
-        addSession(toWorkspace: workspaceID, cwd: actions.resolvedNewSessionCwd(),
+        addSession(toWorkspace: workspaceID, cwd: actions.resolvedNewSessionCwd(in: workspaceID, store: store),
                    at: actions.resolvedNewSessionIndex(in: workspaceID, store: store))
     }
 
