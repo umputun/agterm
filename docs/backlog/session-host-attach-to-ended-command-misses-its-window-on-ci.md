@@ -31,3 +31,10 @@ output after zmx's `session "<name>" created` and screen reset: `agterm: session
 reached its `printf` in this run, and the attach client was still not reapable at the last poll. Whether it
 exits late or never, whether the daemon process had ended, and what happened in the earlier run without
 that message, are still open.
+
+A local full `swift test --package-path agtermCore` on 2026-11-09 (master `f2d84ca2` plus doc and test
+edits outside the session host, machine load 56 from unrelated processes) failed it a fourth time, the
+first outside CI: 4.39 s in, `waitpid` 0, errno 0, `p_stat` SRUN after 3.02 s, empty `zmx list` and host
+log. The PTY held zmx's `session "<name>" created` and screen reset but not the payload's message, the
+shape of run 41899293201. Run alone right after, at load 46, it passed in 1.41 s. So a loaded local
+machine running the full suite can hit it, which is a place to capture stacks of the pane and host.
