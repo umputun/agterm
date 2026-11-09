@@ -102,8 +102,7 @@ struct ServerStreamsTests {
         return viewer
     }
 
-    // regression: the server advertised link.click from the shared kinds and dropped every forwarded click
-    @Test func theServerNeverNegotiatesForwardedClicks() async throws {
+    @Test func aPresenterNegotiatesForwardedClicks() async throws {
         let session = try newSession()
         var fds: [Int32] = [-1, -1]
         #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
@@ -115,8 +114,7 @@ struct ServerStreamsTests {
 
         let answer = await offPool { viewer.first { if case .hello = $0 { true } else { false } } }
         guard case .hello(let hello)? = answer else { Issue.record("no hello"); return }
-        #expect(!hello.kinds.contains(PresentationHub.linkClickKind))
-        #expect(hello.kinds.contains(PresentationHub.pageLinksKind))
+        #expect(hello.kinds.contains(PresentationHub.linkClickKind))
     }
 
     @Test func aViewerGetsTheSnapshotThenTheSessionsChanges() async throws {
@@ -1003,6 +1001,174 @@ struct ServerStreamsTests {
 
         #expect(!adopted)
         #expect(streams.overlayJobs.job(job).map { if case .claimed = $0.state { true } else { false } } != true)
+    }
+
+    private func clickSession() throws -> Session {
+        let session = try newSession()
+        session.currentCwd = harness.scratch.root
+        return session
+    }
+
+    private func write(_ name: String, _ text: String = "# notes\n") throws -> String {
+        let path = harness.scratch.root + "/" + name
+        try Data(text.utf8).write(to: URL(fileURLWithPath: path))
+        return path
+    }
+
+    private func click(_ raw: String, on session: Session, pane: UUID? = nil, from viewer: Viewer) throws {
+        try viewer.send(.linkClick(PresentationLinkClick(raw: raw, pane: pane ?? session.paneIdentity, mode: .overlay)))
+    }
+
+    private func pageRequest(from viewer: Viewer) async -> PresentationPage? {
+        let body = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let page)? = body else { return nil }
+        return page
+    }
+
+    private func refusal(from viewer: Viewer) async -> RemoteLinkRefusal? {
+        let body = await offPool { viewer.first { if case .linkRefused = $0 { true } else { false } } }
+        guard case .linkRefused(let refusal)? = body else { return nil }
+        return refusal.reason
+    }
+
+    @Test func aClickedMarkdownFileInThePanesDirectoryOpensAsAClickedPageWithItsLinks() async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let path = try write("notes.md")
+
+        try click("./notes.md", on: session, from: viewer)
+
+        let page = try #require(await pageRequest(from: viewer))
+        #expect(page.source == .markdown(path: path))
+        #expect(page.navigation)
+        #expect(page.markdownLinks != nil)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.clicked == true)
+    }
+
+    @Test func aClickedTextLocationOpensAtItsLine() async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let path = try write("main.go", "package main\n\nfunc main() {}\n")
+
+        try click("./main.go:3", on: session, from: viewer)
+
+        let page = try #require(await pageRequest(from: viewer))
+        #expect(page.source == .text(path: path, line: 3))
+    }
+
+    @Test(arguments: [("./gone.md", RemoteLinkRefusal.notFound), ("./gone.bin", .notFound), ("./data.bin", .notAPage)])
+    func aClickThatNamesNoPageIsRefused(raw: String, reason: RemoteLinkRefusal) async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        try Data([0, 1, 2]).write(to: URL(fileURLWithPath: harness.scratch.root + "/data.bin"))
+
+        try click(raw, on: session, from: viewer)
+
+        #expect(await refusal(from: viewer) == reason)
+        #expect(session.remoteOverlays.slot(nil) == nil)
+    }
+
+    @Test func aClickInAPaneTheSessionDoesNotHaveIsRefused() async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        _ = try write("notes.md")
+
+        try click("./notes.md", on: session, pane: UUID(), from: viewer)
+
+        #expect(await refusal(from: viewer) == .paneNotAttached)
+    }
+
+    @Test func aClickWhileTheHudIsUpIsNotOpened() async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        _ = try write("notes.md")
+        #expect(harness.actions.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "building")).ok)
+
+        try click("./notes.md", on: session, from: viewer)
+
+        #expect(await refusal(from: viewer) == .notOpened)
+        #expect(session.remoteOverlays.slot(nil) == nil)
+    }
+
+    @Test func aClickWhosePresenterChangedBeforeItsFileWasCheckedIsDropped() async throws {
+        let session = try clickSession()
+        let first = try await presenter(for: session)
+        _ = try write("notes.md")
+        let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        let check = streams.checkPage
+        streams.checkPage = { page, options in
+            entered.signal()
+            release.wait()
+            return check(page, options)
+        }
+
+        try click("./notes.md", on: session, from: first)
+        #expect(await offPool { entered.wait(timeout: .now() + 60) == .success })
+        await drop(first, from: session)
+        let second = try await presenter(for: session)
+        defer { close(second.fd) }
+        release.signal()
+
+        let late = await offPool {
+            second.first(within: 2) { if case .pageRequest = $0 { true } else if case .linkRefused = $0 { true } else { false } }
+        }
+        #expect(late == nil)
+        #expect(session.remoteOverlays.slot(nil) == nil)
+    }
+
+    @Test func aClickReplacesAHiddenClickedPageOnlyOnceTheNewFileChecksOut() async throws {
+        let session = try clickSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        _ = try write("a.md")
+        let replacement = try write("b.md")
+        try FileManager.default.createDirectory(atPath: harness.scratch.root + "/broken.md", withIntermediateDirectories: false)
+        try click("./a.md", on: session, from: viewer)
+        let shown = try #require(await pageRequest(from: viewer))
+        try viewer.send(.pageState(PresentationPageState(page: shown.page, title: nil, address: nil, load: .loaded, error: nil,
+                                                         canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0)))
+
+        try click("./broken.md", on: session, from: viewer)
+        #expect(await refusal(from: viewer) == .notOpened)
+        #expect(session.remoteOverlays.slot(nil)?.job == shown.page)
+
+        try click("./b.md", on: session, from: viewer)
+        let next = try #require(await pageRequest(from: viewer))
+        #expect(next.source == .markdown(path: replacement))
+        #expect(session.remoteOverlays.slot(nil)?.job == next.page)
+    }
+
+    @Test func hidingAPageShownOnThePresenterSendsItAndToggleShowsItAgain() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { close(viewer.fd) }
+        let path = harness.scratch.root + "/notes.md"
+        try Data("# notes\n".utf8).write(to: URL(fileURLWithPath: path))
+        #expect(openOverlay(on: session, page: .markdown(path: path)).ok)
+        #expect(await pageRequest(from: viewer) != nil)
+
+        let hidden = harness.actions.setSessionOverlayVisibility(session.id.uuidString, window: nil, pane: nil, mode: .hide)
+        let hide = await offPool { viewer.first { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } } }
+        let shown = harness.actions.setSessionOverlayVisibility(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
+        let show = await offPool { viewer.first { if case .pageCommand(let command) = $0 { command.action == .show } else { false } } }
+
+        #expect(hidden.result?.text == "hidden")
+        #expect(hide != nil)
+        #expect(shown.result?.text == "shown")
+        #expect(show != nil)
+    }
+
+    @Test func hidingWithNoOverlayIsRefused() throws {
+        let session = try newSession()
+
+        let reply = harness.actions.setSessionOverlayVisibility(session.id.uuidString, window: nil, pane: nil, mode: .hide)
+
+        #expect(!reply.ok)
     }
 
     private func eventually(_ condition: () -> Bool) async -> Bool {

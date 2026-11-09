@@ -14,6 +14,7 @@ public enum ServerCommandPolicy {
         .sessionStatus, .sessionContext, .notify, .sessionHudOpen, .sessionHudUpdate, .sessionHudClose,
         .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
         .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,
+        .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

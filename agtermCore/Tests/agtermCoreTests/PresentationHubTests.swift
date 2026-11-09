@@ -48,16 +48,6 @@ struct PresentationHubTests {
         #expect(sink.bodies == [.hello(Self.hello), .snapshot(snapshot), .status(nil)])
     }
 
-    @Test func aWithheldKindIsNeverNegotiated() throws {
-        let hub = PresentationHub(staleTimeout: 30, withheldKinds: [PresentationHub.linkClickKind])
-        let sink = Sink()
-        let hello = PresentationHello(version: 1, kinds: ["status", PresentationHub.linkClickKind], mode: .mirror)
-
-        try hub.subscribe(session: Self.session, hello: hello, sink: sink) { Self.empty }
-
-        #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)))
-    }
-
     @Test func aChangeMadeWhileTheSnapshotIsTakenLandsAfterIt() throws {
         let hub = makeHub()
         let sink = Sink()

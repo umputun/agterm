@@ -36,34 +36,17 @@ extension ServerActions {
     }
 
     /// openPage checks a file page's file here, where it lives, then hands the page to the presenting Mac, which
-    /// fetches its content over a page channel. A picture goes with its pixel size so that Mac can size it.
+    /// fetches its content over a page channel.
     func openPage(_ page: HtmlSource, in session: Session, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
-        var options = options
-        switch page {
-        case .image(let path):
-            switch ImageFile.pixels(path: path) {
-            case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
-            case .success(let pixels): options = options.with(imagePixels: pixels)
-            }
-        case .markdown(let path):
-            if case .failure(let failure) = MarkdownFile.check(path: path) {
-                return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
-            }
-            if options.navigation { options = options.with(markdownLinks: MarkdownPage.linkGrant(for: path)) }
-        case .text(let path, _):
-            if options.textLog != nil { return ControlResponse(ok: false, error: OverlayHtmlError.logRemote) }
-            if case .failure(let failure) = TextProbe.check(path: path) {
-                return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
-            }
-        case .file, .url, .replica, .document, .unreadable:
-            break
+        if case .text = page, options.textLog != nil { return ControlResponse(ok: false, error: OverlayHtmlError.logRemote) }
+        let checked: ControlSessionOverlayOpenOptions
+        switch Self.checkedPage(page, options: options) {
+        case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure.message)")
+        case .success(let options): checked = options
         }
-        let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
-                                  clicked: options.clicked, textLog: options.textLog, markdownLinks: options.markdownLinks)
-        switch store.openRemotePage(session.id, overlay: overlay, options: options) {
+        let overlay = Self.pageOverlay(page, options: checked)
+        switch streams.handOver(overlay, in: session, options: checked) {
         case .opened:
-            if page.kind != .url { streams.schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, pageID: overlay.id.uuidString))
         case .local: return ControlResponse(ok: false, error: "no connected Mac to show the page")
         case .slotTaken: return ControlResponse(ok: false, error: options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen)
@@ -73,6 +56,55 @@ extension ServerActions {
             return ControlResponse(ok: false, error: "a loopback url names agterm-server's host, so the Mac presenting the session cannot load it")
         case .tooLarge: return ControlResponse(ok: false, error: OverlayHtmlError.remoteTooLarge)
         case .pointsUnsupported: return ControlResponse(ok: false, error: OverlayPointError.remote)
+        }
+    }
+
+    /// PageCheckFailure is why a file page's file cannot be shown.
+    struct PageCheckFailure: Error, Equatable {
+        let message: String
+    }
+
+    /// checkedPage reads a file page's file and returns the options the page opens with: a picture's pixel size,
+    /// so the presenting Mac can size it, and a markdown page's link grant when it navigates. It touches only the
+    /// file, so a click runs it off the main actor.
+    nonisolated static func checkedPage(_ page: HtmlSource, options: ControlSessionOverlayOpenOptions)
+        -> Result<ControlSessionOverlayOpenOptions, PageCheckFailure> {
+        switch page {
+        case .image(let path):
+            switch ImageFile.pixels(path: path) {
+            case .failure(let failure): return .failure(PageCheckFailure(message: "\(failure)"))
+            case .success(let pixels): return .success(options.with(imagePixels: pixels))
+            }
+        case .markdown(let path):
+            if case .failure(let failure) = MarkdownFile.check(path: path) { return .failure(PageCheckFailure(message: "\(failure)")) }
+            return .success(options.navigation ? options.with(markdownLinks: MarkdownPage.linkGrant(for: path)) : options)
+        case .text(let path, _):
+            if case .failure(let failure) = TextProbe.check(path: path) { return .failure(PageCheckFailure(message: "\(failure)")) }
+            return .success(options)
+        case .document(let path):
+            guard case .success(let data) = BoundedFile.read(path: path, maxBytes: DocumentPage.maxBytes), DocumentPage.page(data) != nil
+            else { return .failure(PageCheckFailure(message: "not a readable UTF-8 html file: \(path)")) }
+            return .success(options)
+        case .file, .url, .replica, .unreadable:
+            return .success(options)
+        }
+    }
+
+    static func pageOverlay(_ page: HtmlSource, options: ControlSessionOverlayOpenOptions) -> HtmlOverlay {
+        HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript, chromeless: options.chromeless,
+                    persistent: options.persistent, browse: options.browse, clicked: options.clicked, textLog: options.textLog,
+                    markdownLinks: options.markdownLinks)
+    }
+
+    /// setSessionOverlayVisibility hides or shows the pages shown on the presenting Mac, as a Mac origin does; a program
+    /// runs here only as that Mac's reservation, which neither origin hides.
+    public func setSessionOverlayVisibility(_ target: String?, window: String?, pane: OverlayPane?,
+                                            mode: OverlayVisibilityMode) -> ControlResponse {
+        withSession(target, window: window) { session in
+            if let failure = store.applyOverlayVisibility(session.id, pane: pane, mode: mode) {
+                return ControlResponse(ok: false, error: failure.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: session.anyOverlayShown(pane) ? "shown" : "hidden"))
         }
     }
 

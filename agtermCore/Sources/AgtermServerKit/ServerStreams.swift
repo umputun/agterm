@@ -7,8 +7,7 @@ import agtermCore
 final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageServeHost {
     let store: AppStore
     let catalogID: UUID
-    // the server opens no clicked file, so a presenter keeps its own refusal
-    let presentationHub = PresentationHub(staleTimeout: 30, withheldKinds: [PresentationHub.linkClickKind])
+    let presentationHub = PresentationHub(staleTimeout: 30)
     let overlayJobs = OverlayJobs()
     var presentationStreams: [PresentationStream] = []
     var presentationHeartbeat: Task<Void, Never>?
@@ -22,6 +21,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     private var respawnGenerations: [UUID: [String: Int]] = [:]
     /// now is the clock pending deadlines are checked against at an offer or an answer.
     var now: @MainActor () -> Date = Date.init
+    /// checkPage reads a file page's file before it is handed over; a click runs it off the main actor.
+    var checkPage: @Sendable (HtmlSource, ControlSessionOverlayOpenOptions)
+        -> Result<ControlSessionOverlayOpenOptions, ServerActions.PageCheckFailure> = ServerActions.checkedPage
     /// dispatch runs a page's bridge request through the server's own dispatcher.
     var dispatch: ((ControlRequest) async -> ControlResponse)?
     var catalogStreams: [CatalogStream] = []
@@ -112,12 +114,21 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
         case .pageState, .pageClosed, .pageRejected:
             store.receiveRemotePageFrame(body, forSession: sessionID)
+        case .linkClick(let click):
+            receiveLinkClick(click, forSession: sessionID)
         default:
             break
         }
     }
 
     // MARK: pages
+
+    /// handOver gives a checked page to the Mac presenting `session`, or holds it for the next one.
+    func handOver(_ overlay: HtmlOverlay, in session: Session, options: ControlSessionOverlayOpenOptions) -> RemotePageOpen {
+        let result = store.openRemotePage(session.id, overlay: overlay, options: options)
+        if result == .opened, overlay.source.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
+        return result
+    }
 
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {
         store.claimRemotePage(token: token).map { ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks)) }
@@ -209,5 +220,68 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         shutdownCatalogStreams()
         for stream in overlayJobStreams.values { stream.shutdown() }
         for stream in pageServeStreams.values { stream.shutdown() }
+    }
+}
+
+// MARK: - forwarded clicks
+
+extension ServerStreams {
+    /// receiveLinkClick opens the page a path clicked on the presenting Mac names, the way a Mac origin does: the
+    /// path resolves against the pane's directory here, and only page routes open. Every other click is answered
+    /// with one refusal to the presenter that sent it; a click whose presenter changed meanwhile is dropped.
+    func receiveLinkClick(_ click: PresentationLinkClick, forSession id: UUID) {
+        let generation = presentationHub.presenterGeneration(session: id)
+        guard let target = store.forwardedClickPane(id, pane: click.pane) else {
+            return refuseLinkClick(.paneNotAttached, session: id, generation: generation)
+        }
+        let origin = LinkPolicy.ClickOrigin.pane(id)
+        let candidates = LinkPolicy.locations(for: click.raw, origin: origin, cwd: target.cwd)
+        let check = checkPage
+        Task { @MainActor [weak self] in
+            let (route, present, opening) = await Task.detached(priority: .userInitiated) {
+                let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+                let route = LinkPolicy.resolvedRoute(for: click.raw, candidates: candidates, mode: click.mode, origin: origin,
+                                                     exists: exists)
+                let present = route.localFile.map { exists($0.path(percentEncoded: false)) } ?? false
+                let opening = present ? Self.clickedPage(route).map { ($0.source, check($0.source, $0.options)) } : nil
+                return (route, present, opening)
+            }.value
+            guard let self, presentationHub.presenterGeneration(session: id) == generation else { return }
+            // a location nobody found routes as typed, and a relative one then has nothing to open
+            if route == .ignore, !candidates.isEmpty { return refuseLinkClick(.notFound, session: id, generation: generation) }
+            switch route {
+            case .image, .markdown, .text, .document, .reveal:
+                guard present else { return refuseLinkClick(.notFound, session: id, generation: generation) }
+            default:
+                break
+            }
+            guard let (source, checked) = opening else { return refuseLinkClick(.notAPage, session: id, generation: generation) }
+            guard case .success(let options) = checked, let session = store.session(withID: id), !session.hudActive,
+                  !session.overlayHidden(nil),
+                  handOver(ServerActions.pageOverlay(source, options: options), in: session, options: options) == .opened
+            else { return refuseLinkClick(.notOpened, session: id, generation: generation) }
+        }
+    }
+
+    /// clickedPage is the page a click's route opens, with the options a Mac origin gives a clicked page; nil for a
+    /// route that opens none.
+    nonisolated static func clickedPage(_ route: LinkPolicy.Route) -> (source: HtmlSource, options: ControlSessionOverlayOpenOptions)? {
+        let source: HtmlSource, sizePercent: Int?
+        switch route {
+        case .image(let url, _): (source, sizePercent) = (.image(path: url.path(percentEncoded: false)), nil)
+        case .markdown(let url, _, let percent): (source, sizePercent) = (.markdown(path: url.path(percentEncoded: false)), percent)
+        case .text(let link): (source, sizePercent) = (.text(path: link.url.path(percentEncoded: false), line: link.line), link.sizePercent)
+        case .document(let url, _, let percent): (source, sizePercent) = (.document(path: url.path(percentEncoded: false)), percent)
+        case .reveal, .ignore, .browser, .overlay, .forwardRemote: return nil
+        }
+        let navigation = if case .markdown = source { true } else { false }
+        return (source, ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
+                                                         backgroundColor: nil, page: source, navigation: navigation,
+                                                         clicked: true, forwarded: true))
+    }
+
+    private func refuseLinkClick(_ reason: RemoteLinkRefusal, session id: UUID, generation: Int) {
+        guard presentationHub.presenterGeneration(session: id) == generation else { return }
+        presentationHub.sendToPresenter(.linkRefused(PresentationLinkRefusal(reason: reason)), session: id)
     }
 }
