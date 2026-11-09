@@ -52,7 +52,10 @@ struct ServerCommandsTests {
         try handle.close()
         let effects = fixture.effects(probe: "x86_64\n")
 
-        #expect(throws: SocketClientError.self) { try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: local.path) }
+        let error = #expect(throws: SocketClientError.self) {
+            try ServerInstaller(effects: effects.value).install(.init(destination: "box"), source: local.path)
+        }
+        #expect(error.map { "\($0)" }?.contains("is larger than \(ServerInstall.downloadLimit) bytes") == true)
         #expect(effects.calls.map(\.phase) == ["probe"])
     }
 
