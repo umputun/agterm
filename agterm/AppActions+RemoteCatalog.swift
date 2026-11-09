@@ -31,10 +31,10 @@ extension AppActions {
         if session.scratchActive != shown { store.toggleScratch(session.id) }
     }
 
-    /// newRemoteSession is New Session in a remote window: the placement setting decides whether it lands after the
-    /// selected row, and the directory setting whether it starts in that row's directory or the server's default.
+    /// newRemoteSession applies the placement and directory settings to a session created on the server.
     func newRemoteSession(inWorkspace workspaceID: UUID, of store: AppStore) {
-        let shell = RemoteShellOptions(cwd: settingsModel?.settings.remoteNewSessionCwd(currentSessionCwd: store.activeSession?.focusedCwd))
+        let source = store.newSessionDirectorySource(inWorkspace: workspaceID)
+        let shell = RemoteShellOptions(cwd: settingsModel?.settings.remoteNewSessionCwd(currentSessionCwd: source?.focusedCwd))
         let afterCurrent = settingsModel?.settings.effectiveNewSessionPlacement == .afterCurrent
         let anchor = store.selectedSessionID.flatMap { id in
             afterCurrent && store.sessionLocation(ofSession: id)?.workspace == workspaceID ? RemoteSessionPlacement.after(id) : nil

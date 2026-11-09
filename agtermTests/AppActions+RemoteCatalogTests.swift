@@ -76,17 +76,17 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func catalogSession(_ id: UUID = UUID(), parent: UUID? = nil, ended: Bool = false) -> CatalogSession {
+    private func catalogSession(_ id: UUID = UUID(), parent: UUID? = nil, ended: Bool = false, cwd: String = "/srv") -> CatalogSession {
         let pane = CatalogPane(identity: UUID(), daemon: "agterm-\(id.uuidString)", endpoint: Self.endpoint)
-        return CatalogSession(fields: CatalogSessionFields(id: id, name: "s-\(id.uuidString.prefix(4))", parent: parent, cwd: "/srv",
+        return CatalogSession(fields: CatalogSessionFields(id: id, name: "s-\(id.uuidString.prefix(4))", parent: parent, cwd: cwd,
                                                            primary: pane.identity, axis: nil, shown: false,
                                                            lifecycle: ended ? .ended : .live),
                               panes: ended ? [] : [pane])
     }
 
-    private func open(_ sessions: [CatalogSession], withEmptyWorkspace: Bool = false) {
+    private func open(_ sessions: [CatalogSession], withEmptyWorkspace: Bool = false, spare: [CatalogSession] = []) {
         var workspaces = [CatalogWorkspace(id: workspaceID, name: "main", sessions: sessions)]
-        if withEmptyWorkspace { workspaces.append(CatalogWorkspace(id: emptyWorkspaceID, name: "spare", sessions: [])) }
+        if withEmptyWorkspace || !spare.isEmpty { workspaces.append(CatalogWorkspace(id: emptyWorkspaceID, name: "spare", sessions: spare)) }
         _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                                      versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
                                                      workspaces: workspaces)))
@@ -401,6 +401,22 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(runner.lines.count, 1)
         XCTAssertTrue(runner.lines[0].contains("session new --workspace \(workspaceID.uuidString)"))
         XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testNewSessionInAnotherRemoteWorkspaceTakesThatWorkspacesFolder() throws {
+        let selected = catalogSession(cwd: "/srv/selected")
+        let other = catalogSession(cwd: "/srv/other")
+        open([selected], spare: [other])
+        _ = store.selectSession(selected.id)
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: directory))
+        settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.currentSession.rawValue)
+        actions.settingsModel = settings
+
+        actions.newRemoteSession(inWorkspace: emptyWorkspaceID, of: store)
+        try sent(1)
+
+        XCTAssertTrue(runner.lines[0].contains("session new --workspace \(emptyWorkspaceID.uuidString)"))
+        XCTAssertTrue(runner.lines[0].contains("--cwd=/srv/other"))
     }
 
     func testToggleSplitInARemoteWindowAsksTheServerAndLeavesTheRowUnsplit() throws {
