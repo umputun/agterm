@@ -10,17 +10,19 @@ final class SshConnectionPoolTests {
     private var gate: CheckedContinuation<Void, Never>?
     private var holdStarts = false
     private var holdChecks = false
+    private var gateOpen = false
 
     private func pool(key: String = "window-1") -> SshConnectionPool {
-        SshConnectionPool(host: "box", root: "/tmp/agterm-ssh-501", key: key) { [unowned self] argv in
+        SshConnectionPool(host: "box", root: "/tmp/agterm-ssh-501", key: key) { [weak self] argv in
+            guard let self else { return 255 }
             ran.append(argv)
             let path = argv.joined(separator: " ").components(separatedBy: "ControlPath=").last?
                 .components(separatedBy: CharacterSet(charactersIn: " '")).first ?? ""
             if argv.contains("check") {
-                if holdChecks { await withCheckedContinuation { gate = $0 } }
+                if holdChecks, !gateOpen { await withCheckedContinuation { gate = $0 } }
                 return alive.contains(path) ? 0 : 255
             }
-            if holdStarts { await withCheckedContinuation { gate = $0 } }
+            if holdStarts, !gateOpen { await withCheckedContinuation { gate = $0 } }
             if startStatus == 0 { alive.insert(path) }
             return startStatus
         }
@@ -30,6 +32,18 @@ final class SshConnectionPoolTests {
 
     private func settle() async {
         for _ in 0..<50 { await Task.yield() }
+    }
+
+    private func held() async -> Bool {
+        let deadline = Date().addingTimeInterval(5)
+        while gate == nil, Date() < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+        return gate != nil
+    }
+
+    private func openGate() {
+        gateOpen = true
+        gate?.resume()
+        gate = nil
     }
 
     @Test func eightUsersShareAConnectionAndANinthOpensAnother() {
@@ -82,12 +96,12 @@ final class SshConnectionPoolTests {
         let pool = pool()
         holdStarts = true
         let path = pool.lease("catalog")
-        await settle()
+        #expect(await held())
 
         async let first = pool.ready(path)
         async let second = pool.ready(path)
         await settle()
-        gate?.resume()
+        openGate()
         let results = await [first, second]
 
         #expect(results == [true, true])
@@ -133,10 +147,10 @@ final class SshConnectionPoolTests {
         let pool = pool()
         holdChecks = true
         let path = pool.lease("catalog")
-        await settle()
+        #expect(await held())
 
         _ = pool.close()
-        gate?.resume()
+        openGate()
         await settle()
 
         #expect(starts == 0)
@@ -147,10 +161,10 @@ final class SshConnectionPoolTests {
         let pool = pool()
         holdStarts = true
         let path = pool.lease("catalog")
-        await settle()
+        #expect(await held())
 
         _ = pool.close()
-        gate?.resume()
+        openGate()
         await settle()
 
         #expect(starts == 1)
@@ -215,9 +229,9 @@ final class SshConnectionPoolTests {
 
         let link = transport.open(["ssh"], onLine: { _ in }, onClose: { _ in })
         link.send(Data("hello".utf8))
-        await settle()
+        #expect(await held())
         let beforeConnection = inner.opened.count
-        gate?.resume()
+        openGate()
         await settle()
 
         #expect(beforeConnection == 0)
@@ -254,7 +268,7 @@ final class SshConnectionPoolTests {
         let link = transport.open(["ssh"], onLine: { _ in }, onClose: { _ in })
         link.stop()
         await settle()
-        gate?.resume()
+        openGate()
         await settle()
 
         #expect(inner.opened.isEmpty)

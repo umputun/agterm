@@ -53,11 +53,29 @@ struct AgtermServerTests {
         let catalogID = first.catalog.id
         first.stop()
 
-        let second = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        let second: AgtermServer
+        do {
+            second = try AgtermServer.start(configuration: scratch.configuration(), identity: identity)
+        } catch {
+            Issue.record("restart failed: \(error); test pid \(getpid()); lock holders: \(lockHolders(scratch.state + "/agterm.lock"))")
+            return
+        }
         defer { second.stop() }
 
         #expect(second.catalog.id == catalogID)
         #expect(second.store.workspaces.map(\.id).contains(workspace.id))
+    }
+
+    private func lockHolders(_ path: String) -> String {
+        guard let lsof = ["/usr/sbin/lsof", "/usr/bin/lsof"].first(where: FileManager.default.isExecutableFile(atPath:)) else {
+            return "no lsof"
+        }
+        do {
+            let output = try ServerProcess.run([lsof, "-w", "-n", path], environment: ProcessInfo.processInfo.environment, timeout: 10)
+            return "exit \(output.status): \(output.stdout)\(output.stderr)"
+        } catch {
+            return "lsof failed: \(error)"
+        }
     }
 
     @Test func anUnreadableSavedCatalogStopsTheStartAndIsLeftAlone() throws {

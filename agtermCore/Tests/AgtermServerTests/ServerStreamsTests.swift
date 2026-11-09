@@ -253,7 +253,7 @@ struct ServerStreamsTests {
         let first = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
         guard case .pickRequest(let old)? = first else { Issue.record("no pick request"); return }
 
-        close(viewer.fd)
+        await drop(viewer, from: session)
         let returned = await eventually {
             harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?
                 .interactions?.first?.state == ControlInteraction.unpresented
@@ -281,7 +281,7 @@ struct ServerStreamsTests {
 
         let unoffered = await offPool { older.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
         #expect(unoffered == nil)
-        close(older.fd)
+        await drop(older, from: session)
         let capable = try await presenter(for: session)
         defer { close(capable.fd) }
 
@@ -722,7 +722,7 @@ struct ServerStreamsTests {
         #expect(plain.markdownLinks == nil)
         #expect(!plain.navigation)
 
-        close(older.fd)
+        await drop(older, from: session)
         let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
         #expect(returned)
         let next = try await presenter(for: session)
@@ -1139,6 +1139,7 @@ struct ServerStreamsTests {
         let first = try await presenter(for: session)
         _ = try write("notes.md")
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
         let check = streams.checkPage
         streams.checkPage = { page, options in
             entered.signal()

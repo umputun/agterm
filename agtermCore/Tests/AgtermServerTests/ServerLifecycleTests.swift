@@ -187,7 +187,8 @@ final class ServerLifecycleTests {
 
         await type(server, session, "functions -q __ghostty_mark_prompt_start; and echo INTEGRATED-(echo FISH)\n")
 
-        #expect(await eventually(15) { self.screen(server, session).contains("INTEGRATED-FISH") })
+        let integrated = await eventually(15) { self.screen(server, session).contains("INTEGRATED-FISH") }
+        #expect(integrated, "fish pane screen: \(screen(server, session))")
     }
 
     #if os(Linux)
