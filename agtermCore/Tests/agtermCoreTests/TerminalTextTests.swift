@@ -33,4 +33,16 @@ struct TerminalTextTests {
     @Test func emptyStaysEmpty() {
         #expect(TerminalText.sanitized("") == "")
     }
+
+    @Test(arguments: [
+        ("plain\ttext\n", "plain\ttext\n"),
+        ("\u{1B}[1;38;5;208mbold\u{1B}[22m tail", "bold tail"),
+        ("\u{1B}]8;;http://x\u{1B}\\link\u{1B}]8;;\u{07}", "link"),
+        ("a\u{1B}(Bb\u{1B}=c", "abc"),
+        ("end\u{1B}[38;2;1", "end"),
+        ("end\u{1B}", "end"),
+    ])
+    func strippingEscapesDropsEverySequenceAndKeepsTheText(_ input: String, _ expected: String) {
+        #expect(TerminalText.strippingEscapes(input) == expected)
+    }
 }

@@ -84,6 +84,11 @@ struct TextPageTests {
         #expect(TextPage.diffLanguages(in: "diff --git a/x.go b/x.go\r\n--- a/x.go\r\n+++ b/x.go\r\n") == ["a/x.go": "go", "b/x.go": "go"])
     }
 
+    @Test func aColoredDiffMapsItsHeaderPathsWithoutTheEscapes() {
+        let text = "\u{1B}[1mdiff --git a/x.go b/x.go\u{1B}[m\n\u{1B}[1m--- a/x.go\u{1B}[m\n\u{1B}[1m+++ b/x.go\u{1B}[m\n"
+        #expect(TextPage.diffLanguages(in: text) == ["a/x.go": "go", "b/x.go": "go"])
+    }
+
     @Test func aDiffUnderTheHighlightCapCarriesItsFileLanguages() {
         let text = "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n"
         let overCap = text + String(repeating: " x\n", count: TextPage.maxHighlightBytes / 3 + 1)
