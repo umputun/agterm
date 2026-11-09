@@ -45,7 +45,7 @@ final class HtmlOverlayViewTests: HtmlPageTestCase {
             try click(reload, in: window)
 
             try await waitFor("the reload loaded the file") { row.htmlOverlay?.loadState == .loaded }
-            XCTAssertEqual(row.htmlOverlay?.current?.title, "later")
+            try await waitFor("the reload's title, \(shape)") { row.htmlOverlay?.current?.title == "later" }
         }
     }
 

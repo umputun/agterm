@@ -57,9 +57,11 @@ jobs:
         run: |
           zmx=$(sed -nE 's/^ZMX_REV="([^"]+)".*/\1/p' scripts/setup.sh)
           zmx_target=$(sed -nE 's/^ZMX_TARGET="([^"]+)".*/\1/p' scripts/setup.sh)
-          [ -n "$zmx" ] && [ -n "$zmx_target" ]
+          ghostty=$(sed -nE 's/^GHOSTTY_REV="([^"]+)".*/\1/p' scripts/setup.sh)
+          [ -n "$zmx" ] && [ -n "$zmx_target" ] && [ -n "$ghostty" ]
           echo "zmx=$zmx" >> "$GITHUB_OUTPUT"
           echo "zmx_target=$zmx_target" >> "$GITHUB_OUTPUT"
+          echo "ghostty=$ghostty" >> "$GITHUB_OUTPUT"
       - name: Cache zmx
         uses: actions/cache@v6
         with:
@@ -70,6 +72,16 @@ jobs:
       # the session-host fixtures attach to a real zmx daemon; a cache miss builds it here
       - name: Stage zmx
         run: scripts/setup.sh --zmx-only
+      - name: Cache the shell integration
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/linux/ghostty
+            build/linux/.shell-integration-stamp
+          key: shell-integration-macos-v1-${{ steps.revisions.outputs.ghostty }}
+      # the server's real-daemon panes load it; this job builds no libghostty, so it comes from ghostty's source at the pin
+      - name: Stage the shell integration
+        run: scripts/setup-zmx-linux.sh --shell-integration
       - name: Install fish
         run: brew install fish
       - name: Verify fish
@@ -84,6 +96,7 @@ jobs:
         env:
           AGTERM_REQUIRE_FISH: "1"
           AGTERM_REQUIRE_ZMX: "1"
+          AGTERM_SHELL_INTEGRATION: ${{ github.workspace }}/build/linux/ghostty/shell-integration
           WATCHDOG_SECONDS: "600"
           DIAG_DIR: ${{ github.workspace }}/test-hang
       - name: upload hang diagnostics
@@ -156,8 +169,12 @@ jobs:
     needs: changes
     if: needs.changes.outputs.swift == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    container: swift:6.3.2-noble
+    # build, then the watchdog's 10-minute test cap and its diagnostics
+    timeout-minutes: 45
+    container:
+      image: swift:6.3.2-noble
+      # the watchdog's lldb attaches, as root, to the test runner owned by agterm-test
+      options: --cap-add=SYS_PTRACE
     steps:
       - uses: actions/checkout@v7
       - name: Install jq, zsh, fish and tcsh
@@ -204,7 +221,22 @@ jobs:
       - name: swift test
         working-directory: agtermCore
         # the server's real-daemon suite and the fish cases fail rather than skip without zmx or fish
-        run: runuser --user agterm-test -- env HOME=/home/agterm-test AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1 swift test --skip-build
+        run: >-
+          ../scripts/watchdog.sh runuser --user agterm-test --
+          env HOME=/home/agterm-test AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1 swift test --skip-build
+        env:
+          WATCHDOG_SECONDS: "600"
+          WATCHDOG_DIAG_SECONDS: "300"
+          WATCHDOG_RUNNER: agtermCorePackageTests.xctest
+          # relative: in a container job github.workspace names the host path, not the mounted one
+          DIAG_DIR: ../test-hang
+      - name: upload hang diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-hang-linux
+          path: test-hang
+          if-no-files-found: ignore
 
   build:
     name: Build app

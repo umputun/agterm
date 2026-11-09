@@ -24,6 +24,9 @@ paths:
   touching libghostty, so `SessionHostServerTests` attach to a real daemon in the same `swift test`.
   `AGTERM_REQUIRE_ZMX=1` fails `requiredFixturePrerequisitesArePresent` when zmx or the responsibility SPI
   is missing, since the fixtures themselves skip silently.
+  It stages the shell integration with `scripts/setup-zmx-linux.sh --shell-integration`, cached by `GHOSTTY_REV`,
+  and points `AGTERM_SHELL_INTEGRATION` at it: the job builds no libghostty, so `agterm/Resources/ghostty` is
+  absent and the fish server pane would start without integration.
   It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
   processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
   A hang otherwise reaches only the job timeout, which records nothing.
@@ -40,7 +43,12 @@ paths:
   `build/linux/x86_64`, cached by `ZMX_REV` and the patch digest, stages the shell integration from ghostty's
   source at `GHOSTTY_REV` with `scripts/setup-zmx-linux.sh --shell-integration`, installs fish, and runs with
   `AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1` so `ServerLifecycleTests` drive real zsh, fish and bash panes rather
-  than skip. Darwin-only behavior keeps its tests behind
+  than skip.
+  Its `swift test` runs under `scripts/watchdog.sh` as container root, with only the test command under
+  `runuser`: past 600s the watchdog takes lldb stacks of `agtermCorePackageTests.xctest` first, within 300s,
+  and the `test-hang-linux` artifact carries them. lldb needs the container's `--cap-add=SYS_PTRACE` to attach
+  to another user's process. The 45-minute cap covers the build plus both watchdog budgets.
+  Darwin-only behavior keeps its tests behind
   `#if canImport(Darwin)` beside the code; everything else runs on both platforms.
 - `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
