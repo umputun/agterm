@@ -216,6 +216,8 @@ extension ControlServer {
         library.frontmostWindowID = id
         library.saveIndex()
         if GhosttyApp.shared.autoHideSidebarInactiveWindows { library.applyInactiveWindowSidebarHiding() }
+        // a replica pick's follow runs outside dispatch, so no dispatch refresh follows it
+        refreshWindowCache()
     }
 
     /// Resolve a window id and rename it (the name lives in the index). Requires a name. Returns the id.

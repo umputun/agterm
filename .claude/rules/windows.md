@@ -244,8 +244,9 @@ session drag are out of scope.
 - Refresh after main-actor dispatch except `events.read` and `msg.read`, frontmost change, sidebar
   visibility change, attachment, NSWindow move/resize/fullscreen/minimize transitions, and
   `.agtermWindowCatalogChanged`, which the GUI window close, rename and delete and the Settings
-  auto-follow fan-out post. A GUI change to a `window.list` field owes one of these signals, since an idle
-  follower's poll does not rebuild the cache. Ignore notification payloads: carrying non-Sendable
+  auto-follow fan-out post. A change to a `window.list` field outside dispatch owes one of these signals
+  or a direct `refreshWindowCache` (the remote-catalog dedupe, `ControlServer.takeFrontmost`), since an
+  idle follower's poll does not rebuild the cache. Ignore notification payloads: carrying non-Sendable
   `Notification` into a main-actor region fails Swift 6 Release WMO even when Debug passes.
 
 ## Control catalog

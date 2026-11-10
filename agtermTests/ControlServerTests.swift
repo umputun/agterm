@@ -389,6 +389,45 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(cachedNode(frontmostID)?.active, true)
     }
 
+    func testRemoteCatalogDuplicateRemovalRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let existingID = try XCTUnwrap(library.activeWindowID)
+        let duplicateID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        func cachedIDs() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedIDs(), [existingID.uuidString, duplicateID.uuidString])
+
+        server.remoteCatalogDuplicate(duplicateID, of: existingID)
+        let deadline = Date().addingTimeInterval(2)
+        while library.windows.contains(where: { $0.id == duplicateID }), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(library.windows.contains { $0.id == duplicateID })
+        XCTAssertEqual(cachedIDs(), [existingID.uuidString])
+    }
+
+    func testControlTakeFrontmostRefreshesTheCachedActiveWindow() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let backgroundID = try XCTUnwrap(library.activeWindowID)
+        let frontmostID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        func cachedActive() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.filter(\.active).map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedActive(), [frontmostID.uuidString])
+
+        server.takeFrontmost(backgroundID)
+        XCTAssertEqual(cachedActive(), [backgroundID.uuidString])
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in
