@@ -26,6 +26,15 @@ final class SidebarOutlineView: NSOutlineView {
     /// flat flagged list.
     var reservesDisclosureColumn = true
 
+    /// listsSessionsFlat is true for the flat and plain flagged lists.
+    var listsSessionsFlat = false
+
+    /// selectionMinX is where a row's selection pill starts; a flat list has no strip to leave room for it.
+    var selectionMinX: CGFloat { listsSessionsFlat ? 0 : 8 }
+
+    // with the cell's 2pt icon inset, puts the icon 8pt inside a pill starting at 0, as in the tree
+    private static let flatContentX: CGFloat = 6
+
     /// macOS 27 reserves a wider leading strip than the triangle occupies — a level-0 cell starts at 26
     /// against a triangle ending at 14 — leaving the row icon stranded mid-gap. Trim the surplus, computed
     /// from the frame rather than fixed so a release that lays out at `contentX` keeps its own geometry,
@@ -57,6 +66,7 @@ final class SidebarOutlineView: NSOutlineView {
         let level = level(forRow: row)
         guard level >= 0 else { return nil }
         let indent = CGFloat(level) * indentationPerLevel
+        if listsSessionsFlat { return Self.flatContentX + indent }
         guard reservesDisclosureColumn else { return max(0, Self.contentX - indentationPerLevel) + indent }
         guard #available(macOS 27.0, *) else { return nil }
         return Self.contentX + indent
