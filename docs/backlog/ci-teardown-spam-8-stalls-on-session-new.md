@@ -93,9 +93,18 @@ is still queued: in the same run titles reaching main fell from 1.68M to 290k, t
 tick time from 179 to 116 ms per 250 ms window, and late `session new` to 22-35 ms. The ticks themselves
 remain, so whether this removes the CI stall is unproven; the next stall's stackshot is the evidence to read.
 
-Run 42663853160 (master `f2d84ca2`, 2026-11-09) stalled on an `agtermctl tree` call, not `session new`, and
-spindump saved a stuck stackshot, but none of it reached the run: the upload step refused the artifact
-because `spindump-stuck-stackshot.2026-11-09-17:30:11.14709.buf` contains colons, which
-`actions/upload-artifact` rejects, and the run lists no `surface-teardown` artifact. `keep_stuck_stackshots`
-copies the stackshot under spindump's own name; until the copy drops the colons, every stall that saves one
-loses the whole case folder.
+Four master stalls saved a stuck stackshot and uploaded nothing, because `actions/upload-artifact` refused
+the colons in the copy's name (`spindump-stuck-stackshot.<date>-HH:MM:SS.<pid>.buf`) and failed the whole
+artifact, so none has timings either:
+
+- 42471836035 (`79b631ea`, 2026-11-08): `session new` for `spam-8-7`.
+- 42663853160 (`f2d84ca2`, 2026-11-09): `tree`, not `session new`.
+- 42750078737 (`7ff77b61`, 2026-11-10): `session close`, after all eight sessions realized. The request may
+  not have reached `ghostty_surface_free`: `ControlServer` first waits on main-actor dispatch, and
+  `AppStore.closeSession` finalizes pane identities (a synchronous zmx kill) before any surface teardown.
+  So this is a close-request stall, not a shown recurrence of #844.
+- 42763210167 (`b8a96b1b`, 2026-11-10): `session new` for `spam-8-6`.
+
+`keep_stuck_stackshots` now writes the copy without colons, through `sudo -n cat` into a runner-owned file,
+so a failed copy cannot leave a root-only file that fails the upload. The next stall's
+`spindump-stuck-stackshot.*.buf` is the evidence to read, with `spindump -i`.

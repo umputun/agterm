@@ -145,16 +145,18 @@ def keep_stuck_stackshots(case_dir, since):
         except OSError as exc:
             failures.append(f"{shot.name}: {exc}")
             continue
-        target = case_dir / shot.name
-        for argv in (["sudo", "-n", "cp", str(shot), str(target)], ["sudo", "-n", "chmod", "a+r", str(target)]):
-            try:
-                done = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)
-            except (subprocess.SubprocessError, OSError) as exc:
-                failures.append(f"{shot.name}: {argv[2]}: {exc}")
-                break
-            if done.returncode:
-                failures.append(f"{shot.name}: {argv[2]} exit {done.returncode}: {done.stderr.strip()}")
-                break
+        # upload-artifact rejects a colon, which the stackshot's time stamp has, and fails the whole upload on a
+        # file it cannot read, so the copy is renamed and written by the runner rather than by root
+        target = case_dir / shot.name.replace(":", "-")
+        try:
+            with target.open("wb") as out:
+                done = subprocess.run(["sudo", "-n", "cat", str(shot)], stdout=out, stderr=subprocess.PIPE,
+                                      timeout=10, check=False)
+        except (subprocess.SubprocessError, OSError) as exc:
+            failures.append(f"{shot.name}: {exc}")
+            continue
+        if done.returncode:
+            failures.append(f"{shot.name}: cat exit {done.returncode}: {done.stderr.decode(errors='replace').strip()}")
     return failures
 
 
