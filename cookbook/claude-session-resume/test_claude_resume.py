@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 UNSET = object()
+UNSET_CONFIG = "<unset>"
 TAB_ID = "11111111-2222-4333-8444-555555555555"
 OTHER_ID = "66666666-7777-4888-8999-000000000000"
 HERE = Path(__file__).resolve().parent
@@ -52,14 +53,17 @@ class ClaudeResumeTest(unittest.TestCase):
                     return "".join(c if c.isascii() and (c.isalnum() or c == "-") else "-" for c in path)
 
                 args = sys.argv[1:]
-                config = os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")
+                raw = os.environ.get("CLAUDE_CONFIG_DIR")
+                config = raw or str(Path.home() / ".claude")
                 if args[:1] == ["--session-id"]:
                     transcript = Path(config) / "projects" / encode(os.getcwd()) / f"{args[1]}.jsonl"
                     if transcript.exists():
                         print(f"session file still exists: {transcript}", file=sys.stderr)
                         raise SystemExit(73)
 
-                Path(os.environ["FAKE_CLAUDE_CONFIG_LOG"]).write_text(config)
+                Path(os.environ["FAKE_CLAUDE_CONFIG_LOG"]).write_text(
+                    "<unset>" if raw is None else raw
+                )
                 with Path(os.environ["FAKE_CLAUDE_LOG"]).open("a") as log:
                     print(json.dumps(args), file=log)
                 """
@@ -359,7 +363,7 @@ class ClaudeResumeTest(unittest.TestCase):
         )
 
         self.assert_call(["--session-id", TAB_ID], config_dir=None)
-        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+        self.assertEqual(UNSET_CONFIG, self.last_config_dir())
 
     def test_default_account_keeps_its_conversation_over_a_remembered_one(self):
         self.write_transcript(self.message())
@@ -369,7 +373,7 @@ class ClaudeResumeTest(unittest.TestCase):
         self.write_memo(self.alt_config)
 
         self.assert_call(["--resume", TAB_ID], config_dir=None)
-        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+        self.assertEqual(UNSET_CONFIG, self.last_config_dir())
 
     def test_a_set_config_dir_outranks_the_memo(self):
         self.write_transcript(
@@ -386,13 +390,18 @@ class ClaudeResumeTest(unittest.TestCase):
         self.write_memo(self.home / "gone")
 
         self.assert_call(["--session-id", TAB_ID], config_dir=None)
-        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+        self.assertEqual(UNSET_CONFIG, self.last_config_dir())
 
     def test_memo_is_not_read_as_a_path_when_it_holds_junk(self):
         self.write_memo("")
 
         self.assert_call(["--session-id", TAB_ID], config_dir=None)
-        self.assertEqual(str(self.home / ".claude"), self.last_config_dir())
+        self.assertEqual(UNSET_CONFIG, self.last_config_dir())
+
+    def test_background_flags_pass_through(self):
+        for flag in ("--bg", "--background"):
+            with self.subTest(flag=flag):
+                self.assert_call([flag, "task"], flag, "task")
 
     def test_current_subcommands_pass_through(self):
         for subcommand in ("agents", "auth", "plugin", "plugins", "rm", "ultrareview"):

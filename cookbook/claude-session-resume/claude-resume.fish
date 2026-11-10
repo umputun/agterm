@@ -32,7 +32,7 @@ function claude --description 'Per-agterm-tab Claude Code session resume'
     else
         for a in $argv                                           # user steering a session/subcommand/headless?
             switch $a
-                case -r --resume --session-id '--resume=*' '--session-id=*' '-r=*' -c --continue -p --print -v --version -h --help agents attach auth auto-mode config doctor gateway import install logs mcp migrate-installer plugin plugins purge respawn rm setup-token stop kill ultrareview update upgrade
+                case -r --resume --session-id '--resume=*' '--session-id=*' '-r=*' -c --continue -p --print --bg --background -v --version -h --help agents attach auth auto-mode config doctor gateway import install logs mcp migrate-installer plugin plugins purge respawn rm setup-token stop kill ultrareview update upgrade
                     command claude $argv                          # -> hand off untouched
                     return
             end
@@ -128,6 +128,10 @@ function claude --description 'Per-agterm-tab Claude Code session resume'
         end
     end
 
-    set -lx CLAUDE_CONFIG_DIR "$pick_root"
+    # Claude Code reads a set CLAUDE_CONFIG_DIR as a separate account even when it names the default
+    # directory, so a launch that did not carry one keeps it unset unless the memo's account was
+    # picked. A launch the user prefixed already has it in the environment. The export stays at
+    # function level: a `set -lx` inside `if ... end` is gone after the `end`.
+    test -z "$CLAUDE_CONFIG_DIR"; and test "$pick_root" != "$default"; and set -lx CLAUDE_CONFIG_DIR "$pick_root"
     command claude "$pick_action" "$pick_candidate" $args
 end

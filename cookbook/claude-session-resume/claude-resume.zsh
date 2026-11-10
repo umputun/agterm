@@ -24,7 +24,7 @@ claude() {
     local a
     for a in "$@"; do                                           # user steering a session/subcommand/headless?
       case $a in
-        -r|--resume|--session-id|--resume=*|--session-id=*|-r=*|-c|--continue|-p|--print|-v|--version|-h|--help|agents|attach|auth|auto-mode|config|doctor|gateway|import|install|logs|mcp|migrate-installer|plugin|plugins|purge|respawn|rm|setup-token|stop|kill|ultrareview|update|upgrade)
+        -r|--resume|--session-id|--resume=*|--session-id=*|-r=*|-c|--continue|-p|--print|--bg|--background|-v|--version|-h|--help|agents|attach|auth|auto-mode|config|doctor|gateway|import|install|logs|mcp|migrate-installer|plugin|plugins|purge|respawn|rm|setup-token|stop|kill|ultrareview|update|upgrade)
           command claude "$@"; return ;;                        # -> hand off untouched
       esac
     done
@@ -92,5 +92,12 @@ claude() {
     mkdir -p ${memo:h} 2>/dev/null && print -r -- $CLAUDE_CONFIG_DIR > $memo 2>/dev/null
   fi
 
-  CLAUDE_CONFIG_DIR=$pick_root command claude "$pick_action" "$pick_candidate" "$@"
+  # Claude Code reads a set CLAUDE_CONFIG_DIR as a separate account even when it names the default
+  # directory, so a launch that did not carry one keeps it unset unless the memo's account was
+  # picked. A launch the user prefixed already has it in the environment.
+  if [[ -z ${CLAUDE_CONFIG_DIR:-} && $pick_root != $default ]]; then
+    CLAUDE_CONFIG_DIR=$pick_root command claude "$pick_action" "$pick_candidate" "$@"
+  else
+    command claude "$pick_action" "$pick_candidate" "$@"
+  fi
 }
