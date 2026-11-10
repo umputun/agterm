@@ -42,12 +42,19 @@ struct StateDirectoryLockTests {
     }
 
     private func descriptor(openOn path: String) -> Int32? {
+        #if canImport(Darwin)
         let entries = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd")) ?? []
         for fd in entries.compactMap({ Int32($0) }) {
             var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
             if fcntl(fd, F_GETPATH, &buffer) == 0, String(cString: buffer) == path { return fd }
         }
         return nil
+        #else
+        let entries = (try? FileManager.default.contentsOfDirectory(atPath: "/proc/self/fd")) ?? []
+        return entries.compactMap { Int32($0) }.first {
+            (try? FileManager.default.destinationOfSymbolicLink(atPath: "/proc/self/fd/\($0)")) == path
+        }
+        #endif
     }
 
     // regression: a child spawned while the lock was held kept it locked after release
@@ -60,7 +67,11 @@ struct StateDirectoryLockTests {
         let lockPath = String(cString: resolved)
         free(resolved)
         let fd = try #require(descriptor(openOn: lockPath))
+        #if canImport(Darwin)
         var actions: posix_spawn_file_actions_t?
+        #else
+        var actions = posix_spawn_file_actions_t()
+        #endif
         posix_spawn_file_actions_init(&actions)
         defer { posix_spawn_file_actions_destroy(&actions) }
         posix_spawn_file_actions_adddup2(&actions, fd, 3)
