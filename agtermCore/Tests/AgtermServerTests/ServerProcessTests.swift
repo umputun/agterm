@@ -28,7 +28,19 @@ struct ServerProcessTests {
     @Test func outputAndStatusAreCollected() throws {
         let output = try ServerProcess.run(["/bin/sh", "-c", "echo out; echo err >&2; exit 3"], environment: [:], timeout: 5)
 
-        #expect(output == ServerProcess.Output(status: 3, stdout: "out\n", stderr: "err\n"))
+        #expect(output == ServerProcess.Output(status: 3, stdout: "out\n", stdoutComplete: true, stderr: "err\n"))
+    }
+
+    @Test func outputASurvivorStillHoldsIsReportedIncomplete() throws {
+        let hold = FileManager.default.temporaryDirectory.appendingPathComponent("agts-hold-\(UUID().uuidString)").path
+        FileManager.default.createFile(atPath: hold, contents: Data())
+        defer { try? FileManager.default.removeItem(atPath: hold) }
+        let survivor = "echo early; (while [ -e '\(hold)' ]; do sleep 0.05; done; echo late) &"
+
+        let output = try ServerProcess.run(["/bin/sh", "-c", survivor], environment: [:], timeout: 5)
+
+        #expect(output.status == 0)
+        #expect(!output.stdoutComplete)
     }
 
     @Test func inputReachesTheChild() throws {
