@@ -24,3 +24,6 @@ Open: why a passing run takes the full 0.3 s. [Inference] If the listing read re
 deadline even when the child has already printed, the margin for a real slow listing at quit is thinner
 than the budget suggests, and #915's symptom (reattached panes with no command) can come back on a loaded
 Mac. Timing the child's exit against the read's return in a passing run is where to start.
+
+217250d9 raised `captureInvocationTimeout` to 0.4 s inside an 800 ms quit-time capture budget; the timings above
+were measured with the 0.3 s timeout.

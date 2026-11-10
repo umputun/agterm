@@ -51,13 +51,11 @@ struct LinkPolicyTests {
     @Test(arguments: [
         "file:///net/server/share/x.bin",         // /net (-hosts) auto-mount root
         "file:///Network/Servers/host/share",     // /Network auto-mount root
-        "file:///home/someone/x.bin",              // /home (auto_home) auto-mount root
         "file://localhost/net/server/share",      // local host but an auto-mount path
         "file:///tmp/../net/server/share",        // dot segments resolve INTO /net — must still ignore
         "file:///tmp/%2E%2E/net/server/share",    // percent-encoded `..` decodes BEFORE normalization — still ignore
         "file:///NET/server/share",               // auto-mount match is case-insensitive
         "file:///net",                            // bare root (no child) — exercises the `lower == root` branch
-        "file:///home",                           // bare root
         "file:///network",                        // bare root
         "file:///System/Volumes/Data/home/someone/x.bin",     // canonical Data path where auto_home really mounts
         "file:///System/Volumes/Data/net/server/share",      // canonical Data /net
@@ -190,7 +188,6 @@ struct LinkPolicyTests {
         "//server/share/x.png",
         "/net/host/x.png",
         "/tmp/../net/x.png",
-        "/home/someone/x.png",
         "~",
         "~user/x.png",
         "src/x.png",
@@ -489,7 +486,7 @@ struct LinkPolicyTests {
         #expect(Self.locations(raw).isEmpty)
     }
 
-    @Test(arguments: ["/net.", "/net/host/a.md.", "/Network.", "/home/me/a.md?", "//host/share/a.md.", "/tmp/../net/a.md."])
+    @Test(arguments: ["/net.", "/net/host/a.md.", "/Network.", "//host/share/a.md.", "/tmp/../net/a.md."])
     func aTrimmedSpellingInsideARefusedRootIsNeverOffered(_ raw: String) {
         #expect(!Self.locations(raw).contains { LinkPolicy.isAutomountPath($0.path) || $0.path.hasPrefix("//") })
     }
@@ -510,7 +507,7 @@ struct LinkPolicyTests {
         #expect(Self.locations(raw, cwd: "/w").isEmpty)
     }
 
-    @Test(arguments: ["/net/x/a.go:3", "/Network/a.go:3", "/home/me/a.go:3", "/tmp/../net/x/a.go:3",
+    @Test(arguments: ["/net/x/a.go:3", "/Network/a.go:3", "/tmp/../net/x/a.go:3",
                       "//host/share/a.go:3", "/System/Volumes/Data/home/me/a.go:3"])
     func refusedAbsolutePathsOfferNothingToStat(_ raw: String) {
         #expect(Self.locations(raw, cwd: "/w").isEmpty)
@@ -524,8 +521,27 @@ struct LinkPolicyTests {
 
     @Test func aRelativePathEscapingIntoAnAutomountRootOffersNothing() {
         #expect(Self.locations("../../net/x/a.go:3", cwd: "/w/app").isEmpty)
+    }
+
+    #if os(macOS)
+    @Test(arguments: ["file:///home/someone/x.bin", "file:///home"])
+    func homeIsAnAutoMountRootOnMacOS(_ raw: String) {
+        #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
+    }
+
+    @Test(arguments: ["/home/someone/x.png", "/home/me/a.md?", "/home/me/a.go:3"])
+    func aHomePathOffersNothingToStatOnMacOS(_ raw: String) {
+        #expect(Self.locations(raw, cwd: "/w").isEmpty)
         #expect(Self.locations("../../../home/x/a.go:3", cwd: "/w/a/b").isEmpty)
     }
+    #else
+    // regression: the macOS auto_home root refused every Linux user's files, so a click in agterm-server's panes opened nothing
+    @Test func aHomePathIsAnOrdinaryFileOnLinux() {
+        #expect(Self.locations("./notes.md:3", cwd: "/home/agterm").contains { $0.path == "/home/agterm/notes.md" })
+        #expect(LinkPolicy.disposition(for: "file:///home/agterm/x.bin", localHosts: Self.localHosts)
+            == .reveal(URL(fileURLWithPath: "/home/agterm/x.bin", isDirectory: false)))
+    }
+    #endif
 
     @Test func aRemotePaneOffersNothingToStat() {
         #expect(Self.locations("/x/a.go:42", origin: .remotePane(Self.session)).isEmpty)

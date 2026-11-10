@@ -24,7 +24,7 @@ final class ControlServer {
     let statusSoundPlayer: StatusSoundPlayer
     let launchRestoreMode: RestoreMode
     let zmxForegroundResolver: ZmxForegroundResolver?
-    private let socketPath: String
+    let socketPath: String
 
     /// The target-resolution query layer: owns the `emptyStore`/`store` frontmost-fallback and wraps the
     /// pure `ControlResolve` matcher with app-side store scoping and the pinned wire-error strings.
@@ -83,9 +83,8 @@ final class ControlServer {
     var pendingJobCancels: Set<String> = []
     /// pageServeStreams are the channels presenters opened for pages this Mac handed over, by page id.
     var pageServeStreams: [UUID: PageServeStream] = [:]
-    /// pendingPageClaims are pages whose claim was answered ok and whose connection is not adopted yet, with the
-    /// page each serves as it was handed over.
-    var pendingPageClaims: [UUID: HtmlOverlay] = [:]
+    /// pendingPageClaims are claims answered ok whose connection is not adopted yet, by the token that claimed.
+    var pendingPageClaims: [String: PendingPageClaim] = [:]
     var presentationHeartbeat: Task<Void, Never>?
     /// How long an adopted stream may stay silent before its first hello.
     var presentationHelloDeadline: TimeInterval = 10
@@ -95,13 +94,16 @@ final class ControlServer {
     var remoteClients: [UUID: RemotePresentationClient] = [:]
     var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()
     var remoteTick: Task<Void, Never>?
+    /// remoteCatalogs holds one catalog stream per open remote window; `ControlServer+RemoteCatalog` owns them.
+    var remoteCatalogs: [UUID: RemoteCatalogLink] = [:]
     /// replicaPages are the pages this Mac shows for origins, by local page id; `ControlServer+RemotePage` owns them.
     var replicaPages: [UUID: ReplicaPageRecord] = [:]
     /// remoteLinkRefusalHuds are the slot generations of the refusal panels a forwarded click opened, which a mirrored
     /// HUD may replace; `ControlServer+RemoteLinkClick` owns them.
     var remoteLinkRefusalHuds: [UUID: Int] = [:]
-    /// pageLauncher starts a file page's channel helper; injectable so a hosted test needs no ssh.
+    /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
+    var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
 
@@ -295,6 +297,8 @@ final class ControlServer {
     /// Bind and start listening. Idempotent — the scene `.task` re-runs when a window is recreated and a
     /// second `bind` must not be attempted. Any failure logs and returns, leaving the app to launch.
     func start() {
+        // ahead of the socket: a remote window mirrors its server whether or not this instance serves control
+        wireRemoteCatalogs()
         guard listener == nil else { return }
 
         guard socketPath.utf8.count < 104 else {
@@ -359,6 +363,7 @@ final class ControlServer {
         // or a bind that failed) still holds one and would otherwise keep it for the whole process.
         defer { releaseOwnership() }
         shutdownPresentationStreams()
+        stopRemoteCatalogs()
         stopRemotePresentations()
         guard let loop = listener else { return }
         loop.stop()
@@ -508,13 +513,30 @@ final class ControlServer {
         if request.cmd == .sessionOverlayPageServe {
             let response = runBlocking { await server.dispatch(request) }
             let written = server.responseWriter(conn, response)
-            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)) else { return }
+            guard response.ok, let page = response.result?.id.flatMap(UUID.init(uuidString:)), let token = request.target else { return }
             guard written else {
-                runBlocking { await server.pageClaimUnanswered(page) }
+                runBlocking { await server.pageClaimUnanswered(page, token: token) }
                 return
             }
             handedOff = true
-            runBlocking { await server.adoptPageServeStream(descriptor: conn, page: page) }
+            runBlocking { await server.adoptPageServeStream(descriptor: conn, page: page, token: token) }
+            return
+        }
+
+        // a remote window's structural command is decided here and sent from a worker, so the accept thread
+        // never waits on ssh while local structural commands keep their inline order
+        if let route = runBlocking({ await server.remoteRoute(request) }) {
+            guard case .send = route else {
+                _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
+                return
+            }
+            handedOff = true
+            let worker = Thread {
+                defer { close(conn) }
+                _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
+            }
+            worker.name = "com.umputun.agterm.control.remote"
+            worker.start()
             return
         }
 
@@ -553,7 +575,7 @@ final class ControlServer {
     nonisolated private static func waitsOnNetwork(_ cmd: Command) -> Bool {
         // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket
         [.zmxTree, .zmxAttach, .zmxAttachGroup, .sessionRestart, .sessionCompanionNew, .sessionCompanionDuplicate,
-         .sessionCompanionPage].contains(cmd)
+         .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
     }
 
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
@@ -624,6 +646,8 @@ final class ControlServer {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
         defer { refreshWindowCache() }
+        // every entry, a page's bridge included, reaches a remote window's server the one way the socket does
+        if let route = remoteRoute(request) { return await runRemoteRoute(route) }
         if let refusal = pageCompanionRefusal(request) { return refusal }
         if let response = await ControlDispatcher(actions: self).dispatch(request) {
             return response
@@ -654,9 +678,10 @@ final class ControlServer {
                 .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect, .windowGo,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .windowMinimize,
+                .windowFullscreen, .windowMinimize, .windowRemoteOpen, .windowRemoteDismiss,
+                .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
-                .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
+                .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
                 .recentList, .recentOpen, .recentClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
@@ -699,79 +724,6 @@ final class ControlServer {
         NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
                                         userInfo: ["isDark": isDark])
         return ControlResponse(ok: true, result: ControlResult(text: isDark ? "dark" : "light"))
-    }
-
-    /// Clear every open session's captured foreground command and persist, so the next launch restores plain
-    /// shells. The live fields are usually already nil (consumed at restore); the SAVE is what wipes the
-    /// on-disk copy from the last quit, closing the force-quit re-fire window. App-global like
-    /// `keymap.reload`: no `--window` selector, every open window is cleared.
-    ///
-    /// Also disarms the PENDING capture slots, where a launch restore parks the argv until each surface
-    /// mounts: the socket binds before the later windows' decks do, so a clear arriving in that gap would
-    /// answer ok and then watch those windows run the commands anyway. The `session.restore` pins are
-    /// deliberately untouched — they are sticky, and this command clears captures.
-    func clearRestoreCommands() -> ControlResponse {
-        for session in library.allOpenSessions() { session.clearCapturedForegroundCommands() }
-        // the ack waits on the write for the same reason `restore.capture`'s does: the save IS the clear, and
-        // the slots are not readable, so an ok over a failed write leaves a stale capture nothing can detect.
-        guard library.saveAllOpenChecked() else {
-            return ControlResponse(ok: false, error: "cleared every open pane but at least one window's save "
-                + "failed; those windows keep their captured commands on disk until they save successfully")
-        }
-        return ControlResponse(ok: true)
-    }
-
-    /// The restore-mode policy: settings, this launch's request, and what it got.
-    func readRestoreMode() -> ControlResponse {
-        ControlResponse(ok: true, result: ControlResult(restore: restoreStatus()))
-    }
-
-    /// Persist the mode for the NEXT launch; a pane is wrapped or not at creation, so this process keeps
-    /// the mode it started with.
-    func setRestoreMode(_ mode: RestoreMode) -> ControlResponse {
-        guard settingsModel.setRestoreMode(mode) else {
-            return ControlResponse(ok: false, error: "could not save the restore mode; settings keep "
-                + settingsModel.settings.effectiveRestoreMode.rawValue)
-        }
-        return ControlResponse(ok: true, result: ControlResult(restore: restoreStatus()))
-    }
-
-    func restoreStatus() -> ControlRestoreStatus {
-        let decision = GhosttyApp.shared.restoreLaunchDecision
-        return ControlRestoreStatus(configured: settingsModel.settings.effectiveRestoreMode,
-                                    requestedAtLaunch: decision.requested, active: decision.active,
-                                    unavailableReason: decision.liveUnavailableReason)
-    }
-
-    /// Capture every open pane's live foreground command NOW, filling the same slots the quit-time capture
-    /// fills, then persist them. The point is the exit that never runs `applicationWillTerminate`: a crash, a
-    /// SIGKILL, a hard reset, or a restart that outruns the app's termination window. Run this from a
-    /// scheduled job or a keybind and such an exit restores like a ⌘Q.
-    ///
-    /// App-global like `clearRestoreCommands`, its inverse over the same slots: no `--window` selector, every
-    /// open window. Consumption stays one-shot and launch-only, so nothing here changes replay.
-    ///
-    /// Available only when rerun is configured for the next launch. It refuses in the other two modes,
-    /// unlike `session.restore`, which saves future rerun policy with a note.
-    func captureRestoreCommands() -> ControlResponse {
-        let configuredMode = settingsModel.settings.effectiveRestoreMode
-        guard configuredMode == .rerun else {
-            return ControlResponse(ok: false, error: "restore.capture requires rerun mode; configured restore mode is "
-                + configuredMode.rawValue)
-        }
-        let sessions = library.allOpenSessions()
-        let captured = AppDelegate.captureForegroundCommands(
-            sessions: sessions, zmxResolver: zmxForegroundResolver)
-        // this command's whole claim is that the argv reached disk, so the ack waits on the write and not on
-        // the assignment: `saveAllOpen` swallows the result, `saveAllOpenChecked` reports it.
-        guard library.saveAllOpenChecked() else {
-            return ControlResponse(ok: false, error: "captured \(captured) pane\(captured == 1 ? "" : "s") "
-                + "but at least one window's save failed; failed windows keep their argv in memory until they "
-                + "save successfully")
-        }
-        var result = ControlResult(count: captured)
-        result.text = "captured \(captured) pane\(captured == 1 ? "" : "s")"
-        return ControlResponse(ok: true, result: result)
     }
 
     /// Open or close the target window's dashboard overlay — the app side of the host-free `dashboard`
@@ -884,7 +836,7 @@ final class ControlServer {
         // the window's dashboard controller (nil until WindowContentView registers it), read LIVE for the four
         // dashboard read-backs: the keyboard-driven dashboard bypasses the command path, so a cache goes stale.
         let dashboard = DashboardControllerRegistry.shared.controller(for: windowID)
-        return store.controlTree(
+        var tree = store.controlTree(
             paneForeground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
                     ForegroundProcess.running(for: $0, shellBasename: shellBasename,
@@ -940,6 +892,8 @@ final class ControlServer {
             linkOpenMode: settingsModel.settings.effectiveLinkOpenMode,
             sidebarDensity: GhosttyApp.shared.sidebarDensity
         )
+        tree.remote = windowID.flatMap(library.remoteNode(for:))
+        return tree
     }
 
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME, optional

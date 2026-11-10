@@ -15,6 +15,10 @@ public final class Session: Identifiable {
     public var paneIdentity: UUID
     /// Stable process identity for an existing split pane, including a hidden split.
     public var splitPaneIdentity: UUID?
+    /// daemonBackedPanes holds the pane identities a headless origin runs as detached zmx daemons with no
+    /// surface. Backing and pane-token resolution fall back to it only for a slot without a surface; the Mac
+    /// leaves it empty. Not persisted: the server rebuilds it from the daemons it observes.
+    public var daemonBackedPanes: Set<UUID> = []
     public var customName: String?
     /// Live cwd from the latest OSC 7 / PWD report; the sidebar row refreshes. Persisted by `snapshot()` on
     /// quit + structural mutations only (OSC 7 fires constantly), so a crash loses cwd since the last save.
@@ -76,10 +80,40 @@ public final class Session: Identifiable {
         return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
     }
 
+    /// ScratchDaemon is a scratch behind a zmx daemon on agterm-server rather than a surface here.
+    public struct ScratchDaemon: Equatable, Sendable {
+        public var identity: UUID
+        public var shown: Bool
+
+        public init(identity: UUID, shown: Bool) {
+            self.identity = identity
+            self.shown = shown
+        }
+    }
+
+    /// scratchDaemon is the server's scratch: on agterm-server its own state, in a remote window the catalog's, and
+    /// never saved.
+    public var scratchDaemon: ScratchDaemon?
+
+    /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
+    @ObservationIgnored var scratchStoppedGeneration: Int?
+
+    /// catalogScratch is the server scratch a remote window's row attaches, nil for every other row.
+    public var catalogScratch: UUID? {
+        remotePresentation?.binding.catalogOwned == true ? scratchDaemon?.identity : nil
+    }
+
+    /// presentsCatalog is whether a remote window's row keeps its presentation stream: live, or ended with its
+    /// scratch still running.
+    var presentsCatalog: Bool { !ended || scratchDaemon != nil }
+
     /// User-set flagged working-set membership: surfaces the session in the sidebar's cross-workspace
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
+    /// ended marks a headless origin's session left with no live pane after a daemon was lost, kept in the catalog
+    /// until `session.close` removes it; a Mac never sets it.
+    public var ended = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
     /// parentID names this session's top-level parent; conversion and reopen may update it.
@@ -155,8 +189,8 @@ public final class Session: Identifiable {
     /// A pane hidden since launch has no surface yet, so its realized sibling answers for the shared launch disposition.
     public func zmxBacking(for surface: TerminalZoomSurface) -> Bool? {
         switch surface {
-        case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? false
-        case .split: (splitSurface ?? self.surface)?.backedByZmx ?? false
+        case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? daemonBackedPanes.contains(paneIdentity)
+        case .split: (splitSurface ?? self.surface)?.backedByZmx ?? splitPaneIdentity.map(daemonBackedPanes.contains) ?? false
         default: nil
         }
     }
@@ -329,7 +363,7 @@ public final class Session: Identifiable {
     public private(set) var askPaneIdentity: UUID?
     /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
     /// presented ask keeps the slot and its result here but is neither drawn nor answered on this Mac.
-    public private(set) var askRemoteOwner: Int?
+    public internal(set) var askRemoteOwner: Int?
     /// Tells the presenter a handed-over ask ended here. Set with the handover, run once when it resolves.
     @ObservationIgnored var onRemoteAskEnded: (@MainActor (String) -> Void)?
 
@@ -385,7 +419,8 @@ public final class Session: Identifiable {
     /// Retains a registered ask's terminal outcome before clearing its slot; stale ids are ignored.
     @discardableResult
     public func resolveAsk(id: String, _ result: ControlAskResult) -> Bool {
-        guard askPending?.id == id, result.result != .pending else { return false }
+        guard let ask = askPending, ask.id == id, result.result != .pending else { return false }
+        let result = ask.expired(at: Date()) ? ControlAskResult(result: .cancelled) : result
         if case let .session(sessionID, windowID) = AskRegistry.shared.owner(for: id), sessionID == self.id {
             AskRegistry.shared.retain(id: id, result: result, window: windowID)
         }
@@ -629,11 +664,11 @@ public final class Session: Identifiable {
     public func paneToken(for pane: CommandContext.Pane) -> String {
         switch pane {
         case .left:
-            return surface?.paneToken ?? ""
+            return surface?.paneToken ?? daemonToken(paneIdentity)
         case .right:
-            return splitSurface?.paneToken ?? ""
+            return splitSurface?.paneToken ?? splitPaneIdentity.map(daemonToken) ?? ""
         case .scratch:
-            return scratchSurface?.paneToken ?? ""
+            return scratchSurface?.paneToken ?? scratchDaemon?.identity.uuidString ?? ""
         }
     }
 
@@ -809,7 +844,15 @@ public final class Session: Identifiable {
         if surface?.paneToken == token { return .left }
         if splitSurface?.paneToken == token { return .right }
         if scratchSurface?.paneToken == token { return .scratch }
+        if surface == nil, daemonToken(paneIdentity) == token { return .left }
+        if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
+        if scratchSurface == nil, scratchDaemon?.identity.uuidString == token { return .scratch }
         return nil
+    }
+
+    /// daemonToken is the `AGTERM_PANE_ID` of a surfaceless daemon-backed pane, empty otherwise.
+    private func daemonToken(_ identity: UUID) -> String {
+        daemonBackedPanes.contains(identity) ? identity.uuidString : ""
     }
 
     /// PaneAddress is the outcome of resolving a command's `--pane-id` and `--pane` pair.

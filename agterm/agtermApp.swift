@@ -312,6 +312,9 @@ struct agtermApp: App {
                             Self.reattachPane(old, claim: false, cover: cover, services: paneServices)
                         }
                         PaneLead.heldExit = { [weak server = controlServer] view in server?.remotePaneHeld(view) }
+                        PaneLead.catalogChannel = { [weak server = controlServer] session, user in
+                            server?.catalogPool(forSession: session)?.lease(user)
+                        }
                         PaneLead.ownerRespawn = { [weak server = controlServer] session, daemon in
                             let prior = server?.priorLeader(daemon: daemon)
                             return { server?.ownerRespawned(session: session, daemon: daemon, prior: prior) }
@@ -510,7 +513,9 @@ struct agtermApp: App {
             services.zmxForegroundResolver?.noteLifecycleChange()
             ZmxLeadBook.shared.begin(lead, pane: session.paneIdentity)
         }
-        let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
+        let view = GhosttySurfaceView(workingDirectory: session.localWorkingDirectory(reported: session.initialCwd,
+                                                                                   homeDirectory: NSHomeDirectory()),
+                                      fontSize: session.fontSize.map(Float.init),
                                       env: Self.surfaceEnv(disposition: disposition, fallback: env),
                                       backedByZmx: disposition.backedByZmx)
         let provider = LaunchSeedProvider.pane(session: session, pane: .left, disposition: disposition,
@@ -564,30 +569,6 @@ struct agtermApp: App {
         }
     }
 
-    /// An attach that stopped, on its exit prompt (a failed take-over included) or waiting to reconnect:
-    /// no client is left to report a role, and a cover would hide the line saying what happened.
-    @MainActor
-    static func remotePaneStopped(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary) {
-        if let pane = UUID(uuidString: view.paneToken) {
-            ZmxLeadBook.shared.forget(pane: pane)
-            store.leadRoleChanged()
-        }
-        Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: library)
-    }
-
-    /// Replaces `old` with a fresh attach of the same pane in the same slot. None of the pane's close paths
-    /// run: the session, the daemon and the pane identity all stay, so the program inside keeps the
-    /// `AGTERM_PANE_ID` it was started with.
-    @MainActor @discardableResult
-    static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, services: SurfaceServices) -> Bool {
-        let lead = ZmxLeadAttachment(claim: claim)
-        guard let session = old.session,
-              let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
-              let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
-        else { return false }
-        return replacePane(old, launch: launch, lead: lead, cover: cover, services: services) != nil
-    }
-
     /// replacePane puts a surface built from `launch` in `old`'s slot and destroys `old`, running none of
     /// the pane's close paths. `spawnFirst` creates the new surface at the old size BEFORE the free: libghostty
     /// routes a queued child-exit by surface address, and a surface created after it can take the old exit.
@@ -637,6 +618,11 @@ struct agtermApp: App {
     static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
                                library: WindowLibrary, alreadyFinalized: UUID? = nil) {
         guard let session = store.session(withID: sessionID), session.surface === view || session.splitSurface === view else { return }
+        // the catalog owns a remote window's panes: an exit here attaches again, or keeps an ended row's screen
+        if session.remotePresentation?.binding.catalogOwned == true {
+            if !session.ended { PaneLead.reattach?(view, false) }
+            return
+        }
         if view.isSplitPane {
             store.closeSplitPane(sessionID, alreadyFinalized: alreadyFinalized)
         } else {
@@ -894,17 +880,21 @@ struct agtermApp: App {
     static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
                                    suppressAutoFocus: Bool, actions: AppActions) -> GhosttySurfaceView {
         // re-shows are focused via the `scratchActive` onChange (which also defers to those covers).
-        // scratchCommand is run-once: read it for this spawn, then clear so a post-exit respawn is a shell.
+        // scratchCommand is run-once: read it for this spawn, then clear so a local scratch's post-exit respawn is a shell.
         let command = session.scratchCommand
         session.scratchCommand = nil
         let cwd = session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: NSHomeDirectory())
-        let view = GhosttySurfaceView(workingDirectory: cwd,
-                                      fontSize: session.fontSize.map(Float.init),
-                                      command: command,
-                                      autoFocus: !suppressAutoFocus, env: env)
+        // a remote window's scratch is its server's: a stopped attach keeps its screen until it reconnects
+        let catalogScratch = session.catalogScratch
+        let view = GhosttySurfaceView(workingDirectory: cwd, fontSize: session.fontSize.map(Float.init), command: command,
+                                      autoFocus: !suppressAutoFocus,
+                                      env: env.merging(catalogScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 })
         view.watermarkSession = session
         let sessionID = session.id
-        view.onExit = { store.closeScratch(sessionID) }
+        view.onExit = { [weak view] in
+            if let view, PaneLead.scratchStopped?(view) == true { return }
+            store.closeScratch(sessionID)
+        }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)
         // same idle-timer reset as the overlay: an idle auto-follow fire must not hide the scratch mid-typing.
         view.onUserInput = { store.noteUserActivity() }

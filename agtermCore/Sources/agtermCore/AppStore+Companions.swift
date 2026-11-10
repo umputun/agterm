@@ -242,6 +242,8 @@ extension AppStore {
         session.splitSurface = nil
         if session.searchSurface == nil || exited.contains(where: { $0 === session.searchSurface }) { session.clearSearch() }
         disposeMailboxes([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 })
+        // the exited daemons are gone; a headless origin re-adds the respawned one once it runs
+        session.daemonBackedPanes.removeAll()
         session.splitPaneIdentity = nil
         session.isSplit = false
         session.hasSplit = false

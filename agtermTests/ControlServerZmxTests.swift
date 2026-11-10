@@ -525,6 +525,23 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(state.binding.localPane(forRemote: remoteRight), created.splitPaneIdentity)
         XCTAssertNotNil(created.splitPaneIdentity)
         XCTAssertEqual(state.connection, .connecting)
+        XCTAssertFalse(state.binding.originHeadless)
+    }
+
+    func testAttachingToAHeadlessOriginMarksTheRowsBinding() async throws {
+        let advertising = Self.splitProjection.replacingOccurrences(of: #"{"remote":{"#,
+                                                                    with: #"{"remote":{"presentation":1,"headless":true,"#)
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: advertising, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+        server.remoteTransport = RecordingTransport()
+        let store = try XCTUnwrap(library.activeStore)
+
+        let response = await server.attachRemoteSession(host: "buildbox", session: "s1")
+
+        XCTAssertTrue(response.ok)
+        let created = try XCTUnwrap(store.workspaces.flatMap(\.sessions).first { $0.remoteHost != nil })
+        XCTAssertFalse(store.catalogMirrored)
+        XCTAssertEqual(created.remotePresentation?.binding.originHeadless, true)
     }
 
     func testAttachingToAnOriginThatPredatesPresentationReadsUnsupported() async throws {

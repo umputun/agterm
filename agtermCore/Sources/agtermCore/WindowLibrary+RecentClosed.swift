@@ -76,7 +76,14 @@ extension WindowLibrary {
             return openStores().first { $0.session(withID: parentID) != nil }
         }
         if let owner = storeHoldingWorkspace(of: item) { return owner }
-        return requested ?? activeStore
+        // a closed item is always this Mac's own, and a remote window holds only its server's rows
+        let fallback = requested ?? activeStore
+        guard let fallback, isRemoteStore(fallback) else { return fallback }
+        return openStores().first { !isRemoteStore($0) }
+    }
+
+    func isRemoteStore(_ store: AppStore) -> Bool {
+        windowID(for: store).flatMap { id in windows.first { $0.id == id } }?.isRemote == true
     }
 
     /// The open store holding `item`'s workspace: the workspace id itself for a workspace entry, the parent

@@ -114,7 +114,7 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
     streams an epoch/revision-numbered snapshot and deltas of the whole catalog. It is the single source the
     remote window reconciles from; a reply never mutates the mirror directly.
   - Session effects keep using today's per-session presentation stream unchanged.
-- **Sessions with no surface.** On the server a pane is a detached zmx daemon (`zmx run NAME -d COMMAND`) recorded in
+- **Sessions with no surface.** On the server a pane is a detached zmx daemon (`zmx attach --detached NAME [COMMAND]`, patch 0005) recorded in
   the model with its stable pane identity; attachability, `--pane-id` resolution and swap read that state, never a
   surface. The Mac attaches each pane with today's `zmx attach` over ssh.
 - **Presentation without a local client.** A headless origin delegates asks, pick, pages and program overlays to its
@@ -223,24 +223,25 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 
 ## Implementation Steps
 
-### Task 1: Mac-to-Linux attach gate against agterm-linux
+### Task 1: Mac-to-Linux attach gate script
+
+⚠️ Scope change (Eugene, 2026-11-06): no agterm-linux container. The GTK app is not the server, and Task 5 runs this
+gate against `agterm-server`, the origin that ships. Task 1 writes the script and the doc; the run moves to Task 5.
 
 **Files:**
 - Create: `scripts/linux-origin-gate.sh`
 - Create: `docs/remote-linux-gate.md`
 
-- [ ] the script launches the Debug instance with a short `/tmp` `AGTERM_STATE_DIR` it creates itself, including
+- [x] the script launches the Debug instance with a short `/tmp` `AGTERM_STATE_DIR` it creates itself, including
       the `windows` marker, and refuses to run when that variable is unset or names the live state dir
-- [ ] build a local Linux container (arm64, sshd, key auth) running agterm-linux at a pinned commit in Live mode
-      under a headless compositor with software GL, with its patched zmx and `agtermctl` on the ssh PATH
-- [ ] attach to one of its sessions from an isolated Debug instance over real ssh (`zmx attach HOST ID
-      --companions`): confirm presentation `connected`, status, context, HUD, ask, program overlay with `--block`,
-      HTML file page and group attach
-- [ ] detach during an ask, a page and a running program, reconnect, and relaunch the Debug instance; record what
-      each does
-- [ ] record results, failures and unsupported kinds (image/markdown/text pages, pick, loopback URLs) in
-      `docs/remote-linux-gate.md`; a protocol incompatibility found here is fixed in core before Task 3
-- [ ] stop the container and the Debug instance by pid and confirm with `lsappinfo` that nothing lingers
+- [x] the script takes the ssh host of a Linux origin and drives the gate scenario against it: attach to one of its
+      sessions over real ssh (`zmx attach HOST ID --companions`), presentation `connected`, status, context, HUD,
+      ask, program overlay with `--block`, HTML file page and group attach; then detach during an ask, a page and a
+      running program, reconnect, and relaunch the Debug instance
+- [x] `docs/remote-linux-gate.md`: how to run the gate, what each step checks, and a results section Task 5 fills
+- [x] the script stops the Debug instance by pid and confirms with `lsappinfo` that nothing lingers
+- [x] tests: `shellcheck` clean; the refusal paths (unset state dir, live state dir) exercised; the full run is
+      Task 5's
 
 ### Task 2: Linux build foundation
 
@@ -254,20 +255,30 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Create: `scripts/setup-zmx-linux.sh`
 - Modify: `scripts/zmx-patches/README.md`
 - Modify: `agtermCore/Tests/agtermctlKitTests/OverlayRunJobTests.swift`
+- Modify: `agterm/Resources/agent-status/agterm-codex-status.sh` (portable replacement for `/usr/bin/plutil`)
+- Modify: test sources with unconditional Darwin use (`SessionWaitCommandsTests.swift`, `StreamBridgeTests.swift`,
+  `CodexStatusHookTests.swift` and any other the Linux build reports)
+- ➕ Create: `agtermCore/Sources/agtermCore/PortableMarkdown.swift` (the Linux session-info, HUD-visibility and
+  image-reference paths, behind `#if canImport(Markdown)`)
+- ➕ Modify: `scripts/setup.sh` (zmx target, stage dir and stamp overridable for the Linux build)
+- ➕ Modify: `agtermCore/Package.swift` (swift-markdown 0.8.0, Linux only; Eugene approved the dependency)
 
-- [ ] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
+- [x] make `agtermCore` and `agtermctlKit` build and test on Linux: a Glibc branch for the suspended-spawn
       handoff in `OverlayRunJob`, and any other Darwin-only call the build reports
-- [ ] add a Linux CI job (ubuntu-24.04, pinned Swift 6.3.x, its own `timeout-minutes`) running `swift build` and
+- [x] ➕ (moved from Task 12) portable JSON extraction in `agterm-codex-status.sh` replacing `/usr/bin/plutil`, since
+      `CodexStatusHookTests` runs in the core suite the Linux job must pass
+- [x] ➕ test sources build on Linux: unconditional `import Darwin` and `SO_NOSIGPIPE` in tests get platform branches
+- [x] add a Linux CI job (ubuntu-24.04, pinned Swift 6.3.x, its own `timeout-minutes`) running `swift build` and
       `swift test` for the package, wired into the existing change filters
-- [ ] build the patched zmx for `aarch64-linux-musl` and `x86_64-linux-musl` from the same `ZMX_REV` and patches,
+- [x] build the patched zmx for `aarch64-linux-musl` and `x86_64-linux-musl` from the same `ZMX_REV` and patches,
       with its own stamp
-- [ ] stage ghostty's shell-integration directory (zsh, fish, bash) and its `xterm-ghostty` terminfo entry at
+- [x] stage ghostty's shell-integration directory (zsh, fish, bash) and its `xterm-ghostty` terminfo entry at
       `GHOSTTY_REV` as Linux artifacts, with the same stamp rule
-- [ ] probe the static Linux SDK (musl) with the existing package (`agtermctl`); record whether Foundation use builds
+- [x] probe the static Linux SDK (musl) with the existing package (`agtermctl`); record whether Foundation use builds
       there, which decides packaging in Task 12
-- [ ] Linux CLI rendezvous: `BasicOptions.socketPath` resolves the Linux default when neither `--socket` nor
+- [x] Linux CLI rendezvous: `BasicOptions.socketPath` resolves the Linux default when neither `--socket` nor
       `AGTERM_STATE_DIR` is set; Mac resolution unchanged
-- [ ] tests: `OverlayRunJob` spawn handoff on both platforms; socket path resolution per platform and precedence;
+- [x] tests: `OverlayRunJob` spawn handoff on both platforms; socket path resolution per platform and precedence;
       Linux CI green on the unchanged suite
 
 ### Task 3: Windowless core contracts
@@ -285,19 +296,19 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agterm/Control/ControlServer+Pick.swift`, `ControlServer+RemotePresentation.swift`
 - Modify: matching tests in `agtermCore/Tests/agtermCoreTests/`
 
-- [ ] model daemon backing as session state keyed by stable pane identity, so attachability (`zmxBacking`,
+- [x] model daemon backing as session state keyed by stable pane identity, so attachability (`zmxBacking`,
       `RemoteTreeMerger`) and `paneRole(forToken:)` work with no surface; the Mac keeps deriving it from surfaces
-- [ ] decouple `swapPanes` and split on/off/close from realized surfaces for a store marked headless
-- [ ] add a headless-origin presentation rule: with no local client, asks, pick, pages and jobs route to the elected
+- [x] decouple `swapPanes` and split on/off/close from realized surfaces for a store marked headless
+- [x] add a headless-origin presentation rule: with no local client, asks, pick, pages and jobs route to the elected
       presenter; the Mac origin's follower gate is unchanged
-- [ ] session-bound pick, end to end: `agtermctl pick --session`/env, wire arguments, a session-targeted
+- [x] session-bound pick, end to end: `agtermctl pick --session`/env, wire arguments, a session-targeted
       `ControlActions.openPick` overload with a default (the existing window/follow witness stays), presentation
       frames for pick request, result and cancel, the Mac presenter's receiver, and the origin's routing; today's
       window-scoped pick stays for untargeted calls; a session-bound pick in flight is reported on that session's
       `tree` node, beside the per-window `pickPending`
-- [ ] a durable catalog root for a windowless store: logical window id/name on the wire, a default workspace, and
+- [x] a durable catalog root for a windowless store: logical window id/name on the wire, a default workspace, and
       refusal of physical window commands
-- [ ] tests: backing and token resolution without surfaces, swap/split on a headless store, presenter routing for
+- [x] tests: backing and token resolution without surfaces, swap/split on a headless store, presenter routing for
       both origin kinds, pick request/result/cancel across the stream, old witness still compiles and behaves, Mac
       behavior unchanged; hosted `agtermTests` for the Mac pick receiver (`-only-testing`)
 
@@ -313,38 +324,47 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agtermCore/Sources/agtermCore/ZmxSupport.swift` (Linux socket directory, server shell configuration)
 - Modify: `.github/workflows/ci.yml` (real-zmx lifecycle run on the Linux job)
 - Create: `agtermCore/Tests/AgtermServerTests/`
+- ➕ Create: `agtermCore/Sources/agtermCore/ControlAcceptLoop.swift`, `UnixSocket.swift` (moved from the app with their tests)
+- ➕ Modify: `agtermCore/Sources/agtermCore/Session.swift`, `Snapshot.swift`, `ControlProjection.swift`, `AppStore+Snapshot.swift`, `AppStore+Panes.swift` (`ended`)
+- ➕ Modify: `agtermCore/Sources/agtermCore/TerminfoInstall.swift` (Linux lookup)
+- ➕ Create: `scripts/zmx-patches/0005-detached-create.patch`; modify `scripts/zmx-patches/README.md`, `check.py`, `scripts/setup.sh` (`AGTERM_ZMX_ZIG`)
+- ➕ Create: `scripts/server-container.sh`; modify `scripts/setup-zmx-linux.sh` (`--shell-integration` from ghostty's source at the pin), `.claude/rules/ci.md`
+- ➕ Create: `agtermCore/Tests/agtermCoreTests/TestExecutable.swift`, `agtermCore/Tests/agtermctlKitTests/TestExecutable.swift` (scripts written from a child process)
 
-- [ ] `agterm-server` executable: main-actor run loop, state dir lock, durable catalog id, `AppStore` restored from
+- [x] `agterm-server` executable: main-actor run loop, state dir lock, durable catalog id, `AppStore` restored from
       and saved to the server state dir
-- [ ] Linux control socket server on the shared framing (stream ownership, backpressure), with the Mac's
+- [x] Linux control socket server on the shared framing (stream ownership, backpressure), with the Mac's
       `ControlStreamOwner` moved onto the same framing; only server-supported commands accepted, the rest refused
-- [ ] `ControlActions` for the server: `session.new`, split on/off/close, swap, rename, close, workspace create,
+- [x] `ControlActions` for the server: `session.new`, split on/off/close, swap, rename, close, workspace create,
       rename, delete and move, companions, `session text`/`type` through zmx; each provisions or ends detached zmx
-      daemons (`zmx run NAME -d`) with the session environment
-- [ ] process placement: under a systemd user manager each daemon starts in its own transient scope, outside the
+      daemons (`zmx attach --detached NAME`, patch 0005) with the session environment
+- [x] process placement: under a systemd user manager each daemon starts in its own transient scope, outside the
       server unit's cgroup; the server never runs the zero-client reap
-- [ ] shells: zsh, fish and bash login shells with ghostty's shell integration from the Task 2 artifact; other
+- [x] shells: zsh, fish and bash login shells with ghostty's shell integration from the Task 2 artifact; other
       shells refused with a message naming the supported ones; Mac Live-mode shell rule unchanged
-- [ ] Linux zmx socket directory under `$XDG_RUNTIME_DIR`; Mac resolution unchanged
-- [ ] terminfo: `TerminfoInstall` finds the server's shipped `xterm-ghostty` entry on Linux, and panes and program
+- [x] Linux zmx socket directory under `$XDG_RUNTIME_DIR`; Mac resolution unchanged
+- [x] terminfo: `TerminfoInstall` finds the server's shipped `xterm-ghostty` entry on Linux, and panes and program
       overlays whose `TERM` names it get `TERMINFO` pointing at it
-- [ ] continuous daemon observation replacing the renderer's callbacks: a primary or split shell that exits ends
+- [x] continuous daemon observation replacing the renderer's callbacks: a primary or split shell that exits ends
       its pane (a live split is promoted, a parent with companions respawns as on the Mac), a daemon that vanishes
       while running ends that pane only (a live split is promoted), and a session left with no live pane stays in
       the catalog as `ended`, removed only by `session.close` on it; each
       pane's cwd is read from `/proc/<pid>/cwd` of its foreground process so split and new session inherit it
-- [ ] restart reconciliation: a restarted server adopts surviving daemons from the catalog, marks missing ones
+- [x] restart reconciliation: a restarted server adopts surviving daemons from the catalog, marks missing ones
       ended, and never reaps a live pane
-- [ ] `scripts/server-container.sh`: builds the Linux `agterm-server`, `agtermctl`, zmx and shell integration from
+- [x] `scripts/server-container.sh`: builds the Linux `agterm-server`, `agtermctl`, zmx and shell integration from
       this tree into a local container with sshd, key auth and a systemd user manager with linger, starts or stops
       it, and prints the ssh host; every later task's container checks use it
-- [ ] Linux CI: the Linux job builds the musl zmx and runs the `AgtermServerTests` lifecycle suite against a real
+- [x] Linux CI: the Linux job builds the musl zmx and runs the `AgtermServerTests` lifecycle suite against a real
       daemon (`AGTERM_REQUIRE_ZMX=1`), mirroring the macOS job
-- [ ] tests: lifecycle of each command against a fake zmx runner and against a real daemon; natural primary and
+- [x] ➕ `session.move` served before Task 6, which needs a receipt for every structural command
+- [x] ➕ Linux `ServerProcess` children get only stdin, stdout and stderr (a daemon inherited every other open descriptor for life)
+- [x] ➕ test scripts are written from a child process: a write descriptor held by the test process reached a concurrent spawn and Linux refused the exec (ETXTBSY), which the server suite's spawns made frequent
+- [x] tests: lifecycle of each command against a fake zmx runner and against a real daemon; natural primary and
       split exit, missing daemon while running, cd then split/new-session cwd, all with no Mac connected; restart
-      adoption; zsh, fish and bash panes and a refused shell; socket directory per platform; a program overlay with
-      `TERMINFO` unset and no system `xterm-ghostty` entry still resolves it; refusal of unsupported
-      commands; framing on both platforms; in the container, a live pane survives `systemctl --user restart` and a
+      adoption; zsh, fish and bash panes and a refused shell; socket directory per platform; `TerminfoInstall`
+      Linux lookup and the pane environment's `TERMINFO` (the program-overlay case moves to Task 5); refusal of
+      unsupported commands; framing on both platforms; in the container, a live pane survives `systemctl --user restart` and a
       killed server process
 
 ### Task 5: Server presentation, jobs and pages
@@ -358,16 +378,19 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agtermCore/Sources/agtermCore/CommandPath.swift`
 - Create/modify: tests in `AgtermServerTests` and `agtermCoreTests`
 
-- [ ] server `ControlActions` producing session effects: status, context, HUD, notify, ask, pick, overlay open
+- [x] server `ControlActions` producing session effects: status, context, HUD, notify, ask, pick, overlay open
       (program and every page kind) and their follow-ups (close, resize, reload, cancel, result), feeding the hub
-- [ ] serve `zmx tree`, `zmx present`, overlay job claim/run and page serve from the server through the same core
+- [x] serve `zmx tree`, `zmx present`, overlay job claim/run and page serve from the server through the same core
       engines the Mac uses; page bridge requests dispatch through the control dispatcher, not the GUI registry
-- [ ] image, markdown and text pages and HTML/URL pages from a headless origin reach the presenter
-- [ ] add `~/.local/bin` to the far-side PATH the Mac's ssh commands prepend, after the existing entries
-- [ ] today's per-session `zmx attach` from the Mac to an `agterm-server` session works unchanged: the Task 1 gate
-      re-run against `scripts/server-container.sh`
-- [ ] tests: presentation snapshot and deltas from a headless store, job claim once, page fetch and bridge, PATH
-      composition; hosted `agtermTests` for the changed `ControlServer+PageServe`, `+Presentation` and
+- [x] image, markdown and text pages and HTML/URL pages from a headless origin reach the presenter
+- [x] add `~/.local/bin` to the far-side PATH the Mac's ssh commands prepend, after the existing entries
+- [x] today's per-session `zmx attach` from the Mac to an `agterm-server` session works unchanged: the Task 1 gate
+      run against `scripts/server-container.sh`, results, failures and unsupported kinds (image/markdown/text pages,
+      pick, loopback URLs) recorded in `docs/remote-linux-gate.md`; a protocol incompatibility found here is fixed
+      in core in this task
+- [x] tests: presentation snapshot and deltas from a headless store, job claim once, page fetch and bridge, PATH
+      composition; ➕ (moved from Task 4) a program overlay with `TERMINFO` unset and no system `xterm-ghostty`
+      entry still resolves it; hosted `agtermTests` for the changed `ControlServer+PageServe`, `+Presentation` and
       `+OverlayJobs` paths (`-only-testing`)
 
 ### Task 6: Catalog subscription
@@ -379,19 +402,19 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agtermCore/Sources/AgtermServerKit/`
 - Create: `agtermCore/Tests/agtermCoreTests/CatalogHubTests.swift`
 
-- [ ] catalog snapshot and deltas with epoch and revision, covering workspaces, sessions, panes, names, order,
+- [x] catalog snapshot and deltas with epoch and revision, covering workspaces, sessions, panes, names, order,
       companions and lifecycle; subscriber registered before the snapshot so nothing falls between
-- [ ] `agtermctl catalog subscribe` bridging stdio to the server's catalog stream, the same way `zmx present` does
-- [ ] resnapshot on reconnect and on a new epoch; unknown kinds skipped without ending the stream; a snapshot over
+- [x] `agtermctl catalog subscribe` bridging stdio to the server's catalog stream, the same way `zmx present` does
+- [x] resnapshot on reconnect and on a new epoch; unknown kinds skipped without ending the stream; a snapshot over
       the frame cap goes as chunks plus a commit frame
-- [ ] operation receipts: every structural command accepts an `opID` and the expected epoch, refuses a stale epoch,
+- [x] operation receipts: every structural command accepts an `opID` and the expected epoch, refuses a stale epoch,
       and replies `applied(rev)`, `noop` or `refused`; the bounded op table, saved with the catalog, answers a
       repeated `opID` with its recorded outcome, and `agtermctl catalog op OPID` answers lookups, fencing an unseen
       `opID`
-- [ ] the Mac app's `ControlActions` default refuses `catalog subscribe` and receipt-bearing structural commands
-- [ ] version advertisement: the catalog snapshot and `agtermctl version` against the server report server,
+- [x] the Mac app's `ControlActions` default refuses `catalog subscribe` and receipt-bearing structural commands
+- [x] version advertisement: the catalog snapshot and `agtermctl version` against the server report server,
       protocol and catalog versions
-- [ ] tests: snapshot/delta ordering, restart epoch, every structural command producing the right delta and
+- [x] tests: snapshot/delta ordering, restart epoch, every structural command producing the right delta and
       receipt, refusal and no-op receipts, a repeated `opID` never running twice, a lookup fencing an `opID` that
       arrives later, a stale-epoch command refused, an operation that committed and lost its reply still answered
       by lookup after a server restart, chunked snapshot applied only at commit, version fields in the
@@ -410,41 +433,39 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agterm/agtermApp+Menus.swift`, `agterm/AppActions.swift`, `agterm/ContentView.swift`
 - Create: tests in `agtermCoreTests` and `agtermTests`
 
-- [ ] window entries carry a source, local or remote(host, catalogID); a remote entry persists host, catalog id and
+- [x] window entries carry a source, local or remote(host, catalogID); a remote entry persists host, catalog id and
       local view state (selection, focus, font, ratio, frame), never sessions, and is skipped by seed, save,
       finalization and Recent Closed
-- [ ] the mirror reconciles the catalog into its store by identity and revision: creates and removes replica
+- [x] the mirror reconciles the catalog into its store by identity and revision: creates and removes replica
       sessions and panes, attaches each pane with `zmx attach`, keeps local view state, and never starts a local
       shell for a pane whose attach is starting or failed
-- [ ] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
-- [ ] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
-      screen readable when this Mac held it (a relaunched Mac shows the row without a screen); closing it skips the
-      sheet and removes the ended records only when nothing in the affected group runs, and otherwise opens the
-      Detach/Terminate sheet; Disconnected never turns a row into Ended
-- [ ] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
+- [x] an ssh exit or removal settles the named attachment, not a newer occupant of the same slot
+- [x] ended sessions: a catalog session in the `ended` state keeps its row marked `Ended on HOST` with the last
+      screen readable when this Mac held it (a relaunched Mac shows the row without a screen); Disconnected never
+      turns a row into Ended; closing an Ended row is Task 8's, which owns close routing and the sheet
+- [x] the catalog is the only writer of a remote window's pane structure: presentation `layout` frames and snapshot
       layout are ignored for its rows; per-session attach rows keep today's handling
-- [ ] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
+- [x] a per-host pool of ssh `ControlMaster` connections, each carrying at most 8 session channels, shared by pane
       attaches, presentation streams, control commands, page serve and forwards; a full pool adds a master, and a dead
       master is replaced once and its users reconnect through the pool
-- [ ] Connecting, Connected and Disconnected states shown in the window; last sidebar and screens kept while
+- [x] Connecting, Connected and Disconnected states shown in the window; last sidebar and screens kept while
       disconnected; reconnect takes a fresh snapshot
-- [ ] protocol check at connect: the Mac reads the server's protocol and catalog versions and refuses an
+- [x] protocol check at connect: the Mac reads the server's protocol and catalog versions and refuses an
       unsupported server, or an origin with no catalog version (a Mac app), with a message naming both
-- [ ] open from File ▸ Open Remote Window (hosts from `remotes.conf`) and from the control API: protocol command
+- [x] open from File ▸ Open Remote Window (hosts from `remotes.conf`) and from the control API: protocol command
       `window.remote.open {host}`, dispatcher, `ControlActions` with a default, `agtermctl window remote open HOST`;
       opening a host or catalog already open raises that window and returns its id; closing the window detaches;
       `tree` reports the window's `remote {host, catalogID, state}`
 - [ ] checkpoint: build and launch an isolated Debug instance against `scripts/server-container.sh` and show Eugene the
       remote window (sidebar, connection state, a disconnected window) before writing its hosted and UI tests;
       adjust from his verdict
-- [ ] tests: source persistence round trip, reconciliation (add, remove, reorder, epoch change), slot settlement,
+- [x] tests: source persistence round trip, reconciliation (add, remove, reorder, epoch change), slot settlement,
       state transitions, no local seed on cold reopen, `window.remote.open` dedup and read-back; an older
       presentation snapshot delivered after a newer catalog split, swap and removal changes nothing; refusal of an
       origin without a catalog version; in the container with stock sshd (`MaxSessions 10`), opening and
       reconnecting a 20-session catalog after a dropped link brings back every pane and stream; a killed daemon
-      leaving an Ended row with its screen, a killed primary with a live split promoting the split instead, an
-      ended parent with live companions getting the sheet on close, a normal shell exit closing the row, an
-      unreachable server staying Disconnected, and closing an inert Ended row removing the record
+      leaving an Ended row with its screen, a killed primary with a live split promoting the split instead, a normal
+      shell exit closing the row, and an unreachable server staying Disconnected
 
 ### Task 8: Structural actions routed to the server
 
@@ -456,45 +477,59 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agterm/Control/ControlTargetResolver.swift`, `agterm/Control/ControlServer+SessionActions.swift`
 - Create: tests in `agtermCoreTests`, `agtermTests`, `agtermUITests`
 
-- [ ] one action seam scoped by window source: new session, split on/off/close, swap, rename (inline too), reorder,
+- [x] one action seam scoped by window source: new session, split on/off/close, swap, rename (inline too), reorder,
       move between workspaces, companions, workspace create/rename/delete and session/workspace close go to the
       server as control commands in a remote window, and stay local in a local window
-- [ ] per-operation pending and unknown states cleared by their own receipts compared on `(epoch, rev)`, repeat
+- [x] per-operation pending and unknown states cleared by their own receipts compared on `(epoch, rev)`, repeat
       actions held while pending, an unknown outcome settled only by `catalog op` lookup, before or after a server
       restart, never from a snapshot, and left visibly unknown when the table no longer holds it; ssh runs off the
       main thread
-- [ ] mutations disabled while Disconnected; drag between a remote and a local window refused
-- [ ] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
+- [x] mutations disabled while Disconnected; drag between a remote and a local window refused
+- [x] close in a remote window (session, companion group, workspace) opens the Detach/Terminate/Cancel sheet naming
       the host, Detach the default button; Terminate ends it on the server, scoped from the full catalog including
       detached children, with no undo grace and no Reopen Closed entry; app quit never finalizes server state
-- [ ] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
-      those panes' and scratch's attach clients and releases their presenter, so pending work follows the
-      no-Mac-connected rules; running program overlays close as their ssh terminal ends; it works while
-      Disconnected and sends nothing to the server
-- [ ] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
+- [x] ➕ (moved from Task 7) closing an Ended row skips the sheet and removes the ended records only when nothing in
+      the affected group runs, and otherwise opens the Detach/Terminate sheet
+- [x] detach: the remote window's entry persists the detached session, group and workspace ids; detaching stops
+      those panes' attach clients and releases their presenter; running program overlays close as their ssh
+      terminal ends; it works while Disconnected and sends nothing to the server (detaching scratch is verified in
+      Task 9, pending work following the no-Mac-connected rules in Task 10)
+- [x] detached rows stay hidden through natural exit, split promotion and parent respawn; a companion created under
       a detached parent is hidden with it; a detached session that becomes `ended` stays hidden, and an id is pruned
       from the set only when its record is removed from the catalog; nothing detached is ever relaunched
-- [ ] "Detached Sessions" picker in the remote window (File menu and palette) lists the detached sessions and
+- [x] "Detached Sessions" picker in the remote window (File menu and palette) lists the detached sessions and
       workspaces whose records still exist, ended ones marked as ended; it reattaches a live one, and offers an
       ended one only for record cleanup under the Ended close rule
-- [ ] control coverage: new commands `session.detach` and `session.reattach` (and `workspace.detach`/
+- [x] control coverage: new commands `session.detach` and `session.reattach` (and `workspace.detach`/
       `workspace.reattach`) for remote-window rows only, refused elsewhere, with dispatcher, `ControlActions` defaults
       and `agtermctl session detach|reattach`; `session.close` keeps its terminating meaning everywhere, so recipes
       such as `close-tab-when-done` and agents on the server are unchanged; `tree` lists the remote window's detached
       ids
-- [ ] the local control API targets a remote window's sessions through the same seam, and `tree` reports
+- [x] the local control API targets a remote window's sessions through the same seam, and `tree` reports
       per-session pending state
-- [ ] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
+- [x] tests: routing per source for every action; pending lifecycle for applied, no-op, refused, unrelated delta,
       delta before reply, lost reply settled by lookup, an unchanged snapshot followed by delayed execution (fenced),
       a delayed command crossing a server restart, a create that commits, drops its reply and survives a restart
       (settled as applied by lookup), and a receipt from a newer epoch; disabled-while-disconnected; the sheet's
       Detach, Terminate and Cancel paths for a session, a group and a workspace (including an empty one); detach
       while Disconnected; detached state across Mac relaunch, natural exit, respawn and a new companion; a detached
       session that becomes ended staying hidden through a Mac relaunch and listed as ended in the picker, pruned only
-      when its record is removed; Terminate reaching detached children; `session.detach` refused on a
+      when its record is removed; Terminate reaching detached children; ➕ (moved from Task 7) an ended parent
+      with live companions getting the sheet on close and closing an inert Ended row removing the record;
+      `session.detach` refused on a
       local session and `session.close` still terminating; control API read-back; UI tests in `agtermUITests` for
       new session, split, rename, detach, reattach and terminate against `scripts/server-container.sh`, run with
       `-only-testing` and skipped when no server host is configured
+      ➕ done to the scope Eugene chose (missing cases plus key routing) in a0e4d818, cdb5e09d and 915b16bb, not every
+      case above: the close sheet's three answers per session, group, workspace and
+      empty workspace; GUI New Session, split, move and inline rename; control close, split on/off/close, rename,
+      move and new through a real `ControlServer`, background windows included; detach through respawn, promotion,
+      daemon loss, companion exit and a saved relaunch; detach/reattach and pending read-back; the six UI flows,
+      run 6/6 against agterm-server on an Ubuntu VM. ⚠️ Partly covered, listed as PR gaps: duplicate, swap, companion
+      creation, workspace create/rename/reorder and session reorder are pinned by the core route tests but have no
+      app-route test of their own; `aCommandDelayedAcrossARestartIsRefusedAndClears` answers with an immediate canned
+      refusal, with no delay or epoch change, and `aCreateThatCommittedAndLostItsReplyIsAppliedByALookupAfterARestart`
+      simulates the lookup without a joined create, persist and restart
 
 ### Task 9: Server scratch and custom commands in a remote window
 
@@ -503,17 +538,18 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agterm/AppActions*.swift` (scratch toggle), `agterm/Commands/CustomCommandRunner.swift`
 - Create: tests in `AgtermServerTests`, `agtermTests`
 
-- [ ] scratch in a remote window opens an ephemeral server-side zmx daemon attached like any pane; hiding it keeps
+- [x] scratch in a remote window opens an ephemeral server-side zmx daemon attached like any pane; hiding it keeps
       the same shell, as `toggleScratch` does locally; closing the remote window detaches it like every pane; only
       its shell exiting, closing its session, or a server restart ends it; the live catalog shows it, the
       persisted catalog excludes it; scratch daemons use the `agterm-scratch-<uuid>` name shape, so a restarted
       server ends only those and adopts every other daemon
-- [ ] control coverage: `session.scratch` against a remote window's session routes through the seam (protocol,
+- [x] control coverage: `session.scratch` against a remote window's session routes through the seam (protocol,
       dispatcher, `agtermctl`), and the session's `tree` node reports the server scratch's shown and backed state
-- [ ] custom commands keep running on the Mac; `AGT_*` tokens in a remote window name the server session and host,
+- [x] custom commands keep running on the Mac; `AGT_*` tokens in a remote window name the server session and host,
       and their `agtermctl` session operations reach the server through the seam
-- [ ] tests: scratch survives hide and window detach, ends on shell exit, session close and server restart, and a
-      restart leaves non-scratch daemons running;
+- [x] tests: scratch survives hide and window detach, ends on shell exit, session close and server restart, and a
+      restart leaves non-scratch daemons running; ➕ (moved from Task 8) `session.detach` stops the scratch's attach
+      client and the scratch daemon keeps running;
       `session.scratch` routing and read-back; custom command token values in a remote window
 
 ### Task 10: Pending interactions with no Mac connected
@@ -527,26 +563,27 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Modify: `agterm/Control/ControlServer+RemotePresentation.swift`
 - Create: tests in `agtermCoreTests` and `AgtermServerTests`
 
-- [ ] ask/pick `--timeout` end to end: CLI flag, `ControlArgs` deadline, dispatcher validation, server expiry
-- [ ] a new negotiated hello kind for pending interactions; the snapshot carries unpresented asks, picks, pages and
+- [x] ask/pick `--timeout` end to end: CLI flag, `ControlArgs` deadline, dispatcher validation, server expiry
+- [x] a new negotiated hello kind for pending interactions; the snapshot carries unpresented asks, picks, pages and
       unclaimed jobs with their deadlines, sent as chunks plus a commit frame when it exceeds the frame cap
-- [ ] read-back: each session's `tree` node lists its pending interactions with kind, state (`unpresented`,
+- [x] read-back: each session's `tree` node lists its pending interactions with kind, state (`unpresented`,
       `offered`, `claimed`) and deadline
-- [ ] with no presenter, the server keeps them pending; the next presenter is offered each under its generation;
+- [x] with no presenter, the server keeps them pending; the next presenter is offered each under its generation;
       answers from an old generation are rejected; a job's claim window starts at handoff
-- [ ] per-offer claim tokens: each job offer carries a token bound to the presenter generation, `OverlayJobs.claim`
+- [x] per-offer claim tokens: each job offer carries a token bound to the presenter generation, `OverlayJobs.claim`
       and the run-job helper validate it before releasing launch context, and presenter loss invalidates it
       atomically; job identity stays separate from offer identity
-- [ ] presenter loss mid-interaction returns it to pending instead of handing it back locally; a claimed or unknown
+- [x] presenter loss mid-interaction returns it to pending instead of handing it back locally; a claimed or unknown
       job reports an honest outcome and is never launched again
-- [ ] deadlines and cancellation withdraw pending work before any replay; server restart cancels all of them and the
+- [x] deadlines and cancellation withdraw pending work before any replay; server restart cancels all of them and the
       waiting `agtermctl` call fails with an error
-- [ ] a presenter without the kind is never offered pending work: interactions stay pending on a headless origin
+- [x] a presenter without the kind is never offered pending work: interactions stay pending on a headless origin
       until a capable presenter or their deadline, and a Mac origin keeps today's behavior
-- [ ] tests: each state transition, generation rejection, deadline expiry and `--timeout` validation, restart
+- [x] tests: each state transition, generation rejection, deadline expiry and `--timeout` validation, restart
       cancellation, an old presenter's helper claiming while unpresented and after a re-offer (both refused),
       presenter loss racing a successful claim, an old presenter left without pending offers, a chunked pending snapshot applied only at
-      commit, `tree` read-back; hosted `agtermTests` for the changed `ControlServer+RemotePresentation` path
+      commit, `tree` read-back; ➕ (moved from Task 8) an ask open when its session is detached returns to pending
+      and is offered to the next presenter; hosted `agtermTests` for the changed `ControlServer+RemotePresentation` path
       (`-only-testing`)
 
 ### Task 11: Localhost URL pages through an ssh forward
@@ -557,64 +594,80 @@ Each decision of `docs/remote-agent-server.md`, and what this plan does with it.
 - Create: `agterm/Control/RemotePortForward.swift`
 - Create: tests in `agtermCoreTests` and `agtermTests`
 
-- [ ] a new presenter capability for forwarded loopback pages; a headless origin sends a loopback URL page only to a
+- [x] a new presenter capability for forwarded loopback pages; a headless origin sends a loopback URL page only to a
       presenter that advertises it, as a forward request rather than a plain `.url` source, and refuses it for an
       older presenter, which would otherwise load its own 127.0.0.1
-- [ ] the Mac opens `ssh -L` with `ExitOnForwardFailure` on a free local port for the page's lifetime, rewrites the
+- [x] the Mac opens `ssh -L` with `ExitOnForwardFailure` on a free local port for the page's lifetime, rewrites the
       URL to it, and shows a visible error when the forward fails; the forward closes with the page
-- [ ] a Mac origin keeps refusing loopback URLs for remote handoff, as today
-- [ ] tests: capability gating and old-presenter refusal, URL rewrite, forward lifetime tied to the page, failure
+- [x] a Mac origin keeps refusing loopback URLs for remote handoff, as today
+- [x] tests: capability gating and old-presenter refusal, URL rewrite, forward lifetime tied to the page, failure
       path, Mac-origin refusal unchanged
 
 ### Task 12: Server install and agent setup
 
 **Files:**
 - Create: `scripts/install-server.sh`
-- Modify: `agterm/Resources/agent-status/agterm-codex-status.sh` (portable replacement for `/usr/bin/plutil`)
 - Modify: `agtermCore/Sources/AgtermServerKit/` (`agterm-server install-hooks`)
 - Modify: `agtermCore/Sources/agtermCore/` (portable part of the app's `AgentHooksInstaller` hoisted here)
 - Modify: `agtermCore/Package.swift` (hook scripts and the agent skill as resources of the server product)
 - Create: tests for the hook change and the server-side install
 
-- [ ] packaging from the Task 2 probe: a static musl build of `agterm-server` and `agtermctl`, or a bundled Swift
+- ➕ Task 2 probe result (swift 6.3.2 static-linux-0.1.0 SDK, aarch64 musl): Foundation, `agtermCore` and the
+  swift-markdown/cmark dependency build; `agtermctlKit` fails only where its Linux branches name `Glibc`
+  (`Glibc.send`, `Glibc.accept`/`connect`) or use Glibc's enum-typed `SOCK_STREAM`, which musl's `Musl` module
+  spells as a plain `Int32`. A static build is viable once those take a `Musl` branch.
+- ➕ Done as: static musl binaries from `scripts/server-build.sh`, installed by `scripts/install-server.sh` into
+  `~/.local/lib/agterm-server` with `~/.local/bin` links (a rename swaps the whole directory on upgrade); the hook
+  scripts and the skill ship as files in its `resources/`, not as SwiftPM resources. Under musl every spawn goes
+  through `CleanExec`, the server re-exec'd to close inherited descriptors, since musl has no closefrom action.
+- [x] packaging from the Task 2 probe: a static musl build of `agterm-server` and `agtermctl`, or a bundled Swift
       runtime when the probe failed
-- [ ] install `agterm-server`, the Linux `agtermctl`, zmx, ghostty's shell integration and terminfo entry, the hook
+- [x] install `agterm-server`, the Linux `agtermctl`, zmx, ghostty's shell integration and terminfo entry, the hook
       scripts and the agent skill on a host over ssh (binaries into `~/.local/bin`), and start the server as a systemd user service
       with lingering enabled (`loginctl enable-linger`), refusing with the reason when linger cannot be enabled,
       since without it the user manager ends the server and every zmx daemon at the last ssh logout; upgrade
       replaces binaries and restarts the server without ending panes
-- [ ] check under the real systemd user manager that the same pane processes survive the last ssh logout,
+- [x] check under the real systemd user manager that the same pane processes survive the last ssh logout,
       `systemctl --user restart`, a crash with `Restart=`, and an upgrade
-- [ ] clean-environment check: a bare `ssh HOST agtermctl tree --json` reaches the server through the Linux
+- [x] clean-environment check: a bare `ssh HOST agtermctl tree --json` reaches the server through the Linux
       default
-- [ ] agent hooks and the agent skill installed on the server by `agterm-server install-hooks` from its own
+- [x] agent hooks and the agent skill installed on the server by `agterm-server install-hooks` from its own
       resources, never from the Mac
-- [ ] the installed service reports its versions through `agtermctl version` (produced in Task 6, refused on
+- [x] the installed service reports its versions through `agtermctl version` (produced in Task 6, refused on
       connect in Task 7)
-- [ ] tests: hook script on Linux; `install-hooks` writes the expected files and points them at the server's
+- [x] tests: hook script on Linux; `install-hooks` writes the expected files and points them at the server's
       `agtermctl`; the hoisted installer leaves the Mac's install unchanged
 
 ### Task 13: Update documentation
-- [ ] `site/docs.html`: a Remote server section (install, open a remote window, what runs where, disconnect, close)
+- [x] `site/docs.html`: a Remote server section (install, open a remote window, what runs where, disconnect, close)
       and the scratch/custom-command rules in a remote window
-- [ ] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, `session detach|reattach`
+- [x] `site/commands.html`: `catalog subscribe`, `window remote open` and its read-back, `session detach|reattach`
       and `workspace detach|reattach`, pick `--session`,
       ask/pick `--timeout`, the new `tree` fields, and which commands a server refuses
-- [ ] `site/index.html`: the remote server as a major feature
-- [ ] `.claude/rules/control-api.md` (catalog protocol, receipts, pending interactions, headless presenter rule,
+- [x] `site/index.html`: the remote server as a major feature
+- [x] `.claude/rules/control-api.md` (catalog protocol, receipts, pending interactions, headless presenter rule,
       Linux rendezvous), `windows.md` (window sources), `ci.md` (Linux job); `ARCHITECTURE.md` module map
-- [ ] `plugins/agterm/skills/agterm/` SKILL.md trigger and reference for remote windows and the server
-- [ ] `README.md` synopsis line and `site/llms.txt` index entry; delete `docs/remote-agent-server.md`
+- [x] `plugins/agterm/skills/agterm/` SKILL.md trigger and reference for remote windows and the server
+- [x] `README.md` synopsis line and `site/llms.txt` index entry; delete `docs/remote-agent-server.md`
 
 ### Task 14: [Final] Verify acceptance criteria
-- [ ] every Overview requirement works end to end against the container server through an isolated Debug instance:
+- [x] every Overview requirement works end to end against the container server through an isolated Debug instance:
       new session, split, swap, rename, close, companions, status, context, HUD, ask, pick, program overlay, all
       page kinds, localhost URL page, scratch, disconnect and reconnect, server restart, Mac relaunch
-- [ ] per-session attach to a Mac and to agterm-linux behaves exactly as before
+- [ ] per-session attach to a Mac behaves exactly as before (agterm-linux attach is left to its maintainer; see
+      External)
+      ⚠️ Eugene hand-tested this Mac attaching sessions from his other Macs on the final Debug build (2026-11-09) and
+      found it as before. This Mac as the origin was not exercised on branch code: the other Mac's ssh runs the
+      default-socket `agtermctl`, which is the deployed Release app
 - [ ] on the final tree, once each: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`, the
       Linux build and test, and the new `agtermUITests` classes with `-only-testing` against
       `scripts/server-container.sh`
-- [ ] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test process; container stopped
+      ⚠️ the non-UI gates ran on 89089014 with one `swift test` failure, the zmx race the shipping plan's gate item
+      names. `RemoteWindowUITests` ran 6/6 on 915b16bb, before af23c692's sidebar merge resolution and ba02f880's New
+      Session folder fix, against agterm-server on an Ubuntu VM (`umputun@192.168.1.156`) that this Mac's ssh reaches
+      without a prompt; the container keeps its host key in its own known_hosts file, which the app's plain ssh does
+      not read
+- [x] `lsappinfo list | grep -A4 agterm.debug` shows no leaked test process; container stopped
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion

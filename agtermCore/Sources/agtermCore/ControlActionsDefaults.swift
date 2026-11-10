@@ -168,6 +168,35 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.present"))
     }
 
+    // only a headless server owns a catalog; a remote window must never bind to a live Mac's windows
+    func catalogSubscribe() -> ControlResponse {
+        ControlResponse(ok: false, error: "catalog.subscribe is served only by agterm-server")
+    }
+
+    func detachSessions(_: [String], window _: String?) -> ControlResponse { Self.remoteWindowOnly("session.detach") }
+    func reattachSession(_: String, window _: String?) -> ControlResponse { Self.remoteWindowOnly("session.reattach") }
+    func detachWorkspace(_: String?, window _: String?) -> ControlResponse { Self.remoteWindowOnly("workspace.detach") }
+    func reattachWorkspace(_: String, window _: String?) -> ControlResponse { Self.remoteWindowOnly("workspace.reattach") }
+    func dismissRemoteUnknown(window _: String?) -> ControlResponse { Self.remoteWindowOnly("window.remote.dismiss") }
+
+    static func remoteWindowOnly(_ command: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "\(command) acts only on a remote window")
+    }
+
+    func catalogOperation(_: String, sent _: CatalogPosition?) -> ControlResponse {
+        ControlResponse(ok: false, error: "catalog.op is served only by agterm-server")
+    }
+
+    var takesOperationReceipts: Bool { false }
+
+    func windowRemoteOpen(host _: String) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.remote.open"))
+    }
+
+    func claimOverlayJob(_ job: String, token: String?) -> ControlResponse {
+        token == nil ? claimOverlayJob(job) : ControlResponse(ok: false, error: "job not claimable")
+    }
+
     func claimOverlayJob(_: String) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.job.run"))
     }
@@ -185,6 +214,10 @@ public extension ControlActions {
             return ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.attach --window"))
         }
         return await attachRemoteSession(host: host, session: session)
+    }
+
+    func openPick(_: PendingPick, session _: String, window _: String?, follow _: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("pick.open --session"))
     }
 
     func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {

@@ -346,6 +346,8 @@ struct SocketClientTests {
             show_attention              ctrl+shift+i
             dashboard                   cmd+shift+g
             attach_remote               cmd+shift+r
+            open_remote_window          -
+            detached_sessions           -
             edit_flagged_sessions       -
             edit_focused_workspaces     -
 
@@ -678,6 +680,53 @@ struct SocketClientTests {
         ])
         #expect(try JSONSerialization.jsonObject(with: Data(#require(output.first).utf8)) as? [String: String] ==
             ["id": "pick-1"])
+    }
+
+    private func pickRequests(_ arguments: [String], environment: [String: String], headless: Bool?) throws -> [ControlRequest] {
+        var requests: [ControlRequest] = []
+        var version = ControlResult()
+        version.headless = headless
+        try Pick.Open.parse(arguments + ["--no-block"]).execute(
+            input: Data("One\n".utf8),
+            send: { request in
+                requests.append(request)
+                return SocketReply(ControlResponse(ok: true, result: request.cmd == .version ? version : ControlResult(id: "pick-1")))
+            },
+            sleep: { _ in },
+            output: { _ in },
+            environment: environment
+        )
+        return requests
+    }
+
+    private static let items = [ControlPickItem(id: "One", label: "One")]
+
+    @Test func pickSessionTargetsTheSessionWithoutAskingTheServer() throws {
+        let requests = try pickRequests(["--session", "s1"], environment: ["AGTERM_SESSION_ID": "own"], headless: true)
+
+        #expect(requests == [ControlRequest(cmd: .pickOpen, target: "s1", args: ControlArgs(items: Self.items))])
+    }
+
+    @Test func aPaneOnAgtermServerBindsThePickToItsOwnSession() throws {
+        let requests = try pickRequests([], environment: ["AGTERM_SESSION_ID": "own"], headless: true)
+
+        #expect(requests == [
+            ControlRequest(cmd: .version),
+            ControlRequest(cmd: .pickOpen, target: "own", args: ControlArgs(items: Self.items)),
+        ])
+    }
+
+    @Test(arguments: [nil, false] as [Bool?])
+    func aPaneOnTheMacKeepsTheWindowPick(headless: Bool?) throws {
+        let requests = try pickRequests([], environment: ["AGTERM_SESSION_ID": "own"], headless: headless)
+
+        #expect(requests.last == ControlRequest(cmd: .pickOpen, args: ControlArgs(items: Self.items)))
+    }
+
+    @Test func noSessionInTheEnvironmentAsksNothing() throws {
+        let requests = try pickRequests([], environment: [:], headless: true)
+
+        #expect(requests == [ControlRequest(cmd: .pickOpen, args: ControlArgs(items: Self.items))])
     }
 
     @Test func pickBlockPollsWithBackoffPrintsResultAndExitsZero() throws {
@@ -1215,6 +1264,27 @@ struct SocketClientTests {
         #expect(lines[1] == "  * shell  [s2]  /tmp", "only the failing state earns a tag; nil must stay quiet too")
     }
 
+    @Test(arguments: [("pending", "  * shell (pending)  [s4]  /tmp"), ("unknown", "  * shell (outcome unknown)  [s4]  /tmp")])
+    func formatTreeTagsARowsOperationState(_ state: String, _ expected: String) {
+        let session = ControlSessionNode(id: "s4", name: "shell", cwd: "/tmp", active: true, split: false, backedByZmx: nil, pending: state)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w4", name: "work", active: true, sessions: [session])])
+
+        let lines = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree))).split(separator: "\n").map(String.init)
+
+        #expect(lines[1] == expected)
+    }
+
+    @Test func formatTreeCountsTheInteractionsARowHolds() {
+        let held = [ControlInteraction(kind: "ask", id: "a", state: ControlInteraction.unpresented),
+                    ControlInteraction(kind: "page", id: "p", state: ControlInteraction.offered)]
+        let session = ControlSessionNode(id: "s5", name: "shell", cwd: "/tmp", active: true, split: false, backedByZmx: nil, interactions: held)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w5", name: "work", active: true, sessions: [session])])
+
+        let lines = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree))).split(separator: "\n").map(String.init)
+
+        #expect(lines[1] == "  * shell (2 interactions)  [s5]  /tmp")
+    }
+
     @Test func formatTreeShowsScratchTag() {
         let session = ControlSessionNode(id: "s3", name: "shell", cwd: "/tmp", active: true, split: false,
                                          overlay: false, scratch: true)
@@ -1316,6 +1386,50 @@ struct SocketClientTests {
         #expect(format(installed: AppIdentity(version: "0.35.1")) == "0.34.0 (a1b2c3d)\ninstalled: 0.35.1")
     }
 
+    @Test func formatsTheVersionsAHeadlessServerAdvertises() {
+        var result = ControlResult(app: AppIdentity(version: "1.2.3"))
+        result.versions = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1)
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result))
+            == "1.2.3\nserver: 1.2.3, protocol: 1, catalog: 1")
+    }
+
+    @Test(arguments: [
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied, rev: 4), "operation a: applied at rev 4 in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied), "operation a: applied in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .noop), "operation a: no change in epoch e1"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .refused, error: "no such session"),
+         "operation a: refused in epoch e1: no such session"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .fenced), "operation a: fenced in epoch e1, so it will not run"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .unknown), "operation a: outcome unknown in epoch e1; it will not run now"),
+    ])
+    func formatsAReceiptAlone(_ receipt: CatalogReceipt, _ expected: String) {
+        var result = ControlResult()
+        result.receipt = receipt
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result)) == expected)
+    }
+
+    @Test(arguments: [
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .refused, error: "no such session"),
+         "error: operation a: refused in epoch e1: no such session"),
+        (CatalogReceipt(opID: "a", epoch: "e1", outcome: .fenced), "error: operation a: fenced in epoch e1, so it will not run"),
+    ])
+    func aRefusedOrFencedCommandStillNamesItsReceipt(_ receipt: CatalogReceipt, _ expected: String) {
+        var result = ControlResult()
+        result.receipt = receipt
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: false, result: result, error: "ignored")) == expected)
+    }
+
+    @Test func aReceiptFollowsWhatTheCommandPrints() {
+        var result = ControlResult(id: "s1")
+        result.receipt = CatalogReceipt(opID: "a", epoch: "e1", outcome: .applied, rev: 2)
+
+        #expect(SocketClient.formatResponse(ControlResponse(ok: true, result: result), echoID: true)
+            == "s1\noperation a: applied at rev 2 in epoch e1")
+    }
+
     @Test func versionJSONCarriesTheRawResponseWithoutTheClientPath() throws {
         let line = "{\"ok\": true, \"result\": {\"app\": {\"version\": \"0.24.0\", \"commit\": \"a1b2c3d\\u0020\"}}} "
         let server = StubServer(line: Data(line.utf8))
@@ -1328,6 +1442,7 @@ struct SocketClientTests {
         #expect(!String(decoding: run.out, as: UTF8.self).contains("client"))
     }
 
+    #if canImport(Darwin)
     @Test func refusedConnectWithAHeldOwnershipLockReportsThePresentOwner() throws {
         let socket = try RefusedSocket()
         defer { socket.stop() }
@@ -1338,6 +1453,7 @@ struct SocketClientTests {
         #expect(error.description.contains("the socket owner is present but not accepting connections"))
         #expect(error.description.contains("Connection refused"))
     }
+    #endif
 
     @Test func refusedConnectWithAnUnheldOwnershipLockDoesNotClaimTheAppIsGone() throws {
         let socket = try RefusedSocket()
@@ -1360,6 +1476,7 @@ struct SocketClientTests {
         #expect(error.connectErrno == ECONNREFUSED)
     }
 
+    #if canImport(Darwin)
     @Test func aMissingSocketWithAHeldOwnershipLockReportsThePresentOwner() throws {
         let path = NSTemporaryDirectory() + "agterm-unbound-\(UUID().uuidString.prefix(8)).sock"
         let lockPath = ControlResolve.ownershipLockPath(forSocket: path)
@@ -1372,6 +1489,7 @@ struct SocketClientTests {
         #expect(error.description.contains("the socket owner is present but not accepting connections"))
         #expect(error.description.contains("No such file or directory"))
     }
+    #endif
 
     @Test func aMissingSocketWithNoOwnershipLockStaysUncertainAndKeepsItsErrno() throws {
         let path = NSTemporaryDirectory() + "agterm-absent-\(UUID().uuidString.prefix(8)).sock"
@@ -1401,7 +1519,7 @@ private final class RefusedSocket {
 
     init() throws {
         path = NSTemporaryDirectory() + "agterm-refused-\(UUID().uuidString.prefix(8)).sock"
-        fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        fd = socket(AF_UNIX, unixStreamType, 0)
         guard fd >= 0 else { throw SocketClientError("refused socket() failed") }
         unlink(path)
         var addr = sockaddr_un()
@@ -1733,12 +1851,14 @@ private final class ScriptedStubServer: @unchecked Sendable {
     }
 }
 
+#if canImport(Darwin)
+let unixStreamType = SOCK_STREAM
+#else
+let unixStreamType = Int32(SOCK_STREAM.rawValue)
+#endif
+
 private func systemSocket() -> Int32 {
-    #if canImport(Darwin)
-    return socket(AF_UNIX, SOCK_STREAM, 0)
-    #else
-    return socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
-    #endif
+    socket(AF_UNIX, unixStreamType, 0)
 }
 
 private func systemAccept(_ fd: Int32) -> Int32 {

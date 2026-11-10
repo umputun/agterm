@@ -4,7 +4,7 @@ import agtermCore
 extension ControlServer {
     /// markdownFileRefusal checks the file's descriptor on the calling thread, nil when the page can open.
     func markdownFileRefusal(_ path: String) -> ControlResponse? {
-        guard case .failure(let failure) = MarkdownProbe.check(path: path) else { return nil }
+        guard case .failure(let failure) = MarkdownFile.check(path: path) else { return nil }
         return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
     }
 
@@ -14,7 +14,7 @@ extension ControlServer {
         guard canShowLinkOverlay(session: id, forwarded: forward != nil) else { return completion(false) }
         let path = url.path(percentEncoded: false)
         Task { @MainActor [weak self] in
-            let checked = await MarkdownProbe.checkDetached(path: path)
+            let checked = await MarkdownFile.checkDetached(path: path)
             let links = await Task.detached(priority: .userInitiated) { MarkdownPage.linkGrant(for: path) }.value
             guard let self, case .success = checked, canShowLinkOverlay(session: id, forwarded: forward != nil),
                   forwardIsCurrent(forward, session: id), let store = library.store(forSession: id) else { return completion(false) }

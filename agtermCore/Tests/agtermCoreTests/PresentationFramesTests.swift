@@ -64,6 +64,14 @@ struct PresentationFramesTests {
             pane: nil, owner: 3))),
         PresentationFrame(gen: 1, rev: 34, body: .askResolve(PresentationAskAnswer(id: "a2", owner: 3, button: "ok", text: " mine ",
                                                                                    selected: ["a"]))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickRequest(PresentationPick(
+            PendingPick(id: "k1", items: [ControlPickItem(id: "a", label: "A", subtitle: "s")], prompt: "p", query: "q",
+                        allowCustom: true, selection: "a"), owner: 3, follow: true))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3, item: "a"))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3, query: "typed"))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickResolve(PresentationPickAnswer(id: "k1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickRejected(PresentationPickRef(id: "k1", owner: 3))),
+        PresentationFrame(gen: 1, rev: 34, body: .pickDismiss(PresentationPickRef(id: "k1", owner: 3))),
         PresentationFrame(gen: 1, rev: 35, body: .pageRequest(PresentationPage(
             page: "p1", token: "t1", source: .url("https://example.com/review/42?token=abc&x=1#top"), identity: "https://example.com",
             chromeless: false, javascript: true, navigation: true, browse: false, persistent: true, backgroundColor: nil,
@@ -303,6 +311,29 @@ struct PresentationFramesTests {
         let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .hud(hud)))
 
         #expect(line.count <= PresentationCodec.maxFrameBytes)
+    }
+
+    @Test func aPendingBatchWithAChunkOutOfOrderYieldsNothing() throws {
+        let chunks = try PresentationPendingBatch.chunks([.notify(PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024),
+                                                                                    pane: nil, source: "osc"))])
+        var batch = PresentationPendingBatch()
+        batch.add(chunks[1])
+        batch.add(chunks[0])
+
+        #expect(throws: PresentationPendingBatch.Failure.outOfOrder(1)) { try batch.commit() }
+        #expect(try batch.commit().isEmpty)
+    }
+
+    @Test func aForwardedPageSourceSurvivesAFrame() throws {
+        let page = PresentationPage(page: UUID().uuidString, token: "t", source: .forwarded("https://localhost:8443/app"),
+                                    identity: "localhost:8443", chromeless: false, javascript: true, navigation: false,
+                                    browse: false, persistent: false, backgroundColor: nil, pane: nil, sizePercent: nil,
+                                    follow: false)
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .pageRequest(page)))
+
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .pageRequest(page))
+        #expect(!PresentationPageSource.forwarded("http://localhost/").usesChannel)
+        #expect(!PresentationPageSource.forwarded("http://localhost/").isContent)
     }
 
     @Test func aFrameThatWouldEncodeOversizeIsRefused() {

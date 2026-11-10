@@ -110,6 +110,9 @@ struct SessionInfoMarkupTests {
         #expect(rejection("^[ ](dim: true)") == .empty)
         #expect(rejection("a\nb", markdown: false) == .lineBreak)
         #expect(rejection("a&#10;b") == .lineBreak)
+        // regression: a block parser drops a trailing newline and reads `x\n---` as a heading, both one line
+        #expect(rejection("x\n") == .lineBreak)
+        #expect(rejection("x\n---") == .lineBreak)
         #expect(rejection("a\u{2028}b", markdown: false) == .lineBreak)
         #expect(rejection("x &#27;[31m y") == .controlCharacter)
         #expect(rejection("a\tb", markdown: false) == .controlCharacter)

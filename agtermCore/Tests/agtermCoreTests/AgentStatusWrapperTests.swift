@@ -34,8 +34,7 @@ struct AgentStatusWrapperTests {
         printf '%s' '\(stubStdout)'
         exit \(stubExit)
         """
-        try stubScript.write(to: stub, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        try stubScript.writeExecutable(to: stub)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -160,8 +159,7 @@ struct AgentStatusWrapperTests {
         for stub in [onPath, baked, explicit] {
             try fm.createDirectory(at: stub.deletingLastPathComponent(), withIntermediateDirectories: true)
             try "#!/bin/bash\nprintf '%s\\n' \"$0\" \"$@\" > '\(record.path)'\n"
-                .write(to: stub, atomically: true, encoding: .utf8)
-            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+                .writeExecutable(to: stub)
         }
         if !bakedToolExists { try fm.removeItem(at: baked) }
 

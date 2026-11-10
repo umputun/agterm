@@ -21,6 +21,17 @@ struct PickTests {
         #expect(controller.result(for: pick.id) == outcome)
     }
 
+    @Test func aPickAnsweredPastItsDeadlineResolvesCancelled() {
+        let controller = PickController()
+        var pick = makePick(id: "late")
+        pick.deadline = Date().addingTimeInterval(-1)
+        #expect(controller.open(pick))
+
+        controller.resolve(ControlPickResult(result: .picked, id: "one", label: "One", index: 0))
+
+        #expect(controller.result(for: "late") == ControlPickResult(result: .cancelled))
+    }
+
     @Test func pendingModalErrorNamesTheCurrentOwner() {
         let controller = PickController()
         #expect(controller.pendingModalError == nil)

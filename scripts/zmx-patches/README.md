@@ -3,7 +3,9 @@
 `scripts/setup.sh` applies every `*.patch` here, in name order, to a fresh checkout of `ZMX_REV` before
 building, and every `ghostty/*.patch` to a private checkout of the ghostty revision that `ZMX_REV` pins
 in its `build.zig.zon`. The digest of both sets is part of `.zmx-build-stamp`, so editing one rebuilds
-zmx. A daemon already running keeps the zmx it was started by.
+zmx. A daemon already running keeps the zmx it was started by. `scripts/setup-zmx-linux.sh` builds the same
+patched tree for `aarch64-linux-musl` and `x86_64-linux-musl`, the zmx agterm-server runs, each under its own
+stamp in `build/linux/<arch>/`, so a patch has to build for Linux as well as macOS.
 
 Each patch is a plain `diff -ruN` against a pristine copy of the tree it patches, made so `git apply`
 takes it with `-p1`: the zmx patches against `ZMX_REV`, the `ghostty/` ones against the ghostty revision
@@ -37,6 +39,12 @@ longer apply, and re-running `check.py`.
   on every attach exit, which erases a Live `--command --wait` pane's output under its hold prompt. A client
   with a valid `ZMX_MANAGED` instead turns off the input reports a program may have left on and resets SGR
   and the OSC colors. An unmanaged client and a session switch still write RIS.
+- `0005-detached-create.patch` lets agterm-server start a pane with no terminal. `attach --detached NAME
+  [command...]` creates the session as an attach would and returns, refusing a session that already answers;
+  upstream `run` cannot do it, since it always starts bash and types the command into it. With
+  `ZMX_EXIT_FILE` set, a session whose shell exits writes `exited` to that path, atomically, before its socket
+  goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
+  upstream does. A killed session writes nothing, and the shell never sees the variable.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program

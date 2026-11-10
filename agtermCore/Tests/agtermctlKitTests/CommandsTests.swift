@@ -427,6 +427,22 @@ struct CommandsTests {
         #expect(try request(["session", "scratch", "off"]) == expected)
     }
 
+    @Test func sessionScratchCarriesTheExpectedScratchWithAnOperation() throws {
+        let identity = UUID().uuidString
+        let args = try request(["session", "scratch", "on", "--command", "htop", "--op-id", "op-1", "--epoch", "e1",
+                                "--expect-scratch", identity]).args
+
+        #expect(args?.scratch == identity)
+        #expect(args?.opID == "op-1")
+        #expect(args?.epoch == "e1")
+        #expect(try request(["session", "scratch", "on", "--op-id", "op-1", "--epoch", "e1", "--expect-scratch", "none"]).args?.scratch == "none")
+    }
+
+    @Test(arguments: [["--expect-scratch", "none"], ["--expect-scratch", "nope", "--op-id", "op-1", "--epoch", "e1"]])
+    func sessionScratchRefusesAnExpectedScratchItCannotSend(_ flags: [String]) {
+        #expect(throws: (any Error).self) { try request(["session", "scratch", "on"] + flags) }
+    }
+
     @Test func sessionFocusDefaultsOther() throws {
         let expected = ControlRequest(cmd: .sessionFocus, target: "active", args: ControlArgs(pane: "other"))
         #expect(try request(["session", "focus"]) == expected)
@@ -1503,10 +1519,9 @@ struct CommandsTests {
             ControlRequest(cmd: .pickCancel, target: "pick-1", args: ControlArgs(window: "w1")))
     }
 
-    @Test func pickOpenHasNoTimeoutOption() {
-        #expect(throws: (any Error).self) {
-            try Agtermctl.parseAsRoot(["pick", "--timeout", "60"])
-        }
+    @Test func pickOpenTakesATimeoutFromTheRoot() throws {
+        let command = try #require(try Agtermctl.parseAsRoot(["pick", "--timeout", "60"]) as? Pick.Open)
+        #expect(try command.makeRequest(input: Data("a\n".utf8)).args?.timeout == 60)
     }
 
     // MARK: - dashboard
@@ -1815,11 +1830,43 @@ struct CommandsTests {
         #expect(command.options.socketPath(env: env) == "/tmp/state/agterm.sock")
     }
 
+    #if os(Linux)
+    @Test func socketPathFallsBackToHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x"]
+        #expect(command.options.socketPath(env: env) == "/home/x/.local/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathUsesAbsoluteXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/var/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathIgnoresRelativeXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/home/x", "XDG_STATE_HOME": "state"]
+        #expect(command.options.socketPath(env: env) == "/home/x/.local/state/agterm/agterm.sock")
+    }
+
+    @Test func socketPathStateDirOverXdgStateHome() throws {
+        let command = try Tree.parse([])
+        let env = ["AGTERM_STATE_DIR": "/tmp/state", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/tmp/state/agterm.sock")
+    }
+    #else
     @Test func socketPathFallsBackToHome() throws {
         let command = try Tree.parse([])
         let env = ["HOME": "/Users/x"]
         #expect(command.options.socketPath(env: env) == "/Users/x/Library/Application Support/agterm/agterm.sock")
     }
+
+    @Test func socketPathIgnoresXdgStateHomeOnMac() throws {
+        let command = try Tree.parse([])
+        let env = ["HOME": "/Users/x", "XDG_STATE_HOME": "/var/state"]
+        #expect(command.options.socketPath(env: env) == "/Users/x/Library/Application Support/agterm/agterm.sock")
+    }
+    #endif
 
     @Test func socketPathFallsBackToTmpWithoutHome() throws {
         let command = try Tree.parse([])

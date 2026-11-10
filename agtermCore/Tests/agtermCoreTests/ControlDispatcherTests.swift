@@ -1791,6 +1791,23 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func windowRemoteOpenPassesATrimmedHostAndRefusesOneSshCannotTake() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextWindowRemoteOpenResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+
+        let opened = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: " buildbox ")))
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen))
+        let option = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: "-oProxyCommand=x")))
+        let spaced = await dispatcher.dispatch(ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: "a b")))
+
+        #expect(opened == ControlResponse(ok: true, result: ControlResult(id: "win")))
+        #expect(missing?.error == "window.remote.open requires a host")
+        #expect(option?.error == "window.remote.open: not a host ssh can be given")
+        #expect(spaced?.error == "window.remote.open: not a host ssh can be given")
+        #expect(actions.calls == [.windowRemoteOpen(host: "buildbox")])
+    }
+
     @Test func windowCommandsRejectInvalidInputsBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

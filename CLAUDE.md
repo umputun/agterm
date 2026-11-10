@@ -112,6 +112,9 @@ C-boundary concurrency before changing the bridge.
   via `-only-testing:<Target>/<Class>/<test>`. Never re-run a whole XCUITest suite to verify a narrow
   change; `agtermUITests/ControlAPIUITests` alone is 82 methods and about 7.5 minutes, and tells you
   nothing the targeted run did not.
+- The app build's Bundle helper executables phase runs `swift build` on `agtermCore/.build`, so any SwiftPM
+  process holding that directory (a hung `swift test` included) stalls `xcodebuild` there with no output;
+  check `ps` for one before reading a quiet build as compiling.
 - **An XCUITest run started from a shell inside a live agterm window can die at runner init** with
   `Failed to initialize for UI testing ... Timed out while enabling automation mode` after 60s, before any
   test case runs. The block is at runner initialization, so app code under test cannot reach it; it is not

@@ -4,7 +4,11 @@ import agtermCore
 extension ControlServer {
     /// installRemoteLinkClicks points the link opener's forward and refuse hooks at this server.
     func installRemoteLinkClicks() {
-        LinkOpener.shared.forward = { [weak self] click in self?.forwardRemoteLinkClick(click) ?? .notOpened }
+        // optional chaining would fold a sent click's nil into the missing-server case
+        LinkOpener.shared.forward = { [weak self] click in
+            guard let self else { return .notOpened }
+            return forwardRemoteLinkClick(click)
+        }
         LinkOpener.shared.refuse = { [weak self] session, reason in self?.refuseRemoteLinkClick(reason, session: session) }
     }
 

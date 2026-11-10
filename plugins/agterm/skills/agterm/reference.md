@@ -166,9 +166,10 @@ dead responsible process, and `unknown` an unavailable reading or an unrelated l
 omitted for non-Live and remote panes; the split field includes hidden splits and is omitted without a
 split; these describe attribution, not permission grants),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
-local session, and never present after a relaunch because a remote session is never written to disk),
+local session; a remote row is never written to disk, so a per-session attach is gone after a relaunch, while a
+remote window rebuilds its rows from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
-the id `zmx attach` takes; omitted for a local session),
+the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
 origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
@@ -1520,6 +1521,43 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 
+## remote server
+
+A remote window mirrors agterm-server's catalog on a Linux host (docs: agterm.com/docs#remote-server). The
+window commands run on the Mac; `catalog` is served only by agterm-server.
+
+- `window remote open HOST`: open a window mirroring HOST's agterm-server (an ssh destination), or raise
+  the one already showing it; prints the window id. The window's node in `tree` and `window list` carries
+  `remote`: `host`, `catalogID`, `state` (`connecting`, `connected`, `disconnected`, `refused`, with
+  `reason` for the last two; omitted for a closed window), `detachedSessions`, `detachedWorkspaces` and
+  `operations` (`{id, action, session?, workspace?, state}` for an action still on its way or whose outcome
+  was lost), each omitted when empty. Its session rows add `ended` (the server lost the primary and split panes; a
+  scratch may still run),
+  `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon).
+- `window remote dismiss [ID]`: drop the marks for actions whose outcome was lost; it neither undoes nor
+  resends them. The window settles a mark through `catalog op` by itself when the server still knows it.
+- `session detach [--target T ...]` / `workspace detach [--target T]`: hide a remote window's rows on this
+  Mac, leaving them running on the server; a parent takes its companions. `session close` ends them instead.
+- `session reattach --target ID` / `workspace reattach --target ID`: show a detached row again; ID as
+  `remote.detachedSessions` / `detachedWorkspaces` list it (`active` and an ended session are refused;
+  `session close` removes an ended one).
+- `catalog subscribe`: the stream a remote window runs over ssh; not for use by hand.
+- `catalog op OPID [--epoch E --rev N]`: what became of an operation id: `applied` (with its revision),
+  `noop`, `refused` (with the error), `fenced` or `unknown`; an id the server does not hold is recorded so
+  the command is refused if it arrives later.
+- Operation ids: the session and workspace structure commands take `--op-id ID --epoch E`; the server keeps
+  the last 512 receipts, so the same id within them is not run twice, and answers `result.receipt` `{opID, epoch, outcome, rev?, error?}`; `--expect-panes ID,ID` and `session
+  scratch --expect-scratch ID|none` refuse a target that changed; all need `--op-id`. A Mac app refuses an
+  operation id.
+- On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available
+  on agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap,
+  quick, dashboard, zoom and more; `window list` and the presenter bridges `zmx present`, `run-job` and
+  `page-serve` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick
+  needs a session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held
+  until a Mac presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an
+  ask or pick ends unanswered, at its `--timeout`. `version` adds `headless: true` and
+  `versions`.
+
 ## surface
 
 `agtermctl surface zoom [show|hide|toggle] [--target SURFACE_ID|active|quick] [--window W]` — zoom one
@@ -1629,10 +1667,12 @@ Invalid invocations error (rejected at the CLI and re-checked server-side): `--f
 
 ## pick
 
-`agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--follow] [--window W] [--no-block]`
+`agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--session S] [--timeout SECONDS] [--follow] [--window W] [--no-block]`
 reads choices from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open
 subcommand, so `agtermctl pick open` is not required. Stdin is read unconditionally, so a call that supplies
-no items needs `< /dev/null` or it blocks.
+no items needs `< /dev/null` or it blocks. `--session S` binds the picker to a session, so it shows wherever
+that session is presented, a remote window included, and reads back as `pick` on the session row.
+`--timeout SECONDS` (at most 86400) cancels it unanswered after that long.
 
 The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
 `id` and `label` strings plus an optional `subtitle` and an optional trailing status glyph: `status`
@@ -1702,6 +1742,7 @@ precedence over the role, and the pane must be laid out by its session at open.
 terminal area, excluding the sidebar. An explicit GUI target must be selected in its window;
 GUI pane selectors require it. Terminal asks can coexist with GUI asks and picks.
 `--window W` selects the window; `--follow` raises it without changing session selection.
+`--timeout SECONDS` (at most 86400) cancels the dialog unanswered after that long.
 
 Supply one to six buttons with unique ids and nonempty labels; a question with a field or a list may omit
 them. A token without `=` is both id and label;
@@ -2587,6 +2628,25 @@ the signal when ssh was killed), and 64 for a usage error. Failures before the c
   by `ssh exited 3; xterm-ghostty was not installed`.
 - `ssh exited N; xterm-ghostty was not installed` — any other remote failure; ssh's own stderr above it
   says what happened.
+
+## server
+
+`agtermctl server install DESTINATION [--from FILE] [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]` — macOS only: install or
+upgrade agterm-server on a Linux host. Local-only like `terminfo install`, with the same `DESTINATION`, the
+same four ssh options, the same installer-owned execution settings and the same interactive connection.
+
+- It installs the release matching the app bundle this `agtermctl` belongs to: `uname -m` on the host picks
+  `aarch64` or `x86_64`, the tarball comes from that version's GitHub release, and no archive bytes are
+  sent to the host until its sha256 matches the line in the bundle's `Contents/Resources/agterm-server.sha256`.
+- The tarball unpacks into `~/.local/lib/agterm-server` by rename, so a running server keeps its binary,
+  then its `install.sh` sets up the systemd user service, lingering and the agent hooks.
+- `--from FILE` uses a tarball already on this Mac instead of downloading one: its bytes are read once into a private
+  file, and that copy must match the same sha256 line for the host's architecture.
+- A CLI with no checksum file (a development build, or a copy outside the app) is refused;
+  `scripts/install-server.sh HOST` installs from a checkout.
+- Installation outcomes: exit 0 installed (`installed agterm-server VERSION on DESTINATION`), 3 installed with
+  the agent hooks incomplete, 1 for any refusal or failure with the reason on stderr. A usage error keeps the
+  parser's own exit code.
 
 ## version
 

@@ -8,6 +8,7 @@ extension AppActions {
     func closeSessions(_ ids: [UUID], in store: AppStore) {
         let sessions = ids.compactMap { store.session(withID: $0) }
         guard !sessions.isEmpty else { return }
+        if closeRemote(sessions.map(\.id), in: store) { return }
         if sessions.count == 1 {
             closeSession(sessions[0].id, in: store)
             return

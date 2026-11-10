@@ -209,8 +209,10 @@
             <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">restore</a>
             <a href="#recent" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">recent</a>
             <a href="#zmx" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">zmx</a>
+            <a href="#remote" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">remote server</a>
             <a href="#clipboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">clipboard</a>
             <a href="#terminfo" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">terminfo</a>
+            <a href="#server" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">server</a>
             <a href="#version" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">version</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
@@ -570,9 +572,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> (the machine an attached session
                 came from, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach</span>; omitted for a
-                local session, and never present after a relaunch because a remote session is not persisted),
+                local session; a remote row is not persisted, so a per-session attach is gone after a relaunch, while a remote window rebuilds its rows from the server's catalog),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span> (the origin's id for the session an attached row shows, the id
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes; omitted for a local session),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes; on a remote window's row it equals the row's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; omitted for a local session),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (on an attached session only:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connecting</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unsupported</span> or
@@ -3193,7 +3195,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--follow] [--window W] [--no-block]
+                agtermctl pick [--prompt TEXT] [--query TEXT] [--select ID] [--allow-custom] [--session S] [--timeout SECONDS] [--follow] [--window W] [--no-block]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -3236,6 +3238,9 @@
                 <strong style="color: #bfbab0">Tree read-back:</strong> the target tree's top-level
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> carries the returned picker id
                 while it waits and is omitted after resolution.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--session S</span> binds the picker to a session, so it shows wherever that session is presented, a remote window included; the session row reports it as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>. On agterm-server a pane's own session is used when <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--session</span> is omitted. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--timeout SECONDS</span> cancels the picker unanswered after that long, at most 86400; otherwise <span style="font-family: &quot;JetBrains Mono&quot;, monospace">timeout must be more than 0 and at most 86400 seconds</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Errors:</strong>
@@ -3325,7 +3330,7 @@
                 [--hotkey ID=LETTER ...] [--default ID] [--destructive ID] [--cancel ID] [--style terminal|gui] [--align left|center|right] [--width N]
                 [--input line|multiline [--value TEXT] [--placeholder TEXT]]
                 [--choice ID=LABEL ... [--choice-subtitle ID=TEXT ...] [--multiple] [--checked ID ...] [--other PLACEHOLDER]]
-                [--target T] [--pane left|right] [--pane-id TOKEN] [--window W] [--follow] [--no-block]
+                [--target T] [--pane left|right] [--pane-id TOKEN] [--window W] [--timeout SECONDS] [--follow] [--no-block]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">ask.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -3404,6 +3409,9 @@
                 be selected in its window, and GUI pane selectors require it. Anchored GUI opens under zoom or dashboard are rejected.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises the owning window without
                 changing session selection. Resize, pane swaps, and survivor promotion preserve terminal pane identity.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--timeout SECONDS</span> cancels the dialog unanswered after that long, at most 86400. On agterm-server an ask waits for a Mac presenting its session, and a session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">interactions</span> in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> list what it holds for one: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{kind, id, state, deadline?}</span> with kind <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">page</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">job</span> and state <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unpresented</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">offered</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">claimed</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A terminal ask takes keys only in its focused session or pane and leaves the rest of the window usable.
@@ -4471,6 +4479,113 @@
             </div>
           </section>
 
+          <section id="remote" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              remote server
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              A remote window mirrors the catalog of agterm-server on a Linux host
+              (<a href="/docs#remote-server" style="color: #6d82f3">Remote server</a>). The window commands below run on the
+              Mac; the catalog commands are served only by agterm-server.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl window remote open HOST
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.remote.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Open a window mirroring HOST's agterm-server, or raise the one already showing it. HOST is an ssh destination. Prints the window id.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The window's node in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window list</span> carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span>: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">catalogID</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">state</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">connecting</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">connected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">disconnected</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">refused</span>, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reason</span> for the last two; omitted for a closed window), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">detachedSessions</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">detachedWorkspaces</span> (ids hidden here and still running on the server), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">operations</span>, each <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id, action, session?, workspace?, state}</span> for an action still on its way or whose outcome was lost. Each list is omitted when empty. Its session rows add <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ended</span> (the server lost the primary and split panes; a scratch may still run), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span> (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span>) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratchBacked</span> (the scratch is the server's daemon), each omitted otherwise.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl window remote dismiss [ID]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.remote.dismiss</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Drop a remote window's marks for actions whose outcome it could not learn. It neither undoes nor resends them. ID defaults to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session detach [--target T ...] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.detach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Hide a remote window's sessions on this Mac and leave them running on the server. A parent takes its companions with it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session close</span> ends a session instead.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session reattach --target ID [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.reattach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show a detached session of a remote window again. ID is the detached id or a unique prefix, as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.detachedSessions</span> lists it; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> and an ended session are refused, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session close</span> removes an ended one.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace detach [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.detach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Hide a remote window's workspace and its sessions on this Mac, leaving them running on the server.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace reattach --target ID [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.reattach</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show a detached workspace again; ID as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote.detachedWorkspaces</span> lists it.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl catalog subscribe
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">catalog.subscribe</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Carry the catalog stream between stdin and stdout and agterm-server. A remote window runs it over ssh; it is not meant to be run by hand.
+              </p>
+            </div>
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl catalog op OPID [--epoch E --rev N]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">catalog.op</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Ask agterm-server what became of an operation id: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">applied</span> (with the revision it reached), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">noop</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">refused</span> (with the error), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fenced</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span>. An id it does not hold is recorded, so a command still on its way with that id is refused when it arrives.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--epoch</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--rev</span> go together and name the catalog state the operation was sent at; with them, a miss the table may have dropped since then reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> rather than <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fenced</span>. An operation id is 1 to 128 letters, digits, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">.</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">_</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">:</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">-</span>.
+              </p>
+            </div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Operation ids.</strong> <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rename</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">move</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">swap</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">companion new</span>, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspace new</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">rename</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">delete</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">move</span>, take <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--op-id ID --epoch E</span>. agterm-server keeps the last 512 receipts, so the same id sent again within them is not run twice, and answers with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.receipt</span> <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{opID, epoch, outcome, rev?, error?}</span>, printed as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">operation ID: applied at rev N in epoch E</span>. A command sent at another epoch is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the catalog is at epoch E; take its snapshot and send the command again</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--expect-panes ID,ID</span> refuses the command unless the target session still has those panes, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session scratch</span> takes <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--expect-scratch ID|none</span> the same way; both need <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--op-id</span>. A Mac app refuses every operation id with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">operation receipts are served only by agterm-server</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">On agterm-server.</strong> It serves <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window list</span>, the session and workspace structure commands above plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session companion new</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">type</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">context</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hud</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay open|close|resize|result|reload|navigate|submit|hide|show|toggle</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx tree</span> and the catalog commands, plus the bridges a presenting Mac runs (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx present</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay run-job</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">page-serve</span>). Every other command is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">NAME is not available on agterm-server</span>, and one that drives a window on the Mac adds <span style="font-family: &quot;JetBrains Mono&quot;, monospace">: it drives a window on the Mac showing it</span>. It has one window, the catalog: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> takes that id or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session companion new</span> refuse <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span>; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask open --style gui</span> needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>, while a terminal ask uses the active session; a pick needs a session, from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--session</span> or the calling pane's own. An overlay or page opened with no Mac presenting the session is held until one does, as an ask is. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span> adds <span style="font-family: &quot;JetBrains Mono&quot;, monospace">headless: true</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">versions</span> <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{server, protocol, catalog}</span>.
+              </p>
+          </section>
+
           <section id="clipboard" style="scroll-margin-top: 88px; padding-top: 56px">
             <h2
               style="
@@ -4540,6 +4655,41 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The remote needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tic</span>, which comes with ncurses, and says so when it is missing. Exits with ssh's status; a failure before the connection, such as no entry next to this <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>, is reported without opening one.
+              </p>
+            </div>
+          </section>
+
+          <section id="server" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              server
+            </h2>
+
+            <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 0 0 12px">
+              Local-only and macOS-only: this group runs ssh and a download on the Mac, never opens the control socket, and needs no running agterm.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl server install DESTINATION [--from FILE] [-p PORT] [-i FILE ...] [-J HOST] [-F FILE]
+              </div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Install or upgrade <a href="/docs#remote-server" style="color: #6d82f3">agterm-server</a> on a Linux host. It asks the host for its architecture (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">aarch64</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">x86_64</span>), downloads the release tarball matching this app's version from GitHub, and refuses it unless its sha256 matches the one the app was built with. Only then does it unpack the tarball into <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.local/lib/agterm-server</span> and run its installer, which sets up the systemd user service, lingering and the agent hooks. Running it again upgrades in place while every pane keeps running.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">DESTINATION</span> and the four options are what <a href="#terminfo" style="color: #6d82f3">terminfo install</a> takes, with the same interactive connection and the same installer-owned execution settings. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--from FILE</span> uses a tarball already on this Mac instead of downloading one, for a Mac without GitHub access or a tarball you fetched and checked yourself; it must still match the sha256 this app was built with for the host's architecture. A development build has no release to install and is refused; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scripts/install-server.sh</span> installs from a checkout.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Exits 0 when installed, 3 when installed but the agent hooks are incomplete, and 1 on installation failure, with the reason on stderr.
               </p>
             </div>
           </section>

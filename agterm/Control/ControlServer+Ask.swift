@@ -4,6 +4,23 @@ import agtermCore
 extension ControlServer {
     func openAsk(_ ask: PendingAsk, target: String?, window: String?,
                  placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
+        timed(openAskNow(ask, target: target, window: window, placement: placement, follow: follow), deadline: ask.deadline) { [weak self] in
+            _ = self?.cancelAsk(ask.id, window: nil)
+        }
+    }
+
+    /// timed ends an ask or pick that opened at its `--timeout` deadline, through `cancel`, when it is still pending.
+    func timed(_ response: ControlResponse, deadline: Date?, cancel: @escaping @MainActor () -> Void) -> ControlResponse {
+        guard response.ok, let deadline else { return response }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(max(deadline.timeIntervalSinceNow, 0) * 1_000_000_000))
+            cancel()
+        }
+        return response
+    }
+
+    private func openAskNow(_ ask: PendingAsk, target: String?, window: String?,
+                            placement: ControlAskPlacement, follow: Bool) -> ControlResponse {
         if ask.style == .terminal {
             return resolver.resolveSession(target, window: window) { store, id in
                 presentTerminalAsk(ask, in: store, sessionID: id, placement: placement, follow: follow)
@@ -40,7 +57,7 @@ extension ControlServer {
                   DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true else {
                 return ControlResponse(ok: false, error: "session not visible")
             }
-            switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+            switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                         requireVisible: true, invalidPaneError: "ask pane must be left or right") {
             case let .resolved(identity, pane):
                 anchor = AskAnchor(sessionID: sessionID, pane: pane, paneIdentity: identity)
@@ -73,7 +90,7 @@ extension ControlServer {
         }
         let identity: UUID?
         let pane: OverlayPane?
-        switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+        switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                     requireVisible: true, invalidPaneError: "ask pane must be left or right") {
         case let .resolved(resolvedIdentity, resolvedPane):
             identity = resolvedIdentity
@@ -98,7 +115,7 @@ extension ControlServer {
               let session = store.session(withID: sessionID), let windowID = library.windowID(for: store) else {
             return nil
         }
-        switch resolvePanePlacement(placement.pane, paneID: placement.paneID, in: session,
+        switch session.panePlacement(placement.pane, paneID: placement.paneID,
                                     requireVisible: false, invalidPaneError: "ask pane must be left or right") {
         case let .resolved(identity, pane):
             guard let opened = store.presentAskRemotely(ask, in: session, paneIdentity: identity, window: windowID) else {
@@ -155,6 +172,10 @@ extension ControlServer {
             store.resolveRemoteAsk(answer, forSession: sessionID)
         case .askRejected(let ref) where store.isPresentingRemotely(ref, forSession: sessionID):
             takeBackRemoteAsk(forSession: sessionID)
+        case .pickResolve(let answer):
+            SessionPickBook.shared.resolveRemote(answer, session: sessionID)
+        case .pickRejected(let ref):
+            takeBackRemotePick(forSession: sessionID, refused: ref)
         case .overlayRejected(let change):
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):

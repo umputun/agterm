@@ -341,6 +341,7 @@ struct HudHelperTests {
         #expect(run.running)
     }
 
+    #if canImport(Darwin)
     // the blink's off frame is a NO-BREAK SPACE, which the header's word splitting keeps and which still
     // occupies the glyph's column: a real space would be swallowed and the message would jump two columns
     // left on every other frame.
@@ -351,6 +352,7 @@ struct HudHelperTests {
         #expect(run.paints("\(Self.esc)[17C● busy"))
         #expect(run.paints("\(Self.esc)[17C\u{00A0} busy"))
     }
+    #endif
 
     @Test func theHeadersTextColorIsEmittedBeforeTheFrame() throws {
         let run = try Run("busy\n", cols: 40, rows: 7, textColor: "38;2;126;192;126")
@@ -452,6 +454,7 @@ struct HudHelperTests {
         #expect(run.running)
     }
 
+    #if canImport(Darwin)
     // `${#line}` counts BYTES outside a UTF-8 locale, and the app sized the box in characters: under the
     // locale-less environment a Dock-launched app inherits, an unfixed script centers "…" three columns off.
     @Test func centersANonAsciiMessageByCharactersNotBytes() throws {
@@ -461,7 +464,9 @@ struct HudHelperTests {
         let frame = "\(Self.esc)[15Ca message …"
         #expect(run.paints(frame))
     }
+    #endif
 
+    #if canImport(Darwin)
     // the two halves must count the same unit: `${#line}` counts CODE POINTS, `String.count` counts grapheme
     // clusters, and an accented word is where they part. macOS hands paths back decomposed, so `HudLayout`
     // precomposes and measures in `cellCount`; centering the bytes it actually wrote is what proves both.
@@ -476,6 +481,7 @@ struct HudHelperTests {
         let frame = "\(Self.esc)[\(left)C\(lines[0])"
         #expect(run.paints(frame))
     }
+    #endif
 
     // every write wakes the app's renderer, so a settled panel must go quiet rather than repaint at 2 Hz
     @Test func stopsWritingOnceASpinnerlessFrameIsSettled() throws {

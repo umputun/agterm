@@ -137,14 +137,64 @@ final class SidebarRowViewsTests: XCTestCase {
         XCTAssertEqual(try renderedIcon(forSession: remote.id), coordinator.remoteSplitSessionIcon)
     }
 
-    func testAFlaggedRemoteRowKeepsTheUnsplitWeight() throws {
+    func testAFlaggedRemoteRowFillsItsCloudAndKeepsTheUnsplitWeight() throws {
         let store = try XCTUnwrap(library.activeStore)
         let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
         remote.flagged = true
         buildSidebar(for: store)
 
-        XCTAssertEqual(try renderedIcon(forSession: remote.id), coordinator.remoteSessionIcon,
-                       "on a remote row the weight carries split, so flagging must not claim it")
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), try XCTUnwrap(coordinator.flaggedRemoteSessionIcon))
+    }
+
+    func testAFlaggedRemoteRowWithAHiddenSplitFillsTheSplitWeight() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        store.toggleSplit(remote.id)
+        store.toggleSplit(remote.id)
+        remote.flagged = true
+        buildSidebar(for: store)
+
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), try XCTUnwrap(coordinator.flaggedRemoteSplitSessionIcon))
+    }
+
+    func testAFlaggedEndedRemoteRowFillsItsSlashedCloud() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        remote.ended = true
+        remote.flagged = true
+        buildSidebar(for: store)
+
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), try XCTUnwrap(coordinator.flaggedRemoteDisconnectedSessionIcon))
+    }
+
+    func testFlaggingAndUnflaggingARemoteRowRedrawsItsCloud() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let live = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        let ended = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/b", remoteHost: "buildbox"))
+        ended.ended = true
+        store.toggleSplit(ended.id)
+        store.toggleSplit(ended.id)
+        buildSidebar(for: store)
+
+        store.setFlag(true, forSessions: [live.id, ended.id])
+        coordinator.reconcile()
+        XCTAssertEqual(try renderedIcon(forSession: live.id), try XCTUnwrap(coordinator.flaggedRemoteSessionIcon))
+        XCTAssertEqual(try renderedIcon(forSession: ended.id), try XCTUnwrap(coordinator.flaggedRemoteDisconnectedSplitSessionIcon))
+
+        store.setFlag(false, forSessions: [live.id, ended.id])
+        coordinator.reconcile()
+        XCTAssertEqual(try renderedIcon(forSession: live.id), try XCTUnwrap(coordinator.remoteSessionIcon))
+        XCTAssertEqual(try renderedIcon(forSession: ended.id), try XCTUnwrap(coordinator.remoteDisconnectedSplitSessionIcon))
+    }
+
+    func testTheFlatFlaggedViewLeavesAFlaggedRemoteCloudUnfilled() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        remote.flagged = true
+        store.setSidebarMode(.flagged)
+        buildSidebar(for: store)
+
+        XCTAssertEqual(try renderedIcon(forSession: remote.id), try XCTUnwrap(coordinator.remoteSessionIcon))
     }
 
     func testHiddenSessionIconsGiveTheSlotToTheNameAndLeaveWorkspaceIcons() throws {

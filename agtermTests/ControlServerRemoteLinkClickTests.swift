@@ -77,6 +77,20 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         XCTAssertEqual(fix.transport.clicks, [PresentationLinkClick(raw: "src/a.py:3", pane: Self.remoteLeft, mode: .overlay75)])
     }
 
+    // regression: the installed hook turned every sent click into notOpened, which flashed an empty refusal panel
+    func testAClickSentThroughTheInstalledHookIsNotRefused() throws {
+        let fix = try connected()
+        let (forward, refuse) = (LinkOpener.shared.forward, LinkOpener.shared.refuse)
+        defer { (LinkOpener.shared.forward, LinkOpener.shared.refuse) = (forward, refuse) }
+        fix.server.installRemoteLinkClicks()
+
+        let refusal = LinkOpener.shared.forward(click(fix.session, pane: fix.session.paneIdentity))
+
+        XCTAssertNil(refusal)
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+        XCTAssertFalse(fix.session.hudActive)
+    }
+
     func testAClickThatCannotTravelSendsNothing() throws {
         let old = try connected(kinds: [])
         XCTAssertEqual(old.server.forwardRemoteLinkClick(click(old.session, pane: old.session.paneIdentity)), .originTooOld)

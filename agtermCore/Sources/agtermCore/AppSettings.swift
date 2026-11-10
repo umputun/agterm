@@ -684,6 +684,18 @@ public struct AppSettings: Codable, Equatable, Sendable {
         }
     }
 
+    /// remoteNewSessionCwd is the directory a new session in a remote window asks its server for, nil for the
+    /// server's default: the current row's directory and a custom directory are sent as they are, and home is the
+    /// server account's own.
+    public func remoteNewSessionCwd(currentSessionCwd: String?) -> String? {
+        let cwd: String? = switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
+        case .home: nil
+        case .currentSession: currentSessionCwd
+        case .custom: newSessionCustomDirectory
+        }
+        return cwd?.isEmpty == false ? cwd : nil
+    }
+
     /// The SwiftUI overlay opacity for an inactive-pane mute strength, clamped and scaled by 0.08 (the
     /// default 5 → 0.4). The overlay is the terminal background color, so a higher opacity blends the
     /// pane's text further toward the background while leaving background pixels unchanged.

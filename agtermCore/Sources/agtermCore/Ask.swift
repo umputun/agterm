@@ -221,6 +221,11 @@ public struct PendingAsk: Equatable, Sendable {
     public let form: AskForm?
     /// cancelID identifies the button that resolves `escaped`, as Esc does.
     public let cancelID: String?
+    /// deadline is when the origin cancels the ask unanswered (`--timeout`); nil waits for an answer.
+    public var deadline: Date?
+
+    /// expired reports whether the deadline passed by `now`; an answer then resolves cancelled.
+    public func expired(at now: Date) -> Bool { deadline.map { $0 <= now } ?? false }
 
     public init(id: String, title: String, message: String? = nil, buttons: [ControlAskButton],
                 defaultID: String? = nil, destructiveID: String? = nil, style: ControlAskStyle = .terminal, align: ControlAskAlignment = .right,
@@ -291,9 +296,11 @@ public struct PendingAsk: Equatable, Sendable {
 
     /// The same dialog anchored at `anchor`, everything else kept.
     public func anchored(at anchor: AskAnchor?) -> PendingAsk {
-        PendingAsk(id: id, title: title, message: message, buttons: buttons, defaultID: defaultID,
-                   destructiveID: destructiveID, style: style, align: align, width: width, anchor: anchor,
-                   form: form, cancelID: cancelID)
+        var copy = PendingAsk(id: id, title: title, message: message, buttons: buttons, defaultID: defaultID,
+                              destructiveID: destructiveID, style: style, align: align, width: width, anchor: anchor,
+                              form: form, cancelID: cancelID)
+        copy.deadline = deadline
+        return copy
     }
 }
 

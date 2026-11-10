@@ -126,6 +126,21 @@ final class CustomCommandRunnerTests: XCTestCase {
         @objc func menuAction(_ sender: NSMenuItem) { count += 1 }
     }
 
+    func testTokensInARemoteWindowNameTheServerSessionHostAndScratch() throws {
+        let fixture = try fixture()
+        let workspace = try XCTUnwrap(fixture.store.workspaces.first?.id)
+        let session = try XCTUnwrap(fixture.store.addSession(toWorkspace: workspace, cwd: "/srv", remoteHost: "box"))
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: false)
+
+        let left = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .left)
+        let scratchContext = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .scratch)
+
+        XCTAssertEqual(left.sessionID, session.id.uuidString)
+        XCTAssertEqual(left.sessionHost, "box")
+        XCTAssertEqual(scratchContext.paneID, scratch.uuidString)
+    }
+
     func testMenuFunctionKeyConsumesRepeatAndRelease() throws {
         try assertMenuFunctionKeyOwnership(keymap: "map f5 next_session\n")
     }

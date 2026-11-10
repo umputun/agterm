@@ -352,14 +352,23 @@ struct RemoteTreeTests {
                                            workspaceID: "ws-1", workspaceName: "work", cwd: "/repo",
                                            splitAxis: nil,
                                            panes: [ControlRemotePane(pane: "left", daemon: Self.left)])
-        let remote = ControlRemoteTree(host: nil, endpoint: endpoint, sessions: [session], presentation: 1)
+        let remote = ControlRemoteTree(host: nil, endpoint: endpoint, sessions: [session], presentation: 1, headless: true)
         let stdout = String(decoding: try JSONEncoder().encode(
             ControlResponse(ok: true, result: ControlResult(remote: remote))), as: UTF8.self)
 
         let stamped = try RemoteTreeMerger.decode(stdout: stdout).stamped(host: "buildbox")
 
         #expect(stamped == ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [session],
-                                             presentation: 1))
+                                             presentation: 1, headless: true))
+    }
+
+    @Test func aMacsTreeSaysNothingAboutBeingHeadless() throws {
+        let tree = RemoteTreeMerger.candidates(windows: [], daemons: [:], endpoint: endpoint)
+        let stdout = String(decoding: try JSONEncoder().encode(ControlResponse(ok: true, result: ControlResult(remote: tree))),
+                            as: UTF8.self)
+
+        #expect(!stdout.contains("headless"))
+        #expect(try RemoteTreeMerger.decode(stdout: stdout).headless == nil)
     }
 
     @Test func theRemotesOwnRefusalIsReadFromStdoutWhereAgtermctlPutsIt() {

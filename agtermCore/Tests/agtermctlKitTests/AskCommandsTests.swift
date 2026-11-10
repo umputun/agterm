@@ -335,6 +335,12 @@ struct AskCommandsTests {
         #expect(args.checked == nil)
     }
 
+    @Test func aTimeoutIsSentAndAnInvalidOneRefused() throws {
+        #expect(try open(["Choose", "--button", "ok", "--timeout", "2.5"]).makeRequest().args?.timeout == 2.5)
+        #expect(throws: (any Error).self) { try open(["Choose", "--button", "ok", "--timeout", "0"]) }
+        #expect(throws: (any Error).self) { try open(["Choose", "--button", "ok", "--timeout", "90000"]) }
+    }
+
     private func open(_ argv: [String]) throws -> Ask.Open {
         try #require(try Agtermctl.parseAsRoot(["ask"] + argv) as? Ask.Open)
     }

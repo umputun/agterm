@@ -36,6 +36,8 @@ extension AppStore {
         case .markdown(let path): return .replica(path: path, content: .markdown)
         case .text(let path, let line): return .replica(path: path, content: .text(line: line))
         case .document(let path): return .replica(path: path, content: .document)
+        // the presenter's own forward decides the URL, so a forwarded source is rewritten before it gets here
+        case .forwarded: return nil
         }
     }
 

@@ -183,20 +183,22 @@ renumbering. Do not reintroduce a count anywhere.
   `notify`
 - `font.inc`, `font.dec`, `font.reset`
 - `window.new`, `.list`, `.select`, `.go`, `.close`, `.rename`, `.delete`, `.resize`, `.move`, `.zoom`,
-  `.fullscreen`, `.minimize`
+  `.fullscreen`, `.minimize`, `.remote.open`, `.remote.dismiss`
+- `session.detach`, `session.reattach`, `workspace.detach`, `workspace.reattach`: a remote window's rows only
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
 - `recent.list`, `recent.open`, `recent.clear`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
+- `catalog.subscribe`, `catalog.op`: served only by agterm-server; a Mac app refuses them and any `opID`
 
-`terminfo install` is a CLI-only command with no protocol counterpart, one of the two exemptions from the
+`terminfo install` is a CLI-only command with no protocol counterpart, one of the three exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
 nothing for the app to dispatch or read back. `TerminfoInstall` in `agtermCore` owns the argv and the
 pipeline; the CLI owns the typed option surface, deliberately narrower than ssh's so `-G`, `-N`, `-n` and
 `-f` cannot fake a success or hang the install.
 
-`clipboard set` is the other. It prints an OSC 52 write into the caller's own pane through
+`clipboard set` is the second. It prints an OSC 52 write into the caller's own pane through
 `zmx print <ZMX_SESSION>`, run from the `zmx` beside the CLI, and never opens the socket. The socket still
 never writes a clipboard: the write arrives in the pane's bytes, so every attached terminal applies its own
 `clipboard-write` policy, and a session attached from another Mac gets the text on the Mac showing it.
@@ -207,7 +209,13 @@ overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemon
 pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
 may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
 
-`session wait` is not a third exemption but a client-side composite, like `overlay open --block`: it
+`server install` is the third, macOS-only. It installs the agterm-server release matching the app over ssh
+and a download, and opens no socket. `ServerInstall` in `agtermCore` owns the asset naming, the checksum
+rules and the argv on `TerminfoInstall`'s connection surface; `ServerInstaller` in the CLI runs the steps
+over injectable effects, and no archive bytes are sent to the host until the tarball's sha256 matches the app's
+`agterm-server.sha256`. A bad destination is refused in `run`, not `validate`, so every refusal exits 1.
+
+`session wait` is not a fourth exemption but a client-side composite, like `overlay open --block`: it
 opens the socket only for existing reads (`events.read`, `window.list`, `tree`), so there is no
 `session.wait` command and nothing new to read back. It cannot be a server command: the inline accept loop
 would hold the very status writes it waits for. It anchors the cursor BEFORE reading the tree, so a status
@@ -1555,8 +1563,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
   login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
 - `remoteHost` names the machine a teleported session is attached to and is omitted for a local one. It is
-  live-only: a remote session is never persisted, so it cannot survive a relaunch.
+  live-only: a remote row is never persisted, so a per-session attach is gone after a relaunch, while a remote
+  window rebuilds its rows from the server's catalog with both remote fields set.
   `remoteSessionID`, on the node and on `remote.opened` / `remote.closed`, is the origin's id the row shows.
+  A remote window's row carries it too, equal to the row's own id; a re-attach hook skips those rows by their
+  window's `remote` node, since the window restores them itself.
 - `backedByZmx` on a session is true only when every existing primary/split pane is currently backed.
   Primary/split entries in `surfaces` report their own Boolean; scratch and overlays omit it. Older servers
   omit both levels. There is no sidebar indicator.
@@ -2140,6 +2151,47 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - XCUITest exemption: `zmx.present` needs a second app as its peer, and its effects on a viewer are the
   existing status, context, notification, HUD and pane paths those suites already cover. `ControlServerRemotePresentationTests`
   runs both roles in one process over the real bridge binary instead.
+## agterm-server and remote windows
+
+`site/docs.html#remote-server` owns the user contract and `site/commands.html#remote` the commands.
+
+- agterm-server (`AgtermServerKit`, product `agterm-server`) keeps a windowless `AppStore` on Linux.
+  Every pane is a zmx daemon in a systemd user scope of its own, so a server restart or crash keeps it.
+- `ServerCommandPolicy.served` is default-deny: a protocol command reaches the server's store only once it
+  is listed there, and `HeadlessCommandPolicy` gives the physical-window reason for the rest.
+- The Linux rendezvous is `ControlResolve.defaultStateDirectory`: `$XDG_STATE_HOME/agterm` (absolute only)
+  or `~/.local/state/agterm`, so a bare `agtermctl` over ssh finds the socket. zmx sockets live under
+  `XDG_RUNTIME_DIR`, and the server refuses to start without one (`ServerConfiguration`).
+- `catalog.subscribe` hands its descriptor to a stream like `zmx.present`: a hello with `CatalogVersions`,
+  a snapshot carrying `epoch`, `rev` and `catalogID`, then diffs (`CatalogHub`, `CatalogDiff`).
+  A snapshot clears an applied receipt once it reaches that receipt's epoch and revision
+  (`RemoteCatalogActions.catalogMoved`); it never settles a lost reply.
+- A structural command with `opID` and `epoch` answers `CatalogReceipt` (`ServerActions+Receipts`) and runs
+  once while its receipt is among the 512 the table keeps (`CatalogOperationTable.capacity`); another epoch is
+  refused. `--expect-panes` and `--expect-scratch` refuse it
+  when the target changed under it. `catalog.op` reads the table and fences an id it does not hold, so
+  the command arriving later is refused. The remote window never resends: a lost reply becomes `unknown`,
+  settled through `catalog.op` or dropped once its target leaves the catalog.
+- Asks, picks, pages and overlay jobs on the server wait unpresented until a presenter that can show them
+  takes the session (`AppStore+Interactions`, `ServerStreams`). Only ask and pick take `--timeout`
+  (`armDeadline`); a page or job's claim window starts when it is offered, a claimed job is never
+  relaunched, and a restart forgets everything still waiting.
+- A viewer tells a headless origin from a Mac by `RemoteBinding.originHeadless`, from `zmx.tree`'s
+  `headless`. Only for such a row does a GUI ask for an offscreen row wait hidden and a busy window queue a
+  pick. `version` reports `headless`, and the CLI binds an untargeted pick to `AGTERM_SESSION_ID` only then.
+- A remote window's store is filled by `RemoteCatalogMirror` from `RemoteCatalogClient`'s stream, over
+  `SshConnectionPool` masters of at most eight channels each, below stock sshd's `MaxSessions 10`.
+  A pane joined to a master ignores its own ServerAlive options, so the master runs the pane attach's
+  `RemoteSession.keepAliveCheck` itself; without it a half-open link keeps passing `ssh -O check`. The
+  standalone `RemoteSession.forwardCommand` runs it too, or its forward outlives the link with the page's port dead.
+  Structural actions go to the server through `RemoteCatalogActions` and are disabled while disconnected,
+  never queued; `RemoteWindowViewState` keeps what this Mac detached and its kept views.
+- A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
+  `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
+- Under musl every `ServerProcess` spawn re-execs the server as `CleanExec`, which closes inherited
+  descriptors in the single-threaded child: musl has no closefrom file action, and Foundation opens files
+  without `O_CLOEXEC`.
+
 ## Pane lead
 
 - zmx keeps one leader per daemon and applies only its grid. Stock zmx moves the lead to whichever client

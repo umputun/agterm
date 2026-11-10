@@ -80,8 +80,8 @@ final class OpenCodeHookInstallationTests: XCTestCase {
 
         XCTAssertEqual(outcome, .v1CleanupUserOwned(path: v1Path))
         XCTAssertTrue(outcome.isWarning)
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains("user-owned"))
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains("left untouched"))
+        XCTAssertTrue(outcome.text.contains("user-owned"))
+        XCTAssertTrue(outcome.text.contains("left untouched"))
         XCTAssertEqual(try String(contentsOf: legacy, encoding: .utf8), contents)
         XCTAssertTrue(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins/agterm-v2/tui.js").path))
     }
@@ -118,7 +118,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
             let outcome = try await install(choosing: "OpenCode v2")
             XCTAssertEqual(outcome, .v1CleanupUnreadable(path: legacy.path), "attempt \(expectedAttempt)")
             XCTAssertTrue(outcome.isWarning)
-            XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains(legacy.path))
+            XCTAssertTrue(outcome.text.contains(legacy.path))
             XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: legacy.path), missing.path)
             XCTAssertTrue(FileManager.default.fileExists(atPath: v2Path))
         }
@@ -162,8 +162,8 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         let outcome = try await install(choosing: "OpenCode v2")
 
         XCTAssertEqual(outcome, .v1CleanupUnreadable(path: v1Path))
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains("could not be read"))
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains("left untouched"))
+        XCTAssertTrue(outcome.text.contains("could not be read"))
+        XCTAssertTrue(outcome.text.contains("left untouched"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: legacy.path))
         XCTAssertTrue(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode/plugins/agterm-v2/tui.js").path))
     }
@@ -231,7 +231,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         let outcome = try await install(choosing: nil)
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: config.appendingPathComponent("plugins/agterm-v2/tui.js").path))
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains(config.path))
+        XCTAssertTrue(outcome.text.contains(config.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: home.appendingPathComponent(".config/opencode").path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
     }
@@ -252,7 +252,7 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         let outcome = try await install(choosing: "OpenCode v2")
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: config.appendingPathComponent("plugins/agterm-v2/tui.js").path))
-        XCTAssertTrue(AgentHooksInstaller.opencodeText(outcome).contains(config.path))
+        XCTAssertTrue(outcome.text.contains(config.path))
         XCTAssertEqual(outcome, .v1CleanupUserOwned(path: customLegacy.path))
         XCTAssertEqual(try String(contentsOf: customLegacy, encoding: .utf8), "user-owned")
         XCTAssertTrue(FileManager.default.fileExists(atPath: homeLegacy.path))

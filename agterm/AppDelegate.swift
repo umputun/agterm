@@ -9,8 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private static let logger = Logger(subsystem: "com.umputun.agterm", category: "AppDelegate")
 
-    // leaves 150 ms after the listing's 550 ms worst case for the per-pane kernel reads
-    private static let exitCaptureBudget: Duration = .milliseconds(700)
+    // adds a nominal 150 ms for pane reads after the listing timeout and cleanup grace
+    static let exitCaptureBudget: Duration = .milliseconds(800)
 
     /// App-global window library, set on scene appear; terminate flushes every window's state.
     var library: WindowLibrary?

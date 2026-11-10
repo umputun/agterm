@@ -710,6 +710,37 @@ struct SessionTests {
         #expect(session.paneToken(for: .right) == "")
     }
 
+    @Test func aSurfacelessDaemonBackedPaneAnswersToItsIdentity() {
+        let session = Session(initialCwd: "/repo")
+        let split = UUID()
+        session.splitPaneIdentity = split
+        session.daemonBackedPanes = [session.paneIdentity, split]
+
+        #expect(session.paneRole(forToken: session.paneIdentity.uuidString) == .left)
+        #expect(session.paneRole(forToken: split.uuidString) == .right)
+        #expect(session.paneToken(for: .left) == session.paneIdentity.uuidString)
+        #expect(session.paneToken(for: .right) == split.uuidString)
+        #expect(session.paneToken(for: .scratch) == "")
+    }
+
+    @Test func aSurfacelessPaneOutsideTheDaemonSetHasNoToken() {
+        let session = Session(initialCwd: "/repo")
+        session.splitPaneIdentity = UUID()
+        session.daemonBackedPanes = [session.paneIdentity]
+
+        #expect(session.paneRole(forToken: session.splitPaneIdentity!.uuidString) == nil)
+        #expect(session.paneToken(for: .right) == "")
+    }
+
+    @Test func aLiveSurfaceTokenWinsOverTheDaemonIdentity() {
+        let session = Session(initialCwd: "/repo")
+        session.daemonBackedPanes = [session.paneIdentity]
+        session.surface = FakeSurface(paneToken: "main-tok")
+
+        #expect(session.paneRole(forToken: session.paneIdentity.uuidString) == nil)
+        #expect(session.paneToken(for: .left) == "main-tok")
+    }
+
     @Test func paneRoleFollowsAPromotedSurvivorAndReSplit() {
         // #199: survivor and re-split helper were both baked with the same stale right role; only the token disambiguates.
         let session = Session(initialCwd: "/repo")

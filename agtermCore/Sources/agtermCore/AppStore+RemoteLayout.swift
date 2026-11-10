@@ -5,7 +5,7 @@ extension AppStore {
     @discardableResult
     public func applyRemoteLayout(_ layout: PresentationLayout, forSession id: UUID) -> [UUID] {
         guard layout.isValid, let session = session(withID: id),
-              let binding = session.remotePresentation?.binding else { return [] }
+              let binding = session.remotePresentation?.binding, !binding.catalogOwned else { return [] }
         session.remotePresentation?.layout = layout
         if let split = session.splitPaneIdentity, session.hasSplit,
            session.surface?.isRealized == true, session.splitSurface?.isRealized == true,
@@ -28,7 +28,7 @@ extension AppStore {
     /// Whether confirmed origin removal permits closing this replica without discarding a pending local split.
     public func canCloseRemovedRemotePane(_ local: UUID, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), session.paneRole(forIdentity: local) != nil,
-              let state = session.remotePresentation, let layout = state.layout,
+              let state = session.remotePresentation, !state.binding.catalogOwned, let layout = state.layout,
               let remote = state.binding.remotePane(forLocal: local), !layout.panes.contains(remote) else { return false }
         // ordinary primary close would discard a local split that has not produced its surface yet
         if local == session.paneIdentity, let split = session.splitPaneIdentity,

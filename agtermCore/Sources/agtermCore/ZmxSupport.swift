@@ -292,9 +292,19 @@ public enum ZmxSupport {
     }
 
     public static func socketDirectory(forStateDirectory stateDirectory: String) -> String {
+        "/tmp/agterm-zmx-\(stateHash(stateDirectory))"
+    }
+
+    /// socketDirectory under `runtimeDirectory` is agterm-server's: `XDG_RUNTIME_DIR` is kept for a lingering
+    /// user, while a distribution's tmp cleanup can empty `/tmp` under a live daemon.
+    public static func socketDirectory(forStateDirectory stateDirectory: String, runtimeDirectory: String) -> String {
+        (runtimeDirectory as NSString).appendingPathComponent("agterm-zmx-\(stateHash(stateDirectory))")
+    }
+
+    private static func stateHash(_ stateDirectory: String) -> String {
         let canonical = URL(fileURLWithPath: stateDirectory, isDirectory: true)
             .standardizedFileURL.resolvingSymlinksInPath().path
-        return "/tmp/agterm-zmx-\(stableHash(canonical))"
+        return stableHash(canonical)
     }
 
     public static func daemonName(for paneIdentity: UUID) -> String {
@@ -320,6 +330,23 @@ public enum ZmxSupport {
         return body.count == 32 && body.allSatisfy {
             ($0 >= UInt8(ascii: "0") && $0 <= UInt8(ascii: "9")) ||
                 ($0 >= UInt8(ascii: "a") && $0 <= UInt8(ascii: "f"))
+        }
+    }
+
+    static let scratchNamePrefix = "agterm-scratch-"
+
+    /// scratchDaemonName names agterm-server's daemon behind a session's scratch. It is never `isDaemonName`, so
+    /// nothing that adopts, maps or prunes pane daemons ever claims one.
+    public static func scratchDaemonName(for identity: UUID) -> String {
+        scratchNamePrefix + compactUUID(identity)
+    }
+
+    /// isScratchDaemonName reports whether `name` is exactly the shape `scratchDaemonName(for:)` emits.
+    public static func isScratchDaemonName(_ name: String) -> Bool {
+        guard name.hasPrefix(scratchNamePrefix) else { return false }
+        let body = name.utf8.dropFirst(scratchNamePrefix.utf8.count)
+        return body.count == 32 && body.allSatisfy {
+            ($0 >= UInt8(ascii: "0") && $0 <= UInt8(ascii: "9")) || ($0 >= UInt8(ascii: "a") && $0 <= UInt8(ascii: "f"))
         }
     }
 

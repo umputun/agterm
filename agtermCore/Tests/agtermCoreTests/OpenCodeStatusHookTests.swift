@@ -126,15 +126,13 @@ struct OpenCodeStatusHookTests {
         """
 
         let statusWrapper = dir.appendingPathComponent("status-wrapper")
-        try recordScript.write(to: statusWrapper, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: statusWrapper.path)
+        try recordScript.writeExecutable(to: statusWrapper)
 
         if !setStatusWrapper {
             let defaultWrapperDir = home.appendingPathComponent(".config/agterm/agent-status", isDirectory: true)
             try fm.createDirectory(at: defaultWrapperDir, withIntermediateDirectories: true)
             let defaultWrapper = defaultWrapperDir.appendingPathComponent("agterm-agent-status.sh")
-            try recordScript.write(to: defaultWrapper, atomically: true, encoding: .utf8)
-            try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: defaultWrapper.path)
+            try recordScript.writeExecutable(to: defaultWrapper)
         }
 
         let eventsFile = dir.appendingPathComponent("events.json")
@@ -457,8 +455,7 @@ struct OpenCodeStatusHookTests {
           while [ ! -f '\(release.path)' ]; do sleep 0.01; done
         fi
         printf '%s\\n' "$*" >> '\(statuses.path)'
-        """.write(to: wrapper, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wrapper.path)
+        """.writeExecutable(to: wrapper)
 
         // permission.asked / replied always report (no active-set gate), so the queue order is isolated.
         let events: [[String: Any]] = [

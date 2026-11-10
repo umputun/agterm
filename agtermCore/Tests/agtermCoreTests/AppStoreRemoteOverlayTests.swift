@@ -329,12 +329,15 @@ struct AppStoreRemoteOverlayTests {
 
         #expect(presenter.bodies.last == .overlayRequest(PresentationOverlay(
             job: job, pane: nil, sizePercent: 60, backgroundColor: "#102030", follow: true, wait: true)))
-        #expect(session.remoteOverlays.slot(nil) == RemoteOverlaySlot(job: job, pane: nil,
-                                                                      owner: hub.presenterGeneration(session: session.id),
-                                                                      sizePercent: 60, wait: true))
+        var expected = RemoteOverlaySlot(job: job, pane: nil, owner: hub.presenterGeneration(session: session.id),
+                                         sizePercent: 60, wait: true)
+        expected.request = PresentationOverlay(job: job, pane: nil, sizePercent: 60, backgroundColor: "#102030",
+                                               follow: true, wait: true)
+        #expect(session.remoteOverlays.slot(nil) == expected)
         #expect(!session.overlayActive)
         #expect(!session.programOverlayActive)
         #expect(jobs.job(job)?.context == Self.context)
+        #expect(jobs.claim(job) {} == Self.context, "a presenter without job.token claims by id")
     }
 
     @Test func aPaneOverlayNamesTheOriginsPaneIdentity() throws {

@@ -48,8 +48,12 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         DispatchQueue.main.async { [weak self] in self?.onMouseTrackingEnded?() }
     }
 
-    init(store: AppStore) {
+    /// remote sends a rename in a remote window to its server, answering whether it did.
+    private let remote: (RemoteOperation) -> Bool
+
+    init(store: AppStore, remote: @escaping (RemoteOperation) -> Bool) {
         self.store = store
+        self.remote = remote
         super.init()
     }
 
@@ -134,8 +138,12 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         guard let node, !cancelled else { return }
 
         switch node.kind {
-        case .session: store.renameSession(node.id, to: newValue)
-        case .workspace: store.renameWorkspace(node.id, to: newValue)
+        case .session:
+            if remote(.renameSession(node.id, name: newValue)) { return }
+            store.renameSession(node.id, to: newValue)
+        case .workspace:
+            if remote(.renameWorkspace(node.id, name: newValue)) { return }
+            store.renameWorkspace(node.id, to: newValue)
         }
     }
 

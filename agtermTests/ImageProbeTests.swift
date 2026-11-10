@@ -37,7 +37,7 @@ final class ImageProbeTests: XCTestCase {
         let link = dir.appendingPathComponent("link.png")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: big)
 
-        XCTAssertEqual(failure(link.path), ImageProbe.Failure.tooLarge(link.path).description)
+        XCTAssertEqual(failure(link.path), ImageFile.Failure.tooLarge(link.path).description)
     }
 
     func testATailOfASmallFileStartsAtItsFirstByte() throws {
@@ -123,26 +123,26 @@ final class ImageProbeTests: XCTestCase {
         let fifo = dir.appendingPathComponent("pipe.png").path
         XCTAssertEqual(mkfifo(fifo, 0o600), 0)
 
-        XCTAssertEqual(failure(fifo), ImageProbe.Failure.unreadable(fifo).description)
+        XCTAssertEqual(failure(fifo), ImageFile.Failure.unreadable(fifo).description)
     }
 
     func testADeviceBehindASymlinkIsRefused() throws {
         let link = dir.appendingPathComponent("zero.png")
         try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "/dev/zero")
 
-        XCTAssertEqual(failure(link.path), ImageProbe.Failure.unreadable(link.path).description)
+        XCTAssertEqual(failure(link.path), ImageFile.Failure.unreadable(link.path).description)
     }
 
     func testMarkupNamedAsAPictureIsRefusedBeforeImageIO() throws {
         let svg = dir.appendingPathComponent("logo.png")
         try Data(#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><script>1</script></svg>"#.utf8).write(to: svg)
 
-        XCTAssertEqual(failure(svg.path), ImageProbe.Failure.notAnImage(svg.path).description)
+        XCTAssertEqual(failure(svg.path), ImageFile.Failure.notAnImage(svg.path).description)
     }
 
     func testAMissingFileIsUnreadable() {
         let path = dir.appendingPathComponent("missing.png").path
-        XCTAssertEqual(failure(path), ImageProbe.Failure.unreadable(path).description)
+        XCTAssertEqual(failure(path), ImageFile.Failure.unreadable(path).description)
     }
 
     func testBytesInHandAreJudgedLikeAFile() throws {

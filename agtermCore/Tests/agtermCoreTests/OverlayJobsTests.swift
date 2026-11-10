@@ -25,6 +25,43 @@ struct OverlayJobsTests {
         jobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)
     }
 
+    @Test func aTokenedOfferNeedsItsTokenAndAnUntokenedOneTakesAnIdOnlyClaim() {
+        let (jobs, _) = makeJobs()
+        let tokened = jobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context, token: "t1")
+        let legacy = jobs.register(session: UUID(), pane: nil, owner: 1, context: Self.context)
+
+        #expect(jobs.claim(tokened) {} == nil)
+        #expect(jobs.claim(tokened, token: "t2") {} == nil)
+        #expect(jobs.claim(tokened, token: "t1") {} == Self.context)
+        #expect(jobs.claim(legacy) {} == Self.context)
+    }
+
+    @Test func anUnpresentedJobStartsItsWindowAtTheOfferAndAWithdrawalVoidsTheToken() {
+        let (jobs, _) = makeJobs()
+        let job = jobs.registerUnpresented(session: UUID(), pane: nil, context: Self.context)
+        clock.advance(OverlayJobs.launchWindow * 2)
+
+        #expect(jobs.claim(job) {} == nil)
+        #expect(jobs.offer(job, owner: 2, token: "a"))
+        #expect(jobs.withdraw(job))
+        #expect(jobs.job(job)?.state == .unpresented)
+        #expect(jobs.claim(job, token: "a") {} == nil)
+        #expect(jobs.offer(job, owner: 3, token: "b"))
+        clock.advance(OverlayJobs.launchWindow - 1)
+
+        #expect(jobs.claim(job, token: "b") {} == Self.context)
+        #expect(!jobs.withdraw(job))
+    }
+
+    @Test func cancellingAnUnpresentedJobEndsItCanceled() {
+        let (jobs, finished) = makeJobs()
+        let job = jobs.registerUnpresented(session: UUID(), pane: nil, context: Self.context)
+
+        #expect(jobs.cancel(job))
+
+        #expect(finished().map(\.state) == [.finished(.canceled)])
+    }
+
     @Test func aClaimBeforeTheDeadlineGetsTheContextOnce() {
         let (jobs, _) = makeJobs()
         let id = register(jobs)

@@ -13,6 +13,10 @@ public struct ControlDispatcher {
     }
 
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
+        // a receipt the host never keeps would read as a durable answer
+        if request.args?.opID != nil, !actions.takesOperationReceipts {
+            return ControlResponse(ok: false, error: "operation receipts are served only by agterm-server")
+        }
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
@@ -49,6 +53,20 @@ public struct ControlDispatcher {
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
+        case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
+            return dispatchDetachCommand(request)
+        case .catalogSubscribe:
+            return actions.catalogSubscribe()
+        case .catalogOp:
+            guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
+                return ControlResponse(ok: false, error: "catalog.op requires an operation id")
+            }
+            let epoch = request.args?.epoch?.trimmedOrNil
+            let rev = request.args?.rev
+            guard (epoch == nil) == (rev == nil) else {
+                return ControlResponse(ok: false, error: "catalog.op takes epoch and rev together")
+            }
+            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
         case .recentList, .recentOpen, .recentClear:
@@ -58,7 +76,8 @@ public struct ControlDispatcher {
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,
-                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize:
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize,
+                .windowRemoteOpen:
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
@@ -688,6 +707,14 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid window minimize mode: \(request.args?.mode ?? "toggle")")
             }
             return await actions.windowMinimize(request.target, mode: mode)
+        case .windowRemoteOpen:
+            guard let host = request.args?.host?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "window.remote.open requires a host")
+            }
+            guard RemoteSession.isHost(host) else {
+                return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
+            }
+            return await actions.windowRemoteOpen(host: host)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

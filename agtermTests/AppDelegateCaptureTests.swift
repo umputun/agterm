@@ -62,6 +62,12 @@ final class AppDelegateCaptureTests: XCTestCase {
         XCTAssertEqual(session.splitForegroundCommand, ["worker", "21"])
     }
 
+    func testExitBudgetKeepsAHundredAndFiftyMillisecondsForPaneReadsAfterTheListing() {
+        let listing = Duration.milliseconds(Int64((ZmxClient.captureWallClockLimit * 1000).rounded()))
+
+        XCTAssertEqual(AppDelegate.exitCaptureBudget - listing, .milliseconds(150))
+    }
+
     // #915: a listing slower than 100 ms timed out and left every reattached pane with no command
     func testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds() throws {
         let paneID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!

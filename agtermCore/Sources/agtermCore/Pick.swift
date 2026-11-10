@@ -11,6 +11,11 @@ public struct PendingPick: Equatable, Sendable {
     public let allowCustom: Bool
     /// The item id the picker opens highlighted on, already validated against `items`.
     public let selection: String?
+    /// deadline is when the origin cancels the pick unanswered (`--timeout`); nil waits for an answer.
+    public var deadline: Date?
+
+    /// expired reports whether the deadline passed by `now`; an answer then resolves cancelled.
+    public func expired(at now: Date) -> Bool { deadline.map { $0 <= now } ?? false }
 
     public init(id: String, items: [ControlPickItem], prompt: String? = nil, query: String? = nil,
                 allowCustom: Bool = false, selection: String? = nil) {
@@ -66,6 +71,7 @@ public final class PickController {
     /// Completes the pending picker with `outcome`, keeping it readable until it ages out.
     public func resolve(_ outcome: ControlPickResult) {
         guard let pending else { return }
+        let outcome = pending.expired(at: Date()) ? ControlPickResult(result: .cancelled) : outcome
         Self.resolutionSequence += 1
         recentResults.removeAll { $0.id == pending.id }
         recentResults.append(ResolvedPick(id: pending.id, result: outcome, sequence: Self.resolutionSequence))
@@ -77,6 +83,8 @@ public final class PickController {
             pickWaiter = nil
             waiter.continuation.resume(returning: outcome)
         }
+        SessionPickBook.shared.controllerResolved(pending.id, result: outcome)
+        SessionPickBook.shared.drain(self)
     }
 
     /// pick opens `pick` and suspends until it resolves, for a caller inside the app. Returns nil when the
@@ -125,11 +133,13 @@ public final class PickController {
     public func resolveAsk(_ outcome: ControlAskResult) {
         guard let pendingAsk else { return }
         guard outcome.result != .pending else { return }
+        let outcome = pendingAsk.expired(at: Date()) ? ControlAskResult(result: .cancelled) : outcome
         if let windowID, AskRegistry.shared.owner(for: pendingAsk.id) == .window(windowID) {
             AskRegistry.shared.retain(id: pendingAsk.id, result: outcome, window: windowID)
         }
         self.pendingAsk = nil
         askDraft = nil
+        SessionPickBook.shared.drain(self)
     }
 
     /// cancelAsk cancels without synthesizing a named button answer.
@@ -174,6 +184,7 @@ public final class PickRegistry {
     /// unregister cancels pending modals and retains their outcomes for polls after window teardown.
     public func unregister(_ id: WindowInfo.ID) {
         guard let controller = controllers[id] else { return }
+        SessionPickBook.shared.windowClosing(id)
         controller.cancel()
         controller.cancelAsk()
         controllers[id] = nil

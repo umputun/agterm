@@ -4,6 +4,23 @@ import Testing
 
 @MainActor
 struct ControlDispatcherPickTests {
+    @Test func aTimeoutBecomesThePicksDeadlineAndAnInvalidOneIsRefused() async throws {
+        let actions = MockControlActions()
+        var args = ControlArgs(items: [ControlPickItem(id: "a", label: "A")])
+        args.timeout = 0
+        let refused = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .pickOpen, args: args))
+        args.timeout = 5
+
+        _ = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .pickOpen, args: args))
+
+        #expect(refused == ControlResponse(ok: false, error: ControlInteraction.timeoutError))
+        guard case let .pickOpen(pick, _, _) = try #require(actions.calls.first) else {
+            Issue.record("expected pick.open")
+            return
+        }
+        #expect(try #require(pick.deadline).timeIntervalSinceNow > 4)
+    }
+
     @Test func openRejectsMissingItemsWithoutCallingHost() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -33,6 +50,18 @@ struct ControlDispatcherPickTests {
         let expected = ControlResponse(ok: false, error: "pick.open requires at least one item")
         #expect(empty == expected)
         #expect(explicitlyOff == expected)
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func aTargetedOpenTakesTheSessionFormWhoseDefaultRefuses() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .pickOpen, target: "s1", args: ControlArgs(items: [ControlPickItem(id: "a", label: "A")])
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: ControlActionsUnsupported.message("pick.open --session")))
         #expect(actions.calls.isEmpty)
     }
 

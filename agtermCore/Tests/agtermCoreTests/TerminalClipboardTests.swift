@@ -161,8 +161,7 @@ private struct Fixture {
 
     @discardableResult
     private func script(at file: URL, body: String) throws -> String {
-        try "#!/bin/sh\n\(body)\n".write(to: file, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: file.path)
+        try "#!/bin/sh\n\(body)\n".writeExecutable(to: file)
         return file.path
     }
 }

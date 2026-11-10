@@ -32,9 +32,16 @@ reached its `printf` in this run, and the attach client was still not reapable a
 exits late or never, whether the daemon process had ended, and what happened in the earlier run without
 that message, are still open.
 
+A local full parallel `swift test` on 2026-11-07 (branch `linux-remote-server`, a Linux test container running
+beside it) failed it a fourth time: `waitpid` 0, errno 0, `p_stat` SRUN after 3.03 s, an empty exec-error pipe and
+host log, no session in `zmx list`. This time the PTY held zmx's `session "<name>" created`, the screen reset and the
+payload's `agterm: session is gone`, so the payload ran and printed; the attach client kept running, and whether the
+daemon's pid had exited is not recorded (a missing `zmx list` row does not prove it). Five runs of the test alone
+passed in about 1.3 s each.
+
 A local full `swift test --package-path agtermCore` on 2026-11-09 (master `f2d84ca2` plus doc and test
-edits outside the session host, machine load 56 from unrelated processes) failed it a fourth time, the
-first outside CI: 4.39 s in, `waitpid` 0, errno 0, `p_stat` SRUN after 3.02 s, empty `zmx list` and host
+edits outside the session host, machine load 56 from unrelated processes) failed it a fifth time, the
+second outside CI: 4.39 s in, `waitpid` 0, errno 0, `p_stat` SRUN after 3.02 s, empty `zmx list` and host
 log. The PTY held zmx's `session "<name>" created` and screen reset but not the payload's message, the
 shape of run 41899293201. Run alone right after, at load 46, it passed in 1.41 s. So a loaded local
 machine running the full suite can hit it, which is a place to capture stacks of the pane and host.

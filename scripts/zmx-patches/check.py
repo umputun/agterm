@@ -47,10 +47,14 @@ def drain(fd, seconds):
     return out
 
 
-def cli(*args, stdin=None):
-    env = dict(os.environ, ZMX_DIR=ZDIR)
+def cli(*args, stdin=None, extra=None):
+    env = dict(os.environ, ZMX_DIR=ZDIR, **(extra or {}))
     env.pop("ZMX_SESSION", None)
-    return subprocess.run([ZMX, *args], env=env, input=stdin, capture_output=True, timeout=10)
+    return subprocess.run([ZMX, *args], env=env, input=stdin or b"", capture_output=True, timeout=10)
+
+
+def listed(name):
+    return name.encode() in cli("list", "--short").stdout.split()
 
 
 def check(label, ok, detail=""):
@@ -136,8 +140,59 @@ def main():
         pids.append(p5)
         tail = drain(f5, 3.0).rpartition(b"EXIT-MARK")[2]
         ok &= check("an unmanaged client whose session ends still resets the terminal", b"\x1bc" in tail, repr(tail))
+
+        record = os.path.join(ZDIR, "exit-record")
+        created = cli("attach", "--detached", "detached", "/bin/sh", "-c", "sleep 0.5; exit 7",
+                      extra={"ZMX_EXIT_FILE": record})
+        ok &= check("a detached create needs no tty", created.returncode == 0 and listed("detached"), repr(created.stderr))
+        again = cli("attach", "--detached", "detached", "/bin/sh")
+        ok &= check("a detached create of a live session is refused", again.returncode == 1, repr(again.stderr))
+        gone_without_record = False
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            present = listed("detached")
+            if not present and not os.path.exists(record):
+                gone_without_record = True
+            if not present:
+                break
+            time.sleep(0.02)
+        ok &= check("a session that exited is never gone before its record", not gone_without_record)
+        status = open(record).read().strip() if os.path.exists(record) else None
+        ok &= check("the record marks an exit", status == "exited", repr(status))
+
+        worker_pid = os.path.join(ZDIR, "worker-pid")
+        spawn = ("trap '' HUP; (trap '' HUP; exec sleep 300) </dev/null >/dev/null 2>&1 & "
+                 "echo $! > %s; sleep 0.3; exit 0" % worker_pid)
+        cli("attach", "--detached", "worker", "/bin/sh", "-c", spawn,
+            extra={"ZMX_EXIT_FILE": os.path.join(ZDIR, "worker-record")})
+        deadline = time.time() + 5
+        while time.time() < deadline and listed("worker"):
+            time.sleep(0.05)
+        time.sleep(1.0)
+        pid = int(open(worker_pid).read()) if os.path.exists(worker_pid) else None
+        alive = False
+        if pid:
+            try:
+                os.kill(pid, 0)
+                alive = True
+            except ProcessLookupError:
+                pass
+        ok &= check("an exited shell's hangup-ignoring background worker is ended with the session",
+                    pid is not None and not alive and os.path.exists(os.path.join(ZDIR, "worker-record")), repr(pid))
+
+        cli("attach", "--detached", "env-probe", "/bin/sh", "-c", "printf 'E=[%s]' \"$ZMX_EXIT_FILE\"; sleep 30",
+            extra={"ZMX_EXIT_FILE": os.path.join(ZDIR, "env-record")})
+        time.sleep(0.7)
+        text = cli("screen", "env-probe").stdout
+        ok &= check("the record path does not reach the shell", b"E=[]" in text, repr(text[-200:]))
+
+        killed_record = os.path.join(ZDIR, "killed-record")
+        cli("attach", "--detached", "killed", "/bin/sh", "-c", "sleep 30", extra={"ZMX_EXIT_FILE": killed_record})
+        cli("kill", "killed", "--force")
+        time.sleep(1.0)
+        ok &= check("a killed session writes no record", not listed("killed") and not os.path.exists(killed_record))
     finally:
-        cli("kill", NAME, "--force")
+        cli("kill", NAME, "detached", "killed", "env-probe", "--force")
         for pid in pids:
             try:
                 os.kill(pid, 9)

@@ -34,6 +34,7 @@ extension WorkspaceSidebar.Coordinator {
         if draggedWorkspaceID(from: info) != nil {
             cancelSpringLoadedExpansion()
             guard let move = resolveWorkspaceMove(from: info, in: outlineView) else { return [] }
+            if store.remoteActions != nil, remoteWorkspaceStep(move) == nil { return [] }
             // workspace reorder lives at the top level: highlight a between-rows slot under the root.
             outlineView.setDropItem(nil, dropChildIndex: move.dropChildIndex)
             return .move
@@ -43,7 +44,8 @@ extension WorkspaceSidebar.Coordinator {
             return resolveFlaggedReorder(from: info, item: item, childIndex: index) == nil ? [] : .move
         }
         if !draggedSessionIDs(from: info).isEmpty {
-            guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
+            guard store.remoteActions == nil || draggedSessionIDs(from: info).count == 1,
+                  let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
                 cancelSpringLoadedExpansion()
                 return []
             }
@@ -57,7 +59,7 @@ extension WorkspaceSidebar.Coordinator {
             scheduleSpringLoadedExpansion(of: move.workspace, in: outlineView)
             return .move
         }
-        guard let drop = resolveDirectoryDrop(from: info, item: item) else {
+        guard store.remoteActions == nil, let drop = resolveDirectoryDrop(from: info, item: item) else {
             cancelSpringLoadedExpansion()
             return []
         }
@@ -77,7 +79,12 @@ extension WorkspaceSidebar.Coordinator {
         defer { finishDraggingSequence(collapseSpringLoaded: !dropSucceeded) }
         if draggedWorkspaceID(from: info) != nil {
             guard let move = resolveWorkspaceMove(from: info, in: outlineView) else { return false }
-            store.moveWorkspace(move.workspaceID, at: move.destination)
+            if store.remoteActions != nil {
+                guard let step = remoteWorkspaceStep(move) else { return false }
+                actions.performRemote(.moveWorkspace(move.workspaceID, to: step), in: store)
+            } else {
+                store.moveWorkspace(move.workspaceID, at: move.destination)
+            }
             dropSucceeded = true
             return true
         }
@@ -88,11 +95,19 @@ extension WorkspaceSidebar.Coordinator {
         }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
-            store.moveSessions(move.sessionIDs, toWorkspace: move.workspace, at: move.destination)
+            if store.remoteActions != nil {
+                guard move.sessionIDs.count == 1, let id = move.sessionIDs.first else { return false }
+                let sessions = store.workspaces.first { $0.id == move.workspace }?.sessions.map(\.id) ?? []
+                let placement = RemoteOperation.dropPlacement(of: id, workspace: move.workspace, sessions: sessions,
+                                                              destination: move.destination)
+                actions.performRemote(.moveSession(id, to: placement), in: store)
+            } else {
+                store.moveSessions(move.sessionIDs, toWorkspace: move.workspace, at: move.destination)
+            }
             dropSucceeded = true
             return true
         }
-        guard let drop = resolveDirectoryDrop(from: info, item: item) else { return false }
+        guard store.remoteActions == nil, let drop = resolveDirectoryDrop(from: info, item: item) else { return false }
         guard !drop.exceedsLimit else {
             presentDirectoryDropLimitAlert(in: outlineView)
             return false
@@ -362,6 +377,12 @@ extension WorkspaceSidebar.Coordinator {
         } else {
             alert.runModal()
         }
+    }
+
+    /// remoteWorkspaceStep is a remote window's workspace drop as the one server move step that lands it, nil when none.
+    private func remoteWorkspaceStep(_ move: (workspaceID: UUID, dropChildIndex: Int, destination: Int)) -> String? {
+        guard let source = store.workspaces.firstIndex(where: { $0.id == move.workspaceID }) else { return nil }
+        return RemoteOperation.workspaceStep(from: source, to: move.destination, count: store.workspaces.count)
     }
 
     /// Resolves a workspace drop into the TOP-LEVEL reorder it would perform, nil when it is a no-op, so

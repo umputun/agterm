@@ -52,6 +52,15 @@ capped() {
   echo "exit $?" >> "$file"
 }
 
+# sample is macOS-only; the Linux swift image ships lldb, which needs CAP_SYS_PTRACE for another user's process
+stacks() {
+  if command -v sample >/dev/null; then
+    capped 20 "$out/sample-$1.log" sample "$1" 2 -file "$out/sample-$1.txt"
+  else
+    capped 60 "$out/sample-$1.log" lldb --batch -p "$1" -o "thread backtrace all"
+  fi
+}
+
 diagnose() {
   local tree=$1 p
   diag_end=$((SECONDS + budget))
@@ -59,7 +68,7 @@ diagnose() {
   ps -axo pid,ppid,pgid,stat,etime,command > "$out/ps-all.txt"
   # the test runner first: it holds the stuck test's stack
   for p in $(pgrep -f "$runner"); do
-    capped 20 "$out/sample-$p.log" sample "$p" 2 -file "$out/sample-$p.txt" || return
+    stacks "$p" || return
   done
   for p in $tree; do
     ps -o pid,ppid,pgid,stat,etime,command -p "$p" > "$out/proc-$p.txt" 2>&1
@@ -67,7 +76,7 @@ diagnose() {
   done
   for p in $tree; do
     [ -e "$out/sample-$p.log" ] && continue
-    capped 20 "$out/sample-$p.log" sample "$p" 2 -file "$out/sample-$p.txt" || return
+    stacks "$p" || return
   done
 }
 

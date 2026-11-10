@@ -34,7 +34,7 @@ enum MarkdownPageSource {
     /// origin judges it against the grant it froze, and built here with its pictures.
     static func replicaLinkSource(_ link: HtmlReplicaLink, revision: HtmlReplicaRevision) -> HtmlPageSchemeHandler.Source {
         { path in
-            let local = (MarkdownProbe.Failure.tooLarge(path).description, MarkdownProbe.Failure.unreadable(path).description)
+            let local = (MarkdownFile.Failure.tooLarge(path).description, MarkdownFile.Failure.unreadable(path).description)
             let data = try await link.read(path, revision: revision, limit: MarkdownPage.maxBytes, local: local)
                 .mapError { Failure(description: $0.message) }.get()
             let fetch: @Sendable (String, Int) async -> Data? = { picture, limit in
@@ -52,7 +52,7 @@ enum MarkdownPageSource {
         // parsing, probing, embedding and escaping run detached as the local page's do; only fetches hop back
         return await Task.detached(priority: .userInitiated) {
             guard let markdown = String(data: data, encoding: .utf8) else {
-                return .failure(Failure(description: MarkdownProbe.Failure.notText(path).description))
+                return .failure(Failure(description: MarkdownFile.Failure.notText(path).description))
             }
             var embedding = MarkdownEmbedding()
             let folder = URL(fileURLWithPath: path).deletingLastPathComponent().path

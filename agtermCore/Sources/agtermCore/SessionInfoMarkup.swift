@@ -89,6 +89,11 @@ enum SessionInfoMarkup {
     }
 
     private static func parseMarkdown(_ source: String) throws(ParseError) -> [SessionInfoSpan] {
+        #if !canImport(Darwin) && canImport(Markdown)
+        return try portableSpans(source)
+        #elseif !canImport(Darwin)
+        throw .invalidMarkdown
+        #else
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         let parsed: AttributedString
         do {
@@ -115,6 +120,7 @@ enum SessionInfoMarkup {
             spans.append(span)
         }
         return spans
+        #endif
     }
 
     private static func validate(_ text: String) throws(ParseError) {
@@ -128,6 +134,7 @@ enum SessionInfoMarkup {
     }
 }
 
+#if canImport(Darwin)
 enum SessionInfoColorKey: CodableAttributedStringKey, MarkdownDecodableAttributedStringKey {
     typealias Value = String
     static let name = "color"
@@ -147,3 +154,4 @@ extension AttributeScopes {
 
     var agtermSessionInfo: SessionInfoAttributes.Type { SessionInfoAttributes.self }
 }
+#endif

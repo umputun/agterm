@@ -1,4 +1,8 @@
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 import Testing
 
@@ -36,7 +40,7 @@ struct CodexStatusHookTests {
             try frame.write(to: dir.appendingPathComponent("screen.\(i)"), atomically: true, encoding: .utf8)
         }
         try "token\n".write(to: tokenFile, atomically: true, encoding: .utf8)
-        try "#!/bin/bash\nprintf '%s\\n' \"$*\" >> '\(statuses.path)'\n".write(to: statusWrapper, atomically: true, encoding: .utf8)
+        try "#!/bin/bash\nprintf '%s\\n' \"$*\" >> '\(statuses.path)'\n".writeExecutable(to: statusWrapper)
         try """
         #!/bin/bash
         printf '%s\n' "$*" >> '\(controls.path)'
@@ -48,9 +52,7 @@ struct CodexStatusHookTests {
           cat "$f"
           echo "$(( n + 1 ))" > '\(counter.path)'
         fi
-        """.write(to: agtermctl, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: statusWrapper.path)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: agtermctl.path)
+        """.writeExecutable(to: agtermctl)
 
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: "/bin/bash")

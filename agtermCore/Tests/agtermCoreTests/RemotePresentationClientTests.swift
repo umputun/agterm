@@ -44,6 +44,9 @@ struct RemotePresentationClientTests {
         var asks: [PresentationAsk] = []
         var dismissals: [PresentationAskRef] = []
         var showsAsks = true
+        var picks: [PresentationPick] = []
+        var pickDismissals: [PresentationPickRef] = []
+        var showsPicks = true
         var overlays: [PresentationOverlay] = []
         var showsOverlays = true
         var overlayCloses: [PresentationOverlayChange] = []
@@ -81,6 +84,11 @@ struct RemotePresentationClientTests {
                 return recorder.showsAsks
             },
             askDismiss: { recorder.dismissals.append($0) },
+            pickRequest: {
+                recorder.picks.append($0)
+                return recorder.showsPicks
+            },
+            pickDismiss: { recorder.pickDismissals.append($0) },
             overlayRequest: {
                 recorder.overlays.append($0)
                 return recorder.showsOverlays
@@ -116,6 +124,43 @@ struct RemotePresentationClientTests {
         #expect(hello.body == .hello(PresentationHello(version: PresentationCodec.version,
                                                        kinds: PresentationHub.supportedKinds, mode: .presenter)))
         #expect(recorder.connections == [.connecting])
+    }
+
+    private func pendingAsk(_ id: String, title: String = "deploy?") -> PresentationAsk {
+        PresentationAsk(PendingAsk(id: id, title: title, buttons: [ControlAskButton(id: "yes", label: "Yes")]), pane: nil, owner: 2)
+    }
+
+    @Test func pendingChunksApplyInOrderOnlyAtTheirCommit() throws {
+        let client = makeClient()
+        client.start()
+        connect(client)
+        let asks = [pendingAsk("a1"), pendingAsk("a2", title: String(repeating: "x", count: 150 * 1024)), pendingAsk("a3")]
+        let chunks = try PresentationPendingBatch.chunks(asks.map { .askRequest($0) })
+        #expect(chunks.count > 1)
+
+        for (index, chunk) in chunks.enumerated() { transport.deliver(line(.pendingChunk(chunk), rev: 2 + index)) }
+        #expect(recorder.asks.isEmpty)
+        transport.deliver(line(.pendingCommit, rev: 2 + chunks.count))
+
+        #expect(recorder.asks == asks)
+    }
+
+    @Test func chunksALostStreamLeftUncommittedApplyNothing() throws {
+        let client = makeClient()
+        client.start()
+        connect(client)
+        let chunks = try PresentationPendingBatch.chunks([.askRequest(pendingAsk("a1")),
+                                                          .askRequest(pendingAsk("a2", title: String(repeating: "x", count: 150 * 1024)))])
+
+        transport.deliver(line(.pendingChunk(chunks[0]), rev: 2))
+        transport.close("gone")
+        clock.now = clock.now.addingTimeInterval(60)
+        client.tick()
+        connect(client, gen: 8)
+        for (index, chunk) in chunks.dropFirst().enumerated() { transport.deliver(line(.pendingChunk(chunk), gen: 8, rev: 2 + index)) }
+        transport.deliver(line(.pendingCommit, gen: 8, rev: 2 + chunks.count))
+
+        #expect(recorder.asks.isEmpty)
     }
 
     @Test func theSnapshotsContextIsAppliedThenEachChangeBehindIt() {
@@ -241,6 +286,40 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.askDismiss(PresentationAskRef(id: "a1", owner: 2)), rev: 2))
 
         #expect(recorder.dismissals == [PresentationAskRef(id: "a1", owner: 2)])
+    }
+
+    static let handedOverPick = PresentationPick(PendingPick(id: "k1", items: [ControlPickItem(id: "a", label: "A")]), owner: 2)
+
+    @Test func aHandedOverPickReachesTheAppAndNothingIsSentBack() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.pickRequest(Self.handedOverPick), rev: 2))
+
+        #expect(recorder.picks == [Self.handedOverPick])
+        #expect(transport.links[0].sent.map(\.body).last == .presenterAcquire)
+    }
+
+    @Test func aPickTheAppCannotShowIsRefused() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        recorder.showsPicks = false
+
+        transport.deliver(line(.pickRequest(Self.handedOverPick), rev: 2))
+
+        #expect(transport.links[0].sent.map(\.body).last == .pickRejected(PresentationPickRef(id: "k1", owner: 2)))
+    }
+
+    @Test func theOriginsPickDismissalReachesTheApp() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+
+        transport.deliver(line(.pickDismiss(PresentationPickRef(id: "k1", owner: 2)), rev: 2))
+
+        #expect(recorder.pickDismissals == [PresentationPickRef(id: "k1", owner: 2)])
     }
 
     static let overlay = PresentationOverlay(job: "j1", pane: nil, sizePercent: 60, backgroundColor: nil, follow: false,

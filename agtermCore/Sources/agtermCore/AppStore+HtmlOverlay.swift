@@ -10,6 +10,8 @@ public enum HtmlOverlayCommandFailure: Error, Equatable, Sendable {
     case unknownSession, noOverlay, notHtml
     /// replica: the page is shown here for another Mac, whose ledger alone takes its answer.
     case replica
+    /// pinned: the page failed in a way a reload cannot fix; carries that failure.
+    case pinned(String)
 }
 
 extension HtmlOverlayOpenFailure {
@@ -32,6 +34,7 @@ extension HtmlOverlayCommandFailure {
         case .noOverlay: return OverlayHtmlError.noOverlay
         case .notHtml: return OverlayHtmlError.notHtml
         case .replica: return OverlayHtmlError.replicaSubmit
+        case .pinned(let failure): return failure
         }
     }
 }
@@ -187,6 +190,7 @@ extension AppStore {
         case .success(let found): page = found
         case .failure(let failure): return failure
         }
+        if page.loadFailurePinned { return .pinned(page.loadError ?? "") }
         updateHtmlOverlay(page.id) {
             $0.reloadRevision += 1
             $0.reloadTarget = target
@@ -201,8 +205,19 @@ extension AppStore {
     /// a session hidden by an undoable close. No-op once the page has left its slot.
     public func setHtmlLoadState(_ id: UUID, state: HtmlLoadState, error: String?) {
         updateHtmlOverlay(id) {
+            guard !$0.loadFailurePinned else { return }
             $0.loadState = state
             $0.loadError = error
+            if state == .loaded { $0.contentShown = true }
+        }
+    }
+
+    /// failHtmlOverlay fails page `id` for good: later load reports and reloads leave `error` in place.
+    public func failHtmlOverlay(_ id: UUID, error: String) {
+        updateHtmlOverlay(id) {
+            $0.loadState = .failed
+            $0.loadError = error
+            $0.loadFailurePinned = true
         }
     }
 

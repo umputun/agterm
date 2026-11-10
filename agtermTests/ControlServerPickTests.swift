@@ -145,6 +145,83 @@ final class ControlServerPickTests: XCTestCase {
         XCTAssertEqual(palette.mode, .actions)
     }
 
+    func testASessionBoundPickOpensInTheSessionsWindowAndReportsOnItsNode() throws {
+        let sessionWindowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: "/tmp"))
+        let controller = registerPick(sessionWindowID)
+        let frontmostID = library.newWindow(name: "frontmost").id
+        let frontmost = registerPick(frontmostID)
+        let pick = makePick("bound-\(UUID().uuidString)")
+
+        XCTAssertEqual(
+            server.openPick(pick, session: session.id.uuidString, window: nil, follow: false),
+            ControlResponse(ok: true, result: ControlResult(id: pick.id))
+        )
+
+        XCTAssertEqual(controller.pending, pick)
+        XCTAssertNil(frontmost.pending)
+        let node = store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        XCTAssertEqual(node?.pick, ControlSessionPick(id: pick.id))
+        XCTAssertEqual(
+            server.openPick(makePick("again"), session: session.id.uuidString, window: nil, follow: false),
+            ControlResponse(ok: false, error: "pick already pending")
+        )
+        controller.cancel()
+        XCTAssertEqual(server.pickResult(pick.id, window: nil),
+                       ControlResponse(ok: true, result: ControlResult(pick: ControlPickResult(result: .cancelled))))
+    }
+
+    private final class PresenterSink: PresentationSink {
+        var frames: [PresentationFrame] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            frames.append(frame)
+            return true
+        }
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    private func presentedSession() throws -> Session {
+        let store = try XCTUnwrap(library.activeStore)
+        store.presentationHub = server.presentationHub
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: "/tmp"))
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: session.paneIdentity)
+        addTeardownBlock { @MainActor in ZmxLeadBook.shared.forget(pane: session.paneIdentity) }
+        let notice = try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1"))
+        _ = ZmxLeadBook.shared.apply(notice, pane: session.paneIdentity)
+        let sink = PresenterSink()
+        let hello = PresentationHello(version: 1, kinds: PresentationHub.pickKinds, mode: .presenter)
+        let id = try server.presentationHub.subscribe(session: session.id, hello: hello, sink: sink) {
+            PresentationSnapshot(status: nil, hud: nil)
+        }
+        server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+        return session
+    }
+
+    func testAPresentedSessionPickIsScopedToItsOwnersWindow() throws {
+        let ownerID = try XCTUnwrap(library.activeWindowID)
+        _ = registerPick(ownerID)
+        let session = try presentedSession()
+        let otherID = library.newWindow(name: "other").id
+        _ = registerPick(otherID)
+        let pick = makePick("presented-\(UUID().uuidString)")
+        let unknown = ControlResponse(ok: false, error: "unknown pick: \(pick.id)")
+
+        XCTAssertEqual(server.openPick(pick, session: session.id.uuidString, window: nil, follow: false),
+                       ControlResponse(ok: true, result: ControlResult(id: pick.id)))
+
+        XCTAssertEqual(server.pickResult(pick.id, window: ownerID.uuidString),
+                       ControlResponse(ok: true, result: ControlResult(pick: ControlPickResult(result: .pending))))
+        XCTAssertEqual(server.pickResult(pick.id, window: otherID.uuidString), unknown)
+        XCTAssertEqual(server.cancelPick(pick.id, window: otherID.uuidString), unknown)
+        XCTAssertEqual(server.cancelPick(pick.id, window: ownerID.uuidString), ControlResponse(ok: true))
+        XCTAssertEqual(server.pickResult(pick.id, window: ownerID.uuidString),
+                       ControlResponse(ok: true, result: ControlResult(pick: ControlPickResult(result: .cancelled))))
+        XCTAssertEqual(server.pickResult(pick.id, window: otherID.uuidString), unknown)
+        XCTAssertEqual(server.cancelPick(pick.id, window: ownerID.uuidString), ControlResponse(ok: true))
+    }
+
     func testFollowRaisesSelectsAndClosesPaletteForBackgroundWindow() throws {
         let targetID = try XCTUnwrap(library.activeWindowID)
         let controller = registerPick(targetID)

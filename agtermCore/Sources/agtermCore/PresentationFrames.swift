@@ -232,9 +232,11 @@ public struct PresentationOverlay: Codable, Equatable, Sendable {
     public var backgroundColor: String?
     public var follow: Bool
     public var wait: Bool
+    /// token is the offer token the presenter passes to the job's helper, sent only to one listing `job.token`.
+    public var token: String?
 
     public init(job: String, pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
-                backgroundColor: String?, follow: Bool, wait: Bool) {
+                backgroundColor: String?, follow: Bool, wait: Bool, token: String? = nil) {
         self.job = job
         self.pane = pane
         self.sizePercent = sizePercent
@@ -243,9 +245,16 @@ public struct PresentationOverlay: Codable, Equatable, Sendable {
         self.backgroundColor = backgroundColor
         self.follow = follow
         self.wait = wait
+        self.token = token
     }
 
-    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
+    public var points: OverlayPointSize {
+        get { OverlayPointSize(width: width, height: height) }
+        set {
+            width = newValue.width
+            height = newValue.height
+        }
+    }
 }
 
 /// PresentationOverlayChange names one remote overlay job, with a size for a resize.
@@ -262,7 +271,13 @@ public struct PresentationOverlayChange: Codable, Equatable, Sendable {
         height = points.height
     }
 
-    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
+    public var points: OverlayPointSize {
+        get { OverlayPointSize(width: width, height: height) }
+        set {
+            width = newValue.width
+            height = newValue.height
+        }
+    }
 }
 
 /// PresentationPageSource is a handed-over page's full source on the origin: a file the viewer fetches over the
@@ -279,17 +294,22 @@ public enum PresentationPageSource: Codable, Equatable, Sendable {
     case text(path: String, line: Int?)
     /// document goes only to a presenter also listing `PresentationHub.pageDocumentKind`, for the same reason.
     case document(path: String)
+    /// forwarded is a URL on a headless origin's own loopback, which the presenter reaches through an ssh forward
+    /// it opens; only a presenter listing `page.forward` is sent one.
+    case forwarded(String)
 
     /// usesChannel says the viewer fetches this page over a page channel, which a single-use claim opens.
     public var usesChannel: Bool {
-        if case .url = self { return false }
-        return true
+        switch self {
+        case .url, .forwarded: return false
+        case .file, .image, .markdown, .text, .document: return true
+        }
     }
 
     /// isContent says this is a page the viewer builds from fetched bytes rather than loads as HTML.
     public var isContent: Bool {
         switch self {
-        case .file, .url: return false
+        case .file, .url, .forwarded: return false
         case .image, .markdown, .text, .document: return true
         }
     }
@@ -340,12 +360,21 @@ public struct PresentationPage: Codable, Equatable, Sendable {
         self.follow = follow
     }
 
-    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
+    public var points: OverlayPointSize {
+        get { OverlayPointSize(width: width, height: height) }
+        set {
+            width = newValue.width
+            height = newValue.height
+        }
+    }
 }
 
 /// PresentationPageChange names one handed-over page by the origin's id, with a reason when the presenter
-/// refuses it.
+/// refuses it or took it down because its channel ended.
 public struct PresentationPageChange: Codable, Equatable, Sendable {
+    /// channelLost is the reason of a page a presenter took down because its channel ended, not because anyone closed it.
+    public static let channelLost = "channel-lost"
+
     public var page: String
     public var reason: String?
 
@@ -384,7 +413,13 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
         self.merge = merge
     }
 
-    public var points: OverlayPointSize { OverlayPointSize(width: width, height: height) }
+    public var points: OverlayPointSize {
+        get { OverlayPointSize(width: width, height: height) }
+        set {
+            width = newValue.width
+            height = newValue.height
+        }
+    }
 }
 
 /// PresentationPageState is what a handed-over page shows on the presenter. `address` is the origin's logical
@@ -518,6 +553,63 @@ public struct PresentationSnapshot: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationPendingChunk is slice `index` of the frames a headless origin hands a new presenter at once: base64
+/// of their encoded array, cut at a byte count so an entry of any size stays behind the commit.
+public struct PresentationPendingChunk: Codable, Equatable, Sendable {
+    public var index: Int
+    public var data: String
+
+    public init(index: Int, data: String) {
+        self.index = index
+        self.data = data
+    }
+}
+
+/// PresentationPendingBatch cuts a batch into chunks and gathers chunks back into it.
+public struct PresentationPendingBatch: Sendable {
+    public enum Failure: Error, Equatable {
+        case outOfOrder(Int)
+        case malformed
+    }
+
+    static let chunkBytes = CatalogCodec.chunkBytes
+
+    private var data = Data()
+    private var count = 0
+    private var failure: Failure?
+
+    public init() {}
+
+    /// chunks is `bodies` encoded as one array and cut into slices.
+    public static func chunks(_ bodies: [PresentationFrame.Body]) throws -> [PresentationPendingChunk] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(bodies.map { PresentationFrame(gen: 0, rev: 0, body: $0) })
+        return stride(from: 0, to: data.count, by: chunkBytes).enumerated().map { index, offset in
+            PresentationPendingChunk(index: index, data: data[offset..<min(offset + chunkBytes, data.count)].base64EncodedString())
+        }
+    }
+
+    public mutating func add(_ chunk: PresentationPendingChunk) {
+        guard failure == nil else { return }
+        guard chunk.index == count, let bytes = Data(base64Encoded: chunk.data) else {
+            failure = .outOfOrder(chunk.index)
+            return
+        }
+        data.append(bytes)
+        count += 1
+    }
+
+    /// commit yields the gathered batch and starts over, nothing for a commit with no chunks before it.
+    public mutating func commit() throws -> [PresentationFrame.Body] {
+        defer { self = PresentationPendingBatch() }
+        if let failure { throw failure }
+        guard count > 0 else { return [] }
+        guard let frames = try? JSONDecoder().decode([PresentationFrame].self, from: data) else { throw Failure.malformed }
+        return frames.map(\.body)
+    }
+}
+
 /// PresentationFrame is one line of the presentation stream. `gen` is the connection generation and `rev` a
 /// revision monotonic within it, so a receiver can drop anything left over from an earlier connection.
 public struct PresentationFrame: Equatable, Sendable {
@@ -544,6 +636,12 @@ public struct PresentationFrame: Equatable, Sendable {
         case askRejected(PresentationAskRef)
         /// The ask ended on the origin; the presenter takes its dialog down without answering.
         case askDismiss(PresentationAskRef)
+        case pickRequest(PresentationPick)
+        case pickResolve(PresentationPickAnswer)
+        /// The presenter cannot show the pick, so the origin takes it back.
+        case pickRejected(PresentationPickRef)
+        /// The pick ended on the origin; the presenter takes its picker down without answering.
+        case pickDismiss(PresentationPickRef)
         case overlayRequest(PresentationOverlay)
         /// The presenter cannot show the overlay; the origin fails the job without launching anything.
         case overlayRejected(PresentationOverlayChange)
@@ -565,6 +663,10 @@ public struct PresentationFrame: Equatable, Sendable {
         case linkClick(PresentationLinkClick)
         /// linkRefused: the origin did not open a forwarded click.
         case linkRefused(PresentationLinkRefusal)
+        /// pendingChunk carries a slice of what a headless origin held for a new presenter, applied only at the commit.
+        case pendingChunk(PresentationPendingChunk)
+        /// pendingCommit applies every chunk since the presenter was granted, in order.
+        case pendingCommit
         /// A kind this build does not speak. Kept, with its ordering, so a newer peer does not break the stream.
         case unknown(String)
 
@@ -588,6 +690,10 @@ public struct PresentationFrame: Equatable, Sendable {
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"
             case .askDismiss: return "ask.dismiss"
+            case .pickRequest: return "pick.request"
+            case .pickResolve: return "pick.resolve"
+            case .pickRejected: return "pick.rejected"
+            case .pickDismiss: return "pick.dismiss"
             case .overlayRequest: return "overlay.request"
             case .overlayRejected: return "overlay.rejected"
             case .overlayClose: return "overlay.close"
@@ -602,6 +708,8 @@ public struct PresentationFrame: Equatable, Sendable {
             case .respawn: return "pane.respawn"
             case .linkClick: return "link.click"
             case .linkRefused: return "link.refused"
+            case .pendingChunk: return "pending.chunk"
+            case .pendingCommit: return "pending.commit"
             case .unknown(let kind): return kind
             }
         }
@@ -620,7 +728,8 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, overlay, page, respawn, link
+        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, pick, overlay, page, respawn, link,
+             pending
     }
 
     public init(from decoder: Decoder) throws {
@@ -647,6 +756,10 @@ extension PresentationFrame: Codable {
         case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
         case "ask.rejected": body = .askRejected(try container.decode(PresentationAskRef.self, forKey: .ask))
         case "ask.dismiss": body = .askDismiss(try container.decode(PresentationAskRef.self, forKey: .ask))
+        case "pick.request": body = .pickRequest(try container.decode(PresentationPick.self, forKey: .pick))
+        case "pick.resolve": body = .pickResolve(try container.decode(PresentationPickAnswer.self, forKey: .pick))
+        case "pick.rejected": body = .pickRejected(try container.decode(PresentationPickRef.self, forKey: .pick))
+        case "pick.dismiss": body = .pickDismiss(try container.decode(PresentationPickRef.self, forKey: .pick))
         case "overlay.request": body = .overlayRequest(try container.decode(PresentationOverlay.self, forKey: .overlay))
         case "overlay.rejected":
             body = .overlayRejected(try container.decode(PresentationOverlayChange.self, forKey: .overlay))
@@ -662,6 +775,8 @@ extension PresentationFrame: Codable {
         case "pane.respawn": body = .respawn(try container.decode(PresentationRespawns.self, forKey: .respawn))
         case "link.click": body = .linkClick(try container.decode(PresentationLinkClick.self, forKey: .link))
         case "link.refused": body = .linkRefused(try container.decode(PresentationLinkRefusal.self, forKey: .link))
+        case "pending.chunk": body = .pendingChunk(try container.decode(PresentationPendingChunk.self, forKey: .pending))
+        case "pending.commit": body = .pendingCommit
         default: body = .unknown(kind)
         }
     }
@@ -684,6 +799,9 @@ extension PresentationFrame: Codable {
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)
         case .askResolve(let answer): try container.encode(answer, forKey: .ask)
         case .askRejected(let ref), .askDismiss(let ref): try container.encode(ref, forKey: .ask)
+        case .pickRequest(let pick): try container.encode(pick, forKey: .pick)
+        case .pickResolve(let answer): try container.encode(answer, forKey: .pick)
+        case .pickRejected(let ref), .pickDismiss(let ref): try container.encode(ref, forKey: .pick)
         case .overlayRequest(let overlay): try container.encode(overlay, forKey: .overlay)
         case .overlayRejected(let change), .overlayClose(let change), .overlayResize(let change),
              .overlayClosed(let change):
@@ -696,7 +814,8 @@ extension PresentationFrame: Codable {
         case .respawn(let respawns): try container.encode(respawns, forKey: .respawn)
         case .linkClick(let click): try container.encode(click, forKey: .link)
         case .linkRefused(let refusal): try container.encode(refusal, forKey: .link)
-        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown: break
+        case .pendingChunk(let chunk): try container.encode(chunk, forKey: .pending)
+        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown, .pendingCommit: break
         }
     }
 }

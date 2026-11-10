@@ -220,8 +220,12 @@ public protocol ControlActions {
     func windowZoom(_ target: String?) -> ControlResponse
     func windowFullscreen(_ target: String?) -> ControlResponse
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
+    /// windowRemoteOpen answers `window.remote.open` with the id of the window showing `host`'s catalog.
+    func windowRemoteOpen(host: String) async -> ControlResponse
     /// Open a native picker. The host owns window resolution, registry lookup, and presentation.
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse
+    /// openPick bound to `session`: drawn by the session's presenter or in the session's own window.
+    func openPick(_ pick: PendingPick, session: String, window: String?, follow: Bool) -> ControlResponse
     /// Read a native picker's current result. The host owns window resolution and registry lookup.
     func pickResult(_ target: String, window: String?) -> ControlResponse
     /// Cancel a native picker. The host owns window resolution, registry lookup, and dismissal.
@@ -263,8 +267,25 @@ public protocol ControlActions {
     func attachRemoteSession(host: String, session: String) async -> ControlResponse
     /// Accept a viewer's presentation stream. After an ok answer the host speaks frames on that connection.
     func openPresentation(session: String) -> ControlResponse
+    /// catalogSubscribe answers `catalog.subscribe`; after an ok answer the connection carries catalog frames.
+    func catalogSubscribe() -> ControlResponse
+    /// detachSessions hides `targets`, rows of one remote window, on this Mac; reattachSession shows a detached one
+    /// again. A local window's rows refuse both.
+    func detachSessions(_ targets: [String], window: String?) -> ControlResponse
+    func reattachSession(_ target: String, window: String?) -> ControlResponse
+    func detachWorkspace(_ target: String?, window: String?) -> ControlResponse
+    func reattachWorkspace(_ target: String, window: String?) -> ControlResponse
+    /// dismissRemoteUnknown drops window `window`'s marks for actions with an unknown outcome.
+    func dismissRemoteUnknown(window: String?) -> ControlResponse
+    /// catalogOperation answers `catalog.op`: what became of `opID`, sent when the catalog stood at `sent`,
+    /// fencing an id the host has not seen.
+    func catalogOperation(_ opID: String, sent: CatalogPosition?) -> ControlResponse
+    /// takesOperationReceipts is whether this host answers a structural command's `opID` with a receipt.
+    var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.
     func claimOverlayJob(_ job: String) -> ControlResponse
+    /// claimOverlayJob with the offer token the helper was handed, which a tokened offer requires.
+    func claimOverlayJob(_ job: String, token: String?) -> ControlResponse
     /// claimPageServe claims a handed-over page's channel with its single-use token. After an ok answer the
     /// connection carries page channel frames.
     func claimPageServe(_ token: String) -> ControlResponse

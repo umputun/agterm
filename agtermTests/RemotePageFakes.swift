@@ -160,6 +160,7 @@ final class FakePageLauncher: RemotePageLauncher {
     var chunkSize = 1024
     var reply: String? = #"{"ok":true,"result":{}}"#
     var holdCancels = false
+    var failsLaunch = false
     private(set) var launches: [[String]] = []
     private(set) var origins: [FakePageOrigin] = []
     private(set) var helpers: [Helper] = []
@@ -167,6 +168,7 @@ final class FakePageLauncher: RemotePageLauncher {
     init(files: [String: (String, Data)] = [:]) { self.files = files }
 
     func launch(_ argv: [String], onExit: @escaping @MainActor () -> Void) throws -> RemotePageHelper {
+        if failsLaunch { throw POSIXError(.ENOENT) }
         var pair: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
         launches.append(argv)
@@ -204,5 +206,65 @@ final class ScriptedRunner: RemoteCommandRunner, @unchecked Sendable {
             recorded.append(argv)
             return results.isEmpty ? RemoteCommandResult(status: 255, stdout: "", stderr: "unscripted call") : results.removeFirst()
         }
+    }
+}
+
+@MainActor
+final class FakeForwardLauncher: RemoteForwardLauncher {
+    final class Process: RemoteForwardProcess {
+        private(set) var terminated = false
+        var onExit: (@MainActor (String) -> Void)?
+        var listener: Int32 = -1
+
+        func terminate() {
+            terminated = true
+            if listener >= 0 { close(listener) }
+            listener = -1
+        }
+    }
+
+    var listens = true
+    private(set) var launches: [[String]] = []
+    private(set) var processes: [Process] = []
+
+    func launch(_ argv: [String], onExit: @escaping @MainActor (String) -> Void) throws -> RemoteForwardProcess {
+        launches.append(argv)
+        let process = Process()
+        process.onExit = onExit
+        if listens, let port = Self.forwardPort(argv) {
+            process.listener = Self.listen(port)
+        }
+        processes.append(process)
+        return process
+    }
+
+    var localPort: Int? {
+        launches.last.flatMap(Self.forwardPort)
+    }
+
+    static func forwardPort(_ argv: [String]) -> Int? {
+        let words = argv.first == "/bin/sh" && argv.count == 3
+            ? argv[2].components(separatedBy: " ").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "'")) }
+            : argv
+        guard let index = words.lastIndex(of: "-L"), index + 1 < words.count else { return nil }
+        return Int(words[index + 1].split(separator: ":")[1])
+    }
+
+    static func listen(_ port: Int) -> Int32 {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        var yes: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = UInt16(port).bigEndian
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        guard bound == 0, Darwin.listen(fd, 4) == 0 else {
+            close(fd)
+            return -1
+        }
+        return fd
     }
 }

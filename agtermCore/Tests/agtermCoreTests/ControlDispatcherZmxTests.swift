@@ -258,6 +258,13 @@ struct ControlDispatcherZmxTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func aMacAppRefusesCatalogSubscribe() async {
+        let response = await ControlDispatcher(actions: MockControlActions()).dispatch(ControlRequest(cmd: .catalogSubscribe))
+
+        #expect(response?.ok == false)
+        #expect(response?.error == "catalog.subscribe is served only by agterm-server")
+    }
+
     @Test func zmxAttachRefusesWithoutAHostOrASessionBeforeTheHostIsCalled() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

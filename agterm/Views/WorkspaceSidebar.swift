@@ -102,7 +102,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.workspaces.map {
             ($0.id, $0.name, $0.unseenCount, $0.tint, $0.sessions.map {
                 ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
-                 $0.remoteConnection, $0.tint, $0.effectiveInfo)
+                 $0.remoteConnection, $0.tint, $0.effectiveInfo, $0.ended)
             })
         }
         _ = store.selectedSessionID
@@ -114,6 +114,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // a membership change or a filter flip takes the rebuild branch.
         _ = store.focusedWorkspaceIDs
         _ = store.focusEnabled
+        context.coordinator.applyAddButtonEnabled(!store.serverActionsBlocked)
         context.coordinator.reconcile()
         context.coordinator.syncSelection()
     }
@@ -215,7 +216,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         init(store: AppStore, actions: AppActions) {
             self.store = store
             self.actions = actions
-            self.renameController = SidebarRenameController(store: store)
+            self.renameController = SidebarRenameController(store: store) { [weak actions] operation in
+                actions?.performRemote(operation, in: store) ?? false
+            }
             super.init()
             // seed from the live mirror (SettingsModel applies the persisted size before any sidebar is
             // built) so the first appearanceChanged doesn't rebuild for no change.
@@ -891,8 +894,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedPageSessionIcon = Self.rowIcon("list.bullet.rectangle.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
+        lazy var flaggedRemoteSessionIcon = Self.rowIcon("cloud.fill")
+        lazy var flaggedRemoteSplitSessionIcon = Self.rowIcon("cloud.fill", weight: .bold)
         lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")
         lazy var remoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash", weight: .bold)
+        lazy var flaggedRemoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash.fill")
+        lazy var flaggedRemoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash.fill", weight: .bold)
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)

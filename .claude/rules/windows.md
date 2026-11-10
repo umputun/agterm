@@ -30,6 +30,9 @@ session drag are out of scope.
 
 ## Model and persistence
 
+- A window's `WindowInfo.source` names the agterm-server it mirrors (`WindowSource`); nil is this Mac's own tree.
+  A remote window is never seeded and saves no rows: its store loads empty with its saved
+  `RemoteWindowViewState` and is filled from the catalog (`WindowLibrary+Remote`, `control-api.md`).
 - Host-free `WindowLibrary` owns ordered `WindowInfo` values, live stores, and `frontmostWindowID`.
   Use `WindowInfo`, not `Window`, to avoid framework name collisions. `WindowsIndex` has its own version,
   independent of `Snapshot.version`; `WindowEntry` stores ID, name, and open state.

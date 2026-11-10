@@ -15,7 +15,7 @@ func validatePaneArgument(_ pane: String?) throws {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
+        subcommands: [New.self, Duplicate.self, Close.self, Detach.self, Reattach.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Swap.self, Lead.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self,
                       SelectAll.self,
                       Text.self, Status.self, Restore.self, Restart.self, FlagCommand.self, Context.self, Info.self, Tint.self,
@@ -38,6 +38,7 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Create a companion of this session (id/prefix/active), placed under it in the sidebar; a companion target means its parent.") var parent: String?
         @OptionGroup var tint: TintCreateOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
@@ -69,14 +70,15 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             if let parent {
-                return ControlRequest(cmd: .sessionCompanionNew, target: parent, args: options.withWindow(tint.apply(to:
+                return operation.stamp(ControlRequest(cmd: .sessionCompanionNew, target: parent,
+                                                      args: options.withWindow(tint.apply(to:
                     ControlArgs(name: name, cwd: cwd, noSelect: noSelect ? true : nil, command: command,
-                                wait: wait ? true : nil))))
+                                wait: wait ? true : nil)))))
             }
-            return ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
+            return operation.stamp(ControlRequest(cmd: .sessionNew, args: options.withWindow(tint.apply(to:
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
                             createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
-                            command: command, wait: wait ? true : nil, after: after, before: before))))
+                            command: command, wait: wait ? true : nil, after: after, before: before)))))
         }
     }
 
@@ -114,11 +116,12 @@ struct Session: ParsableCommand {
         @Flag(name: .long, help: "Give a single close ⌘W's undo grace, so undo inside it brings the running shell back; closes at once when Settings turns undo off.")
         var undoable = false
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
             let args = ControlArgs(targets: target.batchTargets, undoable: undoable ? true : nil)
-            return ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active",
-                                  args: options.withWindow(args == ControlArgs() ? nil : args))
+            return operation.stamp(ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active",
+                                                  args: options.withWindow(args == ControlArgs() ? nil : args)))
         }
     }
 
@@ -148,9 +151,11 @@ struct Session: ParsableCommand {
         @Argument(help: "New session name.") var name: String
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionRename, target: target.target, args: options.withWindow(ControlArgs(name: name)))
+            operation.stamp(ControlRequest(cmd: .sessionRename, target: target.target,
+                                           args: options.withWindow(ControlArgs(name: name))))
         }
     }
 
@@ -173,6 +178,7 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         // exactly one placement intent among {workspace positional (relocate), --to (reorder), --after/--before
         // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
@@ -213,8 +219,8 @@ struct Session: ParsableCommand {
             }
             var withTargets = args
             withTargets.targets = target.batchTargets
-            return ControlRequest(cmd: .sessionMove, target: target.targets.first ?? "active",
-                                  args: options.withWindow(withTargets))
+            return operation.stamp(ControlRequest(cmd: .sessionMove, target: target.targets.first ?? "active",
+                                                  args: options.withWindow(withTargets)))
         }
     }
 
@@ -263,6 +269,7 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Divider direction: vertical (left/right) or horizontal (top/bottom).") var axis: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
+            @OptionGroup var operation: OperationOptions
 
             func validate() throws {
                 if let axis, SplitAxis(rawValue: axis) == nil {
@@ -271,8 +278,8 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: .sessionSplit, target: target.target,
-                               args: options.withWindow(ControlArgs(mode: mode, axis: axis)))
+                operation.stamp(ControlRequest(cmd: .sessionSplit, target: target.target,
+                                               args: options.withWindow(ControlArgs(mode: mode, axis: axis))))
             }
         }
 
@@ -281,9 +288,10 @@ struct Session: ParsableCommand {
                 abstract: "Close the split pane (destroys it, killing whatever it runs); ok when there is none.")
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
+            @OptionGroup var operation: OperationOptions
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: .sessionSplitClose, target: target.target, args: options.withWindow())
+                operation.stamp(ControlRequest(cmd: .sessionSplitClose, target: target.target, args: options.withWindow()))
             }
         }
     }
@@ -293,12 +301,23 @@ struct Session: ParsableCommand {
         @Argument(help: "Mode: on (show), off (hide), or toggle (default). The hidden scratch shell stays alive.") var mode: String = "toggle"
         @Option(name: .long, help: "When showing, run this command as the scratch's process instead of a login shell (run-once; respawns the scratch if one is already open).") var command: String?
         @Flag(name: .long, help: "Select (switch to) the target session when showing its scratch (default: show without switching).") var follow = false
+        @Option(name: .customLong("expect-scratch"), help: "The scratch identity, or none, the target session must still have; needs --op-id.") var expectScratch: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
+
+        func validate() throws {
+            guard let expectScratch else { return }
+            guard operation.opID != nil else { throw ValidationError("--expect-scratch needs --op-id") }
+            guard expectScratch.lowercased() == "none" || UUID(uuidString: expectScratch) != nil else {
+                throw ValidationError("--expect-scratch takes a scratch identity or none")
+            }
+        }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionScratch, target: target.target,
-                           args: options.withWindow(ControlArgs(mode: mode, command: command, follow: follow ? true : nil)))
+            var args = ControlArgs(mode: mode, command: command, follow: follow ? true : nil)
+            args.scratch = expectScratch
+            return operation.stamp(ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(args)))
         }
     }
 
