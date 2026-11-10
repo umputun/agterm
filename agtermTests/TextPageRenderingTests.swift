@@ -1097,15 +1097,18 @@ extension TextPageRenderingTests {
     func testColorEscapesBecomeStyledTextAndSearchReadsTheShownText() async throws {
         let text = "\u{1B}[36mbugs+impl\u{1B}[39m started\n\u{1B}[1;38;5;196mfail\u{1B}[22m red\u{1B}[0m \u{1B}(B\u{1B}[2Kplain\n"
             + "\u{1B}[1;38:2::0:128:0mgreen\u{1B}[0m\n"
+            + "\u{1B}[32mok\u{1B}[>4;1m still\u{1B}[0m \u{1B}_Gf=1;AA\u{1B}\\x\u{1B}Ptmux;\u{1B}\u{1B}[31mhidden\u{1B}\\y"
+            + "\u{1B}Ptmux;\u{1B}\u{1B}]8;;http://x\u{1B}\u{1B}\\label\u{1B}\u{1B}]8;;\u{1B}\u{1B}\\\u{1B}\\\nend\u{1B}P1+r6b"
         let (page, window) = try shown(try openText("agents.log", text))
         defer { window.orderOut(nil) }
-        try await waitForScript(Self.code, in: page.webView) { $0 == "bugs+impl started\nfail red plain\ngreen\n" }
+        try await waitForScript(Self.code, in: page.webView) { $0 == "bugs+impl started\nfail red plain\ngreen\nok still xy\nend" }
 
         let spans = try await page.webView.evaluateJavaScript("""
             [...document.querySelectorAll('pre code span')].map(s => `${s.textContent}:${s.style.color}:${s.style.fontWeight}`).join(',')
             """)
         XCTAssertEqual(spans as? String,
-                       "bugs+impl:var(--agterm-color-6, #00cdcd):,fail:rgb(255, 0, 0):bold, red:rgb(255, 0, 0):,green:rgb(0, 128, 0):bold")
+                       "bugs+impl:var(--agterm-color-6, #00cdcd):,fail:rgb(255, 0, 0):bold, red:rgb(255, 0, 0):,green:rgb(0, 128, 0):bold,"
+                       + "ok:var(--agterm-color-2, #00cd00):, still:var(--agterm-color-2, #00cd00):")
         try search("impl started", on: page)
         try await waitForScript(Self.count, in: page.webView) { $0 == "1 of 1" }
     }

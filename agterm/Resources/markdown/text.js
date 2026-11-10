@@ -130,11 +130,18 @@
       let end = at + 2;
       if (kind === 0x5b) {
         while (end < value.length && !(value.charCodeAt(end) >= 0x40 && value.charCodeAt(end) <= 0x7e)) end += 1;
-        if (value[end] === 'm') style = sgr(style, value.slice(at + 2, end));
+        // a private marker (`ESC[>4;1m`, modifyOtherKeys) makes it something other than SGR
+        if (value[end] === 'm' && !/^[<=>?]/.test(value.slice(at + 2, end))) style = sgr(style, value.slice(at + 2, end));
         end += 1;
       } else if (kind === 0x5d) {
         while (end < value.length && value.charCodeAt(end) !== 0x07 && value.charCodeAt(end) !== 0x1b) end += 1;
         end += value.charCodeAt(end) === 0x1b ? 2 : 1;
+      } else if (kind === 0x50 || kind === 0x58 || kind === 0x5e || kind === 0x5f) {
+        // DCS, SOS, PM and APC end only at ESC \; a tmux passthrough doubles every ESC inside it
+        while (end < value.length && !(value[end] === '\x1b' && value[end + 1] === '\\')) {
+          end += value[end] === '\x1b' && value[end + 1] === '\x1b' ? 2 : 1;
+        }
+        end += 2;
       } else if (kind >= 0x20 && kind <= 0x2f) {
         while (end < value.length && value.charCodeAt(end) >= 0x20 && value.charCodeAt(end) <= 0x2f) end += 1;
         end += 1;
