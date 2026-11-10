@@ -8,6 +8,8 @@ enum ServerProcess {
     struct Output: Equatable, Sendable {
         let status: Int32
         let stdout: String
+        /// stdoutComplete is true only after the collector reads EOF.
+        let stdoutComplete: Bool
         let stderr: String
     }
 
@@ -62,7 +64,8 @@ enum ServerProcess {
             throw Failure.timedOut(argv)
         }
         feeder?.finish(grace)
-        return Output(status: status, stdout: out.collect(grace), stderr: err.collect(grace))
+        let captured = out.collect(grace)
+        return Output(status: status, stdout: captured.text, stdoutComplete: captured.complete, stderr: err.collect(grace).text)
     }
 
     /// spawn starts `argv` with `descriptors` as its stdin (/dev/null when nil), stdout and stderr.
@@ -203,6 +206,7 @@ enum ServerProcess {
         private let lock = NSLock()
         private var data = Data()
         private var stopped = false
+        private var reachedEnd = false
         private let done = DispatchSemaphore(value: 0)
 
         init(_ fd: Int32) {
@@ -216,6 +220,7 @@ enum ServerProcess {
                     guard ready > 0 else { continue }
                     let count = read(fd, &chunk, chunk.count)
                     if count < 0, errno == EINTR { continue }
+                    if count == 0 { lock.withLock { reachedEnd = true } }
                     guard count > 0 else { break }
                     lock.withLock { data.append(contentsOf: chunk[0..<count]) }
                 }
@@ -225,11 +230,12 @@ enum ServerProcess {
             thread.start()
         }
 
-        func collect(_ timeout: TimeInterval) -> String {
+        /// collect returns what was read and whether the pipe reached its end before `timeout`.
+        func collect(_ timeout: TimeInterval) -> (text: String, complete: Bool) {
             _ = done.wait(timeout: .now() + timeout)
             return lock.withLock {
                 stopped = true
-                return String(decoding: data, as: UTF8.self)
+                return (String(decoding: data, as: UTF8.self), reachedEnd)
             }
         }
     }

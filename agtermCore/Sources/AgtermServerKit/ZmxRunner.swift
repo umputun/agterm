@@ -105,11 +105,14 @@ public struct ProcessZmxRunner: ZmxRunner {
     public func list() throws -> [ZmxSessionRecord] {
         let output = try invoke(["list"])
         guard output.status == 0 else { throw ZmxRunnerError.failed(output.stderr) }
+        // a cut-short listing leaves out live daemons, and the observer would end their panes
+        guard output.stdoutComplete else { throw ZmxRunnerError.failed("zmx list output did not end") }
         return try ZmxListParser.parse(output.stdout)
     }
 
     public func screen(_ name: String, all: Bool) -> ZmxScreen? {
-        guard let output = try? invoke(["screen", name] + (all ? ["--all"] : [])), output.status == 0 else { return nil }
+        guard let output = try? invoke(["screen", name] + (all ? ["--all"] : [])), output.status == 0,
+              output.stdoutComplete else { return nil }
         return ZmxScreen(output: output.stdout)
     }
 
