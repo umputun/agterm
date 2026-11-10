@@ -511,6 +511,11 @@ struct CommandsTests {
         #expect(try request(["session", "go", "--to", "last", "--window", "w1"]) == expected)
     }
 
+    @Test func sessionGoPosition() throws {
+        let expected = ControlRequest(cmd: .sessionGo, args: ControlArgs(to: "3"))
+        #expect(try request(["session", "go", "--to", "3"]) == expected)
+    }
+
     @Test func sessionGoRequiresToFails() {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "go"]) }
     }

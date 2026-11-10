@@ -605,13 +605,15 @@ buys nothing. A caller with no tree uses `version`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
   directory in Finder. Errors when that directory no longer exists.
-- `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
+- `session go --to next|prev|first|last|next-attention|prev-attention|N [--window W]` — move the
   selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
   flagged sessions in flagged mode, the marked workspaces' sessions while the focus filter is applied,
   else all sessions (clearing the flag / suspending the filter restores the full set). next/prev wrap around at the ends (last→first,
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed, plus active when the tree reports
-  `attentionIncludesActive: true`), wrapping, always within the addressed window. Returns the newly selected id.
+  `attentionIncludesActive: true`), wrapping, always within the addressed window. A number `N` selects the
+  Nth session of that set in sidebar order, 1-based, sessions in a collapsed workspace included; past the end it
+  errors `no session at position N: M navigable` and leaves the selection alone. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
   `session move --after SID | --before SID [--target]` — place the session directly after / before an

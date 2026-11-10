@@ -320,6 +320,7 @@ extension ControlServer: ControlActions {
     func goSession(window: String?, direction: SessionNavigation) -> ControlResponse {
         // relative nav acts on the store's current selection: no session target, just the frontmost/`--window` store.
         resolver.resolvePlacementStore(window) { store in
+            if let error = store.navigationError(direction) { return ControlResponse(ok: false, error: error) }
             store.navigateSession(direction)
             guard let id = store.selectedSessionID else {
                 return ControlResponse(ok: false, error: "no session to navigate")
