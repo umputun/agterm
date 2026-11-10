@@ -819,7 +819,8 @@ extension Notification.Name {
     /// `didResize` fires either.
     static let agtermWindowAttachmentChanged = Notification.Name("agterm.windowAttachmentChanged")
 
-    /// Posted after a GUI action changes a `window.list` field that no NSWindow notification reports.
+    /// Posted after a GUI action finishes changing a `window.list` field that no other observed
+    /// notification reflects.
     static let agtermWindowCatalogChanged = Notification.Name("agterm.windowCatalogChanged")
 
     /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its matcher

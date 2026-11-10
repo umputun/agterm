@@ -249,8 +249,7 @@ final class ControlServer {
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
         // a GUI-only sidebar toggle runs no control command, so window.list's cached copy would lag. queue
-        // nil (NOT .main) delivers synchronously on the posting @MainActor thread, so the refresh lands
-        // before the toggle returns; an async .main hop leaves a window for a stale fast-path read.
+        // nil delivers on the posting @MainActor thread, so the refresh lands before the toggle returns.
         NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }

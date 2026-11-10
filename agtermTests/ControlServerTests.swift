@@ -362,6 +362,33 @@ final class ControlServerTests: XCTestCase {
         XCTAssertNil(cachedAutoFollow())
     }
 
+    func testGUICloseOfABackgroundWindowRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let closingID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let frontmostID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = WindowAccessor.TitleProbeView(windowID: closingID, library: library, store: store)
+        func cachedNode(_ id: UUID) -> ControlWindowNode? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == id.uuidString }
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        let before = try XCTUnwrap(cachedNode(closingID))
+        XCTAssertTrue(before.open)
+        XCTAssertNotNil(before.geometry)
+
+        window.close()
+        let after = try XCTUnwrap(cachedNode(closingID))
+        XCTAssertFalse(after.open)
+        XCTAssertNil(after.geometry)
+        XCTAssertEqual(cachedNode(frontmostID)?.active, true)
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in
