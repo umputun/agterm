@@ -315,11 +315,11 @@ struct ServerStreamsTests {
 
         #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: false).ok)
         let request = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
-        guard case .pickRequest(let shown)? = request else { Issue.record("no pick request: \(viewer.missed ?? "")"); return }
+        guard case .pickRequest(let shown)? = request else { Issue.record("no pick request: \(viewer.missed ?? ""), session \(session.id)"); return }
         try viewer.send(.pickResolve(PresentationPickAnswer(id: shown.id, owner: shown.owner, item: "a")))
 
         let settled = await eventually { harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .picked }
-        #expect(settled)
+        #expect(settled, "session \(session.id)")
     }
 
     @Test func aPickWhosePresenterLeavesWaitsForTheNextOne() async throws {
@@ -909,7 +909,7 @@ struct ServerStreamsTests {
         let session = try newSession()
         let viewer = try await presenter(for: session)
         defer { viewer.disconnect() }
-        let shown = try #require(try await offeredPage(session, to: viewer))
+        let shown = try #require(try await offeredPage(session, to: viewer), "\(viewer.missed ?? ""), session \(session.id)")
         let page = try #require(UUID(uuidString: shown.page))
         var pair: [Int32] = [-1, -1]
         #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
@@ -917,11 +917,11 @@ struct ServerStreamsTests {
         streams.adoptPageServeStream(descriptor: pair[0], page: page, token: shown.token)
 
         close(pair[1])
-        #expect(await eventually { session.remoteOverlays.slot(nil)?.owner == nil })
+        #expect(await eventually { session.remoteOverlays.slot(nil)?.owner == nil }, "session \(session.id)")
         try viewer.send(.pageClosed(PresentationPageChange(page: shown.page)))
 
-        #expect(await eventually { session.remoteOverlays.slot(nil) == nil })
-        #expect(try await offeredPage(session, to: viewer) != nil)
+        #expect(await eventually { session.remoteOverlays.slot(nil) == nil }, "session \(session.id)")
+        #expect(try await offeredPage(session, to: viewer) != nil, "\(viewer.missed ?? ""), session \(session.id)")
     }
 
     @Test func aPresenterReportingItsChannelLostBeforeTheServerSeesItKeepsThePage() async throws {
@@ -1072,10 +1072,10 @@ struct ServerStreamsTests {
         defer { next.disconnect() }
 
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
-        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer: \(next.missed ?? "")"); return }
+        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer: \(next.missed ?? ""), session \(session.id)"); return }
         #expect(fresh.sizePercent == 40)
         let hide = await offPool { next.first { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } } }
-        #expect(hide != nil)
+        #expect(hide != nil, "\(next.missed ?? ""), session \(session.id)")
     }
 
     @Test func offeredPagesAndJobsReadBackTheirWindows() async throws {
@@ -1157,7 +1157,7 @@ struct ServerStreamsTests {
             _ = try write(name, text)
             try click("./" + name, on: session, mode: mode, from: viewer)
             let page = await pageRequest(from: viewer)
-            #expect(page != nil, "\(name) in \(mode): \(viewer.missed ?? "")")
+            #expect(page != nil, "\(name) in \(mode): \(viewer.missed ?? ""), session \(session.id)")
             #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok, "\(name) in \(mode)")
         }
     }
@@ -1251,11 +1251,11 @@ struct ServerStreamsTests {
                                                          canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0)))
 
         try click("./broken.md", on: session, from: viewer)
-        #expect(await refusal(from: viewer) == .notOpened, "\(viewer.missed ?? "")")
+        #expect(await refusal(from: viewer) == .notOpened, "\(viewer.missed ?? ""), session \(session.id)")
         #expect(session.remoteOverlays.slot(nil)?.job == shown.page)
 
         try click("./b.md", on: session, from: viewer)
-        let next = try #require(await pageRequest(from: viewer), "\(viewer.missed ?? "")")
+        let next = try #require(await pageRequest(from: viewer), "\(viewer.missed ?? ""), session \(session.id)")
         #expect(next.source == .markdown(path: replacement))
         #expect(session.remoteOverlays.slot(nil)?.job == next.page)
     }

@@ -30,6 +30,8 @@ paths:
   It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
   processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
   A hang otherwise reaches only the job timeout, which records nothing.
+  On any failure the job also saves the last 45 minutes of the `com.umputun.agterm` unified log, capped at
+  120s, into that artifact: the server's presentation streams log their close reasons only there.
   A prior `swift build --build-tests --enable-code-coverage` step compiles outside it, so compile time on a
   slow runner does not count against the 600s; `swift test` with the same flag reuses that build. The
   35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.

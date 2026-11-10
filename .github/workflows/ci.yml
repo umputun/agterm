@@ -99,6 +99,14 @@ jobs:
           AGTERM_SHELL_INTEGRATION: ${{ github.workspace }}/build/linux/ghostty/shell-integration
           WATCHDOG_SECONDS: "600"
           DIAG_DIR: ${{ github.workspace }}/test-hang
+      # the server logs why it closed each presentation stream only to the unified log
+      - name: save the agterm log
+        if: failure()
+        continue-on-error: true
+        run: |
+          mkdir -p test-hang
+          perl -e 'alarm shift; exec @ARGV' 120 log show --style compact --last 45m \
+            --predicate 'subsystem == "com.umputun.agterm"' > test-hang/agterm.log 2>&1
       - name: upload hang diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

@@ -49,7 +49,7 @@ public final class PresentationStream: PresentationSink {
         do {
             return owner.send(try PresentationCodec.encode(frame))
         } catch {
-            presentationLog.error("closing a presentation stream on an unsendable frame: \(error)")
+            presentationLog.error("closing the presentation stream of \(session) on an unsendable frame: \(error)")
             return false
         }
     }
@@ -57,7 +57,7 @@ public final class PresentationStream: PresentationSink {
     public var subscribed: Bool { subscriber != nil }
 
     public func close(_ reason: PresentationHub.CloseReason) {
-        presentationLog.notice("closing a presentation stream: \(reason)")
+        presentationLog.notice("closing the presentation stream of \(session): \(reason)")
         owner.shutdown()
     }
 
@@ -69,7 +69,7 @@ public final class PresentationStream: PresentationSink {
         do {
             frame = try PresentationCodec.decode(line)
         } catch {
-            presentationLog.error("closing a presentation stream on a bad frame: \(error)")
+            presentationLog.error("closing the presentation stream of \(session) on a bad frame: \(error)")
             owner.shutdown()
             return
         }
@@ -78,19 +78,19 @@ public final class PresentationStream: PresentationSink {
             return
         }
         guard case .hello(let hello) = frame.body else {
-            presentationLog.error("closing a presentation stream that did not open with hello")
+            presentationLog.error("closing the presentation stream of \(session) that did not open with hello")
             owner.shutdown()
             return
         }
         guard host.presentationSourceExists(session) else {
-            presentationLog.notice("closing a presentation stream whose session is gone")
+            presentationLog.notice("closing the presentation stream of \(session) whose session is gone")
             owner.shutdown()
             return
         }
         do {
             subscriber = try host.subscribePresentation(self, hello: hello)
         } catch {
-            presentationLog.error("refusing a presentation stream: \(error)")
+            presentationLog.error("refusing the presentation stream of \(session): \(error)")
             owner.shutdown()
         }
     }
@@ -117,7 +117,7 @@ extension PresentationStreamHost {
         Task { @MainActor [weak stream] in
             try? await Task.sleep(nanoseconds: UInt64(deadline * 1_000_000_000))
             guard let stream, !stream.subscribed else { return }
-            presentationLog.notice("closing a presentation stream that sent no hello")
+            presentationLog.notice("closing the presentation stream of \(stream.session) that sent no hello")
             stream.shutdown()
         }
         let inbound = DispatchSemaphore(value: PresentationStream.inboundLimit)
@@ -148,7 +148,7 @@ extension PresentationStreamHost {
     /// the last mirrored state for good, on a stream that still answers pings.
     public func dropOrphanedPresentationStreams() {
         for stream in presentationStreams where !presentationSourceExists(stream.session) {
-            presentationLog.notice("closing a presentation stream whose session is gone")
+            presentationLog.notice("closing the presentation stream of \(stream.session) whose session is gone")
             stream.shutdown()
         }
     }
