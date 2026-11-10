@@ -58,7 +58,12 @@ public final class PickController {
         return pendingAsk == nil ? "pick pending" : "ask pending"
     }
 
-    public init() {}
+    private let askRegistry: AskRegistry
+
+    /// `askRegistry` holds this controller's ask results.
+    public init(askRegistry: AskRegistry = .shared) {
+        self.askRegistry = askRegistry
+    }
 
     /// open reserves the modal slot unless a pick or ask already owns it.
     @discardableResult
@@ -134,8 +139,8 @@ public final class PickController {
         guard let pendingAsk else { return }
         guard outcome.result != .pending else { return }
         let outcome = pendingAsk.expired(at: Date()) ? ControlAskResult(result: .cancelled) : outcome
-        if let windowID, AskRegistry.shared.owner(for: pendingAsk.id) == .window(windowID) {
-            AskRegistry.shared.retain(id: pendingAsk.id, result: outcome, window: windowID)
+        if let windowID, askRegistry.owner(for: pendingAsk.id) == .window(windowID) {
+            askRegistry.retain(id: pendingAsk.id, result: outcome, window: windowID)
         }
         self.pendingAsk = nil
         askDraft = nil
@@ -157,7 +162,7 @@ public final class PickController {
         if pendingAsk?.id == id {
             return ControlAskResult(result: .pending)
         }
-        guard let windowID, let retained = AskRegistry.shared.result(for: id), retained.windowID == windowID else { return nil }
+        guard let windowID, let retained = askRegistry.result(for: id), retained.windowID == windowID else { return nil }
         return retained.result
     }
 }
