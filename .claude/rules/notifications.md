@@ -142,6 +142,10 @@ paths:
   shell integration's `_ags_precmd`. Panes compare AFTER `AgentIndicator.normalizedPane`,
   or a promoted survivor's baked `.right` fails to match the `.left` its own block is stored as. Every
   internal clear and retag keeps using `setAgentIndicator` and bypasses the rule.
+- A Claude subagent shares its main agent's pane, so pane precedence cannot separate them. The Claude adapter
+  instead posts a subagent's `active` with `--if-idle`, which applies only to an idle row; its `blocked`
+  still applies. Accepted gaps: the main agent's activity can replace a subagent's block, and a block the
+  answering key leaves in place (a digit under `enter`, any key under `never`) stays until main's next event.
 - Two blocks in one session still collapse: the second pane's `blocked` replaces the first, and clearing it
   from that pane leaves nothing. Only per-pane status storage fixes that; discussion #517 tracks it.
 - Interrupt means Esc (`keyCode == 53`) or bare Ctrl-C: control with no command/option/shift and either
@@ -154,7 +158,8 @@ paths:
   active on quick interrupt: Esc/manual decline emits neither `Stop` nor `PostToolUse`, and a prompt
   `PermissionRequest` does not cover turns blocked only through `Notification[permission_prompt]`,
   about six seconds after the last keystroke.
-  `PostToolUse` reasserts `active --blink` after an answered prompt. cmux can observe its
+  The main thread's `PostToolUse` reasserts `active --blink` after an answered prompt; a subagent's is
+  `--if-idle` and cannot. cmux can observe its
   own permission UI and herdr scrapes PTY state; agterm does neither.
 - `AgentIndicator.statusPane` also directs GUI selections needing attention. Attention and ordinary
   navigation, palettes, sidebar and Dock rows, and idle auto-follow use

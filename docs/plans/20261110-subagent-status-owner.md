@@ -144,7 +144,7 @@ Limitations, stated in the docs:
   `.claude/rules/control-api.md` (the `session.status` flags bullet and the Claude hook mapping),
   `.claude/rules/notifications.md`
 
-- [ ] failing adapter tests first in `ClaudeStatusHookTests`, payloads on stdin through the process-chain harness,
+- [x] failing adapter tests first in `ClaudeStatusHookTests`, payloads on stdin through the process-chain harness,
       asserting the recorded writes:
       - subagent `PostToolUse` with argv `active --blink` posts `active --blink --if-idle`; main's posts argv;
       - subagent `PermissionRequest` posts `blocked` unchanged;
@@ -158,17 +158,17 @@ Limitations, stated in the docs:
         argv unchanged;
       - empty stdin, a terminal stdin and an unreadable payload post argv without hanging; Linux without `jq`
         posts argv
-- [ ] adapter: bounded stdin read, key-path parsing, the two argv rewrites
-- [ ] rerun the recipe probe, run from `/tmp` and isolated: `AGT_STATUS_SCRIPT` set to the worktree adapter, a
+- [x] adapter: bounded stdin read, key-path parsing, the two argv rewrites
+- [x] rerun the recipe probe, run from `/tmp` and isolated: `AGT_STATUS_SCRIPT` set to the worktree adapter, a
       recording wrapper via `AGTERM_STATUS_WRAPPER`, `AGTERMCTL` set to a recording stub, `AGT_SUBAGENT_STATE`,
       `AGT_LIGHTS_STATE` and a short `AGTERM_STATE_DIR` under `/tmp`, so nothing reaches the default socket or
       `$HOME` state; the payloads come from the scratchpad. Expected: truthful-agent-lights' `PostToolUse` and
       `Stop` argv as specified above, its `machinery-paint.sh` argv unchanged, `subagent-status` argv unchanged
-- [ ] docs: `site/commands.html` `--if-idle`; `site/docs.html` background subagents keep the row active, a
+- [x] docs: `site/commands.html` `--if-idle`; `site/docs.html` background subagents keep the row active, a
       subagent's `active` never overwrites main's status (its `blocked` still applies), the limitations, the minimum Claude Code version that sends
       `background_tasks` (from the `claude-releases` changelog), the upgrade note; `reference.md` `--if-idle`;
       `control-api.md` Claude mapping; `notifications.md` subagent rule
-- [ ] full gates once: build, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] full gates once: build, `cd agtermCore && swift test`, `make test-app`, `make lint`
 - [ ] verify every Overview requirement against the tests; move this plan to `docs/plans/completed/`
 
 ## Post-Completion

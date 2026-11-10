@@ -3773,7 +3773,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusColor</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusShape</span>, each reporting
-              the per-call override only. Every accepted status set, including idle, also stamps the session's
+              the per-call override only. Every applied status write, including idle, also stamps the session's
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusChangedAt</span> (epoch seconds,
               omitted before any set), including a call that re-pushes the same status — so a script polling
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> can tell how long ago the
@@ -3996,6 +3996,14 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               tool run → active, Stop → completed, permission request and permission prompt → blocked), and an OpenCode lifecycle plugin.
               When Claude Code runs as a worker under another agent with a shell process still between them, as in a
               tool call, its hooks stay silent, so the status of the pane that spawned it is not overwritten.
+              A background subagent or workflow keeps the row working: its activity lights an idle row but never replaces the
+              main agent's status, and while Claude Code (2.1.145 or later) reports one still running, Stop posts active
+              instead of completed; the completed comes from the Stop after the last one finishes. Two gaps remain: the main
+              agent's activity can replace a subagent's permission prompt, and when the key that answers that prompt leaves
+              the block in place, the row stays blocked until the main agent's next event. After upgrading, restart agterm and
+              run the install again: a running older app ignores the subagent's
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--if-idle</span> and applies the
+              write.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               The scripts go to

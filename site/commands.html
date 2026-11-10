@@ -1707,8 +1707,8 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session status &lt;idle|active|completed|blocked&gt; [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb]
-                [--shape SHAPE] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
+                agtermctl session status &lt;idle|active|completed|blocked&gt; [--blink] [--auto-reset] [--if-idle] [--sound NAME]
+                [--color #rrggbb] [--shape SHAPE] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.status</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1719,7 +1719,10 @@
                 Reduce Motion suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
                 pulse resumes when Reduce Motion is disabled;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--auto-reset</span> clears it back to idle once the
-                session is visited (a one-shot completion flash).
+                session is visited (a one-shot completion flash);
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--if-idle</span> applies the status only while the
+                session is idle and otherwise leaves it untouched and still succeeds, which is how a background subagent's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> avoids overwriting the main agent's status.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--sound</span> plays a one-shot sound:
@@ -1769,7 +1772,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (the last two reporting the
                 per-call override only), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusChangedAt</span> — every accepted call stamps it,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusChangedAt</span> — every applied write stamps it,
                 including idle and one that re-pushes the same status, so a poller reads the last set time
                 without keeping state of its own. Automatic and manual clears also count.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> is the surface's stable spawn token
