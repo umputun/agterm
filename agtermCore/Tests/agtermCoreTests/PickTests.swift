@@ -141,9 +141,11 @@ struct PickTests {
         #expect(AskRegistry.shared.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
     }
 
+    // regression: turning the shared ask cache over evicted results other tests in the process were about to read
     @Test func askAndPickCachesTurnOverIndependently() {
         let windowID = UUID()
-        let controller = PickController()
+        let registry = AskRegistry()
+        let controller = PickController(askRegistry: registry)
         PickRegistry.shared.register(windowID, controller: controller)
         defer { PickRegistry.shared.unregister(windowID) }
         #expect(controller.open(makePick(id: "first-pick")))
@@ -153,17 +155,20 @@ struct PickTests {
             let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [], style: .gui)
             ids.append(ask.id)
             #expect(controller.openAsk(ask))
-            #expect(AskRegistry.shared.register(id: ask.id, owner: .window(windowID)))
+            #expect(registry.register(id: ask.id, owner: .window(windowID)))
             controller.cancelAsk()
         }
         #expect(controller.result(for: "first-pick")?.result == .cancelled)
-        #expect(AskRegistry.shared.result(for: ids[0]) == nil)
+        #expect(registry.result(for: ids[0]) == nil)
+        #expect(controller.askResult(for: ids[0]) == nil)
         for index in 0...PickController.retainedResultLimit {
             #expect(controller.open(makePick(id: "pick-\(index)")))
             controller.cancel()
         }
         #expect(controller.result(for: "first-pick") == nil)
-        #expect(AskRegistry.shared.result(for: ids[1])?.result.result == .cancelled)
+        #expect(registry.result(for: ids[1])?.result.result == .cancelled)
+        #expect(controller.askResult(for: ids[1])?.result == .cancelled)
+        #expect(AskRegistry.shared.result(for: ids[1]) == nil)
     }
 
     @Test func pendingPickCarriesQueryAndDefaultsItToNil() {
