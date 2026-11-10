@@ -220,7 +220,7 @@ final class SidebarRowIndentTests: XCTestCase {
         XCTAssertEqual(scroll.contentInsets.left, 8)
     }
 
-    func testFlatAndPlainFlaggedRowsStartAtTheEdgeWithChevronsShown() throws {
+    func testFlatAndPlainFlaggedRowsDropTheStripWithChevronsShown() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
         store.setFlag(true, forSession: session.id)
@@ -231,7 +231,7 @@ final class SidebarRowIndentTests: XCTestCase {
             GhosttyApp.shared.setFlaggedViewLayout(layout)
             store.setSidebarMode(.flagged)
             coordinator.reconcile()
-            XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try row(of: session.id)).minX, 0, "\(layout)")
+            XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try row(of: session.id)).minX, 6, "\(layout)")
             XCTAssertEqual(scroll.contentInsets.left, 6, "\(layout): the margin follows the dropped strip, not the setting")
 
             store.setSidebarMode(.tree)
@@ -239,6 +239,44 @@ final class SidebarRowIndentTests: XCTestCase {
             XCTAssertEqual(try layoutSnapshot(), tree, "\(layout): the ordinary tree keeps its strip")
             XCTAssertEqual(scroll.contentInsets.left, 8, "\(layout)")
         }
+    }
+
+    // the flat list moved its rows to the edge while the pill kept its 8pt inset, leaving the icon outside it
+    func testFlatAndPlainFlaggedPillsHoldTheRowIcon() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        store.setFlag(true, forSession: session.id)
+        try buildSidebar()
+        let tree = try pillAndIcon(of: session.id)
+
+        for density in [SidebarDensity.standard, .compact] {
+            GhosttyApp.shared.setSidebarDensity(density)
+            for layout in [FlaggedViewLayout.flat, .plain] {
+                GhosttyApp.shared.setFlaggedViewLayout(layout)
+                store.setSidebarMode(.flagged)
+                coordinator.reconcile()
+                postAppearanceChange()
+                let flat = try pillAndIcon(of: session.id)
+                XCTAssertEqual(flat.pill.minX, 0, "\(density) \(layout)")
+                XCTAssertEqual(flat.icon.minX - flat.pill.minX, 8, "\(density) \(layout)")
+
+                store.setSidebarMode(.tree)
+                coordinator.reconcile()
+                XCTAssertEqual(try pillAndIcon(of: session.id).pill.minX, 8, "\(density) \(layout)")
+            }
+        }
+        GhosttyApp.shared.setSidebarDensity(.standard)
+        postAppearanceChange()
+        XCTAssertEqual(try pillAndIcon(of: session.id).pill, tree.pill)
+    }
+
+    private func pillAndIcon(of id: UUID) throws -> (pill: NSRect, icon: NSRect) {
+        let row = try row(of: id)
+        let rowView = try XCTUnwrap(outline.rowView(atRow: row, makeIfNecessary: true) as? SidebarRowView)
+        let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
+        cell.layoutSubtreeIfNeeded()
+        let icon = try XCTUnwrap(cell.imageView)
+        return (rowView.selectionRect, icon.convert(icon.bounds, to: rowView))
     }
 
     private struct LayoutSnapshot: Equatable {

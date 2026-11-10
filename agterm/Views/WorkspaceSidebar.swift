@@ -574,6 +574,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastShape = currentShape()
             snapshotRowContent()
             (outline as? SidebarOutlineView)?.reservesDisclosureColumn = rendersWorkspaceRows && !chevronsHidden
+            (outline as? SidebarOutlineView)?.listsSessionsFlat = !rendersWorkspaceRows
             applySidebarContentInset(outline.enclosingScrollView)
 
             // flat flagged list: non-expandable session rows; no workspace nodes, so they leave the cache.

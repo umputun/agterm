@@ -337,8 +337,15 @@ final class SidebarRowView: NSTableRowView {
             (GhosttyApp.shared.terminalForegroundColor ?? .white)
                 .withAlphaComponent(isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
         }
+        NSBezierPath(roundedRect: selectionRect, xRadius: 7, yRadius: 7).fill()
+    }
+
+    /// selectionRect is the pill's frame in the row.
+    var selectionRect: NSRect {
+        let minX = (superview as? SidebarOutlineView)?.selectionMinX ?? 8
         let inset = GhosttyApp.shared.sidebarDensity.selectionInset
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: inset), xRadius: 7, yRadius: 7).fill()
+        let pill = bounds.insetBy(dx: 0, dy: inset)
+        return NSRect(x: pill.minX + minX, y: pill.minY, width: pill.width - minX - 8, height: pill.height)
     }
 }
 
