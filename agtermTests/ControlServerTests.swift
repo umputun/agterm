@@ -362,6 +362,27 @@ final class ControlServerTests: XCTestCase {
         XCTAssertNil(cachedAutoFollow())
     }
 
+    func testGUIDeleteOfTheActiveWindowRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let keptID = try XCTUnwrap(library.activeWindowID)
+        let deletedID = library.newWindow().id
+        let deletedStore = try XCTUnwrap(library.store(for: deletedID))
+        for session in deletedStore.workspaces.flatMap(\.sessions) { deletedStore.closeSession(session.id) }
+        XCTAssertEqual(deletedStore.workspaces.reduce(0) { $0 + $1.sessions.count }, 0)
+        XCTAssertEqual(library.activeWindowID, deletedID)
+        let server = makeServer(library: library)
+        server.start()
+        func cachedIDs() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(Set(try XCTUnwrap(cachedIDs())), [keptID.uuidString, deletedID.uuidString])
+
+        server.actions.deleteActiveWindow()
+        XCTAssertEqual(cachedIDs(), [keptID.uuidString])
+    }
+
     func testGUICloseOfABackgroundWindowRefreshesTheCachedWindowList() async throws {
         let library = WindowLibrary(directory: stateDir)
         let closingID = try XCTUnwrap(library.activeWindowID)
