@@ -317,6 +317,138 @@ final class ControlServerTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testPolledReadsSkipTheWindowCacheRebuildOtherCommandsKeepIt() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let server = makeServer(library: library)
+        server.start()
+        func cachedName() -> String? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == windowID.uuidString }?.name
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        let before = try XCTUnwrap(cachedName())
+        library.renameWindow(windowID, to: "renamed-behind-the-cache")
+
+        let events = try JSONDecoder().decode(ControlResponse.self, from: Data((await send(#"{"cmd":"events.read"}"#) ?? "").utf8))
+        let messages = try JSONDecoder().decode(ControlResponse.self, from: Data((await send(#"{"cmd":"msg.read"}"#) ?? "").utf8))
+        XCTAssertTrue(events.ok, events.error ?? "")
+        XCTAssertEqual(messages.error, "msg.read requires an identity: --as SESSION:PANE-ID")
+        XCTAssertEqual(cachedName(), before)
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedName(), "renamed-behind-the-cache")
+    }
+
+    func testSettingsAutoFollowChangeRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let server = makeServer(library: library)
+        server.start()
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        func cachedAutoFollow() -> Int? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == windowID.uuidString }?.autoFollowMs
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertNil(cachedAutoFollow())
+
+        settings.setAutoFollowAttention(AppSettings.AutoFollowAttention.s10.rawValue)
+        XCTAssertEqual(cachedAutoFollow(), 10_000)
+
+        settings.setAutoFollowAttention(AppSettings.AutoFollowAttention.off.rawValue)
+        XCTAssertNil(cachedAutoFollow())
+    }
+
+    func testGUIDeleteOfTheActiveWindowRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let keptID = try XCTUnwrap(library.activeWindowID)
+        let deletedID = library.newWindow().id
+        let deletedStore = try XCTUnwrap(library.store(for: deletedID))
+        for session in deletedStore.workspaces.flatMap(\.sessions) { deletedStore.closeSession(session.id) }
+        XCTAssertEqual(deletedStore.workspaces.reduce(0) { $0 + $1.sessions.count }, 0)
+        XCTAssertEqual(library.activeWindowID, deletedID)
+        let server = makeServer(library: library)
+        server.start()
+        func cachedIDs() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(Set(try XCTUnwrap(cachedIDs())), [keptID.uuidString, deletedID.uuidString])
+
+        server.actions.deleteActiveWindow()
+        XCTAssertEqual(cachedIDs(), [keptID.uuidString])
+    }
+
+    func testGUICloseOfABackgroundWindowRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let closingID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let frontmostID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = WindowAccessor.TitleProbeView(windowID: closingID, library: library, store: store)
+        func cachedNode(_ id: UUID) -> ControlWindowNode? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == id.uuidString }
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        let before = try XCTUnwrap(cachedNode(closingID))
+        XCTAssertTrue(before.open)
+        XCTAssertNotNil(before.geometry)
+
+        window.close()
+        let after = try XCTUnwrap(cachedNode(closingID))
+        XCTAssertFalse(after.open)
+        XCTAssertNil(after.geometry)
+        XCTAssertEqual(cachedNode(frontmostID)?.active, true)
+    }
+
+    func testRemoteCatalogDuplicateRemovalRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let existingID = try XCTUnwrap(library.activeWindowID)
+        let duplicateID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        func cachedIDs() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedIDs(), [existingID.uuidString, duplicateID.uuidString])
+
+        server.remoteCatalogDuplicate(duplicateID, of: existingID)
+        let deadline = Date().addingTimeInterval(2)
+        while library.windows.contains(where: { $0.id == duplicateID }), Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertFalse(library.windows.contains { $0.id == duplicateID })
+        XCTAssertEqual(cachedIDs(), [existingID.uuidString])
+    }
+
+    func testControlTakeFrontmostRefreshesTheCachedActiveWindow() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let backgroundID = try XCTUnwrap(library.activeWindowID)
+        let frontmostID = library.newWindow().id
+        let server = makeServer(library: library)
+        server.start()
+        func cachedActive() -> [String]? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.filter(\.active).map(\.id)
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedActive(), [frontmostID.uuidString])
+
+        server.takeFrontmost(backgroundID)
+        XCTAssertEqual(cachedActive(), [backgroundID.uuidString])
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in

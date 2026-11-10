@@ -860,6 +860,7 @@ final class SettingsModel {
         for store in library.openIDs().compactMap({ library.store(for: $0) }) {
             applyWindowSettings(to: store)
         }
+        NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)
     }
 
     private func applyInactivePaneMute() {

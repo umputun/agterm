@@ -203,6 +203,8 @@ struct WindowAccessor: NSViewRepresentable {
                         session.discardInfo()
                     }
                     library.closeWindow(windowID)
+                    // the unregister above refreshed window.list while the store was still open
+                    NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)
                     // the quick-terminal panel belongs to no window, so nothing above tore it down. Usually
                     // moot — an empty open set terminates the app — but a cancelled quit prompt leaves agterm
                     // running with no window, where `canShow` refuses a NEW show while a panel already up

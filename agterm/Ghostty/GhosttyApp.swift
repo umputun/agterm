@@ -819,6 +819,10 @@ extension Notification.Name {
     /// `didResize` fires either.
     static let agtermWindowAttachmentChanged = Notification.Name("agterm.windowAttachmentChanged")
 
+    /// Posted after a GUI action finishes changing a `window.list` field that no other observed
+    /// notification reflects.
+    static let agtermWindowCatalogChanged = Notification.Name("agterm.windowCatalogChanged")
+
     /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its matcher
     /// and the action palette re-reads the custom commands. The data-driven menu shortcuts re-render on their
     /// own from the `@Observable` keymap.
