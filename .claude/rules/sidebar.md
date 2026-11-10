@@ -64,7 +64,10 @@ paths:
   toggle. This click routing is keep-in-sync exempt. `GhosttyApp.workspaceRowClickExpands` (default on)
   gates the whole-row target only; the disclosure triangle toggles natively and stays unconditional.
   The deferred item re-reads that mirror when it fires, so turning the setting off inside the deferral
-  window cancels the pending toggle. Route the row-click toggle through `outline.animator()` so it animates
+  window cancels the pending toggle.
+  The row icon acts like the triangle: a click toggles at once whatever the setting, and the second click of
+  a double-click arrives only as `doubleAction`, which toggles back instead of renaming.
+  Route the row-click toggle through `outline.animator()` so it animates
   like the triangle; a bare `expandItem`/`collapseItem` silently drops the animation. Do not gate that on
   Reduce Motion — both hit targets reach the same AppKit animation, so a gate would re-split them. Every
   other expand/collapse site stays unanimated: bulk or programmatic. Control expansion instead persists through

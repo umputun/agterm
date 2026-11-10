@@ -13,16 +13,24 @@
   const pre = document.createElement('pre');
   const code = document.createElement('code');
   const escape = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-  const render = (value, lang) => {
-    code.textContent = value;
+  // text with escape sequences shows its SGR colors instead of the language's, since they are the writer's
+  const render = (parsed, lang) => {
+    if (parsed.runs) {
+      paintRuns(parsed.runs);
+      return;
+    }
+    code.textContent = parsed.plain;
     // highlight.js escapes the text it returns; it and renderDiff's escaped rows are the page's only markup sinks
     if (lang && typeof hljs !== 'undefined' && hljs.getLanguage(lang)) {
-      try { code.innerHTML = hljs.highlight(value, { language: lang, ignoreIllegals: true }).value; } catch (_) { code.textContent = value; }
+      try { code.innerHTML = hljs.highlight(parsed.plain, { language: lang, ignoreIllegals: true }).value; } catch (_) { code.textContent = parsed.plain; }
     }
   };
+  const parsed = ansi(text);
+  text = parsed.plain;
   const rows = !log && source.dataset.diff !== undefined ? diffRows(text.split('\n')) : null;
-  // a patch with no unified hunk (context, normal or combined format) keeps the diff grammar
-  if (rows && rows.some((row) => row.kind !== '')) renderDiff(text.split('\n'), rows); else render(text, language);
+  // a patch with no unified hunk (context, normal or combined format) keeps the diff grammar; a colored patch
+  // shows the diff renderer's bands and syntax, which say what git's colors do
+  if (rows && rows.some((row) => row.kind !== '')) renderDiff(text.split('\n'), rows); else render(parsed, language);
   pre.appendChild(code);
 
   const scroller = document.scrollingElement || document.documentElement;
@@ -104,6 +112,111 @@
     let count = 1;
     for (let at = text.indexOf('\n'); at >= 0; at = text.indexOf('\n', at + 1)) count += 1;
     return count > 1 && text.endsWith('\n') ? count - 1 : count;
+  }
+
+  // escapes are dropped by the grammar of TerminalText.strippingEscapes, so the Swift side reads a diff's headers
+  // the same way; an unfinished sequence at the end of a growing file is dropped and reparsed with the next read
+  function ansi(value) {
+    if (!value.includes('\x1b')) return { plain: value, runs: null };
+    const runs = [];
+    let style = {};
+    let start = 0;
+    const take = (end) => {
+      if (end > start) runs.push({ text: value.slice(start, end), style });
+    };
+    for (let at = value.indexOf('\x1b'); at >= 0; at = value.indexOf('\x1b', start)) {
+      take(at);
+      const kind = value.charCodeAt(at + 1);
+      let end = at + 2;
+      if (kind === 0x5b) {
+        while (end < value.length && !(value.charCodeAt(end) >= 0x40 && value.charCodeAt(end) <= 0x7e)) end += 1;
+        // a private marker (`ESC[>4;1m`, modifyOtherKeys) makes it something other than SGR
+        if (value[end] === 'm' && !/^[<=>?]/.test(value.slice(at + 2, end))) style = sgr(style, value.slice(at + 2, end));
+        end += 1;
+      } else if (kind === 0x5d) {
+        while (end < value.length && value.charCodeAt(end) !== 0x07 && value.charCodeAt(end) !== 0x1b) end += 1;
+        end += value.charCodeAt(end) === 0x1b ? 2 : 1;
+      } else if (kind === 0x50 || kind === 0x58 || kind === 0x5e || kind === 0x5f) {
+        // DCS, SOS, PM and APC end only at ESC \; a tmux passthrough doubles every ESC inside it
+        while (end < value.length && !(value[end] === '\x1b' && value[end + 1] === '\\')) {
+          end += value[end] === '\x1b' && value[end + 1] === '\x1b' ? 2 : 1;
+        }
+        end += 2;
+      } else if (kind >= 0x20 && kind <= 0x2f) {
+        while (end < value.length && value.charCodeAt(end) >= 0x20 && value.charCodeAt(end) <= 0x2f) end += 1;
+        end += 1;
+      }
+      start = Math.min(end, value.length);
+    }
+    take(value.length);
+    return { plain: runs.map((run) => run.text).join(''), runs };
+  }
+
+  // a style is { fg, bg, bold }, colors as CSS values built here from numbers only
+  function sgr(style, params) {
+    const next = { ...style };
+    const codes = params.split(';');
+    // [5, n] or [2, r, g, b]; the colon form may put a color space id before r, g, b
+    const extended = (args) => (args[0] === 5 ? indexed(args[1]) : args[0] === 2 ? rgb(...args.slice(-3)) : undefined);
+    const setColor = (n, color) => { if (color) next[n === 38 ? 'fg' : 'bg'] = color; };
+    for (let at = 0; at < codes.length; at += 1) {
+      // colon subparameters belong to one attribute, so their zeros are never resets
+      const [first, ...sub] = codes[at].split(':').map(Number);
+      const n = first || 0;
+      if (sub.length) {
+        if (n === 38 || n === 48) setColor(n, extended(sub));
+        continue;
+      }
+      if (n === 0) { delete next.fg; delete next.bg; delete next.bold; }
+      else if (n === 1) next.bold = true;
+      else if (n === 22) delete next.bold;
+      else if (n >= 30 && n <= 37) next.fg = indexed(n - 30);
+      else if (n >= 90 && n <= 97) next.fg = indexed(n - 82);
+      else if (n === 39) delete next.fg;
+      else if (n >= 40 && n <= 47) next.bg = indexed(n - 40);
+      else if (n >= 100 && n <= 107) next.bg = indexed(n - 92);
+      else if (n === 49) delete next.bg;
+      else if (n === 38 || n === 48) {
+        const selector = Number(codes[at + 1]);
+        const used = selector === 5 ? 2 : selector === 2 ? 4 : codes.length;
+        setColor(n, extended(codes.slice(at + 1, at + 1 + used).map(Number)));
+        at += used;
+      }
+    }
+    return next;
+  }
+
+  // the theme's 16 colors when it supplies them, xterm's otherwise; 16 to 255 are xterm's cube and gray ramp
+  function indexed(n) {
+    const xterm = ['#000000', '#cd0000', '#00cd00', '#cdcd00', '#0000ee', '#cd00cd', '#00cdcd', '#e5e5e5',
+      '#7f7f7f', '#ff0000', '#00ff00', '#ffff00', '#5c5cff', '#ff00ff', '#00ffff', '#ffffff'];
+    if (!Number.isInteger(n) || n < 0 || n > 255) return undefined;
+    if (n < 16) return `var(--agterm-color-${n}, ${xterm[n]})`;
+    if (n >= 232) return rgb(8 + (n - 232) * 10, 8 + (n - 232) * 10, 8 + (n - 232) * 10);
+    const level = (v) => (v ? 55 + v * 40 : 0);
+    return rgb(level(Math.floor((n - 16) / 36)), level(Math.floor((n - 16) / 6) % 6), level((n - 16) % 6));
+  }
+
+  function rgb(r, g, b) {
+    const ok = [r, g, b].every((v) => Number.isInteger(v) && v >= 0 && v <= 255);
+    return ok ? `rgb(${r}, ${g}, ${b})` : undefined;
+  }
+
+  function paintRuns(runs) {
+    const fragment = document.createDocumentFragment();
+    for (const { text: part, style } of runs) {
+      if (!style.fg && !style.bg && !style.bold) {
+        fragment.append(part);
+        continue;
+      }
+      const span = document.createElement('span');
+      if (style.fg) span.style.color = style.fg;
+      if (style.bg) span.style.backgroundColor = style.bg;
+      if (style.bold) span.style.fontWeight = 'bold';
+      span.textContent = part;
+      fragment.append(span);
+    }
+    code.replaceChildren(fragment);
   }
 
   // every row is one line box of the same height, so a line starts one row below the newline that ends the line
@@ -744,11 +857,11 @@
 
     window.agtermTextUpdate = (raw, clipped, waiting, unreadable, lang, shift) => {
       // line breaks as the parser left them in the first document, which LogFollower.shift counts the same way
-      const value = raw.replace(/\r\n?/g, '\n');
-      render(value, lang);
+      const update = ansi(raw.replace(/\r\n?/g, '\n'));
+      render(update, lang);
       lineRows = null;
       state = { clipped, waiting, unreadable };
-      finder.update(value, shift || { dropped: 0, cut: false, replaced: false });
+      finder.update(update.plain, shift || { dropped: 0, cut: false, replaced: false });
       drawBar();
       if (following) toBottom();
     };

@@ -7,15 +7,18 @@ import AppKit
 extension WorkspaceSidebar.Coordinator {
     // MARK: - Context menu
 
-    /// Single click anywhere on a workspace row toggles its expansion, so the whole row is the hit target,
-    /// not just the disclosure triangle. The toggle is DEFERRED by the double-click interval and cancelled
-    /// by `handleDoubleClick`, so renaming does not flip the row open/closed on the way into edit mode.
-    /// `action` fires on a genuine click, never during a drag, so workspace drag-reorder is unaffected.
-    /// `workspaceRowClickExpands` gates the whole-row target only; the disclosure triangle keeps toggling.
+    /// handleSingleClick folds a workspace row: the icon at once, the rest of the row after the double-click
+    /// interval so a rename double-click never folds it. `action` never fires during a drag.
     @objc func handleSingleClick(_ sender: NSOutlineView) {
         let row = sender.clickedRow
-        guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode, node.kind == .workspace,
-              GhosttyApp.shared.workspaceRowClickExpands else { return }
+        guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
+        if clickHitsWorkspaceIcon(sender, row: row) {
+            pendingRowToggle?.cancel()
+            pendingRowToggle = nil
+            toggleExpansion(of: node, in: sender)
+            return
+        }
+        guard GhosttyApp.shared.workspaceRowClickExpands else { return }
         if let event = NSApp.currentEvent {
             let point = sender.convert(event.locationInWindow, from: nil)
             // clicking the disclosure triangle already toggles natively — ignore that region so we don't double-toggle.
@@ -39,12 +42,25 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     @objc func handleDoubleClick(_ sender: NSOutlineView) {
-        // a double-click is a rename, not an expand/collapse: cancel the pending single-click toggle.
+        // a double-click outside the icon is a rename: cancel the pending single-click toggle.
         pendingRowToggle?.cancel()
         pendingRowToggle = nil
         let row = sender.clickedRow
         guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode else { return }
+        // the second click of an icon double-click arrives only here, so it toggles back as the triangle does.
+        if node.kind == .workspace, clickHitsWorkspaceIcon(sender, row: row) {
+            toggleExpansion(of: node, in: sender)
+            return
+        }
         renameController.beginEditing(node: node)
+    }
+
+    private func clickHitsWorkspaceIcon(_ outline: NSOutlineView, row: Int) -> Bool {
+        guard let event = NSApp.currentEvent,
+              let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView,
+              let icon = cell.imageView, !icon.isHidden else { return false }
+        let point = outline.convert(event.locationInWindow, from: nil)
+        return icon.convert(icon.bounds, to: outline).contains(point)
     }
 
     /// Animated to match the disclosure triangle; `.claude/rules/sidebar.md` owns why, why it is not gated on

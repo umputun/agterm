@@ -165,6 +165,33 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "the disclosure triangle should collapse regardless of the setting")
     }
 
+    func testWorkspaceIconClickTogglesWhenRowClickIsOff() throws {
+        _ = try relaunch(settings: ["workspaceRowClickExpands": false])
+        let icon = workspaceIcon()
+        XCTAssertTrue(icon.waitForExistence(timeout: 5), "the workspace row should expose its icon")
+
+        icon.click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 5), "an icon click should collapse the workspace")
+        icon.click()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 5), "a second icon click should expand it again")
+    }
+
+    func testWorkspaceIconDoubleClickFoldsTwiceWithoutRename() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session should be visible")
+        let icon = workspaceIcon()
+        XCTAssertTrue(icon.waitForExistence(timeout: 5), "the workspace row should expose its icon")
+
+        icon.doubleClick()
+        let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
+        XCTAssertFalse(field.waitForExistence(timeout: 2), "an icon double-click must not start a rename")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 5), "an icon double-click should leave the workspace expanded")
+    }
+
+    private func workspaceIcon() -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "workspace-icon").firstMatch
+    }
+
     func testHiddenChevronsLeaveTheRowClickToggle() throws {
         let ws = try relaunch(settings: ["hiddenInterfaceElements": ["workspaceChevrons"]])
         XCTAssertFalse(app.disclosureTriangles.firstMatch.waitForExistence(timeout: 2), "the workspace chevron should be hidden")
