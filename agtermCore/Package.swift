@@ -8,6 +8,7 @@ let package = Package(
         .library(name: "agtermCore", targets: ["agtermCore"]),
         .library(name: "AgtermResponsibility", targets: ["AgtermResponsibility"]),
         .executable(name: "agtermctl", targets: ["agtermctl"]),
+        .executable(name: "agterm-server", targets: ["agterm-server"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
@@ -27,10 +28,22 @@ let package = Package(
         .executableTarget(name: "agtermctl", dependencies: ["agtermctlKit"]),
         // debug-only fixture: it imports agtermctlKit @testable, and release builds name their products.
         .executableTarget(name: "session-wait-watchdog-probe", dependencies: ["agtermctlKit"]),
-        .testTarget(name: "agtermctlKitTests", dependencies: ["agtermctlKit", "session-wait-watchdog-probe"]),
+        .testTarget(name: "agtermctlKitTests", dependencies: ["agtermctlKit", "agtermctl", "session-wait-watchdog-probe"]),
+        .target(name: "AgtermServerKit", dependencies: ["agtermCore"]),
+        .executableTarget(
+            name: "agterm-server",
+            dependencies: ["AgtermServerKit", "agtermCore", .product(name: "ArgumentParser", package: "swift-argument-parser")]
+        ),
+        .testTarget(name: "AgtermServerTests", dependencies: ["AgtermServerKit", "agterm-server"]),
     ],
     swiftLanguageModes: [.v6]
 )
+
+#if os(Linux)
+// Foundation's attributed Markdown parser is Darwin only; agterm-server parses with swift-markdown instead
+package.dependencies.append(.package(url: "https://github.com/swiftlang/swift-markdown", exact: "0.8.0"))
+package.targets[0].dependencies.append(.product(name: "Markdown", package: "swift-markdown"))
+#endif
 
 #if os(macOS)
 package.products.append(.executable(name: "agterm-session-host", targets: ["agterm-session-host"]))

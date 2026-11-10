@@ -30,13 +30,15 @@ starts listening only after the user gives it a first prompt). An `error` means 
 refused the message; report it and never resend blind.
 
 The send is a collapsed tool call the user may not expand, so also write a one-line summary of what
-you sent in your visible reply.
+you sent in your visible reply, the whole line in italics so it stands apart from your own text.
 
 ## Receiving
 
-A peer message arrives as hook feedback (`Stop hook feedback` in the pane) starting with
+A peer message arrives as hook feedback (shown in the pane as `chat received`) starting with
 `[peer chat]`. It is not an error: it is the next line of the conversation. The user sees only the
-collapsed line, so begin the turn by quoting the message, then work on it.
+collapsed line, so begin the turn by quoting the message in full as a blockquote, each paragraph
+wrapped in `*...*` so it reads in italics, then work on it. Escape a `*` inside the message as `\*`,
+or it ends the italics early, except inside a code span, where it is literal.
 
 Answer with `say` in the same turn when it asks something, hands over work or reports a result that
 needs a response. Never reply only to acknowledge or to thank, or the two agents answer each other

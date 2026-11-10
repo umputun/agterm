@@ -16,7 +16,7 @@ public enum RemoteSession {
     /// `-T` because no pty is wanted, `BatchMode=yes` because a host-key or password prompt would hang a
     /// dispatcher with no way to answer it. `ConnectTimeout` bounds the handshake only — the caller still
     /// needs its own deadline for a remote command that never returns.
-    public static func treeCommand(host: String, connectTimeout: Int = 5) throws -> [String] {
+    public static func treeCommand(host: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
         // the far side runs the BARE form of the same command, which does the whole join in one
         // main-actor walk of its own windows and answers with one document
@@ -25,7 +25,7 @@ public enum RemoteSession {
         // a syntax error in fish and tcsh; wrapped, every login shell sees one ordinary command, as
         // `attachCommand` already sends.
         let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
     }
 
     /// One ssh invocation carrying `session`'s presentation stream, for as long as the row is shown.
@@ -33,41 +33,85 @@ public enum RemoteSession {
     /// `-T` because frames travel on plain stdio and a pty would mangle them, and no lifetime deadline:
     /// the stream is meant to stay up. `exec` so the far-side shell does not linger between ssh and the
     /// bridge, which would keep a dead bridge's stdio open.
-    public static func presentCommand(host: String, session: String, connectTimeout: Int = 5) throws -> [String] {
+    public static func presentCommand(host: String, session: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
         guard isPlain(session) else { throw InvocationError.invalidSession }
         let chain = cliPathPrefix + " && exec agtermctl zmx present " + CommandRestore.shellQuotedLine([session])
         let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
+    }
+
+    /// catalogCommand carries agterm-server's catalog stream for a remote window, for as long as it is open; plain
+    /// stdio and `exec` for the reasons `presentCommand` gives.
+    public static func catalogCommand(host: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
+        try validate(host: host)
+        let chain = cliPathPrefix + " && exec agtermctl catalog subscribe"
+        let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
+    }
+
+    /// endedCommand is what a catalog row whose session ended shows in place of an attach: a line naming the host,
+    /// held open, so a row this Mac has no screen for never starts a local shell.
+    public static func endedCommand(host: String) -> String {
+        let line = "printf '\\033[2mEnded on %s\\033[0m\\n' " + CommandRestore.shellQuotedLine([TerminalText.sanitized(host)])
+        return CommandRestore.shellQuotedLine(["/bin/sh", "-c", line + "; exec cat >/dev/null"])
     }
 
     /// One ssh invocation running the helper for `job`, an overlay the origin handed to this Mac, for as long
     /// as the overlay is up. `-tt` because the program is the user's and reads the pty; `exec` so the helper's
     /// hangup check sees the ssh session's own pty close.
-    public static func runJobCommand(host: String, job: String, connectTimeout: Int = 5) throws -> [String] {
+    public static func runJobCommand(host: String, job: String, token: String? = nil, connectTimeout: Int = 5,
+                                     controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        guard isPlain(job) else { throw InvocationError.invalidSession }
-        let chain = cliPathPrefix + " && exec agtermctl session overlay run-job " + CommandRestore.shellQuotedLine([job])
+        guard isPlain(job), token.map(isPlain) ?? true else { throw InvocationError.invalidSession }
+        let chain = cliPathPrefix + " && exec agtermctl session overlay run-job "
+            + CommandRestore.shellQuotedLine([job] + (token.map { ["--token", $0] } ?? []))
         let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: true, controlPath: controlPath) + [remote]
     }
 
     /// pageServeCommand uses plain ssh stdio to claim and carry a remote page's channel.
-    public static func pageServeCommand(host: String, token: String, connectTimeout: Int = 5) throws -> [String] {
+    public static func pageServeCommand(host: String, token: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
         guard isPlain(token) else { throw InvocationError.invalidSession }
         let chain = cliPathPrefix + " && exec agtermctl session overlay page-serve " + CommandRestore.shellQuotedLine([token])
         let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
+    }
+
+    /// forwardCommand is a forward of its own for a row with no pooled master: ControlMaster and ControlPath are
+    /// switched off over any ssh_config, so the listener lives in this process and ends with it. It takes the pane
+    /// attach's keepalive, or a half-open link would leave it running with the page's port dead.
+    public static func forwardCommand(host: String, spec: String, connectTimeout: Int = 5) throws -> [String] {
+        try validate(host: host)
+        let options = ["-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=\(connectTimeout)", "-o", "ControlMaster=no",
+                       "-o", "ControlPath=none", "-o", "ExitOnForwardFailure=yes"]
+        let ssh = CommandRestore.shellQuotedLine(["ssh"] + options) + " $ka " + CommandRestore.shellQuotedLine(["-L", spec, host])
+        return ["/bin/sh", "-c", keepAliveCheck(options + [host]) + "; exec " + ssh]
+    }
+
+    /// forwardControlCommand adds (`forward`), removes (`cancel`) or, with no spec, checks the master at `controlPath`.
+    public static func forwardControlCommand(_ operation: String, host: String, controlPath: String, spec: String? = nil) throws -> [String] {
+        try validate(host: host)
+        return ["ssh", "-O", operation, "-o", "ControlPath=" + controlPath] + (spec.map { ["-L", $0] } ?? []) + [host]
+    }
+
+    /// connectionPID reads the pid `ssh -O check` reports for a running master, nil when it reports none.
+    public static func connectionPID(_ output: String) -> Int32? {
+        guard let start = output.range(of: "(pid=")?.upperBound, let end = output[start...].firstIndex(of: ")") else { return nil }
+        return Int32(output[start..<end])
     }
 
     /// One ssh invocation running the far side's `agtermctl` with `arguments` plus `--json`, so the reply is the
     /// server's own response line. Arguments carry user text, so the outer layer is quoted for any login shell.
-    public static func controlCommand(host: String, arguments: [String], connectTimeout: Int = 5) throws -> [String] {
+    /// `operands` follow a `--`, so one starting with `-` is never read as an option.
+    public static func controlCommand(host: String, arguments: [String], operands: [String] = [], connectTimeout: Int = 5,
+                                      controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"])
+        let tail = operands.isEmpty ? [] : ["--"] + operands
+        let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"] + tail)
         let remote = ["/bin/sh", "-c", chain].map(accountShellQuoted).joined(separator: " ")
-        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false) + [remote]
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
     }
 
     /// accountShellQuoted quotes `value` as one word that sh, zsh, tcsh and fish all read alike: an apostrophe or
@@ -84,11 +128,10 @@ public enum RemoteSession {
         return quoted + "'"
     }
 
-    /// sshd runs a remote command with `/usr/bin:/bin:/usr/sbin:/sbin` and a non-interactive shell reads no
-    /// profile, so an installed CLI is otherwise not found and every command exits 127. `CommandPath` owns
-    /// where it can live; APPENDED, so a user's own `agtermctl` earlier on PATH still wins.
+    /// sshd's PATH and a profile-less shell miss an installed CLI (exit 127), so `CommandPath`'s Mac directories and
+    /// agterm-server's `$HOME/.local/bin` are APPENDED: a user's own `agtermctl` earlier on PATH still wins.
     static var cliPathPrefix: String {
-        "PATH=\"$PATH:" + CommandPath.standardDirectories.joined(separator: ":") + "\""
+        "PATH=\"$PATH:" + (CommandPath.standardDirectories + ["$HOME/.local/bin"]).joined(separator: ":") + "\""
     }
 
     /// One ssh invocation attaching to `daemon` on `host`, for the lifetime of the pane.
@@ -109,9 +152,9 @@ public enum RemoteSession {
     /// the two variables and the pane behaves as it did before.
     public static func attachCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                      lead: ZmxLeadAttachment? = nil,
-                                     connectTimeout: Int = 5) throws -> [String] {
+                                     connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        guard ZmxSupport.isDaemonName(daemon) else { throw InvocationError.invalidSession }
+        guard ZmxSupport.isDaemonName(daemon) || ZmxSupport.isScratchDaemonName(daemon) else { throw InvocationError.invalidSession }
         guard isPath(endpoint.executable), isPath(endpoint.socketDirectory) else {
             throw InvocationError.invalidEndpoint
         }
@@ -125,10 +168,18 @@ public enum RemoteSession {
         ] + (lead?.assignments ?? []) + [
             endpoint.executable, "attach", daemon, "/bin/sh", "-c", guardScript,
         ])
-        var argv = sshArguments(host: host, connectTimeout: connectTimeout, interactive: true) + [remote]
+        var argv = sshArguments(host: host, connectTimeout: connectTimeout, interactive: true, controlPath: controlPath) + [remote]
         // why ERROR: control-api.md, Remote sessions
         argv.insert(contentsOf: ["-o", "LogLevel=ERROR"], at: argv.count - 2)
         return argv
+    }
+
+    /// keepAliveCheck is shell that sets `$ka` to the ServerAlive options when `ssh -G` with `arguments` reports
+    /// none configured, and to nothing otherwise. When and why: control-api.md, Remote sessions.
+    static func keepAliveCheck(_ arguments: [String]) -> String {
+        "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G"] + arguments)
+            + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
+            + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
     }
 
     /// The pane's command: the attach, then one line saying what died. `commandWait` holds the pane on
@@ -139,17 +190,16 @@ public enum RemoteSession {
     /// `cat` ends with the app's pty. The mouse and focus reporting a remote program left on is switched off
     /// first, or those reports would echo onto the kept screen, and echo goes with the cursor: a paste or a
     /// wheel scroll would otherwise print under the bar, and Ghostty draws its password lock in place of the
-    /// cursor while echo is off. Without a lead nonce nothing could be believed, so it exits.
+    /// cursor while echo is off. `linkNonce` gives an attach that takes no lead the same wait. Without either nonce,
+    /// the wrapper exits with SSH's status.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
-                                         lead: ZmxLeadAttachment? = nil,
-                                         connectTimeout: Int = 5) throws -> String {
+                                         lead: ZmxLeadAttachment? = nil, linkNonce: String? = nil,
+                                         connectTimeout: Int = 5, controlPath: String? = nil) throws -> String {
         let argv = try attachCommand(host: host, endpoint: endpoint, daemon: daemon, lead: lead,
-                                     connectTimeout: connectTimeout)
-        // $ka is unquoted on purpose: four words or none. When and why the check: control-api.md, Remote sessions
-        let keepAlive = "ka=; " + CommandRestore.shellQuotedLine(["ssh", "-G"] + argv.dropFirst())
-            + " 2>/dev/null | grep -qx 'serveraliveinterval 0'"
-            + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
+                                     connectTimeout: connectTimeout, controlPath: controlPath)
+        // $ka is unquoted on purpose: four words or none
+        let keepAlive = keepAliveCheck(Array(argv.dropFirst()))
         let attach = CommandRestore.shellQuotedLine(Array(argv.dropLast(2))) + " $ka "
             + CommandRestore.shellQuotedLine(Array(argv.suffix(2)))
         let label = CommandRestore.shellQuotedLine(
@@ -157,12 +207,16 @@ public enum RemoteSession {
         // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a
         // clean one to anything that looks at the exit code
         let report = "printf '%s %s\\n' \(label) \"$status\""
-        var script = "\(keepAlive); \(attach); status=$?; \(report); exit \"$status\""
-        if let lead {
+        // a pooled pane waits for its master; one that never came up is a lost connection, so 255
+        let run = controlPath == nil ? "\(attach); status=$?"
+            : "if agterm_connection_wait; then \(attach); status=$?; else status=255; fi"
+        let prelude = controlPath.map { connectionWait(host: host, controlPath: $0) + "; " } ?? ""
+        var script = "\(prelude)\(keepAlive); \(run); \(report); exit \"$status\""
+        if let nonce = lead?.nonce ?? linkNonce {
             let bar = CommandRestore.shellQuotedLine(["Connection to \(host) lost · reconnecting… · any key retries now"])
-            let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: lead.nonce)])
+            let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: nonce)])
             let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
-            script = "\(keepAlive); \(attach); status=$?; if [ \"$status\" -eq 255 ]; then "
+            script = "\(prelude)\(keepAlive); \(run); if [ \"$status\" -eq 255 ]; then "
                 + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "
                 + "printf '\\033[?25l'; stty -echo 2>/dev/null; cat >/dev/null; else \(report); fi; exit \"$status\""
         }
@@ -172,16 +226,37 @@ public enum RemoteSession {
     }
 
     /// One ssh invocation that only proves the host answers again, before a waiting pane is attached anew.
-    public static func probeCommand(host: String) throws -> [String] {
+    public static func probeCommand(host: String, controlPath: String? = nil) throws -> [String] {
         try validate(host: host)
-        return sshArguments(host: host, connectTimeout: 5, interactive: false) + ["true"]
+        return sshArguments(host: host, connectTimeout: 5, interactive: false, controlPath: controlPath) + ["true"]
     }
 
-    private static func sshArguments(host: String, connectTimeout: Int, interactive: Bool) -> [String] {
-        ["ssh", interactive ? "-tt" : "-T",
-         "-o", "BatchMode=yes",
-         "-o", "ConnectTimeout=\(connectTimeout)",
-         host]
+    /// connectionWait defines `agterm_connection_wait`, for a command libghostty launches and the app cannot hold back
+    /// until the pool has the master up: it polls the master for 15 s and returns 255, ssh's own failure, when
+    /// none came up, so the caller fails into its reconnect path rather than opening a connection of its own.
+    static func connectionWait(host: String, controlPath: String) -> String {
+        let check = CommandRestore.shellQuotedLine(["ssh", "-O", "check", "-o", "ControlPath=" + controlPath, host])
+        return "agterm_connection_wait() { i=0; while ! \(check) 2>/dev/null; do i=$((i+1)); "
+            + "[ \"$i\" -ge 75 ] && return 255; sleep 0.2; done; }"
+    }
+
+    /// waitingForConnection runs `line`, a job helper's command, once its master answers; without one it says so and
+    /// exits 255.
+    public static func waitingForConnection(_ line: String, host: String, controlPath: String) -> String {
+        let failed = CommandRestore.shellQuotedLine(["agterm: no connection to \(host)"])
+        let script = connectionWait(host: host, controlPath: controlPath)
+            + "; agterm_connection_wait || { printf '%s\\n' \(failed); exit 255; }; exec " + line
+        return CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c", script])
+    }
+
+    private static func sshArguments(host: String, connectTimeout: Int, interactive: Bool, controlPath: String? = nil) -> [String] {
+        var argv = ["ssh", interactive ? "-tt" : "-T",
+                    "-o", "BatchMode=yes",
+                    "-o", "ConnectTimeout=\(connectTimeout)"]
+        if let controlPath {
+            argv += ["-o", "ControlMaster=auto", "-o", "ControlPath=" + controlPath, "-o", "ControlPersist=60"]
+        }
+        return argv + [host]
     }
 
     /// Refused rather than escaped, and a leading `-` with it: ssh would read that as an option.

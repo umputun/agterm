@@ -40,7 +40,10 @@ extension ControlDispatcher {
                 return ControlResponse(ok: false, error: "pick select must name an item id")
             }
 
-            let pick = PendingPick(
+            if let timeout = request.args?.timeout, !ControlInteraction.isValidTimeout(timeout) {
+                return ControlResponse(ok: false, error: ControlInteraction.timeoutError)
+            }
+            var pick = PendingPick(
                 id: UUID().uuidString,
                 items: items,
                 prompt: request.args?.prompt,
@@ -48,11 +51,12 @@ extension ControlDispatcher {
                 allowCustom: allowCustom,
                 selection: selection
             )
-            return actions.openPick(
-                pick,
-                window: request.args?.window,
-                follow: request.args?.follow == true
-            )
+            pick.deadline = request.args?.timeout.map { Date().addingTimeInterval($0) }
+            let window = request.args?.window, follow = request.args?.follow == true
+            if let session = request.target {
+                return actions.openPick(pick, session: session, window: window, follow: follow)
+            }
+            return actions.openPick(pick, window: window, follow: follow)
 
         case .pickResult:
             guard let target = request.target else {

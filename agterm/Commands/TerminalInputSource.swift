@@ -8,8 +8,8 @@ struct KeyboardInputSource: Equatable {
     let name: String
 }
 
-/// Holds the configured keyboard input source while a terminal surface has the keyboard and puts the
-/// earlier one back when it does not. The only owner of Text Input Source selection in the app;
+/// TerminalInputSource holds the configured keyboard input source while any agterm window has the keyboard
+/// and puts the earlier one back when none does. The only owner of Text Input Source selection in the app;
 /// `InputSourceLock` decides, this performs.
 ///
 /// Selection is system-wide, so the restore is what keeps other applications on the user's own source.
@@ -39,9 +39,9 @@ final class TerminalInputSource {
         refresh()
     }
 
-    /// requestRefresh re-evaluates on the next main-queue turn. Responder callbacks run before AppKit
-    /// updates `window.firstResponder`, so a synchronous read there sees the previous owner.
-    func requestRefresh() {
+    // re-evaluates on the next main-queue turn, so the resign/become pair of a key-window handoff between
+    // two agterm windows is one evaluation and never releases and relocks.
+    private func requestRefresh() {
         guard !refreshScheduled, !stopped else { return }
         refreshScheduled = true
         DispatchQueue.main.async { [weak self] in self?.refresh() }
@@ -72,7 +72,9 @@ final class TerminalInputSource {
         refreshScheduled = false
         guard !stopped, target != nil || lock.baseline != nil, let current = Self.currentID() else { return }
         let enabled = Set(Self.enabledSources().map(\.id))
-        guard let wanted = lock.reconcile(terminalFocused: Self.terminalHoldsKeyboard(), target: target,
+        // nil at launch: the settings model applies the saved source before the application object exists.
+        let appFocused = (NSApp as NSApplication?)?.windows.contains(where: \.isKeyWindow) ?? false
+        guard let wanted = lock.reconcile(terminalFocused: appFocused, target: target,
                                           enabled: enabled, current: current) else { return }
         if !Self.select(wanted) { lock.selectionFailed() }
     }
@@ -84,15 +86,6 @@ final class TerminalInputSource {
             }
             observers.append((center, token))
         }
-    }
-
-    private static func terminalHoldsKeyboard() -> Bool {
-        // nil at launch: the settings model applies the saved source before the application object exists.
-        guard let app = NSApp as NSApplication?,
-              let responder = app.windows.first(where: \.isKeyWindow)?.firstResponder as? GhosttySurfaceView else {
-            return false
-        }
-        return responder.surface != nil
     }
 
     private static func currentID() -> String? {

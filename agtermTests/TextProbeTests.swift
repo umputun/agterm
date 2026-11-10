@@ -15,7 +15,7 @@ final class TextProbeTests: XCTestCase {
         try? FileManager.default.removeItem(at: dir)
     }
 
-    private func failure(_ result: Result<Void, TextProbe.Failure>) -> TextProbe.Failure? {
+    private func failure<T>(_ result: Result<T, TextProbe.Failure>) -> TextProbe.Failure? {
         if case .failure(let failure) = result { return failure }
         return nil
     }
@@ -26,6 +26,35 @@ final class TextProbeTests: XCTestCase {
 
         XCTAssertEqual(TextProbe.load(path: path), .success("package main\n"))
         XCTAssertNoThrow(try TextProbe.check(path: path).get())
+    }
+
+    func testALogOverTheWholeFileCapPassesTheLogCheckAndLoadsItsEnd() throws {
+        let url = dir.appendingPathComponent("big.log")
+        let line = String(repeating: "x", count: 99) + "\n"
+        try Data(String(repeating: line, count: (TextPage.maxBytes / 100) + 10).utf8).write(to: url)
+
+        XCTAssertEqual(failure(TextProbe.check(path: url.path)), .tooLarge(url.path))
+        XCTAssertNoThrow(try TextProbe.checkLog(path: url.path).get())
+        let read = try XCTUnwrap(TextProbe.loadLog(path: url.path, tail: 3).get())
+        let size = ((TextPage.maxBytes / 100) + 10) * 100
+        XCTAssertEqual(read.snapshot, LogTail.Snapshot(text: line + line + line, lines: 3, clipped: false, startOffset: size - 300))
+    }
+
+    func testTheLogCheckReadsOnlyTheRequestedTail() throws {
+        let url = dir.appendingPathComponent("mixed.log")
+        try Data(Array("bad".utf8) + [0] + Array("line\ngood\n".utf8)).write(to: url)
+
+        XCTAssertNoThrow(try TextProbe.checkLog(path: url.path, tail: 1).get())
+        XCTAssertEqual(failure(TextProbe.checkLog(path: url.path, tail: 2)), .notText(url.path))
+    }
+
+    func testABinaryOrMissingLogFailsTheLogCheck() throws {
+        let binary = dir.appendingPathComponent("core.log").path
+        try Data([0x61, 0x00, 0x62]).write(to: URL(fileURLWithPath: binary))
+        let missing = dir.appendingPathComponent("gone.log").path
+
+        XCTAssertEqual(failure(TextProbe.checkLog(path: binary)), .notText(binary))
+        XCTAssertEqual(failure(TextProbe.checkLog(path: missing)), .unreadable(missing))
     }
 
     func testAFifoADirectoryAndAMissingFileAreUnreadable() throws {
@@ -67,6 +96,12 @@ final class TextProbeTests: XCTestCase {
 
         XCTAssertEqual(failure(TextProbe.check(path: nul.path)), .notText(nul.path))
         XCTAssertEqual(failure(TextProbe.check(path: invalid.path)), .notText(invalid.path))
+    }
+
+    func testBytesInHandAreJudgedLikeAFile() {
+        XCTAssertEqual(try? TextProbe.text(Data("let x = 1\n".utf8), path: "/o/a.swift").get(), "let x = 1\n")
+        XCTAssertEqual(failure(TextProbe.text(Data([0x61, 0x00, 0x62]), path: "/o/nul.txt")), .notText("/o/nul.txt"))
+        XCTAssertEqual(failure(TextProbe.text(Data([0xFF, 0xFE, 0x61]), path: "/o/bad.txt")), .notText("/o/bad.txt"))
     }
 
     func testTheDetachedCheckMatchesTheCheck() async throws {

@@ -2,6 +2,8 @@
 
 Arm a tab with one chord and it closes itself the moment the agent stops replying.
 
+Author: [@andr81](https://github.com/andr81)
+
 ## What it does
 
 The last prompt of a task is usually the last thing that tab is for. What is left is a finished agent sitting in a session you have to come back to and close by hand, and a sidebar that slowly fills up with them.

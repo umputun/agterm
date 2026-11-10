@@ -9,6 +9,14 @@ C-boundary concurrency before changing the bridge.
 
 - For nonstandard or risky UI requests, first explain the AppKit/SwiftUI cost and offer the standard
   alternative. Proceed if the user still prefers the custom behavior.
+- Design every UI behavior to be consistent and unsurprising: a key or gesture does one thing for what the user
+  is looking at and never reaches a layer hidden behind the visible one.
+  A rule whose exceptions depend on state the user cannot see on screen is a defect: propose the single rule,
+  and ask before adding a case.
+  Existing behavior next to the change that breaks this rule is a defect to fix with it, not a pre-existing one:
+  name it with its fix as a question, never as out of scope.
+  A control that already exists elsewhere in the app (a search bar, a button, a picker) looks and behaves the same
+  in the new place: reuse its component, and show the user the rendered result before writing tests.
 - Judge any change that can leave a long-standing visual artifact by what the user is left looking at,
   never by whether the mechanism is sound. A panel, badge, marker or overlay that outlives the thing it
   describes is a defect however correct the code that posted it. Give it a way to clear itself, and put
@@ -17,9 +25,18 @@ C-boundary concurrency before changing the bridge.
 - For every new capability, propose useful control API/CLI coverage: protocol command and arguments,
   dispatch, `agtermctl`, read-back, and tests. Control-native features count; skip only chrome with nothing
   meaningful to drive.
+- A session attached from another Mac is a normal view, not an extra.
+  Every new or changed capability that works locally works there too, unless it was explicitly deferred
+  or declined: design the remote path (presentation, page serving, control routing) together with the
+  local one, and a missing remote path is part of the task, never an exclusion to note.
 - For each hideable titlebar/sidebar element, ask whether it should join host-free `InterfaceElement` and
   Settings > Interface. Never add that preference without approval.
   A control enabled there stays visible and is disabled when it cannot act; never show or hide it by state.
+- The HTML overlay displays a page over a session; it is not a browser.
+  Moving within what the page was opened with is in scope: an HTML file's grant folder, a markdown file's link
+  root, a URL page's origin, and any origin for a `--browse` page; a terminal click may replace a hidden clicked page.
+  Features that make it a general browser (tabs, an address bar, links followed past those bounds) are declined.
+  What a mouse-capturing program does with a click is that program's, not agterm's.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.
   It also points "can you add X" requests to Discussions ▸ Ideas instead of issues.
@@ -51,6 +68,8 @@ C-boundary concurrency before changing the bridge.
 - The control socket binds from the window scene's task, so a backgrounded `open -n -g` can leave the app
   running with no socket until a window renders.
   If the socket is still absent 10 s after launch, activate the instance; never leave a socket wait unbounded.
+  An activation by pid once left it unbound for 15 s more (2026-11-07); stopping it and relaunching without `-g`
+  bound the socket at once.
 - `agtermctl` never reads `AGTERM_SOCKET`; it resolves `--socket`, then `AGTERM_STATE_DIR`, then
   `~/Library/Application Support/agterm`. A shell inside the live terminal therefore defaults onto the
   live socket, and exporting a short `AGTERM_STATE_DIR` is what keeps inherited commands off it.
@@ -75,7 +94,8 @@ C-boundary concurrency before changing the bridge.
 - Xcodegen creates the app project; Xcode 26 builds it. Call `xcodegen`, `xcodebuild`, and `swift`
   directly through repository scripts; `mise` is unused.
 - Swift 6 `agtermCore` uses complete concurrency checking and has no Xcode/libghostty dependency.
-- `scripts/setup.sh` builds pinned libghostty and zmx with Homebrew `zig@0.16` and Xcode's Metal Toolchain.
+- `scripts/setup.sh` builds pinned libghostty with Homebrew `zig@0.17`, zmx with `zig@0.16`, and Xcode's
+  Metal Toolchain.
   It is idempotent after artifacts exist. zmx is the plain upstream pin plus `scripts/zmx-patches/`,
   whose README says what each patch is for and how to regenerate one.
 - Commands:
@@ -92,6 +112,9 @@ C-boundary concurrency before changing the bridge.
   via `-only-testing:<Target>/<Class>/<test>`. Never re-run a whole XCUITest suite to verify a narrow
   change; `agtermUITests/ControlAPIUITests` alone is 82 methods and about 7.5 minutes, and tells you
   nothing the targeted run did not.
+- The app build's Bundle helper executables phase runs `swift build` on `agtermCore/.build`, so any SwiftPM
+  process holding that directory (a hung `swift test` included) stalls `xcodebuild` there with no output;
+  check `ps` for one before reading a quiet build as compiling.
 - **An XCUITest run started from a shell inside a live agterm window can die at runner init** with
   `Failed to initialize for UI testing ... Timed out while enabling automation mode` after 60s, before any
   test case runs. The block is at runner initialization, so app code under test cannot reach it; it is not
@@ -111,6 +134,11 @@ C-boundary concurrency before changing the bridge.
   connecting. Both runners recovered once Eugene allowed the pending authorization, with the same stale
   session host and the same `testmanagerd` still running, so neither needs a restart. SIP refuses
   `launchctl kickstart -k` on `testmanagerd`. [Unverified] which authorization that was.
+- A TCC-gated tool run from a shell in the live terminal (`screencapture`, XCUITest) can be denied after a
+  deploy replaces the app under a running `agterm-session-host`, even with an existing grant.
+  `codesign -v <pid>` reports the code on disk does not match, and tccd logs
+  `Failed to match existing code requirement`. Check both before calling a permission missing;
+  a Debug instance can capture its own view in-process instead.
 - For maintainer work, ask before splitting a touched long file and do not raise limits reflexively.
   Contributors need not refactor preexisting length; mention it without blocking or suggesting a limit bump.
 
@@ -130,6 +158,8 @@ C-boundary concurrency before changing the bridge.
   set's artifact and stamp links before setup runs and let it build locally. `setup.sh` writes stamps
   through symlinks while replacing linked artifacts with local files and directories, so a linked build
   leaves the main checkout claiming a build its artifacts never came from.
+- A contributor PR is built on master's dependency pins, never its own older ones: merge fetched
+  `origin/master` into its local branch before setup, and match stamps against that merged tree.
 - After merge, verify the PR merge commit on fetched `origin/master`, then remove the worktree without
   changing the main checkout's branch. Squash/rebase makes removal report unmerged commits; after
   verification, discard the worktree safely. Native removal may leave a renamed branch, which must be
@@ -183,9 +213,10 @@ C-boundary concurrency before changing the bridge.
 
 ## Protect the live terminal
 
-- Never run a mutating `agtermctl` command on the default socket. It controls the user's live deployed
-  terminal. Read-only `tree` and `window list` are tolerable; writes require explicit isolated socket.
-  Never execute bundled recipes against the default instance.
+- Never run experimental or test `agtermctl` mutations (bundled recipes, probes, test scenarios) on the
+  default socket; it controls the user's live daily-driver terminal, so experiments go to an isolated socket.
+  A session's normal operations on itself (context, rename, status, notify, HUD, chat, its own companions)
+  are ordinary use.
 - Every delegated agent that might touch the app or CLI must receive verbatim:
   “never execute `agterm`/`agtermctl` against the default socket, never launch or quit the app, static
   reading only.”
@@ -219,12 +250,13 @@ C-boundary concurrency before changing the bridge.
 - `scripts/setup.sh` builds upstream `ghostty-org/ghostty` at `GHOSTTY_REV` using
   `zig build -Demit-xcframework=true -Dxcframework-target=native`, after applying
   `scripts/ghostty-patches/*.patch`. That directory documents the teardown backport and its removal.
-- `GHOSTTY_REV` is `683d8db` (2026-08-25), a plain reproducibility pin carrying upstream's hidden-surface
-  GPU release.
+- `GHOSTTY_REV` is `83fb956` (v1.4.0, 2026-10-27), a plain reproducibility pin carrying upstream's
+  hidden-surface GPU release.
   It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size
   increase; upstream fixed that and the case was re-verified by hand before the bump. Re-test the
   font-increase case when moving it, and check `minimum_zig_version` in `build.zig.zon` against
-  `ZIG_FORMULA`. The 0.15 to 0.16 jump came with the `0ba6250` bump, not this one.
+  `GHOSTTY_ZIG_FORMULA`. zmx has its own `ZMX_ZIG_FORMULA`, so a ghostty compiler jump leaves zmx's
+  stamp and caches valid.
 - `.ghostty-build-stamp` records the revision and patch digest the staged artifacts came from
   and is what decides a rebuild.
   Presence alone would serve an xcframework built from a different rev silently, so a `GHOSTTY_REV`
@@ -306,14 +338,19 @@ C-boundary concurrency before changing the bridge.
   social tags insert `macOS` for search intent, and `site/llms.txt` carries a libghostty-based variant.
 - `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
   every command, arguments, and read-back field.
-- `cookbook/` is not a synchronized surface. Recipes pin a minimum version and are fixed reactively;
+- `cookbook/` is not a synchronized surface. Recipes pin a minimum version;
   its CI checks structure and shell hygiene, not current API parity.
-- Cookbook recipes are third-party work published by their author, not code the project owns.
-  Review asks only three things: it does no harm, deliberately or accidentally; it does what it claims;
+- Every recipe names its author on an `Author:` line and in the index's author column.
+  A recipe by another author is his published work, not code the project owns.
+  An issue asking to fix or change one gets a pointer to `cookbook/CONTRIBUTING.md#bugs-and-improvements` and is
+  closed; bugs in @umputun's recipes follow normal bug handling.
+  Review of a contributed recipe asks only three things: it does no harm, deliberately or accidentally; it does what it claims;
   and it follows `cookbook/CONTRIBUTING.md`.
   Edge cases, minor bugs, and other small findings never block the PR: approve and merge, leaving a note
   for the contributor. That note is where a recipe finding ends: never file it in `docs/backlog/`, which
   is for code the project owns, and never edit a recipe's prose unprompted.
+- A recipe's Limits list only what the recipe causes or cannot do, never general agent behavior.
+  State what the recipe guarantees before a side effect, so the side effect never reads as misrouting.
 - agterm runs only on macOS, so POSIX portability is never a finding by itself. A shellcheck SC3xxx on a
   recipe is a CI lint gate, not a runtime defect: `/bin/sh` there is bash 3.2 and `printf %q` works.
   Never propose a bash shebang as the fix; the mac shell is zsh, and CI's `.zsh` path is `zsh -n`.

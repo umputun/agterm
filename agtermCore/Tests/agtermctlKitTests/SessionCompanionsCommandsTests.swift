@@ -38,6 +38,16 @@ struct SessionCompanionsCommandsTests {
         #expect(try request(["session", "overlay", "page-attach", "--target", "pg", "--window", "win"]) == expected)
     }
 
+    @Test func sessionConvertWithCompanionSendsTheConvertCommand() throws {
+        let expected = ControlRequest(cmd: .sessionCompanionConvert, target: "s1", args: ControlArgs(window: "win"))
+        #expect(try request(["session", "convert", "--companion", "--target", "s1", "--window", "win"]) == expected)
+        #expect(try request(["session", "convert", "--companion"]) == ControlRequest(cmd: .sessionCompanionConvert, target: "active"))
+    }
+
+    @Test func sessionConvertNeedsTheCompanionFlag() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "convert"]) }
+    }
+
     @Test func sessionCollapseAndExpandTargetAParent() throws {
         #expect(try request(["session", "collapse"]) == ControlRequest(cmd: .sessionCollapse, target: "active"))
         let expected = ControlRequest(cmd: .sessionExpand, target: "9f3c", args: ControlArgs(window: "win"))

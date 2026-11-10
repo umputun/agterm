@@ -25,6 +25,10 @@ class SidebarCellView: NSTableCellView {
     var companionMarker: NSImageView?
     var companionMarkerWidthConstraint: NSLayoutConstraint?
 
+    /// titleCenter centers the name on the row; its constant carries the density's `titleLift`, reset on every
+    /// configure since a reused cell keeps the density it was built with.
+    var titleCenter: NSLayoutConstraint?
+
     func setCompanionMarker(_ companions: [String]) {
         guard let companionMarker, let companionMarkerWidthConstraint else { return }
         companionMarker.isHidden = companions.isEmpty
@@ -274,7 +278,8 @@ final class StatusIconView: NSImageView {
         guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
         // symbol + color come from the shared resolvers, so this glyph and the SwiftUI StatusGlyph stay
         // identical, per-call `--shape`/`--color` overrides included.
-        let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: .regular)
+        let weight = GhosttyApp.shared.statusSymbolWeight(for: status, override: shape)
+        let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: weight)
             .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status, override: colorHex)]))
         let symbol = GhosttyApp.shared.statusSymbolName(for: status, override: shape)
         return NSImage(systemSymbolName: symbol, accessibilityDescription: status.rawValue)?
@@ -332,7 +337,8 @@ final class SidebarRowView: NSTableRowView {
             (GhosttyApp.shared.terminalForegroundColor ?? .white)
                 .withAlphaComponent(isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
         }
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1.5), xRadius: 7, yRadius: 7).fill()
+        let inset = GhosttyApp.shared.sidebarDensity.selectionInset
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: inset), xRadius: 7, yRadius: 7).fill()
     }
 }
 

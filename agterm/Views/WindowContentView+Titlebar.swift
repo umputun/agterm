@@ -299,6 +299,8 @@ struct TitlebarLabel: View {
         // MIDDLE under its own ceiling instead, so an ssh target retains both of its ends.
         .lineLimit(1)
         .truncationMode(.tail)
+        // fixed-width slot, so the label's width stays put while an animated title ticks (#516)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var composition: TitlebarComposition {

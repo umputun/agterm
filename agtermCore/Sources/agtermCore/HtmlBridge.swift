@@ -44,7 +44,7 @@ public struct HtmlBridgeError: Error, Equatable, Sendable {
 /// window or batch resolves exactly as it would over the socket.
 public enum HtmlBridge {
     // each needs more than one request and reply: a stream handed over, or work done after the reply
-    private static let refused: Set<Command> = [.zmxPresent, .sessionOverlayJobRun, .sessionOverlayPageServe, .zmxReset,
+    private static let refused: Set<Command> = [.zmxPresent, .catalogSubscribe, .sessionOverlayJobRun, .sessionOverlayPageServe, .zmxReset,
                                                 .sessionCompanionPageAttach]
     // commands that address no session, or address it some other way than by `target`
     private static let notSessionTargeted: Set<Command> = [.sessionNew, .sessionGo, .sessionOverlayJobRun,
@@ -54,7 +54,9 @@ public enum HtmlBridge {
     // resize included: a pane page's own request then meets the pane refusal instead of resizing the session's
     private static let ownOverlay: Set<Command> = [.sessionOverlayClose, .sessionOverlayReload, .sessionOverlayResize,
                                                    .sessionOverlayNavigate, .sessionOverlaySubmit,
-                                                   .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle]
+                                                   .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
+                                                   .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayChanges,
+                                                   .sessionOverlayWrap]
     // these take their window as `target`, not as `args.window`
     private static let windowTargeted: Set<Command> = [.windowClose, .windowSelect, .windowRename, .windowDelete,
                                                        .windowResize, .windowMove, .windowZoom, .windowFullscreen,

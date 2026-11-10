@@ -112,8 +112,9 @@ Check these in order:
 
 - **Restart after selecting Live sessions.** The restore mode is fixed when agterm starts. Changing
   **Settings ▸ General ▸ Restore sessions** affects the next process, not sessions already open.
-- **Read the eligibility reason in Settings.** Live mode requires zsh or fish as the macOS login shell and the
-  bundled zmx and shell-integration resources (`ZDOTDIR` for zsh, `XDG_DATA_DIRS` for fish). If the launch
+- **Read the eligibility reason in Settings.** Live mode requires zsh or fish as the macOS login shell (or as the
+  absolute path in the ghostty `command` agterm loads, including an inherited global config and
+  `config-file` includes, last value winning, read only at launch) and the bundled zmx and shell-integration resources (`ZDOTDIR` for zsh, `XDG_DATA_DIRS` for fish). If the launch
   cannot use live mode, every pane starts as an ordinary shell.
 - **Inspect actual backing with `tree --json`.** Primary and split surfaces report `backedByZmx`; the session
   field is true only when every existing primary or split is backed. The sidebar deliberately has no zmx
@@ -244,6 +245,12 @@ gives agterm Full Disk Access, which covers all of them at once. A dismissed pro
 not permitted` for the privacy denial, `Permission denied` for ordinary permission bits, and some `ls`
 replacements print the same wording for both. Needing the grant is macOS policy, not an agterm bug: do not
 file it.
+
+### "a dropped screenshot reaches a Live pane but cannot be read"
+
+The pane gets the thumbnail's `TemporaryItems/NSIRD_screencaptureui_*` path, but opening it fails with
+`Operation not permitted` and Claude Code drops the image silently. In the reported case Full Disk Access fixed
+it without a restart; see the [screenshot read diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#a-dropped-screenshot-reaches-a-live-pane-but-cannot-be-read).
 
 ### "agterm would like to access data from other apps, over and over"
 
@@ -387,6 +394,10 @@ there: link detection follows the program's mouse request, not that setting.
 
 ## Reporting: decide bug vs unsupported FIRST
 
+- A bug or a wanted change **in a cookbook recipe** whose Author line names someone other than @umputun →
+  a pull request against the recipe, never an issue; see
+  <https://github.com/umputun/agterm/blob/master/cookbook/CONTRIBUTING.md#bugs-and-improvements>. Bugs in
+  @umputun's recipes, and agterm bugs a recipe exposes, are reported as below.
 - A **supported** thing misbehaves (a documented command/feature does the wrong thing, a crash, a parse
   bug) → a GitHub **issue**.
 - The user wants something **not supported**, or it is a question / idea / "can it do X" → a GitHub

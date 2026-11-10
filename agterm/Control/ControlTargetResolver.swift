@@ -49,6 +49,23 @@ final class ControlTargetResolver {
         return resolvePlacementStore(window, body)
     }
 
+    /// placementStore is the store a placement command with `window` lands in, nil when that window is not open.
+    func placementStore(_ window: String?) -> AppStore? {
+        guard case .success(let store) = resolveWindowStore(window) else { return nil }
+        return store
+    }
+
+    /// workspaceStore is the store owning workspace `target`, resolved as `resolveWorkspace` does; nil when it does
+    /// not resolve.
+    func workspaceStore(_ target: String?, window: String?) -> AppStore? {
+        var owner: AppStore?
+        _ = resolveWorkspace(target, window: window) { store, _ in
+            owner = store
+            return ControlResponse(ok: true)
+        }
+        return owner
+    }
+
     /// Resolve `window` to an OPEN window's store. nil → the frontmost store. A set value resolves the
     /// window id (active=frontmost / exact / prefix / ambiguous / not-found); the window must be open,
     /// else the closed-window error.

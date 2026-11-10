@@ -22,9 +22,17 @@ extension ControlServer {
     /// attachCompanionPage answers `session.companion.page.attach`: a token for one `page-serve` claim, and the page.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id), session.content == .page, let overlay = session.htmlOverlay,
-                  let source = AppStore.presentationSource(overlay.source) else {
-                return ControlResponse(ok: false, error: "not a page companion")
+            guard let session = store.session(withID: id), session.content == .page, let overlay = session.htmlOverlay else {
+                return ControlResponse(ok: false, error: "not a page session")
+            }
+            if case .unreadable = overlay.source {
+                return ControlResponse(ok: false, error: "an unreadable saved page cannot be shown on another Mac")
+            }
+            guard let source = AppStore.presentationSource(overlay.source) else {
+                return ControlResponse(ok: false, error: "not a page session")
+            }
+            if source.isContent {
+                return ControlResponse(ok: false, error: "a markdown, text or document page cannot be shown on another Mac")
             }
             // a loopback address names this Mac's own server, which the other Mac would never reach
             if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
@@ -59,28 +67,31 @@ extension ControlServer {
 
     /// adoptCompanionPageStream takes over a claimed attachment's connection; a page that closed meanwhile gets none.
     func adoptCompanionPageStream(descriptor: Int32, serving: CompanionPageServing) {
-        let owner = ControlStreamOwner(descriptor: descriptor, limits: Self.pageServeLimits)
-        guard let overlay = servedPage(session: serving.session, page: serving.page) else {
-            owner.start(onLine: { _ in }, onClose: {})
-            owner.shutdown()
-            return
-        }
-        let stream = PageServeStream(page: serving.page, source: overlay.source, owner: owner, server: self, companion: serving)
+        let source = servedPage(session: serving.session, page: serving.page)?.source
+        let attachment = PageServeStream.Attachment(claim: serving.claim, session: serving.session)
+        guard let stream = PageServeStream.adopt(descriptor: descriptor, page: serving.page, source: source,
+                                                 attachment: attachment, host: self) else { return }
         companionPageStreams[serving.claim] = stream
-        owner.start(
-            onLine: { [weak stream] line in stream?.take(Data(line)) },
-            onClose: { [weak stream] in
-                DispatchQueue.main.async { MainActor.assumeIsolated { stream?.closed() } }
-            }
-        )
     }
 
-    /// companionPagePlace is where a served page companion sits now, nil once it is gone. A soft-closed page still
+    func claimPageAttachment(_ token: String) -> ControlResponse? { claimCompanionPage(token) }
+
+    func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool {
+        guard let serving = pendingCompanionClaims.removeValue(forKey: claim) else { return false }
+        adoptCompanionPageStream(descriptor: descriptor, serving: serving)
+        return true
+    }
+
+    func dropPageAttachmentClaim(_ claim: UUID) -> Bool { pendingCompanionClaims.removeValue(forKey: claim) != nil }
+
+    func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) { companionPageStreams[attachment.claim] = nil }
+
+    /// pageAttachmentPlace is where a served page companion sits now, nil once it is gone. A soft-closed page still
     /// serves: undo brings it back with its viewers attached.
-    func companionPagePlace(_ serving: CompanionPageServing) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {
-        guard servedPage(session: serving.session, page: serving.page) != nil else { return nil }
+    func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {
+        guard servedPage(session: attachment.session, page: page) != nil else { return nil }
         // the holding store, pending close included, so a soft-closed page still answers for its own window
-        return (serving.session, nil, library.store(holdingSession: serving.session).flatMap(library.windowID(for:)))
+        return (attachment.session, nil, library.store(holdingSession: attachment.session).flatMap(library.windowID(for:)))
     }
 
     /// endCompanionPageServing ends every attachment of `page`, which left its slot here.

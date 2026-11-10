@@ -2,6 +2,8 @@
 
 Pick one of the repo's SQLite databases in the native picker and browse it in a TUI viewer, in an overlay over the session you pressed the chord in.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Plenty of projects carry a SQLite database or two — the application's store, a test fixture, a cache — and opening one up is the quickest way to see what the code actually wrote.

@@ -1,5 +1,17 @@
 import Foundation
 
+/// MarkdownLinkGrant is what a markdown page may follow links within: its file and that file's folder, both with
+/// symlinks resolved when the page opens and fixed for its life.
+public struct MarkdownLinkGrant: Codable, Equatable, Sendable {
+    public let path: String
+    public let root: String
+
+    public init(path: String, root: String) {
+        self.path = path
+        self.root = root
+    }
+}
+
 /// MarkdownPage is the page a markdown overlay shows. The app reads the file and the local pictures it
 /// references, and this builds the document a bundled renderer turns into HTML. The markdown comes from a
 /// clicked path in untrusted output, so its text and the picture map travel as escaped, inert data; the page
@@ -40,21 +52,75 @@ public enum MarkdownPage {
     /// markdown file's own folder, after symlinks on both sides are resolved; in document order, each
     /// reference once. A remote, a `data:` or an escaping reference is left out and renders as its alt text.
     public static func imageReferences(in markdown: String, folder: String) -> [Image] {
-        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-        guard let parsed = try? AttributedString(markdown: markdown, options: options) else { return [] }
+        references(in: markdown) { localPath($0, folder: folder) }
+    }
+
+    /// remoteImageReferences lists the same references for a markdown file on another Mac, `folder` being its
+    /// folder there, checked lexically only; a markdown-spelled one is left out, since that Mac serves it as text.
+    public static func remoteImageReferences(in markdown: String, folder: String) -> [Image] {
+        references(in: markdown) { isMarkdown($0) ? nil : lexicalPath($0, folder: folder) }
+    }
+
+    /// linkGrant is what a page opened on `path` may follow links within, nil when its links stay text: a relative
+    /// path, a target that is not markdown, or a folder that is `/` or `home`, all judged with symlinks resolved.
+    public static func linkGrant(for path: String, home: String = NSHomeDirectory()) -> MarkdownLinkGrant? {
+        guard path.hasPrefix("/") else { return nil }
+        let file = real(path)
+        let root = URL(fileURLWithPath: file).deletingLastPathComponent().path
+        guard isMarkdown(file), root != "/", root != real(home) else { return nil }
+        return MarkdownLinkGrant(path: file, root: root)
+    }
+
+    /// linkedDocument is the path a link page reads for `requested`, an absolute path already percent-decoded:
+    /// the request normalized, so its pictures come from the folder its links resolve against. Nil unless both
+    /// the request and its symlink-resolved target are markdown strictly inside the grant's root, so a
+    /// `guide.md` alias of a `.env` is refused.
+    public static func linkedDocument(_ requested: String, grant: MarkdownLinkGrant) -> String? {
+        guard requested.hasPrefix("/"), isMarkdown(requested),
+              let lexical = lexicalPath(requested, folder: grant.root) else { return nil }
+        let file = real(lexical)
+        return isMarkdown(file) && file != grant.root && HtmlOverlay.contains(grant.root, file) ? lexical : nil
+    }
+
+    private static func isMarkdown(_ path: String) -> Bool {
+        LinkPolicy.markdownExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased())
+    }
+
+    private static func references(in markdown: String, path: (String) -> String?) -> [Image] {
         var found: [Image] = [], seen: Set<String> = []
-        for run in parsed.runs {
-            guard let url = run.imageURL else { continue }
-            let reference = url.relativeString.removingPercentEncoding ?? url.relativeString
-            guard seen.insert(reference).inserted, let path = localPath(reference, folder: folder) else { continue }
+        for source in imageSources(in: markdown) {
+            let reference = source.removingPercentEncoding ?? source
+            guard seen.insert(reference).inserted, let path = path(reference) else { continue }
             found.append(Image(reference: reference, path: path))
         }
         return found
     }
 
+    /// imageSources lists every picture reference in document order, as the parser hands it over. Off Darwin it
+    /// needs swift-markdown, and without it a page embeds no pictures.
+    private static func imageSources(in markdown: String) -> [String] {
+        #if canImport(Darwin)
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+        guard let parsed = try? AttributedString(markdown: markdown, options: options) else { return [] }
+        return parsed.runs.compactMap { $0.imageURL?.relativeString }
+        #elseif canImport(Markdown)
+        return MarkdownImageCollector.sources(in: markdown)
+        #else
+        return []
+        #endif
+    }
+
     /// localPath resolves one decoded reference against `folder`, nil unless it names a file inside it. The
     /// lexical check runs first, so a reference outside the folder is refused without touching the filesystem.
     static func localPath(_ reference: String, folder: String) -> String? {
+        guard let lexical = lexicalPath(reference, folder: folder) else { return nil }
+        let realRoot = real(LinkPolicy.lexicallyNormalizedAbsolutePath(folder)), file = real(lexical)
+        return file != realRoot && HtmlOverlay.contains(realRoot, file) ? file : nil
+    }
+
+    /// lexicalPath joins one decoded reference to `folder` and normalizes it without reading the filesystem,
+    /// nil unless the result lies strictly inside the folder: no `~`, no scheme, no `..` escape.
+    public static func lexicalPath(_ reference: String, folder: String) -> String? {
         guard folder.hasPrefix("/"), !reference.isEmpty else { return nil }
         let candidate: String
         if reference.hasPrefix("/") {
@@ -66,9 +132,7 @@ public enum MarkdownPage {
         }
         let root = LinkPolicy.lexicallyNormalizedAbsolutePath(folder)
         let lexical = LinkPolicy.lexicallyNormalizedAbsolutePath(candidate)
-        guard lexical != root, HtmlOverlay.contains(root, lexical) else { return nil }
-        let realRoot = real(root), file = real(lexical)
-        return file != realRoot && HtmlOverlay.contains(realRoot, file) ? file : nil
+        return lexical != root && HtmlOverlay.contains(root, lexical) ? lexical : nil
     }
 
     private static func hasScheme(_ reference: String) -> Bool {
@@ -84,8 +148,10 @@ public enum MarkdownPage {
 
     /// html is the document the renderer fills: the markdown as the text of a hidden element, the embedded
     /// pictures as a JSON attribute, and `style`, the app's own stylesheet. Everything authored is HTML-escaped,
-    /// never placed inside a script element, and the policy loads nothing but `data:` pictures.
-    public static func html(markdown: String, images: Embedded, style: String) -> String {
+    /// never placed inside a script element, and the policy loads nothing but `data:` pictures. The holder is a
+    /// `div`: the parser drops a newline right after `<pre>`, which would move a `---` up to the first line.
+    /// `links` lets the renderer keep relative links to neighbouring markdown files.
+    public static func html(markdown: String, images: Embedded, style: String, links: Bool = false) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         let map = (try? encoder.encode(images)).map { String(decoding: $0, as: UTF8.self) } ?? "{}"
@@ -93,7 +159,7 @@ public enum MarkdownPage {
         <!doctype html><html><head><meta charset="utf-8">\
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">\
         <style>\(style)</style></head><body>\
-        <pre id="agterm-markdown" hidden data-images="\(escaped(map))">\(escaped(markdown))</pre>\
+        <div id="agterm-markdown" hidden data-images="\(escaped(map))"\(links ? #" data-links="local""# : "")>\(escaped(markdown))</div>\
         <main id="agterm-page"></main></body></html>
         """
     }

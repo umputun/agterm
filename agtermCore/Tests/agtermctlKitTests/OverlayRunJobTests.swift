@@ -14,9 +14,11 @@ struct OverlayRunJobTests {
 
         init() {
             var pair: [Int32] = [-1, -1]
-            socketpair(AF_UNIX, SOCK_STREAM, 0, &pair)
+            socketpair(AF_UNIX, unixStreamType, 0, &pair)
+            #if canImport(Darwin)
             var noSigPipe: Int32 = 1
             for fd in pair { setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size)) }
+            #endif
             helper = pair[0]
             origin = pair[1]
         }
@@ -74,10 +76,19 @@ struct OverlayRunJobTests {
 
     func gone(_ pid: pid_t) -> Bool {
         for _ in 0..<100 {
-            if kill(pid, 0) != 0 { return true }
+            if kill(pid, 0) != 0 || zombie(pid) { return true }
             usleep(20_000)
         }
         return false
+    }
+
+    func zombie(_ pid: pid_t) -> Bool {
+        #if os(Linux)
+        guard let stat = try? String(contentsOfFile: "/proc/\(pid)/stat", encoding: .utf8) else { return false }
+        return OverlayJobRunner.statusFields(stat)?.state == "Z"
+        #else
+        false
+        #endif
     }
 
     func pidFile() -> String {
@@ -112,6 +123,22 @@ struct OverlayRunJobTests {
 
         #expect(throws: SocketClientError.self) { try runner.claim("job") }
         #expect(origin.frames().isEmpty)
+    }
+
+    @Test(arguments: [
+        ("41 (sleep) Z 1 40 30 0 -1", "Z", 40),
+        ("9 (a) R (b) S 1 77 77 0 -1", "S", 77),
+        ("12 (two words) R 1 12 12", "R", 12),
+    ] as [(String, String, Int32)])
+    func procStatReadsTheStateAndGroupAfterTheName(line: String, state: String, group: Int32) {
+        let fields = OverlayJobRunner.statusFields(line)
+        #expect(fields.map { String($0.state) } == state)
+        #expect(fields?.group == group)
+    }
+
+    @Test(arguments: ["", "no parens 1 2 3", "5 (sh) Z 1", "5 (sh) ZZ 1 5 5", "5 (sh) Z 1 group 5"])
+    func procStatRefusesALineItCannotRead(line: String) {
+        #expect(OverlayJobRunner.statusFields(line) == nil)
     }
 
     @Test func aCancelFromTheAppEndsTheProgramCanceled() throws {
@@ -151,6 +178,23 @@ struct OverlayRunJobTests {
         close(origin.origin)
 
         #expect(runner.run(claimed, baseEnvironment: Self.base) == 5)
+    }
+
+    @Test func aSuspendedSpawnRunsNothingUntilContinued() throws {
+        let marker = NSTemporaryDirectory() + "agterm-suspended-\(UUID().uuidString)"
+        defer { unlink(marker) }
+        let environment = Self.base.merging(["AGTERM_OVL_CMD": "echo ran > '\(marker)'"]) { _, new in new }
+
+        let pid = try OverlayJobRunner.spawn(environment: environment, cwd: "/", suspended: true)
+        Thread.sleep(forTimeInterval: 0.3)
+        #expect(!FileManager.default.fileExists(atPath: marker))
+        kill(pid, SIGCONT)
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) < 0, errno == EINTR {}
+
+        #expect(status & 0x7f == 0)
+        #expect((status >> 8) & 0xff == 0)
+        #expect((try? String(contentsOfFile: marker, encoding: .utf8)) == "ran\n")
     }
 
     @Test func theProgramDoesNotInheritTheAppConnection() throws {
@@ -209,8 +253,7 @@ struct OverlayRunJobTests {
         try FileManager.default.createDirectory(atPath: bin, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: bin) }
         let tool = (bin as NSString).appendingPathComponent("agterm-fixture-tool")
-        try "#!/bin/sh\nexit 0\n".write(toFile: tool, atomically: true, encoding: .utf8)
-        chmod(tool, 0o755)
+        try "#!/bin/sh\nexit 0\n".writeExecutable(to: URL(fileURLWithPath: tool))
         let session = UUID()
         let environment = SurfaceEnvironment.session(sessionID: session, windowID: nil, workspaceID: nil,
                                                      socketPath: "/tmp/origin.sock", programVersion: "9.9.9")

@@ -1,11 +1,43 @@
 import Foundation
 
+/// One entry in the persisted window index: id, name, and open-at-quit, which drives reopen-all.
+public struct WindowEntry: Codable, Sendable, Equatable {
+    public var id: UUID
+    public var name: String
+    public var isOpen: Bool
+    public var source: WindowSource?
+
+    public init(id: UUID, name: String, isOpen: Bool, source: WindowSource? = nil) {
+        self.id = id
+        self.name = name
+        self.isOpen = isOpen
+        self.source = source
+    }
+}
+
+/// The persisted `windows.json` index: ordered window list plus frontmost id. `version` is independent of
+/// `Snapshot.version` (the per-window file shape) so the two evolve separately.
+public struct WindowsIndex: Codable, Equatable, Sendable {
+    /// Bumped when the index shape changes; a mismatch makes the index count as absent.
+    public static let currentVersion = 1
+
+    public var version: Int
+    public var frontmost: UUID?
+    public var windows: [WindowEntry]
+
+    public init(version: Int = WindowsIndex.currentVersion, frontmost: UUID? = nil, windows: [WindowEntry] = []) {
+        self.version = version
+        self.frontmost = frontmost
+        self.windows = windows
+    }
+}
+
 extension WindowLibrary {
     /// saveIndex writes `windows.json`: ordered window list with open flags, plus the frontmost id. A
     /// failure is logged and leaves `indexUnsaved` set until a later write lands.
     @discardableResult
     public func saveIndex() -> Bool {
-        let entries = windows.map { WindowEntry(id: $0.id, name: $0.name, isOpen: stores[$0.id] != nil) }
+        let entries = windows.map { WindowEntry(id: $0.id, name: $0.name, isOpen: stores[$0.id] != nil, source: $0.source) }
         let index = WindowsIndex(frontmost: frontmostWindowID, windows: entries)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

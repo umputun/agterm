@@ -7,7 +7,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case previousWindow = "previous_window", nextWindow = "next_window"
     case newWorkspace = "new_workspace", renameWorkspace = "rename_workspace", deleteWorkspace = "delete_workspace"
     case newSession = "new_session", openDirectory = "open_directory", renameSession = "rename_session"
-    case duplicateSession = "duplicate_session", newCompanion = "new_companion", duplicateCompanion = "duplicate_companion"
+    case duplicateSession = "duplicate_session", newCompanion = "new_companion", duplicateCompanion = "duplicate_companion",
+         convertCompanion = "convert_companion"
     case closeSession = "close_session", reopenRecent = "reopen_recent", undoClose = "undo_close", clearStatus = "clear_status"
     case increaseFontSize = "increase_font_size", decreaseFontSize = "decrease_font_size", resetFontSize = "reset_font_size"
     case toggleSplit = "toggle_split", toggleHorizontalSplit = "toggle_horizontal_split"
@@ -25,7 +26,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case quickTerminal = "quick_terminal", sessionPalette = "session_palette", commandPalette = "command_palette"
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
     case dashboard = "dashboard"
-    case attachRemote = "attach_remote"
+    case attachRemote = "attach_remote", openRemoteWindow = "open_remote_window", detachedSessions = "detached_sessions"
     case editFlaggedSessions = "edit_flagged_sessions", editFocusedWorkspaces = "edit_focused_workspaces"
 
     /// The shipped default chord, or `nil` for a keyless action, which gains a key only when the user
@@ -67,10 +68,10 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .nextSession: return Chord(mods: [.command, .option], key: "down")
         case .previousAttentionSession: return Chord(mods: [.control, .option], key: "up")
         case .nextAttentionSession: return Chord(mods: [.control, .option], key: "down")
-        case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion,
+        case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion, .convertCompanion,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
              .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
-             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces:
+             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces, .openRemoteWindow, .detachedSessions:
             return nil
         }
     }

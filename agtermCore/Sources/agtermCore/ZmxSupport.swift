@@ -28,11 +28,14 @@ public enum ZmxSupport {
         public let sessionHostExecutablePath: String?
         /// Nil leaves the attach unmanaged, as a zmx without explicit leadership expects.
         public let lead: ZmxLeadAttachment?
+        /// The shell `commandShell(fromCommand:)` took from ghostty `command`; it replaces
+        /// `passwordDatabaseShell`, nil leaving the login shell in charge.
+        public let commandShell: String?
 
         public init(zmxExecutablePath: String, passwordDatabaseShell: String?, resourcesDirectory: String?,
                     stateDirectory: String, paneIdentity: UUID, baseEnvironment: [String: String],
                     inheritedZdotdir: String?, sessionHostExecutablePath: String? = nil,
-                    lead: ZmxLeadAttachment? = nil) {
+                    lead: ZmxLeadAttachment? = nil, commandShell: String? = nil) {
             self.zmxExecutablePath = zmxExecutablePath
             self.passwordDatabaseShell = passwordDatabaseShell
             self.resourcesDirectory = resourcesDirectory
@@ -42,6 +45,7 @@ public enum ZmxSupport {
             self.inheritedZdotdir = inheritedZdotdir
             self.sessionHostExecutablePath = sessionHostExecutablePath
             self.lead = lead
+            self.commandShell = commandShell
         }
     }
 
@@ -54,15 +58,20 @@ public enum ZmxSupport {
         public let daemonName: String
         public let socketDirectory: String
         public let paneID: String
+        /// The ghostty `command` shell the attach line re-exports as `SHELL`, which `login` resets to the
+        /// password-database shell before zmx reads it; nil for a login-shell pane.
+        public let commandShell: String?
 
         public init(executablePath: String, environment: [String: String], daemonName: String,
-                    socketDirectory: String, paneID: String, sessionHostExecutablePath: String? = nil) {
+                    socketDirectory: String, paneID: String, sessionHostExecutablePath: String? = nil,
+                    commandShell: String? = nil) {
             self.executablePath = executablePath
             self.sessionHostExecutablePath = sessionHostExecutablePath
             self.environment = environment
             self.daemonName = daemonName
             self.socketDirectory = socketDirectory
             self.paneID = paneID
+            self.commandShell = commandShell
         }
     }
 
@@ -77,7 +86,7 @@ public enum ZmxSupport {
             switch self {
             case .executablePathNotAbsolute: "the zmx executable path is not absolute"
             case .executableUnavailable: "the zmx executable is unavailable"
-            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish"
+            case .unsupportedLoginShell: "the password-database login shell is not zsh or fish, and the ghostty command setting names neither"
             case .missingZshIntegration: "the bundled zsh integration is unavailable"
             case .missingFishIntegration: "the bundled fish integration is unavailable"
             }
@@ -92,7 +101,7 @@ public enum ZmxSupport {
         guard FileManager.default.isExecutableFile(atPath: executable) else {
             return .failure(.executableUnavailable)
         }
-        guard let shell = inputs.passwordDatabaseShell, let shellKind = shellKind(for: shell) else {
+        guard let shell = inputs.commandShell ?? inputs.passwordDatabaseShell, let shellKind = shellKind(for: shell) else {
             return .failure(.unsupportedLoginShell)
         }
         guard let resources = inputs.resourcesDirectory else {
@@ -147,7 +156,8 @@ public enum ZmxSupport {
             daemonName: daemonName,
             socketDirectory: socketDirectory,
             paneID: paneID,
-            sessionHostExecutablePath: host
+            sessionHostExecutablePath: host,
+            commandShell: inputs.commandShell
         ))
     }
 
@@ -171,12 +181,34 @@ public enum ZmxSupport {
             let endsPane = argv == nil && paneCommand != nil && !payload.isEmpty
             arguments = [host, "client", configuration.daemonName] + (endsPane ? ["--ends-pane"] : []) + ["--"] + arguments
         }
+        var wrapper: [String] = []
         if let shell = configuration.environment["SHELL"], shellKind(for: shell) == .fish,
            let integrationRoot = configuration.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] {
-            arguments = ["/usr/bin/env", "/bin/sh", "-c", fishXDGDataDirectoriesScript, "sh", integrationRoot] + arguments
+            wrapper = ["/bin/sh", "-c", fishXDGDataDirectoriesScript, "sh", integrationRoot]
+        }
+        let assignments = configuration.commandShell.map { ["SHELL=\($0)"] } ?? []
+        if !wrapper.isEmpty || !assignments.isEmpty {
+            arguments = ["/usr/bin/env"] + assignments + wrapper + arguments
         }
         return CommandRestore.shellQuotedLine(arguments)
     }
+
+    /// commandShell is the shell a ghostty `command` value names when Live can run it in place of the login
+    /// shell: an absolute zsh or fish path after an optional `direct:` or `shell:` prefix, followed only by
+    /// flags Live applies anyway. Anything else is nil, since Live starts the shell itself and cannot honor
+    /// other programs or arguments.
+    public static func commandShell(fromCommand command: String) -> String? {
+        var value = command
+        for prefix in ["direct:", "shell:"] where value.hasPrefix(prefix) {
+            value = String(value.dropFirst(prefix.count))
+        }
+        let words = value.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard let shell = words.first, (shell as NSString).isAbsolutePath, shellKind(for: shell) != nil,
+              words.dropFirst().allSatisfy(liveShellFlags.contains) else { return nil }
+        return shell
+    }
+
+    private static let liveShellFlags: Set<String> = ["-l", "--login", "-i", "--interactive", "-il", "-li"]
 
     /// Merged at launch because a surface `XDG_DATA_DIRS` would replace a `ghostty.conf` `env` entry.
     static let fishXDGDataDirectoriesScript = [
@@ -260,9 +292,19 @@ public enum ZmxSupport {
     }
 
     public static func socketDirectory(forStateDirectory stateDirectory: String) -> String {
+        "/tmp/agterm-zmx-\(stateHash(stateDirectory))"
+    }
+
+    /// socketDirectory under `runtimeDirectory` is agterm-server's: `XDG_RUNTIME_DIR` is kept for a lingering
+    /// user, while a distribution's tmp cleanup can empty `/tmp` under a live daemon.
+    public static func socketDirectory(forStateDirectory stateDirectory: String, runtimeDirectory: String) -> String {
+        (runtimeDirectory as NSString).appendingPathComponent("agterm-zmx-\(stateHash(stateDirectory))")
+    }
+
+    private static func stateHash(_ stateDirectory: String) -> String {
         let canonical = URL(fileURLWithPath: stateDirectory, isDirectory: true)
             .standardizedFileURL.resolvingSymlinksInPath().path
-        return "/tmp/agterm-zmx-\(stableHash(canonical))"
+        return stableHash(canonical)
     }
 
     public static func daemonName(for paneIdentity: UUID) -> String {
@@ -288,6 +330,23 @@ public enum ZmxSupport {
         return body.count == 32 && body.allSatisfy {
             ($0 >= UInt8(ascii: "0") && $0 <= UInt8(ascii: "9")) ||
                 ($0 >= UInt8(ascii: "a") && $0 <= UInt8(ascii: "f"))
+        }
+    }
+
+    static let scratchNamePrefix = "agterm-scratch-"
+
+    /// scratchDaemonName names agterm-server's daemon behind a session's scratch. It is never `isDaemonName`, so
+    /// nothing that adopts, maps or prunes pane daemons ever claims one.
+    public static func scratchDaemonName(for identity: UUID) -> String {
+        scratchNamePrefix + compactUUID(identity)
+    }
+
+    /// isScratchDaemonName reports whether `name` is exactly the shape `scratchDaemonName(for:)` emits.
+    public static func isScratchDaemonName(_ name: String) -> Bool {
+        guard name.hasPrefix(scratchNamePrefix) else { return false }
+        let body = name.utf8.dropFirst(scratchNamePrefix.utf8.count)
+        return body.count == 32 && body.allSatisfy {
+            ($0 >= UInt8(ascii: "0") && $0 <= UInt8(ascii: "9")) || ($0 >= UInt8(ascii: "a") && $0 <= UInt8(ascii: "f"))
         }
     }
 

@@ -2,6 +2,8 @@
 
 Speak agent status changes out loud from a dedicated session, as a worked example of wiring the event stream to something.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 This one is a demonstration rather than a tool. Talking terminals get old within the hour, and nothing here is meant to survive on your machine past the afternoon you try it. What it is good for is showing the shape of a non-trivial event-driven flow end to end, because every piece of it is a piece you would need for something you did want to keep: subscribing to the stream, filtering it, resolving the ids an event carries into names, and running the whole thing somewhere that survives you switching sessions.

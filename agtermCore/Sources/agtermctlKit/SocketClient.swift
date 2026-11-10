@@ -2,6 +2,8 @@
 import Darwin
 #elseif canImport(Glibc)
 import Glibc
+#elseif canImport(Musl)
+import Musl
 #endif
 import ArgumentParser
 import Foundation
@@ -75,11 +77,7 @@ struct SocketClient {
         guard path.utf8.count < pathCapacity else {
             throw SocketClientError("socket path too long (\(path.utf8.count) bytes): \(path)")
         }
-        #if canImport(Darwin)
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        #else
-        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
-        #endif
+        let fd = socket(AF_UNIX, UnixSocket.streamType, 0)
         guard fd >= 0 else { throw SocketClientError("socket() failed: \(String(cString: strerror(errno)))") }
 
         // a write after the server closes the connection (e.g. it rejected an oversized request) would
@@ -155,7 +153,7 @@ struct SocketClient {
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             while offset < data.count {
-                let n = write(fd, base + offset, data.count - offset)
+                let n = UnixSocket.write(fd, base + offset, data.count - offset)
                 if n <= 0 { throw SocketClientError("write failed: \(String(cString: strerror(errno)))") }
                 offset += n
             }
@@ -251,6 +249,7 @@ struct SocketClient {
     /// re-encoding here would drop every field this build does not model. Pure so it can be unit-tested
     /// directly; `printResponse` routes it to stdout/stderr.
     static func formatResponse(_ response: ControlResponse, echoID: Bool = false) -> String {
+        if let receipt = response.result?.receipt { return formatResponse(response, receipt: receipt, echoID: echoID) }
         if !response.ok {
             return "error: " + (response.error ?? "unknown error")
         }
@@ -287,8 +286,12 @@ struct SocketClient {
             return open.complete ? reopened : reopened + " (incomplete: the entry stays in the list)"
         }
         if let app = response.result?.app {
-            guard let installed = response.result?.installed, installed != app else { return formatIdentity(app) }
-            return "\(formatIdentity(app))\ninstalled: \(formatIdentity(installed))"
+            var lines = [formatIdentity(app)]
+            if let installed = response.result?.installed, installed != app { lines.append("installed: \(formatIdentity(installed))") }
+            if let versions = response.result?.versions {
+                lines.append("server: \(versions.server), protocol: \(versions.protocolVersion), catalog: \(versions.catalog)")
+            }
+            return lines.joined(separator: "\n")
         }
         if let text = response.result?.text {
             return text
@@ -335,6 +338,30 @@ struct SocketClient {
 
     static func formatAffected(_ affected: Int) -> String {
         affected == 1 ? "1 session" : "\(affected) sessions"
+    }
+
+    /// formatResponse(_:receipt:echoID:) prints what the command itself prints, then its receipt; a refused or
+    /// fenced operation prints the receipt alone, which carries the error.
+    private static func formatResponse(_ response: ControlResponse, receipt: CatalogReceipt, echoID: Bool) -> String {
+        guard response.ok else { return "error: " + formatReceipt(receipt) }
+        var bare = response
+        bare.result?.receipt = nil
+        let base = formatResponse(bare, echoID: echoID)
+        return base == "ok" ? formatReceipt(receipt) : base + "\n" + formatReceipt(receipt)
+    }
+
+    /// formatReceipt names an operation's outcome and the catalog epoch it belongs to.
+    static func formatReceipt(_ receipt: CatalogReceipt) -> String {
+        let head = "operation \(receipt.opID):"
+        switch receipt.outcome {
+        case .applied:
+            guard let rev = receipt.rev else { return "\(head) applied in epoch \(receipt.epoch)" }
+            return "\(head) applied at rev \(rev) in epoch \(receipt.epoch)"
+        case .noop: return "\(head) no change in epoch \(receipt.epoch)"
+        case .refused: return "\(head) refused in epoch \(receipt.epoch): \(receipt.error ?? "no reason given")"
+        case .fenced: return "\(head) fenced in epoch \(receipt.epoch), so it will not run"
+        case .unknown: return "\(head) outcome unknown in epoch \(receipt.epoch); it will not run now"
+        }
     }
 
     static func formatIdentity(_ identity: AppIdentity) -> String {
@@ -543,8 +570,10 @@ struct SocketClient {
                 let realizedTag = session.realized == false ? " (not realized)" : ""
                 let overlayHidden = session.hiddenOverlays?.contains("session") == true
                 let overlayTag = session.overlay ? (overlayHidden ? " (overlay hidden)" : " (overlay)") : ""
+                let pendingTag = session.pending.map { $0 == "unknown" ? " (outcome unknown)" : " (pending)" } ?? ""
+                let interactionTag = session.interactions.map { " (\($0.count) interaction\($0.count == 1 ? "" : "s"))" } ?? ""
                 let tags = splitTag + realizedTag + overlayTag
-                    + (session.scratch ? " (scratch)" : "")
+                    + (session.scratch ? " (scratch)" : "") + pendingTag + interactionTag
                 let splitCwdSuffix = session.splitCwd.map { $0 == session.cwd ? "" : "  split cwd: \($0)" } ?? ""
                 let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
                 let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""
@@ -564,9 +593,5 @@ struct SocketClient {
 }
 
 private func systemConnect(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ len: socklen_t) -> Int32 {
-    #if canImport(Darwin)
-    return Darwin.connect(fd, addr, len)
-    #else
-    return Glibc.connect(fd, addr, len)
-    #endif
+    UnixSocket.connect(fd, addr, len)
 }

@@ -137,6 +137,7 @@ struct PresentationHubTests {
             PresentationSnapshot(status: nil, hud: nil, layout: initial)
         }
         if staleHeartbeat {
+            hub.heartbeat()
             clock.now += 31
             hub.heartbeat()
             #expect(first.closed == .stale)
@@ -154,6 +155,84 @@ struct PresentationHubTests {
 
         #expect(next.bodies.last == .layout(initial))
         #expect(next.frames.count == 3)
+    }
+
+    static let shapesHello = PresentationHello(version: 1, kinds: hello.kinds + [PresentationHub.statusShapesKind],
+                                               mode: .mirror)
+    static let checkmarkHello = PresentationHello(version: 1, kinds: shapesHello.kinds + [PresentationHub.statusCheckmarkKind],
+                                                  mode: .mirror)
+
+    static func status(shape: StatusShape?) -> PresentationStatus {
+        PresentationStatus(status: .blocked, blink: true, color: "#ff8800", shape: shape, pane: .scratch, changedAt: 42)
+    }
+
+    @Test(arguments: StatusShape.allCases)
+    func oneStatusReachesEachViewerWithOnlyAShapeItDecodes(shape: StatusShape) throws {
+        let hub = makeHub()
+        let legacy = Sink()
+        let shapes = Sink()
+        let current = Sink()
+
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: legacy) { Self.empty }
+        try hub.subscribe(session: Self.session, hello: Self.shapesHello, sink: shapes) { Self.empty }
+        try hub.subscribe(session: Self.session, hello: Self.checkmarkHello, sink: current) { Self.empty }
+        hub.publish(.status(Self.status(shape: shape)), session: Self.session)
+
+        #expect(current.bodies.last == .status(Self.status(shape: shape)))
+        #expect(shapes.bodies.last == .status(Self.status(shape: StatusShape.expanded.contains(shape) ? shape : nil)))
+        #expect(legacy.bodies.last == .status(Self.status(shape: StatusShape.original.contains(shape) ? shape : nil)))
+        let line = String(decoding: try PresentationCodec.encode(try #require(legacy.frames.last)), as: UTF8.self)
+        #expect(line.contains("\"\(shape.rawValue)\"") == StatusShape.original.contains(shape))
+    }
+
+    @Test func aViewerWithoutTheCheckmarkKindGetsTheSnapshotAndAHeldDeltaWithoutTheCheckmark() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let snapshot = PresentationSnapshot(status: Self.status(shape: .checkmark), hud: nil, context: "build")
+
+        try hub.subscribe(session: Self.session, hello: Self.shapesHello, sink: sink) {
+            hub.publish(.status(Self.status(shape: .bolt)), session: Self.session)
+            return snapshot
+        }
+
+        let expected = PresentationSnapshot(status: Self.status(shape: nil), hud: nil, context: "build")
+        #expect(sink.bodies == [.hello(Self.shapesHello), .snapshot(expected), .status(Self.status(shape: .bolt))])
+    }
+
+    @Test func aViewerWithoutTheShapesKindGetsTheSnapshotAndAHeldDeltaWithoutANewShape() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let snapshot = PresentationSnapshot(status: Self.status(shape: .bolt), hud: nil, context: "build")
+
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: sink) {
+            hub.publish(.status(Self.status(shape: .seal)), session: Self.session)
+            return snapshot
+        }
+
+        let expected = PresentationSnapshot(status: Self.status(shape: nil), hud: nil, context: "build")
+        #expect(sink.bodies == [.hello(Self.hello), .snapshot(expected), .status(Self.status(shape: nil))])
+    }
+
+    @Test func aViewerAdvertisingTheShapesKindGetsTheSnapshotUnchanged() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let snapshot = PresentationSnapshot(status: Self.status(shape: .triangleDown), hud: nil)
+
+        try hub.subscribe(session: Self.session, hello: Self.shapesHello, sink: sink) { snapshot }
+
+        #expect(sink.bodies == [.hello(Self.shapesHello), .snapshot(snapshot)])
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.statusShapesKind))
+    }
+
+    @Test func aViewerAdvertisingTheCheckmarkKindGetsTheSnapshotUnchanged() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let snapshot = PresentationSnapshot(status: Self.status(shape: .checkmark), hud: nil)
+
+        try hub.subscribe(session: Self.session, hello: Self.checkmarkHello, sink: sink) { snapshot }
+
+        #expect(sink.bodies == [.hello(Self.checkmarkHello), .snapshot(snapshot)])
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.statusCheckmarkKind))
     }
 
     @Test func theAnswerAdvertisesOnlyKindsBothSidesSpeak() throws {
@@ -186,6 +265,25 @@ struct PresentationHubTests {
         #expect(sink.bodies.last == ask)
     }
 
+    @Test func onlyThePresentersLinkClickReachesTheHost() throws {
+        let hub = makeHub()
+        var received: [PresentationFrame.Body] = []
+        hub.onPresenterFrame = { _, body in received.append(body) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.linkClickKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let click = PresentationFrame.Body.linkClick(PresentationLinkClick(raw: "/a.md", pane: UUID(), mode: .overlay))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: click), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: click), from: presenter)
+
+        #expect(received == [click])
+        #expect(presenterSink.bodies.first == .hello(hello))
+    }
+
     @Test(arguments: [true, false])
     func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
         let hub = makeHub()
@@ -199,6 +297,32 @@ struct PresentationHubTests {
 
         #expect(hub.presenterSupports(PresentationHub.askFormKind, session: Self.session) == advertised)
         #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)))
+    }
+
+    @Test func aBatchGoesAsChunksOfOneArrayWithEveryEntryBehindTheCommit() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: ["notify"], mode: .presenter),
+                                   sink: sink) { Self.empty }
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
+        let small = (0..<40).map { PresentationNotify(title: "t", body: String(repeating: "x", count: 5000) + "\($0)", pane: nil, source: "osc") }
+        let big = PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024), pane: nil, source: "osc")
+        let before = sink.frames.count
+
+        hub.batchToPresenter(session: Self.session) {
+            for notify in small { hub.sendToPresenter(.notify(notify), session: Self.session) }
+            hub.sendToPresenter(.notify(big), session: Self.session)
+        }
+
+        let sent = sink.bodies.dropFirst(before)
+        let chunks = sent.compactMap { if case .pendingChunk(let chunk) = $0 { chunk } else { nil } }
+        #expect(chunks.count > 1)
+        #expect(chunks.map(\.index) == Array(chunks.indices))
+        #expect(Array(sent.dropLast()).allSatisfy { if case .pendingChunk = $0 { true } else { false } })
+        #expect(sent.last == .pendingCommit)
+        var batch = PresentationPendingBatch()
+        for chunk in chunks { batch.add(chunk) }
+        #expect(try batch.commit() == small.map { .notify($0) } + [.notify(big)])
     }
 
     @Test func aPeerWithNoUsableVersionIsRefused() {
@@ -236,9 +360,29 @@ struct PresentationHubTests {
         hub.heartbeat()
         clock.now += 20
         hub.heartbeat()
+        #expect(sink.closed == nil)
+        clock.now += 11
+        hub.heartbeat()
 
         #expect(sink.closed == .stale)
         #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    // regression: a heartbeat late past the stale timeout dropped viewers it had never given a ping to answer
+    @Test func aLongGapBetweenHeartbeatsLeavesTheViewerAPingToAnswer() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: Self.hello, sink: sink) { Self.empty }
+
+        clock.now += 60
+        hub.heartbeat()
+        #expect(sink.closed == nil)
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .ack), from: id)
+        clock.now += 60
+        hub.heartbeat()
+
+        #expect(sink.closed == nil)
+        #expect(sink.bodies.filter { $0 == .ping }.count == 2)
     }
 
     @Test func aPingFromTheViewerIsAnswered() throws {

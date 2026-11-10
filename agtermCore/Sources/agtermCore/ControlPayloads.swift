@@ -136,7 +136,7 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     public let statusShape: String?
     /// parent is the far side's parent session of a companion, omitted for a top-level session.
     public let parent: String?
-    /// content is `page` for a page companion, which has no panes and attaches only under its parent's row.
+    /// content is `page` for a page, which has no panes; a page companion attaches only under its parent's row.
     public let content: String?
     /// companions lists every companion of a top-level session in sidebar order, attachable or not, so a
     /// group attach can keep that order and name a member it could not bring. `[]` means none; nil means
@@ -214,19 +214,23 @@ public struct ControlRemoteTree: Codable, Sendable, Equatable {
     /// The presentation protocol version this app speaks. Absent from an app that predates the presentation
     /// stream, which is how an attaching Mac learns not to open one.
     public let presentation: Int?
+    /// headless is true from agterm-server, which has no screen of its own to show what its presenter refuses;
+    /// absent from a Mac.
+    public let headless: Bool?
 
     public init(host: String?, endpoint: ControlZmxEndpoint, sessions: [ControlRemoteSession],
-                presentation: Int? = nil) {
+                presentation: Int? = nil, headless: Bool? = nil) {
         self.host = host
         self.endpoint = endpoint
         self.sessions = sessions
         self.presentation = presentation
+        self.headless = headless
     }
 
     /// This answer with the ssh destination the requesting app was given. A field added to this type has to
     /// be copied here too, or the requesting app loses it.
     public func stamped(host: String) -> ControlRemoteTree {
-        ControlRemoteTree(host: host, endpoint: endpoint, sessions: sessions, presentation: presentation)
+        ControlRemoteTree(host: host, endpoint: endpoint, sessions: sessions, presentation: presentation, headless: headless)
     }
 }
 

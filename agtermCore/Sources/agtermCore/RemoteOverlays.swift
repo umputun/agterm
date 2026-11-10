@@ -6,8 +6,9 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let job: String
     /// The pane role the slot covers, nil for the session-wide slot. Follows its pane across a swap.
     public fileprivate(set) var pane: OverlayPane?
-    /// The presenter generation the job was handed to; only that stream can still reach its surface.
-    public let owner: Int
+    /// The presenter generation the job was handed to; only that stream can still reach its surface. Nil while a
+    /// headless origin holds the slot for a presenter to come.
+    public internal(set) var owner: Int?
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
     /// points retains requested overrides even when an older presenter ignores them.
@@ -19,8 +20,13 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public var ended = false
     /// page is what the slot holds instead of a program; `job` is then the page id.
     public var page: RemotePage?
+    /// presenterSized marks a picture the presenter fitted itself, whose points only it knows, until a resize
+    /// replaces its size whole.
+    public var presenterSized = false
+    /// request is a program's request as first made, sent again at each offer.
+    var request: PresentationOverlay?
 
-    public init(job: String, pane: OverlayPane?, owner: Int, sizePercent: Int?, wait: Bool = false,
+    public init(job: String, pane: OverlayPane?, owner: Int?, sizePercent: Int?, wait: Bool = false,
                 ended: Bool = false, page: RemotePage? = nil) {
         self.job = job
         self.pane = pane
@@ -41,10 +47,15 @@ public struct RemotePage: Equatable, Sendable {
     }
 
     public internal(set) var overlay: HtmlOverlay
-    /// token claims the page channel once; it is never reported.
-    let token: String
-    let claimDeadline: Date
+    /// token claims the page channel once; it is never reported. Each offer issues a new one.
+    var token: String
+    var claimDeadline: Date
+    /// request is the page as first offered, sent again with a new token at each offer.
+    var request: PresentationPage?
     public internal(set) var claimed = false
+    /// withdrawnFrom is the presenter generation a headless origin took the page back from after its channel ended,
+    /// until the next offer: that presenter's close can arrive after the channel's end and still dismiss the page.
+    var withdrawnFrom: Int?
     /// hidden is the visibility the presenter last reported.
     public internal(set) var hidden = false
     /// requested is a visibility sent and not yet echoed back by the presenter.
@@ -126,13 +137,20 @@ public struct RemoteOverlays: Equatable, Sendable {
         }
     }
 
-    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize()) {
+    mutating func resize(job: String, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
+                         presenterSized: Bool = false) {
         guard let index = slots.firstIndex(where: { $0.job == job }) else { return }
         slots[index].sizePercent = sizePercent
         slots[index].points = points
+        slots[index].presenterSized = presenterSized
     }
 
     mutating func remove(job: String) { slots.removeAll { $0.job == job } }
+
+    mutating func update(job: String, _ change: (inout RemoteOverlaySlot) -> Void) {
+        guard let index = slots.firstIndex(where: { $0.job == job }) else { return }
+        change(&slots[index])
+    }
 
     /// updatePage changes the page held under `job`; false when no slot holds it.
     @discardableResult

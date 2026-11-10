@@ -16,6 +16,7 @@ extension AppActions {
     /// Opens a companion of `id`, a sibling when `id` is itself a companion, and selects it. Store-scoped like
     /// `duplicateSession(_:in:)`.
     func newCompanion(_ id: UUID, in store: AppStore) {
+        if performRemote(.newCompanion(parent: id), in: store, select: true) { return }
         if store.session(withID: id)?.remoteHost != nil {
             return createRemoteCompanion(.terminal(CompanionOptions()), of: id, in: store, action: "New Companion")
         }
@@ -38,6 +39,7 @@ extension AppActions {
     }
 
     func duplicateAsCompanion(_ id: UUID, in store: AppStore) {
+        guard store.remoteActions == nil else { return }
         if store.session(withID: id)?.remoteHost != nil {
             return createRemoteCompanion(.duplicate, of: id, in: store, action: "Duplicate as Companion")
         }
@@ -69,6 +71,27 @@ extension AppActions {
                 hud.fail(reply.error ?? "the companion was not created")
             }
         }
+    }
+
+    /// convertToCompanion shows refusals in a timed HUD, with notification fallback.
+    func convertToCompanion(_ id: UUID, in store: AppStore) {
+        switch store.convertToCompanion(id) {
+        case .failure(let refusal):
+            guard let remoteAttacher, let windowID = library.windowID(for: store) else {
+                return NotificationManager.shared.notifyCommandFailure(name: "Convert to Companion", detail: refusal.message)
+            }
+            RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString,
+                            action: "Convert to Companion").fail(refusal.message)
+        case .success:
+            store.noteUserActivity()
+            focusActiveSession()
+        }
+    }
+
+    func convertActiveSessionToCompanion() {
+        guard uiActionsEnabled else { return }
+        guard let store, let id = store.selectedSessionID else { return }
+        convertToCompanion(id, in: store)
     }
 
     func duplicateActiveSessionAsCompanion() {

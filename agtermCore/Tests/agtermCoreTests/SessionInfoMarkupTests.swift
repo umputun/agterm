@@ -57,7 +57,8 @@ struct SessionInfoMarkupTests {
     }
 
     @Test func badColorValuesAreRejected() {
-        #expect(rejection("^[a](color: \"pink\")") == .unknownColor("pink"))
+        #expect(rejection("^[a](color: \"maroon\")") == .unknownColor("maroon"))
+        #expect(rejection("^[a](color: \"#3a7bd5\")") == .unknownColor("#3a7bd5"))
         #expect(rejection("^[a](color: 42)") == .invalidMarkdown)
         #expect(rejection("^[a](color: red)") == .invalidMarkdown)
     }
@@ -69,6 +70,8 @@ struct SessionInfoMarkupTests {
         #expect(info.hideAfter == 30)
         #expect(info.spans == [SessionInfoSpan(text: "3", bold: true), SessionInfoSpan(text: " "),
                                SessionInfoSpan(text: "ok", color: .green)])
+        let pink = try SessionInfo.make(source: "^[ok](color: \"pink\")", markdown: true, hideAfter: 0).get()
+        #expect(pink.spans == [SessionInfoSpan(text: "ok", color: .pink)])
         let plain = try SessionInfo.make(source: "**3**", markdown: false, hideAfter: 0).get()
         #expect(plain.spans == [SessionInfoSpan(text: "**3**")])
     }
@@ -91,8 +94,9 @@ struct SessionInfoMarkupTests {
     }
 
     @Test func makeReportsParseErrorsAsMessages() {
-        #expect(SessionInfo.make(source: "^[a](color: \"pink\")", markdown: true, hideAfter: 0)
-            == .failure(SessionInfoRejection(message: "unknown info color: pink (red|orange|yellow|green|blue|purple|gray)")))
+        #expect(SessionInfo.make(source: "^[a](color: \"maroon\")", markdown: true, hideAfter: 0)
+            == .failure(SessionInfoRejection(
+                message: "unknown info color: maroon (red|orange|yellow|green|blue|purple|gray|teal|pink|brown|indigo|mint)")))
         #expect(SessionInfo.make(source: "a\nb", markdown: false, hideAfter: 0)
             == .failure(SessionInfoRejection(message: "info text must be one line")))
         #expect(SessionInfo.make(source: "  ", markdown: false, hideAfter: 0)
@@ -106,6 +110,9 @@ struct SessionInfoMarkupTests {
         #expect(rejection("^[ ](dim: true)") == .empty)
         #expect(rejection("a\nb", markdown: false) == .lineBreak)
         #expect(rejection("a&#10;b") == .lineBreak)
+        // regression: a block parser drops a trailing newline and reads `x\n---` as a heading, both one line
+        #expect(rejection("x\n") == .lineBreak)
+        #expect(rejection("x\n---") == .lineBreak)
         #expect(rejection("a\u{2028}b", markdown: false) == .lineBreak)
         #expect(rejection("x &#27;[31m y") == .controlCharacter)
         #expect(rejection("a\tb", markdown: false) == .controlCharacter)

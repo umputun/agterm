@@ -9,7 +9,7 @@ struct LaunchSpawnWindow {
 /// The expected spawn order of a launch restore and the keys exempt from pacing, taken from the model
 /// before any window mounts. Each open window's selected session's on-screen panes come first and form
 /// the burst; the rest follow window by window, session by session, primary before shown split. A hidden
-/// split, a session that was not restored, and every runtime surface are never expected, so a pane that
+/// split, a page row, a session that was not restored, and every runtime surface are never expected, so a pane that
 /// replays nothing has to leave the queue itself.
 public struct LaunchSpawnPlan: Equatable, Sendable {
     public let order: [UUID]
@@ -20,7 +20,7 @@ public struct LaunchSpawnPlan: Equatable, Sendable {
         var burst: [UUID] = []
         var rest: [UUID] = []
         for window in windows {
-            for session in window.sessions where session.wasRestored {
+            for session in window.sessions where session.wasRestored && session.content == .terminal {
                 let keys = panes(of: session)
                 if session.id == window.selectedSessionID { burst += keys } else { rest += keys }
             }

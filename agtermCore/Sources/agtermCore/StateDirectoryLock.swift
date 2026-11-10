@@ -20,7 +20,10 @@ public final class StateDirectoryLock: Sendable {
         self.fd = fd
     }
 
+    // a child spawned on another thread holds a copy of the descriptor until its exec,
+    // and close alone leaves the lock held through that copy
     deinit {
+        flock(fd, LOCK_UN)
         close(fd)
     }
 

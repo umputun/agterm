@@ -2,6 +2,8 @@
 
 Let two coding agents in one agterm split talk to each other through agterm's pane mailboxes.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Two agents run side by side in a split session, one per pane, and talk to each other directly: Claude Code and Codex, or two of the same kind. You watch both halves of the exchange without relaying anything by hand. The value is disagreement: an agent working alone accepts its own reasoning, while a second one with its own context attacks it first, whether the subject is a plan, a diff, a bug or a long investigation.
@@ -26,8 +28,10 @@ agterm 0.40.0 or later, which added the per-pane message bus (`agtermctl msg`). 
 3. For Claude Code, add this entry to each of `hooks.SessionStart`, `hooks.UserPromptSubmit` and `hooks.Stop` in `~/.claude/settings.json`. A Claude pane without it never receives mail.
 
    ```json
-   {"hooks": [{"type": "command", "command": "mailbox-chat.py claude-hook", "asyncRewake": true, "timeout": 2000000}]}
+   {"hooks": [{"type": "command", "command": "mailbox-chat.py claude-hook", "asyncRewake": true, "rewakeSummary": "chat received", "timeout": 2000000}]}
    ```
+
+   The undocumented `rewakeSummary` field (tested with Claude Code 2.1.317 and subject to change) only renames the collapsed pane line; without it, the line reads `Stop hook feedback`.
 
 4. For Codex, add the SessionStart hook to `~/.codex/config.toml`, then trust it once in Codex's `/hooks` dialog; Codex does not run a new hook before that.
 
@@ -38,13 +42,20 @@ agterm 0.40.0 or later, which added the per-pane message bus (`agtermctl msg`). 
    command = "mailbox-chat.py codex-hook"
    ```
 
-5. For agterm, add this line to `hooks.conf` beside your `keymap.conf` (`~/.config/agterm/hooks.conf` by default), with the full path to the script, then run `agtermctl hooks reload`. It is what hands mail to Codex.
+5. For Codex, add these two lines to `~/.codex/rules/default.rules`, creating the file if needed, with the full path of the copy from step 1, then restart Codex. Codex's default sandbox refuses the connection to agterm's socket that every send makes, and the rule runs only the `say --file` form of that copy outside it. Without the `host_executable` line Codex matches the rule by file name alone, so a `mailbox-chat.py` it writes into the workspace or `/tmp` would run outside the sandbox too. Setting `network_access = true` under `[sandbox_workspace_write]` in `config.toml` also lets sends through, but it opens the network and agterm's whole control API to every command Codex runs.
+
+   ```
+   host_executable(name="mailbox-chat.py", paths=["/full/path/to/mailbox-chat.py"])
+   prefix_rule(pattern=["mailbox-chat.py", "say", "--file"], decision="allow")
+   ```
+
+6. For agterm, add this line to `hooks.conf` beside your `keymap.conf` (`~/.config/agterm/hooks.conf` by default), with the full path to the script, then run `agtermctl hooks reload`. It is what hands mail to Codex.
 
    ```
    on message /full/path/to/mailbox-chat.py agterm-hook
    ```
 
-6. Start Codex with `--no-daemon` and a first prompt that says nothing about any chat:
+7. Start Codex with `--no-daemon` and a first prompt that says nothing about any chat:
 
    ```sh
    codex --no-daemon "Answer with the single word READY."
@@ -58,7 +69,7 @@ If your `agtermctl` is not on `PATH` under that name, set `AGTERMCTL` to its ful
 
 Open a split and start one agent in each pane yourself, with no topic on its command line: Claude Code bare, Codex with the launch line from *Setup*. Wait until Codex has answered READY, and after a `/clear` in Codex give it any prompt first, before the chat starts. Then ask either agent to talk to the other: "chat with codex about the retry bug", "work with claude on this", "ask the other agent what it thinks". The skill's `description` lists the phrases it answers to. That agent sends the first message, and from there each reply arrives in the other pane on its own. Your part is reading both panes and stepping in when they need a decision that is yours.
 
-An agent sends with:
+Claude Code sends with:
 
 ```sh
 mailbox-chat.py say --stdin <<'MSG'
@@ -66,7 +77,9 @@ the message
 MSG
 ```
 
-It prints JSON: `sent` means the other pane's mailbox accepted the message, `receiver` is `claude`, `codex` or `none` for who serves that pane, `peerBusy` is true while a Claude receiver is mid-turn, and `error` means the mailbox refused it. `mailbox-chat.py status` reports the same receiver without sending. `mailbox-chat.py deliver` hands a Codex pane's waiting mail to it by hand; run it from a plain shell with that pane's `AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, never through Codex, whose sandbox refuses `codex queue`.
+Codex sends from a file instead, because its allow rule from *Setup* cannot match a heredoc, which Codex runs as a shell script. It writes the message to a file named after its pane's `AGTERM_PANE_ID` and then runs `mailbox-chat.py say --file /tmp/mailbox-chat-<pane>.txt` as a plain command. The script reads only a regular file of up to 64 KiB and never deletes it, so Codex reuses one file for the whole chat.
+
+Either form prints JSON: `sent` means the other pane's mailbox accepted the message, `receiver` is `claude`, `codex` or `none` for who serves that pane, `peerBusy` is true while a Claude receiver is mid-turn, and `error` means the mailbox refused it. `mailbox-chat.py status` reports the same receiver without sending. `mailbox-chat.py deliver` hands a Codex pane's waiting mail to it by hand; run it from a plain shell with that pane's `AGTERM_SESSION_ID` and `AGTERM_PANE_ID`, never through Codex, whose sandbox refuses `codex queue`.
 
 ## How it works
 
@@ -74,24 +87,24 @@ It prints JSON: `sent` means the other pane's mailbox accepted the message, `rec
 
 A Claude Code receiver is the `claude-hook` subcommand running as an `asyncRewake` hook. It waits on the pane's mailbox with `msg read --wait`, and when mail arrives between turns it acks it and exits with status 2, which Claude Code turns into a new turn carrying the message as hook feedback. `UserPromptSubmit` marks the pane busy and `Stop` clears the mark, so mail never interrupts a running turn; a mail-woken turn marks itself busy because it fires no `UserPromptSubmit`, and an auto-compaction mid-turn leaves the mark alone. One waiter serves a pane under a lock and exits when its Claude Code does.
 
-Codex has no hook that can wake an idle session. Its `SessionStart` hook records the thread id and executable of the interactive Codex in that pane, skipping a nested headless `codex exec`, and hands over any mail already waiting. After that, agterm's `on message` hook runs `agterm-hook` for each new message; for a pane with a live Codex registration it hands the mail to that thread with `codex queue`, acking each message only after Codex accepted it. The hand-over runs in agterm's hook rather than in `say`, because `codex queue` fails inside a Codex tool sandbox, so delivery to Codex runs outside the sending agent's sandbox. It uses the registered Codex executable, since the hook runs with agterm's own `PATH`, and the socket agterm passes it. A registration whose Codex process has exited is ignored, because `codex queue` would accept mail for a thread nobody runs.
+Codex has no hook that can wake an idle session. Its `SessionStart` hook records the thread id and executable of the interactive Codex in that pane, skipping a nested headless `codex exec` and a start with no transcript, such as Codex's background memory session, and hands over any mail already waiting. After that, agterm's `on message` hook runs `agterm-hook` for each new message; for a pane with a live Codex registration it hands the mail to that thread with `codex queue`, acking each message only after Codex accepted it. The hand-over runs in agterm's hook rather than in `say`, because `codex queue` fails inside a Codex tool sandbox, so delivery to Codex runs outside the sending agent's sandbox. It uses the registered Codex executable, since the hook runs with agterm's own `PATH`, and the socket agterm passes it. A registration whose Codex process has exited is ignored, because `codex queue` would accept mail for a thread nobody runs.
 
 Mail that is not from this recipe, such as a `msg send` from a script, is delivered to either agent marked `[agterm mailbox, not a peer chat message]` with its sender, and the skills tell the agents not to answer it through `say`.
 
 ## Limits
 
-**Installing the Claude hook makes every Claude Code pane in agterm wake on mail to it.** That includes `msg send --all` broadcasts, whose text starts a turn in each idle Claude pane. Each Claude pane keeps one waiter that asks agterm for mail about four times a second; the cost of many idle waiters has not been measured.
+**A chat message reaches only the other pane of the sender's split.** `say` addresses the pane beside the sender, so a chat never reaches, or wakes, an agent in any other session.
 
-**The hook takes the pane's mailbox.** Another program reading the same Claude pane's mailbox competes with it for each message.
+**The Claude hook runs in every Claude Code you start, not only in chat panes.** It is installed in `~/.claude/settings.json`, so each Claude Code pane in agterm watches its own mailbox. This matters only when something other than this recipe sends mail to those panes: a script's `msg send`, or a `msg send --all` broadcast. Such mail arrives marked as not from the chat, as described above, and starts a turn in an idle Claude pane, so a broadcast starts one in every idle Claude pane it reaches. If nothing else uses agterm's mailboxes, nothing changes. Each waiter checks its mailbox about four times a second; the cost of many idle ones has not been measured.
 
-**A Codex conversation is reachable only after its first prompt.** Codex runs its `SessionStart` hook, which registers the thread mail is handed to, on a conversation's first prompt rather than at launch. A Codex started without the READY prompt shows as `receiver: none` and its mail waits in the mailbox until you prompt it. After `/clear` it is worse: the old conversation's registration is still live, so mail goes to the old thread until the new conversation's first prompt replaces it.
+**Another program that consumes a Claude pane's mail competes with the hook.** One that removes messages with `msg read --ack` or `msg ack` can take a message before the hook sees it.
+
+**Codex can take mail only after its first prompt.** Codex registers a conversation on its first prompt, not at launch, which is why the launch line in *Setup* includes the READY prompt. A Codex started without one reports `receiver: none`, and its mail waits until you prompt it. After `/clear`, mail still goes to the cleared conversation until you give the new one a prompt, so give it one before the chat continues.
 
 **Never put a topic on an agent's command line.** Duplicate as Companion starts each pane's program again with the same command line, so `claude "chat with codex about the retry bug"` in a pane makes the copy start that chat too, unasked. Ask in the pane instead. The Codex launch line in *Setup* is safe to copy: its READY prompt carries no topic.
 
 **A failed hand-over to Codex may be incomplete.** agterm shows a banner for a hook that exits nonzero, and `agtermctl hooks list` keeps its last failure. The hand-over Codex's own start runs, and the Claude waiter, log to `codex-<pane>.log` and `claude-<pane>.log` in the script's state directory, `agterm-mailbox-chat-<uid>` under the system temp directory. Codex may already have accepted a message whose ack then failed, so read the Codex pane before retrying with `mailbox-chat.py deliver`, or the same message can arrive twice.
 
 **Unread mail is lost** when agterm quits, and when the receiving pane closes or its program is restarted: agterm keeps mailboxes in memory and drops one with its pane. A Claude Code turn interrupted with Esc reports no end, so its mail waits until the next turn completes.
-
-**A reply is not promised.** An agent can decline to answer a message that arrived perfectly well, and nothing reports that. If an exchange goes quiet, read the other pane.
 
 The recipe never types into a pane, starts, restarts or stops an agent, or closes anything. Remote panes are not supported.

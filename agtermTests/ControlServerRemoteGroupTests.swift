@@ -178,6 +178,115 @@ final class ControlServerRemoteGroupTests: XCTestCase {
         XCTAssertEqual(reply?.result?.remoteGroup?.companions.map(\.origin), ["c1"])
     }
 
+    func testAPageRootGroupArrivesAsATopLevelReplicaRowWithItsCompanionsUnderIt() async throws {
+        let listing = tree([pageRoot(members: ["c1", "pg"]), terminal("c1", parent: "PR"), page("pg", parent: "PR")])
+        let runner = ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID), pageAttach(id: "pg", parent: "PR")])
+        let (server, store) = makeServer(runner)
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let rowID = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        let row = try XCTUnwrap(store.session(withID: rowID))
+        XCTAssertNil(row.parentID)
+        XCTAssertEqual(row.content, .page)
+        XCTAssertEqual(row.remoteHost, "buildbox")
+        XCTAssertEqual(row.htmlOverlay?.replicaOf, UUID(uuidString: rootPageID))
+        XCTAssertEqual(store.workspace(forSession: rowID)?.id, store.currentWorkspaceID)
+        XCTAssertEqual(store.selectedSessionID, rowID)
+        let binding = try XCTUnwrap(row.remotePresentation?.binding)
+        XCTAssertEqual(binding.remoteSessionID, "PR")
+        XCTAssertEqual(binding.origin, RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "dash"))
+        XCTAssertTrue(binding.daemonsByPane.isEmpty, "a page owns no daemon")
+        XCTAssertEqual(store.companions(of: rowID).map { $0.remotePresentation?.binding.remoteSessionID }, ["c1", "pg"])
+        XCTAssertEqual(store.companions(of: rowID).last?.remotePresentation?.binding.origin?.endpoint, endpoint)
+        XCTAssertEqual(reply.result?.remoteGroup?.companions.compactMap(\.id).count, 2)
+        XCTAssertTrue(try XCTUnwrap(runner.invocations[1].last).contains("page-attach"))
+    }
+
+    func testAPageRootGroupKeepsTheRootAndNamesAnUnavailableMember() async throws {
+        let listing = tree([pageRoot(members: ["c1", "c2"]), terminal("c1", parent: "PR")])
+        let (server, store) = makeServer(ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID)]))
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil)
+
+        let row = try XCTUnwrap(reply.result?.id)
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "kept dash (\(row)) and 1 companion(s); not attached: c2-name (unavailable on buildbox)")
+        XCTAssertEqual(store.companions(of: try XCTUnwrap(UUID(uuidString: row))).count, 1)
+    }
+
+    func testAPageRootTheOriginRefusesLeavesNoRow() async throws {
+        let refused = RemoteCommandResult(status: 1, stdout: #"{"ok":false,"error":"a page on this Mac's loopback cannot be "#
+                                          + #"shown on another Mac"}"#, stderr: "")
+        let (server, store) = makeServer(ScriptedRunner([tree([pageRoot(members: ["c1"]), terminal("c1", parent: "PR")]), refused]))
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil)
+
+        XCTAssertEqual(reply.error, "a page on this Mac's loopback cannot be shown on another Mac")
+        XCTAssertTrue(store.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+    }
+
+    func testAPageRootWhoseWorkspaceClosesDuringTheHandoffLeavesNoRow() async throws {
+        let runner = ScriptedRunner([tree([pageRoot(members: ["c1"]), terminal("c1", parent: "PR")]), pageAttach(id: "PR", page: rootPageID)])
+        let (server, store) = makeServer(runner)
+        _ = store.addWorkspace(name: "other", revealNewWorkspace: false)
+        let destination = try XCTUnwrap(store.currentWorkspaceID)
+        runner.beforeCall = { index in
+            guard index == 1 else { return }
+            await MainActor.run { store.removeWorkspace(destination) }
+        }
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil)
+
+        XCTAssertEqual(reply.error, "the window or workspace to attach into was closed")
+        XCTAssertNil(reply.result?.id)
+        XCTAssertTrue(store.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+        XCTAssertEqual(runner.invocations.count, 2, "no member is attempted")
+    }
+
+    func testAPageRootWhoseWindowClosesDuringTheHandoffLeavesNoRow() async throws {
+        let runner = ScriptedRunner([tree([pageRoot(members: [])]), pageAttach(id: "PR", page: rootPageID)])
+        let (server, front) = makeServer(runner)
+        let windows = try XCTUnwrap(library)
+        let destination = windows.newWindow(name: "closing").id
+        let destinationStore = try XCTUnwrap(windows.loadStore(for: destination))
+        runner.beforeCall = { index in
+            guard index == 1 else { return }
+            await MainActor.run { windows.closeWindow(destination) }
+        }
+
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: destination.uuidString)
+
+        XCTAssertEqual(reply.error, "the window or workspace to attach into was closed")
+        XCTAssertTrue(destinationStore.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+        XCTAssertTrue(front.workspaces.flatMap(\.sessions).allSatisfy { $0.remoteHost == nil })
+    }
+
+    // a page root parked by a soft close kept its group when its page ended there, so Undo brought back a dead page
+    func testAPageRootEndingThereWhileItsGroupIsParkedFinalizesTheGroup() async throws {
+        let listing = tree([pageRoot(members: ["c1", "pg"]), terminal("c1", parent: "PR"), page("pg", parent: "PR")])
+        let (server, store) = makeServer(ScriptedRunner([listing, pageAttach(id: "PR", page: rootPageID), pageAttach(id: "pg", parent: "PR")]))
+        let launcher = try XCTUnwrap(server.pageLauncher as? FakePageLauncher)
+        let reply = await server.attachRemoteGroup(host: "buildbox", session: "PR", window: nil)
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let root = try XCTUnwrap(reply.result?.id.flatMap(UUID.init(uuidString:)))
+        let members = store.companions(of: root).map(\.id)
+        XCTAssertEqual(members.count, 2)
+        XCTAssertTrue(store.softCloseSession(root, grace: 600))
+        XCTAssertNotNil(store.pendingCloseSession(withID: root))
+
+        try XCTUnwrap(launcher.helpers.first).exit()
+        let deadline = Date().addingTimeInterval(5)
+        while store.pendingCloseSession(withID: root) != nil, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+
+        XCTAssertNil(store.pendingCloseSession(withID: root))
+        for member in members { XCTAssertNil(store.pendingCloseSession(withID: member)) }
+        XCTAssertFalse(store.undoPendingClose())
+        XCTAssertNil(store.session(withID: root))
+        XCTAssertTrue(members.allSatisfy { store.session(withID: $0) == nil })
+    }
+
     private static func attachedParent(in store: AppStore) -> Session? {
         store.workspaces.flatMap(\.sessions).first { $0.remoteHost == "buildbox" && $0.parentID == nil }
     }
@@ -206,9 +315,18 @@ final class ControlServerRemoteGroupTests: XCTestCase {
             + #""workspaceName":"work","cwd":"/repo","parent":"\#(parent)","panes":[{"pane":"left","daemon":"\#(daemon)"}]}"#
     }
 
-    private func page(_ id: String) -> String {
+    private func page(_ id: String, parent: String = "P") -> String {
         #"{"id":"\#(id)","name":"report","windowID":"w1","windowName":"main","workspaceID":"ws1","workspaceName":"work","#
-            + #""cwd":"/srv","parent":"P","content":"page","panes":[]}"#
+            + #""cwd":"/srv","parent":"\#(parent)","content":"page","panes":[]}"#
+    }
+
+    private let rootPageID = "6B2F8D3C-4E5A-4F6B-9C7D-8E9F0A1B2C3D"
+    private let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+
+    private func pageRoot(members: [String]) -> String {
+        let list = members.map { #"{"id":"\#($0)","name":"\#(name(of: $0))"}"# }.joined(separator: ",")
+        return #"{"id":"PR","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","workspaceName":"work","#
+            + #""cwd":"/srv","content":"page","panes":[],"companions":[\#(list)]}"#
     }
 
     private func name(of id: String) -> String { id == "pg" ? "report" : "\(id)-name" }
@@ -219,9 +337,9 @@ final class ControlServerRemoteGroupTests: XCTestCase {
             + #""sessions":[\#(sessions.joined(separator: ","))]}}}"#, stderr: "")
     }
 
-    private func pageAttach() -> RemoteCommandResult {
-        RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"pg","parent":"P","companionPage":{"#
-            + #""page":"\#(pageID)","token":"tok-1","source":{"file":{"path":"/srv/report.html","grantRoot":"/srv"}},"#
+    private func pageAttach(id: String = "pg", parent: String = "P", page: String? = nil) -> RemoteCommandResult {
+        RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"id":"\#(id)","parent":"\#(parent)","companionPage":{"#
+            + #""page":"\#(page ?? pageID)","token":"tok-1","source":{"file":{"path":"/srv/report.html","grantRoot":"/srv"}},"#
             + #""identity":"report.html","chromeless":false,"javascript":true,"navigation":false,"browse":false,"#
             + #""persistent":false,"follow":false}}}"#, stderr: "")
     }

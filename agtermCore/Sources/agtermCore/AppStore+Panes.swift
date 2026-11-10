@@ -31,7 +31,9 @@ extension AppStore {
         for session in sessions {
             ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
         }
-        let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
+        // a remote window's scratch is its server's daemon, never this Mac's to end
+        let scratches = sessions.filter { $0.remoteHost == nil }.compactMap(\.scratchDaemon?.identity)
+        let identities = (PaneIdentityInventory.identities(in: sessions) + scratches).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
     }
 
@@ -105,23 +107,30 @@ extension AppStore {
     /// Exchanges two role-mutable pane slots and every pane-owned field. Layout stays fixed; focus follows the
     /// terminal.
     @discardableResult
-    public func swapPanes(_ sessionID: UUID) -> SwapRefusal? {
+    public func swapPanes(_ sessionID: UUID, allowingUnrealized: Bool = false) -> SwapRefusal? {
         guard let session = session(withID: sessionID) else { return .noSession }
         guard session.hasSplit else { return .noSplit }
-        guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
-            return .slotNotRealized
-        }
-        guard let primaryRole = primarySurface as? any PaneRoleMutableSurface,
-              let splitRole = splitSurface as? any PaneRoleMutableSurface else {
-            return .roleNotMutable
+        // a catalog row follows a swap its server already made, so a pane whose attach is still starting moves
+        // as a slot, and only the surfaces that exist take their new role
+        if allowingUnrealized {
+            (session.surface as? any PaneRoleMutableSurface)?.setPaneRole(.split)
+            (session.splitSurface as? any PaneRoleMutableSurface)?.setPaneRole(.primary)
+        } else if !headless {
+            // a headless store's panes are daemons with no surface, so only the model fields move
+            guard let primarySurface = session.surface, let splitSurface = session.splitSurface else {
+                return .slotNotRealized
+            }
+            guard let primaryRole = primarySurface as? any PaneRoleMutableSurface,
+                  let splitRole = splitSurface as? any PaneRoleMutableSurface else {
+                return .roleNotMutable
+            }
+            primaryRole.setPaneRole(.split)
+            splitRole.setPaneRole(.primary)
         }
 
         let primaryCwd = session.currentCwd ?? session.initialCwd
         let splitCwd = session.splitCwd ?? session.initialSplitCwd ?? primaryCwd
-        primaryRole.setPaneRole(.split)
-        splitRole.setPaneRole(.primary)
-        session.surface = splitSurface
-        session.splitSurface = primarySurface
+        (session.surface, session.splitSurface) = (session.splitSurface, session.surface)
         if let splitPaneIdentity = session.splitPaneIdentity {
             session.splitPaneIdentity = session.paneIdentity
             session.paneIdentity = splitPaneIdentity
@@ -180,6 +189,22 @@ extension AppStore {
         setAgentIndicator(AgentIndicator(), forSession: session.id)
     }
 
+    /// dropScratchDaemon forgets the server scratch of `sessionID`, whose daemon ended or is being replaced, with the
+    /// state its pane owned, as `closeScratch` does for a surface.
+    public func dropScratchDaemon(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), let scratch = session.scratchDaemon else { return }
+        releaseScratchOwnedState(of: session, token: scratch.identity.uuidString)
+        session.scratchDaemon = nil
+    }
+
+    /// releaseScratchOwnedState drops what a departing scratch owned: a `.scratch`-tagged block (a main/split tag
+    /// survives), its background label, since a respawn runs another program, and its mailbox.
+    func releaseScratchOwnedState(of session: Session, token: String) {
+        clearIndicatorOwnedByPane(.scratch, of: session)
+        dropPaneBackground(.scratch, of: session)
+        disposeMailbox(token: token)
+    }
+
     /// clearPaneOwnedState drops what the program in `pane` owned when its shell is replaced in place: its
     /// status, and a HUD, ask or pane overlay anchored to it. The pane, its identity and its persisted pins stay.
     public func clearPaneOwnedState(_ sessionID: UUID, pane: StatusPane) {
@@ -220,6 +245,7 @@ extension AppStore {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
             MessageBus.shared.dispose(pane: split)
+            session.daemonBackedPanes.remove(split)
         }
         let wasShown = session.isSplit
         session.isSplit = false
@@ -267,7 +293,8 @@ extension AppStore {
     @discardableResult
     public func closePrimaryPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) -> PrimaryPaneExit {
         guard let session = session(withID: sessionID) else { return .closed }
-        guard let survivor = session.splitSurface else {
+        let survivor = session.splitSurface
+        guard hasLiveSplit(session, survivor: survivor) else {
             if respawnsOnLastPaneExit(session, now: now) {
                 respawnPrimaryPane(session, now: now)
                 return .respawned
@@ -275,14 +302,24 @@ extension AppStore {
             closeSession(sessionID, alreadyFinalized: alreadyFinalized)
             return .closed
         }
+        promoteSplit(session)
+        return .promoted
+    }
+
+    /// promoteSplit moves the split pane into the primary slot and leaves the session a single pane, the
+    /// survivor's surface, identity, command and metadata included. The surface may not exist yet: a catalog
+    /// row promotes a pane its server already promoted, whose attach may still be starting.
+    func promoteSplit(_ session: Session) {
+        let survivor = session.splitSurface
         defer { savePaneLayout(session) }
-        if session.hudPaneIdentity == session.paneIdentity { closeHud(sessionID) }
+        if session.hudPaneIdentity == session.paneIdentity { closeHud(session.id) }
         if session.askPaneIdentity == session.paneIdentity { session.cancelPendingAsk() }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
-        survivor.promoteToPrimaryPane()
+        survivor?.promoteToPrimaryPane()
         session.surface = survivor
         session.splitSurface = nil
+        session.daemonBackedPanes.remove(session.paneIdentity)
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
         MessageBus.shared.dispose(pane: session.paneIdentity)
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
@@ -349,7 +386,23 @@ extension AppStore {
             }
         }
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
-        return .promoted
+    }
+
+    /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, its
+    /// daemon on a headless store, where a split identity is minted before any daemon is provisioned for it.
+    private func hasLiveSplit(_ session: Session, survivor: (any TerminalSurface)?) -> Bool {
+        guard headless else { return survivor != nil }
+        return session.splitPaneIdentity.map(session.daemonBackedPanes.contains) ?? false
+    }
+
+    /// markSessionEnded keeps a headless session whose last live pane's daemon was lost, rather than closing it:
+    /// the row stays as ended until `session.close` removes it.
+    public func markSessionEnded(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), !session.ended else { return }
+        session.ended = true
+        session.daemonBackedPanes.removeAll()
+        scheduleTreeChanged()
+        save()
     }
 
     /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane
@@ -360,7 +413,11 @@ extension AppStore {
     /// INTO `surface`. Called by the split surface's `onExit`.
     public func closeSplitPane(_ sessionID: UUID, alreadyFinalized: UUID? = nil, now: Date = Date()) {
         guard let session = session(withID: sessionID) else { return }
-        guard session.surface != nil, session.splitSurface != nil else {
+        // headless: the exiting split's own daemon may already be unmarked, so only the primary's counts
+        let bothLive = headless
+            ? session.splitPaneIdentity != nil && session.daemonBackedPanes.contains(session.paneIdentity)
+            : session.surface != nil && session.splitSurface != nil
+        guard bothLive else {
             if respawnsOnLastPaneExit(session, now: now) {
                 respawnPrimaryPane(session, now: now)
                 return
@@ -614,11 +671,7 @@ extension AppStore {
         // a search bar pinned to the scratch being torn down would stay stuck; guarded on identity so a
         // search owned by the main/split pane survives.
         if session.searchSurface === scratch { session.clearSearch() }
-        // the `.scratch`-tagged block loses its owning surface here; a main/split tag survives (helper guards).
-        clearIndicatorOwnedByPane(.scratch, of: session)
-        // a respawned scratch runs another program, so a label for the old one must not carry over
-        dropPaneBackground(.scratch, of: session)
-        disposeMailbox(token: scratch.paneToken)
+        releaseScratchOwnedState(of: session, token: scratch.paneToken)
         scratch.teardown()
         session.scratchSurface = nil
         session.scratchGeneration += 1

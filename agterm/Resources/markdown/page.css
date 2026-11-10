@@ -33,6 +33,7 @@ code, kbd, samp, pre { font-family: var(--mono); }
 code { font-size: 0.87em; color: var(--code); background: var(--tint); padding: 0.1em 0.35em; border-radius: 4px; }
 pre { font-size: 13.5px; line-height: 1.45; background: var(--tint); border-radius: 6px; padding: 10px 14px; overflow-x: auto; }
 pre code { color: var(--fg); background: none; padding: 0; font-size: inherit; }
+pre.agterm-frontmatter { white-space: pre-wrap; overflow-wrap: anywhere; }
 blockquote { margin-left: 0; padding-left: 1em; border-left: 3px solid var(--accent); color: var(--muted); }
 table { border-collapse: collapse; display: block; overflow-x: auto; }
 th, td { border: 1px solid var(--rule); padding: 5px 12px; }

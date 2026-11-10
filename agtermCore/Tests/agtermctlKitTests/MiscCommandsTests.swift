@@ -34,4 +34,11 @@ struct MiscCommandsTests {
         #expect(typed == ControlRequest(cmd: .sessionType, target: "s1",
                                         args: ControlArgs(text: "hi", select: false, paneID: "tok")))
     }
+
+    @Test func aPickTimeoutIsSentAndAnInvalidOneRefused() throws {
+        let command = try Pick.Open.parse(["--timeout", "10"])
+
+        #expect(try command.makeRequest(input: Data("a\n".utf8)).args?.timeout == 10)
+        #expect(throws: (any Error).self) { try Pick.Open.parse(["--timeout", "-1"]) }
+    }
 }

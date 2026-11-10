@@ -3,6 +3,49 @@ import Testing
 @testable import agtermCore
 
 struct RemoteSessionTests {
+    @Test func aForwardOfItsOwnSwitchesMultiplexingOffAndFailsOnABusyPort() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 0, config: "serveraliveinterval 15")
+        let command = try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000")
+        #expect(command.prefix(2) == ["/bin/sh", "-c"])
+        _ = try fake.runShell(command[2])
+
+        #expect(try fake.sshCalls().last == [
+            "-T", "-N", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "-o", "ControlMaster=no", "-o", "ControlPath=none",
+            "-o", "ExitOnForwardFailure=yes", "-L", "localhost:5001:localhost:3000", "box",
+        ])
+        #expect(throws: (any Error).self) { try RemoteSession.forwardCommand(host: "-oProxyCommand=x", spec: "a") }
+    }
+
+    // regression: a forward of its own with no keepalive outlives a half-open link with the page's port dead
+    @Test(arguments: zip(["serveraliveinterval 0", "serveraliveinterval 15", ""], [true, false, false]))
+    func aForwardOfItsOwnGetsKeepAliveOnlyWhenTheUsersConfigSetsNone(config: String, added: Bool) throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 0, config: config)
+        let command = try RemoteSession.forwardCommand(host: "box", spec: "localhost:5001:localhost:3000")
+        _ = try fake.runShell(command[2])
+
+        let calls = try fake.sshCalls()
+        #expect(calls.count == 2)
+        #expect(calls.first?.prefix(3) == ["-G", "-T", "-N"], "the check sees the forward's own options")
+        #expect((calls.last ?? []).contains("ServerAliveInterval=5") == added)
+        #expect(calls.last?.suffix(3) == ["-L", "localhost:5001:localhost:3000", "box"])
+    }
+
+    @Test func aPooledForwardIsAddedCancelledAndCheckedThroughItsControlSocket() throws {
+        #expect(try RemoteSession.forwardControlCommand("forward", host: "box", controlPath: "/tmp/m", spec: "s") ==
+            ["ssh", "-O", "forward", "-o", "ControlPath=/tmp/m", "-L", "s", "box"])
+        #expect(try RemoteSession.forwardControlCommand("check", host: "box", controlPath: "/tmp/m") ==
+            ["ssh", "-O", "check", "-o", "ControlPath=/tmp/m", "box"])
+    }
+
+    @Test func theConnectionsPidIsReadFromItsCheck() {
+        #expect(RemoteSession.connectionPID("Master running (pid=4242)\r\n") == 4242)
+        #expect(RemoteSession.connectionPID("Control socket connect(/tmp/m): No such file or directory") == nil)
+    }
+
     private let daemon = ZmxSupport.daemonName(for: UUID())
     private let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/Contents/Resources/zmx/zmx",
                                               socketDirectory: "/tmp/agterm-zmx-abc123")
@@ -13,6 +56,80 @@ struct RemoteSessionTests {
         let argv = try RemoteSession.treeCommand(host: "buildbox", connectTimeout: 12)
         #expect(argv.prefix(7) == ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=12", "buildbox"])
         #expect(argv.count == 8)
+    }
+
+    @Test func theFarSidePathReachesACLIInstalledUnderTheUsersHome() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-path-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let bin = home.appendingPathComponent(".local/bin")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try "#!/bin/sh\n".writeExecutable(to: bin.appendingPathComponent("agterm-path-probe"))
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", RemoteSession.cliPathPrefix + "; command -v agterm-path-probe; printf '%s' \"$PATH\""]
+        process.environment = ["HOME": home.path, "PATH": "/usr/bin:/bin"]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+
+        let lines = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).split(separator: "\n")
+        #expect(lines.first.map(String.init) == bin.appendingPathComponent("agterm-path-probe").path)
+        #expect(lines.last.map(String.init) == "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin:\(home.path)/.local/bin")
+    }
+
+    @Test func aPooledCommandRidesItsConnectionAndAnUnpooledOneIsUnchanged() throws {
+        let pooled = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C", controlPath: "/tmp/p-0")
+        let plain = try RemoteSession.presentCommand(host: "buildbox", session: "0F1E2D3C")
+
+        #expect(pooled.prefix(13) == ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+                                      "-o", "ControlMaster=auto", "-o", "ControlPath=/tmp/p-0", "-o", "ControlPersist=60",
+                                      "buildbox"])
+        #expect(Array(pooled.suffix(1)) == Array(plain.suffix(1)))
+    }
+
+    @Test func aPooledPaneAttachesOnceItsConnectionAnswers() throws {
+        let bin = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-ssh-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: bin) }
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        try """
+        #!/bin/sh
+        case "$*" in *"-O check"*) exit 0;; *" -G "*) exit 0;; esac
+        echo attached; exit 0
+        """.writeExecutable(to: bin.appendingPathComponent("ssh"))
+        let line = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon, session: "s",
+                                                       pane: .left, lead: ZmxLeadAttachment(claim: false),
+                                                       controlPath: "/tmp/p-0")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", line]
+        process.environment = ["PATH": bin.path + ":/usr/bin:/bin"]
+        process.standardInput = FileHandle.nullDevice
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        process.waitUntilExit()
+
+        #expect(String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).contains("attached"))
+        #expect(process.terminationStatus == 0)
+        #expect(line.contains("if agterm_connection_wait; then"))
+        #expect(line.contains("else status=255; fi"), "no master is a lost connection, which takes the reconnect path")
+    }
+
+    @Test func anUnpooledPaneScriptHasNoConnectionWait() throws {
+        let line = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon, session: "s",
+                                                       pane: .left, lead: ZmxLeadAttachment(claim: false))
+
+        #expect(!line.contains("agterm_connection_wait"))
+        #expect(!line.contains("ControlPath"))
+    }
+
+    @Test func aJobHelperWaitsForItsConnectionOrSaysThereIsNone() {
+        let line = RemoteSession.waitingForConnection("'ssh' 'job'", host: "buildbox", controlPath: "/tmp/p-0")
+
+        #expect(line.contains("agterm_connection_wait || {"))
+        #expect(line.contains("no connection to buildbox"))
+        #expect(line.contains("exit 255"))
     }
 
     @Test func presentIsNonInteractiveAndRunsTheBridgeForThatSession() throws {
@@ -65,6 +182,20 @@ struct RemoteSessionTests {
 
         #expect(run.status == 0)
         #expect(try fake.calls() == [["session", "overlay", "run-job", "j1;rm"]])
+    }
+
+    @Test func runJobPassesTheOfferTokenAndRefusesAnUnplainOne() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.runJobCommand(host: "buildbox", job: "j1", token: "t-1"))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["session", "overlay", "run-job", "j1", "--token", "t-1"]])
+        #expect(throws: RemoteSession.InvocationError.invalidSession) {
+            try RemoteSession.runJobCommand(host: "buildbox", job: "j1", token: "t 1")
+        }
     }
 
     @Test(arguments: ["", "j 1", "j1\u{1B}[31m"])
@@ -163,6 +294,18 @@ struct RemoteSessionTests {
 
         #expect(run.status == 0)
         #expect(try fake.calls() == [arguments + ["--json"]])
+    }
+
+    @Test func operandsFollowADoubleDashAfterTheOptions() throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installAgtermctl(exitCodes: [0])
+
+        let run = try fake.runRemote(RemoteSession.controlCommand(host: "buildbox", arguments: ["session", "rename", "--target", "s1"],
+                                                                  operands: ["-x it's"]))
+
+        #expect(run.status == 0)
+        #expect(try fake.calls() == [["session", "rename", "--target", "s1", "--json", "--", "-x it's"]])
     }
 
     @Test func treeWidensPathWithEveryDocumentedInstallDirectory() throws {
@@ -369,6 +512,24 @@ struct RemoteSessionTests {
             + "\u{1B}[30;43m Connection to buildbox lost · reconnecting… · any key retries now \u{1B}[K\u{1B}[0m\n"
             + "\u{1B}]2;agterm-remote;n1:lost\u{07}\u{1B}[?25l", "echo goes off with the cursor, so no lock glyph")
         #expect(run.process.terminationStatus == 255)
+    }
+
+    @Test func anAttachWithALinkNonceAndNoLeadWaitsUnderThatNonce() async throws {
+        let fake = try FakeRemote()
+        defer { fake.cleanUp() }
+        try fake.installSSH(exitCode: 255)
+        let command = try RemoteSession.attachPaneCommand(host: "buildbox", endpoint: endpoint, daemon: daemon,
+                                                          session: "scratch", pane: .left, linkNonce: "s1")
+
+        #expect(!command.contains(ZmxLeadAttachment.nonceVariable))
+        let run = try fake.startShell(command)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(run.process.isRunning)
+        try run.input.fileHandleForWriting.close()
+        for await _ in run.exited {}
+        let text = String(decoding: run.output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+
+        #expect(text.contains("\u{1B}]2;agterm-remote;s1:lost\u{07}"))
     }
 
     @Test(arguments: [0, 1, 23] as [Int32])
@@ -594,7 +755,6 @@ private struct FakeRemote {
 
     private func write(name: String, script: String) throws {
         let url = root.appendingPathComponent(name)
-        try ("#!/bin/sh\n" + script + "\n").write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        try ("#!/bin/sh\n" + script + "\n").writeExecutable(to: url)
     }
 }

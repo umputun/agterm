@@ -108,6 +108,7 @@ struct PresenterGrantTests {
         acquire(hub, id, gen: sink.frames[0].gen)
         let generation = hub.presenterGeneration(session: Self.session)
 
+        hub.heartbeat()
         clock.now = clock.now.addingTimeInterval(31)
         hub.heartbeat()
 

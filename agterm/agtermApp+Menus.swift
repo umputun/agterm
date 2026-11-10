@@ -126,6 +126,12 @@ extension agtermApp {
                 Button("Attach Remote…") { actions.attachRemote() }
                     .keyboardShortcut(shortcut(for: .attachRemote))
                     .disabled(!PaletteCommand.attachRemote.isEnabled(in: context))
+                Button("Open Remote Window…") { actions.openRemoteWindow() }
+                    .keyboardShortcut(shortcut(for: .openRemoteWindow))
+                    .disabled(!PaletteCommand.openRemoteWindow.isEnabled(in: context))
+                Button("Detached Sessions…") { actions.openDetachedSessions() }
+                    .keyboardShortcut(shortcut(for: .detachedSessions))
+                    .disabled(!PaletteCommand.detachedSessions.isEnabled(in: context))
                 Menu("Open Recent") {
                     let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
                     let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
@@ -160,12 +166,17 @@ extension agtermApp {
                 Button("Duplicate Session") { actions.duplicateActiveSession() }
                     .keyboardShortcut(shortcut(for: .duplicateSession))
                     .disabled(!PaletteCommand.duplicateSession.isEnabled(in: context))
+                Divider()
                 Button("New Companion") { actions.newCompanionOfActiveSession() }
                     .keyboardShortcut(shortcut(for: .newCompanion))
                     .disabled(!PaletteCommand.newCompanion.isEnabled(in: context))
                 Button("Duplicate as Companion") { actions.duplicateActiveSessionAsCompanion() }
                     .keyboardShortcut(shortcut(for: .duplicateCompanion))
                     .disabled(!PaletteCommand.duplicateCompanion.isEnabled(in: context))
+                Button("Convert to Companion") { actions.convertActiveSessionToCompanion() }
+                    .keyboardShortcut(shortcut(for: .convertCompanion))
+                    .disabled(!PaletteCommand.convertCompanion.isEnabled(in: context))
+                Divider()
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {

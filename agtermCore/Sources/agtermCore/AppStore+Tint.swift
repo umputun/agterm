@@ -32,6 +32,12 @@ extension AppStore {
         applyTints(ids) { SidebarTint.recolor($0, to: color) }
     }
 
+    /// setTintColor is the named form's batch rule for any color value, with untinted rows starting on
+    /// `placement`.
+    public func setTintColor(_ color: TintValue, forSessions ids: [UUID], startingOn placement: Set<TintPart> = [.icon]) {
+        applyTints(ids) { SidebarTint.recolor($0, to: color, startingOn: placement) }
+    }
+
     /// setTintParts shows each tinted session's own color on `parts`. An untinted session is left alone, so
     /// no row stores a placement it does not show.
     public func setTintParts(_ parts: Set<TintPart>, forSessions ids: [UUID]) {

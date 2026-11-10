@@ -8,14 +8,15 @@ These rules cover recipes. The project-wide rules for everything else are in [CO
 
 ## Layout
 
-One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and whatever the recipe needs to run, and nothing more. A recipe that is only instructions, a set of `agtermctl` commands or `keymap.conf` lines the reader types in, is a README alone. Anything else it needs is one of these:
+One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the supporting files listed below, and nothing more. A recipe that is only instructions, a set of `agtermctl` commands or `keymap.conf` lines the reader types in, is a README alone. Anything else it needs is one of these:
 
 - **Scripts**, named by language as described below.
 - **A config file** the reader copies into place, named for its purpose, when the recipe is configuration rather than code. It spares the reader retyping a block out of the README, where a brace lost in transcription kills every hook silently. Nothing lints it, so say in the pull request what reads it, the same as a script in an extension CI does not know.
 - **An agent skill**, whether a chord hands work to it or the reader invokes it directly. Ship it as `SKILL.md`, or, for a recipe that drives more than one agent, one `SKILL-<agent>.md` per agent; every loader requires the installed file to be named exactly `SKILL.md`, so the suffix belongs to the recipe rather than to the agent. The skill is part of the recipe and is read the same way, so keep it to what this recipe needs rather than shipping your whole configuration.
 - **Data files** the scripts or the skill read at run time, such as page templates, in a subdirectory.
+- **A screenshot** for a recipe that puts something on screen, beside the README and embedded right under the *Author* line, as [claude-git-info](claude-git-info/) does: `<img src="screenshot.png" alt="what it shows" width="283">`, a 2x capture shown at half its width. It goes in the recipe's README only, never in the index.
 
-*Setup* says where every one of these files goes. A skill that finds its scripts or data by path relative to itself keeps them in the subdirectories it names, such as `scripts/` and `assets/`, and *Setup* says they must be installed together.
+*Setup* says where the files needed to run the recipe go. A skill that finds its scripts or data by path relative to itself keeps them in the subdirectories it names, such as `scripts/` and `assets/`, and *Setup* says they must be installed together.
 
 Name scripts by their language, because the extension decides what CI does with them:
 
@@ -37,7 +38,7 @@ Six headings, exactly these, in this order. CI checks that all six are present:
 
 <one-line summary>
 
-<byline, when porting someone else's work>
+Author: [@<login>](https://github.com/<login>)
 
 ## What it does
 ## Requirements
@@ -47,7 +48,7 @@ Six headings, exactly these, in this order. CI checks that all six are present:
 ## Limits
 ```
 
-**Requirements** names the minimum agterm version the recipe needs, written as "X or later", plus any external tool it calls. Work out that minimum from the commands and flags the recipe uses rather than naming the version you happen to run, and say in the same line what shipped in it. The version is the contract: a recipe that breaks against a later agterm is fixed when someone reports it, and dropped if it stays broken and nobody claims it.
+**Requirements** names the minimum agterm version the recipe needs, written as "X or later", plus any external tool it calls. Work out that minimum from the commands and flags the recipe uses rather than naming the version you happen to run, and say in the same line what shipped in it.
 
 **Setup** is the exact steps, including where the file goes and how it is invoked or sourced. Anything machine-specific is a variable the reader sets, named and explained here.
 
@@ -55,15 +56,17 @@ Six headings, exactly these, in this order. CI checks that all six are present:
 
 **Limits** states destructive behavior in plain words. If the recipe closes sessions, deletes workspaces, or kills a running shell, say so in a sentence the reader cannot skim past. "Parking a project closes its shells" is that sentence; "state is not preserved" is not. Known caveats that are not destructive go here too.
 
-When you are porting someone else's work, credit him by name with a link to his GitHub profile and to wherever you found it, as a byline under the summary line.
+The **Author** line names who wrote the recipe, by GitHub login linked to the profile, and CI checks that it is there. When you port someone else's work, he is the author: name him, and link wherever you found it on the same line, as in `Author: [@ssgreg](https://github.com/ssgreg), from [discussion #71](https://github.com/umputun/agterm/discussions/71)`.
 
 ## Index row
 
 Add a row to [README.md](README.md) in the same pull request:
 
-| recipe | what it does | needs |
-|---|---|---|
-| [project-switcher](project-switcher/) | show only one project's workspaces | 0.18.0, jq |
+| recipe | what it does | needs | author |
+|---|---|---|---|
+| [project-switcher](project-switcher/) | show only one project's workspaces | 0.18.0, jq | [@umputun](https://github.com/umputun) |
+
+The *author* column repeats the README's Author line.
 
 The index is split into four tables, grouped by what the reader is trying to do, alphabetical within each. Pick the one that matches the goal rather than the tool, since the agent a recipe needs is already in its *needs* column:
 
@@ -89,6 +92,10 @@ Keep a recipe standing on its own. If two recipes share a gotcha, both explain i
 Every recipe is read before it is merged, for three things: whether its commands, flags, and JSON paths are right against the current control API; what it destroys, and whether the README says so; and whether anything private came along with it. Nothing is executed during review, because a recipe run against the default socket runs against the reviewer's live terminal with real work in it.
 
 Expect questions on all three. A recipe that is correct but silent about closing sessions comes back for the *Limits* sentence, not as a rejection.
+
+## Bugs and improvements
+
+Each recipe names its author. Bugs in @umputun's recipes can be reported as issues. For recipes by other authors, @umputun does not provide fixes or improvements from issue reports: submit a pull request, or a new recipe for a different workflow. Issues requesting fixes or changes to those recipes are closed with a pointer here. A bug in agterm itself that a recipe exposes is an issue like any other. A recipe that stays broken and nobody fixes is dropped.
 
 ## License
 

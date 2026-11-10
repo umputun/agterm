@@ -37,6 +37,76 @@ struct RemotePageResourcesTests {
         #expect(RemotePageResources.resolve(docs + "/img/a.png", source: source) == nil)
     }
 
+    @Test func anImageOrTextPageServesOnlyItsOwnFile() {
+        let image = HtmlSource.image(path: docs + "/img/a.png")
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: image)
+            == .init(path: docs + "/img/a.png", maxBytes: ImagePage.maxBytes, picture: true))
+        #expect(RemotePageResources.content(docs + "/index.html", source: image) == nil)
+        let text = HtmlSource.text(path: docs + "/index.html", line: 4)
+        #expect(RemotePageResources.content(docs + "/index.html", source: text)
+            == .init(path: docs + "/index.html", maxBytes: TextPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: text) == nil)
+    }
+
+    @Test func aDocumentPageServesOnlyItsOwnFile() {
+        let document = HtmlSource.document(path: docs + "/index.html")
+        #expect(RemotePageResources.content(docs + "/index.html", source: document)
+            == .init(path: docs + "/index.html", maxBytes: DocumentPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: document) == nil)
+        #expect(RemotePageResources.resolve(docs + "/index.html", source: document) == nil)
+    }
+
+    @Test func aMarkdownPageServesItsOwnFileAndPicturesInItsFolder() {
+        let markdown = HtmlSource.markdown(path: docs + "/index.html")
+        #expect(RemotePageResources.content(docs + "/index.html", source: markdown)
+            == .init(path: docs + "/index.html", maxBytes: MarkdownPage.maxBytes, picture: false))
+        #expect(RemotePageResources.content(docs + "/img/a.png", source: markdown)
+            == .init(path: docs + "/img/a.png", maxBytes: MarkdownPage.maxImageBytes, picture: true))
+    }
+
+    @Test(arguments: ["/docs/../secret.txt", "/docs/out.txt", "/secret.txt", "/docs", "/docs/img/../../secret.txt"])
+    func aMarkdownPageRefusesEscapes(_ relative: String) {
+        #expect(RemotePageResources.content(root + relative, source: .markdown(path: docs + "/index.html")) == nil)
+    }
+
+    @Test func aLinkPageServesMarkdownOnlyThroughTheGrantAndEverythingElseAsAPicture() throws {
+        let fm = FileManager.default
+        try fm.createDirectory(atPath: docs + "/sub", withIntermediateDirectories: true)
+        for file in ["a.md", "sub/b.md", "large.md", ".env"] { try Data("x".utf8).write(to: URL(fileURLWithPath: docs + "/" + file)) }
+        try fm.createSymbolicLink(atPath: docs + "/guide.md", withDestinationPath: docs + "/.env")
+        try fm.createSymbolicLink(atPath: docs + "/picture.png", withDestinationPath: docs + "/large.md")
+        try fm.createSymbolicLink(atPath: docs + "/alias.png", withDestinationPath: docs + "/a.md")
+        try fm.createSymbolicLink(atPath: root + "/outside.md", withDestinationPath: docs + "/a.md")
+        let source = HtmlSource.markdown(path: docs + "/a.md")
+        let grant = try #require(MarkdownPage.linkGrant(for: docs + "/a.md"))
+        let text = { (path: String) in RemotePageResources.ContentResource(path: path, maxBytes: MarkdownPage.maxBytes, picture: false) }
+        let picture = { (path: String) in RemotePageResources.ContentResource(path: path, maxBytes: MarkdownPage.maxImageBytes, picture: true) }
+
+        #expect(RemotePageResources.content(grant.path, source: source, links: grant) == text(grant.path))
+        #expect(RemotePageResources.content(grant.root + "/sub/b.md", source: source, links: grant) == text(grant.root + "/sub/b.md"))
+        #expect(RemotePageResources.content(grant.root + "/img/a.png", source: source, links: grant) == picture(grant.root + "/img/a.png"))
+        #expect(RemotePageResources.content(grant.root + "/picture.png", source: source, links: grant) == picture(grant.root + "/large.md"))
+        #expect(RemotePageResources.content(grant.root + "/alias.png", source: source, links: grant) == picture(grant.root + "/a.md"))
+        for refused in ["/guide.md", "/../outside.md", "/../secret.txt", "/out.txt", ""] {
+            #expect(RemotePageResources.content(grant.root + refused, source: source, links: grant) == nil, "\(refused)")
+        }
+    }
+
+    @Test func aLinkPageRetargetedAfterItsGrantIsJudgedAgain() throws {
+        try Data("x".utf8).write(to: URL(fileURLWithPath: docs + "/a.md"))
+        let grant = try #require(MarkdownPage.linkGrant(for: docs + "/a.md"))
+        try FileManager.default.removeItem(atPath: docs + "/a.md")
+        try FileManager.default.createSymbolicLink(atPath: docs + "/a.md", withDestinationPath: root + "/secret.txt")
+
+        #expect(RemotePageResources.content(grant.path, source: .markdown(path: docs + "/a.md"), links: grant) == nil)
+    }
+
+    @Test func aFilePageIsNeverServedAsContentNorAContentPageAsAFile() {
+        let file = HtmlSource.file(path: docs + "/index.html", grantRoot: docs)
+        #expect(RemotePageResources.content(docs + "/index.html", source: file) == nil)
+        #expect(RemotePageResources.resolve(docs + "/index.html", source: .markdown(path: docs + "/index.html")) == nil)
+    }
+
     @Test func aRelativePathOrAUrlPageServesNothing() throws {
         let file = HtmlSource.file(path: docs + "/index.html", grantRoot: docs)
         #expect(RemotePageResources.resolve("docs/index.html", source: file) == nil)

@@ -47,6 +47,59 @@ final class AppActionsCompanionsTests: XCTestCase {
         XCTAssertTrue(opened.spec.message.contains(RefusingDuplicator.reason), opened.spec.message)
         XCTAssertEqual(opened.spec.hideAfter, AppActions.remoteAttachErrorSeconds)
     }
+
+    func testConvertToCompanionNestsTheSessionUnderAFreshParentAndKeepsItSelected() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+
+        actions.convertToCompanion(session.id, in: store)
+
+        let parent = try XCTUnwrap(store.parent(of: session))
+        XCTAssertNil(parent.parentID)
+        XCTAssertEqual(store.selectedSessionID, session.id)
+        XCTAssertTrue(huds.opened.isEmpty)
+    }
+
+    func testARefusedConvertShowsTheReasonInATimedHudOverTheSession() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let companion = try store.addCompanion(to: session.id).get()
+
+        actions.convertToCompanion(companion.id, in: store)
+
+        let opened = try XCTUnwrap(huds.opened.first)
+        XCTAssertEqual(opened.session, companion.id.uuidString)
+        XCTAssertTrue(opened.spec.message.contains(ConvertRefusal.alreadyCompanion.message), opened.spec.message)
+        XCTAssertEqual(companion.parentID, session.id)
+    }
+
+    func testConvertToCompanionNestsATopLevelPageUnderAFreshParent() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let page = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", content: .page))
+        XCTAssertNil(store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                           sizePercent: nil))
+
+        actions.convertToCompanion(page.id, in: store)
+
+        let parent = try XCTUnwrap(store.parent(of: page))
+        XCTAssertEqual(parent.content, .terminal)
+        XCTAssertEqual(store.selectedSessionID, page.id)
+        XCTAssertTrue(huds.opened.isEmpty)
+    }
+
+    func testARefusedConvertOfARemotePageRowShowsTheReasonInATimedHud() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let remote = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "far", content: .page))
+
+        actions.convertToCompanion(remote.id, in: store)
+
+        let opened = try XCTUnwrap(huds.opened.first)
+        XCTAssertEqual(opened.session, remote.id.uuidString)
+        XCTAssertTrue(opened.spec.message.contains(ConvertRefusal.remoteSession.message), opened.spec.message)
+        XCTAssertNil(remote.parentID)
+    }
 }
 
 private final class RefusingDuplicator: CompanionDuplicating {

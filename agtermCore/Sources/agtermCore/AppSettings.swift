@@ -20,6 +20,62 @@ public enum FlaggedViewLayout: String, Codable, Sendable, CaseIterable {
     case tree
 }
 
+/// SidebarDensity is the sidebar's row spacing: `standard` (raw "default") or `compact`, which tightens the
+/// row padding, indent and info-line gap. App-wide. Raw-stored, resolved by `effectiveSidebarDensity`.
+public enum SidebarDensity: String, Codable, Sendable, CaseIterable {
+    case standard = "default"
+    case compact
+
+    /// displayName is the Settings picker's label for the value.
+    public var displayName: String {
+        switch self {
+        case .standard: "Default"
+        case .compact: "Compact"
+        }
+    }
+
+    /// rowPadding is the vertical padding a row adds to its rounded font size.
+    public var rowPadding: Double {
+        switch self {
+        case .standard: 15
+        case .compact: 10
+        }
+    }
+
+    /// indentPerLevel is the outline's horizontal step per nesting level.
+    public var indentPerLevel: Double {
+        switch self {
+        case .standard: 14
+        case .compact: 10
+        }
+    }
+
+    /// titleLift raises the row name above the row's center. A centered text box leaves lowercase letters
+    /// visibly low, which the compact row's tighter selection exposes.
+    public var titleLift: Double {
+        switch self {
+        case .standard: 0
+        case .compact: 1
+        }
+    }
+
+    /// selectionInset is the gap between a selected row's highlight and its row edge, top and bottom.
+    public var selectionInset: Double {
+        switch self {
+        case .standard: 1.5
+        case .compact: 0.5
+        }
+    }
+
+    /// infoLineSpacing is how far an info line lifts into the title band, and the padding under it.
+    public var infoLineSpacing: Double {
+        switch self {
+        case .standard: 6
+        case .compact: 4
+        }
+    }
+}
+
 /// SessionInfoDisplay is where the sidebar draws a session's info line: in every sidebar view, only in the
 /// flagged view, or nowhere. It gates drawing alone; the line, its expiry and its read-back stay either way.
 /// App-wide. Raw-stored, resolved by `effectiveSessionInfoDisplay`.
@@ -95,6 +151,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case workspaceAddSession
     case workspaceIcons
     case sessionIcons
+    case workspaceChevrons
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
@@ -102,7 +159,8 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     /// The surface this element lives on; the title bar for everything not listed as sidebar.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons:
+        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+             .workspaceChevrons:
             return .sidebar
         default: return .titleBar
         }
@@ -134,6 +192,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .workspaceAddSession: return "Workspace add-session"
         case .sessionIcons: return "Session icons"
         case .workspaceIcons: return "Workspace icons"
+        case .workspaceChevrons: return "Workspace chevrons"
         }
     }
 
@@ -164,6 +223,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .workspaceAddSession: return "plus"
         case .sessionIcons: return "terminal"
         case .workspaceIcons: return "square.grid.2x2"
+        case .workspaceChevrons: return "chevron.right"
         }
     }
 
@@ -365,8 +425,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// forwards right-/middle-click to libghostty. agterm has no terminal context menu, so paste-or-off is
     /// the whole meaningful choice.
     public var rightClickPaste: Bool?
-    /// Whether clicking anywhere on a workspace row expands or collapses it; nil = on. The disclosure
-    /// triangle toggles regardless of this setting.
+    /// workspaceRowClickExpands says whether clicking a workspace row folds it; nil = on. The disclosure
+    /// triangle and the row icon fold regardless.
     public var workspaceRowClickExpands: Bool?
     /// Which directory a new (⌘T) session opens in, a `NewSessionDirectory` raw value; nil = `home`. Read
     /// by `AppActions.newSession()` through `resolveNewSessionCwd`.
@@ -417,9 +477,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// sessionInfoDisplay is the raw `SessionInfoDisplay` for the sidebar info line; nil = always. Resolved by
     /// `effectiveSessionInfoDisplay`.
     public var sessionInfoDisplay: String?
+    /// sidebarDensity is the raw `SidebarDensity`; nil = default. Resolved by `effectiveSidebarDensity`.
+    public var sidebarDensity: String?
     /// Raw `LinkOpenMode`; nil = browser. Resolved by `effectiveLinkOpenMode`.
     public var linkOpenMode: String?
-    /// terminalInputSource is the keyboard input source id held while a terminal has the keyboard; nil = off.
+    /// terminalInputSource is the keyboard input source id held while an agterm window has the keyboard;
+    /// nil = off.
     /// `InputSourceLock` owns when it is selected and restored.
     public var terminalInputSource: String?
     /// htmlOverlayZoom is the page zoom every HTML overlay shows at, nil for actual size; read it through
@@ -456,8 +519,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 hiddenInterfaceElements: [String]? = nil, shownInterfaceElements: [String]? = nil,
                 autoHideSidebarInactiveWindows: Bool? = nil, flaggedViewLayout: String? = nil,
                 linkOpenMode: String? = nil, terminalInputSource: String? = nil,
-                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil, sessionInfoDisplay: String? = nil) {
+                htmlOverlayZoom: Double? = nil, welcomeShown: Bool? = nil, sessionInfoDisplay: String? = nil,
+                sidebarDensity: String? = nil) {
         self.sessionInfoDisplay = sessionInfoDisplay
+        self.sidebarDensity = sidebarDensity
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -602,9 +667,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         return raw.flatMap(StatusShape.init(rawValue:))
     }
 
-    /// The working directory a new session opens in, resolving `newSessionDirectory` against the active
-    /// session's focused-pane cwd and home. An unknown/nil mode, a blank `currentSessionCwd`, or a blank
-    /// custom path all fall back to home. Host-free so `AppActions` and the tests share one resolution.
+    /// The working directory a new session opens in, resolving `newSessionDirectory` against the supplied
+    /// `currentSessionCwd` (the focused-pane cwd of `AppStore.newSessionDirectorySource`) and home.
+    /// An unknown/nil mode, a blank `currentSessionCwd`, or a blank custom path all fall back to home.
+    /// Host-free so `AppActions` and the tests share one resolution.
     public func resolveNewSessionCwd(currentSessionCwd: String?, home: String) -> String {
         switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
         case .home:
@@ -616,6 +682,18 @@ public struct AppSettings: Codable, Equatable, Sendable {
             guard let dir = newSessionCustomDirectory, !dir.isEmpty else { return home }
             return dir
         }
+    }
+
+    /// remoteNewSessionCwd is the directory a new session in a remote window asks its server for, nil for the
+    /// server's default: the current row's directory and a custom directory are sent as they are, and home is the
+    /// server account's own.
+    public func remoteNewSessionCwd(currentSessionCwd: String?) -> String? {
+        let cwd: String? = switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
+        case .home: nil
+        case .currentSession: currentSessionCwd
+        case .custom: newSessionCustomDirectory
+        }
+        return cwd?.isEmpty == false ? cwd : nil
     }
 
     /// The SwiftUI overlay opacity for an inactive-pane mute strength, clamped and scaled by 0.08 (the
@@ -665,10 +743,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
         Self.clampInterfaceFontSize(interfaceFontSize ?? Self.defaultInterfaceFontSize)
     }
 
-    /// The outline row height: the clamped point size plus a fixed 15pt of vertical padding, so the
-    /// default 13pt maps to a 28pt row. The row icon and status glyph keep their fixed sizes.
-    public static func sidebarRowHeight(fontSize: Double) -> Double {
-        clampSidebarFontSize(fontSize).rounded() + 15
+    /// The resolved sidebar density: the explicit `sidebarDensity` when a KNOWN raw value, else `standard`.
+    public var effectiveSidebarDensity: SidebarDensity {
+        sidebarDensity.flatMap(SidebarDensity.init(rawValue:)) ?? .standard
+    }
+
+    /// The outline row height: the clamped point size plus the density's vertical padding, so the default
+    /// 13pt maps to a 28pt row (23pt compact). The row icon and status glyph keep their fixed 16pt.
+    public static func sidebarRowHeight(fontSize: Double, density: SidebarDensity = .standard) -> Double {
+        clampSidebarFontSize(fontSize).rounded() + density.rowPadding
     }
 
     /// The theme name that renders for the given appearance, the dark slot falling back to `theme`. Used

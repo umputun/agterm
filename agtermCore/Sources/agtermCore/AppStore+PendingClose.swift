@@ -183,7 +183,7 @@ extension AppStore {
                 emitSessionClosed(close.session, workspace: close.workspaceID)
                 continue
             }
-            let companions = closes.map(\.session).filter { $0.parentID == close.session.id }
+            let companions = closes.map(\.session).filter { $0.parentID == close.session.id && $0.isPersistable }.map(sessionSnapshot)
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
                                       id: close.recentID, companions: companions)
@@ -493,6 +493,7 @@ extension AppStore {
     // a companion whose parent moved since the close follows the parent, or regrouping would detach it
     @discardableResult
     private func restorePendingSession(_ close: PendingSessionClose) -> UUID {
+        close.session.parentID = close.session.parentID.map(groupRoot(of:))
         let workspaceIndex: Int
         if let parent = close.session.parentID.flatMap(location(ofSession:)) {
             workspaceIndex = parent.workspaceIndex

@@ -57,6 +57,57 @@ struct RemoteTreeTests {
         #expect(tree.sessions[1].content == "page")
     }
 
+    @Test func aTopLevelPageIsListedWithItsWholeGroupWithNoDaemonAtAll() throws {
+        let root = ControlSessionNode(id: "pr", name: "dash", cwd: "/srv", active: false, split: false, backedByZmx: nil,
+                                      status: "active", context: "board", content: "page")
+        let pageChild = ControlSessionNode(id: "pg", name: "report", cwd: "/srv", active: false, split: false, backedByZmx: nil,
+                                           parent: "pr", content: "page")
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [root, node(id: "c1", name: "logs", cwd: "/repo", parent: "pr"), pageChild])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows, inventory: inventory(entries: []))
+
+        #expect(tree.sessions.map(\.id) == ["pr", "pg"])
+        let listed = try #require(tree.sessions.first)
+        #expect(listed.panes.isEmpty && listed.parent == nil && listed.content == "page")
+        #expect(listed.context == "board" && listed.status == "active")
+        #expect(listed.companions == [ControlRemoteMember(id: "c1", name: "logs"), ControlRemoteMember(id: "pg", name: "report")],
+                "a terminal companion with no daemon is still named as a member")
+        #expect(tree.sessions[1].parent == "pr")
+        #expect(tree.endpoint == endpoint)
+    }
+
+    @Test func aTerminalCompanionOfATopLevelPageIsOfferedWhenItsDaemonRuns() throws {
+        let root = ControlSessionNode(id: "pr", name: "dash", cwd: "/srv", active: false, split: false, backedByZmx: nil,
+                                      content: "page")
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [root, node(id: "c1", name: "logs", cwd: "/repo", parent: "pr")])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows, inventory: inventory(entries: [
+            entry(session: "c1", pane: "left", daemon: Self.left),
+        ]))
+
+        #expect(tree.sessions.map(\.id) == ["c1", "pr"])
+        #expect(tree.sessions[0].parent == "pr")
+    }
+
+    @Test func aPageAttachedFromAnotherMacIsNeverOfferedAgain() throws {
+        let replicaRoot = ControlSessionNode(id: "pr", name: "dash", cwd: "/srv", active: false, split: false, backedByZmx: nil,
+                                             remoteHost: "buildbox", content: "page")
+        let replicaChild = ControlSessionNode(id: "pg", name: "report", cwd: "/srv", active: false, split: false,
+                                              backedByZmx: nil, remoteHost: "buildbox", parent: "pr", content: "page")
+        let underTerminal = ControlSessionNode(id: "pg2", name: "notes", cwd: "/srv", active: false, split: false,
+                                               backedByZmx: nil, remoteHost: "buildbox", parent: "s1", content: "page")
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [replicaRoot, replicaChild, node(id: "s1", name: "build", cwd: "/repo"), underTerminal])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows, inventory: inventory(entries: [
+            entry(session: "s1", pane: "left", daemon: Self.left),
+        ]))
+
+        #expect(tree.sessions.map(\.id) == ["s1"])
+    }
+
     @Test func everyOpenWindowIsOffered() throws {
         let windows = [window(id: "w-1", name: "main", workspace: "umputun.dev",
                               sessions: [node(id: "s1", name: "build", cwd: "/repo")]),
@@ -301,14 +352,23 @@ struct RemoteTreeTests {
                                            workspaceID: "ws-1", workspaceName: "work", cwd: "/repo",
                                            splitAxis: nil,
                                            panes: [ControlRemotePane(pane: "left", daemon: Self.left)])
-        let remote = ControlRemoteTree(host: nil, endpoint: endpoint, sessions: [session], presentation: 1)
+        let remote = ControlRemoteTree(host: nil, endpoint: endpoint, sessions: [session], presentation: 1, headless: true)
         let stdout = String(decoding: try JSONEncoder().encode(
             ControlResponse(ok: true, result: ControlResult(remote: remote))), as: UTF8.self)
 
         let stamped = try RemoteTreeMerger.decode(stdout: stdout).stamped(host: "buildbox")
 
         #expect(stamped == ControlRemoteTree(host: "buildbox", endpoint: endpoint, sessions: [session],
-                                             presentation: 1))
+                                             presentation: 1, headless: true))
+    }
+
+    @Test func aMacsTreeSaysNothingAboutBeingHeadless() throws {
+        let tree = RemoteTreeMerger.candidates(windows: [], daemons: [:], endpoint: endpoint)
+        let stdout = String(decoding: try JSONEncoder().encode(ControlResponse(ok: true, result: ControlResult(remote: tree))),
+                            as: UTF8.self)
+
+        #expect(!stdout.contains("headless"))
+        #expect(try RemoteTreeMerger.decode(stdout: stdout).headless == nil)
     }
 
     @Test func theRemotesOwnRefusalIsReadFromStdoutWhereAgtermctlPutsIt() {

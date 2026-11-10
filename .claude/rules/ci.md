@@ -24,17 +24,44 @@ paths:
   touching libghostty, so `SessionHostServerTests` attach to a real daemon in the same `swift test`.
   `AGTERM_REQUIRE_ZMX=1` fails `requiredFixturePrerequisitesArePresent` when zmx or the responsibility SPI
   is missing, since the fixtures themselves skip silently.
+  It stages the shell integration with `scripts/setup-zmx-linux.sh --shell-integration`, cached by `GHOSTTY_REV`,
+  and points `AGTERM_SHELL_INTEGRATION` at it: the job builds no libghostty, so `agterm/Resources/ghostty` is
+  absent and the fish server pane would start without integration.
   It runs under `scripts/watchdog.sh`: past 600s the watchdog tries, within a 120s budget, to save the test
   processes' tree, open files and stacks, kills the tree, and the `test-hang` artifact carries what it got.
   A hang otherwise reaches only the job timeout, which records nothing.
-  `coverage`, the only Swift-gated Linux job, downloads it for best-effort Coveralls.
+  On any failure the job also saves the last 45 minutes of the `com.umputun.agterm` unified log, capped at
+  120s, into that artifact: the server's presentation streams log their close reasons only there.
+  A prior `swift build --build-tests --enable-code-coverage` step compiles outside it, so compile time on a
+  slow runner does not count against the 600s; `swift test` with the same flag reuses that build. The
+  35-minute job cap leaves room for a slow build plus the watchdog's 600s and 120s.
+  `coverage` downloads it for best-effort Coveralls.
   `lint` installs SwiftLint and runs `swiftlint lint --strict`; every warning fails.
+- `linux` builds and tests `agtermCore` in the `swift:6.3.2-noble` container on ubuntu-24.04, the
+  toolchain agterm-server ships on, under the Swift filter. It installs jq, which the Codex status hook reads
+  JSON with where `/usr/bin/plutil` is absent, and runs as an unprivileged user because root passes the
+  permission checks several tests expect to fail.
+  It builds the x86_64 musl zmx with a zig 0.16.0 tarball through `scripts/setup.sh --zmx-only` into
+  `build/linux/x86_64`, cached by `ZMX_REV` and the patch digest, stages the shell integration from ghostty's
+  source at `GHOSTTY_REV` with `scripts/setup-zmx-linux.sh --shell-integration`, installs fish, and runs with
+  `AGTERM_REQUIRE_ZMX=1 AGTERM_REQUIRE_FISH=1` so `ServerLifecycleTests` drive real zsh, fish and bash panes rather
+  than skip.
+  Its `swift test` runs under `scripts/watchdog.sh` as container root, with only the test command under
+  `runuser`: past 600s the watchdog takes lldb stacks of `agtermCorePackageTests.xctest` first, within 300s,
+  and the `test-hang-linux` artifact carries them. lldb needs the container's `--cap-add=SYS_PTRACE` to attach
+  to another user's process. The 45-minute cap covers the build plus both watchdog budgets.
+  Darwin-only behavior keeps its tests behind
+  `#if canImport(Darwin)` beside the code; everything else runs on both platforms.
 - `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
   build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
   `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
   `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
-  `hosted` runs Debug `scripts/test-app.sh` and needs nothing from `build`; it builds the bundled helpers
-  itself. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
+  `hosted` runs the Debug tests `scripts/test-app.sh` runs and needs nothing from `build`; it builds the
+  bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
+  cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the
+  watchdog, at 600s, with `WATCHDOG_RUNNER` naming the DerivedData test host, which xcodebuild launches
+  outside the command's process tree. The `hosted-test-hang` artifact adds the xcresult under
+  `build/DerivedData/Logs/Test`. The 35-minute job cap mirrors `test`'s. Keep both app builds: Release exercises the whole-module optimizer and its SIL-deserializer
   failure. Debug provides `ENABLE_TESTABILITY` for `DockMenuTests`'s `@testable import agterm`. Do not
   enable testability in the notarized Release app.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
@@ -72,7 +99,7 @@ paths:
   changed; its Swift membership also runs macOS jobs.
 - The cookbook job builds nothing. It compares the `cookbook/README.md` table and recipe directories in
   both directions; requires kebab-case directories, a `README.md` with all six exact
-  (`grep -qxF`) headings, and shebangs for `.sh`/`.zsh`/`.fish`/`.py`; runs `shellcheck` on `.sh`; parses
+  (`grep -qxF`) headings and an `Author: [@login](https://github.com/login)` line, and shebangs for `.sh`/`.zsh`/`.fish`/`.py`; runs `shellcheck` on `.sh`; parses
   `.zsh` with `zsh -n` and `.fish` with `fish --no-execute`; runs `ruff check` on `.py`; and runs every
   `test_*.py` regression script through `python3`. `shellcheck` is preinstalled. Install absent `zsh` and `fish`
   together before the shell gates, and install `ruff` through `pipx` because the runner's python is

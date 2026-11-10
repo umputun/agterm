@@ -64,8 +64,12 @@ public enum TerminalClipboard {
         process.standardError = stderr
         try process.run()
         // a zmx that exits before reading everything must surface as its status, not kill this process
+        #if canImport(Darwin)
         _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
         try? stdin.fileHandleForWriting.write(contentsOf: sequence)
+        #else
+        withBrokenPipeSignalBlocked { try? stdin.fileHandleForWriting.write(contentsOf: sequence) }
+        #endif
         try? stdin.fileHandleForWriting.close()
         let diagnostics = stderr.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
@@ -74,4 +78,24 @@ public enum TerminalClipboard {
                                       stderr: String(decoding: diagnostics, as: UTF8.self))
         }
     }
+
+    #if !canImport(Darwin)
+    // linux has no per-descriptor SIGPIPE switch; a broken-pipe SIGPIPE goes to the writing thread, so blocking
+    // and draining it there keeps the write's EPIPE and leaves every other thread alone
+    private static func withBrokenPipeSignalBlocked(_ body: () -> Void) {
+        var pipeSignal = sigset_t()
+        sigemptyset(&pipeSignal)
+        sigaddset(&pipeSignal, SIGPIPE)
+        var previous = sigset_t()
+        pthread_sigmask(SIG_BLOCK, &pipeSignal, &previous)
+        body()
+        var pending = sigset_t()
+        sigpending(&pending)
+        if sigismember(&pending, SIGPIPE) == 1 {
+            var noWait = timespec()
+            _ = sigtimedwait(&pipeSignal, nil, &noWait)
+        }
+        pthread_sigmask(SIG_SETMASK, &previous, nil)
+    }
+    #endif
 }

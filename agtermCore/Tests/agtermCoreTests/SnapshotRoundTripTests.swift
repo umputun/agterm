@@ -10,7 +10,7 @@ struct SnapshotRoundTripTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let local = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        let remote = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox")!
 
         let snapshot = store.snapshot()
 
@@ -309,7 +309,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func anUnknownTintColorDropsOnlyTheTint() throws {
-        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"teal","on":["name"]}}"#
+        let session = #"{"id":"00000000-0000-0000-0000-000000000003","cwd":"/tmp","flagged":true,"tint":{"color":"maroon","on":["name"]}}"#
         let decodedSession = try JSONDecoder().decode(SessionSnapshot.self, from: Data(session.utf8))
         #expect(decodedSession.tint == nil)
         #expect(decodedSession.flagged == true)
@@ -643,6 +643,240 @@ struct SnapshotRoundTripTests {
         #expect(r.hudFile == nil)
         #expect(r.hudActive == false)
         #expect(r.overlayActive == false)
+    }
+
+    private func throughDisk(_ snapshot: Snapshot) throws -> Snapshot {
+        try JSONDecoder().decode(Snapshot.self, from: JSONEncoder().encode(snapshot))
+    }
+
+    @Test func aFilePageRowRoundTripsWithItsOptions() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/site/index.html", grantRoot: "/tmp/site"), navigation: true,
+                                  javascript: true, chromeless: true)
+        let page = try addPageRow(to: store, workspace: ws.id, overlay: overlay, backgroundColor: "#102030")
+        store.renameSession(page.id, to: "dash")
+        page.flagged = true
+        page.context = "build status"
+
+        let snapshot = try throughDisk(store.snapshot())
+        let saved = try #require(snapshot.workspaces.first { $0.id == ws.id }?.sessions.first)
+        let restored = makeStore()
+        restored.restore(from: snapshot)
+
+        #expect(saved.page == PageSnapshot(source: .file(path: "/tmp/site/index.html", grantRoot: "/tmp/site"),
+                                           javascript: true, navigation: true, chromeless: true, backgroundColor: "#102030"))
+        #expect(saved.paneIdentity == nil)
+        let row = try #require(restored.session(withID: page.id))
+        let shown = try #require(row.htmlOverlay)
+        #expect(row.content == .page)
+        #expect(shown.source == overlay.source)
+        #expect(shown.javascript && shown.navigation && shown.chromeless)
+        #expect(!shown.persistent && !shown.browse)
+        #expect(shown.id != overlay.id)
+        #expect(row.overlayActive)
+        #expect(row.overlayBackgroundColor == "#102030")
+        #expect(row.overlaySizePercent == nil)
+        #expect(row.displayName == "dash")
+        #expect(row.flagged)
+        #expect(row.context == "build status")
+        #expect(row.locallyManagedPaneIdentities.isEmpty)
+    }
+
+    @Test func aURLPageRowRoundTripsWithItsOptions() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let url = try #require(URL(string: "https://example.com/app?x=1"))
+        let page = try addPageRow(to: store, workspace: ws.id,
+                                  overlay: HtmlOverlay(source: .url(url), navigation: true, persistent: true, browse: true))
+
+        let restored = makeStore()
+        restored.restore(from: try throughDisk(store.snapshot()))
+
+        let shown = try #require(restored.session(withID: page.id)?.htmlOverlay)
+        #expect(shown.source == .url(url))
+        #expect(shown.navigation && shown.persistent && shown.browse)
+        #expect(!shown.javascript && !shown.chromeless)
+        #expect(restored.session(withID: page.id)?.overlayBackgroundColor == nil)
+    }
+
+    @Test func aPageParentRoundTripsWithTerminalAndPageCompanions() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let root = try addPageRow(to: store, workspace: ws.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let after = try #require(store.addSession(toWorkspace: ws.id, cwd: "/after"))
+        let terminal = try store.addCompanion(to: root.id, options: CompanionOptions(cwd: "/term")).get()
+        let url = try #require(URL(string: "https://example.com"))
+        let nested = try store.addPageCompanion(to: root.id, overlay: HtmlOverlay(source: .url(url))).get()
+        root.isExpanded = false
+
+        let restored = makeStore()
+        restored.restore(from: try throughDisk(store.snapshot()))
+
+        let sessions = try #require(restored.workspaces.first { $0.id == ws.id }).sessions
+        #expect(sessions.map(\.id) == [root.id, terminal.id, nested.id, after.id])
+        #expect(sessions.map(\.content) == [.page, .terminal, .page, .terminal])
+        #expect(sessions.map(\.parentID) == [nil, root.id, root.id, nil])
+        #expect(!sessions[0].isExpanded)
+        #expect(sessions[0].htmlOverlay?.source == .file(path: "/tmp/root.html", grantRoot: nil))
+        #expect(sessions[1].paneIdentity == terminal.paneIdentity)
+        #expect(sessions[1].initialCwd == "/term")
+        #expect(sessions[2].htmlOverlay?.source == .url(url))
+        #expect(restored.companions(of: root.id).map(\.id) == [terminal.id, nested.id])
+    }
+
+    @Test(arguments: [false, true])
+    func aPageGroupRestoresWhetherOrNotTheLaunchArmsCommands(launchRestore: Bool) throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let root = try addPageRow(to: store, workspace: ws.id, overlay: HtmlOverlay(source: .file(path: "/tmp/root.html", grantRoot: nil)))
+        let terminal = try store.addCompanion(to: root.id).get()
+        terminal.foregroundCommand = ["vim", "notes.md"]
+
+        let restored = makeStore()
+        restored.restore(from: store.snapshot(), launchRestore: launchRestore)
+
+        #expect(restored.session(withID: root.id)?.htmlOverlay?.source == .file(path: "/tmp/root.html", grantRoot: nil))
+        #expect(restored.companions(of: root.id).map(\.id) == [terminal.id])
+        #expect(restored.session(withID: terminal.id)?.pendingForegroundCommand == (launchRestore ? ["vim", "notes.md"] : nil))
+    }
+
+    @Test func aPageRowWhoseLoadFailsStaysWithItsCompanionsAndReload() throws {
+        let root = UUID()
+        let companion = UUID()
+        let workspace = UUID()
+        let store = makeStore()
+        store.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: workspace, name: "work", sessions: [
+            SessionSnapshot(id: root, customName: nil, cwd: "/tmp",
+                            page: PageSnapshot(source: .file(path: "/nonexistent/gone.html", grantRoot: "/nonexistent"))),
+            SessionSnapshot(id: companion, customName: nil, cwd: "/tmp", parentID: root),
+        ])]))
+        let page = try #require(store.session(withID: root)?.htmlOverlay)
+
+        store.setHtmlLoadState(page.id, state: .failed, error: "The file couldn’t be opened.")
+
+        let row = try #require(store.session(withID: root))
+        #expect(row.htmlOverlay?.loadState == .failed)
+        #expect(store.companions(of: root).map(\.id) == [companion])
+        #expect(store.reloadHtmlOverlay(root, pane: nil) == nil)
+        #expect(row.htmlOverlay?.loadState == .loading)
+        #expect(store.snapshot().workspaces[0].sessions.map(\.id) == [root, companion])
+    }
+
+    @Test func aReplicaPageRowIsAbsentFromTheSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let replica = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b", remoteHost: "buildbox", content: .page))
+        let overlay = HtmlOverlay(source: .replica(path: "/srv/page.html", content: .html), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(replica.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+        let url = try #require(URL(string: "https://example.com"))
+        let remoteURL = try addPageRow(to: store, workspace: ws.id, overlay: HtmlOverlay(source: .url(url)))
+        let remote = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c", remoteHost: "buildbox", content: .page))
+        #expect(store.openHtmlOverlay(remote.id, pane: nil, overlay: HtmlOverlay(source: .url(url)), sizePercent: nil) == nil)
+
+        let ids = store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.map(\.id)
+
+        #expect(ids == [local.id, remoteURL.id])
+        #expect(replica.pageSnapshot == nil)
+        #expect(remote.pageSnapshot == nil)
+    }
+
+    @Test func aPageRowJoinsTheSnapshotOnlyOnceItsPageIsPlaced() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let page = try #require(store.addSession(toWorkspace: ws.id, cwd: "/page", content: .page))
+        let before = store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.map(\.id)
+
+        #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: HtmlOverlay(source: .file(path: "/tmp/p.html", grantRoot: nil)),
+                                      sizePercent: nil) == nil)
+
+        #expect(before == [])
+        #expect(store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.map(\.id) == [page.id])
+    }
+
+    @Test func aPageRowShowingAnotherKindOfPageIsNotSaved() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = try addPageRow(to: store, workspace: ws.id, overlay: HtmlOverlay(source: .markdown(path: "/tmp/notes.md")))
+
+        #expect(store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.isEmpty == true)
+    }
+
+    @Test(arguments: [
+        (#"{"file":"/tmp/a.html","javascript":"yes","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .file(path: "/tmp/a.html", grantRoot: nil), navigation: true))),
+        (#"{"url":"https://example.com","grantRoot":"/tmp"}"#, PageSnapshot?.some(PageSnapshot(source: .url(URL(string: "https://example.com")!)))),
+        (#"{"url":"ftp://example.com"}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"javascript":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#""page""#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"file":42}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"slides":"/tmp/deck.key","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))),
+        (#"{"unreadable":"kept reason","navigation":true}"#, PageSnapshot?.some(PageSnapshot(source: .unreadable("kept reason"), navigation: true))),
+    ])
+    func aPageDescriptorDecodesLossilyAndAnUnusableOneReadsAsUnreadable(page: String, expected: PageSnapshot?) throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","customName":"keep","page":\#(page)}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.page == expected)
+        #expect(snap.customName == "keep")
+    }
+
+    @Test(arguments: [#"{"url":"ftp://example.com"}"#, #"{"javascript":true}"#, #"{"file":42}"#, #""page""#,
+                      #"{"slides":"/tmp/deck.key"}"#])
+    func anUnreadablePageDescriptorRestoresAFailedPageRowWithItsCompanions(page: String) throws {
+        let root = UUID(), companion = UUID(), pane = UUID(), workspace = UUID()
+        let json = #"{"id":"\#(root.uuidString)","cwd":"/tmp","customName":"dash","page":\#(page)}"#
+        let unreadable = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        let store = makeStore()
+
+        store.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: workspace, name: "work", sessions: [
+            unreadable,
+            SessionSnapshot(id: companion, paneIdentity: pane, customName: nil, cwd: "/tmp", parentID: root),
+        ])]))
+
+        let row = try #require(store.session(withID: root))
+        let shown = try #require(row.htmlOverlay)
+        #expect(row.content == .page)
+        #expect(row.displayName == "dash")
+        #expect(shown.source == .unreadable(reason: PageSnapshot.unreadableReason))
+        #expect(shown.loadState == .failed)
+        #expect(shown.loadError == PageSnapshot.unreadableReason)
+        #expect(row.locallyManagedPaneIdentities.isEmpty)
+        #expect(store.companions(of: root).map(\.id) == [companion])
+        #expect(PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions)) == [pane])
+        #expect(store.htmlOverlayNodes(row, zoom: nil)?.first.map { [$0.file, $0.url, $0.document] } == [nil, nil, nil])
+    }
+
+    @Test func anUnreadablePageRowSurvivesASecondSave() throws {
+        let root = UUID(), companion = UUID()
+        let json = #"{"id":"\#(root.uuidString)","cwd":"/tmp","page":{"url":"ftp://example.com","navigation":true}}"#
+        let first = makeStore()
+        first.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8)),
+            SessionSnapshot(id: companion, paneIdentity: UUID(), customName: nil, cwd: "/tmp", parentID: root),
+        ])]))
+        let second = makeStore()
+
+        second.restore(from: try throughDisk(first.snapshot()))
+        let saved = try throughDisk(second.snapshot()).workspaces[0].sessions
+
+        #expect(saved.map(\.id) == [root, companion])
+        #expect(saved[0].page == PageSnapshot(source: .unreadable(PageSnapshot.unreadableReason)))
+        #expect(saved[0].paneIdentity == nil)
+        #expect(second.session(withID: root)?.content == .page)
+        #expect(second.session(withID: root)?.htmlOverlay?.loadState == .failed)
+        #expect(second.companions(of: root).map(\.id) == [companion])
+    }
+
+    @Test func aSnapshotWithoutAPageDescriptorRestoresATerminal() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        let store = makeStore()
+
+        store.restore(from: Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [snap])]))
+
+        #expect(snap.page == nil)
+        #expect(store.workspaces[0].sessions[0].content == .terminal)
+        #expect(store.workspaces[0].sessions[0].htmlOverlay == nil)
     }
 
     @Test func sessionSnapshotDecodesWithoutSplitRatio() throws {

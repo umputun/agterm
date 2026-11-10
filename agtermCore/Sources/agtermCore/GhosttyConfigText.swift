@@ -24,14 +24,57 @@ public enum GhosttyConfigText {
     }
 
     /// keyValues parses config text into `key = value` pairs in file order, skipping blank and `#` lines and
-    /// unquoting each value.
+    /// unquoting each value. CRLF is one `Character`, so lines split on any newline rather than on LF.
     public static func keyValues(in text: String) -> [(key: String, value: String)] {
-        text.split(separator: "\n").compactMap { raw in
+        text.split(whereSeparator: \.isNewline).compactMap { raw in
             let line = raw.trimmingCharacters(in: .whitespaces)
             guard !line.isEmpty, !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { return nil }
             let key = line[..<eq].trimmingCharacters(in: .whitespaces)
             return (key, unquoted(line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)))
         }
+    }
+
+    /// keyValues(loading:home:read:) reads `paths` in order and then the `config-file` includes they name, as
+    /// `ghostty_config_load_recursive_files` does: includes queue behind every source and behind their own
+    /// includer, resolve against the including file's directory, and a path already included is skipped.
+    public static func keyValues(loading paths: [String], home: String,
+                                 read: (String) -> String?) -> [(key: String, value: String)] {
+        var pairs: [(key: String, value: String)] = []
+        var includes: [String] = []
+        func load(_ path: String) {
+            guard let text = read(path) else { return }
+            let base = (path as NSString).deletingLastPathComponent
+            for pair in keyValues(in: text) {
+                pairs.append(pair)
+                guard pair.key == "config-file" else { continue }
+                // ghostty strips the optional-marker before the quotes, so `?"x"` unquotes here
+                let raw = unquoted(pair.value.hasPrefix("?") ? String(pair.value.dropFirst()) : pair.value)
+                if pair.value.isEmpty {
+                    includes.removeAll()
+                } else if !raw.isEmpty {
+                    includes.append(includePath(raw, base: base, home: home))
+                }
+            }
+        }
+        paths.forEach(load)
+        var loaded = Set<String>()
+        var index = 0
+        while index < includes.count {
+            let path = includes[index]
+            index += 1
+            if loaded.insert(path).inserted { load(path) }
+        }
+        return pairs
+    }
+
+    /// includePath resolves an existing relative include through its symlinks, as ghostty's `realPathFile`
+    /// does, so the includes it names resolve against the target's directory.
+    private static func includePath(_ raw: String, base: String, home: String) -> String {
+        if raw.hasPrefix("~/") { return (home as NSString).appendingPathComponent(String(raw.dropFirst(2))) }
+        if (raw as NSString).isAbsolutePath { return raw }
+        let joined = URL(fileURLWithPath: base, isDirectory: true).appending(path: raw).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: joined.path) else { return joined.path }
+        return joined.resolvingSymlinksInPath().path
     }
 
     /// unquoted strips one pair of surrounding double quotes, without unescaping.

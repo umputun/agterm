@@ -31,6 +31,25 @@ struct AskTests {
         #expect(registry.result(for: ask.id)?.windowID == windowID)
     }
 
+    @Test func anAnswerPastTheDeadlineResolvesCancelledBeforeAnyExpiryRuns() {
+        let session = Session(initialCwd: "/tmp")
+        var ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: buttons(count: 1))
+        ask.deadline = Date().addingTimeInterval(-1)
+        #expect(session.openAsk(ask))
+        AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: UUID()))
+
+        #expect(session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "button-0", label: "Button 0", index: 0)))
+
+        #expect(AskRegistry.shared.result(for: ask.id)?.result == ControlAskResult(result: .cancelled))
+    }
+
+    @Test func anAnchoredCopyKeepsTheDeadline() {
+        var ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: buttons(count: 1), style: .gui)
+        ask.deadline = Date(timeIntervalSince1970: 42)
+
+        #expect(ask.anchored(at: nil).deadline == ask.deadline)
+    }
+
     @Test func sessionResolutionRetainsItsRegisteredOutcomeSynchronously() {
         let registry = AskRegistry.shared
         let previousResolver = registry.resolveOwner

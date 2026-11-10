@@ -595,4 +595,37 @@ final class PersistenceTests {
         try nestedStore.save(snapshot)
         #expect(nestedStore.load() == snapshot)
     }
+
+    private func blockWrites(to url: URL) throws {
+        try? FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        try Data().write(to: url.appendingPathComponent("occupied"))
+    }
+
+    @Test func aFailedSnapshotSaveShowsInTheTreeUntilASaveLands() throws {
+        let app = AppStore(persistence: store)
+        #expect(app.controlTree(paneForeground: { _ in nil }).snapshotUnsaved == nil)
+        try blockWrites(to: fileURL)
+
+        #expect(!app.saveChecked())
+        let failed = app.controlTree(paneForeground: { _ in nil })
+        #expect(failed.snapshotUnsaved == true)
+        #expect(failed.indexUnsaved == nil)
+
+        try FileManager.default.removeItem(at: fileURL)
+        #expect(app.saveChecked())
+        #expect(app.controlTree(paneForeground: { _ in nil }).snapshotUnsaved == nil)
+    }
+
+    @Test func aFailedSnapshotSaveMarksOnlyItsOwnWindow() throws {
+        let failing = AppStore(persistence: PersistenceStore(directory: directory, fileName: "windows/a.json"))
+        let healthy = AppStore(persistence: PersistenceStore(directory: directory, fileName: "windows/b.json"))
+        try blockWrites(to: directory.appendingPathComponent("windows/a.json"))
+
+        #expect(!failing.saveChecked())
+        #expect(healthy.saveChecked())
+
+        #expect(failing.controlTree(paneForeground: { _ in nil }).snapshotUnsaved == true)
+        #expect(healthy.controlTree(paneForeground: { _ in nil }).snapshotUnsaved == nil)
+    }
 }

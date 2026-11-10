@@ -32,9 +32,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // flush below the titlebar; a custom row height restores the roomy size .plain's .default shrinks
         // to ~17px.
         outline.rowSizeStyle = .custom
-        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize)
+        let density = GhosttyApp.shared.sidebarDensity
+        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize, density: density)
         outline.floatsGroupRows = false
-        outline.indentationPerLevel = 14
+        outline.indentationPerLevel = density.indentPerLevel
         outline.autosaveExpandedItems = false
         outline.target = context.coordinator
         outline.action = #selector(Coordinator.handleSingleClick(_:))
@@ -101,7 +102,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         _ = store.workspaces.map {
             ($0.id, $0.name, $0.unseenCount, $0.tint, $0.sessions.map {
                 ($0.id, $0.displayName, $0.hasSplit, $0.splitAxis, $0.unseenCount, $0.agentIndicator, $0.flagged,
-                 $0.remoteConnection, $0.tint, $0.effectiveInfo)
+                 $0.remoteConnection, $0.tint, $0.effectiveInfo, $0.ended)
             })
         }
         _ = store.selectedSessionID
@@ -113,6 +114,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // a membership change or a filter flip takes the rebuild branch.
         _ = store.focusedWorkspaceIDs
         _ = store.focusEnabled
+        context.coordinator.applyAddButtonEnabled(!store.serverActionsBlocked)
         context.coordinator.reconcile()
         context.coordinator.syncSelection()
     }
@@ -128,6 +130,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         /// Root workspace nodes in store order, rebuilt from the store on each reload from cached instances.
         private var roots: [SidebarNode] = []
+        private var deferredRebuild = false
+        private var deferredRenameNodes: [UUID: SidebarNode] = [:]
         /// Cache of node instances keyed by id, so identity is stable across reloads.
         var nodeCache: [UUID: SidebarNode] = [:]
         /// Guards `syncSelection` against re-entering the store via the selection-change callback it fires.
@@ -195,9 +199,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// reconcile reloads only the rows whose content changed. An absent key ≠ any real content.
         private var lastRowContent: [UUID: RowContent] = [:]
 
-        /// The sidebar font size last applied (row height + row fonts). `.agtermAppearanceChanged` fires for
-        /// every settings change, so `appearanceChanged` compares against this and rebuilds only on a change.
+        /// The sidebar font size, density and chevron visibility last applied (row height, indent, row fonts,
+        /// leading strip). `.agtermAppearanceChanged` fires for every settings change, so `appearanceChanged`
+        /// compares against these and rebuilds only on a change.
         private var lastSidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+        private var lastSidebarDensity: SidebarDensity = .standard
+        private var lastChevronsHidden = false
+
+        private var chevronsHidden: Bool { GhosttyApp.shared.hiddenInterfaceElements.contains(.workspaceChevrons) }
 
         /// Centered hint floating over the empty outline in flagged mode; hidden otherwise.
         private weak var emptyState: NSStackView?
@@ -207,21 +216,21 @@ struct WorkspaceSidebar: NSViewRepresentable {
         init(store: AppStore, actions: AppActions) {
             self.store = store
             self.actions = actions
-            self.renameController = SidebarRenameController(store: store)
+            self.renameController = SidebarRenameController(store: store) { [weak actions] operation in
+                actions?.performRemote(operation, in: store) ?? false
+            }
             super.init()
             // seed from the live mirror (SettingsModel applies the persisted size before any sidebar is
             // built) so the first appearanceChanged doesn't rebuild for no change.
             lastSidebarFontSize = GhosttyApp.shared.sidebarFontSize
+            lastSidebarDensity = GhosttyApp.shared.sidebarDensity
+            lastChevronsHidden = chevronsHidden
             renameController.onRenameEnded = { [weak self] node in
-                guard let self, !renameController.isEditing, !renameController.isCommitting else { return }
-                if let node, let outline = outlineView, outline.row(forItem: node) >= 0 {
-                    outline.reloadItem(node)
-                }
-                // row updates were skipped while the editor was open, and a cancel changes no model value to retrigger them
-                reconcile()
-                syncSelection()
-                focusActiveTerminal()
+                guard let self else { return }
+                if let node { deferredRenameNodes[node.id] = node }
+                flushDeferredRenameUpdates()
             }
+            renameController.onMouseTrackingEnded = { [weak self] in self?.flushDeferredRenameUpdates() }
             // the menu/palette can't reach the inline editor directly, so they post a notification. Scoped
             // by `object: store`: the handlers' selected-session guard is NOT a per-window scope, so an
             // `object: nil` pairing starts an inline edit in EVERY window — each leaving an unopened editor
@@ -277,15 +286,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// (agterm/Resources/ghostty-defaults.conf; a user window-padding override in ghostty.conf is not
         /// tracked): window-padding-x = 8 is the left margin; the top is a 2px nudge, not the full
         /// window-padding-y = 6, because the row already centers its content in a ~28px row. `.plain` adds
-        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode.
+        /// no insets of its own, so we own them (auto-adjust off). Same in every toolbar mode. Without the
+        /// disclosure strip the left margin narrows, which would otherwise put the row icon 10pt in.
         func applySidebarContentInset(_ scroll: NSScrollView?) {
             guard let scroll else { return }
+            let reserves = (outlineView as? SidebarOutlineView)?.reservesDisclosureColumn ?? true
             scroll.automaticallyAdjustsContentInsets = false
-            scroll.contentInsets = NSEdgeInsets(top: 2, left: 8, bottom: 0, right: 0)
+            scroll.contentInsets = NSEdgeInsets(top: 2, left: reserves ? 8 : 6, bottom: 0, right: 0)
         }
 
         @objc private func appearanceChanged() {
-            applySidebarFontSizeIfChanged()
+            applySidebarMetricsIfChanged()
             refreshSelectionAppearance()
             applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile reloads those rows.
@@ -304,15 +315,36 @@ struct WorkspaceSidebar: NSViewRepresentable {
             reapplyStatusGlyphs()
         }
 
-        /// Re-apply the row height + fonts when the sidebar font-size setting changed. The size is not part
-        /// of `reconcile`'s per-row content diff, so it needs an explicit row-height update plus a full
-        /// `rebuildAndReload` to re-run the cell builder, guarded on the tracked value.
-        private func applySidebarFontSizeIfChanged() {
+        /// Re-apply the row height, indent and fonts when the sidebar font size, density or chevron visibility
+        /// changed. None is part of `reconcile`'s per-row content diff, so they need explicit outline updates
+        /// plus a full `rebuildAndReload` to re-run the cell builder, guarded on the tracked values. Waits out a
+        /// rename in flight; `flushDeferredRenameUpdates` applies it once the rename settles.
+        private func applySidebarMetricsIfChanged() {
             let size = GhosttyApp.shared.sidebarFontSize
-            guard size != lastSidebarFontSize else { return }
+            let density = GhosttyApp.shared.sidebarDensity
+            guard size != lastSidebarFontSize || density != lastSidebarDensity || chevronsHidden != lastChevronsHidden else { return }
+            guard !renameController.isRenameInFlight else { return }
             lastSidebarFontSize = size
-            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size)
+            lastSidebarDensity = density
+            lastChevronsHidden = chevronsHidden
+            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size, density: density)
+            outlineView?.indentationPerLevel = density.indentPerLevel
             rebuildAndReload()
+        }
+
+        private func flushDeferredRenameUpdates() {
+            guard !renameController.isRenameInFlight else { return }
+            applySidebarMetricsIfChanged()
+            if deferredRebuild { rebuildAndReload() }
+            if let outline = outlineView {
+                for node in deferredRenameNodes.values where outline.row(forItem: node) >= 0 {
+                    outline.reloadItem(node)
+                }
+            }
+            deferredRenameNodes.removeAll()
+            reconcile()
+            syncSelection()
+            focusActiveTerminal()
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change
@@ -456,7 +488,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// delta takes a per-row `reloadItem`, which re-renders at the row's stable frame, so a name/cwd
         /// update never re-lays-out the tree. Skipped mid-rename so it can't drop an in-progress edit.
         private func reloadChangedContentRows() {
-            guard let outline = outlineView, !renameController.isCommitting, !renameController.isEditing else { return }
+            guard let outline = outlineView, !renameController.isRenameInFlight else { return }
             func reloadIfChanged(_ id: UUID, _ content: RowContent) {
                 let previous = lastRowContent[id]
                 guard content != previous else { return }
@@ -522,9 +554,15 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so NSOutlineView item
-        /// identity and expansion state stay stable, then reloads the outline preserving expansion.
+        /// identity and expansion state stay stable, then reloads the outline preserving expansion. A reload
+        /// would detach an open rename editor, so a rename in flight defers it to `flushDeferredRenameUpdates`.
         func rebuildAndReload() {
             guard let outline = outlineView else { return }
+            guard !renameController.isRenameInFlight else {
+                deferredRebuild = true
+                return
+            }
+            deferredRebuild = false
             // a mode or layout switch moves the selected row, possibly under a collapsed workspace, while the
             // selected id stays the same: forget the last reveal so the next `syncSelection` reveals it again.
             // Only a switch does this. Any other rebuild must leave a deliberate fold alone.
@@ -535,6 +573,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             lastFlaggedLayout = flaggedLayout
             lastShape = currentShape()
             snapshotRowContent()
+            (outline as? SidebarOutlineView)?.reservesDisclosureColumn = rendersWorkspaceRows && !chevronsHidden
+            applySidebarContentInset(outline.enclosingScrollView)
 
             // flat flagged list: non-expandable session rows; no workspace nodes, so they leave the cache.
             if !rendersWorkspaceRows {
@@ -710,6 +750,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Workspace rows are never auto-selected.
         func syncSelection() {
             guard let outline = outlineView else { return }
+            guard !renameController.isRenameInFlight else { return }
             applyingSelection = true
             defer { applyingSelection = false }
             guard let selectedID = store.selectedSessionID, let node = nodeCache[selectedID], node.kind == .session else {
@@ -803,7 +844,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// cover owns the keyboard and hides the pane, so focusing a pane would starve the overlay/scratch
         /// program of input and send keystrokes to a surface the user can't see.
         func focusActiveTerminal(attempt: Int = 0) {
-            if renameController.isEditing { return }
+            if renameController.isRenameInFlight { return }
             let window = outlineView?.window
             if let window, window.firstResponder is NSText { return }
             if let session = store.activeSession, HtmlOverlayRegistry.shared.focusCover(of: session) { return }
@@ -853,8 +894,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         lazy var flaggedPageSessionIcon = Self.rowIcon("list.bullet.rectangle.fill")
         lazy var remoteSessionIcon = Self.rowIcon("cloud")
         lazy var remoteSplitSessionIcon = Self.rowIcon("cloud", weight: .bold)
+        lazy var flaggedRemoteSessionIcon = Self.rowIcon("cloud.fill")
+        lazy var flaggedRemoteSplitSessionIcon = Self.rowIcon("cloud.fill", weight: .bold)
         lazy var remoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash")
         lazy var remoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash", weight: .bold)
+        lazy var flaggedRemoteDisconnectedSessionIcon = Self.rowIcon("icloud.slash.fill")
+        lazy var flaggedRemoteDisconnectedSplitSessionIcon = Self.rowIcon("icloud.slash.fill", weight: .bold)
 
         private static func rowIcon(_ symbolName: String, weight: NSFont.Weight = .regular) -> NSImage? {
             let config = NSImage.SymbolConfiguration(pointSize: 13, weight: weight)
@@ -896,77 +941,6 @@ final class SidebarScrollView: NSScrollView {
 // a first click into a background window only activates it, so the link's click-time check reads that window.
 private final class EmptyStateLinkButton: NSButton {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { false }
-}
-
-/// `NSOutlineView` subclass routing the per-row context menu and double-click rename to the coordinator.
-final class SidebarOutlineView: NSOutlineView {
-    // never become first responder: focus lives in the terminal, and a mouse click still selects the row
-    // (selection is independent of first responder). Otherwise the responder bounce (terminal → outline →
-    // terminal, via mouseDown's focusActiveTerminal) makes AppKit re-set `isEmphasized` on the rows — an
-    // extra repaint that flicks the selection pill on every click. Programmatic selection never bounces.
-    override var acceptsFirstResponder: Bool { false }
-
-    // expansion would widen the column per nesting level and push every row's trailing glyph and badge past the
-    // sidebar edge; the column's autoresizing mask already fits it to the sidebar.
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        autoresizesOutlineColumn = false
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) { fatalError("init(coder:) is not supported") }
-
-    /// Where a row's content belongs: the level-0 disclosure triangle ends at 14pt, and the cell's own 2pt
-    /// icon inset supplies the gap after it.
-    private static let contentX: CGFloat = 14
-
-    /// macOS 27 reserves a wider leading strip than the triangle occupies — a level-0 cell starts at 26
-    /// against a triangle ending at 14 — leaving the row icon stranded mid-gap. Trim the surplus, computed
-    /// from the frame rather than fixed so a release that lays out at `contentX` keeps its own geometry,
-    /// and gated on the version because the earlier layout is already tight and cannot be tested here.
-    /// `frameOfOutlineCell` stays untouched: the triangle keeps its place, and `handleSingleClick` reads
-    /// that frame to keep a row click from double-toggling expansion.
-    override func frameOfCell(atColumn column: Int, row: Int) -> NSRect {
-        var frame = super.frameOfCell(atColumn: column, row: row)
-        guard #available(macOS 27.0, *), !frame.isEmpty, tableColumns.indices.contains(column),
-              tableColumns[column] === outlineTableColumn else { return frame }
-        let level = level(forRow: row)
-        guard level >= 0 else { return frame }
-        let trim = max(0, frame.minX - (Self.contentX + CGFloat(level) * indentationPerLevel))
-        frame.origin.x -= trim
-        frame.size.width += trim
-        return frame
-    }
-
-    override func draggingExited(_ sender: NSDraggingInfo?) {
-        super.draggingExited(sender)
-        (delegate as? WorkspaceSidebar.Coordinator)?.finishDraggingSequence()
-    }
-
-    override func menu(for event: NSEvent) -> NSMenu? {
-        let point = convert(event.locationInWindow, from: nil)
-        let row = self.row(at: point)
-        // standard Mac list behavior: keep a multi-selection when right-clicking one of its selected rows,
-        // narrow to the clicked session when right-clicking outside it.
-        if row >= 0, let node = item(atRow: row) as? SidebarNode, node.kind == .session,
-           !selectedRowIndexes.contains(row) {
-            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        }
-        return (delegate as? WorkspaceSidebar.Coordinator)?.menu(forRow: row)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        // NSTableView treats Control-click as a plain click and ignores a left-button event handed to
-        // rightMouseDown, so the secondary-click convention has to open the menu here.
-        if event.modifierFlags.contains(.control) {
-            if let menu = menu(for: event) { NSMenu.popUpContextMenu(menu, with: event, for: self) }
-        } else {
-            super.mouseDown(with: event)
-        }
-        // after the click is handled, hand keyboard focus back to the terminal; row selection persists
-        // (model state), only first responder moves. Skipped mid-rename by the coordinator.
-        (delegate as? WorkspaceSidebar.Coordinator)?.focusActiveTerminal()
-    }
 }
 
 extension Notification.Name {

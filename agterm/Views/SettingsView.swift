@@ -197,7 +197,7 @@ private struct GeneralSettingsView: View {
                 set: { model.setFlaggedViewLayout($0) })
     }
 
-    /// Default ON; turning it off stores false and leaves only the disclosure triangle as the hit target.
+    /// workspaceRowClickExpands defaults on; off stores false and leaves the triangle and row icon as hit targets.
     private var workspaceRowClickExpands: Binding<Bool> {
         Binding(get: { model.settings.workspaceRowClickExpands ?? true },
                 set: { model.setWorkspaceRowClickExpands($0 ? nil : false) })
@@ -254,13 +254,23 @@ private struct InterfaceSettingsView: View {
         Form {
             twoColumnSection("Title Bar", elements: InterfaceElement.settingsOrder(in: .titleBar), fill: { Spacer() },
                              trailing: { EmptyView() })
-            // the multi-window toggle rides the Sidebar section: the tab is full at 540x710, and its own
-            // section header would push the quick-terminal Size off the bottom.
-            // the info-line picker takes the grid's empty half: a row of its own would push the Size off the bottom
-            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { sessionInfoPicker },
+            // the multi-window toggle and the info-line picker share the Sidebar section's last row: the tab is
+            // full at 540x710, and a row or section header of their own would push the quick-terminal Size off.
+            twoColumnSection("Sidebar", elements: InterfaceElement.settingsOrder(in: .sidebar), fill: { EmptyView() },
                              trailing: {
-                Toggle("Show sidebar only in the active window", isOn: autoHideSidebarInactiveWindows)
+                HStack(spacing: 16) {
+                    sessionInfoPicker.frame(maxWidth: .infinity)
+                    Divider()
+                    Toggle(isOn: autoHideSidebarInactiveWindows) {
+                        HStack(spacing: 6) {
+                            Color.clear.frame(width: 18).accessibilityHidden(true)
+                            Text("Active window only")
+                        }
+                    }
+                    .accessibilityLabel("Active window only")
                     .accessibilityIdentifier("settings-auto-hide-inactive-sidebars")
+                    .frame(maxWidth: .infinity)
+                }
             })
             Section("Quick Terminal") {
                 Picker("Size", selection: quickTerminalSizePercent) {
@@ -428,7 +438,7 @@ private struct NotificationsSettingsView: View {
 private struct AgentStatusSettingsView: View {
     /// Gap between a glyph row's color well and its shape picker.
     private static let controlSpacing: CGFloat = 8
-    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the six
+    /// Column width every shape picker reserves: a menu button sizes to the glyph it shows and the
     /// silhouettes differ by a few points, so without a fixed column the color wells jog between rows. Snug
     /// enough to read as spacing, not a hole, with room above the widest silhouette's button.
     private static let shapePickerWidth: CGFloat = 80
@@ -562,7 +572,7 @@ private struct AgentStatusSettingsView: View {
     /// with the status's current color. NON-template — a menu recolors a template symbol to its own text color
     /// and would wash out the previewed tint.
     private static func shapeImage(_ shape: StatusShape, tint: NSColor) -> NSImage {
-        let config = NSImage.SymbolConfiguration(pointSize: StatusIconView.glyphPointSize, weight: .regular)
+        let config = NSImage.SymbolConfiguration(pointSize: StatusIconView.glyphPointSize, weight: GhosttyApp.symbolWeight(shape))
             .applying(NSImage.SymbolConfiguration(paletteColors: [tint]))
         guard let image = NSImage(systemSymbolName: shape.symbolName, accessibilityDescription: shape.displayName)?
             .withSymbolConfiguration(config) else {
@@ -652,7 +662,7 @@ private struct KeyMappingSettingsView: View {
     var body: some View {
         Form {
             Section("Keyboard Layout") {
-                Picker("Lock in terminals", selection: terminalInputSource) {
+                Picker("Lock in agterm", selection: terminalInputSource) {
                     Text("Off").tag(String?.none)
                     ForEach(inputSources, id: \.id) { source in
                         Text(source.name).tag(String?.some(source.id))

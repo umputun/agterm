@@ -63,6 +63,19 @@ extension ControlServer {
         return ControlResponse(ok: true, result: ControlResult(text: want.rawValue))
     }
 
+    /// Set every window's sidebar row spacing. App-wide like `setFlaggedViewLayout`, through the same
+    /// `SettingsModel` setter the Settings picker uses; echoes the resulting density.
+    func setSidebarDensity(_ mode: ControlSidebarDensityMode) -> ControlResponse {
+        let want: SidebarDensity
+        switch mode {
+        case .standard: want = .standard
+        case .compact: want = .compact
+        case .toggle: want = settingsModel.settings.effectiveSidebarDensity == .compact ? .standard : .compact
+        }
+        settingsModel.setSidebarDensity(want)
+        return ControlResponse(ok: true, result: ControlResult(text: want.rawValue))
+    }
+
     /// Expand every workspace in a window's sidebar tree; `--window` picks the OPEN target, default frontmost.
     /// Idempotent, and a graceful no-op under the flat flagged list (no workspace rows); a closed or absent
     /// window errors.

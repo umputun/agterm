@@ -218,6 +218,7 @@ struct WindowContentView: View {
                     restoreFocusAfterPick()
                 }
             }
+            if old, !new { HtmlOverlayRegistry.shared.retryPageCloses(in: store) }
         }
         // `GhosttyApp` isn't observable, so re-read every mirror when a settings appearance change posts.
         .onReceive(NotificationCenter.default.publisher(for: .agtermAppearanceChanged)) { _ in
@@ -418,6 +419,27 @@ struct WindowContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // the overlay renders in-deck inside `sessionDetail` (`overlayPanel`), not at this level.
                 .overlay(alignment: .topTrailing) { searchBarLayer }
+                // over the terminals, not above them: a row would resize every pane on each connection change
+                .overlay(alignment: .top) { remoteConnectionLayer }
+        }
+    }
+
+    @ViewBuilder private var remoteConnectionLayer: some View {
+        if let state = store.catalogState, let host = library.windows.first(where: { $0.id == windowID })?.source?.host {
+            VStack(spacing: 6) {
+                if let notice = state.windowNotice(host: host) {
+                    RemoteConnectionStrip(notice: notice, symbol: state.isRefused ? "exclamationmark.icloud" : "icloud.slash",
+                                          chromeText: chromeText, terminalColor: terminalColor)
+                }
+                if let remote = store.remoteActions, remote.unknownCount > 0 {
+                    RemoteConnectionStrip(notice: "\(remote.unknownCount) action\(remote.unknownCount == 1 ? "" : "s") on \(host) "
+                                              + "with an unknown outcome",
+                                          symbol: "questionmark.circle", action: ("Dismiss", { remote.dismissUnknown() }),
+                                          identifier: "remote-unknown", chromeText: chromeText, terminalColor: terminalColor)
+                }
+            }
+            .padding(.top, 8)
+            .padding(.horizontal, 8)
         }
     }
 
@@ -708,6 +730,7 @@ struct WindowContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
+                .disabled(store.serverActionsBlocked)
                 .toolTip(helpHint("New Workspace", .newWorkspace), isShown: tipsShown)
                 .accessibilityLabel("New Workspace")
             }
@@ -716,6 +739,7 @@ struct WindowContentView: View {
                 Menu {
                     Button("New Session") { actions.newSession() }
                     Button("Open Directory…") { actions.openDirectory() }
+                        .disabled(store.isRemoteWindow)
                 } label: {
                     Image(systemName: InterfaceElement.newSession.symbolName!)
                         .frame(width: 24, height: 22)
@@ -726,6 +750,7 @@ struct WindowContentView: View {
                 .tint(chromeText)
                 .menuIndicator(.hidden)
                 .fixedSize()
+                .disabled(store.serverActionsBlocked)
                 .toolTip(helpHint("New Session", .newSession), isShown: tipsShown)
                 .accessibilityLabel("Add session")
                 .accessibilityIdentifier("add-session")

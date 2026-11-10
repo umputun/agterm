@@ -2,7 +2,7 @@
 
 Close the sessions you are done with for now and bring any of them back later, each with its own Claude Code conversation.
 
-From [discussion #737](https://github.com/umputun/agterm/discussions/737).
+Author: [@ne0r0mancer](https://github.com/ne0r0mancer), from [discussion #737](https://github.com/umputun/agterm/discussions/737).
 
 ## What it does
 

@@ -2,6 +2,8 @@
 
 When the agent says its task is done, a dialog over the session offers Clear, Close session, or Continue.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 The [session-context-nudge](../session-context-nudge/) recipe has the agent keep the title-bar line saying what the session is working on, and clear that line once the work is finished. That clear is the agent declaring the task over, which is the moment you usually start a fresh conversation or close the tab. This recipe turns it into a question.

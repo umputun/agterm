@@ -2,7 +2,7 @@
 
 Show one project's workspaces in the sidebar and hide the rest, without closing anything.
 
-Ported from [discussion #293](https://github.com/umputun/agterm/discussions/293).
+Author: [@umputun](https://github.com/umputun), ported from [discussion #293](https://github.com/umputun/agterm/discussions/293).
 
 ## What it does
 

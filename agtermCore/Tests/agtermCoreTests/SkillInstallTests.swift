@@ -167,4 +167,52 @@ struct SkillInstallTests {
         let contents = "---\ndescription: someone else's agterm\n---\nbody"
         #expect(SkillInstall.mayOverwrite(directoryExists: true, existingSKILL: contents) == false)
     }
+
+    private func makeHome() throws -> URL {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("skill-install-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        return home
+    }
+
+    @Test func installCopiesIntoEveryPresentAgent() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        for base in [".claude", ".codex"] {
+            try FileManager.default.createDirectory(at: home.appendingPathComponent(base), withIntermediateDirectories: true)
+        }
+        let source = repository.appendingPathComponent("plugins/agterm/skills/agterm")
+
+        let report = try SkillInstall.install(source: source, home: home)
+
+        #expect(report.installed.map(\.agent) == ["Claude Code", "Codex"])
+        #expect(report.skipped.isEmpty)
+        #expect(report.freshSkillsDir)
+        for target in report.installed {
+            #expect(FileManager.default.fileExists(atPath: target.skillDirectory + "/SKILL.md"))
+        }
+        #expect(try SkillInstall.install(source: source, home: home).freshSkillsDir == false)
+    }
+
+    @Test func installLeavesAForeignSkillAlone() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let foreign = home.appendingPathComponent(".claude/skills/agterm")
+        try FileManager.default.createDirectory(at: foreign, withIntermediateDirectories: true)
+        try "mine".write(to: foreign.appendingPathComponent("SKILL.md"), atomically: true, encoding: .utf8)
+
+        let report = try SkillInstall.install(source: repository.appendingPathComponent("plugins/agterm/skills/agterm"), home: home)
+
+        #expect(report.installed.isEmpty)
+        #expect(report.skipped.map(\.agent) == ["Claude Code"])
+        #expect(try String(contentsOf: foreign.appendingPathComponent("SKILL.md"), encoding: .utf8) == "mine")
+    }
+
+    @Test func installRefusesAMissingSource() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        #expect(throws: SkillInstall.MissingSource.self) {
+            try SkillInstall.install(source: home.appendingPathComponent("absent"), home: home)
+        }
+    }
 }

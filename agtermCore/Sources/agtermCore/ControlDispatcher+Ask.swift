@@ -111,12 +111,16 @@ extension ControlDispatcher {
         case .pane(let parsed): pane = parsed
         case .rejected(let response): return response
         }
-        let ask = PendingAsk(
+        if let timeout = args.timeout, !ControlInteraction.isValidTimeout(timeout) {
+            return ControlResponse(ok: false, error: ControlInteraction.timeoutError)
+        }
+        var ask = PendingAsk(
             id: UUID().uuidString, title: title, message: args.message,
             buttons: buttons.map { ControlAskButton(id: $0.id, label: $0.label, hotkey: $0.hotkey?.lowercased()) },
             defaultID: defaultButton, destructiveID: args.destructiveButton, style: style, align: align, width: args.width,
             form: form, cancelID: cancelButton
         )
+        ask.deadline = args.timeout.map { Date().addingTimeInterval($0) }
         return actions.openAsk(ask, target: request.target, window: args.window,
                                placement: ControlAskPlacement(pane: pane, paneID: args.paneID),
                                follow: args.follow == true)

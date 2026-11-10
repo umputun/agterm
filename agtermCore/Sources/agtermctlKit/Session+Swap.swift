@@ -7,9 +7,10 @@ extension Session {
             abstract: "Exchange a split session's two panes, including their live roles and state.")
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionSwap, target: target.target, args: options.withWindow())
+            operation.stamp(ControlRequest(cmd: .sessionSwap, target: target.target, args: options.withWindow()))
         }
     }
 }

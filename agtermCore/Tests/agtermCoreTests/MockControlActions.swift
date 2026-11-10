@@ -33,7 +33,9 @@ final class MockControlActions: ControlActions {
         case sessionExpansion(target: String?, window: String?, expanded: Bool)
         case companionNew(target: String?, options: CompanionOptions, window: String?)
         case companionPage(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
+        case pageSession(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
         case companionDuplicate(target: String?, window: String?, select: Bool)
+        case companionConvert(target: String?, window: String?)
         case companionPageAttach(target: String?, window: String?)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
@@ -86,6 +88,7 @@ final class MockControlActions: ControlActions {
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
         case flaggedViewLayout(ControlFlaggedLayoutMode)
+        case sidebarDensity(ControlSidebarDensityMode)
         case expand(window: String?)
         case collapse(window: String?)
         case sidebarWidth(points: Double, window: String?)
@@ -100,6 +103,10 @@ final class MockControlActions: ControlActions {
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayVisibility(target: String?, window: String?, pane: OverlayPane?, mode: OverlayVisibilityMode)
+        case overlayFollow(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
+        case overlayWrap(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
+        case overlaySearch(target: String?, window: String?, pane: OverlayPane?, request: TextSearchRequest)
+        case overlayChanges(target: String?, window: String?, pane: OverlayPane?, forward: Bool)
         case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
@@ -126,6 +133,7 @@ final class MockControlActions: ControlActions {
         case windowZoom(target: String?)
         case windowFullscreen(target: String?)
         case windowMinimize(target: String?, mode: ControlToggleMode)
+        case windowRemoteOpen(host: String)
         case pickOpen(PendingPick, window: String?, follow: Bool)
         case pickResult(target: String, window: String?)
         case pickCancel(target: String, window: String?)
@@ -155,6 +163,7 @@ final class MockControlActions: ControlActions {
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextFlaggedViewLayoutResponse = ControlResponse(ok: true)
+    var nextSidebarDensityResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
     var nextCollapseResponse = ControlResponse(ok: true)
     var nextSidebarWidthResponse = ControlResponse(ok: true)
@@ -212,6 +221,7 @@ final class MockControlActions: ControlActions {
     var nextWindowZoomResponse = ControlResponse(ok: true)
     var nextWindowFullscreenResponse = ControlResponse(ok: true)
     var nextWindowMinimizeResponse = ControlResponse(ok: true)
+    var nextWindowRemoteOpenResponse = ControlResponse(ok: true)
     var nextPickOpenResponse = ControlResponse(ok: true)
     var nextPickResultResponse = ControlResponse(ok: true)
     var nextPickCancelResponse = ControlResponse(ok: true)
@@ -343,8 +353,18 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
+    func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.companionConvert(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         calls.append(.companionPage(target: target, window: window, options: options))
+        return ControlResponse(ok: true)
+    }
+
+    func createPageSession(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        calls.append(.pageSession(target: target, window: window, options: options))
         return ControlResponse(ok: true)
     }
 
@@ -638,6 +658,11 @@ final class MockControlActions: ControlActions {
         return nextFlaggedViewLayoutResponse
     }
 
+    func setSidebarDensity(_ mode: ControlSidebarDensityMode) -> ControlResponse {
+        calls.append(.sidebarDensity(mode))
+        return nextSidebarDensityResponse
+    }
+
     func expandSidebar(window: String?) -> ControlResponse {
         calls.append(.expand(window: window))
         return nextExpandResponse
@@ -721,6 +746,30 @@ final class MockControlActions: ControlActions {
                                      mode: OverlayVisibilityMode) -> ControlResponse {
         calls.append(.overlayVisibility(target: target, window: window, pane: pane, mode: mode))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "hidden"))
+    }
+
+    func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayFollow(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "following"))
+    }
+
+    func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
+                               mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayWrap(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "wrapped"))
+    }
+
+    func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                              request: TextSearchRequest) async -> ControlResponse {
+        calls.append(.overlaySearch(target: target, window: window, pane: pane, request: request))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "1 of 2"))
+    }
+
+    func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
+                                   forward: Bool) async -> ControlResponse {
+        calls.append(.overlayChanges(target: target, window: window, pane: pane, forward: forward))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "3 of 7"))
     }
 
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
@@ -854,6 +903,11 @@ final class MockControlActions: ControlActions {
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse {
         calls.append(.windowMinimize(target: target, mode: mode))
         return nextWindowMinimizeResponse
+    }
+
+    func windowRemoteOpen(host: String) async -> ControlResponse {
+        calls.append(.windowRemoteOpen(host: host))
+        return nextWindowRemoteOpenResponse
     }
 
     func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse {

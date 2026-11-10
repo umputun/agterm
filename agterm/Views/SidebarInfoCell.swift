@@ -2,11 +2,9 @@ import agtermCore
 import AppKit
 
 /// SidebarInfoMetrics sizes a session row carrying an info line: the plain row on top, one smaller line under
-/// it. The line is lifted into the plain row's bottom padding so it reads as part of the row.
+/// it. The line lifts into the plain row's bottom padding by the density's `infoLineSpacing` and is padded by
+/// the same amount under it, so the row grows by exactly one line.
 enum SidebarInfoMetrics {
-    static let lift: CGFloat = 6
-    static let bottomPadding: CGFloat = 6
-
     static func font(base: Double) -> NSFont { .systemFont(ofSize: max(9, base - 1.5)) }
 
     static func lineHeight(base: Double) -> CGFloat {
@@ -14,8 +12,8 @@ enum SidebarInfoMetrics {
         return ceil(font.ascender - font.descender + font.leading)
     }
 
-    static func rowHeight(base: Double) -> CGFloat {
-        AppSettings.sidebarRowHeight(fontSize: base) + lineHeight(base: base) - lift + bottomPadding
+    static func rowHeight(base: Double, density: SidebarDensity) -> CGFloat {
+        AppSettings.sidebarRowHeight(fontSize: base, density: density) + lineHeight(base: base)
     }
 }
 
@@ -25,14 +23,17 @@ enum SidebarInfoMetrics {
 final class SidebarInfoCellView: SidebarCellView {
     let infoField = NSTextField(labelWithString: "")
     var titleBandHeight: NSLayoutConstraint?
+    var infoTop: NSLayoutConstraint?
     private var spans: [SessionInfoSpan] = []
     private var base = AppSettings.defaultSidebarFontSize
     private var selected = false
 
-    func apply(spans: [SessionInfoSpan], base: Double) {
+    /// apply also resets both layout constants, since a reused cell keeps the density it was built with.
+    func apply(spans: [SessionInfoSpan], base: Double, density: SidebarDensity) {
         self.spans = spans
         self.base = base
-        titleBandHeight?.constant = AppSettings.sidebarRowHeight(fontSize: base)
+        titleBandHeight?.constant = AppSettings.sidebarRowHeight(fontSize: base, density: density)
+        infoTop?.constant = -density.infoLineSpacing
         render()
     }
 

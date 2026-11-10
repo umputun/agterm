@@ -12,13 +12,15 @@ extension AppStore {
     /// disk. `setRestoreCommand` is the one today: a "cleared" ack that never reached disk would leave the
     /// old shell line armed on every launch. `save()` is this with the result discarded, so they can't drift.
     @discardableResult
-    func saveChecked() -> Bool {
+    public func saveChecked() -> Bool {
         saveDebouncer.cancel()
         do {
             try persistence.save(snapshot())
+            snapshotUnsaved = false
             snapshotDidSave?()
             return true
         } catch {
+            snapshotUnsaved = true
             log("save failed: \(error)")
             return false
         }

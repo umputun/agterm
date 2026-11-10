@@ -33,17 +33,33 @@ extension AppActions {
     /// attachRemote asks which configured machine to attach from, in the window's picker; a single entry
     /// needs no question.
     func attachRemote() {
+        guard let windowID = library.activeWindowID else { return }
+        pickRemote(prompt: "Attach from which Mac?", in: windowID) { [weak self] in self?.attachRemote($0, in: windowID) }
+    }
+
+    /// openRemoteWindow asks which configured machine's agterm-server to show, then opens its window or raises
+    /// the one already showing it.
+    func openRemoteWindow() {
+        guard let windowID = library.activeWindowID else { return }
+        pickRemote(prompt: "Open a window for which server?", in: windowID) { [weak self] host in
+            guard let self, let openWindow else { return }
+            openWindow(library.newRemoteWindow(host: host).id)
+        }
+    }
+
+    /// pickRemote asks for one `remotes.conf` entry in `windowID`'s picker, skipping the question for one entry.
+    private func pickRemote(prompt: String, in windowID: WindowInfo.ID, then use: @escaping (String) -> Void) {
         let remotes = configuredRemotes
-        guard let windowID = library.activeWindowID, uiActionsEnabled(for: windowID), let first = remotes.first,
+        guard uiActionsEnabled(for: windowID), let first = remotes.first,
               let controller = PickRegistry.shared.controller(for: windowID) else { return }
-        guard remotes.count > 1 else { return attachRemote(first.destination, in: windowID) }
+        guard remotes.count > 1 else { return use(first.destination) }
         let items = remotes.map {
             ControlPickItem(id: $0.destination, label: $0.label, subtitle: $0.label == $0.destination ? nil : $0.destination)
         }
         Task {
-            let pick = PendingPick(id: UUID().uuidString, items: items, prompt: "Attach from which Mac?")
+            let pick = PendingPick(id: UUID().uuidString, items: items, prompt: prompt)
             guard let picked = await controller.pick(pick), picked.result == .picked, let destination = picked.id else { return }
-            attachRemote(destination, in: windowID)
+            use(destination)
         }
     }
 
@@ -58,7 +74,7 @@ extension AppActions {
             hud.progress("listing sessions on \(destination)…")
             let listing = await remoteAttacher.remoteTree(host: destination)
             // a page companion attaches only under its parent's row, which the picker has no place for
-            guard listing.ok, let sessions = listing.result?.remote?.sessions.filter({ $0.content == nil }) else {
+            guard listing.ok, let sessions = listing.result?.remote?.sessions.filter({ $0.content == nil || $0.parent == nil }) else {
                 hud.fail("\(destination): \(listing.error ?? "no answer")")
                 return
             }

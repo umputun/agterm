@@ -8,11 +8,12 @@ public enum HtmlSource: Equatable, Sendable {
     case file(path: String, grantRoot: String?)
     /// url is a web page, pinned to its origin by the navigation policy.
     case url(URL)
-    /// replica is a file page another Mac opened, shown here from `agterm-page://<page id>/`: `path` is its
-    /// path on that Mac, whose own grant decides what else may be fetched.
-    case replica(path: String)
+    /// replica is a page another Mac opened, shown here from bytes fetched over its page channel: `path` is its
+    /// path on that Mac, whose own rules decide what else may be fetched, and `content` what kind of page it is.
+    /// It is never a path on this Mac, so nothing reads it from the local disk.
+    case replica(path: String, content: ReplicaContent)
     /// image is a picture shown on a page of its own, embedded in the page's HTML so the page gets no file
-    /// grant, theme or bridge. It never travels to another Mac.
+    /// grant, theme or bridge.
     case image(path: String)
     /// markdown is a markdown file the app renders with its pictures embedded: no file grant or bridge,
     /// but themed.
@@ -20,6 +21,33 @@ public enum HtmlSource: Equatable, Sendable {
     /// text is a source, config or log file shown read-only, scrolled to `line` when one is set: no file
     /// grant, bridge, link or navigation, but themed.
     case text(path: String, line: Int?)
+    /// document is an HTML file a terminal click named, so untrusted: the app reads its text and loads it with no
+    /// file grant or bridge, themed like a file page.
+    case document(path: String)
+    /// unreadable is a saved page row whose descriptor this build cannot use: it loads nothing and shows `reason`
+    /// as its failed state, so the row stays a page instead of restoring as a terminal.
+    case unreadable(reason: String)
+
+    /// kind is what the page shows, a replica counted as the kind its origin opened.
+    public var kind: HtmlPageKind {
+        switch self {
+        case .file: return .file
+        case .url: return .url
+        case .image: return .image
+        case .markdown: return .markdown
+        case .text: return .text
+        case .document: return .document
+        case .unreadable: return .unreadable
+        case .replica(_, let content):
+            switch content {
+            case .html: return .file
+            case .image: return .image
+            case .markdown: return .markdown
+            case .text: return .text
+            case .document: return .document
+            }
+        }
+    }
 
     /// imagePath is the picture an `.image` page shows, nil for every other source.
     public var imagePath: String? {
@@ -56,6 +84,21 @@ public enum HtmlSource: Equatable, Sendable {
     }
 }
 
+/// ReplicaContent is the kind of page a replica's origin opened: an HTML file it loads as is, or a picture,
+/// markdown, text or clicked HTML file this Mac builds a page from. An image carries its oriented pixel size for sizing.
+public enum ReplicaContent: Equatable, Sendable {
+    case html
+    case image(width: Int, height: Int)
+    case markdown
+    case text(line: Int?)
+    case document
+}
+
+/// HtmlPageKind is what a page shows, independent of which Mac read its file.
+public enum HtmlPageKind: Equatable, Sendable {
+    case file, url, image, markdown, text, document, unreadable
+}
+
 /// HtmlOrigin is a web page's origin: lowercase scheme and host plus the effective port, so an omitted
 /// port equals the scheme's default.
 struct HtmlOrigin: Equatable {
@@ -75,6 +118,70 @@ struct HtmlOrigin: Equatable {
     var display: String {
         let name = host.contains(":") ? "[\(host)]" : host
         return port == (scheme == "https" ? 443 : 80) ? "\(scheme)://\(name)" : "\(scheme)://\(name):\(port)"
+    }
+}
+
+/// TextLog is a text page's request to show only a log's last `tail` lines, following its end when `follow` is set.
+public struct TextLog: Equatable, Sendable {
+    public let tail: Int
+    public let follow: Bool
+
+    public init(tail: Int, follow: Bool) {
+        self.tail = tail
+        self.follow = follow
+    }
+}
+
+/// TextLogReport is what the app last read for a log page: the lines shown, a clipped first line, a file that is
+/// missing (`waiting`) or turned binary (`unreadable`, the last good text still shown).
+public struct TextLogReport: Equatable, Sendable {
+    public var lines = 0
+    public var clipped = false
+    public var waiting = false
+    public var unreadable = false
+
+    public init(lines: Int = 0, clipped: Bool = false, waiting: Bool = false, unreadable: Bool = false) {
+        self.lines = lines
+        self.clipped = clipped
+        self.waiting = waiting
+        self.unreadable = unreadable
+    }
+}
+
+/// TextLogState is a log page's live state: whether it follows the file, and the app's last report.
+public struct TextLogState: Equatable, Sendable {
+    public var following: Bool
+    public var report: TextLogReport
+
+    public init(following: Bool, report: TextLogReport = TextLogReport()) {
+        self.following = following
+        self.report = report
+    }
+}
+
+/// TextChanges is a diff page's count of changes, a change being one run of removed and added lines, and the one it
+/// last stepped to, from 1 and 0 before any step.
+public struct TextChanges: Equatable, Sendable {
+    public let count: Int
+    public let current: Int
+
+    public init(count: Int, current: Int) {
+        self.count = count
+        self.current = current
+    }
+}
+
+/// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
+/// with no match.
+public struct TextSearch: Equatable, Sendable {
+    public let query: String
+    public var matches: Int
+    public var current: Int
+
+    public init(query: String, matches: Int = 0, current: Int = 0) {
+        self.query = query
+        self.matches = matches
+        self.current = current
     }
 }
 
@@ -112,7 +219,7 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let id: UUID
     public let source: HtmlSource
     /// navigation adds history, reload, browser and source-sharing buttons to the identity strip.
-    public let navigation: Bool
+    public internal(set) var navigation: Bool
     /// javascript lets the page run its own scripts; agterm's theme script runs either way.
     public let javascript: Bool
     /// chromeless drops the identity strip: a file page, or a URL page on a loopback host whose frames stay on
@@ -122,10 +229,34 @@ public struct HtmlOverlay: Equatable, Sendable {
     public let persistent: Bool
     /// browse lets a URL page's main frame leave its original origin for any HTTP(S) site.
     public let browse: Bool
+    /// clicked marks a page a terminal click opened, which `AppStore.releaseHiddenClickedPage` lets a later click
+    /// replace. Local: presentation frames do not carry it.
+    public let clicked: Bool
     /// replicaOf is the page id on the Mac that opened the page, set only on a page shown here for it.
     public let replicaOf: UUID?
+    /// markdownLinks is what a markdown page may follow links within, set only with navigation.
+    public internal(set) var markdownLinks: MarkdownLinkGrant?
+    /// textLog makes a text page a log page; logState is that page's live state, set exactly when textLog is.
+    public let textLog: TextLog?
+    public var logState: TextLogState?
+    /// textSearch is a text page's search, nil with none; searchRevision changes with every query set or closed, and a
+    /// page report naming another revision is dropped.
+    public internal(set) var textSearch: TextSearch?
+    public internal(set) var searchRevision = 0
+    /// textChanges is a diff page's last report on its changes, nil until it reports and on any other page.
+    public internal(set) var textChanges: TextChanges?
+    /// textWrap is whether a text page wraps long lines; a replica keeps its own in the page.
+    public internal(set) var textWrap = false
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
+    /// loadFailurePinned keeps a failure the page cannot load past, such as its port forward ending, over every
+    /// later load report and reload.
+    public internal(set) var loadFailurePinned = false
+    /// contentShown is set by the first finished load and kept through reloads and navigation, which keep the shown
+    /// document on screen while they load; `current` cannot tell this, a provisional report setting it early.
+    public internal(set) var contentShown = false
+    /// awaitsFirstContent is a replica waiting for its first successful load.
+    public var awaitsFirstContent: Bool { replicaOf != nil && loadState == .loading && !contentShown }
     /// current is what the web view shows now, as the adapter last reported it; nil until the first load
     /// finishes and after a reload of the original file.
     public var current: HtmlPageInfo?
@@ -134,12 +265,20 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
+    /// init drops navigation from a markdown page without `markdownLinks`, so its strip never offers Back and
+    /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
-                persistent: Bool = false, browse: Bool = false, id: UUID = UUID(), replicaOf: UUID? = nil) {
+                persistent: Bool = false, browse: Bool = false, clicked: Bool = false, id: UUID = UUID(),
+                replicaOf: UUID? = nil, textLog: TextLog? = nil, markdownLinks: MarkdownLinkGrant? = nil) {
         self.id = id
+        self.textLog = textLog
+        logState = textLog.map { TextLogState(following: $0.follow) }
+        self.clicked = clicked
         self.replicaOf = replicaOf
         self.source = source
-        self.navigation = navigation
+        let links = navigation ? markdownLinks : nil
+        self.markdownLinks = links
+        self.navigation = navigation && (source.kind != .markdown || links != nil)
         self.javascript = javascript
         self.chromeless = chromeless
         self.persistent = persistent
@@ -176,6 +315,15 @@ extension HtmlSource {
 }
 
 extension HtmlOverlay {
+    /// withoutLinks is this page with no link grant, as a presenter that cannot follow links is handed it: a
+    /// markdown page loses its Back and Forward with the grant.
+    func withoutLinks() -> HtmlOverlay {
+        var page = self
+        page.markdownLinks = nil
+        page.navigation = navigation && source.kind != .markdown
+        return page
+    }
+
     /// identity names what the panel shows from what the app loaded, never from the page's title, which the
     /// page writes and could dress as a prompt: the file shown, the origin a URL page is confined to, or
     /// for a browsing page the origin of the document it shows now. A browsing page on a document with no
@@ -183,8 +331,12 @@ extension HtmlOverlay {
     public var identity: String {
         switch source {
         case .file(let path, _): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .replica(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
-        case .image(let path), .markdown(let path), .text(let path, _): return URL(fileURLWithPath: path).lastPathComponent
+        case .replica(let path, .html), .replica(let path, .markdown): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .replica(let path, _): return URL(fileURLWithPath: path).lastPathComponent
+        case .markdown(let path): return URL(fileURLWithPath: current?.page ?? path).lastPathComponent
+        case .image(let path), .text(let path, _), .document(let path):
+            return URL(fileURLWithPath: path).lastPathComponent
+        case .unreadable: return "unreadable page"
         case .url(let url):
             let shown = browse ? current.map { URL(string: $0.page).flatMap(HtmlOrigin.init)?.display ?? $0.page } : nil
             return shown ?? HtmlOrigin(url)?.display ?? url.absoluteString
@@ -297,7 +449,7 @@ public enum HtmlNavigationPolicy {
     public static func decide(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> HtmlNavigationDecision {
         // ahead of the shared exits: a text page shows only the document the app built, so not even a
         // user-activated web link or another about: address leaves it
-        if case .text = overlay.source {
+        if overlay.source.kind == .text {
             return action.target == .mainFrame && action.url.absoluteString == "about:blank" ? .allow : .cancel
         }
         let scheme = action.url.scheme?.lowercased()
@@ -309,15 +461,18 @@ public enum HtmlNavigationPolicy {
             if web { return action.userActivated ? .openExternal : .cancel }
             guard scheme == "file", let grantRoot else { return .cancel }
             return HtmlOverlay.contains(grantRoot, action.url.path) ? .allow : .cancel
-        case .replica:
+        case .replica(_, .html):
             if web { return action.userActivated ? .openExternal : .cancel }
             let own = action.url.host?.lowercased() == overlay.id.uuidString.lowercased()
             return scheme == HtmlSource.replicaScheme && own ? .allow : .cancel
-        case .image:
+        case .image, .replica(_, .image):
             return .cancel
-        case .markdown:
+        case .markdown, .replica(_, .markdown):
+            if web { return action.userActivated ? .openExternal : .cancel }
+            return followsLink(action, overlay: overlay) ? .allow : .cancel
+        case .document, .replica(_, .document):
             return web && action.userActivated ? .openExternal : .cancel
-        case .text:
+        case .replica(_, .text), .text, .unreadable:
             return .cancel
         case .url(let original):
             guard web else { return .cancel }
@@ -325,6 +480,16 @@ public enum HtmlNavigationPolicy {
             if action.target == .subframe, !overlay.chromeless { return .allow }
             return action.userActivated ? .openExternal : .cancel
         }
+    }
+
+    // the page's own scheme address of a markdown file inside its grant; the source serving it judges the
+    // canonical file again, so this check is lexical only
+    private static func followsLink(_ action: HtmlNavigationAction, overlay: HtmlOverlay) -> Bool {
+        let url = action.url
+        guard let grant = overlay.markdownLinks, action.target == .mainFrame, url.scheme?.lowercased() == HtmlSource.replicaScheme,
+              url.host?.lowercased() == overlay.id.uuidString.lowercased(),
+              LinkPolicy.markdownExtensions.contains(url.pathExtension.lowercased()) else { return false }
+        return MarkdownPage.lexicalPath(url.path, folder: grant.root) != nil
     }
 }
 

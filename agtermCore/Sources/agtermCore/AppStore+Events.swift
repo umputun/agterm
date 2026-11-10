@@ -32,7 +32,8 @@ extension AppStore {
         guard let host = session.remoteHost else { return }
         onRemoteRowVisibility?(session, kind == .remoteOpened)
         emitControlEvent(kind, workspace: workspace, session: session.id,
-                         payload: ControlEventPayload(name: session.displayName, host: host))
+                         payload: ControlEventPayload(name: session.displayName, host: host,
+                                                      remoteSessionID: session.remoteSessionID))
     }
 
     /// `pane.split` / `pane.scratch` carry `shown`/`hidden`; callers emit only on a real transition.

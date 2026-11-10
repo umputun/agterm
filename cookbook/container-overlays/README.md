@@ -2,6 +2,8 @@
 
 Open agterm overlays — terminal programs, HTML pages and URLs — from inside a docker container, with the program running in the container and files opened by their Mac paths.
 
+Author: [@Rulexec](https://github.com/Rulexec)
+
 ## What it does
 
 An agterm session whose shell runs `docker exec` into a container can manage sessions and set statuses from inside, but `agtermctl session overlay open` fails there: agterm executes the overlay COMMAND on the Mac, reads `--html` files from the Mac's filesystem, and for `--url` pages `localhost` means the Mac. This recipe installs an `agtermctl` wrapper inside the container that rewrites exactly the overlay calls, so from inside the container:

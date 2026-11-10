@@ -2,6 +2,7 @@
 paths:
   - "agterm/Views/WorkspaceSidebar*.swift"
   - "agterm/Views/SidebarRowViews.swift"
+  - "agterm/Views/SidebarOutlineView.swift"
   - "agterm/Views/SidebarRenameController.swift"
   - "agtermCore/Sources/agtermCore/SidebarDrop.swift"
   - "agtermCore/Sources/agtermCore/SidebarMode.swift"
@@ -17,12 +18,26 @@ paths:
 - `WorkspaceSidebar` is an AppKit `NSOutlineView`, chosen over SwiftUI `List` for native
   cross-workspace drag-and-drop. Its `@MainActor` Coordinator caches reference-type `SidebarNode`s so
   reloads retain identity, expansion, and selection.
+- `SidebarDensity` ([[settings]]) sets row padding, indent, info-line spacing, the name's lift and the selection
+  inset. Rows sit edge to edge, so the padding is the only gap between items and the selection pill shrinks with
+  the row. A density change re-applies `rowHeight` and `indentationPerLevel` and rebuilds; cells are reused, so
+  `viewFor` resets `titleCenter` and `SidebarInfoCellView.apply` resets `infoTop` on every configure.
+  `SidebarDensityTests` switches a mounted outline both ways.
 - macOS 27 reserves a wider leading strip than the disclosure triangle occupies, stranding the row icon
   mid-gap. `SidebarOutlineView.frameOfCell` trims the surplus, gated on that version; its doc comment owns
-  the reasoning. Leave `frameOfOutlineCell` alone: the triangle keeps its place and `handleSingleClick`
-  reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27 and up, the
-  indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only below the
-  gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
+  the reasoning. While the strip is reserved, `frameOfOutlineCell` is native: the triangle keeps its place and
+  `handleSingleClick` reads that frame. `SidebarRowIndentTests` splits by version: the tight-gap cases run on 27
+  and up, the indent and trailing-edge cases everywhere, and `testBelowTheGateFramesMatchAPlainOutline` only
+  below the gate, where it is the only thing pinning earlier layouts as untouched. Do not re-gate or drop it.
+- `reservesDisclosureColumn` drops that strip on every version while `InterfaceElement.workspaceChevrons` is
+  hidden and in the flat and plain flagged lists, which never draw a level-0 triangle. Level-0 triangles then get
+  an empty frame and a companion parent's ends at its content; never hide one through
+  `shouldShowOutlineCellForItem`, which makes AppKit refuse to collapse that item. A dropped strip also narrows
+  the scroll view's left inset from 8 to 6, keyed on the flag, never the setting. Every workspace row menu offers Collapse/Expand Workspace through the
+  row click's `toggleExpansion`, so a hidden chevron with row click off still leaves a mouse fold.
+- macOS 27 hides `NSMenuItem` images under the default `preferredImageVisibility` (`.automatic`), which is
+  how the Tint submenu's swatches vanished. Any menu item whose image carries meaning sets `.visible`, by key
+  (`setValue(1, forKey: "preferredImageVisibility")`) while CI builds with the macOS 26 SDK, which lacks the property.
 
 ## Drag and row actions
 
@@ -49,7 +64,10 @@ paths:
   toggle. This click routing is keep-in-sync exempt. `GhosttyApp.workspaceRowClickExpands` (default on)
   gates the whole-row target only; the disclosure triangle toggles natively and stays unconditional.
   The deferred item re-reads that mirror when it fires, so turning the setting off inside the deferral
-  window cancels the pending toggle. Route the row-click toggle through `outline.animator()` so it animates
+  window cancels the pending toggle.
+  The row icon acts like the triangle: a click toggles at once whatever the setting, and the second click of
+  a double-click arrives only as `doubleAction`, which toggles back instead of renaming.
+  Route the row-click toggle through `outline.animator()` so it animates
   like the triangle; a bare `expandItem`/`collapseItem` silently drops the animation. Do not gate that on
   Reduce Motion — both hit targets reach the same AppKit animation, so a gate would re-split them. Every
   other expand/collapse site stays unanimated: bulk or programmatic. Control expansion instead persists through
@@ -76,8 +94,9 @@ paths:
 - Copy Name writes `Session.displayName`, or the workspace name, to `NSPasteboard.general`. A blank
   workspace name and a vanished row both count as absent, and nothing to copy leaves the pasteboard
   untouched rather than clearing it. No control form — see `control-api.md`.
-- Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, and Reveal in Finder appear only
-  for one target. Duplicate as Companion is omitted on a page row. Duplicate inserts a fresh
+- Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, Convert to Companion, and Reveal in
+  Finder appear only for one target. Duplicate as Companion is omitted on a page row; Convert to Companion is omitted
+  on a companion row and disabled on a remote one. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
@@ -124,11 +143,11 @@ paths:
 - In tree mode, flagged rows swap to `terminal.fill` or `rectangle.split.2x1.fill`; flagged mode retains
   unfilled base icons because every row is flagged. This same-size symbol swap avoids layout shift.
   `RowContent.flagged` limits reload to the changed row.
-- A remote row (`Session.remoteHost != nil`) takes `cloud` instead, and
-  there a heavier WEIGHT means split rather than flagged: a hidden split is state nothing else reveals,
-  while the fill is tree-mode decoration the flat flagged view already passes `flagged: false` for.
-  Weight rather than `.fill` because `.fill` is what every other row icon spends on FLAGGED, so a filled
-  cloud would read as a flag; the focused-workspace icon distinguishes itself the same way.
+- A remote row (`Session.remoteHost != nil`, an attached row or a remote window's) takes `cloud` instead,
+  `icloud.slash` while it shows a notice, each filled when flagged as every other row icon is.
+  A heavier WEIGHT marks its split, since a hidden split is state nothing else reveals and `.fill` is
+  already the flag; the focused-workspace icon distinguishes itself the same way. On a filled cloud the
+  bold weight is barely distinguishable, an accepted trade-off.
   The split axis is not distinguished — no cloud symbol carries both arrangements. The title bar draws
   the same `cloud` beside the host, gated by `InterfaceElement.remoteHost`.
   See [[control-api]].
@@ -139,6 +158,8 @@ paths:
 - A row's tint (`Session.tint`, `Workspace.tint`) colors its icon and/or name through `SidebarCellView.setColors`,
   selected rows included, so every retint keeps it; `RowContent.tint` reloads that row alone. The Tint submenu
   checks an entry only when every target shares it and disables Show On unless every target is tinted.
+  An untinted row counts as the last Show On pick (`Coordinator.tintPlacement`, app-wide, never persisted), which a
+  menu color pick starts it on; the palette and `session.tint` keep starting on the icon.
 - A session with an info line (`session.info`, [[control-api]]) uses the `session-info-cell` identifier and a
   taller row from `SidebarInfoMetrics`: the plain row, plus one line set 1.5 points smaller with a 9-point
   minimum, lifted 6 points into the plain row's bottom padding. The title row centers in a band of plain
@@ -150,7 +171,7 @@ paths:
   and low. A text-default symbol counts as emoji only with VS16, and VS15 always keeps text form.
 - `AppSettings.sessionInfoDisplay` (`always`|`flagged`|`off`, nil = always) decides where the line shows,
   mirrored to `GhosttyApp.sessionInfoDisplay`. `flagged` shows it in the flagged view only. Hiding never
-  clears the line. The picker shares the Settings ▸ Interface Sidebar grid.
+  clears the line. The picker shares the Settings ▸ Interface Sidebar section's last row.
 
 ## Workspace focus
 
@@ -239,6 +260,12 @@ paths:
   overwriting them and clears `lastRevealedSelection` only for that switch, so the next `syncSelection`
   reveals it with persistence suppressed. No other rebuild may clear it, or a deliberate fold reopens.
   `appearanceChanged` calls `syncSelection` after `reconcile` because that path never reaches `updateNSView`.
+- A reload under an open rename detaches its field editor, and a detached standard editor that takes a mouse-down
+  spins TextKit 2 on the main thread. While `SidebarRenameController.isRenameInFlight` (editing, committing, or a
+  mouse-down still tracking in the editor), rebuilds, row reloads, metrics, selection sync and focus hand-back
+  wait for `flushDeferredRenameUpdates`, and `SidebarNameFieldEditor` ignores a mouse-down once detached.
+  Renaming another row commits the open edit first; a repeat for the edited row keeps it. End-editing commits to
+  the row `beginEditing` recorded, since collapsing its workspace takes the field's row away mid-edit.
 - Track expansion independently in `expandedWorkspaceIDs`. `NSOutlineView` drops expansion when items
   leave the data source, so expand/collapse delegate callbacks and `expandAll` update the set and
   `rebuildAndReload` reapplies it after flagged-mode round trips, where the flat list drops every workspace
@@ -263,6 +290,10 @@ paths:
 - A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
   slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
+- Convert to Companion is the one path that changes a `parentID` after creation. A recorded parent can therefore be
+  a companion by the time its child reopens: both restore paths resolve it through `groupRoot(of:)`, and Recent
+  Closed's `restoresSession` finds a parent inside a closed group or workspace, not only as an entry's root.
+  A group hard close finalizes the parked companions of every member, not only of the closed parent.
 - `session.collapse`/`.expand` mirror the workspace pair: `AppActions.setSessionExpanded` persists, then posts
   `.agtermSetSessionExpanded`, which updates `expandedParentIDs` even when no nested row is shown and drives a
   visible row under suppression. It posts on an unchanged value too, since a reveal may have opened the row.

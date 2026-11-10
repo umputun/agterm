@@ -2,6 +2,8 @@
 
 Pick a file or directory with fzf in an overlay, and have the path typed into the shell you pressed the key in.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Press the key and an 80% floating overlay opens over the current session running fzf over your project trees. Pick something, and the path is typed into that session's prompt without a Return, so it arrives as an argument to whatever you were already writing. Esc closes the overlay and types nothing.

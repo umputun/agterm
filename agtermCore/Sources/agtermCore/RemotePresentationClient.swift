@@ -33,6 +33,9 @@ public struct RemotePresentationEffects {
     /// Shows an ask the origin handed over; false when it cannot, which the client reports as a refusal.
     public var askRequest: @MainActor (PresentationAsk) -> Bool
     public var askDismiss: @MainActor (PresentationAskRef) -> Void
+    /// Shows a session-bound pick the origin handed over; false when it cannot, which the client reports as a refusal.
+    public var pickRequest: @MainActor (PresentationPick) -> Bool
+    public var pickDismiss: @MainActor (PresentationPickRef) -> Void
     /// Shows an overlay the origin handed over; false when it cannot, which the client reports as a refusal.
     public var overlayRequest: @MainActor (PresentationOverlay) -> Bool
     public var overlayClose: @MainActor (PresentationOverlayChange) -> Void
@@ -43,6 +46,8 @@ public struct RemotePresentationEffects {
     public var pageCommand: @MainActor (PresentationPageCommand) -> Void
     /// respawns reports the origin's respawn counts; true for a snapshot, which a first attach takes as its baseline.
     public var respawns: @MainActor (PresentationRespawns, Bool) -> Void
+    /// linkRefused reports the origin refused a click this Mac forwarded.
+    public var linkRefused: @MainActor (RemoteLinkRefusal) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -55,6 +60,8 @@ public struct RemotePresentationEffects {
                 mode: @escaping @MainActor (PresentationMode) -> Void = { _ in },
                 askRequest: @escaping @MainActor (PresentationAsk) -> Bool = { _ in false },
                 askDismiss: @escaping @MainActor (PresentationAskRef) -> Void = { _ in },
+                pickRequest: @escaping @MainActor (PresentationPick) -> Bool = { _ in false },
+                pickDismiss: @escaping @MainActor (PresentationPickRef) -> Void = { _ in },
                 overlayRequest: @escaping @MainActor (PresentationOverlay) -> Bool = { _ in false },
                 overlayClose: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
                 overlayResize: @escaping @MainActor (PresentationOverlayChange) -> Void = { _ in },
@@ -64,6 +71,7 @@ public struct RemotePresentationEffects {
                 pageClose: @escaping @MainActor (PresentationPageChange) -> Void = { _ in },
                 pageCommand: @escaping @MainActor (PresentationPageCommand) -> Void = { _ in },
                 respawns: @escaping @MainActor (PresentationRespawns, Bool) -> Void = { _, _ in },
+                linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -77,6 +85,8 @@ public struct RemotePresentationEffects {
         self.mode = mode
         self.askRequest = askRequest
         self.askDismiss = askDismiss
+        self.pickRequest = pickRequest
+        self.pickDismiss = pickDismiss
         self.overlayRequest = overlayRequest
         self.overlayClose = overlayClose
         self.overlayResize = overlayResize
@@ -84,6 +94,7 @@ public struct RemotePresentationEffects {
         self.pageClose = pageClose
         self.pageCommand = pageCommand
         self.respawns = respawns
+        self.linkRefused = linkRefused
         self.warn = warn
     }
 }
@@ -113,6 +124,7 @@ public final class RemotePresentationClient {
     private var running = false
     private var generation: Int?
     private var revision = -1
+    private var pendingBatch = PresentationPendingBatch()
     private var lastFrameAt = Date.distantPast
     private var retryAt: Date?
     private var failures = 0
@@ -121,6 +133,8 @@ public final class RemotePresentationClient {
     /// Nil until reported, so a new client's first report reaches the row whatever an earlier client of
     /// the same row left on it.
     private var mode: PresentationMode?
+    /// The kinds the origin's hello answer agreed for the current link, empty with no link.
+    private var originKinds: Set<String> = []
 
     public init(argv: [String], presentationVersion: Int?, transport: RemotePresentationTransport,
                 effects: RemotePresentationEffects, now: @escaping () -> Date = Date.init) {
@@ -156,6 +170,9 @@ public final class RemotePresentationClient {
         guard retryAt != nil else { return }
         retryAt = now()
     }
+
+    /// originSupports says whether the origin agreed `kind` on the current link.
+    public func originSupports(_ kind: String) -> Bool { link != nil && originKinds.contains(kind) }
 
     /// Sends what this Mac answered about work the origin handed over. Dropped with no link: the origin
     /// takes that work back when the stream goes.
@@ -207,7 +224,11 @@ public final class RemotePresentationClient {
     }
 
     private func apply(_ frame: PresentationFrame, on link: RemotePresentationLink) {
-        switch frame.body {
+        apply(frame.body, on: link)
+    }
+
+    private func apply(_ body: PresentationFrame.Body, on link: RemotePresentationLink) {
+        switch body {
         case .snapshot(let snapshot):
             failures = 0
             warnedReason = nil
@@ -227,12 +248,17 @@ public final class RemotePresentationClient {
         case .sound(let sound): effects.sound(sound)
         case .ping: send(.ack, on: link)
         // an origin that predates the role answers mirror, and nothing is asked of it
-        case .hello(let answer) where answer.mode == .presenter: send(.presenterAcquire, on: link)
+        case .hello(let answer):
+            originKinds = Set(answer.kinds)
+            if answer.mode == .presenter { send(.presenterAcquire, on: link) }
         case .presenterGranted: report(.presenter)
         case .presenterRefused: report(.mirror)
         case .askRequest(let ask):
             if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
         case .askDismiss(let ref): effects.askDismiss(ref)
+        case .pickRequest(let pick):
+            if !effects.pickRequest(pick) { send(.pickRejected(PresentationPickRef(id: pick.id, owner: pick.owner)), on: link) }
+        case .pickDismiss(let ref): effects.pickDismiss(ref)
         case .overlayRequest(let overlay):
             if !effects.overlayRequest(overlay) { send(.overlayRejected(PresentationOverlayChange(job: overlay.job)), on: link) }
         case .overlayClose(let change): effects.overlayClose(change)
@@ -244,7 +270,18 @@ public final class RemotePresentationClient {
         case .pageClose(let change): effects.pageClose(change)
         case .pageCommand(let command): effects.pageCommand(command)
         case .respawn(let respawns): effects.respawns(respawns, false)
-        case .hello, .ack, .presenterAcquire, .askResolve, .askRejected, .overlayRejected, .overlayClosed, .unknown,
+        case .linkRefused(let refusal): effects.linkRefused(refusal.reason)
+        case .pendingChunk(let chunk): pendingBatch.add(chunk)
+        case .pendingCommit:
+            guard let entries = try? pendingBatch.commit() else { return effects.warn("malformed pending batch") }
+            for entry in entries {
+                switch entry {
+                case .pendingChunk, .pendingCommit: continue
+                default: apply(entry, on: link)
+                }
+            }
+        case .ack, .presenterAcquire, .linkClick, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
+             .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState:
             break
         }
@@ -262,6 +299,7 @@ public final class RemotePresentationClient {
         retryAt = nil
         generation = nil
         revision = -1
+        pendingBatch = PresentationPendingBatch()
         lastFrameAt = now()
         report(.connecting)
         launchCount += 1
@@ -292,6 +330,7 @@ public final class RemotePresentationClient {
     private func dropLink() {
         link?.stop()
         link = nil
+        originKinds = []
     }
 
     private func send(_ body: PresentationFrame.Body, on link: RemotePresentationLink) {

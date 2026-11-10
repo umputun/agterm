@@ -69,6 +69,10 @@ paths:
   `terminalOnly` and takes the same remote route. `AppActions` reaches the local planner through
   `CompanionDuplicating`, which `ControlServer` implements, so the GUI and `session.companion.duplicate` share one
   planner; a refusal shows in a timed `RemoteAttachHud` over the session, falling back to `notifyCommandFailure`.
+- Convert to Companion (`convert_companion`, keyless) follows Duplicate as Companion in both menus, with a palette row;
+  a top-level page takes it too, and `PaletteContext.activeSessionIsCompanion`/`activeSessionIsRemote` disable it.
+  `AppActions.convertToCompanion` shares `AppStore.convertToCompanion` with `session.companion.convert`, and a
+  refusal reaches the same timed HUD Duplicate as Companion uses.
 
 ## Dock menu
 
@@ -125,12 +129,13 @@ paths:
 - Wire all four callbacks through `wireSearchCallbacks` for main, split, and scratch. Surface methods are
   thin binding-action wrappers; `AppActions` owns GUI needle/navigation/end behavior. The same session
   state and `searchDisplayText` back `session.search`.
-- Scratch is searchable; quick terminal and full overlay are not. `searchTarget` checks a covering scratch
-  FIRST, then returns nil when the focused pane sits under its own pane overlay, then falls back to the
-  focused surface. That order is load-bearing: the scratch covers a pane overlay too and is searchable.
-  Keep the pane-overlay rung in `searchTarget` alone; `coverHidesActiveSession` covers only the
-  session-wide blockers, and duplicating the rung there blocks Command-F on the scratch above it.
-  Floating overlay leaves pane search available.
+- What is on top owns Command-F. `AppActions.coverTakesSearch` runs before the close branch: the quick terminal
+  holding the keys, or `Session.visibleCover` (a shown page or program overlay over the focused pane, full or
+  floating), takes the key, so the terminal behind never opens or closes its bar. A text page focuses its own
+  field; every other cover does nothing with it. A HUD is passive and a pane overlay on the other pane of a split
+  covers nothing the user types into, so neither takes it.
+- Scratch is searchable. With no cover on top, `searchTarget` checks the scratch FIRST, then the focused surface,
+  so the scratch above a pane overlay keeps Command-F.
 - On scratch exit, clear search only when `searchSurface === scratchSurface`; pane-owned search survives.
   Split/primary teardown follows the same ownership rule.
 

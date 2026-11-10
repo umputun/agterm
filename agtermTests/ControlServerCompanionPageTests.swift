@@ -131,7 +131,7 @@ final class ControlServerCompanionPageTests: XCTestCase {
 
         let fresh = try attach(page)
         let claimed = try XCTUnwrap(server.claimPageServe(fresh.token).result?.id.flatMap(UUID.init(uuidString:)))
-        server.pageClaimUnanswered(claimed)
+        server.pageClaimUnanswered(claimed, token: fresh.token)
 
         XCTAssertNotNil(store.session(withID: page.id))
         XCTAssertTrue(server.pendingCompanionClaims.isEmpty)
@@ -156,18 +156,51 @@ final class ControlServerCompanionPageTests: XCTestCase {
     func testASoftClosedPageStillAnswersForItsOwnWindow() throws {
         let page = try filePage()
         let window = try XCTUnwrap(server.library.windowID(for: store))
-        let serving = CompanionPageServing(claim: UUID(), session: page.id, page: try XCTUnwrap(page.htmlOverlay?.id))
+        let attachment = PageServeStream.Attachment(claim: UUID(), session: page.id)
+        let overlay = try XCTUnwrap(page.htmlOverlay?.id)
 
         XCTAssertTrue(store.softCloseSession(page.id))
 
-        XCTAssertEqual(server.companionPagePlace(serving)?.window, window)
+        XCTAssertEqual(server.pageAttachmentPlace(attachment, page: overlay)?.window, window)
     }
 
-    func testOnlyAPageCompanionIsHandedOutAndALoopbackPageIsNot() throws {
-        XCTAssertEqual(server.attachCompanionPage(parent.id.uuidString, window: nil).error, "not a page companion")
+    func testOnlyAPageSessionIsHandedOutAndALoopbackPageIsNot() throws {
+        XCTAssertEqual(server.attachCompanionPage(parent.id.uuidString, window: nil).error, "not a page session")
         let loopback = try store.addPageCompanion(to: parent.id, overlay: HtmlOverlay(source: .url(try XCTUnwrap(URL(string: "http://localhost:3000/"))))).get()
         XCTAssertEqual(server.attachCompanionPage(loopback.id.uuidString, window: nil).error,
                        "a page on this Mac's loopback cannot be shown on another Mac")
+    }
+
+    func testAMarkdownPageCompanionIsNotHandedOutEvenWithALinkGrant() throws {
+        let grant = MarkdownLinkGrant(path: docs.appendingPathComponent("a.md").path, root: docs.path)
+        let overlay = HtmlOverlay(source: .markdown(path: grant.path), navigation: true, markdownLinks: grant)
+        let page = try store.addPageCompanion(to: parent.id, overlay: overlay).get()
+
+        XCTAssertEqual(server.attachCompanionPage(page.id.uuidString, window: nil).error,
+                       "a markdown, text or document page cannot be shown on another Mac")
+    }
+
+    func testATopLevelPageIsHandedOutWithNoParentAndALoopbackOneIsNot() throws {
+        let row = try pageRow()
+        let reply = server.attachCompanionPage(row.id.uuidString, window: nil)
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertNil(reply.result?.parent)
+        XCTAssertEqual(reply.result?.companionPage?.page, row.htmlOverlay?.id.uuidString)
+
+        let url = try XCTUnwrap(URL(string: "http://127.0.0.1:3000/"))
+        let loopback = try store.addPageSession(after: parent.id, overlay: HtmlOverlay(source: .url(url))).get()
+        XCTAssertEqual(server.attachCompanionPage(loopback.id.uuidString, window: nil).error,
+                       "a page on this Mac's loopback cannot be shown on another Mac")
+    }
+
+    func testAnUnreadableSavedPageIsNotHandedOut() throws {
+        let row = try store.addPageSession(after: parent.id, overlay: PageSnapshot(source: .unreadable("bad descriptor")).makeOverlay()).get()
+
+        let reply = server.attachCompanionPage(row.id.uuidString, window: nil)
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, "an unreadable saved page cannot be shown on another Mac")
+        XCTAssertTrue(server.companionPageTokens.isEmpty)
     }
 
     func testAUrlAttachmentHasALifetimeChannelAndNoBridge() throws {
@@ -181,6 +214,39 @@ final class ControlServerCompanionPageTests: XCTestCase {
             return client.frame()
         }
         XCTAssertEqual(answer ?? nil, .failure(id: 4, error: "a URL page has no bridge"))
+    }
+
+    func testAPageRowClosingItsWindowSoftClosesItsGroupThroughTheAppClose() throws {
+        let row = try pageRow()
+        let companion = try store.addCompanion(to: row.id).get()
+        let live = HtmlOverlayRegistry.shared.page(for: try XCTUnwrap(row.htmlOverlay), store: store)
+
+        live.webViewDidClose(live.webView)
+
+        waitUntil("the group soft-closed") { self.store.pendingCloseSession(withID: companion.id) != nil }
+        XCTAssertNotNil(store.pendingCloseSession(withID: row.id))
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertTrue(store.undoPendingClose())
+        store.closeSession(row.id)
+    }
+
+    func testAControlCloseOrSubmitOfAPageRowClosesItAtOnceWithNoUndo() throws {
+        let closing = try pageRow()
+        let submitting = try pageRow()
+
+        XCTAssertTrue(server.closeSessionOverlay(closing.id.uuidString, window: nil, pane: nil).ok)
+        XCTAssertTrue(server.submitSessionOverlay(submitting.id.uuidString, window: nil, pane: nil, value: "x").ok)
+
+        for row in [closing, submitting] {
+            XCTAssertNil(store.session(withID: row.id))
+            XCTAssertNil(store.pendingCloseSession(withID: row.id))
+        }
+    }
+
+    private func pageRow() throws -> Session {
+        let index = docs.appendingPathComponent("index.html").path
+        return try store.addPageSession(after: parent.id, overlay: HtmlOverlay(source: .file(path: index, grantRoot: docs.path),
+                                                                               javascript: true)).get()
     }
 
     private func filePage() throws -> Session {

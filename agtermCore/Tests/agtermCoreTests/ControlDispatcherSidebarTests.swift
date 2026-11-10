@@ -28,6 +28,28 @@ struct ControlDispatcherSidebarTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test(arguments: [("default", .standard), ("compact", .compact), ("toggle", .toggle), (nil, .toggle)] as [(String?, ControlSidebarDensityMode)])
+    func sidebarDensityRoutesTheParsedMode(_ raw: String?, _ mode: ControlSidebarDensityMode) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSidebarDensityResponse = ControlResponse(ok: true, result: ControlResult(text: "compact"))
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sidebarDensity, args: ControlArgs(mode: raw)))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "compact")))
+        #expect(actions.calls == [.sidebarDensity(mode)])
+    }
+
+    @Test func sidebarDensityRejectsAnUnknownModeWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sidebarDensity, args: ControlArgs(mode: "dense")))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid sidebar density: dense"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sidebarWidthRoutesPointsAndWindow() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

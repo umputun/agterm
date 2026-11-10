@@ -72,8 +72,11 @@ class ControlAPITestCase: XCTestCase {
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
         app.launchArguments += seededDefaults.flatMap { ["-\($0.key)", $0.value] }
+        app.launchEnvironment.merge(launchEnvironmentOverrides) { $1 }
         return app
     }
+
+    var launchEnvironmentOverrides: [String: String] { [:] }
 
     /// Settings to write into the isolated state dir's `settings.json` before launch. Nil (the default)
     /// launches with stock defaults. Override to start the app with a non-default setting — the control

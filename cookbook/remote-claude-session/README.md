@@ -2,6 +2,8 @@
 
 One chord opens a tab that runs Claude Code inside a tmux session on a remote host, reconnects on its own, and reports the agent's status onto its own sidebar row.
 
+Author: [@andr81](https://github.com/andr81)
+
 ## What it does
 
 A laptop that goes to sleep, gets closed, or comes along in a bag takes every local agent with it. Moving the agent to a server that stays up fixes that, and the price is usually a handful of manual steps every time: ssh in, find or create the tmux session, `cd` to the project, start the agent, and do it all again after the connection drops.

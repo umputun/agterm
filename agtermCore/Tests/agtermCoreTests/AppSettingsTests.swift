@@ -524,6 +524,51 @@ struct AppSettingsTests {
         #expect(legacy.effectiveFlaggedViewLayout == .flat)
     }
 
+    @Test func sidebarDensityDefaultsToStandardResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        #expect(AppSettings().effectiveSidebarDensity == .standard)
+        #expect(AppSettings(sidebarDensity: "compact").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        for density in SidebarDensity.allCases {
+            let settings = AppSettings(sidebarDensity: density.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+            #expect(decoded.sidebarDensity == density.rawValue)
+            #expect(decoded.effectiveSidebarDensity == density)
+        }
+        #expect(AppSettings(sidebarDensity: "dense").effectiveSidebarDensity == .standard)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.sidebarDensity == nil)
+        #expect(legacy.effectiveSidebarDensity == .standard)
+    }
+
+    struct DensityMetrics: Sendable {
+        let padding, indent, info, lift, inset: Double
+    }
+
+    @Test(arguments: [
+        (SidebarDensity.standard, DensityMetrics(padding: 15, indent: 14, info: 6, lift: 0, inset: 1.5)),
+        (.compact, DensityMetrics(padding: 10, indent: 10, info: 4, lift: 1, inset: 0.5)),
+    ])
+    func sidebarDensityMetrics(_ density: SidebarDensity, _ expected: DensityMetrics) {
+        #expect(density.rowPadding == expected.padding)
+        #expect(density.indentPerLevel == expected.indent)
+        #expect(density.infoLineSpacing == expected.info)
+        #expect(density.titleLift == expected.lift)
+        #expect(density.selectionInset == expected.inset)
+    }
+
+    @Test func sidebarRowHeightFollowsDensity() {
+        #expect(AppSettings.sidebarRowHeight(fontSize: 13, density: .standard) == AppSettings.sidebarRowHeight(fontSize: 13))
+        #expect(AppSettings.sidebarRowHeight(fontSize: 9, density: .compact) == 19)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 13, density: .compact) == 23)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 20, density: .compact) == 30)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 99, density: .compact) == AppSettings.sidebarFontSizeRange.upperBound.rounded() + 10)
+    }
+
+    @Test func sidebarDensityDisplayNamesAndWireValues() {
+        #expect(SidebarDensity.standard.rawValue == "default")
+        #expect(SidebarDensity.compact.rawValue == "compact")
+        #expect(SidebarDensity.allCases.map(\.displayName) == ["Default", "Compact"])
+    }
+
     @Test func sessionInfoDisplayDefaultsToAlwaysResolvesTolerantlyAndIsNotAGhosttyKey() throws {
         #expect(AppSettings().sessionInfoDisplay == nil)
         #expect(AppSettings().effectiveSessionInfoDisplay == .always)
@@ -640,6 +685,15 @@ struct AppSettingsTests {
         #expect(legacy.newSessionDirectory == nil)
         #expect(legacy.newSessionCustomDirectory == nil)
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test(arguments: [(nil, "/srv/app", nil), ("home", "/srv/app", nil), ("custom", "/srv/app", "/Users/me/work"),
+                      ("currentSession", "/srv/app", "/srv/app"), ("currentSession", "", nil), ("currentSession", nil, nil)]
+          as [(String?, String?, String?)])
+    func aRemoteNewSessionSendsTheCurrentRowsOrTheCustomDirectory(_ mode: String?, _ current: String?, _ expected: String?) {
+        let settings = AppSettings(newSessionDirectory: mode, newSessionCustomDirectory: "/Users/me/work")
+
+        #expect(settings.remoteNewSessionCwd(currentSessionCwd: current) == expected)
     }
 
     @Test func resolveNewSessionCwdHomeIsDefault() {
@@ -816,9 +870,10 @@ struct AppSettingsTests {
     }
 
     @Test(arguments: [(InterfaceElement.sessionIcons, "Session icons", InterfaceElement.workspaceIcons),
-                      (.workspaceIcons, "Workspace icons", .sessionIcons)])
-    func rowIconElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
-                                                              other: InterfaceElement) {
+                      (.workspaceIcons, "Workspace icons", .sessionIcons),
+                      (.workspaceChevrons, "Workspace chevrons", .workspaceIcons)])
+    func rowElementsAreShownByDefaultAndHideIndependently(element: InterfaceElement, name: String,
+                                                          other: InterfaceElement) {
         #expect(element.section == .sidebar)
         #expect(element.displayName == name)
         #expect(!element.hiddenByDefault)
@@ -893,7 +948,8 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession, .workspaceIcons, .sessionIcons,
+                            .workspaceChevrons])
         #expect(!titleBar.isEmpty)
     }
 

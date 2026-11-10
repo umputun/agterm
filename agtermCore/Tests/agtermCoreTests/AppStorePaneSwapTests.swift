@@ -345,6 +345,23 @@ struct AppStorePaneSwapTests {
         #expect(State(fixture.session) == before)
     }
 
+    @Test func aHeadlessSwapExchangesThePanesWithNoSurfaces() {
+        let (store, session) = makeHeadlessSession(split: true)
+        let primary = session.paneIdentity
+        let split = session.splitPaneIdentity!
+        session.currentCwd = "/left"
+        session.splitCwd = "/right"
+
+        #expect(store.swapPanes(session.id) == nil)
+        #expect(session.paneIdentity == split)
+        #expect(session.splitPaneIdentity == primary)
+        #expect(session.currentCwd == "/right")
+        #expect(session.splitCwd == "/left")
+        #expect(session.paneRole(forToken: split.uuidString) == .left)
+        #expect(store.swapPanes(session.id) == nil)
+        #expect(session.paneIdentity == primary)
+    }
+
     @Test func swapRefusesUnknownOrSplitlessSessionWithoutMutation() {
         let store = makeStore()
         let before = store.snapshot()

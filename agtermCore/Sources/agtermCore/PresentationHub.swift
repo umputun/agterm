@@ -31,24 +31,53 @@ public final class PresentationHub {
         let sink: PresentationSink
         var kinds: Set<String> = []
         var revision = 0
-        var lastAck: Date
+        // the first ping still unanswered; a late heartbeat sends a ping before it can call the viewer stale
+        var pingedAt: Date?
         /// Deltas published while the snapshot is being taken, held so they land after it.
         var held: [PresentationFrame.Body]? = []
 
-        init(session: UUID, generation: Int, sink: PresentationSink, now: Date) {
+        init(session: UUID, generation: Int, sink: PresentationSink) {
             self.session = session
             self.generation = generation
             self.sink = sink
-            lastAck = now
+        }
+
+        @MainActor func decodable(_ body: PresentationFrame.Body) -> PresentationFrame.Body {
+            let accepted = PresentationHub.acceptedShapes(kinds)
+            guard accepted.count < StatusShape.allCases.count else { return body }
+            switch body {
+            case .status(let status):
+                return .status(status.map { Self.withShape(in: accepted, $0) })
+            case .snapshot(var snapshot):
+                snapshot.status = snapshot.status.map { Self.withShape(in: accepted, $0) }
+                return .snapshot(snapshot)
+            default:
+                return body
+            }
+        }
+
+        private static func withShape(in accepted: Set<StatusShape>, _ status: PresentationStatus) -> PresentationStatus {
+            guard let shape = status.shape, !accepted.contains(shape) else { return status }
+            var status = status
+            status.shape = nil
+            return status
         }
     }
 
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
-                                        overlayPointsKind] + pageKinds
+                                        overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
+                                        statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind]
+                                        + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
+    /// pickKinds are the presentation kinds a presenter must speak to be handed a session-bound pick.
+    public static let pickKinds = ["pick.request", "pick.resolve", "pick.rejected", "pick.dismiss"]
+    /// pendingSnapshotKind is a presenter's capability of taking a headless origin's pending interactions.
+    public static let pendingSnapshotKind = "pending.snapshot"
+    /// jobTokenKind is a presenter's capability of passing an overlay job's offer token to its helper.
+    public static let jobTokenKind = "job.token"
     /// askFormKind is the capability of drawing an ask's text field, choice list and cancel role. It names no
     /// frame body: an ask needing it travels as an ordinary `ask.request`, sent only to a presenter listing it.
     public static let askFormKind = "ask.form"
@@ -57,6 +86,30 @@ public final class PresentationHub {
     public static let askOtherKind = "ask.other"
     /// overlayPointsKind advertises point sizing without adding a frame kind.
     public static let overlayPointsKind = "overlay.points"
+    /// pageContentKind advertises the image, markdown and text page sources without adding a frame kind.
+    public static let pageContentKind = "page.content"
+    /// pageDocumentKind advertises the clicked-HTML document page source.
+    public static let pageDocumentKind = "page.document"
+    /// pageLinksKind advertises a markdown page that follows its links under `PresentationPage.markdownLinks`; an older
+    /// presenter would fetch the original spelling and `.md` pictures, so it is handed the page without links.
+    public static let pageLinksKind = "page.links"
+    /// pageForwardKind is a presenter's capability of reaching a headless origin's loopback URL page through an ssh
+    /// forward it opens.
+    public static let pageForwardKind = "page.forward"
+    /// statusShapesKind advertises the expanded status-shape set.
+    public static let statusShapesKind = "status.shapes"
+    /// statusCheckmarkKind advertises `StatusShape.checkmark`, added after `status.shapes` shipped.
+    public static let statusCheckmarkKind = "status.checkmark"
+
+    /// acceptedShapes is the shape set a viewer advertising `kinds` decodes; a shape outside it is cleared, and
+    /// that viewer draws its own Settings shape instead.
+    static func acceptedShapes(_ kinds: Set<String>) -> Set<StatusShape> {
+        var shapes = kinds.contains(statusShapesKind) ? StatusShape.expanded : StatusShape.original
+        if kinds.contains(statusCheckmarkKind) { shapes.insert(.checkmark) }
+        return shapes
+    }
+    /// linkClickKind advertises forwarded clicks and the refusal frame that answers one.
+    public static let linkClickKind = "link.click"
 
     private let staleTimeout: TimeInterval
     private let now: () -> Date
@@ -67,6 +120,9 @@ public final class PresentationHub {
 
     /// Called with a session whose presenter went away, after the role is released.
     public var onPresenterLost: (@MainActor (UUID) -> Void)?
+    private var batches: [UUID: [PresentationFrame.Body]] = [:]
+    /// onPresenterGranted runs once a viewer took `session`'s presenter role and was told so.
+    public var onPresenterGranted: (@MainActor (UUID) -> Void)?
     /// Called with what a session's current presenter sent about work it was handed. Frames of this kind
     /// from any other viewer are dropped before this is reached.
     public var onPresenterFrame: (@MainActor (UUID, PresentationFrame.Body) -> Void)?
@@ -89,7 +145,7 @@ public final class PresentationHub {
         }
         lastGeneration += 1
         let id = SubscriberID(generation: lastGeneration)
-        let subscriber = Subscriber(session: session, generation: lastGeneration, sink: sink, now: now())
+        let subscriber = Subscriber(session: session, generation: lastGeneration, sink: sink)
         subscribers[id] = subscriber
 
         let state = snapshot()
@@ -118,7 +174,22 @@ public final class PresentationHub {
     public func sendToPresenter(_ body: PresentationFrame.Body, session: UUID) -> Bool {
         guard let holder = grant.holder(of: session) else { return false }
         if Self.supportedKinds.contains(body.kind), subscribers[holder]?.kinds.contains(body.kind) != true { return false }
+        if batches[session] != nil {
+            batches[session]?.append(body)
+            return true
+        }
         return send(body, to: holder)
+    }
+
+    /// batchToPresenter sends what `fill` hands `session`'s presenter as pending chunks and one commit, so the presenter
+    /// applies it all together or, when the stream ends first, none of it.
+    public func batchToPresenter(session: UUID, _ fill: () -> Void) {
+        batches[session] = []
+        fill()
+        let bodies = batches.removeValue(forKey: session) ?? []
+        guard !bodies.isEmpty, let chunks = try? PresentationPendingBatch.chunks(bodies) else { return }
+        for chunk in chunks { sendToPresenter(.pendingChunk(chunk), session: session) }
+        sendToPresenter(.pendingCommit, session: session)
     }
 
     func publishLayout(_ layout: PresentationLayout, session: UUID) {
@@ -141,27 +212,30 @@ public final class PresentationHub {
     public func receive(_ frame: PresentationFrame, from id: SubscriberID) {
         guard let subscriber = subscribers[id], frame.gen == subscriber.generation else { return }
         switch frame.body {
-        case .ack: subscriber.lastAck = now()
+        case .ack: subscriber.pingedAt = nil
         case .ping: send(.ack, to: id)
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-        case .askResolve, .askRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState:
+            if granted { onPresenterGranted?(subscriber.session) }
+        case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
+             .pageState, .linkClick:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break
         }
     }
 
-    /// Closes every subscriber whose last ack is older than the stale timeout and pings the rest. The owner of
-    /// the streams calls this on its own timer.
+    /// heartbeat closes every subscriber that left a ping unanswered past the stale timeout and pings the rest.
+    /// The owner of the streams calls this on its own timer.
     public func heartbeat() {
         let current = now()
         for (id, subscriber) in subscribers {
-            if current.timeIntervalSince(subscriber.lastAck) > staleTimeout {
+            if let pingedAt = subscriber.pingedAt, current.timeIntervalSince(pingedAt) > staleTimeout {
                 drop(id, reason: .stale)
                 continue
             }
+            if subscriber.pingedAt == nil { subscriber.pingedAt = current }
             send(.ping, to: id)
         }
     }
@@ -185,7 +259,7 @@ public final class PresentationHub {
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
         guard let subscriber = subscribers[id] else { return false }
-        let frame = PresentationFrame(gen: subscriber.generation, rev: subscriber.revision, body: body)
+        let frame = PresentationFrame(gen: subscriber.generation, rev: subscriber.revision, body: subscriber.decodable(body))
         guard subscriber.sink.offer(frame) else {
             drop(id, reason: .stalled)
             return false

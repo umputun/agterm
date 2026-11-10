@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 @testable import agtermCore
 
@@ -238,7 +239,7 @@ struct RemotePresentationStateTests {
         let (store, session) = try attached()
         store.applyRemoteInfo(PresentationInfo(source: "previous", markdown: false, hideAfter: 0), forSession: session.id)
 
-        store.applyRemoteInfo(PresentationInfo(source: "^[a](color: \"pink\")", markdown: true, hideAfter: 0),
+        store.applyRemoteInfo(PresentationInfo(source: "^[a](color: \"maroon\")", markdown: true, hideAfter: 0),
                               forSession: session.id)
 
         #expect(session.mirroredInfo == nil)

@@ -2,6 +2,8 @@
 
 Claude Code keeps the session's title-bar line saying what it is working on, without being asked and without being told when the task changed.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 `agtermctl session context` puts a line in the title bar saying what a session is for — a ticket number, a bug, the thing you are actually doing. It is genuinely useful with a dozen sessions open and genuinely never set, because setting it is one more thing to remember at exactly the moment you are thinking about something else.

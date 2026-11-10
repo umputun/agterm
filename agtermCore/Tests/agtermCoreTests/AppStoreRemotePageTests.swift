@@ -38,13 +38,19 @@ struct AppStoreRemotePageTests {
         store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { drafts.kinds.append($0.kind) })
     }
 
-    @Test func onlyFileAndUrlPagesTravelToAnotherMac() throws {
+    @Test func everyLocalPageKindTravelsToAnotherMacButAReplica() throws {
         #expect(AppStore.presentationSource(.file(path: "/a.html", grantRoot: "/")) == .file(path: "/a.html", grantRoot: "/"))
         #expect(AppStore.presentationSource(.url(try #require(URL(string: "https://x.io/")))) == .url("https://x.io/"))
+        #expect(AppStore.presentationSource(.image(path: "/a.png"), imagePixels: ImagePixels(width: 800, height: 600))
+            == .image(path: "/a.png", width: 800, height: 600))
+        #expect(AppStore.presentationSource(.markdown(path: "/a.md")) == .markdown(path: "/a.md"))
+        #expect(AppStore.presentationSource(.text(path: "/a.go", line: 3)) == .text(path: "/a.go", line: 3))
+        #expect(AppStore.presentationSource(.replica(path: "/a.html", content: .html)) == nil)
+        #expect(AppStore.presentationSource(.replica(path: "/a.png", content: .image(width: 1, height: 1))) == nil)
+    }
+
+    @Test func anImageWithoutItsProbedSizeDoesNotTravel() {
         #expect(AppStore.presentationSource(.image(path: "/a.png")) == nil)
-        #expect(AppStore.presentationSource(.markdown(path: "/a.md")) == nil)
-        #expect(AppStore.presentationSource(.text(path: "/a.go", line: 3)) == nil)
-        #expect(AppStore.presentationSource(.replica(path: "/a.html")) == nil)
     }
 
     @Test func aPageOpensOnAPresenterThatSpeaksPages() throws {
@@ -71,15 +77,165 @@ struct AppStoreRemotePageTests {
                                                                                    pageID: page.id.uuidString)])
     }
 
-    @Test func aPresentedSessionRefusesATextPage() throws {
+    @Test(arguments: [
+        (HtmlSource.image(path: "/tmp/shot.png"), PresentationPageSource.image(path: "/tmp/shot.png", width: 640, height: 480)),
+        (.markdown(path: "/tmp/notes/README.md"), .markdown(path: "/tmp/notes/README.md")),
+        (.text(path: "/tmp/src/main.go", line: 3), .text(path: "/tmp/src/main.go", line: 3)),
+        (.document(path: "/tmp/agdoc/pr.html"), .document(path: "/tmp/agdoc/pr.html")),
+    ])
+    func aContentPageOpensOnAPresenterThatBuildsIt(source: HtmlSource, sent: PresentationPageSource) throws {
         let (session, _) = try origin()
-        let page = HtmlOverlay(source: .text(path: "/tmp/src/main.go", line: 3))
+        let page = HtmlOverlay(source: source)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
 
-        #expect(open(session, page) == .local)
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .opened)
+
+        let request = try #require(presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.first)
+        #expect(request.source == sent)
+        #expect(request.sizePercent == nil)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == page.id)
+        #expect(!session.overlayActive)
+    }
+
+    // a presenter that predates document pages cannot decode one and would drop its whole stream
+    @Test func aPresenterWithoutDocumentPagesIsNotHandedOne() throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageDocumentKind })
+        let page = HtmlOverlay(source: .document(path: "/tmp/agdoc/pr.html"))
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil)
+
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .unsupported)
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
+    }
+
+    @Test(arguments: [true, false])
+    func aLinkGrantReachesOnlyAPresenterThatFollowsLinks(supported: Bool) throws {
+        let kinds = PresentationHub.supportedKinds.filter { supported || $0 != PresentationHub.pageLinksKind }
+        let (session, _) = try origin(kinds: kinds)
+        let grant = MarkdownLinkGrant(path: "/tmp/docs/a.md", root: "/tmp/docs")
+        let page = HtmlOverlay(source: .markdown(path: "/tmp/docs/a.md"), navigation: true, markdownLinks: grant)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil)
+
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .opened)
+        let request = presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last
+        #expect(request?.markdownLinks == (supported ? grant : nil))
+        #expect(request?.navigation == supported)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.markdownLinks == (supported ? grant : nil))
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == page.id)
+    }
+
+    @Test(arguments: [HtmlSource.image(path: "/tmp/shot.png"), .markdown(path: "/tmp/a.md"), .text(path: "/tmp/a.go", line: nil)])
+    func aPresenterWithoutContentPagesKeepsTheRefusal(source: HtmlSource) throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageContentKind })
+        let page = HtmlOverlay(source: source)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 10, height: 10))
+
+        #expect(store.openRemotePage(session.id, overlay: page, options: options, now: Self.start) == .unsupported)
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == .presenter)
         #expect(session.remoteOverlays.slots.isEmpty)
         #expect(!session.overlayActive)
         #expect(presenter.bodies.allSatisfy { if case .pageRequest = $0 { false } else { true } })
+    }
+
+    // an auto-sized image left its origin slot without a size, so the tree read it full and a point resize was refused
+    @Test func anAutoSizedImageReservesTheBasePercentAndTakesAPointResize() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        let request = try #require(presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.first)
+        #expect(request.sizePercent == nil)
+        #expect(session.remoteOverlays.slot(nil)?.sizePercent == ImagePage.basePercent)
+        #expect(store.remoteOverlayNodes(of: session)?.first?.sizePercent == ImagePage.basePercent)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .sent)
+        #expect(presenter.commands.last?.sizePercent == ImagePage.basePercent)
+        #expect(presenter.commands.last?.points == OverlayPointSize(width: 600))
+    }
+
+    // a width-only resize replaced the presenter's fitted size, dropping the fitted height
+    @Test func pointResizesOfAPresenterSizedImageSendOnlyTheirAxesToMergeUntilASizeReplacesIt() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+        let resize = { (size: Int?, points: OverlayPointSize) -> PresentationPageCommand? in
+            #expect(self.store.resizeRemoteOverlay(session.id, sizePercent: size, points: points) == .sent)
+            return self.presenter.commands.last
+        }
+
+        let width = try #require(resize(nil, OverlayPointSize(width: 600)))
+        #expect(width.merge == true && width.points == OverlayPointSize(width: 600) && width.sizePercent == ImagePage.basePercent)
+        let height = try #require(resize(nil, OverlayPointSize(height: 300)))
+        #expect(height.merge == true && height.points == OverlayPointSize(height: 300))
+        #expect(session.remoteOverlays.slot(nil)?.points == OverlayPointSize(width: 600, height: 300))
+
+        let replaced = try #require(resize(60, OverlayPointSize(width: 500)))
+        #expect(replaced.merge == nil && replaced.sizePercent == 60 && replaced.points == OverlayPointSize(width: 500))
+        let after = try #require(resize(nil, OverlayPointSize(height: 200)))
+        #expect(after.merge == nil && after.points == OverlayPointSize(width: 500, height: 200))
+    }
+
+    @Test func aFullResizeEndsThePresenterSizing() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize()) == .sent)
+
+        #expect(presenter.commands.last?.merge == nil)
+        #expect(session.remoteOverlays.slot(nil)?.presenterSized == false)
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .notFloating)
+    }
+
+    @Test func aSizedImageAndOtherPagesNeverAskToMerge() throws {
+        let (session, _) = try origin()
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: 70, backgroundColor: nil,
+                                                       imagePixels: ImagePixels(width: 640, height: 480))
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: .image(path: "/tmp/a.png")), options: options,
+                                     now: Self.start) == .opened)
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: nil, points: OverlayPointSize(width: 600)) == .sent)
+
+        #expect(presenter.commands.last?.merge == nil)
+        #expect(presenter.commands.last?.sizePercent == 70)
+    }
+
+    @Test(arguments: [
+        (HtmlSource.image(path: "/tmp/a.png"), OverlayPane?.some(.left), Int?.none, Int?.none),
+        (.image(path: "/tmp/a.png"), nil, 60, 60),
+        (.markdown(path: "/tmp/a.md"), nil, nil, nil),
+    ])
+    func onlyAnUnsizedSessionWideImageTakesTheBasePercent(source: HtmlSource, pane: OverlayPane?, size: Int?, reserved: Int?) throws {
+        let (session, _) = try origin(split: true)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil,
+                                                       pane: pane, imagePixels: ImagePixels(width: 640, height: 480))
+
+        #expect(store.openRemotePage(session.id, overlay: HtmlOverlay(source: source), options: options, now: Self.start) == .opened)
+
+        #expect(session.remoteOverlays.slot(pane)?.sizePercent == reserved)
+    }
+
+    @Test func pageBelongsRemoteAnswersBySessionID() throws {
+        let (session, _) = try origin()
+
+        #expect(store.pageBelongsRemote(session.id, pane: nil))
+        setLead(.leader, pane: session.paneIdentity)
+        #expect(!store.pageBelongsRemote(session.id, pane: nil))
+        #expect(!store.pageBelongsRemote(UUID(), pane: nil))
+    }
+
+    @Test func wrapRefusesAPageThePresenterShows() throws {
+        let (session, _) = try origin()
+
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.remote))
     }
 
     @Test func aPresenterWithoutPageKindsKeepsTheRefusal() throws {
@@ -359,6 +515,26 @@ struct AppStoreRemotePageTests {
         #expect(presenter.commands.map(\.action) == [.back, .forward])
     }
 
+    @Test func aContentPageRefusesFinderAndBrowserLikeAFilePage() throws {
+        let (session, _) = try origin()
+        #expect(open(session, HtmlOverlay(source: .markdown(path: "/tmp/notes/README.md"))) == .opened)
+
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .browser) == .refused(OverlayHtmlError.remotePage))
+        #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .finder) == .refused(OverlayHtmlError.remotePage))
+        #expect(presenter.commands.isEmpty)
+    }
+
+    @Test func expiryEndsAnUnclaimedContentPage() throws {
+        let (session, _) = try origin()
+        let page = HtmlOverlay(source: .text(path: "/tmp/src/main.go", line: nil))
+        #expect(open(session, page) == .opened)
+
+        store.expireRemotePageClaims(now: Self.start.addingTimeInterval(AppStore.pageClaimWindow + 1))
+
+        #expect(session.remoteOverlays.slot(nil) == nil)
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
+    }
+
     @Test func finderOnAUrlPageGivesTheLocalAnswer() throws {
         let (session, _) = try origin()
         #expect(open(session, try url("https://example.com/a")) == .opened)
@@ -433,6 +609,63 @@ struct AppStoreRemotePageTests {
         #expect(HtmlPageOutcomes.shared.outcome(for: filePage.id)?.outcome == .dismissed)
     }
 
+    @Test func aForwardedClickReplacesAHiddenClickedPage() throws {
+        let (session, _) = try origin()
+        let old = clicked("/tmp/a.md")
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+        let new = clicked("/tmp/b.md")
+
+        #expect(open(session, new, forwarded: true) == .opened)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == new.id)
+        #expect(presenter.bodies.contains(.pageClose(PresentationPageChange(page: old.id.uuidString))))
+    }
+
+    @Test func aForwardedClickLeavesAShownOrUnclickedPageInPlace() throws {
+        let (session, _) = try origin()
+        let shown = clicked("/tmp/a.md")
+        #expect(open(session, shown) == .opened)
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .slotTaken)
+        #expect(store.closeRemoteOverlay(session.id, pane: nil))
+
+        let unclicked = HtmlOverlay(source: .markdown(path: "/tmp/c.md"))
+        #expect(open(session, unclicked) == .opened)
+        report(unclicked, session, hidden: true)
+        #expect(open(session, clicked("/tmp/d.md"), forwarded: true) == .slotTaken)
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == unclicked.id)
+    }
+
+    @Test func aRefusedForwardedClickKeepsTheHiddenPage() throws {
+        let (session, _) = try origin(split: true)
+        let old = clicked("/tmp/a.md")
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+
+        let huge = HtmlOverlay(source: .markdown(path: "/" + String(repeating: "a", count: 300_000)), clicked: true)
+        #expect(open(session, huge, forwarded: true) == .tooLarge)
+        setLead(.leader, pane: try #require(session.splitPaneIdentity))
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .local)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == old.id)
+        #expect(!presenter.bodies.contains(.pageClose(PresentationPageChange(page: old.id.uuidString))))
+    }
+
+    @Test func aForwardedClickAPresenterCannotShowKeepsTheHiddenPage() throws {
+        let (session, _) = try origin(kinds: PresentationHub.pageKinds)
+        let old = HtmlOverlay(source: .file(path: "/tmp/docs/a.html", grantRoot: "/tmp/docs"), clicked: true)
+        #expect(open(session, old) == .opened)
+        report(old, session, hidden: true)
+
+        #expect(open(session, clicked("/tmp/b.md"), forwarded: true) == .unsupported)
+
+        #expect(session.remoteOverlays.slot(nil)?.page?.overlay.id == old.id)
+    }
+
+    private func clicked(_ path: String) -> HtmlOverlay {
+        HtmlOverlay(source: .markdown(path: path), clicked: true)
+    }
+
     private func origin(kinds: [String] = PresentationHub.supportedKinds,
                         split: Bool = false) throws -> (Session, PresentationHub.SubscriberID?) {
         store.presentationHub = hub
@@ -452,10 +685,11 @@ struct AppStoreRemotePageTests {
         return (session, id)
     }
 
-    private func open(_ session: Session, _ page: HtmlOverlay, pane: OverlayPane? = nil, size: Int? = nil) -> RemotePageOpen {
+    private func open(_ session: Session, _ page: HtmlOverlay, pane: OverlayPane? = nil, size: Int? = nil,
+                      forwarded: Bool = false) -> RemotePageOpen {
         store.openRemotePage(session.id, overlay: page, options: ControlSessionOverlayOpenOptions(
-            command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil, follow: true, pane: pane),
-                             now: Self.start)
+            command: "", cwd: nil, wait: false, sizePercent: size, backgroundColor: nil, follow: true, pane: pane,
+            forwarded: forwarded), now: Self.start)
     }
 
     private func file() -> HtmlOverlay {

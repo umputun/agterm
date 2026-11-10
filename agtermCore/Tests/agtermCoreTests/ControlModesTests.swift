@@ -112,4 +112,13 @@ struct ControlModesTests {
         #expect(ControlFlaggedLayoutMode.parse("toggle") == .toggle)
         #expect(ControlFlaggedLayoutMode.parse("grid") == nil)
     }
+
+    @Test func sidebarDensityModeParsesModes() {
+        #expect(ControlSidebarDensityMode.parse(nil) == .toggle)
+        #expect(ControlSidebarDensityMode.parse("default") == .standard)
+        #expect(ControlSidebarDensityMode.parse("compact") == .compact)
+        #expect(ControlSidebarDensityMode.parse("toggle") == .toggle)
+        #expect(ControlSidebarDensityMode.parse("standard") == nil)
+        #expect(ControlSidebarDensityMode.parse("Compact") == nil)
+    }
 }

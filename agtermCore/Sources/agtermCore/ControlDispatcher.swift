@@ -13,6 +13,10 @@ public struct ControlDispatcher {
     }
 
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
+        // a receipt the host never keeps would read as a durable answer
+        if request.args?.opID != nil, !actions.takesOperationReceipts {
+            return ControlResponse(ok: false, error: "operation receipts are served only by agterm-server")
+        }
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
@@ -31,12 +35,13 @@ public struct ControlDispatcher {
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
                 .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy, .sessionOverlayText,
-                .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
-                .sessionBackground, .sessionText:
+                .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
+                .sessionOverlaySearch, .sessionOverlayChanges, .sessionOverlayWrap, .sessionBackground, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
-        case .sessionCompanionNew, .sessionCompanionPage, .sessionCompanionDuplicate, .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
+        case .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionCompanionDuplicate, .sessionCompanionConvert,
+                .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
             return await dispatchCompanionCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
@@ -44,10 +49,24 @@ public struct ControlDispatcher {
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .keymapList, .keymapRun,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarFlaggedLayout,
-                .sidebarExpand, .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
+                .sidebarDensity, .sidebarExpand, .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
         case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
+        case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
+            return dispatchDetachCommand(request)
+        case .catalogSubscribe:
+            return actions.catalogSubscribe()
+        case .catalogOp:
+            guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
+                return ControlResponse(ok: false, error: "catalog.op requires an operation id")
+            }
+            let epoch = request.args?.epoch?.trimmedOrNil
+            let rev = request.args?.rev
+            guard (epoch == nil) == (rev == nil) else {
+                return ControlResponse(ok: false, error: "catalog.op takes epoch and rev together")
+            }
+            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
         case .recentList, .recentOpen, .recentClear:
@@ -57,7 +76,8 @@ public struct ControlDispatcher {
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,
-                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize:
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize,
+                .windowRemoteOpen:
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
@@ -419,9 +439,14 @@ public struct ControlDispatcher {
         case .sessionSearch:
             return await actions.searchSession(request.target, window: request.args?.window,
                                                text: request.args?.text, to: request.args?.to)
+        case .sessionOverlaySearch:
+            return await dispatchSessionOverlaySearch(request)
+        case .sessionOverlayChanges:
+            return await dispatchSessionOverlayChanges(request)
         case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload,
              .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy,
-             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
+             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
+             .sessionOverlayWrap:
             return dispatchSessionOverlayCommand(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)
@@ -481,6 +506,11 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid flagged layout: \(request.args?.mode ?? "toggle")")
             }
             return actions.setFlaggedViewLayout(mode)
+        case .sidebarDensity:
+            guard let mode = ControlSidebarDensityMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false, error: "invalid sidebar density: \(request.args?.mode ?? "toggle")")
+            }
+            return actions.setSidebarDensity(mode)
         case .sidebarExpand:
             return actions.expandSidebar(window: request.args?.window)
         case .sidebarCollapse:
@@ -677,6 +707,14 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "invalid window minimize mode: \(request.args?.mode ?? "toggle")")
             }
             return await actions.windowMinimize(request.target, mode: mode)
+        case .windowRemoteOpen:
+            guard let host = request.args?.host?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "window.remote.open requires a host")
+            }
+            guard RemoteSession.isHost(host) else {
+                return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
+            }
+            return await actions.windowRemoteOpen(host: host)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

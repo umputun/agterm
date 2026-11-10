@@ -27,10 +27,11 @@ extension WorkspaceSidebar.Coordinator {
 
     func outlineView(_ outlineView: NSOutlineView, heightOfRowByItem item: Any) -> CGFloat {
         let base = GhosttyApp.shared.sidebarFontSize
+        let density = GhosttyApp.shared.sidebarDensity
         guard let node = item as? SidebarNode, node.kind == .session, sessionInfo(forSession: node.id) != nil else {
-            return AppSettings.sidebarRowHeight(fontSize: base)
+            return AppSettings.sidebarRowHeight(fontSize: base, density: density)
         }
-        return SidebarInfoMetrics.rowHeight(base: base)
+        return SidebarInfoMetrics.rowHeight(base: base, density: density)
     }
 
     /// sessionInfo is the info line a session row shows, shared by the height, the cell builder and the row diff.
@@ -61,6 +62,8 @@ extension WorkspaceSidebar.Coordinator {
         let cell = (outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarCellView) ?? makeCell(identifier: identifier)
 
         let field = cell.textField!
+        (field.cell as? SidebarNameFieldCell)?.renameController = renameController
+        cell.titleCenter?.constant = -GhosttyApp.shared.sidebarDensity.titleLift
         field.delegate = renameController
         // a reused cell may carry editing state from a prior rename; reset to label
         field.isEditable = false
@@ -70,6 +73,7 @@ extension WorkspaceSidebar.Coordinator {
         // glyph: each branch assigns it in full, and an idle round-trip restarts the blink on reload.
         applyBadge(toCell: cell, count: 0)
         cell.setAddButtonVisible(false)
+        cell.addButton?.isEnabled = !store.serverActionsBlocked
         cell.notice = nil
         cell.setIconVisible(!GhosttyApp.shared.hiddenInterfaceElements.contains(node.kind.iconElement))
         switch node.kind {
@@ -115,7 +119,10 @@ extension WorkspaceSidebar.Coordinator {
             cell.notice = notice
             cell.imageView?.setAccessibilityIdentifier("session-icon")
             cell.tint = session?.tint
-            if let info { (cell as? SidebarInfoCellView)?.apply(spans: info, base: GhosttyApp.shared.sidebarFontSize) }
+            if let info {
+                (cell as? SidebarInfoCellView)?.apply(spans: info, base: GhosttyApp.shared.sidebarFontSize,
+                                                      density: GhosttyApp.shared.sidebarDensity)
+            }
         }
         // text/icon colors track the terminal theme, a selected row the selection foreground, and a row
         // tint overrides the parts it colors. This build-time pass is a first guess: row(forItem:) can
@@ -139,11 +146,8 @@ extension WorkspaceSidebar.Coordinator {
         }
     }
 
-    /// The notice a remote row shows while its presentation stream is not up, nil otherwise.
-    func presentationNotice(for session: Session) -> String? {
-        guard let host = session.remoteHost else { return nil }
-        return session.remoteConnection?.rowNotice(host: host)
-    }
+    /// presentationNotice is the line a remote row shows while it has ended or its stream is not up.
+    func presentationNotice(for session: Session) -> String? { session.remoteRowNotice }
 
     /// Shows the unseen-notification `count` capsule on the row (hidden, zero-width when 0, so the
     /// name reclaims the space). The `notify-badge` accessibility hook lives on `BadgeView`.
@@ -152,20 +156,19 @@ extension WorkspaceSidebar.Coordinator {
         cell.badge.count = count
     }
 
-    /// The leading session-row icon: split-rectangle when split, else plain terminal, each swapped to its
-    /// filled variant when `flagged` — tree mode only, the flat flagged view passes `flagged: false`.
-    ///
-    /// A remote row takes its own glyph and keeps the split bit, not the flagged fill: a HIDDEN split is
-    /// state nothing else reveals, while the fill is tree-mode decoration the flat flagged view already
-    /// passes `flagged: false` for. It marks that split by WEIGHT, as the focused-workspace icon does,
-    /// because `.fill` is what every other row icon spends on FLAGGED, so a filled cloud would read as a
-    /// flag. The axis is not distinguished — no cloud symbol carries both arrangements.
-    ///
-    /// A remote row whose presentation stream is down swaps the cloud for its slashed form.
+    /// iconForSession uses filled variants when flagged; the flat flagged view passes false. Remote rows use
+    /// clouds, slashed for a notice; bold marks a split but is barely distinguishable when filled. Remote split
+    /// axes share a glyph.
     private func iconForSession(split: Bool, axis: SplitAxis, flagged: Bool, remote: Bool,
                                 disconnected: Bool) -> NSImage? {
-        if remote, disconnected { return split ? remoteDisconnectedSplitSessionIcon : remoteDisconnectedSessionIcon }
-        if remote { return split ? remoteSplitSessionIcon : remoteSessionIcon }
+        if remote, disconnected {
+            if flagged { return split ? flaggedRemoteDisconnectedSplitSessionIcon : flaggedRemoteDisconnectedSessionIcon }
+            return split ? remoteDisconnectedSplitSessionIcon : remoteDisconnectedSessionIcon
+        }
+        if remote {
+            if flagged { return split ? flaggedRemoteSplitSessionIcon : flaggedRemoteSessionIcon }
+            return split ? remoteSplitSessionIcon : remoteSessionIcon
+        }
         switch (split, axis, flagged) {
         case (true, .topBottom, true): return flaggedHorizontalSplitSessionIcon
         case (true, .topBottom, false): return horizontalSplitSessionIcon
@@ -193,7 +196,8 @@ extension WorkspaceSidebar.Coordinator {
         let band = NSLayoutGuide()
         cell.addLayoutGuide(band)
         let bandHeight = band.heightAnchor.constraint(
-            equalToConstant: AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize))
+            equalToConstant: AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize,
+                                                          density: GhosttyApp.shared.sidebarDensity))
         infoCell?.titleBandHeight = bandHeight
         let center = infoCell == nil ? cell.centerYAnchor : band.centerYAnchor
 
@@ -208,7 +212,7 @@ extension WorkspaceSidebar.Coordinator {
         let iconWidth = icon.widthAnchor.constraint(equalToConstant: SidebarCellView.iconWidth)
         cell.iconWidthConstraint = iconWidth
 
-        let field = NSTextField(labelWithString: "")
+        let field = SidebarNameField(labelWithString: "")
         field.translatesAutoresizingMaskIntoConstraints = false
         field.lineBreakMode = .byTruncatingTail
         field.isEditable = false
@@ -221,6 +225,8 @@ extension WorkspaceSidebar.Coordinator {
         cell.textField = field
         let iconGap = field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: SidebarCellView.iconGap)
         cell.iconGapConstraint = iconGap
+        let titleCenter = field.centerYAnchor.constraint(equalTo: center, constant: -GhosttyApp.shared.sidebarDensity.titleLift)
+        cell.titleCenter = titleCenter
 
         let statusIcon = cell.statusIcon
         statusIcon.translatesAutoresizingMaskIntoConstraints = false
@@ -240,7 +246,7 @@ extension WorkspaceSidebar.Coordinator {
             iconWidth,
             icon.heightAnchor.constraint(equalToConstant: 16),
             iconGap,
-            field.centerYAnchor.constraint(equalTo: center),
+            titleCenter,
             // chain: name (flex) | [+ button for workspace] | status icon | badge (trailing).
             // the status icon and badge hug their content, so the name truncates first and both stay whole.
             statusIcon.trailingAnchor.constraint(equalTo: badge.leadingAnchor),
@@ -302,15 +308,26 @@ extension WorkspaceSidebar.Coordinator {
             info.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             info.setAccessibilityIdentifier("session-info")
             cell.addSubview(info)
+            let infoTop = info.topAnchor.constraint(equalTo: band.bottomAnchor,
+                                                    constant: -GhosttyApp.shared.sidebarDensity.infoLineSpacing)
+            infoCell.infoTop = infoTop
             constraints += [
                 info.leadingAnchor.constraint(equalTo: field.leadingAnchor),
                 info.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
-                info.topAnchor.constraint(equalTo: band.bottomAnchor, constant: -SidebarInfoMetrics.lift),
+                infoTop,
             ]
         }
 
         NSLayoutConstraint.activate(constraints)
         return cell
+    }
+
+    /// applyAddButtonEnabled sets every shown workspace row's "+" to whether a new session can be made now.
+    func applyAddButtonEnabled(_ enabled: Bool) {
+        guard let outline = outlineView else { return }
+        for row in 0..<outline.numberOfRows {
+            (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView)?.addButton?.isEnabled = enabled
+        }
     }
 
     private func makeAddSessionButton() -> NSButton {

@@ -12,7 +12,7 @@ public struct PersistenceStore {
     private let directory: URL
     private let fileName: String
 
-    private var fileURL: URL { directory.appendingPathComponent(fileName) }
+    var fileURL: URL { directory.appendingPathComponent(fileName) }
 
     /// Creates a store rooted at `directory`, defaulting to the app's Application Support directory.
     /// `fileName` defaults to `workspaces.json`; a per-window store overrides it to `windows/<id>.json`.

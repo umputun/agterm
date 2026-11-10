@@ -42,8 +42,12 @@ extension ControlServer: ControlActions {
             }
             // the control path is trusted and synchronous: a file on slow storage stalls the app while it is read
             if let path = options.page?.imagePath { return openImageFile(in: store, sessionID: id, path: path, options: options) }
-            if let path = options.page?.markdownPath, let refusal = markdownFileRefusal(path) { return refusal }
-            if let path = options.page?.textPath, let refusal = textFileRefusal(path) { return refusal }
+            if let path = options.page?.markdownPath {
+                if let refusal = markdownFileRefusal(path) { return refusal }
+                let links = options.navigation ? MarkdownPage.linkGrant(for: path) : nil
+                return openHtmlOverlay(in: store, sessionID: id, page: .markdown(path: path), options: options.with(markdownLinks: links))
+            }
+            if let path = options.page?.textPath, let refusal = textFileRefusal(path, log: options.textLog) { return refusal }
             if let page = options.page {
                 return openHtmlOverlay(in: store, sessionID: id, page: page, options: options)
             }
@@ -73,36 +77,18 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// openLinkOverlay shows a clicked link as a browsing page over its session, at `sizePercent` or full size
-    /// when nil, and says whether it did.
-    /// A HUD on the session and a zoomed terminal in its window both refuse it up front: the store would
-    /// accept the page, closing the HUD for good in one case and showing nothing in the other.
-    func openLinkOverlay(_ url: URL, session id: UUID, sizePercent: Int?) -> Bool {
-        guard canShowLinkOverlay(session: id) else { return false }
-        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
-                                                       backgroundColor: nil, page: .url(url), navigation: true,
-                                                       javascript: true, persistent: true, browse: true)
-        return openSessionOverlay(id.uuidString, window: nil, options: options).ok
-    }
-
-    /// canShowLinkOverlay is the up-front HUD and zoom refusal `openLinkOverlay` describes.
-    func canShowLinkOverlay(session id: UUID) -> Bool {
-        guard let session = library.store(forSession: id)?.session(withID: id), !session.hudActive else { return false }
-        if let windowID = library.windowID(forSession: id),
-           TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil { return false }
-        return true
-    }
-
     // a page the placement rule hands to the presenting Mac is stored, rendered and followed there, so none of
     // the local persistent store check, page build or `--follow` happens here
     func openHtmlOverlay(in store: AppStore, sessionID id: UUID, page: HtmlSource,
                          options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         let alreadyOpen = options.pane == nil ? "overlay already open" : PaneOverlayError.alreadyOpen
+        if let refusal = textLogRefusal(in: store, sessionID: id, options: options) { return refusal }
         let overlay = HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript,
-                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse)
+                                  chromeless: options.chromeless, persistent: options.persistent, browse: options.browse,
+                                  clicked: options.clicked, textLog: options.textLog, markdownLinks: options.markdownLinks)
         switch store.openRemotePage(id, overlay: overlay, options: options) {
         case .opened:
-            if case .file = page { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
+            if page.kind != .url { schedulePageClaimExpiry(after: AppStore.pageClaimWindow) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, pageID: overlay.id.uuidString))
         case .slotTaken: return ControlResponse(ok: false, error: alreadyOpen)
         case .paneMissing: return ControlResponse(ok: false, error: PaneOverlayError.paneNotVisible)
@@ -110,7 +96,7 @@ extension ControlServer: ControlActions {
         case .loopback: return ControlResponse(ok: false, error: OverlayHtmlError.remoteLoopback)
         case .tooLarge: return ControlResponse(ok: false, error: OverlayHtmlError.remoteTooLarge)
         case .pointsUnsupported: return ControlResponse(ok: false, error: OverlayPointError.remote)
-        case .local: break
+        case .local: if options.forwarded { return ControlResponse(ok: false, error: OverlayHtmlError.presenter) }
         }
         if store.session(withID: id)?.remoteOverlays.slot(options.pane) != nil {
             return ControlResponse(ok: false, error: alreadyOpen)
@@ -250,35 +236,7 @@ extension ControlServer: ControlActions {
 
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard let session = store.session(withID: id) else {
-                return ControlResponse(ok: false, error: "no such session")
-            }
-            if session.remoteOverlays.slot(pane)?.page != nil {
-                return ControlResponse(ok: false, error: OverlayHtmlError.noResult)
-            }
-            if let slot = session.remoteOverlays.slot(pane), !slot.ended {
-                return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
-            }
-            if session.htmlCovers(pane) {
-                return ControlResponse(ok: false, error: OverlayHtmlError.noResult)
-            }
-            let (running, exitCode) = pane.map { (session.paneOverlay($0) != nil, session.paneOverlayExitCode($0)) }
-                ?? (session.programOverlayActive, session.overlayExitCode)
-            if running {
-                return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
-            }
-            if exitCode == nil, let failure = session.remoteOverlays.failure(pane) {
-                return ControlResponse(ok: false, error: OverlayResultError.ended(failure))
-            }
-            // a HUD opened after a program clears its result, so one recorded here is a remote job's that
-            // ended under a HUD; the painter itself never reports a status
-            if exitCode == nil, pane == nil, session.hudActive {
-                return ControlResponse(ok: false, error: OverlayHudError.noResult)
-            }
-            guard let code = exitCode else {
-                return ControlResponse(ok: false, error: OverlayResultError.noResult)
-            }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, exitCode: code))
+            store.session(withID: id)?.overlayResult(pane: pane) ?? ControlResponse(ok: false, error: "no such session")
         }
     }
 

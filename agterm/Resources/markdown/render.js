@@ -3,6 +3,7 @@
   const source = document.getElementById('agterm-markdown');
   const page = document.getElementById('agterm-page');
   if (!source || !page || typeof markdownit !== 'function') return;
+  const local = source.dataset.links === 'local';
   let images = {};
   try { images = JSON.parse(source.dataset.images || '{}'); } catch (_) { images = {}; }
   const refs = images.references || {}, uris = images.uris || [];
@@ -32,18 +33,29 @@
     }
     return `<span class="agterm-alt">${alt || md.utils.escapeHtml(key)}</span>`;
   };
-  page.innerHTML = md.render(source.textContent);
+  // markdown-it knows no frontmatter: its closing `---` would turn the yaml into a setext heading
+  let text = source.textContent, front = '';
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (fm) {
+    const yaml = md.options.highlight(fm[1], 'yaml') || md.utils.escapeHtml(fm[1]);
+    front = `<pre class="agterm-frontmatter"><code class="language-yaml">${yaml}</code></pre>`;
+    text = text.slice(fm[0].length);
+  }
+  page.innerHTML = front + md.render(text);
   source.remove();
   for (const img of page.querySelectorAll('img[data-agterm-image]')) {
     img.src = uris[Number(img.dataset.agtermImage)];
     img.removeAttribute('data-agterm-image');
   }
 
-  // a web link goes through the app's confirmed hand-off and a fragment scrolls in place; anything else
-  // (about:, a relative file, another scheme) would navigate the page off its document, so it stays text
+  // a web link goes through the app's confirmed hand-off and a fragment scrolls in place; anything else would
+  // navigate the page off its document, except on a link page a relative markdown link, whose target the app
+  // judges again before reading it
+  const neighbour = (href) => local && !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('/') &&
+    !href.includes('\\') && /\.(md|markdown)$/i.test(href.split(/[?#]/)[0]);
   for (const link of page.querySelectorAll('a[href]')) {
     const href = link.getAttribute('href');
-    if (/^https?:\/\//i.test(href) || /^#[^#]*$/.test(href)) continue;
+    if (/^https?:\/\//i.test(href) || /^#[^#]*$/.test(href) || neighbour(href)) continue;
     link.removeAttribute('href');
   }
 

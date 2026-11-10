@@ -4,12 +4,10 @@ import agtermCore
 /// Installs the bundled agent skill into the skills directories of the coding agents present on the machine:
 /// Claude Code (`~/.claude/skills/agterm/`) and Codex (`~/.codex/skills/agterm/`), both using the same
 /// SKILL.md Agent-Skill format, so an agent running INSIDE an agterm session learns to drive the app via
-/// `agtermctl`. The host-free path/target/ownership logic is `agtermCore.SkillInstall`; this type owns the
-/// AppKit filesystem glue. Idempotent, and it refuses to overwrite a same-named skill the user authored.
+/// `agtermctl`. The copy is `agtermCore.SkillInstall.install`; this type owns the alert. Idempotent, and it
+/// refuses to overwrite a same-named skill the user authored.
 @MainActor
 enum SkillInstaller {
-    private struct InstallError: Error { let message: String }
-
     /// The bundled source folder at `Contents/Resources/agterm`, or nil when this build skipped the
     /// resource bundling (e.g. a bare `swift build`). The name follows the skill directory's own
     /// basename in `plugins/agterm/skills/agterm`, which `project.yml` copies verbatim.
@@ -17,11 +15,7 @@ enum SkillInstaller {
         Bundle.main.resourceURL?.appendingPathComponent(SkillInstall.skillName)
     }
 
-    private struct Report {
-        var installed: [(agent: String, path: String)] = []
-        var skipped: [(agent: String, reason: String)] = []
-        var freshSkillsDir = false
-    }
+    private typealias Report = SkillInstall.Report
 
     /// Run the install and show a result alert.
     static func run() {
@@ -29,62 +23,17 @@ enum SkillInstaller {
     }
 
     static func run(probe: OpenCodeEnvironmentProbe.Result?) {
-        do {
-            let result = try install(codexHome: probe?.codexHome)
-            present(style: result.warning ? .warning : .informational,
-                    title: result.installed ? "Agent Skill Installed" : "Skill Not Installed",
-                    text: result.text)
-        } catch let error as InstallError {
-            present(style: .warning, title: "Install Failed", text: error.message)
-        } catch {
-            present(style: .warning, title: "Install Failed", text: error.localizedDescription)
+        // install throws only for a missing source; a failed copy is a per-target skip in the report
+        guard let source = bundledFolder,
+              let report = try? SkillInstall.install(source: source, home: FileManager.default.homeDirectoryForCurrentUser,
+                                                     codexHome: probe?.codexHome.map { URL(fileURLWithPath: $0) }) else {
+            present(style: .warning, title: "Install Failed", text: "The agent skill is not bundled in this build.")
+            return
         }
-    }
-
-    // Internal so hosted fixtures can install into temporary roots without opening a modal.
-    static func install(home: String = FileManager.default.homeDirectoryForCurrentUser.path,
-                        codexHome: String? = nil, source: URL? = bundledFolder) throws -> (installed: Bool, warning: Bool, text: String) {
-        guard let source, FileManager.default.fileExists(atPath: source.path) else {
-            throw InstallError(message: "The agent skill is not bundled in this build.")
-        }
-        let fm = FileManager.default
-        let codexDirectory = codexHome ?? home + "/.codex"
-        let codexExists = fm.fileExists(atPath: codexDirectory)
-        let skipPrefixes = codexHome.map { ["Codex": $0 + "/skills/" + SkillInstall.skillName + ": "] } ?? [:]
-        let targets = SkillInstall.installTargets(home: home,
-                                                  claudeExists: fm.fileExists(atPath: home + "/.claude"),
-                                                  codexExists: codexExists,
-                                                  codexHome: codexDirectory)
-        var report = Report()
-        if codexHome != nil, !codexExists {
-            report.skipped.append(("Codex", "no \(codexDirectory) found"))
-        }
-        for target in targets {
-            let destination = URL(fileURLWithPath: target.skillDirectory)
-            // refuse to clobber a same-named skill the user authored (a present dir whose SKILL.md is
-            // absent, unreadable, or lacks the agterm marker). `attributesOfItem` uses lstat semantics (does
-            // NOT follow the final symlink), so any symlink at the destination counts as present —
-            // `fileExists(atPath:)` follows it and reads a dangling one as absent, letting the wipe path
-            // delete the user's own symlink.
-            let directoryExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
-            let existingSKILL = try? String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8)
-            guard SkillInstall.mayOverwrite(directoryExists: directoryExists, existingSKILL: existingSKILL) else {
-                let reason = "a different '\(SkillInstall.skillName)' skill is already there — left untouched"
-                report.skipped.append((target.agent, skipPrefixes[target.agent, default: ""] + reason))
-                continue
-            }
-            do {
-                let skillsDir = destination.deletingLastPathComponent()
-                if !fm.fileExists(atPath: skillsDir.path) { report.freshSkillsDir = true }
-                try fm.createDirectory(at: skillsDir, withIntermediateDirectories: true)
-                try? fm.removeItem(at: destination) // drop a prior agterm install (ignore if absent)
-                try fm.copyItem(at: source, to: destination)
-                report.installed.append((target.agent, destination.path))
-            } catch {
-                report.skipped.append((target.agent, skipPrefixes[target.agent, default: ""] + error.localizedDescription))
-            }
-        }
-        return (!report.installed.isEmpty, report.installed.isEmpty || !report.skipped.isEmpty, message(report))
+        let problem = report.installed.isEmpty || !report.skipped.isEmpty
+        present(style: problem ? .warning : .informational,
+                title: report.installed.isEmpty ? "Skill Not Installed" : "Agent Skill Installed",
+                text: message(report))
     }
 
     private static func message(_ report: Report) -> String {
@@ -93,7 +42,7 @@ enum SkillInstaller {
             lines.append("The skill was not installed.")
         } else {
             lines.append("Installed for:")
-            for entry in report.installed { lines.append("  • \(entry.agent): \(entry.path)") }
+            for entry in report.installed { lines.append("  • \(entry.agent): \(entry.skillDirectory)") }
             lines.append("")
             lines.append("The agent uses it automatically when you ask it to control agterm. It drives the "
                 + "app via the agtermctl CLI, so install that too if you haven't: Help ▸ Install Command Line Tool…")

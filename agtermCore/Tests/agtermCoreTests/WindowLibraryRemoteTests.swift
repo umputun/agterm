@@ -1,0 +1,413 @@
+import Foundation
+import Testing
+@testable import agtermCore
+
+@MainActor
+final class WindowLibraryRemoteTests {
+    private let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agts-remote-\(UUID().uuidString)")
+    private let workspaceID = UUID()
+
+    deinit { try? FileManager.default.removeItem(at: directory) }
+
+    private var windowFiles: [String] {
+        (try? FileManager.default.contentsOfDirectory(atPath: directory.appendingPathComponent("windows").path)) ?? []
+    }
+
+    private final class Binder: RemoteCatalogEffects {
+        let bind: (UUID) -> Bool
+        init(bind: @escaping (UUID) -> Bool) { self.bind = bind }
+        func attachCommand(host _: String, pane _: CatalogPane) -> String { "attach" }
+        func catalogRowAdded(_: Session) {}
+        func catalogRowRemoved(_: UUID) {}
+        func catalogRowEnded(_: UUID) {}
+        func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
+        func catalogBound(_ catalogID: UUID) -> Bool { bind(catalogID) }
+        func catalogStateChanged(_: RemoteCatalogMirror.State) {}
+    }
+
+    private func snapshot(_ catalogID: UUID) -> CatalogSnapshot {
+        CatalogSnapshot(epoch: "e1", rev: 0, catalogID: catalogID,
+                        versions: CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1), workspaces: [])
+    }
+
+    private func mirror(_ library: WindowLibrary, window id: UUID, host: String,
+                        viewState: RemoteWindowViewState = RemoteWindowViewState()) throws -> (RemoteCatalogMirror, Binder) {
+        let binder = Binder { catalogID in
+            if case .duplicate = library.bindCatalog(catalogID, toWindow: id) { return false }
+            return true
+        }
+        let store = try #require(library.store(for: id))
+        return (RemoteCatalogMirror(host: host, store: store, effects: binder, viewState: viewState), binder)
+    }
+
+    private func catalogSession(_ id: UUID = UUID(), ended: Bool = false) -> CatalogSession {
+        let pane = CatalogPane(identity: UUID(), daemon: "agterm-\(id.uuidString)",
+                               endpoint: ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx"))
+        return CatalogSession(fields: CatalogSessionFields(id: id, name: "s", parent: nil, cwd: "/srv", primary: pane.identity, axis: nil,
+                                                           shown: false, lifecycle: ended ? .ended : .live),
+                              panes: ended ? [] : [pane])
+    }
+
+    private func snapshot(_ catalogID: UUID, sessions: [CatalogSession], epoch: String = "e1") -> CatalogSnapshot {
+        CatalogSnapshot(epoch: epoch, rev: 0, catalogID: catalogID, versions: CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1),
+                        workspaces: [CatalogWorkspace(id: workspaceID, name: "w", sessions: sessions)])
+    }
+
+    private func relaunch(_ library: WindowLibrary, window id: UUID, catalog: UUID,
+                          sessions: [CatalogSession]) throws -> (WindowLibrary, RemoteCatalogMirror, Binder) {
+        try #require(library.store(for: id)).save()
+        let relaunched = WindowLibrary(directory: directory)
+        let (mirror, binder) = try mirror(relaunched, window: id, host: "buildbox", viewState: relaunched.remoteViewState(for: id))
+        _ = mirror.receive(.snapshot(snapshot(catalog, sessions: sessions, epoch: "e2")))
+        return (relaunched, mirror, binder)
+    }
+
+    @Test func theHooksBracketARemoteStoreAndALocalWindowFiresNeither() throws {
+        let library = WindowLibrary(directory: directory)
+        var opened: [UUID] = [], closed: [UUID] = []
+        library.onRemoteStoreOpened = { id, _ in opened.append(id) }
+        library.onRemoteStoreClosed = { closed.append($0) }
+
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let local = library.newWindow()
+        library.closeWindow(remote.id)
+        library.closeWindow(local.id)
+        library.loadStore(for: remote.id)
+
+        #expect(opened == [remote.id, remote.id])
+        #expect(closed == [remote.id])
+        #expect(library.openRemoteStores.map(\.id) == [remote.id])
+    }
+
+    @Test func anAliasWhoseSnapshotArrivesAfterItOpenedSettlesToTheWindowShowingThatCatalog() throws {
+        let library = WindowLibrary(directory: directory)
+        let catalog = UUID()
+        let first = library.newRemoteWindow(host: "buildbox")
+        #expect(library.bindCatalog(catalog, toWindow: first.id) == .bound)
+        let alias = library.newRemoteWindow(host: "buildbox.local")
+        let (aliasMirror, binder) = try mirror(library, window: alias.id, host: "buildbox.local")
+
+        let beforeSnapshot = library.settledRemoteWindowID(for: alias.id)
+        _ = aliasMirror.receive(.snapshot(snapshot(catalog)))
+
+        #expect(beforeSnapshot == nil)
+        #expect(library.settledRemoteWindowID(for: alias.id) == first.id)
+        #expect(withExtendedLifetime(binder) { aliasMirror.state } == .refused("another window already shows the catalog of buildbox.local"))
+    }
+
+    @Test func aClosedWindowShowingTheCatalogIsStillTheOneAnAliasSettlesTo() throws {
+        let library = WindowLibrary(directory: directory)
+        let catalog = UUID()
+        let first = library.newRemoteWindow(host: "buildbox")
+        #expect(library.bindCatalog(catalog, toWindow: first.id) == .bound)
+        library.closeWindow(first.id)
+        let alias = library.newRemoteWindow(host: "buildbox.local")
+        let (aliasMirror, binder) = try mirror(library, window: alias.id, host: "buildbox.local")
+
+        _ = aliasMirror.receive(.snapshot(snapshot(catalog)))
+
+        #expect(withExtendedLifetime(binder) { library.settledRemoteWindowID(for: alias.id) } == first.id)
+        #expect(!library.isOpen(first.id))
+    }
+
+    @Test func aWindowWhoseServerAnsweredSettlesToItself() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let (remoteMirror, binder) = try mirror(library, window: remote.id, host: "buildbox")
+
+        _ = remoteMirror.receive(.snapshot(snapshot(UUID())))
+        let connected = library.settledRemoteWindowID(for: remote.id)
+        let unreachable = library.newRemoteWindow(host: "gone")
+        let (goneMirror, goneBinder) = try mirror(library, window: unreachable.id, host: "gone")
+        goneMirror.connectionLost("gone did not answer")
+
+        #expect(withExtendedLifetime(binder) { connected } == remote.id)
+        #expect(withExtendedLifetime(goneBinder) { library.settledRemoteWindowID(for: unreachable.id) } == unreachable.id)
+    }
+
+    @Test func treeAndWindowListReportTheServerItsCatalogAndTheConnection() throws {
+        let library = WindowLibrary(directory: directory)
+        let local = try #require(library.activeWindowID)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let catalog = UUID()
+        let (remoteMirror, binder) = try mirror(library, window: remote.id, host: "buildbox")
+
+        let connecting = library.remoteNode(for: remote.id)
+        _ = remoteMirror.receive(.snapshot(snapshot(catalog)))
+        remoteMirror.connectionLost("exit 255")
+        let nodes = withExtendedLifetime(binder) { library.controlWindowNodes() }
+        library.closeWindow(remote.id)
+
+        #expect(library.remoteNode(for: local) == nil)
+        #expect(connecting?.state == "connecting")
+        #expect(connecting?.catalogID == nil)
+        let listed = try #require(nodes.first { $0.id == remote.id.uuidString }?.remote)
+        #expect(listed.host == "buildbox")
+        #expect(listed.catalogID == catalog.uuidString)
+        #expect(listed.state == "disconnected")
+        #expect(listed.reason == "exit 255")
+        #expect(nodes.first { $0.id == local.uuidString }?.remote == nil)
+        #expect(library.remoteNode(for: remote.id)?.state == nil)
+        let encoded = String(decoding: try JSONEncoder().encode(nodes.first { $0.id == local.uuidString }), as: UTF8.self)
+        #expect(!encoded.contains("remote"))
+    }
+
+    @Test func aRemoteWindowIsNeverSeededAndKeepsItsSourceAcrossARelaunch() throws {
+        let library = WindowLibrary(directory: directory)
+        let local = try #require(library.activeWindowID)
+
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let store = try #require(library.store(for: remote.id))
+        let relaunched = WindowLibrary(directory: directory)
+
+        #expect(store.workspaces.isEmpty)
+        #expect(library.windows.map(\.id) == [local, remote.id])
+        #expect(relaunched.windows.first { $0.id == remote.id }?.source == WindowSource(host: "buildbox"))
+        #expect(relaunched.store(for: remote.id)?.workspaces.isEmpty == true)
+        #expect(!windowFiles.contains("\(remote.id.uuidString).json"))
+    }
+
+    @Test func openingAHostAlreadyOpenReturnsItsWindow() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.newRemoteWindow(host: "buildbox")
+
+        let again = library.newRemoteWindow(host: "buildbox")
+        let other = library.newRemoteWindow(host: "otherbox")
+
+        #expect(again.id == first.id)
+        #expect(other.id != first.id)
+    }
+
+    @Test func bindingACatalogRefusesOneAnotherWindowShowsAndNotesAReplacedOne() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.newRemoteWindow(host: "a")
+        let second = library.newRemoteWindow(host: "b")
+        let catalog = UUID(), replacement = UUID()
+
+        let bound = library.bindCatalog(catalog, toWindow: first.id)
+        let duplicate = library.bindCatalog(catalog, toWindow: second.id)
+        let rebound = library.bindCatalog(replacement, toWindow: first.id)
+
+        #expect(bound == .bound)
+        #expect(duplicate == .duplicate(first.id))
+        #expect(rebound == .rebound(previous: catalog))
+        #expect(WindowLibrary(directory: directory).windows.first { $0.id == first.id }?.source?.catalogID == replacement)
+    }
+
+    @Test func theViewStateIsSavedWithEveryStoreSaveAndReadBack() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let store = try #require(library.store(for: remote.id))
+        let workspace = store.addWorkspace(name: "w")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/", remoteHost: "buildbox"))
+        session.fontSize = 14
+        store.catalogMirrored = true
+
+        store.save()
+
+        let state = WindowLibrary(directory: directory).remoteViewState(for: remote.id)
+        #expect(state.selectedSessionID == session.id)
+        #expect(state.sessions[session.id]?.fontSize == 14)
+    }
+
+    @Test func aDetachedRowStaysHiddenAfterTheWindowIsSavedAndTheMacRelaunches() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let catalog = UUID()
+        let hidden = catalogSession(), shown = catalogSession()
+        let (first, binder) = try mirror(library, window: remote.id, host: "buildbox")
+        _ = first.receive(.snapshot(snapshot(catalog, sessions: [hidden, shown])))
+        withExtendedLifetime(binder) { first.detach(sessions: [hidden.id]) }
+
+        let (relaunched, mirror, relaunchedBinder) = try relaunch(library, window: remote.id, catalog: catalog, sessions: [hidden, shown])
+
+        let store = try #require(relaunched.store(for: remote.id))
+        #expect(store.workspaces.flatMap(\.sessions).map(\.id) == [shown.id])
+        #expect(withExtendedLifetime(relaunchedBinder) { mirror.detachedItems.map(\.id) } == [hidden.id])
+    }
+
+    @Test func aDetachedRowThatEndedStaysHiddenAndEndedAfterTheMacRelaunches() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let catalog = UUID()
+        let hidden = catalogSession(), shown = catalogSession()
+        let (first, binder) = try mirror(library, window: remote.id, host: "buildbox")
+        _ = first.receive(.snapshot(snapshot(catalog, sessions: [hidden, shown])))
+        withExtendedLifetime(binder) {
+            first.detach(sessions: [hidden.id])
+            _ = first.receive(.delta(epoch: "e1", rev: 1, change: .sessionChanged(catalogSession(hidden.id, ended: true).fields)))
+        }
+
+        let (relaunched, mirror, relaunchedBinder) = try relaunch(library, window: remote.id, catalog: catalog,
+                                                                  sessions: [catalogSession(hidden.id, ended: true), shown])
+
+        let store = try #require(relaunched.store(for: remote.id))
+        #expect(store.workspaces.flatMap(\.sessions).map(\.id) == [shown.id])
+        #expect(withExtendedLifetime(relaunchedBinder) { mirror.detachedItems }
+            == [RemoteDetachedItem(kind: .session, id: hidden.id, name: "s", ended: true)])
+    }
+
+    @Test func aColdReopenedWindowSavedBeforeItsCatalogKeepsTheSavedViewState() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let store = try #require(library.store(for: remote.id))
+        let workspace = store.addWorkspace(name: "w")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/", remoteHost: "buildbox"))
+        session.fontSize = 14
+        store.catalogMirrored = true
+        store.save()
+
+        let relaunched = WindowLibrary(directory: directory)
+        let cold = try #require(relaunched.store(for: remote.id))
+        cold.save()
+
+        #expect(WindowLibrary(directory: directory).remoteViewState(for: remote.id).sessions[session.id]?.fontSize == 14)
+    }
+
+    @Test func aClosedRemoteWindowLeavesTheClaimWalkComplete() {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        library.closeWindow(remote.id)
+
+        let walk = library.paneClaims()
+
+        #expect(walk.complete)
+        #expect(!walk.claims.contains { $0.windowID == remote.id })
+    }
+
+    @Test func deletingARemoteWindowRemovesItsFiles() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let store = try #require(library.store(for: remote.id))
+        _ = store.addWorkspace(name: "w")
+        store.save()
+        let remoteFiles = { (try? FileManager.default.contentsOfDirectory(atPath: self.directory.appendingPathComponent("remote").path)) ?? [] }
+        let before = remoteFiles()
+
+        library.removeWindow(remote.id)
+
+        #expect(!before.isEmpty)
+        #expect(remoteFiles().isEmpty)
+    }
+
+    @Test func aClosedLocalWorkspaceReopensInALocalWindowWhileARemoteOneIsFrontmost() throws {
+        let library = WindowLibrary(directory: directory)
+        let localStore = try #require(library.activeStore)
+        let closing = localStore.addWorkspace(name: "closing")
+        _ = localStore.addSession(toWorkspace: closing.id, cwd: "/")
+        localStore.removeWorkspace(closing.id)
+        let remote = library.newRemoteWindow(host: "buildbox")
+        let remoteStore = try #require(library.store(for: remote.id))
+
+        let reopened = library.reopenLatestRecentClosed(into: remoteStore)
+
+        #expect(reopened)
+        #expect(library.frontmostWindowID == remote.id)
+        #expect(localStore.workspaces.contains { $0.id == closing.id })
+        #expect(remoteStore.workspaces.isEmpty)
+    }
+
+    @Test func aDetachedTargetResolvesByPrefixAcrossRemoteWindowsOrInTheNamedOne() throws {
+        let library = WindowLibrary(directory: directory)
+        let first = library.newRemoteWindow(host: "a")
+        let second = library.newRemoteWindow(host: "b")
+        let local = library.newWindow()
+        let (mirrorA, _) = try mirror(library, window: first.id, host: "a")
+        let (mirrorB, _) = try mirror(library, window: second.id, host: "b")
+        let session = UUID(), other = UUID()
+        try #require(library.store(for: first.id)).catalogDetachedSessions = [session]
+        try #require(library.store(for: second.id)).catalogDetachedSessions = [other]
+        _ = (mirrorA, mirrorB, local)
+
+        let found = library.resolveDetached(String(session.uuidString.prefix(8)), kind: .session, window: nil)
+        let scoped = library.resolveDetached(session.uuidString, kind: .session, window: second.id)
+        let workspace = library.resolveDetached(session.uuidString, kind: .workspace, window: nil)
+
+        guard case .success(let (store, id)) = found else { Issue.record("not found"); return }
+        #expect(id == session)
+        #expect(store === library.store(for: first.id))
+        guard case .failure = scoped, case .failure = workspace else { Issue.record("resolved outside its window or kind"); return }
+    }
+
+    @Test func theRemoteNodeReportsDetachedIdsAndOmitsEmptyOnes() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "a")
+        let (kept, _) = try mirror(library, window: remote.id, host: "a")
+        let store = try #require(library.store(for: remote.id))
+        let session = UUID(), workspace = UUID()
+        let before = library.remoteNode(for: remote.id)
+
+        store.catalogDetachedSessions = [session]
+        store.catalogDetachedWorkspaces = [workspace]
+        let after = library.remoteNode(for: remote.id)
+        _ = kept
+
+        #expect(before?.detachedSessions == nil)
+        #expect(before?.detachedWorkspaces == nil)
+        #expect(before?.operations == nil)
+        #expect(after?.detachedSessions == [session.uuidString])
+        #expect(after?.detachedWorkspaces == [workspace.uuidString])
+    }
+
+    /// RemoteFixture holds what a remote window's store reaches only weakly, for as long as a test runs.
+    private struct RemoteFixture {
+        let window: WindowInfo
+        let mirror: RemoteCatalogMirror
+        let store: AppStore
+        let actions: RemoteCatalogActions
+    }
+
+    private func remoteWithCatalog(_ library: WindowLibrary, host: String, sessions: [UUID]) throws -> RemoteFixture {
+        let window = library.newRemoteWindow(host: host)
+        let (catalogMirror, _) = try mirror(library, window: window.id, host: host)
+        let store = try #require(library.store(for: window.id))
+        let actions = RemoteCatalogActions(mirror: catalogMirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+        let workspace = CatalogWorkspace(id: UUID(), name: "w", sessions: sessions.map {
+            CatalogSession(fields: CatalogSessionFields(id: $0, name: "s", parent: nil, cwd: "/", primary: UUID(), axis: nil, shown: false,
+                                                        lifecycle: .live), panes: [])
+        })
+        _ = catalogMirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
+                                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
+                                                            workspaces: [workspace])))
+        return RemoteFixture(window: window, mirror: catalogMirror, store: store, actions: actions)
+    }
+
+    @Test func aCloseTargetReachesAHiddenRowInARemoteCatalogAndKeepsItsWindowScope() throws {
+        let library = WindowLibrary(directory: directory)
+        let hidden = UUID(), shown = UUID()
+        let remote = try remoteWithCatalog(library, host: "a", sessions: [hidden, shown])
+        remote.mirror.detach(sessions: [hidden])
+        let other = try remoteWithCatalog(library, host: "b", sessions: [])
+
+        let found = library.resolveCloseTarget(String(hidden.uuidString.prefix(8)), window: nil)
+        let scoped = library.resolveCloseTarget(hidden.uuidString, window: remote.window.id.uuidString)
+        let elsewhere = library.resolveCloseTarget(hidden.uuidString, window: other.window.id.uuidString)
+        let missingWindow = library.resolveCloseTarget(hidden.uuidString, window: "no-such-window")
+
+        guard case .remote(let owner, let id) = found, case .remote = scoped else { Issue.record("hidden row not reached"); return }
+        #expect(owner === remote.store)
+        #expect(id == hidden)
+        guard case .refused = elsewhere, case .unresolvedWindow = missingWindow else {
+            Issue.record("a close left its window or widened a missing one")
+            return
+        }
+    }
+
+    @Test func aPrefixSharedByAShownLocalRowAndAHiddenRemoteRowIsAmbiguous() throws {
+        let library = WindowLibrary(directory: directory)
+        let local = library.newWindow()
+        let localStore = try #require(library.store(for: local.id))
+        let workspace = localStore.addWorkspace(name: "w")
+        let row = try #require(localStore.addSession(toWorkspace: workspace.id, cwd: "/"))
+        let prefix = String(row.id.uuidString.prefix(4))
+        let twin = try #require(UUID(uuidString: prefix + String(UUID().uuidString.dropFirst(4))))
+        let remote = try remoteWithCatalog(library, host: "a", sessions: [twin, UUID()])
+        remote.mirror.detach(sessions: [twin])
+
+        let shared = library.resolveCloseTarget(prefix, window: nil)
+        let localOnly = library.resolveCloseTarget(row.id.uuidString, window: nil)
+
+        guard case .refused = shared, case .local = localOnly else { Issue.record("the two windows' rows were not weighed together"); return }
+    }
+}

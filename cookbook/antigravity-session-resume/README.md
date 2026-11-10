@@ -2,6 +2,8 @@
 
 After a restart each pane reopens its own Antigravity CLI (`agy`) conversation instead of starting a fresh one or sharing a single workspace-wide recent session.
 
+Author: [@stn1slv](https://github.com/stn1slv)
+
 ## What it does
 
 Pairs an `agy` `SessionStart` hook with a small `zsh` wrapper function so each agterm pane remembers and reopens its own `agy` conversation across terminal restarts:

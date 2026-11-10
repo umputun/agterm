@@ -2,6 +2,8 @@
 
 Grid the flagged panes that are actually running something, one chord, and dismiss them with the same key.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Flagging marks the sessions you care about right now, and the flagged sidebar view lists them by name. This recipe shows that set as live terminals instead, minus the panes that have nothing to show: `agt-flagged-dashboard.sh` takes the flagged sessions, keeps only the panes running a foreground command, and opens the dashboard grid over those. Flag the three agents you are babysitting, press the chord, and watch all three at once; arrow keys move the highlight, Enter drops into one and closes the grid.

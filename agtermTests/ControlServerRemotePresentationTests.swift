@@ -1,3 +1,5 @@
+import AppKit
+import WebKit
 import XCTest
 @testable import agterm
 import agtermCore
@@ -20,7 +22,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func fixture(player: StatusSoundPlayer = .shared) throws -> (server: ControlServer, store: AppStore, session: Session) {
+    private func fixture(player: StatusSoundPlayer = .shared, headless: Bool = false) throws
+        -> (server: ControlServer, store: AppStore, session: Session) {
         let library = WindowLibrary(directory: stateDir)
         let server = ControlServer(
             library: library,
@@ -35,7 +38,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory(),
                                                      remoteHost: "buildbox"))
-        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1),
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1,
+                                       originHeadless: headless),
                          forSession: session.id)
         return (server, store, session)
     }
@@ -47,6 +51,21 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
     private func body(of session: Session) -> String {
         (try? String(contentsOfFile: ControlServer.bodyFile(for: session.id), encoding: .utf8)) ?? ""
+    }
+
+    func testZmxPresentThroughTheDispatcherAcceptsOnlyALiveBackedSession() async throws {
+        let fix = try fixture()
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let session = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let request = ControlRequest(cmd: .zmxPresent, target: session.id.uuidString)
+
+        session.daemonBackedPanes.insert(session.paneIdentity)
+        let backed = await ControlDispatcher(actions: fix.server).dispatch(request)
+        session.daemonBackedPanes.removeAll()
+        let plain = await ControlDispatcher(actions: fix.server).dispatch(request)
+
+        XCTAssertEqual(backed, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString)))
+        XCTAssertEqual(plain, ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it"))
     }
 
     func testAMirroredHudIsWrittenToThePanelAndMarkedAsTheBridges() throws {
@@ -246,9 +265,10 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         }
     }
 
-    private func connected(player: StatusSoundPlayer = .shared) throws -> (fix: (server: ControlServer, store: AppStore, session: Session),
-                                                                           transport: Transport) {
-        let fix = try fixture(player: player)
+    private func connected(player: StatusSoundPlayer = .shared, headless: Bool = false) throws
+        -> (fix: (server: ControlServer, store: AppStore, session: Session), transport: Transport) {
+        let fix = try fixture(player: player, headless: headless)
+        XCTAssertFalse(fix.store.catalogMirrored)
         let transport = Transport()
         fix.server.remoteTransport = transport
         fix.server.startRemotePresentation(for: fix.session)
@@ -399,6 +419,194 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         XCTAssertEqual(transport.links[0].sent.last, .askRejected(PresentationAskRef(id: "a1", owner: 2)))
         XCTAssertEqual(fix.session.askPending?.id, "local")
+    }
+
+    func testAPendingBatchIsShownOnlyAtItsCommit() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let ask = PresentationAsk(PendingAsk(id: "a1", title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")]),
+                                  pane: nil, owner: 2)
+
+        let chunks = try PresentationPendingBatch.chunks([.askRequest(ask)])
+        for (index, chunk) in chunks.enumerated() { try transport.feed(.pendingChunk(chunk), rev: 2 + index) }
+        XCTAssertNil(fix.session.askPending)
+        try transport.feed(.pendingCommit, rev: 2 + chunks.count)
+
+        XCTAssertEqual(fix.session.askPending?.id, "a1")
+        XCTAssertTrue(fix.session.askReplica)
+    }
+
+    func testAGuiAskForAHeadlessRowNotShownWaitsAndIsAnsweredOnceTheRowIsSelected() throws {
+        let (fix, transport) = try connected(headless: true)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let workspace = try XCTUnwrap(fix.store.currentWorkspaceID)
+        let other = try XCTUnwrap(fix.store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        fix.store.selectSession(other.id)
+        let ask = PresentationAsk(PendingAsk(id: "g1", title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")], style: .gui),
+                                  pane: nil, owner: 2)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(fix.session.askPending?.id, "g1")
+        XCTAssertFalse(transport.links[0].sent.contains(.askRejected(PresentationAskRef(id: "g1", owner: 2))))
+        fix.store.selectSession(fix.session.id)
+        fix.session.resolveAsk(id: "g1", ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .askResolve(PresentationAskAnswer(id: "g1", owner: 2, button: "yes")))
+    }
+
+    func testADetachedRowsStreamStopsAndItsAskLeavesWithoutAnAnswer() throws {
+        let (fix, transport) = try connected(headless: true)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let ask = PresentationAsk(PendingAsk(id: "a1", title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")]),
+                                  pane: nil, owner: 2)
+        try transport.feed(.askRequest(ask), rev: 2)
+        XCTAssertEqual(fix.session.askPending?.id, "a1")
+        let sent = transport.links[0].sent
+
+        let effects = RemoteCatalogWindow(window: try XCTUnwrap(fix.server.library.windowID(for: fix.store)), server: fix.server,
+                                          pool: SshConnectionPool(host: "buildbox", root: "/tmp", key: UUID().uuidString) { _ in 0 })
+        effects.catalogRowRemoved(fix.session.id)
+        fix.store.closeSession(fix.session.id)
+
+        XCTAssertTrue(transport.links[0].stopped)
+        XCTAssertEqual(transport.links[0].sent, sent)
+    }
+
+    private func pickWindow(_ fix: (server: ControlServer, store: AppStore, session: Session)) throws -> PickController {
+        let windowID = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        let controller = PickController()
+        PickRegistry.shared.register(windowID, controller: controller)
+        addTeardownBlock { @MainActor in PickRegistry.shared.unregister(windowID) }
+        return controller
+    }
+
+    private func handedPick(owner: Int = 2) -> PresentationPick {
+        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner)
+    }
+
+    func testAHandedOverPickIsShownInTheRowsWindowAndItsAnswerGoesBack() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let pick = handedPick()
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(controller.pending, pick.pending)
+        let node = fix.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == fix.session.id.uuidString }
+        XCTAssertEqual(node?.pick, ControlSessionPick(id: pick.id, replica: true))
+        controller.resolve(ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .pickResolve(PresentationPickAnswer(id: pick.id, owner: 2, item: "a")))
+    }
+
+    private func followedReplica(_ follow: Bool) throws -> (rowWindow: WindowInfo.ID, frontmost: WindowInfo.ID?) {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let rowWindow = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        _ = fix.server.library.newWindow(name: "front")
+        XCTAssertNotEqual(fix.server.library.frontmostWindowID, rowWindow)
+        let pick = PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]),
+                                    owner: 2, follow: follow)
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(controller.pending?.id, pick.id)
+        return (rowWindow, fix.server.library.frontmostWindowID)
+    }
+
+    func testAFollowedReplicaRaisesTheRowsBackgroundWindow() throws {
+        let shown = try followedReplica(true)
+        XCTAssertEqual(shown.frontmost, shown.rowWindow)
+    }
+
+    func testAnUnfollowedReplicaLeavesTheFrontmostWindow() throws {
+        let shown = try followedReplica(false)
+        XCTAssertNotEqual(shown.frontmost, shown.rowWindow)
+    }
+
+    func testAPickTheRowsWindowCannotShowIsRefused() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+        controller.open(local)
+        let pick = handedPick()
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertEqual(transport.links[0].sent.last, .pickRejected(PresentationPickRef(id: pick.id, owner: 2)))
+        XCTAssertEqual(controller.pending, local)
+    }
+
+    func testAClosingWindowDetachesItsShownAndQueuedPicksWithoutAnswering() throws {
+        let (fix, transport) = try connected(headless: true)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let windowID = try XCTUnwrap(fix.server.library.windowID(for: fix.store))
+        let shown = handedPick(), waiting = handedPick()
+        try transport.feed(.pickRequest(shown), rev: 2)
+        try transport.feed(.pickRequest(waiting), rev: 3)
+        XCTAssertEqual(controller.pending, shown.pending)
+        let sent = transport.links[0].sent
+
+        PickRegistry.shared.unregister(windowID)
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(transport.links[0].sent, sent)
+    }
+
+    func testAQueuedPickAnswersResultAndCancelOnThisMac() throws {
+        let (fix, transport) = try connected(headless: true)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+        controller.open(local)
+        let pick = handedPick()
+        try transport.feed(.pickRequest(pick), rev: 2)
+        let window = try XCTUnwrap(fix.server.library.windowID(for: fix.store)).uuidString
+
+        XCTAssertEqual(fix.server.pickResult(pick.id, window: nil).result?.pick, ControlPickResult(result: .pending))
+        XCTAssertEqual(fix.server.pickResult(pick.id, window: window).result?.pick, ControlPickResult(result: .pending))
+        XCTAssertTrue(fix.server.cancelPick(pick.id, window: window).ok)
+        XCTAssertTrue(fix.server.cancelPick(pick.id, window: nil).ok)
+
+        XCTAssertEqual(controller.pending, local)
+        let cancelled = ControlPickResult(result: .cancelled)
+        XCTAssertEqual(transport.links[0].sent.filter { $0 == .pickResolve(PresentationPickAnswer(id: pick.id, owner: 2)) }.count, 1)
+        XCTAssertEqual(fix.server.pickResult(pick.id, window: nil).result?.pick, cancelled)
+        controller.cancel()
+        XCTAssertNil(controller.pending)
+    }
+
+    func testAPickForABusyHeadlessWindowWaitsAndIsShownWhenTheLocalPickEnds() throws {
+        let (fix, transport) = try connected(headless: true)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+        controller.open(local)
+        let pick = handedPick()
+
+        try transport.feed(.pickRequest(pick), rev: 2)
+
+        XCTAssertFalse(transport.links[0].sent.contains(.pickRejected(PresentationPickRef(id: pick.id, owner: 2))))
+        XCTAssertEqual(controller.pending, local)
+        controller.cancel()
+        XCTAssertEqual(controller.pending, pick.pending)
+    }
+
+    func testTheOriginsPickDismissalClosesTheReplicaWithoutAnswering() throws {
+        let (fix, transport) = try connected()
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let controller = try pickWindow(fix)
+        let pick = handedPick()
+        try transport.feed(.pickRequest(pick), rev: 2)
+        let sent = transport.links[0].sent.count
+
+        try transport.feed(.pickDismiss(PresentationPickRef(id: pick.id, owner: 2)), rev: 3)
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(transport.links[0].sent.count, sent)
     }
 
     private let handedOverlay = PresentationOverlay(job: "job-1", pane: nil, sizePercent: 50, backgroundColor: nil,
@@ -553,31 +761,35 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     @MainActor
     private final class BridgeTransport: RemotePresentationTransport {
         let argv: [String]
-        private let dropPageKinds: Bool
+        private let dropKind: (@Sendable (String) -> Bool)?
         private let process = RemotePresentationProcess()
 
-        init(argv: [String], dropPageKinds: Bool = false) {
+        init(argv: [String], dropKind: (@Sendable (String) -> Bool)? = nil) {
             self.argv = argv
-            self.dropPageKinds = dropPageKinds
+            self.dropKind = dropKind
         }
 
         func open(_ ignored: [String], onLine: @escaping @MainActor (Data) -> Void,
                   onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
             let link = process.open(argv, onLine: onLine, onClose: onClose)
-            return dropPageKinds ? OlderPresenterLink(inner: link) : link
+            return dropKind.map { OlderPresenterLink(inner: link, dropKind: $0) } ?? link
         }
     }
 
     @MainActor
     private final class OlderPresenterLink: RemotePresentationLink {
         private let inner: RemotePresentationLink
+        private let dropKind: @Sendable (String) -> Bool
 
-        init(inner: RemotePresentationLink) { self.inner = inner }
+        init(inner: RemotePresentationLink, dropKind: @escaping @Sendable (String) -> Bool) {
+            self.inner = inner
+            self.dropKind = dropKind
+        }
 
         func send(_ line: Data) {
             guard let frame = try? PresentationCodec.decode(line.dropLast()), case .hello(let hello) = frame.body,
                   let older = try? PresentationCodec.encode(PresentationFrame(gen: frame.gen, rev: frame.rev, body: .hello(
-                      PresentationHello(version: hello.version, kinds: hello.kinds.filter { !$0.hasPrefix("page.") },
+                      PresentationHello(version: hello.version, kinds: hello.kinds.filter { !dropKind($0) },
                                         mode: hello.mode)))) else { return inner.send(line) }
             inner.send(older)
         }
@@ -692,7 +904,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli: String
     }
 
-    private func bridgedPair(dropPageKinds: Bool = false) throws -> BridgedPair {
+    private func bridgedPair(dropKind: (@Sendable (String) -> Bool)? = nil) throws -> BridgedPair {
         let library = WindowLibrary(directory: stateDir)
         let socketPath = "/tmp/agterm-e2e-\(UUID().uuidString.prefix(8)).sock"
         let server = ControlServer(
@@ -721,7 +933,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         let cli = try XCTUnwrap(Bundle.main.executableURL).deletingLastPathComponent()
             .appendingPathComponent("agtermctl").path
         server.remoteTransport = BridgeTransport(argv: [cli, "zmx", "present", origin.id.uuidString,
-                                                        "--socket", socketPath], dropPageKinds: dropPageKinds)
+                                                        "--socket", socketPath], dropKind: dropKind)
 
         server.startRemotePresentation(for: viewer)
         waitUntil("the viewer's stream connects") { viewer.remotePresentation?.connection == .connected }
@@ -832,11 +1044,13 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertTrue(DeckPaneGates.coverActive(viewer))
         XCTAssertFalse(DeckPaneGates.coverActive(origin), "the origin's session stays uncovered")
         let job = try XCTUnwrap(viewer.overlayReplica?.job)
+        let handed = try XCTUnwrap(viewer.overlayCommand)
+        let token = try XCTUnwrap(handed.firstMatch(of: /--token[^0-9A-F]*([0-9A-F-]{36})/)?.1, "the viewer hands its helper the offer token")
 
         let helper = Process()
         helper.executableURL = URL(fileURLWithPath: "/usr/bin/script")
         helper.arguments = ["-q", "/dev/null", "/bin/sh", "-c",
-                            "'\(pair.cli)' session overlay run-job \(job) --socket '\(pair.socketPath)'; true"]
+                            "'\(pair.cli)' session overlay run-job \(job) --token \(token) --socket '\(pair.socketPath)'; true"]
         helper.standardInput = Pipe()
         helper.standardOutput = FileHandle.nullDevice
         helper.standardError = FileHandle.nullDevice
@@ -940,11 +1154,152 @@ final class ControlServerRemotePresentationTests: XCTestCase {
     }
 
     func testAnOlderPresenterKeepsTheRefusal() throws {
-        let pair = try bridgedPair(dropPageKinds: true)
+        let pair = try bridgedPair(dropKind: { $0.hasPrefix("page.") })
         follow(pair.origin)
         let dir = try pageDir(["index.html": "<p>x</p>"])
 
         XCTAssertEqual(try openPage(pair, in: dir).error, OverlayHtmlError.presenter)
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+    }
+
+    func testAMarkdownPageHandedToTheViewerRendersAndReloadsOverItsOneChannel() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        let launcher = relay(pair)
+        let dir = try pageDir(["README.md": "# One\n\n![s](shot.png)\n"])
+        let readme = dir.appendingPathComponent("README.md").path, shot = dir.appendingPathComponent("shot.png")
+        try png(width: 30, height: 10).write(to: shot)
+
+        let opened = openContent(pair, .markdown(path: readme))
+
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        waitUntil("the viewer renders the page") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        let web = try XCTUnwrap(HtmlOverlayRegistry.shared.existing(try XCTUnwrap(pair.viewer.htmlOverlay?.id))?.webView)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "One")
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "30")
+        let node = viewerNode(pair)
+        XCTAssertEqual(node?.markdown, readme)
+        XCTAssertEqual(node?.replica, true)
+
+        try Data("# Two\n\n![s](shot.png)\n".utf8).write(to: URL(fileURLWithPath: readme))
+        try png(width: 40, height: 10).write(to: shot)
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: false).ok)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "Two")
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "40")
+        try Data("# Three\n".utf8).write(to: URL(fileURLWithPath: readme))
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: true).ok)
+        waitForScript("document.querySelector('h1')?.textContent ?? ''", in: web, "Three")
+
+        XCTAssertEqual(launcher.helpers.count, 1)
+        let asked = launcher.toOrigin.frames.compactMap { if case .resource(_, let path) = $0 { path } else { nil } }
+        XCTAssertEqual(asked.filter { $0 == readme }.count, 3)
+        XCTAssertEqual(asked.filter { $0 == shot.path }.count, 2)
+    }
+
+    func testAnUnsizedImageHandedToTheViewerIsSizedThereAndReportedAsAnImage() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let shot = try pageDir([:]).appendingPathComponent("shot.png")
+        try png(width: 300, height: 200).write(to: shot)
+
+        let opened = openContent(pair, .image(path: shot.path))
+
+        XCTAssertTrue(opened.ok, opened.error ?? "")
+        waitUntil("the viewer shows the picture") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        let web = try XCTUnwrap(HtmlOverlayRegistry.shared.existing(try XCTUnwrap(pair.viewer.htmlOverlay?.id))?.webView)
+        waitForScript("document.images[0] ? document.images[0].naturalWidth : 0", in: web, "300")
+        XCTAssertEqual(pair.viewer.overlaySizePercent, ImagePage.basePercent)
+        XCTAssertFalse(pair.viewer.overlayPoints.isEmpty)
+        XCTAssertEqual(viewerNode(pair)?.image, shot.path)
+        XCTAssertFalse(pair.origin.overlayActive)
+        let fitted = pair.viewer.overlayPoints
+
+        let resized = pair.server.resizeSessionOverlay(pair.origin.id.uuidString, window: nil, sizePercent: nil,
+                                                       points: OverlayPointSize(width: 600))
+
+        XCTAssertTrue(resized.ok, resized.error ?? "")
+        waitUntil("the viewer takes the width") { pair.viewer.overlayPoints.width == 600 }
+        XCTAssertEqual(pair.viewer.overlayPoints.height, fitted.height)
+        XCTAssertNotNil(fitted.height)
+    }
+
+    func testATextPageHandedToTheViewerKeepsItsLineAndFailsOnceItsFileOutgrowsTheCap() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let dir = try pageDir(["main.go": "package main\n\nfunc main() {}\n"])
+        let main = dir.appendingPathComponent("main.go")
+
+        XCTAssertTrue(openContent(pair, .text(path: main.path, line: 3)).ok)
+
+        waitUntil("the viewer shows the text") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        XCTAssertEqual(viewerNode(pair)?.text?.line, 3)
+        try Data(count: TextPage.maxBytes + 1).write(to: main)
+        XCTAssertTrue(pair.server.reloadSessionOverlay(pair.origin.id.uuidString, window: nil, pane: nil, current: false).ok)
+        waitUntil("the oversized file fails the page") { pair.viewer.htmlOverlay?.loadState == .failed }
+        XCTAssertEqual(pair.viewer.htmlOverlay?.loadError, "file is too large for the page: \(main.path)")
+    }
+
+    func testAPresenterWithoutContentPagesRefusesThemAndStillTakesAFilePage() throws {
+        let content = PresentationHub.pageContentKind
+        let pair = try bridgedPair(dropKind: { $0 == content })
+        follow(pair.origin)
+        _ = relay(pair)
+        let dir = try pageDir(["index.html": "<p>x</p>", "README.md": "# x\n"])
+
+        XCTAssertEqual(openContent(pair, .markdown(path: dir.appendingPathComponent("README.md").path)).error,
+                       OverlayHtmlError.presenter)
+        XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
+        XCTAssertTrue(try openPage(pair, in: dir).ok)
+    }
+
+    func testAnOriginClickOnAnImageInAFollowedSessionOpensOnThePresenter() throws {
+        let pair = try bridgedPair()
+        follow(pair.origin)
+        _ = relay(pair)
+        let shot = try pageDir([:]).appendingPathComponent("shot.png")
+        try png(width: 20, height: 20).write(to: shot)
+        var shown: Bool?
+
+        pair.server.openImageLink(shot, session: pair.origin.id) { shown = $0 }
+
+        waitUntil("the click resolves") { shown != nil }
+        XCTAssertEqual(shown, true)
+        waitUntil("the viewer shows the picture") { pair.viewer.htmlOverlay?.loadState == .loaded }
+        XCTAssertFalse(pair.origin.overlayActive)
+    }
+
+    private func openContent(_ pair: BridgedPair, _ page: HtmlSource) -> ControlResponse {
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil,
+                                                       backgroundColor: nil, page: page)
+        return pair.server.openSessionOverlay(pair.origin.id.uuidString, window: nil, options: options)
+    }
+
+    private func viewerNode(_ pair: BridgedPair) -> ControlHtmlOverlayNode? {
+        pair.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == pair.viewer.id.uuidString }?.htmlOverlays?.first
+    }
+
+    private func png(width: Int, height: Int) throws -> Data {
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
+                                                 bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                                 colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+        return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+    }
+
+    private func waitForScript(_ script: String, in view: WKWebView, _ expected: String) {
+        let met = expectation(description: script)
+        var last = ""
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(8)
+            while Date() < deadline {
+                last = (try? await view.evaluateJavaScript("String(\(script))") as? String) ?? ""
+                if last == expected { break }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            met.fulfill()
+        }
+        wait(for: [met], timeout: 10)
+        XCTAssertEqual(last, expected, script)
     }
 }

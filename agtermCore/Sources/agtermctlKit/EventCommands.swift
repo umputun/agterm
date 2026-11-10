@@ -110,6 +110,7 @@ enum EventFormatter {
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.pane ?? "") pane-id=\(event.payload.paneID ?? "-")"
         case .remoteOpened, .remoteClosed:
             return "\(time) \(event.kind.rawValue) \(name) host=\(event.payload.host ?? "")"
+                + " remote-session-id=\(event.payload.remoteSessionID ?? "-")"
         case .appLaunched:
             return "\(time) \(event.kind.rawValue)"
         case .message:

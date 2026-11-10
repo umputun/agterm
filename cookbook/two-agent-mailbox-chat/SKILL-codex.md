@@ -12,15 +12,20 @@ itself is the result even when code comes out of it.
 
 ## Sending
 
+Write the message to `/tmp/mailbox-chat-<pane>.txt` with `apply_patch`, where `<pane>` is this
+pane's `AGTERM_PANE_ID`: read it once with `echo "$AGTERM_PANE_ID"` and write the value into the
+path literally, here and in the send. Overwrite the file for every message. Then send it as a
+separate command, exactly in this form:
+
 ```bash
-mailbox-chat.py say --stdin <<'CHAT'
-the message
-CHAT
+mailbox-chat.py say --file /tmp/mailbox-chat-<pane>.txt
 ```
 
-Pass the message on stdin through a quoted heredoc, never as an argument. The script adds the
-`[peer chat]` label and the reply line itself; do not write either. Put code, logs and long lists in
-a file under `/tmp` and name its path in a short message that still states the point.
+Use a literal path with no heredoc, redirection, variable or wrapper: the recipe's allow rule
+matches only this plain form, and anything else runs in the sandbox, which refuses agterm's
+socket. Never put the message text in an argument. The script adds the `[peer chat]` label and the
+reply line itself; do not write either. Put code, logs and long lists in another file under `/tmp`
+and name its path in a short message that still states the point.
 
 The reply is JSON. `receiver` says who serves the other pane: `claude` (a peer waiting for mail,
 `peerBusy` true while it is mid-turn), `codex` (agterm hands the mail to it), or `none`
@@ -29,7 +34,7 @@ starts listening only after the user gives it a first prompt). An `error` means 
 refused the message; report it and never resend blind.
 
 The send is a collapsed tool call the user may not expand, so also write a one-line summary of what
-you sent in your visible reply.
+you sent in your visible reply, the whole line in italics so it stands apart from your own text.
 
 ## Receiving
 

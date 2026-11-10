@@ -361,6 +361,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     nonisolated let releaseIntent = OSAllocatedUnfairLock(initialState: LinkPolicy.ClickIntent.normal)
     var linkPressDragged = false
 
+    // admitted by the off-main SET_TITLE callback, completed by the main block it queues.
+    nonisolated let titleAdmission = OSAllocatedUnfairLock(initialState: TitleAdmission())
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:],
          backedByZmx: Bool = false) {
@@ -466,8 +469,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     func updateGhosttyFocus() {
         guard let surface else { return }
         ghostty_surface_set_focus(surface, liveFocus)
-        // a view can hold first responder before its surface exists; creation lands here.
-        TerminalInputSource.shared.requestRefresh()
         // `isAccessibilityFocused` mirrors `liveFocus`; AX must hear it move. This covers the key-window and
         // (re)attach paths only — the first-responder transitions post for themselves, since they run before
         // AppKit has updated `window.firstResponder` and never reach this method.
@@ -848,7 +849,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         windowVisibilityObservation = nil
         if let surface { ghostty_surface_free(surface) }
         surface = nil
-        TerminalInputSource.shared.requestRefresh()
         // release the custom layer libghostty installed and this view still retains. The current pin clears
         // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where
         // the callback kept pointing at the freed renderer and the next CoreAnimation display locked a mutex

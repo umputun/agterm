@@ -1,6 +1,6 @@
 ---
 worth: maybe
-where: agtermTests/SessionHostClientTests.swift:29
+where: agtermTests/SessionHostClientTests.swift:testTwoRacingClientsUseOneRoot
 added: 2026-09-20
 ---
 # a racing session-host client sometimes creates an app-rooted daemon
@@ -104,11 +104,54 @@ unified logging has no `session-host` record in the window, so the host and the 
 error. The unmediated client is plain `zmx attach`, which puts the create-then-cannot-connect failure
 inside zmx, independent of the session host.
 
-[Unverified] one candidate: `createSocket` binds and then listens, and a concurrent `zmx list` that
-connects between the two gets `ConnectionRefused` and deletes the socket as stale (`util.zig`,
-`cleanupStaleSocket`). A probe creating 800 sessions against 4 to 8 concurrent `zmx list` loops
-reproduced nothing, and 60 isolated iterations of the test passed, so this is not established.
+One candidate was that `createSocket` binds and then listens, so a concurrent `zmx list` connecting
+between the two deletes the socket as stale. `scripts/zmx-patches/0003-atomic-socket-publish.patch`,
+added after this sighting, publishes the socket name only once it listens, so a recurrence on the
+patched build rules that route out wherever the staged publication ran. Its direct-bind fallback, taken
+when `.s` cannot be made or the staged path is too long, still binds then listens. The two app-rooted
+routes above stay open.
 
 The fixture now keeps what was missing: `terminal-INDEX.out` holds each terminal client's pty output,
 which is where a terminal client's `cannot connect` line goes, and `leaders-timeout.list` holds the
 last `zmx list` output when `waitForLeaders` gives up.
+
+Re-filed after the 71a9483f drop because the seventh sighting, on the 0003-patched build, shows the staged
+publish did not remove the symptom, and source reading found a remover that logs nothing.
+
+Seventh sighting, 2026-11-07, PR #930's branch: `testRealClientPaneChangesFromSupervisorToOrphanedWhileBarePaneReadsApp`
+failed in one full hosted run and `SessionHostClientTests.testClientQueuedBehindStalledPeersStillJoinsTheHost`
+in another, 2 of 3 full runs, each with the fifth sighting's `created` then `FileNotFound` stop reason.
+The method then failed 2 of 20 iterations beside concurrent core `swift test --filter SessionHost` loops,
+one set from another session, and 0 of 20 alone.
+
+2026-11-08, no reproduction: 0 of 120 contended iterations with a zmx trace that wrote records inside the
+create window, 0 of 40 untraced on the same build that failed, and 0 failures in two and a half full hosted
+runs with a failure-only trace (each final-name delete recorded after it ran, plus failed connects). Every
+retained trace held only the teardown removals. Each fixture keeps its own `ZMX_DIR` and zmx's kill and
+cleanup touch only that directory, so the shared `agterm-aaaa...` name in core and hosted tests is not a
+cross-suite remover.
+
+With 0003 the staged socket is published under its final name before `created` is printed, which
+supersedes the fifth sighting's not-published-yet inference: the name existed and then went away.
+
+Source-confirmed removers of a published name, neither confirmed as the route taken:
+
+- `Daemon.run` in zmx's `loop.zig`: `daemonize()` returns errors raised in the forked child (`setsid`,
+  `/dev/null` open or `dup2`, `forkpty`, `fcntl`), and the caller's `else` branch then runs in that child,
+  closing the socket and deleting the session name with no log line. The parent independently prints
+  `created` after its 10 ms sleep, so child-side cleanup can leave the name absent when it connects.
+- The daemon's shutdown `defer` deletes the name when the shell exits at once. It logs
+  `deleting socket file` before the unlink, and no such line was found for the failing creator, so this
+  route is weaker, though zmx's logs are not written with `O_APPEND` and a missing line proves little.
+
+A C probe kept a hard-linked socket connectable after its staged name was unlinked in 200 of 200
+attempts; it did not reproduce the symptom. On recurrence, a failure-only zmx trace that records each
+final-name delete after it runs, with pid, ppid and site, can identify which instrumented zmx path
+deleted the name; a removal outside zmx stays unobserved. The heavier trace that also logged the create
+path never reproduced.
+
+Eighth sighting, 2026-11-08, in the host-free suite: `SessionHostServerTests`
+`readinessTransitionMeasuresWrittenQuerySeparatelyFromReceivedReply` failed once in 8 loop runs of the suite
+beside a full `make test-app`, with `attach client exited or failed before readiness` and the child
+`exited with wait status 256; output: session "agterm-…" created`. So the route is reachable from
+core `swift test` as well as from hosted tests. No zmx trace was running.

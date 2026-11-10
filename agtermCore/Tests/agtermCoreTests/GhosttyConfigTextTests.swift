@@ -64,4 +64,71 @@ struct GhosttyConfigTextTests {
                                                     theme: GhosttyConfigText.Setting<String>, expected: String?) {
         #expect(explicit.over(theme) == expected)
     }
+
+    private static func commands(loading paths: [String], files: [String: String]) -> [String] {
+        GhosttyConfigText.keyValues(loading: paths, home: "/home/me") { files[$0] }
+            .filter { $0.key == "command" }.map(\.value)
+    }
+
+    @Test func includesLoadAfterEverySourceInQueueOrder() {
+        let files = [
+            "/cfg/a.conf": "config-file = inc/one.conf\ncommand = a",
+            "/cfg/b.conf": "command = b\nconfig-file = /abs/two.conf",
+            "/cfg/inc/one.conf": "command = one\nconfig-file = nested.conf",
+            "/abs/two.conf": "command = two",
+            "/cfg/inc/nested.conf": "command = nested",
+        ]
+        #expect(Self.commands(loading: ["/cfg/a.conf", "/cfg/b.conf"], files: files) == ["a", "b", "one", "two", "nested"])
+    }
+
+    @Test func includePathsHonorOptionalMarkerQuotesAndHome() {
+        let files = [
+            "/cfg/main.conf": "config-file = ?\"spaced name.conf\"\nconfig-file = ~/extra.conf\nconfig-file = ?missing.conf",
+            "/cfg/spaced name.conf": "command = spaced",
+            "/home/me/extra.conf": "command = home",
+        ]
+        #expect(Self.commands(loading: ["/cfg/main.conf"], files: files) == ["spaced", "home"])
+    }
+
+    @Test func emptyConfigFileClearsTheQueuedIncludes() {
+        let files = [
+            "/cfg/a.conf": "config-file = dropped.conf",
+            "/cfg/b.conf": "config-file =\nconfig-file = kept.conf",
+            "/cfg/dropped.conf": "command = dropped",
+            "/cfg/kept.conf": "command = kept",
+        ]
+        #expect(Self.commands(loading: ["/cfg/a.conf", "/cfg/b.conf"], files: files) == ["kept"])
+    }
+
+    @Test func anIncludeCycleLoadsEachIncludeOnce() {
+        let files = [
+            "/cfg/main.conf": "config-file = loop.conf",
+            "/cfg/loop.conf": "command = loop\nconfig-file = loop.conf",
+        ]
+        #expect(Self.commands(loading: ["/cfg/main.conf"], files: files) == ["loop"])
+    }
+
+    @Test func keyValuesSplitsCRLFLines() {
+        #expect(Self.pairs("# comment\r\ncommand = /bin/zsh\r\ntheme = x\r\n") == ["command=/bin/zsh", "theme=x"])
+    }
+
+    @Test func aNestedIncludeResolvesFromTheSymlinkTargetDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "agterm-config-include-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let scoped = root.appending(path: "scoped"), dotfiles = root.appending(path: "dotfiles")
+        try FileManager.default.createDirectory(at: scoped, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: dotfiles, withIntermediateDirectories: true)
+        try "config-file = shell.conf".write(to: scoped.appending(path: "ghostty.conf"), atomically: true, encoding: .utf8)
+        try "config-file = fish.conf".write(to: dotfiles.appending(path: "shell.conf"), atomically: true, encoding: .utf8)
+        try "command = target".write(to: dotfiles.appending(path: "fish.conf"), atomically: true, encoding: .utf8)
+        try "command = alias".write(to: scoped.appending(path: "fish.conf"), atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(at: scoped.appending(path: "shell.conf"),
+                                                   withDestinationURL: dotfiles.appending(path: "shell.conf"))
+
+        let pairs = GhosttyConfigText.keyValues(loading: [scoped.appending(path: "ghostty.conf").path], home: "/home/me") {
+            try? String(contentsOfFile: $0, encoding: .utf8)
+        }
+
+        #expect(pairs.filter { $0.key == "command" }.map(\.value) == ["target"])
+    }
 }

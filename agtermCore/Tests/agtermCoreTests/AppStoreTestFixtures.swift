@@ -1,4 +1,5 @@
 import Foundation
+import Testing
 @testable import agtermCore
 
 /// A store backed by a throwaway temp directory so mutation-time saves never
@@ -9,6 +10,20 @@ import Foundation
     return AppStore(persistence: PersistenceStore(directory: dir))
 }
 
+@MainActor func makeHeadlessSession(split: Bool) -> (store: AppStore, session: Session) {
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+    let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: nil, headless: true)
+    let workspace = store.addWorkspace(name: "server")
+    let session = store.addSession(toWorkspace: workspace.id, cwd: "/srv")!
+    session.daemonBackedPanes = [session.paneIdentity]
+    if split {
+        session.hasSplit = true
+        session.splitPaneIdentity = UUID()
+        session.daemonBackedPanes.insert(session.splitPaneIdentity!)
+    }
+    return (store, session)
+}
+
 /// The same throwaway store, plus the Open Recent store it records closes into and the persistence it
 /// writes through, for the paths that read back what a close or a restore persisted.
 @MainActor func makeStoreWithRecentClosed() -> (AppStore, RecentClosedStore, PersistenceStore) {
@@ -16,6 +31,13 @@ import Foundation
     let recentClosed = RecentClosedStore(directory: dir)
     let persistence = PersistenceStore(directory: dir)
     return (AppStore(persistence: persistence, recentClosedStore: recentClosed), recentClosed, persistence)
+}
+
+@MainActor func addPageRow(to store: AppStore, workspace: UUID, overlay: HtmlOverlay, cwd: String = "/page",
+                           backgroundColor: String? = nil) throws -> Session {
+    let page = try #require(store.addSession(toWorkspace: workspace, cwd: cwd, content: .page))
+    #expect(store.openHtmlOverlay(page.id, pane: nil, overlay: overlay, sizePercent: nil, backgroundColor: backgroundColor) == nil)
+    return page
 }
 
 @MainActor struct CompanionGroup {

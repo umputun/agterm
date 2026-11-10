@@ -95,9 +95,8 @@ final class GhosttyApp {
     /// Which keystroke clears a blocked or completed glyph; read at keystroke time by the surface factories'
     /// status-clear closure. Settings-mirrored like `toolbarMode`.
     private(set) var statusReset: StatusReset = .firstKey
-    /// Whether a click anywhere on a sidebar workspace row toggles its expansion; on by default. The sidebar
-    /// Coordinator reads it in `handleSingleClick`, and the disclosure triangle ignores it because AppKit
-    /// toggles that natively. Settings-mirrored like `toolbarMode`.
+    /// workspaceRowClickExpands mirrors the setting for `handleSingleClick`; on by default. The disclosure
+    /// triangle, which AppKit toggles natively, and the row icon ignore it.
     private(set) var workspaceRowClickExpands: Bool = true
     /// The persisted choice and effective mode frozen before the first surface. An ineligible live request
     /// falls back to fresh shells without releasing its daemon claims. Settings changes never mutate either
@@ -106,6 +105,9 @@ final class GhosttyApp {
     var requestedRestoreMode: RestoreMode { restoreLaunchDecision.requested }
     var launchRestoreMode: RestoreMode { restoreLaunchDecision.active }
     var liveRestoreUnavailableReason: String? { restoreLaunchDecision.liveUnavailableReason }
+    /// The Live pane shell ghostty `command` names, latched with the restore decision it feeds. A running
+    /// daemon keeps the shell it started with, so a reload switching it would mislabel those panes.
+    let liveCommandShell: String?
     var restoreRunningCommand: Bool { launchRestoreMode == .rerun }
     static func capturesForegroundOnExit(mode: RestoreMode) -> Bool { mode == .rerun || mode == .live }
     /// Whether the window title bar shows the attention bell icon; off by default. The title bar reads it via
@@ -136,6 +138,8 @@ final class GhosttyApp {
     /// The sidebar row-text point size. The sidebar Coordinator reads it for each row's font and the derived
     /// row height (via `AppSettings.sidebarRowHeight`); settings-mirrored like `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+    /// The sidebar row spacing; the Coordinator reads it with `sidebarFontSize`. Settings-mirrored.
+    private(set) var sidebarDensity: SidebarDensity = .standard
     /// The sizes the palette/picker and session switcher derive from the separate `interfaceFontSize`,
     /// resolved once per settings change rather than per row.
     private(set) var interfaceMetrics = InterfaceMetrics(fontSize: AppSettings.defaultInterfaceFontSize)
@@ -165,9 +169,12 @@ final class GhosttyApp {
     private init() {
         let resolvedResources = Self.resolveResources()
         let initialSettings = Self.settingsStore().load()
+        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
+        let commandShell = Self.resolveLiveCommandShell(configInputs)
         let restoreDecision = initialSettings.effectiveRestoreMode.launchDecision(
-            liveUnavailableReason: ZmxLaunch.liveUnavailableReason())
+            liveUnavailableReason: ZmxLaunch.liveUnavailableReason(commandShell: commandShell))
         restoreLaunchDecision = restoreDecision
+        liveCommandShell = commandShell
         resourcesDir = resolvedResources
         let booted = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS
         // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
@@ -178,7 +185,6 @@ final class GhosttyApp {
             logger.error("ghostty_init failed")
             return
         }
-        let configInputs = Self.resolveConfigInputs(settings: initialSettings)
         guard let cfg = loadConfig(configInputs) else {
             logger.error("ghostty_config_new failed")
             return
@@ -315,6 +321,10 @@ final class GhosttyApp {
         sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
     }
 
+    func setSidebarDensity(_ density: SidebarDensity) {
+        sidebarDensity = density
+    }
+
     /// `InterfaceMetrics` clamps its own input, so a hand-edited out-of-range value lands in range here too.
     func setInterfaceFontSize(_ size: Double) {
         interfaceMetrics = InterfaceMetrics(fontSize: size)
@@ -343,14 +353,26 @@ final class GhosttyApp {
     /// plain circle — lives in host-free `AgentStatus.symbolName(override:configured:)`; this supplies only the
     /// mirrored Settings value. Shared by the sidebar `StatusIconView` and SwiftUI `StatusGlyph` against drift.
     func statusSymbolName(for status: AgentStatus, override shape: StatusShape?) -> String {
-        let configured: StatusShape?
+        status.symbolName(override: shape, configured: configuredStatusShape(for: status))
+    }
+
+    /// The symbol weight for a status glyph, resolved with the same precedence as `statusSymbolName`.
+    func statusSymbolWeight(for status: AgentStatus, override shape: StatusShape?) -> NSFont.Weight {
+        Self.symbolWeight(status.shape(override: shape, configured: configuredStatusShape(for: status)))
+    }
+
+    /// The weight one shape draws at: heavy for a stroke glyph, so its ink matches the filled silhouettes.
+    static func symbolWeight(_ shape: StatusShape) -> NSFont.Weight {
+        shape.isStroke ? .heavy : .regular
+    }
+
+    private func configuredStatusShape(for status: AgentStatus) -> StatusShape? {
         switch status {
-        case .active: configured = activeStatusShape
-        case .blocked: configured = blockedStatusShape
-        case .completed: configured = completedStatusShape
-        case .idle: configured = nil
+        case .active: activeStatusShape
+        case .blocked: blockedStatusShape
+        case .completed: completedStatusShape
+        case .idle: nil
         }
-        return status.symbolName(override: shape, configured: configured)
     }
 
     /// The configured tint for a status glyph. `idle` never renders a glyph (filtered out before any glyph is
@@ -494,17 +516,8 @@ final class GhosttyApp {
     /// followed, so a `selection-*` behind one is missed.
     private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
                                                isDark: Bool) -> (NSColor?, NSColor?) {
-        var sources: [String] = []
-        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
-            sources.append(defaults.path)
-        }
-        if inheritGlobalConfig {
-            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
-        }
-        sources.append(ghosttyConfigPath)
-        sources.append(settingsConfigURL.path)
-
-        let config = sources.flatMap(keyValues(ofFileAt:))
+        let config = configSources(ghosttyConfigPath: ghosttyConfigPath, inheritGlobalConfig: inheritGlobalConfig)
+            .flatMap(keyValues(ofFileAt:))
         let themeName = GhosttyConfigText.lastSetting(of: "theme", in: config) { $0 }.over(.unset) ?? ""
         // the settings conf carries the raw dual `theme = light:,dark:` (ghostty picks the terminal side
         // itself), so pick the appearance side.
@@ -521,6 +534,34 @@ final class GhosttyApp {
                 .over(GhosttyConfigText.lastSetting(of: key, in: theme, parse: parseHexColor))
         }
         return (color("selection-background"), color("selection-foreground"))
+    }
+
+    /// configSources lists the files `loadConfig` reads before its `config-file` includes, in its order.
+    private static func configSources(ghosttyConfigPath: String, inheritGlobalConfig: Bool) -> [String] {
+        var sources: [String] = []
+        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
+            sources.append(defaults.path)
+        }
+        if inheritGlobalConfig {
+            sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
+        }
+        sources.append(ghosttyConfigPath)
+        sources.append(settingsConfigURL.path)
+        return sources
+    }
+
+    /// resolveLiveCommandShell reads ghostty `command` from every config source and include, then
+    /// classifies the final raw value: an earlier supported one must not outlive a later unsupported one.
+    private static func resolveLiveCommandShell(_ inputs: ConfigInputs) -> String? {
+        let sources = configSources(ghosttyConfigPath: inputs.scopedURL.path,
+                                    inheritGlobalConfig: inputs.inheritGlobalConfig)
+        let pairs = GhosttyConfigText.keyValues(loading: sources, home: NSHomeDirectory()) {
+            try? String(contentsOfFile: $0, encoding: .utf8)
+        }
+        guard case .value(let command) = GhosttyConfigText.lastSetting(of: "command", in: pairs, parse: { $0 }) else {
+            return nil
+        }
+        return ZmxSupport.commandShell(fromCommand: command)
     }
 
     /// keyValues reads a config file's pairs; a missing or unreadable file yields none.

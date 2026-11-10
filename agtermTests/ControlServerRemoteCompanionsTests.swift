@@ -90,7 +90,9 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let pageUsage = RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unexpected argument 'page-attach'")
         let pages = ScriptedRunner([pageUsage])
         let (pageServer, _, _) = try makeServer(pages, store: store, row: row)
-        let page = await pageServer.attachRemotePage(created, host: "buildbox", parent: row.id, select: false)
+        let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
+        let page = await pageServer.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                     at: .companion(of: row.id), select: false)
         XCTAssertEqual(page.error, "the agterm on buildbox is too old for page companions")
     }
 
@@ -199,6 +201,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         XCTAssertEqual(page.remoteHost, "buildbox")
         XCTAssertEqual(page.htmlOverlay?.replicaOf, UUID(uuidString: pageID))
         XCTAssertEqual(page.remotePresentation?.binding.remoteSessionID, created, "New Companion on the row makes a sibling there")
+        XCTAssertEqual(page.remoteSessionID, created)
         let create = try XCTUnwrap(runner.invocations[1].last)
         for word in ["overlay", "open", "--companion", "--html", "/srv/report.html", "--cwd", "/srv", "--js"] {
             XCTAssertTrue(create.contains(word), word)
@@ -317,6 +320,42 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
                          forSession: other.id)
         let ambiguous = await server.attachRemoteSession(host: "buildbox", session: created, window: nil)
         XCTAssertEqual(ambiguous.error, "more than one row here shows the page's parent")
+    }
+
+    func testAListedPageRootAttachesAtTopLevelAndItsCompanionsAttachUnderItLater() async throws {
+        let root = #"{"id":"page-root","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/srv","panes":[],"content":"page","companions":[{"id":"c1","name":"c"},"#
+            + #"{"id":"\#(created)","name":"report"}]}"#
+        let pageChild = #"{"id":"\#(created)","name":"report","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/srv","panes":[],"parent":"page-root","content":"page"}"#
+        let terminalChild = #"{"id":"c1","name":"c","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/repo","parent":"page-root","panes":[{"pane":"left","#
+            + #""daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#
+        let listing = tree(sessions: [root, terminalChild, pageChild].joined(separator: ","))
+        let runner = ScriptedRunner([listing, pageAttach("page-root"), listing, listing, pageAttach(created)])
+        let (server, store, _) = try makeServer(runner)
+        server.pageLauncher = FakePageLauncher()
+
+        let attached = await server.attachRemoteSession(host: "buildbox", session: "page-root", window: nil)
+
+        XCTAssertTrue(attached.ok, attached.error ?? "")
+        XCTAssertNil(attached.result?.parent)
+        let rowID = try XCTUnwrap(attached.result?.id.flatMap(UUID.init(uuidString:)))
+        let row = try XCTUnwrap(store.session(withID: rowID))
+        XCTAssertNil(row.parentID)
+        XCTAssertEqual(row.content, .page)
+        XCTAssertEqual(row.remoteHost, "buildbox")
+        XCTAssertEqual(row.remoteSessionID, "page-root")
+        XCTAssertEqual(store.workspace(forSession: rowID)?.id, store.currentWorkspaceID)
+
+        let terminal = await server.attachRemoteSession(host: "buildbox", session: "c1", window: nil)
+        let page = await server.attachRemoteSession(host: "buildbox", session: created, window: nil)
+
+        XCTAssertTrue(terminal.ok, terminal.error ?? "")
+        XCTAssertTrue(page.ok, page.error ?? "")
+        XCTAssertEqual(store.companions(of: rowID).map { $0.remotePresentation?.binding.remoteSessionID }, ["c1", created])
+        XCTAssertEqual(store.companions(of: rowID).map(\.remoteSessionID), ["c1", created])
+        XCTAssertEqual(store.companions(of: rowID).map(\.content), [.terminal, .page])
     }
 
     func testAGuiNewCompanionOnARemoteRowCreatesItThroughTheOrigin() async throws {

@@ -27,6 +27,7 @@ final class AppActionsTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             HtmlOverlayRegistry.shared.setZoom(1)
+            HtmlOverlayRegistry.shared.closePageSession = nil
             actions = nil
             settings = nil
             library = nil
@@ -126,16 +127,34 @@ final class AppActionsTests: XCTestCase {
         return session
     }
 
+    private func activeNewSessionCwd() throws -> String {
+        let store = try XCTUnwrap(library.activeStore)
+        return actions.resolvedNewSessionCwd(in: try XCTUnwrap(store.currentWorkspaceID), store: store)
+    }
+
+    func testNewSessionCwdReadsTheSuppliedBackgroundStore() throws {
+        settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.currentSession.rawValue)
+        let front = try XCTUnwrap(library.activeWindowID)
+        let frontStore = try XCTUnwrap(library.activeStore)
+        try XCTUnwrap(frontStore.activeSession).currentCwd = "/nowhere/front"
+        let back = library.newWindow(name: "back")
+        library.frontmostWindowID = front
+        let backStore = try XCTUnwrap(library.store(for: back.id))
+        try XCTUnwrap(backStore.activeSession).currentCwd = "/nowhere/back"
+
+        XCTAssertEqual(actions.resolvedNewSessionCwd(in: backStore.workspaces[0].id, store: backStore), "/nowhere/back")
+    }
+
     func testNewSessionCwdFollowsTheCurrentSessionThroughTheLocalRule() throws {
         settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.currentSession.rawValue)
         let local = try XCTUnwrap(library.activeStore?.activeSession)
         local.currentCwd = "/nowhere/local"
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/local")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/local")
 
         let remote = try remoteActiveSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), home)
+        XCTAssertEqual(try activeNewSessionCwd(), home)
         remote.currentCwd = stateDir.path
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), stateDir.path)
+        XCTAssertEqual(try activeNewSessionCwd(), stateDir.path)
     }
 
     func testNewSessionCwdKeepsTheFocusedSplitPaneAndTheEmptyCwdFallback() throws {
@@ -148,18 +167,18 @@ final class AppActionsTests: XCTestCase {
         local.hasSplit = true
         local.isSplit = true
         local.splitFocused = true
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/split")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/split")
 
         local.splitFocused = false
         local.currentCwd = ""
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), home)
+        XCTAssertEqual(try activeNewSessionCwd(), home)
     }
 
     func testNewSessionCwdCustomModeIgnoresTheActiveSessionsRemoteness() throws {
         settings.setNewSessionDirectory(AppSettings.NewSessionDirectory.custom.rawValue)
         settings.setNewSessionCustomDirectory("/nowhere/custom")
         _ = try remoteActiveSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
-        XCTAssertEqual(actions.resolvedNewSessionCwd(), "/nowhere/custom")
+        XCTAssertEqual(try activeNewSessionCwd(), "/nowhere/custom")
     }
 
     func testNewSessionAfterCurrentLandsBehindTheSelectedSession() throws {
@@ -207,5 +226,113 @@ final class AppActionsTests: XCTestCase {
         let sessions = try XCTUnwrap(store.workspaces.first { $0.id == target }).sessions
         XCTAssertEqual(sessions.count, 3)
         XCTAssertEqual(sessions.last?.id, store.selectedSessionID)
+    }
+
+    private func pageRow(in store: AppStore) throws -> Session {
+        let anchor = try XCTUnwrap(store.workspaces.first?.sessions.first)
+        let overlay = HtmlOverlay(source: .file(path: "/tmp/agterm-missing-\(UUID().uuidString).html", grantRoot: nil), javascript: true)
+        return try store.addPageSession(after: anchor.id, overlay: overlay, select: false).get()
+    }
+
+    private func waitFor(_ what: String, _ condition: @escaping () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition() {
+            guard Date() < deadline else { return XCTFail("\(what) not reached within 5s") }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    func testAPageCloseRunsUnderAZoomInItsOwnWindow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let row = try pageRow(in: store)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        zoom.set(.on, target: .session(try XCTUnwrap(store.workspaces.first?.sessions.first).id, .primary))
+        XCTAssertFalse(actions.uiActionsEnabled(for: windowID))
+
+        XCTAssertTrue(actions.closePageSession(row.id, in: store))
+
+        XCTAssertNotNil(store.pendingCloseSession(withID: row.id))
+    }
+
+    func testAPageCloseRunsUnderADashboardInItsOwnWindow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let row = try pageRow(in: store)
+        let dashboard = DashboardController()
+        dashboard.open(members: [DashboardMember(session: try XCTUnwrap(store.workspaces.first?.sessions.first).id, surface: .primary)])
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        defer { DashboardControllerRegistry.shared.unregister(windowID) }
+        XCTAssertFalse(actions.uiActionsEnabled(for: windowID))
+
+        XCTAssertTrue(actions.closePageSession(row.id, in: store))
+
+        XCTAssertNotNil(store.pendingCloseSession(withID: row.id))
+    }
+
+    func testAnotherWindowsZoomAndPickLeaveAPageCloseInADifferentWindowAlone() throws {
+        let back = try XCTUnwrap(library.activeStore)
+        let row = try pageRow(in: back)
+        let front = library.newWindow(name: "front").id
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(front, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(front) }
+        zoom.set(.on, target: .session(UUID(), .primary))
+        let pick = PickController()
+        XCTAssertTrue(pick.open(PendingPick(id: "front", items: [])))
+        PickRegistry.shared.register(front, controller: pick)
+        defer { PickRegistry.shared.unregister(front) }
+        XCTAssertNotEqual(library.windowID(for: back), front)
+
+        XCTAssertTrue(actions.closePageSession(row.id, in: back))
+
+        XCTAssertNotNil(back.pendingCloseSession(withID: row.id))
+    }
+
+    func testAPageCloseWithGraceUndoOffClosesWithoutAnUndo() throws {
+        settings.setCloseGraceUndoEnabled(false)
+        let store = try XCTUnwrap(library.activeStore)
+        let row = try pageRow(in: store)
+
+        XCTAssertTrue(actions.closePageSession(row.id, in: store))
+
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertNil(store.pendingCloseSession(withID: row.id))
+    }
+
+    func testAPagesWindowCloseIsKeptWhileItsPickerIsPendingAndRunsOnceThePickerIsDismissed() async throws {
+        let registry = HtmlOverlayRegistry.shared
+        registry.install()
+        var asked = 0
+        registry.closePageSession = { [actions] store, id in
+            asked += 1
+            return actions?.closePageSession(id, in: store) ?? false
+        }
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let row = try pageRow(in: store)
+        let selected = store.selectedSessionID
+        let live = registry.page(for: try XCTUnwrap(row.htmlOverlay), store: store)
+        let pick = PickController()
+        XCTAssertTrue(pick.open(PendingPick(id: "busy", items: [])))
+        PickRegistry.shared.register(windowID, controller: pick)
+        defer { PickRegistry.shared.unregister(windowID) }
+
+        live.webViewDidClose(live.webView)
+        try await waitFor("the refused close was asked") { asked == 1 }
+        XCTAssertNotNil(store.session(withID: row.id))
+        XCTAssertNil(store.pendingCloseSession(withID: row.id))
+
+        pick.cancel()
+        registry.retryPageCloses(in: store)
+        try await waitFor("the kept close ran") { store.pendingCloseSession(withID: row.id) != nil }
+        registry.retryPageCloses(in: store)
+        try await Task.sleep(for: .milliseconds(100))
+
+        XCTAssertEqual(asked, 2)
+        XCTAssertEqual(store.selectedSessionID, selected)
+        store.finalizeAllPendingCloses()
     }
 }

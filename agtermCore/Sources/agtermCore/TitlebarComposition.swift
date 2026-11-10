@@ -54,7 +54,9 @@ public struct TitlebarComposition: Sendable, Equatable {
     /// context line two, REPLACING the cwd detail rather than sharing the row, which would truncate both.
     /// Hidden composes nothing — neither title bar renders a label in that mode.
     public static func compose(_ parts: Parts, mode: ToolbarMode) -> TitlebarComposition {
-        let identity = [parts.workspaceName.flatMap(cappedWorkspaceName), parts.sessionName, parts.windowName]
+        // a remote window is named after its host, which the host part already shows
+        let windowName = parts.windowName == parts.remoteHost.map(TerminalText.sanitized) ? nil : parts.windowName
+        let identity = [parts.workspaceName.flatMap(cappedWorkspaceName), parts.sessionName, windowName]
             .compactMap { $0 }
             .joined(separator: identitySeparator)
         switch mode {

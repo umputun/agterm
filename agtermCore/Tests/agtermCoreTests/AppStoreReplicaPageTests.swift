@@ -42,6 +42,66 @@ struct AppStoreReplicaPageTests {
         #expect(store.session(withID: parent.id) != nil)
     }
 
+    @Test func aMarkdownReplicaKeepsTheOriginsLinkGrantAndNavigationOnlyWithIt() throws {
+        let (store, session) = try attached(split: false)
+        let grant = MarkdownLinkGrant(path: "/docs/README.md", root: "/docs")
+        var linked = page(.markdown(path: "/docs/README.md"))
+        linked.markdownLinks = grant
+
+        #expect(store.presentReplicaPage(linked, forSession: session.id) == nil)
+        #expect(session.htmlOverlay?.markdownLinks == grant)
+        #expect(session.htmlOverlay?.navigation == true)
+
+        #expect(store.closeOverlay(session.id))
+        #expect(store.presentReplicaPage(page(.markdown(path: "/docs/README.md")), forSession: session.id) == nil)
+        #expect(session.htmlOverlay?.markdownLinks == nil)
+        #expect(session.htmlOverlay?.navigation == false)
+    }
+
+    @Test func aReplicaPageRootIsATopLevelRowAtTheEndOfItsWorkspace() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
+
+        let row = try store.addReplicaPageRoot(toWorkspace: ws.id, host: "buildbox", name: "dash", page: page(), select: true).get()
+
+        #expect(row.parentID == nil && row.content == .page && row.remoteHost == "buildbox")
+        #expect(row.displayName == "dash")
+        #expect(store.workspace(forSession: row.id)?.id == ws.id)
+        #expect(store.workspaces.first { $0.id == ws.id }?.sessions.map(\.id) == [local.id, row.id])
+        #expect(store.selectedSessionID == row.id)
+        let shown = try #require(row.htmlOverlay)
+        #expect(shown.source == .replica(path: "/docs/index.html", content: .html))
+        #expect(shown.replicaOf == Self.origin)
+        #expect(HtmlPageOutcomes.shared.outcome(for: shown.id)?.outcome == .pending)
+    }
+
+    @Test func aReplicaPageRootAndItsCompanionsAreAbsentFromTheSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
+        let root = try store.addReplicaPageRoot(toWorkspace: ws.id, host: "buildbox", name: nil, page: page(), select: false).get()
+        let child = try store.addReplicaPageCompanion(to: root.id, page: page(id: UUID()), select: false).get()
+        let terminal = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", remoteHost: "buildbox", parentID: root.id))
+
+        let ids = store.snapshot().workspaces.first { $0.id == ws.id }?.sessions.map(\.id)
+
+        #expect(store.companions(of: root.id).map(\.id) == [child.id, terminal.id])
+        #expect(ids == [local.id])
+        #expect(root.pageSnapshot == nil)
+    }
+
+    @Test func aReplicaPageRootIntoAMissingWorkspaceCreatesNothing() throws {
+        let store = makeStore()
+        let before = store.workspaces.flatMap(\.sessions).count
+
+        let result = store.addReplicaPageRoot(toWorkspace: UUID(), host: "buildbox", name: nil, page: page(), select: true)
+
+        guard case .failure(let refusal) = result else { Issue.record("a row was created"); return }
+        #expect(refusal.message == "the workspace here is gone")
+        #expect(store.workspaces.flatMap(\.sessions).count == before)
+    }
+
     @Test func aFilePageIsShownSessionWideUnderItsOwnId() throws {
         let (store, session) = try attached()
 
@@ -49,7 +109,7 @@ struct AppStoreReplicaPageTests {
 
         let shown = try #require(session.htmlOverlay)
         #expect(session.htmlOverlayActive)
-        #expect(shown.source == .replica(path: "/docs/index.html"))
+        #expect(shown.source == .replica(path: "/docs/index.html", content: .html))
         #expect(shown.replicaOf == Self.origin)
         #expect(shown.id != Self.origin)
         #expect(shown.javascript && shown.navigation)
@@ -64,7 +124,35 @@ struct AppStoreReplicaPageTests {
 
         #expect(store.presentReplicaPage(page(.file(path: "/docs/index.html", grantRoot: nil)), forSession: session.id) == nil)
 
-        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html"))
+        #expect(session.htmlOverlay?.source == .replica(path: "/docs/index.html", content: .html))
+    }
+
+    @Test(arguments: [
+        (PresentationPageSource.image(path: "/shots/a.png", width: 800, height: 600), ReplicaContent.image(width: 800, height: 600)),
+        (.markdown(path: "/docs/README.md"), .markdown),
+        (.text(path: "/src/main.go", line: 12), .text(line: 12)),
+        (.document(path: "/docs/pr.html"), .document),
+    ])
+    func aContentPageIsShownAsAReplicaOfItsKind(source: PresentationPageSource, content: ReplicaContent) throws {
+        let (store, session) = try attached()
+
+        #expect(store.presentReplicaPage(page(source), forSession: session.id) == nil)
+
+        let shown = try #require(session.htmlOverlay)
+        guard case .replica(_, let kind) = shown.source else { Issue.record("not a replica: \(shown.source)"); return }
+        #expect(kind == content)
+        #expect(shown.replicaOf == Self.origin)
+    }
+
+    @Test func theTreeReportsAContentReplicaByItsKind() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(.text(path: "/src/main.go", line: 12)), forSession: session.id) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first)
+
+        #expect(node.text == ControlTextOverlayNode(file: "/src/main.go", language: TextPage.language(forFile: "/src/main.go"), line: 12))
+        #expect(node.file == nil)
+        #expect(node.replica == true)
     }
 
     @Test func aUrlPageLoadsItsFullAddressHere() throws {
@@ -292,5 +380,30 @@ struct AppStoreReplicaPageTests {
 
         #expect(session.overlaySizePercent == 60)
         #expect(session.overlayPoints == OverlayPointSize(width: 900, height: 300))
+    }
+
+    @Test func aPictureSizedHereKeepsItsFloatingSizeUnderAReplayedPointOverride() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: ImagePage.basePercent, points: OverlayPointSize(width: 640, height: 480)),
+                                         forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: ImagePage.basePercent,
+                                points: OverlayPointSize(width: 300), merge: true)
+
+        #expect(session.overlaySizePercent == ImagePage.basePercent)
+        #expect(session.overlayPoints == OverlayPointSize(width: 300, height: 480))
+    }
+
+    @Test func aMergingResizeKeepsTheAxisItDoesNotNameAndAPlainOneReplacesIt() throws {
+        let (store, session) = try attached()
+        #expect(store.presentReplicaPage(page(size: 95, points: OverlayPointSize(width: 400, height: 300)), forSession: session.id) == nil)
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 600), merge: true)
+        #expect(session.overlayPoints == OverlayPointSize(width: 600, height: 300))
+
+        store.resizeReplicaPage(Self.origin.uuidString, forSession: session.id, sizePercent: 95,
+                                points: OverlayPointSize(width: 500))
+        #expect(session.overlayPoints == OverlayPointSize(width: 500))
     }
 }

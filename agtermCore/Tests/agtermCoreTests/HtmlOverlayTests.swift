@@ -4,6 +4,23 @@ import Testing
 
 @MainActor
 struct HtmlOverlayTests {
+    @Test func aPinnedFailureOutlastsLaterLoadReportsAndRefusesAReload() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir))
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let page = HtmlOverlay(source: .url(try #require(URL(string: "http://localhost:5001/"))))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+
+        store.failHtmlOverlay(page.id, error: "the port forward failed")
+        store.setHtmlLoadState(page.id, state: .loaded, error: nil)
+
+        #expect(session.htmlOverlay?.loadState == .failed)
+        #expect(session.htmlOverlay?.loadError == "the port forward failed")
+        #expect(store.reloadHtmlOverlay(session.id, pane: nil) == .pinned("the port forward failed"))
+        #expect(session.htmlOverlay?.loadState == .failed)
+    }
+
     final class Sink: PresentationSink {
         var frames: [PresentationFrame] = []
 
@@ -237,7 +254,7 @@ struct HtmlOverlayTests {
     ])
     func replicaPolicyAllowsOnlyItsOwnSchemeOrigin(_ url: String, _ target: HtmlNavigationTarget, _ userActivated: Bool,
                                                    _ expected: HtmlNavigationDecision) throws {
-        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html"), replicaOf: UUID())
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: UUID())
         let resolved = url.replacingOccurrences(of: "OWN", with: overlay.id.uuidString)
             .replacingOccurrences(of: "own", with: overlay.id.uuidString.lowercased())
         let action = HtmlNavigationAction(url: try #require(URL(string: resolved)), target: target, userActivated: userActivated)
@@ -246,7 +263,7 @@ struct HtmlOverlayTests {
 
     @Test func aReplicaIsNamedByItsFileAndReportsTheOriginPathAsReplica() throws {
         let origin = UUID()
-        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html"), replicaOf: origin)
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: origin)
         #expect(overlay.identity == "index.html")
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
 
@@ -255,6 +272,39 @@ struct HtmlOverlayTests {
         #expect(node.cwd == nil)
         #expect(node.replica == true)
         #expect(node.remote == nil)
+    }
+
+    @Test func aReplicaAwaitsItsFirstContentUntilItLoadsOnce() throws {
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+
+        store.setHtmlPage(overlay.id, HtmlPageInfo(page: "agterm-page://x/index.html", title: nil, canGoBack: false, canGoForward: false))
+        #expect(session.htmlOverlay?.awaitsFirstContent == true)
+
+        store.setHtmlLoadState(overlay.id, state: .loaded, error: nil)
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
+
+        for target in [HtmlReloadTarget.original, .current] {
+            #expect(store.reloadHtmlOverlay(session.id, pane: nil, target: target) == nil)
+            store.setHtmlLoadState(overlay.id, state: .loading, error: nil)
+            #expect(session.htmlOverlay?.awaitsFirstContent == false)
+        }
+    }
+
+    @Test func aReplicaWhoseFirstLoadFailedNoLongerAwaitsContent() {
+        let overlay = HtmlOverlay(source: .replica(path: "/origin/docs/index.html", content: .html), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil) == nil)
+
+        store.setHtmlLoadState(overlay.id, state: .failed, error: "gone")
+
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
+    }
+
+    @Test func aLocalPageNeverAwaitsContent() {
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page(), sizePercent: nil) == nil)
+
+        #expect(session.htmlOverlay?.loadState == .loading)
+        #expect(session.htmlOverlay?.awaitsFirstContent == false)
     }
 
     @Test func aLocalPageNodeOmitsTheRemoteFields() throws {
@@ -287,12 +337,95 @@ struct HtmlOverlayTests {
         #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)
     }
 
+    @Test(arguments: [
+        ("https://example.com/", HtmlNavigationTarget.mainFrame, true, HtmlNavigationDecision.openExternal),
+        ("https://example.com/", .mainFrame, false, .cancel),
+        ("https://example.com/", .subframe, false, .cancel),
+        ("about:blank", .mainFrame, false, .allow),
+        ("file:///tmp/agdoc/other.html", .mainFrame, true, .cancel),
+        ("file:///etc/passwd", .subframe, false, .cancel),
+        ("javascript:alert(1)", .mainFrame, true, .cancel),
+        ("data:text/html,x", .mainFrame, true, .cancel),
+    ])
+    func documentPagePolicyHandsWebLinksOutAndKeepsEverythingElse(_ url: String, _ target: HtmlNavigationTarget,
+                                                                  _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+        for source in [HtmlSource.document(path: "/tmp/agdoc/pr.html"), .replica(path: "/tmp/agdoc/pr.html", content: .document)] {
+            let action = HtmlNavigationAction(url: try #require(URL(string: url)), target: target, userActivated: userActivated)
+            #expect(HtmlNavigationPolicy.decide(action, overlay: HtmlOverlay(source: source)) == expected)
+        }
+    }
+
+    @Test func aDocumentPageIsNamedByItsFileNeverTheTitle() {
+        var overlay = HtmlOverlay(source: .document(path: "/tmp/agdoc/pr.html"))
+        overlay.current = HtmlPageInfo(page: "/tmp/agdoc/pr.html", title: "enter your password", canGoBack: false, canGoForward: false)
+        #expect(overlay.identity == "pr.html")
+        #expect(overlay.source.kind == .document)
+        #expect(HtmlSource.replica(path: "/tmp/agdoc/pr.html", content: .document).kind == .document)
+    }
+
     @Test func aMarkdownPageIsNamedByItsFileNeverTheTitle() {
         var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
         overlay.current = HtmlPageInfo(page: "/tmp/notes/readme.md", title: "enter your password", canGoBack: false, canGoForward: false)
         #expect(overlay.identity == "readme.md")
         #expect(overlay.source.markdownPath == "/tmp/notes/readme.md")
         #expect(overlay.source.imagePath == nil)
+    }
+
+    @Test(arguments: [HtmlSource.markdown(path: "/tmp/notes/readme.md"), .replica(path: "/tmp/notes/readme.md", content: .markdown)])
+    func aLinkPageIsNamedByTheFileItShows(_ source: HtmlSource) {
+        var overlay = HtmlOverlay(source: source, navigation: true,
+                                  markdownLinks: MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes"))
+        overlay.current = HtmlPageInfo(page: "/tmp/notes/sub/guide.md", title: "enter your password", canGoBack: true, canGoForward: false)
+        #expect(overlay.identity == "guide.md")
+    }
+
+    @Test func aLinkPageKeepsItsOriginalForReadBack() {
+        var overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true,
+                                  markdownLinks: MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes"))
+        overlay.current = HtmlPageInfo(page: "/tmp/notes/sub/guide.md", title: nil, canGoBack: true, canGoForward: false)
+        #expect(overlay.source.markdownPath == "/tmp/notes/readme.md")
+    }
+
+    @Test func aMarkdownPageHasNavigationOnlyWithALinkGrant() {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        #expect(HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant).navigation)
+        #expect(!HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true).navigation)
+        #expect(HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: false, markdownLinks: grant).markdownLinks == nil)
+        #expect(HtmlOverlay(source: .file(path: "/tmp/a/x.html", grantRoot: nil), navigation: true).navigation)
+    }
+
+    @Test(arguments: [
+        ("/tmp/notes/readme.md", HtmlNavigationTarget.mainFrame, false, HtmlNavigationDecision.allow),
+        ("/tmp/notes/sub/guide.markdown", .mainFrame, true, .allow),
+        ("/tmp/notes/a/../readme.md", .mainFrame, true, .allow),
+        ("/tmp/notes/../other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/notes/%2e%2e/other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/other/x.md", .mainFrame, true, .cancel),
+        ("/tmp/notes/notes.txt", .mainFrame, true, .cancel),
+        ("/tmp/notes/sub/guide.md", .subframe, true, .cancel),
+        ("/tmp/notes/sub/guide.md", .newWindow, true, .cancel),
+    ])
+    func aLinkPageLoadsOnlyItsOwnMarkdownInsideTheGrant(_ path: String, _ target: HtmlNavigationTarget,
+                                                        _ userActivated: Bool, _ expected: HtmlNavigationDecision) throws {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        let overlay = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant)
+        let url = try #require(URL(string: "agterm-page://\(overlay.id.uuidString.lowercased())\(path)"))
+        let action = HtmlNavigationAction(url: url, target: target, userActivated: userActivated)
+        #expect(HtmlNavigationPolicy.decide(action, overlay: overlay) == expected)
+    }
+
+    @Test func aLinkPageRefusesAnotherPagesAddressAndAPageWithoutAGrant() throws {
+        let grant = MarkdownLinkGrant(path: "/tmp/notes/readme.md", root: "/tmp/notes")
+        let linked = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"), navigation: true, markdownLinks: grant)
+        let plain = HtmlOverlay(source: .markdown(path: "/tmp/notes/readme.md"))
+        let other = try #require(URL(string: "agterm-page://\(UUID().uuidString.lowercased())/tmp/notes/readme.md"))
+        let own = try #require(URL(string: "agterm-page://\(plain.id.uuidString.lowercased())/tmp/notes/readme.md"))
+        let web = try #require(URL(string: "https://example.com/x.md"))
+
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: other, target: .mainFrame, userActivated: true), overlay: linked) == .cancel)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: own, target: .mainFrame, userActivated: true), overlay: plain) == .cancel)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: web, target: .mainFrame, userActivated: true), overlay: linked) == .openExternal)
+        #expect(HtmlNavigationPolicy.decide(HtmlNavigationAction(url: web, target: .mainFrame, userActivated: false), overlay: linked) == .cancel)
     }
 
     @Test(arguments: [
@@ -796,5 +929,336 @@ struct HtmlOverlayTests {
         #expect(theme.background == "#ffffff")
         #expect(theme.foreground == "#1e1e1e")
         #expect(!theme.stylesheet(themed: true).contains("display"))
+    }
+
+    private final class TreeEvents {
+        var count = 0
+    }
+
+    private func logStore() throws -> (store: AppStore, session: Session, events: TreeEvents) {
+        let events = TreeEvents()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir),
+                             controlEventSink: { if $0.kind == .treeChanged { events.count += 1 } }, paneFinalizer: nil)
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        return (store, session, events)
+    }
+
+    private func logPage(follow: Bool = true) -> HtmlOverlay {
+        HtmlOverlay(source: .text(path: "/tmp/app.log", line: nil), textLog: TextLog(tail: 50, follow: follow))
+    }
+
+    @Test func aLogPageStartsWithTheRequestedFollowStateAndOtherPagesHaveNone() {
+        #expect(logPage(follow: true).logState == TextLogState(following: true))
+        #expect(logPage(follow: false).logState == TextLogState(following: false))
+        #expect(HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil)).logState == nil)
+    }
+
+    @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
+    func followModeSetsTheLogPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
+        let (store, session, events) = try logStore()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: logPage(follow: from), sizePercent: nil) == nil)
+        let opened = events.count
+
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: mode) == .success(to))
+
+        #expect(session.htmlOverlay?.logState?.following == to)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func followModeThatChangesNothingEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: logPage(follow: true), sizePercent: nil) == nil)
+        let opened = events.count
+
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .success(true))
+
+        #expect(events.count == opened)
+    }
+
+    @Test func followModeRefusesEverythingButALogPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.page(.noOverlay)))
+        #expect(store.setTextLogFollowing(UUID(), pane: nil, mode: .on) == .failure(.page(.unknownSession)))
+
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.notLog))
+        #expect(TextLogFollowFailure.notLog.message == "no log page")
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.setTextLogFollowing(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
+    }
+
+    @Test func aScrollReportedFollowChangeEmitsOnlyWhenItChanges() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage(follow: true)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextLogFollowing(page.id, following: false)
+        store.setTextLogFollowing(page.id, following: false)
+
+        #expect(session.htmlOverlay?.logState?.following == false)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func aReportIsWrittenWithNoEventAndKeepsFollowing() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage(follow: false)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+        let report = TextLogReport(lines: 12, clipped: true, waiting: false, unreadable: true)
+
+        store.setTextLogReport(page.id, report)
+
+        #expect(session.htmlOverlay?.logState == TextLogState(following: false, report: report))
+        #expect(events.count == opened)
+    }
+
+    @Test func aReportForAPageThatIsNotALogPageIsIgnored() throws {
+        let (store, session, _) = try logStore()
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+
+        store.setTextLogReport(text.id, TextLogReport(lines: 3))
+        store.setTextLogFollowing(text.id, following: true)
+
+        #expect(session.htmlOverlay?.logState == nil)
+    }
+
+    @Test func aLogPageNodeReportsItsLimitAndLiveState() throws {
+        let (store, session, _) = try logStore()
+        let page = logPage(follow: true)
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextLogReport(page.id, TextLogReport(lines: 7, clipped: true, waiting: false, unreadable: true))
+
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text == ControlTextOverlayNode(file: "/tmp/app.log", language: nil, line: nil, tail: 50, following: true,
+                                               lines: 7, clipped: true, waiting: false, unreadable: true))
+    }
+
+    @Test func aPlainTextPageNodeOmitsTheLogFields() throws {
+        let (store, session, _) = try logStore()
+        let text = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: 3))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: text, sizePercent: nil) == nil)
+
+        let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = try #require(String(data: try JSONEncoder().encode(node), encoding: .utf8))
+
+        for field in ["tail", "following", "lines", "clipped", "waiting", "unreadable", "search"] {
+            #expect(!json.contains("\"\(field)\""))
+        }
+    }
+
+    @Test func aQuerySetOrClosedBumpsTheRevisionAndEmitsOnlyOnAChange() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextSearch(page.id, query: "error")
+        store.setTextSearch(page.id, query: "error")
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "error"))
+        #expect(session.htmlOverlay?.searchRevision == 1)
+        #expect(events.count == opened + 1)
+
+        store.setTextSearch(page.id, query: "")
+        store.setTextSearch(page.id, query: "")
+        #expect(session.htmlOverlay?.textSearch == nil)
+        #expect(session.htmlOverlay?.searchRevision == 2)
+        #expect(events.count == opened + 2)
+    }
+
+    @Test func aReportIsKeptOnlyForTheCurrentRevisionAndEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "a")
+        store.setTextSearch(page.id, query: "ab")
+        let set = events.count
+
+        store.setTextSearchReport(page.id, revision: 1, query: "a", matches: 9, current: 4)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab"))
+        store.setTextSearchReport(page.id, revision: 2, query: "abc", matches: 7, current: 2)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab"))
+
+        store.setTextSearchReport(page.id, revision: 2, query: "ab", matches: 3, current: 1)
+        #expect(session.htmlOverlay?.textSearch == TextSearch(query: "ab", matches: 3, current: 1))
+        #expect(events.count == set)
+    }
+
+    @Test func aClosedSearchDropsALateReport() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "a")
+        store.setTextSearch(page.id, query: "")
+
+        store.setTextSearchReport(page.id, revision: 2, query: "a", matches: 1, current: 1)
+
+        #expect(session.htmlOverlay?.textSearch == nil)
+    }
+
+    @Test func aSearchAddressesOnlyALocalTextPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
+        #expect(store.textSearchPage(UUID(), pane: nil) == .failure(.page(.unknownSession)))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        store.setTextSearch(markdown.id, query: "a")
+        #expect(session.htmlOverlay?.textSearch == nil)
+        #expect(store.closeOverlay(session.id))
+
+        let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.closeOverlay(session.id))
+
+        let log = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: log, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil).map(\.id) == .success(log.id))
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.notHtml)))
+        #expect(TextSearchFailure.notText.message == "no text page")
+    }
+
+    @Test func aTextPageNodeReportsItsSearch() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextSearch(page.id, query: "main()")
+        store.setTextSearchReport(page.id, revision: 1, query: "main()", matches: 4, current: 2)
+
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.search == ControlTextSearchNode(query: "main()", matches: 4, current: 2))
+    }
+
+    @Test func aChangesReportIsKeptClearedAndEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+
+        store.setTextChangesReport(page.id, changes: TextChanges(count: 7, current: 3))
+        #expect(session.htmlOverlay?.textChanges == TextChanges(count: 7, current: 3))
+        store.setTextChangesReport(page.id, changes: nil)
+        #expect(session.htmlOverlay?.textChanges == nil)
+        #expect(events.count == opened)
+    }
+
+    @Test func aChangesStepAddressesOnlyALocalDiffPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
+
+        let plain = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: plain, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.notDiff))
+        #expect(store.closeOverlay(session.id))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.notDiff))
+        store.setTextChangesReport(markdown.id, changes: TextChanges(count: 1, current: 0))
+        #expect(session.htmlOverlay?.textChanges == nil)
+        #expect(store.closeOverlay(session.id))
+
+        let patch = HtmlOverlay(source: .text(path: "/tmp/a.patch", line: 3))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: patch, sizePercent: nil) == nil)
+        #expect(store.textChangesPage(session.id, pane: nil).map(\.id) == .success(patch.id))
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.textChangesPage(session.id, pane: nil) == .failure(.page(.notHtml)))
+        #expect(TextChangesFailure.notDiff.message == "no diff page")
+    }
+
+    @Test func aTextPageNodeReportsItsChangesOnlyOnceReported() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let before = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = String(data: try JSONEncoder().encode(before), encoding: .utf8) ?? ""
+        #expect(!json.contains("changes"))
+
+        store.setTextChangesReport(page.id, changes: TextChanges(count: 11, current: 2))
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.changes == ControlTextChangesNode(count: 11, current: 2))
+    }
+
+    @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
+    func wrapModeSetsTheTextPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextWrap(page.id, wrapped: from)
+        let opened = events.count
+
+        #expect(store.setTextWrap(session.id, pane: nil, mode: mode) == .success(to))
+
+        #expect(session.htmlOverlay?.textWrap == to)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func aWrapThatChangesNothingEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = logPage()
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextWrap(page.id, wrapped: true)
+        let wrapped = events.count
+
+        store.setTextWrap(page.id, wrapped: true)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .success(true))
+
+        #expect(session.htmlOverlay?.textWrap == true)
+        #expect(events.count == wrapped)
+    }
+
+    @Test func wrapRefusesEverythingButATextPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.page(.noOverlay)))
+        #expect(store.setTextWrap(UUID(), pane: nil, mode: .on) == .failure(.page(.unknownSession)))
+
+        let markdown = HtmlOverlay(source: .markdown(path: "/tmp/a.md"))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: markdown, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(markdown.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
+        let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(replica.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
+        #expect(TextWrapFailure.notText.message == "no text page")
+        #expect(TextWrapFailure.remote.message == "remote page: wrap it on the Mac that shows it")
+    }
+
+    @Test func aTextPageNodeReportsWrapOnlyWhileWrapped() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let before = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = String(data: try JSONEncoder().encode(before), encoding: .utf8) ?? ""
+        #expect(!json.contains("wrap"))
+
+        store.setTextWrap(page.id, wrapped: true)
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.wrap == true)
     }
 }

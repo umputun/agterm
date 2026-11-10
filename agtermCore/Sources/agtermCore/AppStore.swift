@@ -141,8 +141,29 @@ public final class AppStore {
     @ObservationIgnored var pendingCloseTasks: [UUID: Task<Void, Never>] = [:]
 
     @ObservationIgnored let persistence: PersistenceStore
+    /// catalogOperations is agterm-server's operation table, written in every save of this store; nil on a Mac.
+    @ObservationIgnored public var catalogOperations: CatalogOperationTable?
+    /// catalogMirrored is set once a remote window's store holds its server's catalog; until then its saved view
+    /// state is the only record of how this Mac showed the rows.
+    @ObservationIgnored public internal(set) var catalogMirrored = false
+    /// catalogState is a remote window's connection to its server, nil for a local window. Observed: the window
+    /// strip draws it.
+    public internal(set) var catalogState: RemoteCatalogMirror.State?
+    /// remoteActions sends a remote window's structural actions to its server; nil for a local window, whose actions
+    /// change this store directly.
+    @ObservationIgnored public weak var remoteActions: RemoteCatalogActions?
+    /// catalogDetachedSessions and catalogDetachedWorkspaces are what a remote window hides and leaves running on its
+    /// server; empty for a local window.
+    public internal(set) var catalogDetachedSessions: Set<UUID> = []
+    public internal(set) var catalogDetachedWorkspaces: Set<UUID> = []
+    /// catalogHiddenViews keeps the view of each row a detach hides, so it comes back on reattach and is saved meanwhile.
+    @ObservationIgnored var catalogHiddenViews: [UUID: RemoteWindowViewState.SessionView] = [:]
+    /// catalogHiddenCollapsed keeps whether each workspace a detach hides was collapsed.
+    @ObservationIgnored var catalogHiddenCollapsed: [UUID: Bool] = [:]
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
+    /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
+    @ObservationIgnored var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
@@ -209,6 +230,11 @@ public final class AppStore {
     /// and mutated only through the two public methods, so the app target cannot desync it.
     @ObservationIgnored var autoFollowSuppressionCount = 0
 
+    /// headless marks agterm-server's store: every pane is a detached zmx daemon with no surface, so pane
+    /// structure keys on `Session.daemonBackedPanes` and session effects go to the presenting Mac. Only the
+    /// server sets it; a store on the Mac keeps every surface rule.
+    public let headless: Bool
+
     public init(workspaces: [Workspace] = [], selectedSessionID: UUID? = nil,
                 persistence: PersistenceStore = PersistenceStore(),
                 recentClosedStore: RecentClosedStore? = nil,
@@ -216,7 +242,9 @@ public final class AppStore {
                 snapshotDidSave: (() -> Void)? = nil,
                 controlEventSink: ((ControlEventDraft) -> Void)? = nil,
                 paneFinalizer: (([UUID]) -> Void)?,
-                launchPaneDrop: (([UUID]) -> Void)? = nil) {
+                launchPaneDrop: (([UUID]) -> Void)? = nil,
+                headless: Bool = false) {
+        self.headless = headless
         self.workspaces = workspaces
         self.selectedSessionID = selectedSessionID
         self.persistence = persistence
@@ -319,7 +347,7 @@ public final class AppStore {
                             dashboardFontMode: () -> String? = { nil }, app: AppIdentity? = nil,
                             liveReset: ControlLiveResetReadback? = nil, indexUnsaved: Bool = false,
                             flaggedLayout: FlaggedViewLayout? = nil, htmlZoom: Double? = nil,
-                            linkOpenMode: LinkOpenMode? = nil) -> ControlTree {
+                            linkOpenMode: LinkOpenMode? = nil, sidebarDensity: SidebarDensity? = nil) -> ControlTree {
         let activeID = selectedSessionID
         // `currentWorkspaceID`, not the selected session's owner: an EMPTY destination selects nothing, so
         // deriving this from the selection alone made `tree` name the workspace `workspace.go` just left.
@@ -343,6 +371,7 @@ public final class AppStore {
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
                     let pane = session.paneIdentity(for: surface)
                     let token = surface.surface(in: session)?.paneToken
+                        ?? pane.flatMap { session.daemonBackedPanes.contains($0) ? $0.uuidString : nil }
                     return ControlSurfaceNode(id: id, kind: surface.rawValue, active: surface.isActive(in: session),
                                               visible: surface.isVisible(in: session),
                                               backedByZmx: session.zmxBacking(for: surface),
@@ -371,7 +400,12 @@ public final class AppStore {
                                                                 remote: session.askPresentedRemotely ? true : nil,
                                                                 replica: session.askReplica ? true : nil)
                                           },
+                                          pick: SessionPickBook.shared.node(forSession: session.id),
                                           scratch: session.scratchActive, flagged: session.flagged,
+                                          ended: session.ended ? true : nil,
+                                          pending: remoteActions?.pendingState(of: session.id),
+                                          scratchBacked: isRemoteWindow && session.scratchDaemon != nil ? true : nil,
+                                          interactions: interactionNodes(session),
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)
                                               ? true : nil,
@@ -408,7 +442,8 @@ public final class AppStore {
                                           tint: session.tint?.color.rawValue, tintOn: session.tint?.parts.map(\.rawValue),
                                           parent: session.parentID?.uuidString,
                                           collapsed: !session.isExpanded && parents.contains(session.id) ? true : nil,
-                                          content: session.content == .page ? "page" : nil, info: session.effectiveInfo)
+                                          content: session.content == .page ? "page" : nil, info: session.effectiveInfo,
+                                          remoteSessionID: session.remoteSessionID)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
@@ -430,7 +465,9 @@ public final class AppStore {
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
                            pickPending: pickPending(), askPending: askPending(), app: app, liveReset: liveReset,
-                           indexUnsaved: indexUnsaved ? true : nil, linkOpenMode: linkOpenMode?.rawValue)
+                           indexUnsaved: indexUnsaved ? true : nil, snapshotUnsaved: snapshotUnsaved ? true : nil,
+                           linkOpenMode: linkOpenMode?.rawValue,
+                           sidebarDensity: sidebarDensity?.rawValue)
     }
 
     /// The tree's `paneOverlays`: the panes covered by their own overlay, omitted when neither is.
@@ -502,7 +539,8 @@ public final class AppStore {
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true,
-                           remoteHost: String? = nil, tint: SidebarTint? = nil, parentID: UUID? = nil,
+                           remoteHost: String? = nil, remoteSessionID: String? = nil, tint: SidebarTint? = nil,
+                           parentID: UUID? = nil,
                            content: SessionContent = .terminal) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         // both reach a custom command's expansion — cwd through initialCwd, name through customName — so
@@ -510,7 +548,7 @@ public final class AppStore {
         // `remoteHost` arrives here rather than being assigned after, because this call saves.
         let session = Session(initialCwd: TerminalText.sanitized(cwd),
                               customName: name.map(TerminalText.sanitized)?.trimmedOrNil,
-                              remoteHost: remoteHost, content: content)
+                              remoteHost: remoteHost, remoteSessionID: remoteSessionID, content: content)
         session.initialCommand = command
         session.commandWait = wait
         session.tint = tint
@@ -584,14 +622,23 @@ public final class AppStore {
     public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
         // a parent closes with its companions; one Recent Closed entry carries the whole group
         let companions = companions(of: sessionID)
+        // recorded before the companions close, which takes a page companion's page with it
+        let recorded = companions.filter(\.isPersistable).map(sessionSnapshot)
         for companion in companions.reversed() {
             closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
-        closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: companions)
-        finalizeParkedCompanions(of: [sessionID])
+        closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
+        // a converted companion can still own a parked companion recorded under it
+        finalizeParkedCompanions(of: [sessionID] + companions.map(\.id))
     }
 
-    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [Session] = []) {
+    /// closeSessionRow closes one row and none of its companions: a catalog row's companions leave only when
+    /// their own catalog sessions do.
+    func closeSessionRow(_ sessionID: UUID) {
+        closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
+    }
+
+    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]

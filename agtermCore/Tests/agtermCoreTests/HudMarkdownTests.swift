@@ -3,6 +3,12 @@ import Testing
 @testable import agtermCore
 
 struct HudMarkdownTests {
+    private let esc = "\u{1B}["
+    private let osc = "\u{1B}]"
+    private let st = "\u{1B}\\"
+
+    // the markdown renderer is Foundation's, Darwin only; the run, wrap and SGR tests below it run everywhere
+    #if canImport(Darwin)
     private func plain(_ source: String) -> [String] {
         HudMarkdown.lines(source).map { line in
             line.kind == .rule ? line.lead + "<rule>" : line.lead + line.runs.map(\.text).joined()
@@ -75,11 +81,14 @@ struct HudMarkdownTests {
         #expect(lines.allSatisfy { $0.runs.allSatisfy { $0.style.isEmpty } })
     }
 
+    #endif
+
     @Test func tabsExpandToTheNextStop() {
         #expect(HudMarkdown.expandTabs("a\tb") == "a   b")
         #expect(HudMarkdown.expandTabs("abcd\te") == "abcd    e")
     }
 
+    #if canImport(Darwin)
     @Test func aBlockQuotePrefixesEveryRow() {
         #expect(plain("> first  \n> second") == ["│ first", "│ second"])
     }
@@ -179,13 +188,18 @@ struct HudMarkdownTests {
                                                                                     link: "file:///tmp/build.log"))
     }
 
+    #endif
+
     @Test func aLinkTargetIsAlwaysPrintableAscii() throws {
         let url = try #require(URL(string: "https://example.com/a%1Bb"))
 
         #expect(HudMarkdown.linkTarget(url) == "https://example.com/a%1Bb")
+        #if canImport(Darwin)
         #expect(styled("[x](https://example.com/%D1%84)")[0].first?.link == "https://example.com/%D1%84")
+        #endif
     }
 
+    #if canImport(Darwin)
     @Test func aLinkInAHeadingKeepsTheHeadingStyle() {
         #expect(styled("# [t](http://x) u")[0] == [
             HudMarkdown.Run(text: "t", style: [.bold, .underline], link: "http://x"),
@@ -200,6 +214,8 @@ struct HudMarkdownTests {
                          [HudMarkdown.Run(text: "ef", style: .underline, link: "http://x/yz")]])
     }
 
+    #endif
+
     @Test func aClippedLinkLeavesTheEllipsisOutsideIt() {
         let row = HudMarkdown.clipped([HudMarkdown.Run(text: "abcdef", style: .underline, link: "http://x")], columns: 4)
 
@@ -207,6 +223,7 @@ struct HudMarkdownTests {
                         HudMarkdown.Run(text: "…", style: [])])
     }
 
+    #if canImport(Darwin)
     @Test func strongInsideEmphasisCarriesBoth() {
         #expect(styled("*a **b***").first?.last == HudMarkdown.Run(text: "b", style: [.bold, .italic]))
     }
@@ -224,10 +241,6 @@ struct HudMarkdownTests {
     private func laidOut(_ source: String, width: Int) -> [String] {
         HudMarkdown.rows(HudMarkdown.lines(source), width: width).map { $0.map(\.text).joined() }
     }
-
-    private let esc = "\u{1B}["
-    private let osc = "\u{1B}]"
-    private let st = "\u{1B}\\"
 
     @Test func wrappingBreaksAtSpacesAcrossStyleRuns() {
         let rows = HudMarkdown.rows(HudMarkdown.lines("aa **bb** cc"), width: 5)
@@ -284,6 +297,8 @@ struct HudMarkdownTests {
         #expect(HudMarkdown.sgr(rows[0]) == "\(esc)1mx y\(esc)22m")
     }
 
+    #endif
+
     @Test func sgrEmitsOnlyTheCodesAChangeNeeds() {
         let bold = HudMarkdown.Run(text: "a", style: .bold)
         let italic = HudMarkdown.Run(text: "b", style: .italic)
@@ -311,12 +326,14 @@ struct HudMarkdownTests {
         #expect(HudMarkdown.sgr(row) == "\(esc)1;2ma\(esc)22;2mb\(esc)22m")
     }
 
+    #if canImport(Darwin)
     @Test func sgrNeverResetsTheTextColor() {
         let rows = HudMarkdown.rows(HudMarkdown.lines("# t\n\n**b** *i* ~~s~~\n\n| h |\n|---|\n| c |"), width: 30)
 
         #expect(!rows.map(HudMarkdown.sgr).joined().contains("\(esc)0m"))
         #expect(!rows.map(HudMarkdown.sgr).joined().contains("\(esc)m"))
     }
+    #endif
 
     @Test func aTooWideRowEndsInAnEllipsisAndClosesItsStyleFirst() {
         let row = [HudMarkdown.Run(text: "ab", style: .bold), HudMarkdown.Run(text: "cdef", style: [])]

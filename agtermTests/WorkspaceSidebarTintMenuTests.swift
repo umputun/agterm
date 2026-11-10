@@ -19,6 +19,7 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         await MainActor.run {
             savedUserKeyEquivalents = NSMenuItem.usesUserKeyEquivalents
             NSMenuItem.usesUserKeyEquivalents = false
+            WorkspaceSidebar.Coordinator.tintPlacement = [.icon]
             stateDir = FileManager.default.temporaryDirectory
                 .appendingPathComponent("agterm-tint-menu-tests-\(UUID().uuidString)", isDirectory: true)
             library = WindowLibrary(directory: stateDir)
@@ -29,6 +30,7 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             NSMenuItem.usesUserKeyEquivalents = savedUserKeyEquivalents
+            WorkspaceSidebar.Coordinator.tintPlacement = [.icon]
             window?.orderOut(nil)
             window = nil
             outline = nil
@@ -90,6 +92,25 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
                                               SidebarTint(color: .green, parts: [.icon, .name])])
     }
 
+    func testLastPlacementPickStartsTheNextUntintedRow() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (workspaceID, sessions) = try seed(store, tints: [SidebarTint(color: .red), nil])
+        buildSidebar(for: store)
+
+        try perform("Name", in: try tintMenu(onSession: sessions[0].id))
+        let untinted = try tintMenu(onSession: sessions[1].id)
+
+        XCTAssertEqual(try item("Name", in: untinted).state, .on)
+        XCTAssertFalse(try item("Name", in: untinted).isEnabled)
+        XCTAssertEqual(try item("Icon", in: untinted).state, .off)
+        try perform("Blue", in: untinted)
+        XCTAssertEqual(sessions[1].tint, SidebarTint(color: .blue, parts: [.name]))
+        try perform("Green", in: try tintMenu(onWorkspace: workspaceID))
+        XCTAssertEqual(store.workspaces.first { $0.id == workspaceID }?.tint, SidebarTint(color: .green, parts: [.name]))
+        try perform("Yellow", in: try tintMenu(onSession: sessions[0].id))
+        XCTAssertEqual(sessions[0].tint, SidebarTint(color: .yellow, parts: [.name]))
+    }
+
     func testNoneClearsTheTint() throws {
         let store = try XCTUnwrap(library.activeStore)
         let (_, sessions) = try seed(store, tints: [SidebarTint(color: .red)])
@@ -100,6 +121,57 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         try perform("None", in: menu)
 
         XCTAssertNil(sessions[0].tint)
+    }
+
+    func testEveryPaletteColorIsListedWithASwatch() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [nil])
+        buildSidebar(for: store)
+
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        for color in TintColor.allCases {
+            let row = try item(color.rawValue.capitalized, in: menu)
+            XCTAssertNotNil(row.image, "\(color) has no swatch")
+            if #available(macOS 27, *) {
+                XCTAssertTrue(row.responds(to: NSSelectorFromString("setPreferredImageVisibility:")))
+                XCTAssertEqual((row.value(forKey: "preferredImageVisibility") as? NSNumber)?.intValue, 1,
+                               "\(color) swatch left to the system default")
+            }
+        }
+    }
+
+    func testAHexTintShowsACheckedCustomEntryThatANameReplaces() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [SidebarTint(color: .hex("#3a7bd5"), parts: [.name])])
+        buildSidebar(for: store)
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        let custom = try item("Custom #3a7bd5", in: menu)
+        XCTAssertEqual(custom.state, .on)
+        XCTAssertNotNil(custom.image)
+        XCTAssertEqual(try item("None", in: menu).state, .off)
+        XCTAssertTrue(TintColor.allCases.allSatisfy { (try? item($0.rawValue.capitalized, in: menu).state) == .off })
+        XCTAssertEqual(try item("Name", in: menu).state, .on)
+
+        try perform("Mint", in: menu)
+
+        XCTAssertEqual(sessions[0].tint, SidebarTint(color: .mint, parts: [.name]))
+        XCTAssertNil(try tintMenu(onSession: sessions[0].id).items.first { $0.title.hasPrefix("Custom") })
+    }
+
+    func testAMixedBatchShowsNoCustomEntry() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (_, sessions) = try seed(store, tints: [SidebarTint(color: .hex("#3a7bd5")), SidebarTint(color: .hex("#112233"))])
+        store.setSidebarSelection(sessions.map(\.id))
+        buildSidebar(for: store)
+
+        let menu = try tintMenu(onSession: sessions[0].id)
+
+        XCTAssertNil(menu.items.first { $0.title.hasPrefix("Custom") })
+        XCTAssertEqual(try item("None", in: menu).state, .off)
+        XCTAssertTrue(TintColor.allCases.allSatisfy { (try? item($0.rawValue.capitalized, in: menu).state) == .off })
+        XCTAssertEqual(try item("Icon", in: menu).state, .on)
     }
 
     func testWorkspaceMenuTintsTheWorkspaceRowAlone() throws {
@@ -132,6 +204,12 @@ final class WorkspaceSidebarTintMenuTests: XCTestCase {
         coordinator.reconcile()
         tinted = try cell(forSession: sessions[0].id)
         XCTAssertEqual(tinted.textField?.textColor, NSColor.systemGreen)
+
+        store.setTint(SidebarTint(color: .hex("#3a7bd5"), parts: [.icon]), forSession: sessions[0].id)
+        coordinator.reconcile()
+        tinted = try cell(forSession: sessions[0].id)
+        XCTAssertEqual(tinted.imageView?.contentTintColor, NSColor(agtermHex: "#3a7bd5"))
+        XCTAssertEqual(tinted.imageView?.accessibilityValue() as? String, "#3a7bd5 tint")
 
         store.setTint(nil, forSession: sessions[0].id)
         coordinator.reconcile()

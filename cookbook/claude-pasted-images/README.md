@@ -2,6 +2,8 @@
 
 Draw an image you pasted into Claude Code under the prompt that carried it, instead of only `[Image #N]`.
 
+Author: [@umputun](https://github.com/umputun)
+
 ## What it does
 
 Claude Code shows a pasted screenshot in its transcript as a `[Image #N]` placeholder, so scrolling back

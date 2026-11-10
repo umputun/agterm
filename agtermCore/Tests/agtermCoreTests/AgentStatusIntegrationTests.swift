@@ -25,8 +25,7 @@ struct AgentStatusIntegrationTests {
 
         let calls = dir.appendingPathComponent("calls")
         let stub = dir.appendingPathComponent("agent-status")
-        try "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '\(calls.path)'\n".write(to: stub, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        try "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '\(calls.path)'\n".writeExecutable(to: stub)
 
         let script = """
         PROMPT_COMMAND='echo "status=$? active=${_ags_active-unset}"'

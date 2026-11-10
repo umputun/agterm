@@ -114,6 +114,7 @@ struct ControlWindowProtocolTests {
             ControlRequest(cmd: .windowFullscreen, target: "9f3c"),
             ControlRequest(cmd: .windowMinimize, target: "9f3c", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .windowMinimize, target: "active"),
+            ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: "buildbox")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

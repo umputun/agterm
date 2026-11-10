@@ -21,6 +21,8 @@ public enum OverlayJobOutcome: Equatable, Sendable {
 
 /// OverlayJobState is where a remote job is between its open and its outcome.
 public enum OverlayJobState: Equatable, Sendable {
+    /// held by a headless origin until a presenter takes its session; nothing can claim it
+    case unpresented
     /// Handed to the presenter, waiting for a helper to claim it before the launch deadline.
     case unclaimed(deadline: Date)
     /// A helper holds it and has the launch context, waiting for `started` before the deadline.
@@ -35,10 +37,13 @@ public struct OverlayJob: Equatable, Sendable {
     public let session: UUID
     /// The pane the overlay covers, nil for the session-wide slot.
     public let pane: OverlayPane?
-    /// The presenter generation the job was handed to.
-    public let owner: Int
+    /// The presenter generation the job was handed to, nil while it waits for one.
+    public internal(set) var owner: Int?
     public let context: OverlayLaunchContext
     public internal(set) var state: OverlayJobState
+    /// offerToken is what a claim of the current offer must carry; nil for an offer to a presenter without
+    /// `job.token`, which a claim by id alone takes.
+    var offerToken: String?
 }
 
 /// OverlayJobs is the origin's private table of remote overlay jobs. It settles the one race that matters,
@@ -69,17 +74,49 @@ public final class OverlayJobs {
 
     /// Registers a job handed to a presenter. Returns its id.
     @discardableResult
-    public func register(session: UUID, pane: OverlayPane?, owner: Int, context: OverlayLaunchContext) -> String {
+    public func register(session: UUID, pane: OverlayPane?, owner: Int, context: OverlayLaunchContext,
+                         token: String? = nil) -> String {
         let id = UUID().uuidString
         jobs[id] = OverlayJob(id: id, session: session, pane: pane, owner: owner, context: context,
-                              state: .unclaimed(deadline: now().addingTimeInterval(Self.launchWindow)))
+                              state: .unclaimed(deadline: now().addingTimeInterval(Self.launchWindow)), offerToken: token)
         return id
     }
 
+    /// registerUnpresented holds a job for a presenter to come; its launch window starts at `offer`.
+    public func registerUnpresented(session: UUID, pane: OverlayPane?, context: OverlayLaunchContext) -> String {
+        let id = UUID().uuidString
+        jobs[id] = OverlayJob(id: id, session: session, pane: pane, owner: nil, context: context, state: .unpresented)
+        return id
+    }
+
+    /// offer hands an unpresented job to the presenter `owner` under `token`, starting its launch window.
+    @discardableResult
+    public func offer(_ id: String, owner: Int, token: String?) -> Bool {
+        guard var job = jobs[id], job.state == .unpresented else { return false }
+        job.owner = owner
+        job.offerToken = token
+        job.state = .unclaimed(deadline: now().addingTimeInterval(Self.launchWindow))
+        jobs[id] = job
+        return true
+    }
+
+    /// withdraw takes an offered job nobody claimed back to unpresented, invalidating its offer token.
+    @discardableResult
+    public func withdraw(_ id: String) -> Bool {
+        guard var job = jobs[id], case .unclaimed = job.state else { return false }
+        job.owner = nil
+        job.offerToken = nil
+        job.state = .unpresented
+        jobs[id] = job
+        return true
+    }
+
     /// A helper claims the job. Single use: the context is handed out once, only to a claim that beats the
-    /// launch deadline. `cancel` is how the table reaches that helper later.
-    public func claim(_ id: String, cancel: @escaping () -> Void) -> OverlayLaunchContext? {
-        guard var job = jobs[id], case .unclaimed(let deadline) = job.state, now() < deadline else {
+    /// launch deadline and carries the offer's token when the offer had one. `cancel` is how the table reaches
+    /// that helper later.
+    public func claim(_ id: String, token: String? = nil, cancel: @escaping () -> Void) -> OverlayLaunchContext? {
+        guard var job = jobs[id], case .unclaimed(let deadline) = job.state, now() < deadline,
+              job.offerToken == nil || job.offerToken == token else {
             expire()
             return nil
         }
@@ -126,7 +163,7 @@ public final class OverlayJobs {
     public func cancel(_ id: String) -> Bool {
         guard let job = jobs[id] else { return false }
         switch job.state {
-        case .unclaimed:
+        case .unpresented, .unclaimed:
             finish(id, .canceled)
         case .claimed, .running:
             cancelHooks[id]?()

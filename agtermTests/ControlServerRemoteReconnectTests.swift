@@ -238,6 +238,189 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: session.paneIdentity))
     }
 
+    private final class GatedProbe: RemoteCommandRunner, @unchecked Sendable {
+        private let lock = NSLock()
+        private var started = false
+        private var waiter: CheckedContinuation<Void, Never>?
+        var inFlight: Bool { lock.withLock { started } }
+
+        func run(_ argv: [String], deadline: TimeInterval) async -> RemoteCommandResult {
+            await withCheckedContinuation { continuation in
+                lock.withLock {
+                    started = true
+                    waiter = continuation
+                }
+            }
+            return RemoteCommandResult(status: 0, stdout: "", stderr: "")
+        }
+
+        func release() { lock.withLock { waiter }?.resume() }
+    }
+
+    private func catalogRow() throws -> (Session, GhosttySurfaceView, GhosttySurfaceView) {
+        let (session, view) = try replica()
+        let split = UUID()
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+            session.paneIdentity: ZmxSupport.daemonName(for: UUID()), split: ZmxSupport.daemonName(for: UUID()),
+        ], presentationVersion: 1, catalogOwned: true), forSession: session.id)
+        let splitView = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                           env: ["AGTERM_PANE_ID": split.uuidString], backedByZmx: false)
+        splitView.session = session
+        session.splitPaneIdentity = split
+        session.splitSurface = splitView
+        session.hasSplit = true
+        return (session, view, splitView)
+    }
+
+    // regression: an ended catalog row's waiting pane reconnected, and the replace tore down its last screen
+    func testAnEndedRowsPanesStopWaitingAndKeepTheirScreens() async throws {
+        let (session, view, splitView) = try catalogRow()
+        let server = server(probe: 0)
+        PaneLead.reconnect = { _, _ in
+            XCTFail("an ended row's pane is never attached again")
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        defer { book.cancel(pane: split) }
+        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(splitView, cover: false)
+        XCTAssertTrue(book.waiting(pane: split))
+
+        session.ended = true
+        server.tickReconnects()
+
+        XCTAssertFalse(book.waiting(pane: session.paneIdentity))
+        XCTAssertFalse(book.waiting(pane: split))
+        XCTAssertTrue(session.surface === view)
+        XCTAssertTrue(session.splitSurface === splitView)
+    }
+
+    func testARowThatEndsDuringItsProbeIsNotAttachedAgain() async throws {
+        let (session, view, _) = try catalogRow()
+        let probe = GatedProbe()
+        let server = server(runner: probe)
+        PaneLead.reconnect = { _, _ in
+            XCTFail("a row that ended while its probe ran is never attached again")
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        server.waitToReconnect(view, cover: false)
+        server.tickReconnects()
+        for _ in 0..<200 where !probe.inFlight {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(probe.inFlight)
+
+        session.ended = true
+        probe.release()
+        for _ in 0..<200 where book.waiting(pane: session.paneIdentity) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertFalse(book.waiting(pane: session.paneIdentity))
+        XCTAssertTrue(session.surface === view)
+    }
+
+    func testAnEndedRowsLiveScratchKeepsWaitingForItsHost() async throws {
+        let (session, _, _) = try catalogRow()
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+        let scratchView = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
+        session.scratchSurface = scratchView
+        session.ended = true
+        let probe = Probe(status: 255)
+        let server = server(runner: probe)
+        let book = RemoteReconnectBook.shared
+        defer { book.cancel(pane: scratch) }
+
+        book.wait(pane: scratch, session: session.id, host: "mini", cover: false, now: server.hudClock())
+        server.tickReconnects()
+        try await settleProbe(scratch)
+
+        XCTAssertEqual(probe.argvs.count, 1)
+        XCTAssertTrue(book.waiting(pane: scratch))
+    }
+
+    // regression: a probe answering before the fresh catalog arrived replaced the held screen of a row that had ended
+    func testACatalogRowWaitsForAFreshCatalogBeforeAttachingAgain() async throws {
+        let (session, view, _) = try catalogRow()
+        let server = server(probe: 0)
+        var attached: [GhosttySurfaceView] = []
+        PaneLead.reconnect = { old, _ in
+            attached.append(old)
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        server.waitToReconnect(view, cover: false)
+
+        for state in [RemoteCatalogMirror.State.connecting, .disconnected("lost")] {
+            store.catalogState = state
+            book.retryNow(pane: session.paneIdentity, now: Date())
+            server.tickReconnects()
+            try await settleProbe(session.paneIdentity)
+            XCTAssertTrue(attached.isEmpty, "\(state)")
+            XCTAssertTrue(book.waiting(pane: session.paneIdentity), "\(state)")
+            XCTAssertTrue(session.surface === view, "\(state)")
+        }
+
+        store.catalogState = .connected
+        book.retryNow(pane: session.paneIdentity, now: Date())
+        server.tickReconnects()
+        try await settleProbe(session.paneIdentity)
+
+        XCTAssertEqual(attached, [view])
+        XCTAssertFalse(book.waiting(pane: session.paneIdentity))
+    }
+
+    func testAProbeThatReturnsAfterTheCatalogDroppedKeepsThePaneWaiting() async throws {
+        let (session, view, _) = try catalogRow()
+        store.catalogState = .connected
+        let probe = GatedProbe()
+        let server = server(runner: probe)
+        PaneLead.reconnect = { _, _ in
+            XCTFail("a pane whose catalog dropped during its probe is never attached")
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        server.waitToReconnect(view, cover: false)
+        server.tickReconnects()
+        for _ in 0..<200 where !probe.inFlight {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(probe.inFlight)
+
+        store.catalogState = .disconnected("lost")
+        probe.release()
+        try await settleProbe(session.paneIdentity)
+
+        XCTAssertTrue(book.waiting(pane: session.paneIdentity))
+        XCTAssertTrue(session.surface === view)
+    }
+
+    func testACatalogScratchIsProbedAndLeavesTheBookWhileTheCatalogIsDown() async throws {
+        let (session, _, _) = try catalogRow()
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+        session.scratchSurface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
+        store.catalogState = .disconnected("lost")
+        let probe = Probe(status: 0)
+        let server = server(runner: probe)
+        PaneLead.reconnect = { _, _ in
+            XCTFail("a scratch reattaches through the mirror")
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        defer { book.cancel(pane: scratch) }
+
+        book.wait(pane: scratch, session: session.id, host: "mini", cover: false, now: server.hudClock())
+        server.tickReconnects()
+        try await settleProbe(scratch)
+
+        XCTAssertEqual(probe.argvs.count, 1)
+        XCTAssertFalse(book.waiting(pane: scratch))
+    }
+
     func testAPaneAlreadyClosedWhenParkedIsNeverRegistered() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)

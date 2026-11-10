@@ -19,6 +19,12 @@ enum PaneLead {
     /// Attaches a parked pane again without the claim, covered until its first report when `cover`. False
     /// when nothing was attached.
     static var reconnect: ((_ old: GhosttySurfaceView, _ cover: Bool) -> Bool)?
+    /// scratchStopped parks a remote window's scratch whose attach lost its link or ended; false for any other view.
+    /// Installed by the app.
+    static var scratchStopped: ((_ view: GhosttySurfaceView) -> Bool)?
+    /// catalogChannel leases a pane of a remote window's row its ssh channel; nil for every other row. Installed by
+    /// the app.
+    static var catalogChannel: ((_ session: UUID, _ user: String) -> String?)?
     /// heldExit hands a remote pane's clean exit to the respawn join. Installed by the app.
     static var heldExit: ((_ view: GhosttySurfaceView) -> Void)?
     /// ownerRespawn reads a daemon's leader before a parent respawns, then returns what publishes the respawn.
@@ -43,6 +49,7 @@ enum PaneLead {
     /// only an origin that reported a role before will report one after the attach, so only it is covered.
     /// A reconnect that lost the link before its first report inherits that from the attach it replaced.
     static func linkLost(_ notice: RemoteLinkNotice, from view: GhosttySurfaceView) {
+        if !view.isDestroyed, scratchStopped?(view) == true { return }
         guard !view.isDestroyed, let pane = UUID(uuidString: view.paneToken),
               ZmxLeadBook.shared.states[pane]?.attachment.nonce == notice.nonce else { return }
         waitToReconnect?(view, ZmxLeadBook.shared.role(pane: pane) != nil || ZmxLeadBook.shared.reattaching(pane: pane))
@@ -106,7 +113,8 @@ struct PaneReattach {
               let daemon = binding.daemon(forLocalPane: identity),
               let command = try? RemoteSession.attachPaneCommand(
                   host: origin.host, endpoint: origin.endpoint, daemon: daemon, session: origin.sessionName,
-                  pane: old.isSplitPane ? .right : .left, lead: lead)
+                  pane: old.isSplitPane ? .right : .left, lead: lead,
+                  controlPath: PaneLead.catalogChannel?(session.id, "pane:\(identity)"))
         else { return nil }
         return PaneReattach(command: command, wait: true, environment: old.env, workingDirectory: old.workingDirectory)
     }

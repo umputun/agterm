@@ -3,7 +3,7 @@ worth: maybe
 where: agtermCore/Tests/SessionHostRuntimeTests/SessionHostServerTests.swift:paneAttachAfterTheCreatedCommandEndedStartsNoShell
 added: 2026-11-02
 ---
-# session host attach to an ended command missed its 3 s window once on CI, cause unknown
+# session host attach to an ended command misses its 3 s window on CI, cause unknown
 
 `paneAttachAfterTheCreatedCommandEndedStartsNoShell` failed in run 41408692761 (PR #864 head `560228b4`) with
 `the pane's attach to an ended command kept running`: the pane's `zmx attach`, which carries the
@@ -16,3 +16,32 @@ Open: a slow exit and a stuck one look the same at the 3 s mark. On a stall the 
 last `waitpid` result and errno, its `p_stat`, argv, whatever its PTY and exec-error pipe hold, the `zmx list`
 output and the host log, recorded before the kill. The next failure's report is where to start; collect
 stacks of the pane and host if it does not locate the phase.
+
+Run 41899293201 (PR #891 head `e109e4f7`) failed it again, 3.88 s in, with the stall report: `waitpid` 0,
+errno 0, `p_stat` SRUN after 3.06 s. The argv was the guard payload (`zmx attach <name> /bin/sh -c
+"printf ... 'agterm: session is gone'; exit 1"`), the exec-error pipe was empty, and the PTY held zmx's
+`session "<name>" created` plus its screen reset, but not the payload's message. `zmx list` showed no
+session under the name and the host log was empty. So the daemon zmx created for the payload was gone or
+never listed while the attach client kept running; whether the payload ran and its output was lost, or the
+attach never saw the daemon end, is not established.
+
+Run 42295772822 (master `255f13a2`, the v0.41.0 release commit) failed it a third time, 4.32 s in: `waitpid` 0,
+errno 0, `p_stat` SRUN after 3.16 s, empty `zmx list` and host log. This time the PTY held the payload's
+output after zmx's `session "<name>" created` and screen reset: `agterm: session is gone`. So the payload
+reached its `printf` in this run, and the attach client was still not reapable at the last poll. Whether it
+exits late or never, whether the daemon process had ended, and what happened in the earlier run without
+that message, are still open.
+
+A local full parallel `swift test` on 2026-11-07 (branch `linux-remote-server`, a Linux test container running
+beside it) failed it a fourth time: `waitpid` 0, errno 0, `p_stat` SRUN after 3.03 s, an empty exec-error pipe and
+host log, no session in `zmx list`. This time the PTY held zmx's `session "<name>" created`, the screen reset and the
+payload's `agterm: session is gone`, so the payload ran and printed; the attach client kept running, and whether the
+daemon's pid had exited is not recorded (a missing `zmx list` row does not prove it). Five runs of the test alone
+passed in about 1.3 s each.
+
+A local full `swift test --package-path agtermCore` on 2026-11-09 (master `f2d84ca2` plus doc and test
+edits outside the session host, machine load 56 from unrelated processes) failed it a fifth time, the
+second outside CI: 4.39 s in, `waitpid` 0, errno 0, `p_stat` SRUN after 3.02 s, empty `zmx list` and host
+log. The PTY held zmx's `session "<name>" created` and screen reset but not the payload's message, the
+shape of run 41899293201. Run alone right after, at load 46, it passed in 1.41 s. So a loaded local
+machine running the full suite can hit it, which is a place to capture stacks of the pane and host.

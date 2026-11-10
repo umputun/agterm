@@ -64,6 +64,7 @@ class HtmlPageTestCase: XCTestCase {
         registry.sharing = SystemHtmlSharing()
         registry.setZoom(1)
         registry.dispatch = nil
+        registry.closePageSession = nil
         store.closeSession(session.id)
         try await afterSessionClose()
         try? FileManager.default.removeItem(at: directory)
@@ -112,6 +113,28 @@ class HtmlPageTestCase: XCTestCase {
         view.frame = try XCTUnwrap(window.contentView).bounds
         window.contentView?.addSubview(view)
         return window
+    }
+
+    /// fetched lists the origin paths a `replicaLink` page asked for, in order.
+    var fetched: [String] = []
+
+    /// replicaLink serves a replica page's fetches from this Mac's disk, as a page channel serves them from the origin.
+    func replicaLink() -> HtmlReplicaLink {
+        HtmlReplicaLink(fetch: { [weak self] path, _ in
+            self?.fetched.append(path)
+            let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            return HtmlPageResource(mimeType: "application/octet-stream", chunks: AsyncThrowingStream {
+                $0.yield(data)
+                $0.finish()
+            })
+        }, bridge: { _ in throw RemotePageChannel.Failure.closed })
+    }
+
+    /// openReplica opens a page shown for another Mac whose file is `path` there.
+    func openReplica(_ path: String, _ content: ReplicaContent) -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .replica(path: path, content: content), replicaOf: UUID())
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
     }
 
     func writePNG(_ name: String, width: Int) throws -> String {

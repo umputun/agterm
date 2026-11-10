@@ -34,6 +34,7 @@ struct HtmlOverlayView: View {
                 .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
                 .overlay {
                     if overlay.loadState == .failed { failure }
+                    if overlay.awaitsFirstContent { loading }
                 }
         }
     }
@@ -65,7 +66,7 @@ struct HtmlOverlayView: View {
                     button("link", "Copy Link", "htmlOverlay.copy", enabled: true) {
                         registry.copyLink(overlay.id)
                     }
-                case .replica, .image, .markdown, .text:
+                case .replica, .image, .markdown, .text, .document, .unreadable:
                     EmptyView()
                 }
             }
@@ -110,32 +111,56 @@ struct HtmlOverlayView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // over the page so a failed load never reads as a blank one; reload replaces it with the loading state
+    // over the page so a failed load never reads as a blank one; its reload is the only retry a page without
+    // `--navigation` has, and replaces it with the loading state
     private var failure: some View {
         VStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 24))
-            Text("The page could not be loaded")
-                .font(.headline)
-            if let error = overlay.loadError {
-                Text(error)
-                    .font(.system(size: 12))
-                    .multilineTextAlignment(.center)
-                    .textSelection(.enabled)
+            VStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 24))
+                Text("The page could not be loaded")
+                    .font(.headline)
+                if let error = overlay.loadError {
+                    Text(error)
+                        .font(.system(size: 12))
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("htmlOverlay.error")
+            button("arrow.clockwise", "Reload", "htmlOverlay.failureReload", enabled: true) {
+                HtmlOverlayRegistry.shared.reload(overlay.id, target: .current, store: store)
             }
         }
         .foregroundStyle(foreground)
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
+    }
+
+    // a slow remote load must not look like an ignored click
+    private var loading: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text(session.remoteHost.map { "Loading \(overlay.identity) from \($0)" } ?? "Loading \(overlay.identity)")
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("htmlOverlay.error")
+        .accessibilityIdentifier("htmlOverlay.loading")
+        .foregroundStyle(foreground.opacity(0.7))
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(backgroundColor.flatMap { NSColor(agtermHex: $0) }.map { Color(nsColor: $0) } ?? background)
     }
 
     private var sourceText: String {
         switch overlay.source {
-        case .file(let path, _), .replica(let path), .image(let path), .markdown(let path), .text(let path, _): path
+        case .file(let path, _), .replica(let path, _), .image(let path), .markdown(let path), .text(let path, _), .document(let path): path
         case .url(let url): url.absoluteString
+        case .unreadable(let reason): reason
         }
     }
 

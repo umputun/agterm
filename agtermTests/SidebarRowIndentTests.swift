@@ -38,6 +38,9 @@ final class SidebarRowIndentTests: XCTestCase {
             pairWindow?.orderOut(nil)
             window = nil
             pairWindow = nil
+            GhosttyApp.shared.setHiddenInterfaceElements([])
+            GhosttyApp.shared.setSidebarDensity(.standard)
+            GhosttyApp.shared.setFlaggedViewLayout(.flat)
             scroll = nil
             outline = nil
             coordinator = nil
@@ -155,6 +158,105 @@ final class SidebarRowIndentTests: XCTestCase {
                                          "\(session.displayName): \(type(of: view)) runs past the sidebar edge")
             }
         }
+    }
+
+    func testHiddenChevronsStartWorkspaceRowsAtTheEdgeOnEveryVersion() throws {
+        GhosttyApp.shared.setHiddenInterfaceElements([.workspaceChevrons])
+        try buildSidebar()
+
+        let workspace = try workspaceRow()
+        XCTAssertEqual(outline.frameOfOutlineCell(atRow: workspace), .zero)
+        XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: workspace).minX, 0)
+        XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try sessionRow()).minX, Self.indentationPerLevel)
+    }
+
+    // hiding the triangle through shouldShowOutlineCellForItem made AppKit ignore collapseItem for that row
+    func testHiddenChevronsLeaveTheWorkspaceFoldable() throws {
+        GhosttyApp.shared.setHiddenInterfaceElements([.workspaceChevrons])
+        try buildSidebar()
+
+        let node = try XCTUnwrap(outline.item(atRow: try workspaceRow()))
+        outline.collapseItem(node)
+
+        XCTAssertFalse(outline.isItemExpanded(node))
+    }
+
+    func testHiddenChevronsKeepACompanionParentsTriangleWholeAheadOfItsContent() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        _ = try store.addCompanion(to: parent.id).get()
+        try buildSidebar()
+        let nativeWidth = outline.frameOfOutlineCell(atRow: try row(of: parent.id)).width
+        XCTAssertGreaterThan(nativeWidth, 0)
+        GhosttyApp.shared.setHiddenInterfaceElements([.workspaceChevrons])
+
+        for density in [SidebarDensity.standard, .compact] {
+            GhosttyApp.shared.setSidebarDensity(density)
+            postAppearanceChange()
+            let row = try row(of: parent.id)
+            let triangle = outline.frameOfOutlineCell(atRow: row)
+            XCTAssertEqual(triangle.width, nativeWidth, "\(density)")
+            XCTAssertGreaterThanOrEqual(triangle.minX, 0, "\(density)")
+            XCTAssertEqual(triangle.maxX, outline.frameOfCell(atColumn: 0, row: row).minX, "\(density)")
+        }
+    }
+
+    func testTogglingChevronsOnAMountedSidebarReappliesTheLayoutBothWays() throws {
+        try buildSidebar()
+        postAppearanceChange()
+        let shown = try layoutSnapshot()
+        XCTAssertNotEqual(shown.triangle, .zero)
+        XCTAssertEqual(scroll.contentInsets.left, 8)
+
+        GhosttyApp.shared.setHiddenInterfaceElements([.workspaceChevrons])
+        postAppearanceChange()
+        XCTAssertEqual(outline.frameOfOutlineCell(atRow: try workspaceRow()), .zero)
+        XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try workspaceRow()).minX, 0)
+        XCTAssertEqual(scroll.contentInsets.left, 6)
+
+        GhosttyApp.shared.setHiddenInterfaceElements([])
+        postAppearanceChange()
+        XCTAssertEqual(try layoutSnapshot(), shown)
+        XCTAssertEqual(scroll.contentInsets.left, 8)
+    }
+
+    func testFlatAndPlainFlaggedRowsStartAtTheEdgeWithChevronsShown() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        store.setFlag(true, forSession: session.id)
+        try buildSidebar()
+        let tree = try layoutSnapshot()
+
+        for layout in [FlaggedViewLayout.flat, .plain] {
+            GhosttyApp.shared.setFlaggedViewLayout(layout)
+            store.setSidebarMode(.flagged)
+            coordinator.reconcile()
+            XCTAssertEqual(outline.frameOfCell(atColumn: 0, row: try row(of: session.id)).minX, 0, "\(layout)")
+            XCTAssertEqual(scroll.contentInsets.left, 6, "\(layout): the margin follows the dropped strip, not the setting")
+
+            store.setSidebarMode(.tree)
+            coordinator.reconcile()
+            XCTAssertEqual(try layoutSnapshot(), tree, "\(layout): the ordinary tree keeps its strip")
+            XCTAssertEqual(scroll.contentInsets.left, 8, "\(layout)")
+        }
+    }
+
+    private struct LayoutSnapshot: Equatable {
+        let triangle: NSRect
+        let workspace: NSRect
+        let session: NSRect
+    }
+
+    private func layoutSnapshot() throws -> LayoutSnapshot {
+        let workspace = try workspaceRow()
+        return LayoutSnapshot(triangle: outline.frameOfOutlineCell(atRow: workspace),
+                              workspace: outline.frameOfCell(atColumn: 0, row: workspace),
+                              session: outline.frameOfCell(atColumn: 0, row: try sessionRow()))
+    }
+
+    private func postAppearanceChange() {
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        outline.layoutSubtreeIfNeeded()
     }
 
     private func row(of id: UUID) throws -> Int {

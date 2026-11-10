@@ -15,6 +15,7 @@ import ctypes.util
 import fcntl
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,7 @@ AGTERMCTL = os.environ.get("AGTERMCTL") or "agtermctl"
 STATE_DIR = os.path.join(tempfile.gettempdir(), f"agterm-mailbox-chat-{os.getuid()}")
 BODY_LIMIT = 64 * 1024
 LABEL = "[peer chat]"
-REPLY_LINE = "If you answer, use mailbox-chat.py say --stdin; do not reply only to acknowledge."
+REPLY_LINE = "If you answer, use mailbox-chat.py say; do not reply only to acknowledge."
 WAIT_ROUND_SECONDS = 30
 WAKE = 2
 # codex global options that take a value, skipped to find its subcommand
@@ -121,6 +122,24 @@ def compose(text: str) -> str:
         raise ChatError(f"message is {size} bytes, over agterm's {BODY_LIMIT}-byte limit; put the long part in a file "
                         "and name its path")
     return message
+
+
+def read_message_file(path: str) -> str:
+    """the message text in `path`, which must be a regular file within agterm's body limit."""
+    # codex's allow rule runs this outside its sandbox, so a fifo or device path must neither block nor flood it
+    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        raise ChatError(f"{path} is not a regular file")
+    with os.fdopen(fd, "rb") as f:
+        data = f.read(BODY_LIMIT + 1)
+    if len(data) > BODY_LIMIT:
+        raise ChatError(f"{path} is over agterm's {BODY_LIMIT}-byte limit; put the long part in another file "
+                        "and name its path")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ChatError(f"{path} is not utf-8 text") from None
 
 
 def find_node(tree: Any, sid: str) -> dict[str, Any] | None:
@@ -270,10 +289,12 @@ class Waiter:
             if self.busy():
                 time.sleep(self.BUSY_POLL_SECONDS)
                 continue
+            # write before the ack: a pipe Claude closed fails here and leaves the mail in the mailbox
+            sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
+            sys.stderr.flush()
             agtermctl("msg", "ack", "--as", self.identity(), *[m["id"] for m in messages])
             # the turn this starts is Stop-hook feedback, which fires no UserPromptSubmit
             self.mark_busy()
-            sys.stderr.write("\n\n".join(render(m) for m in messages) + "\n")
             return WAKE
         return 0
 
@@ -480,10 +501,14 @@ def codex_hook() -> int:
     if not sid or not pane:
         return 0
     try:
-        thread = hook_event().get("session_id")
+        event = hook_event()
+        thread = event.get("session_id")
+        # codex's background memory session starts with no transcript, and codex queue cannot reach it
+        if not thread or not event.get("transcript_path"):
+            return 0
         pid = find_codex_pid(os.getppid())
         # a nested `codex exec` fires SessionStart too and would take over the pane's thread
-        if not thread or pid is None or is_codex_exec(pid):
+        if pid is None or is_codex_exec(pid):
             return 0
         Courier(sid, pane).register(str(thread), pid, executable_path(pid))
         # detached, so codex's startup never waits on queue calls into its own thread
@@ -524,7 +549,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="mailbox-chat.py")
     sub = parser.add_subparsers(dest="cmd", required=True)
     say_cmd = sub.add_parser("say", help="send a message to the agent in the other pane")
-    say_cmd.add_argument("--stdin", action="store_true", required=True)
+    say_input = say_cmd.add_mutually_exclusive_group(required=True)
+    say_input.add_argument("--stdin", action="store_true", help="read the message from stdin")
+    say_input.add_argument("--file", metavar="PATH", help="read the message from a file, which is kept")
     sub.add_parser("status", help="the other pane and which receiver serves it")
     deliver_cmd = sub.add_parser("deliver", help="hand a codex pane's waiting mail to its thread")
     deliver_cmd.add_argument("--pane", help="pane id, default: this pane")
@@ -540,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
         return agterm_hook()
     try:
         if args.cmd == "say":
-            result = say(sys.stdin.read())
+            result = say(read_message_file(args.file) if args.file is not None else sys.stdin.read())
         elif args.cmd == "status":
             result = status()
         else:

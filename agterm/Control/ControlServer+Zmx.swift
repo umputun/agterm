@@ -253,7 +253,7 @@ extension ControlServer {
         // cwd through the terminal stream anyway.
         guard let created = store.addSession(toWorkspace: placement.workspace, cwd: NSHomeDirectory(),
                                              command: primary, name: remote.name, wait: true,
-                                             select: placement.select, remoteHost: host,
+                                             select: placement.select, remoteHost: host, remoteSessionID: remote.id,
                                              parentID: placement.parent) else {
             return ControlResponse(ok: false, error: "could not create the session")
         }
@@ -262,6 +262,8 @@ extension ControlServer {
             created.splitCommandWait = true
             store.setSplitVisibility(created.id, shown: true,
                                      axis: remote.splitAxis.flatMap(SplitAxis.init(rawValue:)) ?? .leftRight)
+            // a new split focuses its right pane; an attached session opens on its left one
+            created.splitFocused = false
         }
         var daemons = [created.paneIdentity: left]
         ZmxLeadBook.shared.begin(leads.left, pane: created.paneIdentity)
@@ -271,7 +273,8 @@ extension ControlServer {
         }
         let origin = RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name)
         store.bindRemote(RemoteBinding(remoteSessionID: remote.id, daemonsByLocalPane: daemons,
-                                       presentationVersion: tree.presentation, origin: origin),
+                                       presentationVersion: tree.presentation, origin: origin,
+                                       originHeadless: tree.headless == true),
                          forSession: created.id)
         // the row's created event fired inside `addSession`, before the binding existed
         startRemotePresentation(for: created)

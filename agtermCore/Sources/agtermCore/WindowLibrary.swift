@@ -6,10 +6,13 @@ import Observation
 public struct WindowInfo: Codable, Sendable, Identifiable, Equatable {
     public let id: UUID
     public var name: String
+    /// source is where the window's sessions come from; nil is this Mac's own.
+    public var source: WindowSource?
 
-    public init(id: UUID = UUID(), name: String) {
+    public init(id: UUID = UUID(), name: String, source: WindowSource? = nil) {
         self.id = id
         self.name = name
+        self.source = source
     }
 
     /// Whether `name` is user-set; the title bar shows it only when true, so "window N" stays hidden.
@@ -20,36 +23,6 @@ public struct WindowInfo: Codable, Sendable, Identifiable, Equatable {
         let parts = name.split(separator: " ", omittingEmptySubsequences: true)
         guard parts.count == 2, parts[0] == "window", let number = Int(parts[1]), number >= 1 else { return false }
         return true
-    }
-}
-
-/// One entry in the persisted window index: id, name, and open-at-quit, which drives reopen-all.
-public struct WindowEntry: Codable, Sendable, Equatable {
-    public var id: UUID
-    public var name: String
-    public var isOpen: Bool
-
-    public init(id: UUID, name: String, isOpen: Bool) {
-        self.id = id
-        self.name = name
-        self.isOpen = isOpen
-    }
-}
-
-/// The persisted `windows.json` index: ordered window list plus frontmost id. `version` is independent of
-/// `Snapshot.version` (the per-window file shape) so the two evolve separately.
-public struct WindowsIndex: Codable, Equatable, Sendable {
-    /// Bumped when the index shape changes; a mismatch makes the index count as absent.
-    public static let currentVersion = 1
-
-    public var version: Int
-    public var frontmost: UUID?
-    public var windows: [WindowEntry]
-
-    public init(version: Int = WindowsIndex.currentVersion, frontmost: UUID? = nil, windows: [WindowEntry] = []) {
-        self.version = version
-        self.frontmost = frontmost
-        self.windows = windows
     }
 }
 
@@ -66,7 +39,7 @@ public struct WindowsIndex: Codable, Equatable, Sendable {
 @MainActor
 public final class WindowLibrary {
     /// The ordered window metadata, for the menu/palette.
-    public private(set) var windows: [WindowInfo]
+    public internal(set) var windows: [WindowInfo]
 
     /// App-wide recent closed sessions/workspaces, newest first. Reopening inserts into the active window
     /// unless another one still holds the session, live or pending its close, in which case it restores
@@ -91,7 +64,7 @@ public final class WindowLibrary {
     /// Bumped on every open-set change, the observable stand-in for `stores` membership: a background
     /// window opening or closing changes neither `windows` nor (necessarily) `frontmostWindowID`, so a
     /// view reading the attention list or a row's eligibility would otherwise keep its stale answer.
-    private(set) var openSetVersion = 0
+    var openSetVersion = 0
 
     /// The state directory (AGTERM_STATE_DIR-aware): the index here, per-window files in `windows/`.
     @ObservationIgnored let directory: URL
@@ -100,6 +73,12 @@ public final class WindowLibrary {
     @ObservationIgnored private let controlEventRing: ControlEventRing
     /// Every event after the ring sequences it, debounced `tree.changed` included: what `events.read` will show.
     @ObservationIgnored public var onControlEvent: ((ControlEvent) -> Void)?
+    /// onRemoteStoreOpened and onRemoteStoreClosed bracket a remote window's loaded store, so the app can run
+    /// its catalog stream exactly while it is open.
+    @ObservationIgnored public var onRemoteStoreOpened: ((UUID, AppStore) -> Void)?
+    @ObservationIgnored public var onRemoteStoreClosed: ((UUID) -> Void)?
+    /// remoteDuplicates maps a remote window whose server turned out to be another window's to that window.
+    @ObservationIgnored var remoteDuplicates: [UUID: UUID] = [:]
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
@@ -216,12 +195,14 @@ public final class WindowLibrary {
             // auto-follow timeout + sidebar visibility come from the per-window store, the frame +
             // fullscreen/zoom/minimized flags from the app-side closures; both nil for a closed window.
             let live = flags($0.id)
-            return ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active,
-                                     autoFollowMs: stores[$0.id]?.autoFollowMs,
-                                     sidebarVisible: stores[$0.id]?.sidebarVisible,
-                                     geometry: geometry($0.id),
-                                     fullscreen: live?.fullscreen, zoomed: live?.zoomed,
-                                     minimized: live?.minimized)
+            var node = ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active,
+                                         autoFollowMs: stores[$0.id]?.autoFollowMs,
+                                         sidebarVisible: stores[$0.id]?.sidebarVisible,
+                                         geometry: geometry($0.id),
+                                         fullscreen: live?.fullscreen, zoomed: live?.zoomed,
+                                         minimized: live?.minimized)
+            node.remote = remoteNode(for: $0.id)
+            return node
         }
     }
 
@@ -420,6 +401,7 @@ public final class WindowLibrary {
     public func loadStore(for id: UUID, launchRestore: Bool = false) -> AppStore? {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
+        if windows.first(where: { $0.id == id })?.isRemote == true { return loadRemoteStore(for: id) }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
         let snapshot = loadSnapshotForStore(persistence)
@@ -484,6 +466,7 @@ public final class WindowLibrary {
         // its registration (window.new immediately followed by window.close).
         pendingClaim.removeAll { $0 == id }
         guard let store = stores[id] else { return }
+        remoteStoreClosing(id)
         // the undo window dies with the store, so a soft-closed session left pending here would keep its
         // daemon with nothing able to finalize it. `WindowAccessor` already does this, so it is idempotent.
         store.finalizeAllPendingCloses()
@@ -526,8 +509,10 @@ public final class WindowLibrary {
     /// persists. No-ops on the last window. Clears `frontmostWindowID` if it pointed at the removed one.
     public func removeWindow(_ id: UUID) {
         guard canRemoveWindow, let index = windows.firstIndex(where: { $0.id == id }) else { return }
+        let removingRemote = windows[index].isRemote
         // after the guard: a rejected delete of the last window must keep its live claim.
         pendingClaim.removeAll { $0 == id }
+        if stores[id] != nil { remoteStoreClosing(id) }
         // before the pane inventory below, which reads `workspaces` and so cannot see a soft-closed
         // session; without this its daemon outlives the window with nothing left to finalize it
         stores[id]?.finalizeAllPendingCloses()
@@ -563,6 +548,7 @@ public final class WindowLibrary {
         if frontmostWindowID == id { frontmostWindowID = nil }
         // best-effort: a missing/never-written per-window file is fine to "fail" to remove.
         try? FileManager.default.removeItem(at: windowFileURL(for: id))
+        if removingRemote { removeRemoteFiles(id) }
         saveIndex()
     }
 
@@ -570,7 +556,7 @@ public final class WindowLibrary {
     /// closed ones by rewriting `windows/<id>.json`. A closed window must drop its stale sizes too, else it
     /// reopens overriding the new global default. No-ops a window with no overrides.
     public func resetSessionFontSizesAllWindows() {
-        for info in windows {
+        for info in windows where !info.isRemote {
             if let store = stores[info.id] {
                 store.resetSessionFontSizes()
                 continue
@@ -626,7 +612,7 @@ public final class WindowLibrary {
     /// windowless — falls back to the frontmost/first window.
     private func bootstrap() {
         if let index = loadIndex() {
-            windows = index.windows.map { WindowInfo(id: $0.id, name: $0.name) }
+            windows = index.windows.map { WindowInfo(id: $0.id, name: $0.name, source: $0.source) }
             frontmostWindowID = index.frontmost
             reopen(index)
             return
@@ -716,12 +702,16 @@ public final class WindowLibrary {
         PersistenceStore(directory: windowsDirectory, fileName: "\(id.uuidString).json")
     }
 
-    private func makeStore(for windowID: UUID, persistence: PersistenceStore) -> AppStore {
+    func makeStore(for windowID: UUID, persistence: PersistenceStore, remote: Bool = false) -> AppStore {
         let store = AppStore(
             persistence: persistence,
-            recentClosedStore: recentClosedStore,
+            // a remote window's rows belong to its server, which has no undo or Reopen Closed
+            recentClosedStore: remote ? nil : recentClosedStore,
             recentClosedDidChange: { [weak self] in self?.refreshRecentClosedItems() },
-            snapshotDidSave: { [weak self] in self?.retryUnsavedIndex() },
+            snapshotDidSave: { [weak self] in
+                self?.retryUnsavedIndex()
+                if remote { self?.saveRemoteViewState(for: windowID) }
+            },
             controlEventSink: { [weak self] draft in
                 guard let self else { return }
                 guard !self.isBootstrapping else { return }
@@ -766,7 +756,7 @@ public final class WindowLibrary {
 
     private func prepareLaunchPaneInventory() -> Set<UUID>? {
         var identities: Set<UUID> = []
-        for window in windows {
+        for window in windows where !window.isRemote {
             let persistence = persistenceStore(for: window.id)
             do {
                 var snapshot = try persistence.loadChecked()
@@ -812,7 +802,7 @@ public final class WindowLibrary {
     }
 
     private func finalizeWindowPanes(_ id: UUID) {
-        guard let paneFinalizer else { return }
+        guard let paneFinalizer, windows.first(where: { $0.id == id })?.isRemote != true else { return }
         if let store = stores[id] {
             let identities = PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions))
             if !identities.isEmpty { paneFinalizer(identities) }
@@ -852,6 +842,7 @@ public final class WindowLibrary {
 
         for window in windows {
             indexed.insert(window.id)
+            if window.isRemote { continue } // its panes are daemons on its server
             let origin = ClaimOrigin(id: window.id, name: window.name,
                                      state: stores[window.id] != nil ? .open : .closed)
             let walk = stores[window.id].map { liveClaims($0, origin: origin) } ?? persistedClaims(origin: origin)
@@ -943,7 +934,8 @@ public final class WindowLibrary {
         var claims: [ZmxPaneClaim] = []
         var complete = true
         for workspace in snapshot.workspaces {
-            for session in workspace.sessions {
+            // a page owns no daemon to claim
+            for session in workspace.sessions where session.page == nil {
                 let site = ClaimSite(origin: origin, workspaceID: workspace.id, workspaceName: workspace.name,
                                      sessionID: session.id, sessionName: Self.persistedName(session))
                 // each pane is judged on its own: a session missing its primary identity can still own a
@@ -966,9 +958,10 @@ public final class WindowLibrary {
 
     /// Window files on disk that the index does not list. A stale index short-circuits recovery, so these
     /// are real panes whose daemons would otherwise read as unclaimed. Nil when the directory itself could
-    /// not be read, which is not the same answer as "no stray files".
+    /// not be read, which is not the same answer as "no stray files"; Linux lists a non-directory as empty.
     private func strayWindowFileIDs(indexed: Set<UUID>) -> [UUID]? {
-        guard let contents = try? FileManager.default.contentsOfDirectory(at: windowsDirectory,
+        guard (try? windowsDirectory.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true,
+              let contents = try? FileManager.default.contentsOfDirectory(at: windowsDirectory,
                                                                           includingPropertiesForKeys: nil) else {
             return nil
         }

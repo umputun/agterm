@@ -184,8 +184,7 @@ struct ConfigPathsTests {
     private func makeRecorder(in dir: URL, named name: String) throws -> (script: String, got: URL) {
         let got = dir.appendingPathComponent("\(name).got")
         let script = dir.appendingPathComponent(name)
-        try "#!/bin/sh\nprintf '%s' \"$1\" > \"\(got.path)\"\n".write(to: script, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        try "#!/bin/sh\nprintf '%s' \"$1\" > \"\(got.path)\"\n".writeExecutable(to: script)
         return (script.path, got)
     }
 
