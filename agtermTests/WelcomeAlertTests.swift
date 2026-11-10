@@ -53,25 +53,58 @@ final class WelcomeAlertTests: XCTestCase {
         XCTAssertEqual(events, ["probe", "skill result dismissed", "hooks result dismissed"])
     }
 
-    func testInstallationGuardsReentryAndDoesNotCacheAcrossActions() async {
-        var probes = 0
-        var skills = 0
-        for _ in 0..<2 {
+    func testQueuedHelpRequestWaitsForProbeAndResultThenUsesFreshProbe() async {
+        let hooksProbeStarted = expectation(description: "hooks probe started")
+        let hooksResultOpened = expectation(description: "hooks result opened")
+        let skillRequested = expectation(description: "skill requested while hooks are probing")
+        let hooksCapture = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: "/first/codex")
+        let skillCapture = OpenCodeEnvironmentProbe.Result(version: .v2, v2ConfigurationDirectory: nil, codexHome: "/second/codex")
+        var finishProbe: CheckedContinuation<OpenCodeEnvironmentProbe.Result?, Never>?
+        var dismissHooks: CheckedContinuation<Void, Never>?
+        var events: [String] = []
+        defer {
+            finishProbe?.resume(returning: hooksCapture)
+            dismissHooks?.resume()
+        }
+        let hooks = Task {
+            await AgentInstallers.run(skill: false, hooks: true, probe: {
+                events.append("hooks probe")
+                return await withCheckedContinuation {
+                    finishProbe = $0
+                    hooksProbeStarted.fulfill()
+                }
+            }, installSkill: { _ in XCTFail("unchecked skill must not install") }, installHooks: { result in
+                XCTAssertEqual(result?.codexHome, hooksCapture.codexHome)
+                events.append("hooks result opened")
+                await withCheckedContinuation {
+                    dismissHooks = $0
+                    hooksResultOpened.fulfill()
+                }
+                events.append("hooks result dismissed")
+            })
+        }
+        await fulfillment(of: [hooksProbeStarted], timeout: 3)
+        let skill = Task {
+            skillRequested.fulfill()
             await AgentInstallers.run(skill: true, hooks: false, probe: {
-                probes += 1
-                await AgentInstallers.run(skill: true, hooks: true, probe: {
-                    XCTFail("reentry must not probe")
-                    return nil
-                }, installSkill: { _ in XCTFail("reentry must not show a skill result") },
-                   installHooks: { _ in XCTFail("reentry must not show a hooks result") })
-                return nil
+                events.append("skill probe")
+                return skillCapture
             }, installSkill: { result in
-                XCTAssertNil(result)
-                skills += 1
+                XCTAssertEqual(result?.codexHome, skillCapture.codexHome)
+                events.append("skill result dismissed")
             }, installHooks: { _ in XCTFail("unchecked hooks must not install") })
         }
-        XCTAssertEqual(probes, 2)
-        XCTAssertEqual(skills, 2)
+        await fulfillment(of: [skillRequested], timeout: 3)
+        XCTAssertEqual(events, ["hooks probe"])
+        finishProbe?.resume(returning: hooksCapture)
+        finishProbe = nil
+        await fulfillment(of: [hooksResultOpened], timeout: 3)
+        XCTAssertEqual(events, ["hooks probe", "hooks result opened"])
+        dismissHooks?.resume()
+        dismissHooks = nil
+        await hooks.value
+        await skill.value
+        XCTAssertEqual(events, ["hooks probe", "hooks result opened", "hooks result dismissed", "skill probe", "skill result dismissed"])
     }
 
     func testHooksOnlyProbesOnceAndNoSelectionDoesNotProbe() async {
