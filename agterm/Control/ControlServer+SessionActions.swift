@@ -529,9 +529,14 @@ extension ControlServer: ControlActions {
                                        autoReset: update.autoReset ?? false,
                                        color: update.color, shape: update.shape, statusPane: resolvedPane)
         // rejected writes must return before playback: no status change means no sound.
-        if case .refused(let owner) = store.applyControlStatus(indicator, forSession: id) {
+        switch store.applyControlStatus(indicator, forSession: id, ifIdle: update.ifIdle) {
+        case .refused(let owner):
             return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
                 "(write from that pane to change it)")
+        case .skipped:
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        case .applied:
+            break
         }
         // the blocked marker goes even when this Mac has no blocked sound: the presenter plays its own setting
         let explicit = prepared == nil ? nil : update.sound

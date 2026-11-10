@@ -193,6 +193,19 @@ final class ControlServerStatusSoundTests: XCTestCase {
         XCTAssertEqual(viewer.sounds, [PresentationSound(name: nil)])
     }
 
+    func testASkippedIfIdleStatusAnswersOkAndPlaysNothing() async throws {
+        makeServer(resolvedSound: sound)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        let viewer = try present(session)
+        store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
+        let response = await update(soundName: "Tink", status: .active, ifIdle: true)
+        XCTAssertTrue(response.ok)
+        XCTAssertEqual(session.agentIndicator.status, .completed)
+        XCTAssertTrue(viewer.sounds.isEmpty)
+        await assertNoPlayback()
+    }
+
     func testARefusedStatusSendsNoSound() async throws {
         makeServer(resolvedSound: sound)
         let store = try XCTUnwrap(library.activeStore)
@@ -254,8 +267,9 @@ final class ControlServerStatusSoundTests: XCTestCase {
     }
 
     private func update(target: String? = nil, soundName: String? = "held", status: AgentStatus = .blocked,
-                        pane: StatusPane? = nil, paneID: String? = nil) async -> ControlResponse {
-        let update = ControlSessionStatusUpdate(status: status, blink: nil, autoReset: nil, sound: soundName, pane: pane, paneID: paneID)
+                        pane: StatusPane? = nil, paneID: String? = nil, ifIdle: Bool = false) async -> ControlResponse {
+        let update = ControlSessionStatusUpdate(status: status, blink: nil, autoReset: nil, sound: soundName, pane: pane,
+                                                paneID: paneID, ifIdle: ifIdle)
         return await server.setSessionStatus(target, window: nil, update: update)
     }
 }

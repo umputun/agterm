@@ -641,6 +641,12 @@ struct CommandsTests {
                                       args: ControlArgs(status: "completed", autoReset: true)))
     }
 
+    @Test func sessionStatusWithIfIdle() throws {
+        let req = try request(["session", "status", "active", "--blink", "--if-idle"])
+        #expect(req == ControlRequest(cmd: .sessionStatus, target: "active",
+                                      args: ControlArgs(status: "active", blink: true, ifIdle: true)))
+    }
+
     @Test func sessionStatusWithSound() throws {
         let req = try request(["session", "status", "blocked", "--sound", "Glass"])
         #expect(req.cmd == .sessionStatus)

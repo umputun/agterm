@@ -272,7 +272,8 @@ public struct ControlDispatcher {
                                                     autoReset: request.args?.autoReset,
                                                     sound: request.args?.sound, color: request.args?.color,
                                                     shape: shape,
-                                                    pane: pane, paneID: request.args?.paneID)
+                                                    pane: pane, paneID: request.args?.paneID,
+                                                    ifIdle: request.args?.ifIdle ?? false)
             return await actions.setSessionStatus(request.target, window: request.args?.window, update: update)
         case .sessionRestore:
             return dispatchSessionRestore(request)

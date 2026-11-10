@@ -617,6 +617,15 @@ struct ControlProtocolTests {
         #expect(decoded.args?.autoReset == true)
     }
 
+    @Test func sessionStatusIfIdleRoundTrips() throws {
+        let json = #"{"cmd":"session.status","args":{"status":"active","ifIdle":true}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.args?.ifIdle == true)
+
+        let encoded = try JSONEncoder().encode(ControlRequest(cmd: .sessionStatus, args: ControlArgs(status: "active")))
+        #expect(try JSONDecoder().decode(ControlRequest.self, from: encoded).args?.ifIdle == nil)
+    }
+
     @Test func sessionStatusUnknownStateDecodesForServerToReject() throws {
         let json = #"{"cmd":"session.status","args":{"status":"bogus"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))

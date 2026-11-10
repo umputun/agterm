@@ -229,6 +229,49 @@ struct AppStoreStatusTests {
         #expect(drafts.kinds.isEmpty)
     }
 
+    @Test func anIfIdleWriteAppliesOnAnIdleRow() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+
+        let result = store.applyControlStatus(AgentIndicator(status: .active, blink: true), forSession: session.id,
+                                              ifIdle: true)
+
+        #expect(result == .applied)
+        #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true))
+    }
+
+    @Test(arguments: [AgentStatus.active, .completed, .blocked])
+    func anIfIdleWriteLeavesABusyRowUntouched(_ standing: AgentStatus) throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let drafts = DraftCollector()
+        let store = AppStore(persistence: PersistenceStore(directory: dir),
+                             controlEventSink: { drafts.kinds.append($0.kind) })
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.applyControlStatus(AgentIndicator(status: standing), forSession: session.id)
+        let stamp = session.statusChangedAt
+        drafts.kinds.removeAll()
+
+        let result = store.applyControlStatus(AgentIndicator(status: .active, blink: true), forSession: session.id,
+                                              ifIdle: true)
+
+        #expect(result == .skipped)
+        #expect(session.agentIndicator == AgentIndicator(status: standing))
+        #expect(session.statusChangedAt == stamp)
+        #expect(drafts.kinds.isEmpty)
+    }
+
+    @Test func anIfIdleWriteFromTheOtherPaneIsSkippedNotRefused() {
+        let (store, session) = blockedLeftSplitSession()
+
+        let result = store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right),
+                                              forSession: session.id, ifIdle: true)
+
+        #expect(result == .skipped)
+        #expect(session.agentIndicator.status == .blocked)
+    }
+
     @MainActor
     private final class RecordingSink: PresentationSink {
         var frames: [PresentationFrame] = []
@@ -297,6 +340,15 @@ struct AppStoreStatusTests {
         store.applyControlStatus(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
 
         store.applyControlStatus(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
+
+        #expect(sink.statuses.count == 1)
+    }
+
+    @Test func aSkippedWritePublishesNothing() throws {
+        let (store, session, sink) = try mirroredStore()
+        store.applyControlStatus(AgentIndicator(status: .completed), forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: .active), forSession: session.id, ifIdle: true)
 
         #expect(sink.statuses.count == 1)
     }

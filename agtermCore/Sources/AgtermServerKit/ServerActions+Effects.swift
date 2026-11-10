@@ -12,9 +12,14 @@ extension ServerActions {
             let pane = update.paneID.flatMap { session.paneRole(forToken: $0) } ?? update.pane
             let indicator = AgentIndicator(status: update.status, blink: update.blink ?? false, autoReset: update.autoReset ?? false,
                                            color: update.color, shape: update.shape, statusPane: pane)
-            if case .refused(let owner) = store.applyControlStatus(indicator, forSession: session.id) {
+            switch store.applyControlStatus(indicator, forSession: session.id, ifIdle: update.ifIdle) {
+            case .refused(let owner):
                 return ControlResponse(ok: false, error: "blocked status owned by pane \(owner.rawValue) " +
                     "(write from that pane to change it)")
+            case .skipped:
+                return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+            case .applied:
+                break
             }
             let explicit = update.sound.flatMap { $0.isEmpty ? nil : $0 }
             if explicit != nil || (update.status == .blocked && !wasBlocked) {

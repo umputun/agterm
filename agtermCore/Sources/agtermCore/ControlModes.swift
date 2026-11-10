@@ -212,10 +212,12 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
     /// app-side. A resolved token OVERRIDES the stale role `pane` (a promoted-then-re-split pane, #199);
     /// nil/empty/unknown falls back to `pane`.
     public let paneID: String?
+    /// `ifIdle` applies the write only while the session's status is idle; otherwise it is an ok no-op.
+    public let ifIdle: Bool
 
     public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?,
                 color: String? = nil, shape: StatusShape? = nil,
-                pane: StatusPane? = nil, paneID: String? = nil) {
+                pane: StatusPane? = nil, paneID: String? = nil, ifIdle: Bool = false) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
@@ -224,6 +226,7 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
         self.shape = shape
         self.pane = pane
         self.paneID = paneID
+        self.ifIdle = ifIdle
     }
 }
 
