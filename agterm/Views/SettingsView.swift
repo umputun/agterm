@@ -197,7 +197,7 @@ private struct GeneralSettingsView: View {
                 set: { model.setFlaggedViewLayout($0) })
     }
 
-    /// Default ON; turning it off stores false and leaves only the disclosure triangle as the hit target.
+    /// workspaceRowClickExpands defaults on; off stores false and leaves the triangle and row icon as hit targets.
     private var workspaceRowClickExpands: Binding<Bool> {
         Binding(get: { model.settings.workspaceRowClickExpands ?? true },
                 set: { model.setWorkspaceRowClickExpands($0 ? nil : false) })
