@@ -930,9 +930,8 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     public let name: String
     public let open: Bool
     public let active: Bool
-    /// The window's auto-follow-blocked timeout in milliseconds; nil/omitted when disabled. As of the last
-    /// cache refresh — `window.list` answers from a nonisolated fast path, so a just-changed setting lags
-    /// until the next command; the live `idleMs` is kept off `window.list` (tree-only) for that reason.
+    /// The window's auto-follow-blocked timeout in milliseconds; nil/omitted when disabled. The live
+    /// `idleMs` stays tree-only, since the cached `window.list` copy would go stale.
     public let autoFollowMs: Int?
     /// Whether this window's sidebar is visible; nil/omitted for a CLOSED window with no live store. Read
     /// from the open window's store, mirroring `autoFollowMs`. The read side of `sidebar`, per window.

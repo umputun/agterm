@@ -240,8 +240,11 @@ session drag are out of scope.
 - `window.list` is served from `cachedWindowNodes`. Registration and unregistration post
   `.agtermWindowAttachmentChanged`; observe it on `.main`, not synchronously, because unregister precedes
   `closeWindow` and an immediate refresh captures `open: true` without geometry.
-- Refresh on every command, frontmost change, sidebar visibility change, attachment, and NSWindow
-  move/resize/fullscreen/minimize transitions. Ignore notification payloads: carrying non-Sendable
+- Refresh after main-actor dispatch except `events.read` and `msg.read`, frontmost change, sidebar
+  visibility change, attachment, NSWindow move/resize/fullscreen/minimize transitions, and
+  `.agtermWindowCatalogChanged`, which the GUI window rename and delete and the Settings auto-follow
+  fan-out post. A GUI change to a `window.list` field owes one of these signals, since an idle
+  follower's poll does not rebuild the cache. Ignore notification payloads: carrying non-Sendable
   `Notification` into a main-actor region fails Swift 6 Release WMO even when Debug passes.
 
 ## Control catalog

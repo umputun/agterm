@@ -254,6 +254,10 @@ final class ControlServer {
         NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
+        // refresh before a catalog-changing GUI action returns
+        NotificationCenter.default.addObserver(forName: .agtermWindowCatalogChanged, object: nil, queue: nil) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshWindowCache() }
+        }
         // window.list carries LIVE NSWindow geometry + fullscreen/zoom read at cache-build time, which a user
         // drag/resize/zoom/fullscreen changes with NO control command — and a polling window.list is
         // fast-path-served, so it never refreshes its own cache. the fullscreen notifications fire AFTER the

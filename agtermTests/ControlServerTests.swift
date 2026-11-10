@@ -341,6 +341,27 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(cachedName(), "renamed-behind-the-cache")
     }
 
+    func testSettingsAutoFollowChangeRefreshesTheCachedWindowList() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let server = makeServer(library: library)
+        server.start()
+        let settings = SettingsModel(library: library, settingsStore: SettingsStore(directory: stateDir))
+        func cachedAutoFollow() -> Int? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == windowID.uuidString }?.autoFollowMs
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertNil(cachedAutoFollow())
+
+        settings.setAutoFollowAttention(AppSettings.AutoFollowAttention.s10.rawValue)
+        XCTAssertEqual(cachedAutoFollow(), 10_000)
+
+        settings.setAutoFollowAttention(AppSettings.AutoFollowAttention.off.rawValue)
+        XCTAssertNil(cachedAutoFollow())
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in
