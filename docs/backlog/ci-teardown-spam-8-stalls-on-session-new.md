@@ -116,3 +116,8 @@ shared cache (macOS build 25G332) and the app frames need that run's Release bin
 the job. The decoded report contains one suspended sample with unsymbolicated frames, so the main thread's
 role in the stall remains unresolved. The next capture step is to decode the stackshot on the runner inside
 the step, or to keep the Release binary and its symbols with the evidence for later decoding.
+
+Run 42883406544 (PR #955 head `60e0a272`, 2026-11-10) stalled at `new-5`: `new-0` to `new-4` answered in 0.05 to
+1.08 s. At capture time, with the CLI already defunct, the app was at 171% CPU and the one-minute `vm.loadavg` at
+8.4. The app sample, the CLI sample and the spindump report failed as before. The artifact holds a raw stuck
+stackshot (`spindump-stuck-stackshot.2026-11-10-19-24-29.15324.buf`) and an empty `spindump-06-new-5.txt`.
