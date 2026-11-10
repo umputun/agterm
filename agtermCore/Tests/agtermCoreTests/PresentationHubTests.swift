@@ -137,6 +137,7 @@ struct PresentationHubTests {
             PresentationSnapshot(status: nil, hud: nil, layout: initial)
         }
         if staleHeartbeat {
+            hub.heartbeat()
             clock.now += 31
             hub.heartbeat()
             #expect(first.closed == .stale)
@@ -359,9 +360,29 @@ struct PresentationHubTests {
         hub.heartbeat()
         clock.now += 20
         hub.heartbeat()
+        #expect(sink.closed == nil)
+        clock.now += 11
+        hub.heartbeat()
 
         #expect(sink.closed == .stale)
         #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    // regression: a heartbeat late past the stale timeout dropped viewers it had never given a ping to answer
+    @Test func aLongGapBetweenHeartbeatsLeavesTheViewerAPingToAnswer() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: Self.hello, sink: sink) { Self.empty }
+
+        clock.now += 60
+        hub.heartbeat()
+        #expect(sink.closed == nil)
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .ack), from: id)
+        clock.now += 60
+        hub.heartbeat()
+
+        #expect(sink.closed == nil)
+        #expect(sink.bodies.filter { $0 == .ping }.count == 2)
     }
 
     @Test func aPingFromTheViewerIsAnswered() throws {

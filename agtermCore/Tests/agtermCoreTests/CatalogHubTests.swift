@@ -181,6 +181,7 @@ struct CatalogHubTests {
         try hub.subscribe(hello: CatalogHello(version: 1), sink: quiet, versions: CatalogFixture.versions)
         let id = try hub.subscribe(hello: CatalogHello(version: 1), sink: acking, versions: CatalogFixture.versions)
 
+        hub.heartbeat()
         clock.now += 20
         hub.receive(.ack, from: id)
         clock.now += 20
@@ -189,6 +190,40 @@ struct CatalogHubTests {
         #expect(quiet.closed == [.stale])
         #expect(acking.frames.last == .ping)
         #expect(acking.closed.isEmpty)
+    }
+
+    // regression: a heartbeat late past the stale timeout dropped subscribers it had never given a ping to answer
+    @Test func aLongGapBetweenHeartbeatsLeavesTheSubscriberAPingToAnswer() throws {
+        let clock = Clock()
+        let hub = CatalogHub(epoch: "e1", staleTimeout: 30, now: { clock.now }, source: { CatalogFixture.snapshot([]) })
+        let sink = Sink()
+        let id = try hub.subscribe(hello: CatalogHello(version: 1), sink: sink, versions: CatalogFixture.versions)
+
+        clock.now += 60
+        hub.heartbeat()
+        #expect(sink.closed.isEmpty)
+        hub.receive(.ack, from: id)
+        clock.now += 60
+        hub.heartbeat()
+
+        #expect(sink.closed.isEmpty)
+        #expect(sink.frames.filter { $0 == .ping }.count == 2)
+    }
+
+    @Test func anUnansweredPingExpiresFromItsFirstProbe() throws {
+        let clock = Clock()
+        let hub = CatalogHub(epoch: "e1", staleTimeout: 30, now: { clock.now }, source: { CatalogFixture.snapshot([]) })
+        let sink = Sink()
+        try hub.subscribe(hello: CatalogHello(version: 1), sink: sink, versions: CatalogFixture.versions)
+
+        hub.heartbeat()
+        clock.now += 20
+        hub.heartbeat()
+        #expect(sink.closed.isEmpty)
+        clock.now += 11
+        hub.heartbeat()
+
+        #expect(sink.closed == [.stale])
     }
 
     @Test func aPingIsAnsweredWithAnAck() throws {

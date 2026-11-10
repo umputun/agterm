@@ -28,11 +28,11 @@ public final class CatalogHub {
 
     private final class Subscriber {
         let sink: CatalogSink
-        var lastAck: Date
+        // the first ping still unanswered; a late heartbeat sends a ping before it can call the subscriber stale
+        var pingedAt: Date?
 
-        init(sink: CatalogSink, now: Date) {
+        init(sink: CatalogSink) {
             self.sink = sink
-            lastAck = now
         }
     }
 
@@ -87,7 +87,7 @@ public final class CatalogHub {
         let state = snapshot()
         lastID += 1
         let id = SubscriberID(value: lastID)
-        subscribers[id] = Subscriber(sink: sink, now: now())
+        subscribers[id] = Subscriber(sink: sink)
         let answer = CatalogHello(version: min(hello.version, CatalogCodec.version), epoch: epoch, versions: versions)
         let frames: [CatalogFrame]
         do {
@@ -109,20 +109,21 @@ public final class CatalogHub {
     public func receive(_ frame: CatalogFrame, from id: SubscriberID) {
         guard let subscriber = subscribers[id] else { return }
         switch frame {
-        case .ack: subscriber.lastAck = now()
+        case .ack: subscriber.pingedAt = nil
         case .ping: send(.ack, to: id)
         default: break
         }
     }
 
-    /// heartbeat closes every subscriber whose last ack is older than the stale timeout and pings the rest.
+    /// heartbeat closes every subscriber that left a ping unanswered past the stale timeout and pings the rest.
     public func heartbeat() {
         let current = now()
         for (id, subscriber) in subscribers {
-            if current.timeIntervalSince(subscriber.lastAck) > staleTimeout {
+            if let pingedAt = subscriber.pingedAt, current.timeIntervalSince(pingedAt) > staleTimeout {
                 drop(id, reason: .stale)
                 continue
             }
+            if subscriber.pingedAt == nil { subscriber.pingedAt = current }
             send(.ping, to: id)
         }
     }

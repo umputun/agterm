@@ -31,15 +31,15 @@ public final class PresentationHub {
         let sink: PresentationSink
         var kinds: Set<String> = []
         var revision = 0
-        var lastAck: Date
+        // the first ping still unanswered; a late heartbeat sends a ping before it can call the viewer stale
+        var pingedAt: Date?
         /// Deltas published while the snapshot is being taken, held so they land after it.
         var held: [PresentationFrame.Body]? = []
 
-        init(session: UUID, generation: Int, sink: PresentationSink, now: Date) {
+        init(session: UUID, generation: Int, sink: PresentationSink) {
             self.session = session
             self.generation = generation
             self.sink = sink
-            lastAck = now
         }
 
         @MainActor func decodable(_ body: PresentationFrame.Body) -> PresentationFrame.Body {
@@ -145,7 +145,7 @@ public final class PresentationHub {
         }
         lastGeneration += 1
         let id = SubscriberID(generation: lastGeneration)
-        let subscriber = Subscriber(session: session, generation: lastGeneration, sink: sink, now: now())
+        let subscriber = Subscriber(session: session, generation: lastGeneration, sink: sink)
         subscribers[id] = subscriber
 
         let state = snapshot()
@@ -212,7 +212,7 @@ public final class PresentationHub {
     public func receive(_ frame: PresentationFrame, from id: SubscriberID) {
         guard let subscriber = subscribers[id], frame.gen == subscriber.generation else { return }
         switch frame.body {
-        case .ack: subscriber.lastAck = now()
+        case .ack: subscriber.pingedAt = nil
         case .ping: send(.ack, to: id)
         case .presenterAcquire:
             let granted = grant.acquire(session: subscriber.session, by: id)
@@ -226,15 +226,16 @@ public final class PresentationHub {
         }
     }
 
-    /// Closes every subscriber whose last ack is older than the stale timeout and pings the rest. The owner of
-    /// the streams calls this on its own timer.
+    /// heartbeat closes every subscriber that left a ping unanswered past the stale timeout and pings the rest.
+    /// The owner of the streams calls this on its own timer.
     public func heartbeat() {
         let current = now()
         for (id, subscriber) in subscribers {
-            if current.timeIntervalSince(subscriber.lastAck) > staleTimeout {
+            if let pingedAt = subscriber.pingedAt, current.timeIntervalSince(pingedAt) > staleTimeout {
                 drop(id, reason: .stale)
                 continue
             }
+            if subscriber.pingedAt == nil { subscriber.pingedAt = current }
             send(.ping, to: id)
         }
     }
