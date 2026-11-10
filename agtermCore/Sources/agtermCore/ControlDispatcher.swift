@@ -179,7 +179,7 @@ public struct ControlDispatcher {
             return actions.selectSession(request.target, window: request.args?.window)
         case .sessionGo:
             guard let dir = (request.args?.to).flatMap(SessionNavigation.init(wire:)) else {
-                return ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention")
+                return ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention|N")
             }
             return actions.goSession(window: request.args?.window, direction: dir)
         case .sessionClose:

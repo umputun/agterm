@@ -348,8 +348,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   renders even in every toolbar mode. Only a drag captures the live divider; `session.resize`, the
   double-click reset and the first-layout seed set the value directly. A shown split therefore always
   reports a ratio, so absence means no split or one never shown, never "at the default".
-- `session.go --to next|prev|first|last|next-attention|prev-attention` operates on current selection in
-  the placement store, wraps within filtered scope, and returns selected ID. It has no target. The
+- `session.go --to next|prev|first|last|next-attention|prev-attention|N` operates on current selection in
+  the placement store, wraps within filtered scope, and returns selected ID. It has no target.
+  `N` is a 1-based place in `navigableSessions`, so a collapsed workspace's sessions count; past the end
+  is `AppStore.navigationError`, never a wrap. The
   attention steps include `active` while the window's `attentionIncludesActive` tree field is true.
   They never cross windows; `attentionNavigationAcrossWindows` in the tree describes GUI navigation only.
 - `notify` requires body, defaults title and session, skips OSC focus suppression, increments unseen, and

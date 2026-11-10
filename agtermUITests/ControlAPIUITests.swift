@@ -1200,7 +1200,7 @@ final class ControlAPIUITests: ControlAPITestCase {
     func testSessionGoInvalidDirectionErrors() throws {
         let response = try sendCommand(#"{"cmd":"session.go","args":{"to":"sideways"}}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "an invalid direction should fail: \(response)")
-        XCTAssertEqual(response["error"] as? String, "session.go requires --to next|prev|first|last|next-attention|prev-attention",
+        XCTAssertEqual(response["error"] as? String, "session.go requires --to next|prev|first|last|next-attention|prev-attention|N",
                        "should return the direction guard: \(response)")
     }
 

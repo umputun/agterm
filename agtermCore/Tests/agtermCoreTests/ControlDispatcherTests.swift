@@ -372,18 +372,28 @@ struct ControlDispatcherTests {
             cmd: .sessionGo,
             args: ControlArgs(to: "sideways")
         ))
+        let zeroPosition = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionGo,
+            args: ControlArgs(to: "0")
+        ))
         let missingName = await dispatcher.dispatch(ControlRequest(cmd: .sessionRename, target: "session"))
 
-        #expect(missingDirection == ControlResponse(
-            ok: false,
-            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
-        ))
-        #expect(badDirection == ControlResponse(
-            ok: false,
-            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
-        ))
+        let usage = ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention|N")
+        #expect(missingDirection == usage)
+        #expect(badDirection == usage)
+        #expect(zeroPosition == usage)
         #expect(missingName == ControlResponse(ok: false, error: "session.rename requires a name"))
         #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionGoRoutesAPosition() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionGo, args: ControlArgs(window: "win", to: "3")))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.sessionGo(window: "win", .position(3))])
     }
 
     @Test func workspaceCommandsRouteThroughActions() async {

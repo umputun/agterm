@@ -1336,7 +1336,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session go --to next|prev|first|last|next-attention|prev-attention [--window W]
+                agtermctl session go --to next|prev|first|last|next-attention|prev-attention|N [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.go</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1351,7 +1351,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blocked</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">completed</span>, plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> when
                 <strong>Settings ▸ Agent Status ▸ Attention navigation includes active sessions</strong> is on), also wrapping,
-                always within the addressed window.
+                always within the addressed window. A number
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">N</span> selects the Nth session of that set in
+                sidebar order, counting from 1 and including sessions in a collapsed workspace; past the end it errors and the
+                selection stays.
                 <strong style="color: #bfbab0">Returns</strong> the newly selected
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>

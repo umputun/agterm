@@ -4,13 +4,21 @@ import Observation
 /// A relative step through the flattened session list for keyboard navigation. `next`/`previous` step one
 /// and wrap, `first`/`last` jump to a tree end, `nextAttention`/`previousAttention` step (wrapping) through
 /// only the sessions needing attention — status `blocked` or `completed`, plus `active` under
-/// `AppStore.attentionIncludesActive`.
-public enum SessionNavigation: Sendable { case next, previous, first, last, nextAttention, previousAttention }
+/// `AppStore.attentionIncludesActive`. `position` jumps to a 1-based place in that list and never wraps.
+public enum SessionNavigation: Sendable, Hashable {
+    case next, previous, first, last, nextAttention, previousAttention
+    case position(Int)
+}
 
 extension SessionNavigation {
     /// Maps a control-channel direction string to a case, nil for an unknown one. Both `prev` (the CLI's
-    /// spelling) and `previous` are accepted.
+    /// spelling) and `previous` are accepted; a positive integer is a `position`.
     public init?(wire: String) {
+        if let position = Int(wire) {
+            guard position >= 1 else { return nil }
+            self = .position(position)
+            return
+        }
         switch wire {
         case "next": self = .next
         case "prev", "previous": self = .previous
@@ -754,7 +762,8 @@ public final class AppStore {
     /// (`navigableSessions`: the flagged set in `.flagged` mode, the MARKED workspaces' sessions while the
     /// focus filter is applied, else all). `next`/`previous` move one and WRAP WITHIN that set, never leaking
     /// across the filter; `first`/`last` jump to its ends; with no/invalid selection `next`/`previous` land
-    /// on the first session. No-op on an empty list. Routes through `selectSession`, inheriting recency,
+    /// on the first session; `position` selects that place or no-ops past the end (`navigationError`
+    /// says why). No-op on an empty list. Routes through `selectSession`, inheriting recency,
     /// badge clearing, persistence and workspace derivation. Targets are always in-set, so nav never triggers
     /// `disableFocusIfSelectionOutsideSet` — that stays the safety net for an explicit cross-set select.
     @discardableResult
@@ -776,8 +785,20 @@ public final class AppStore {
         case .nextAttention, .previousAttention:
             guard let found = attentionTarget(in: sessions, forward: direction == .nextAttention) else { return nil }
             target = found
+        case .position(let position):
+            guard ids.indices.contains(position - 1) else { return nil }
+            target = ids[position - 1]
         }
         return selectSession(target)
+    }
+
+    /// Why `navigateSession(direction)` cannot land, nil when it can. Only a `position` past the end of
+    /// `navigableSessions` misses; every other step lands somewhere in a non-empty list.
+    public func navigationError(_ direction: SessionNavigation) -> String? {
+        guard case .position(let position) = direction else { return nil }
+        let count = navigableSessions.count
+        guard position > count else { return nil }
+        return "no session at position \(position): \(count) navigable"
     }
 
     /// Steps the CURRENT workspace one place through `visibleWorkspaces`, WRAPPING, via `selectWorkspace`, so

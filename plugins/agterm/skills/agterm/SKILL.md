@@ -389,7 +389,7 @@ omitted when expanded).
   grace-period undo. `--undoable` gives a single target that grace too, as ⌘W does, so undo (⌘Z) or, for a local
   session, `recent open` inside it brings the running shell back; `result.undoable` says whether it applied (false when Settings turns undo off).
 - `session select` · `session rename <name>` · `session reveal` (select the focused pane's cwd in Finder).
-- `session go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
+- `session go --to next|prev|first|last|next-attention|prev-attention|N` — move the selection between sessions; `N` is the 1-based place in sidebar order.
 - `session move <workspace>` (relocate) or `session move --to up|down|top|bottom` (reorder within the
   workspace) or `session move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
   workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and

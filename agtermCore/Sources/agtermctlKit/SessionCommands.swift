@@ -137,8 +137,11 @@ struct Session: ParsableCommand {
 
     struct Go: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "go",
-            abstract: "Navigate sessions: next|prev|first|last|next-attention|prev-attention.")
-        @Option(name: .long, help: "Direction: next, prev, first, last, next-attention, or prev-attention (attention = blocked/completed, plus active when enabled in Settings).") var to: String
+            abstract: "Navigate sessions: next|prev|first|last|next-attention|prev-attention|N.")
+        @Option(name: .long, help: """
+            Direction: next, prev, first, last, next-attention, prev-attention (attention = blocked/completed, \
+            plus active when enabled in Settings), or a 1-based position N in the sidebar order.
+            """) var to: String
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {

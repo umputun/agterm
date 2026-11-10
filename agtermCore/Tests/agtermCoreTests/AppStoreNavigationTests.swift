@@ -135,6 +135,56 @@ struct AppStoreNavigationTests {
         #expect(SessionNavigation(wire: "prev-attention") == .previousAttention)
         #expect(SessionNavigation(wire: "previous-attention") == .previousAttention)
         #expect(SessionNavigation(wire: "sideways") == nil)
+        #expect(SessionNavigation(wire: "3") == .position(3))
+        #expect(SessionNavigation(wire: "0") == nil)
+        #expect(SessionNavigation(wire: "-1") == nil)
+    }
+
+    @Test func navigatePositionSelectsThatPlaceAcrossWorkspaces() {
+        let (store, ids) = Self.makeNavTree()
+        store.selectSession(ids[0])
+        store.navigateSession(.position(3))
+        #expect(store.selectedSessionID == ids[2])
+        store.navigateSession(.position(1))
+        #expect(store.selectedSessionID == ids[0])
+        #expect(store.navigationError(.position(4)) == nil)
+    }
+
+    @Test func navigatePositionPastTheEndIsANoOpWithAnError() {
+        let (store, ids) = Self.makeNavTree()
+        store.selectSession(ids[1])
+        store.navigateSession(.position(5))
+        #expect(store.selectedSessionID == ids[1])
+        #expect(store.navigationError(.position(5)) == "no session at position 5: 4 navigable")
+        #expect(store.navigationError(.next) == nil)
+    }
+
+    @Test func navigatePositionCountsTheFilteredSet() {
+        let (store, ids) = Self.makeNavTree()
+        store.setFocusedWorkspace(store.workspace(forSession: ids[2])!.id)
+        store.selectSession(ids[2])
+        store.navigateSession(.position(2))
+        #expect(store.selectedSessionID == ids[3])
+        #expect(store.navigationError(.position(3)) != nil)
+    }
+
+    @Test func navigatePositionFollowsTheFlaggedOrder() {
+        let (store, ids) = Self.makeNavTree()
+        store.setFlag(true, forSession: ids[3])
+        store.setFlag(true, forSession: ids[1])
+        store.setSidebarMode(.flagged)
+        store.flaggedLayout = .flat
+        store.navigateSession(.position(2))
+        #expect(store.selectedSessionID == ids[1])
+        #expect(store.navigationError(.position(3)) != nil)
+    }
+
+    @Test func navigatePositionCountsACollapsedWorkspace() {
+        let (store, ids) = Self.makeNavTree()
+        store.setWorkspaceExpanded(store.workspace(forSession: ids[0])!.id, expanded: false)
+        store.selectSession(ids[3])
+        store.navigateSession(.position(2))
+        #expect(store.selectedSessionID == ids[1])
     }
 
     @Test func navigateAttentionStepsThroughAttentionSessionsOnly() {
