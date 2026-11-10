@@ -193,12 +193,16 @@ final class TextPageRenderingTests: HtmlPageTestCase {
     func testANearCapFileRendersInBoundedTime() async throws {
         let line = "func main() { return }\n"
         let diff = Self.patch(changes: [0], lines: TextPage.maxBytes / " line 100000\n".utf8.count - 10)
-        let cases = [("high.go", String(repeating: line, count: TextPage.maxHighlightBytes / line.utf8.count)),
-                     ("plain.log", String(repeating: line, count: TextPage.maxBytes / line.utf8.count)), ("big.diff", diff)]
-        for (name, text) in cases {
+        let high = String(repeating: line, count: TextPage.maxHighlightBytes / line.utf8.count)
+        let plain = String(repeating: line, count: TextPage.maxBytes / line.utf8.count)
+        let colored = "\u{1B}[36mfunc\u{1B}[39m main() { \u{1B}[1mreturn\u{1B}[22m }\n"
+        let coloredCount = TextPage.maxBytes / colored.utf8.count
+        let cases = [("high.go", high, high.utf16.count), ("plain.log", plain, plain.utf16.count), ("big.diff", diff, diff.utf16.count),
+                     ("colored.log", String(repeating: colored, count: coloredCount), line.utf16.count * coloredCount)]
+        for (name, text, length) in cases {
             let clock = ContinuousClock(), started = clock.now
             let page = registry.page(for: try openText(name, text), store: store)
-            try await waitForScript("document.querySelector('pre code')?.textContent.length ?? 0", in: page.webView) { $0 == "\(text.utf16.count)" }
+            try await waitForScript("document.querySelector('pre code')?.textContent.length ?? 0", in: page.webView) { $0 == "\(length)" }
 
             XCTAssertLessThan(clock.now - started, .seconds(10), name)
             store.closeHtmlOverlay(page.id)
@@ -1088,6 +1092,55 @@ extension TextPageRenderingTests {
 
         let keywords = try await page.webView.evaluateJavaScript("document.querySelectorAll('pre code .hljs-keyword').length")
         XCTAssertEqual(keywords as? Int, 2)
+    }
+
+    func testColorEscapesBecomeStyledTextAndSearchReadsTheShownText() async throws {
+        let text = "\u{1B}[36mbugs+impl\u{1B}[39m started\n\u{1B}[1;38;5;196mfail\u{1B}[22m red\u{1B}[0m \u{1B}(B\u{1B}[2Kplain\n"
+            + "\u{1B}[1;38:2::0:128:0mgreen\u{1B}[0m\n"
+            + "\u{1B}[32mok\u{1B}[>4;1m still\u{1B}[0m \u{1B}_Gf=1;AA\u{1B}\\x\u{1B}Ptmux;\u{1B}\u{1B}[31mhidden\u{1B}\\y"
+            + "\u{1B}Ptmux;\u{1B}\u{1B}]8;;http://x\u{1B}\u{1B}\\label\u{1B}\u{1B}]8;;\u{1B}\u{1B}\\\u{1B}\\\nend\u{1B}P1+r6b"
+        let (page, window) = try shown(try openText("agents.log", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0 == "bugs+impl started\nfail red plain\ngreen\nok still xy\nend" }
+
+        let spans = try await page.webView.evaluateJavaScript("""
+            [...document.querySelectorAll('pre code span')].map(s => `${s.textContent}:${s.style.color}:${s.style.fontWeight}`).join(',')
+            """)
+        XCTAssertEqual(spans as? String,
+                       "bugs+impl:var(--agterm-color-6, #00cdcd):,fail:rgb(255, 0, 0):bold, red:rgb(255, 0, 0):,green:rgb(0, 128, 0):bold,"
+                       + "ok:var(--agterm-color-2, #00cd00):, still:var(--agterm-color-2, #00cd00):")
+        try search("impl started", on: page)
+        try await waitForScript(Self.count, in: page.webView) { $0 == "1 of 1" }
+    }
+
+    func testAColoredDiffShowsItsRowsAndFileLanguageWithoutTheEscapes() async throws {
+        let plain = ["diff --git a/x.go b/x.go", "--- a/x.go", "+++ b/x.go", "@@ -1 +1 @@", "-var a", "+func b() {}", ""]
+        let colored = ["\u{1B}[1mdiff --git a/x.go b/x.go\u{1B}[m", "\u{1B}[1m--- a/x.go\u{1B}[m", "\u{1B}[1m+++ b/x.go\u{1B}[m",
+                       "\u{1B}[36m@@ -1 +1 @@\u{1B}[m", "\u{1B}[31m-var a\u{1B}[m", "\u{1B}[32m+func b() {}\u{1B}[m", ""]
+        let (page, window) = try shown(try openText("colored.diff", colored.joined(separator: "\n")))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "1 change" }
+
+        let dom = try await page.webView.evaluateJavaScript("""
+            [document.querySelector('pre code').textContent === \(try json(plain.joined(separator: "\n"))),
+             document.querySelectorAll('pre code .hljs-keyword').length,
+             document.querySelectorAll('.agterm-added, .agterm-removed').length].join('|')
+            """)
+        XCTAssertEqual(dom as? String, "true|2|2")
+    }
+
+    func testAFollowedLogEndingMidEscapeShowsNoFragmentUntilItCompletes() async throws {
+        let (overlay, url) = try openLog("a\n")
+        let page = registry.page(for: overlay, store: store)
+        try await waitForScript(Self.code, in: page.webView) { $0 == "a\n" }
+
+        try append("x\u{1B}[3", to: url)
+        try await waitForScript(Self.code, in: page.webView) { $0 == "a\nx" }
+        try append("1mb\n", to: url)
+        try await waitForScript(Self.code, in: page.webView) { $0 == "a\nxb\n" }
+
+        let color = try await page.webView.evaluateJavaScript("document.querySelector('pre code span')?.style.color ?? ''")
+        XCTAssertEqual(color as? String, "var(--agterm-color-1, #cd0000)")
     }
 
     func testAddedAndRemovedRunsGetBandsAlsoPastTheHighlightCap() async throws {

@@ -25,6 +25,50 @@ public enum TerminalText {
         }
         return String(scalars)
     }
+
+    /// strippingEscapes drops an ESC and whatever sequence follows it: CSI (`ESC [` … final byte `@`-`~`), OSC (`ESC ]` … BEL
+    /// or ST), DCS/SOS/PM/APC strings (… ST), intermediate forms (`ESC (` … final byte), and the two-character forms. A trailing partial sequence is dropped with it, since a cut tail
+    /// can end mid-escape.
+    static func strippingEscapes(_ text: String) -> String {
+        guard text.unicodeScalars.contains(where: { $0.value == 0x1B }) else { return text }
+        var result = String.UnicodeScalarView()
+        let scalars = Array(text.unicodeScalars)
+        var index = 0
+        while index < scalars.count {
+            let scalar = scalars[index]
+            guard scalar.value == 0x1B else {
+                result.append(scalar)
+                index += 1
+                continue
+            }
+            index += 1
+            guard index < scalars.count else { break }
+            let kind = scalars[index]
+            index += 1
+            if kind.value == 0x5B { // CSI: parameters, then one final byte
+                while index < scalars.count, !(0x40...0x7E).contains(scalars[index].value) { index += 1 }
+                index += 1
+            } else if kind.value == 0x5D { // OSC: runs to BEL or ESC \
+                while index < scalars.count, scalars[index].value != 0x07, scalars[index].value != 0x1B {
+                    index += 1
+                }
+                if index < scalars.count, scalars[index].value == 0x1B { index += 1 }
+                index += 1
+            } else if [0x50, 0x58, 0x5E, 0x5F].contains(kind.value) {
+                // DCS, SOS, PM, APC: opaque up to ESC \ only; a tmux passthrough doubles every ESC inside it
+                while index < scalars.count {
+                    let next = index + 1 < scalars.count ? scalars[index + 1].value : 0
+                    if scalars[index].value == 0x1B, next == 0x5C { break }
+                    index += scalars[index].value == 0x1B && next == 0x1B ? 2 : 1
+                }
+                index += 2
+            } else if (0x20...0x2F).contains(kind.value) { // intermediates, then one final byte: `tput sgr0` emits ESC ( B
+                while index < scalars.count, (0x20...0x2F).contains(scalars[index].value) { index += 1 }
+                index += 1
+            }
+        }
+        return String(result)
+    }
 }
 
 extension String {

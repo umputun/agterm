@@ -58,8 +58,9 @@ public enum TextPage {
     /// file's language. A changed row can look like a header, so the renderer looks up only rows outside hunks.
     static func diffLanguages(in text: String) -> [String: String] {
         var found: [String: String] = [:]
-        for row in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-        where row.hasPrefix("--- ") || row.hasPrefix("+++ ") {
+        for raw in text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let row = TerminalText.strippingEscapes(String(raw))
+            guard row.hasPrefix("--- ") || row.hasPrefix("+++ ") else { continue }
             let path = String(row.dropFirst(4).prefix { $0 != "\t" })
             let file = path.count > 1 && path.hasPrefix("\"") && path.hasSuffix("\"") ? String(path.dropFirst().dropLast()) : path
             if let language = language(forFile: file) { found[path] = language }
