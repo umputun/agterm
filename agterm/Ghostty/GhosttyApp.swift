@@ -95,9 +95,8 @@ final class GhosttyApp {
     /// Which keystroke clears a blocked or completed glyph; read at keystroke time by the surface factories'
     /// status-clear closure. Settings-mirrored like `toolbarMode`.
     private(set) var statusReset: StatusReset = .firstKey
-    /// Whether a click anywhere on a sidebar workspace row toggles its expansion; on by default. The sidebar
-    /// Coordinator reads it in `handleSingleClick`, and the disclosure triangle ignores it because AppKit
-    /// toggles that natively. Settings-mirrored like `toolbarMode`.
+    /// workspaceRowClickExpands mirrors the setting for `handleSingleClick`; on by default. The disclosure
+    /// triangle, which AppKit toggles natively, and the row icon ignore it.
     private(set) var workspaceRowClickExpands: Bool = true
     /// The persisted choice and effective mode frozen before the first surface. An ineligible live request
     /// falls back to fresh shells without releasing its daemon claims. Settings changes never mutate either
