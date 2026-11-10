@@ -578,6 +578,11 @@ final class ControlServer {
          .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
     }
 
+    // these polling reads cannot change window nodes; skip the AppKit rebuild
+    nonisolated private static func leavesWindowsUnchanged(_ cmd: Command) -> Bool {
+        cmd == .eventsRead || cmd == .msgRead
+    }
+
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
     /// read error, the `maxLineBytes` cap, or the `readDeadlineSeconds` overall cap.
     nonisolated private static func readLine(_ conn: Int32) -> Data? {
@@ -645,7 +650,7 @@ final class ControlServer {
     private func dispatch(_ request: ControlRequest) async -> ControlResponse {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
-        defer { refreshWindowCache() }
+        defer { if !Self.leavesWindowsUnchanged(request.cmd) { refreshWindowCache() } }
         // every entry, a page's bridge included, reaches a remote window's server the one way the socket does
         if let route = remoteRoute(request) { return await runRemoteRoute(route) }
         if let refusal = pageCompanionRefusal(request) { return refusal }

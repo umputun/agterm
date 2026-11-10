@@ -317,6 +317,30 @@ final class ControlServerTests: XCTestCase {
         store.closeOverlay(session.id)
     }
 
+    func testPolledReadsSkipTheWindowCacheRebuildOtherCommandsKeepIt() async throws {
+        let library = WindowLibrary(directory: stateDir)
+        let store = try XCTUnwrap(library.activeStore)
+        let windowID = try XCTUnwrap(library.windowID(for: store))
+        let server = makeServer(library: library)
+        server.start()
+        func cachedName() -> String? {
+            server.fastPathResponse(for: ControlRequest(cmd: .windowList))?.result?.windows?.first { $0.id == windowID.uuidString }?.name
+        }
+
+        _ = await send(#"{"cmd":"version"}"#)
+        let before = try XCTUnwrap(cachedName())
+        library.renameWindow(windowID, to: "renamed-behind-the-cache")
+
+        let events = try JSONDecoder().decode(ControlResponse.self, from: Data((await send(#"{"cmd":"events.read"}"#) ?? "").utf8))
+        let messages = try JSONDecoder().decode(ControlResponse.self, from: Data((await send(#"{"cmd":"msg.read"}"#) ?? "").utf8))
+        XCTAssertTrue(events.ok, events.error ?? "")
+        XCTAssertEqual(messages.error, "msg.read requires an identity: --as SESSION:PANE-ID")
+        XCTAssertEqual(cachedName(), before)
+
+        _ = await send(#"{"cmd":"version"}"#)
+        XCTAssertEqual(cachedName(), "renamed-behind-the-cache")
+    }
+
     private func send(_ line: String) async -> String? {
         let path = socketPath!
         return await withCheckedContinuation { continuation in
