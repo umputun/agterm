@@ -136,7 +136,7 @@ extension LaunchSeedProvider {
     private static func restoreInitialInput(_ argv: [String]?, policy: LaunchSeedPolicy) -> String? {
         guard policy.restoreEnabled, let argv,
               CommandRestore.shouldRestore(argv: argv, denylist: policy.denylist) else { return nil }
-        return CommandRestore.shellQuotedLine(argv) + "\n"
+        return argv.map(CommandRestore.accountShellQuoted).joined(separator: " ") + "\n"
     }
 
     @MainActor
