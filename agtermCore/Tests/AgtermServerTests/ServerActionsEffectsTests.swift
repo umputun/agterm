@@ -15,9 +15,11 @@ struct ServerActionsEffectsTests {
             name: nil, after: nil, before: nil, noSelect: false)))
     }
 
-    private func status(_ session: Session, _ status: AgentStatus, pane: StatusPane? = nil, sound: String? = nil) async -> ControlResponse {
+    private func status(_ session: Session, _ status: AgentStatus, pane: StatusPane? = nil, sound: String? = nil,
+                        ifIdle: Bool = false) async -> ControlResponse {
         await harness.actions.setSessionStatus(session.id.uuidString, window: nil, update: ControlSessionStatusUpdate(
-            status: status, blink: nil, autoReset: nil, sound: sound, color: nil, shape: nil, pane: pane, paneID: nil))
+            status: status, blink: nil, autoReset: nil, sound: sound, color: nil, shape: nil, pane: pane, paneID: nil,
+            ifIdle: ifIdle))
     }
 
     @Test func aStatusIsSetOnTheSession() async throws {
@@ -36,6 +38,34 @@ struct ServerActionsEffectsTests {
         let reply = await status(session, .active, pane: .right)
 
         #expect(reply == ControlResponse(ok: false, error: "blocked status owned by pane left (write from that pane to change it)"))
+        #expect(session.agentIndicator.status == .blocked)
+    }
+
+    @Test func anIfIdleWriteSetsAnIdleSession() async throws {
+        let session = try newSession()
+
+        #expect(await status(session, .active, ifIdle: true).ok)
+
+        #expect(session.agentIndicator.status == .active)
+    }
+
+    @Test(arguments: [AgentStatus.active, .completed, .blocked])
+    func anIfIdleWriteAnswersOkAndLeavesABusySessionAlone(_ standing: AgentStatus) async throws {
+        let session = try newSession()
+        _ = await status(session, standing)
+
+        #expect(await status(session, .active, ifIdle: true).ok)
+
+        #expect(session.agentIndicator.status == standing)
+    }
+
+    @Test func anIfIdleWriteFromTheOtherPaneIsNotRefused() async throws {
+        let session = try newSession()
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        _ = await status(session, .blocked, pane: .left)
+
+        #expect(await status(session, .active, pane: .right, ifIdle: true).ok)
+
         #expect(session.agentIndicator.status == .blocked)
     }
 

@@ -5,6 +5,9 @@ import Foundation
 /// The outcome of a control-channel status write, which `AppStore.applyControlStatus` may refuse.
 public enum StatusWriteResult: Equatable, Sendable {
     case applied
+    /// `skipped` is an `ifIdle` write that met a non-idle row and was dropped whole, like `refused`, but it is
+    /// not an error: the caller asked for the write only on an idle row.
+    case skipped
     /// The write was dropped whole — no status change, no `statusChangedAt` restamp, no control event — because
     /// `owner` holds a blocked status this pane may not replace.
     case refused(owner: StatusPane)
@@ -24,9 +27,12 @@ extension AppStore {
     /// block. The owning pane clears its own status through any of them, and the GUI Clear Status paths
     /// bypass this rule entirely. Same-pane writes are unrestricted, so a single pane behaves exactly as
     /// before. Panes are compared AFTER `normalizedPane`, so a promoted survivor's stale `.right` matches the
-    /// `.left` it is stored as.
+    /// `.left` it is stored as. `ifIdle` is checked before pane precedence, so its no-op on a busy row succeeds
+    /// across panes.
     @discardableResult
-    public func applyControlStatus(_ indicator: AgentIndicator, forSession id: UUID) -> StatusWriteResult {
+    public func applyControlStatus(_ indicator: AgentIndicator, forSession id: UUID,
+                                   ifIdle: Bool = false) -> StatusWriteResult {
+        if ifIdle, let session = session(withID: id), session.agentIndicator.status != .idle { return .skipped }
         if let session = session(withID: id), session.agentIndicator.status == .blocked,
            indicator.status != .blocked {
             let owner = session.agentIndicator.normalizedPane(hasSplit: session.hasSplit) ?? .left

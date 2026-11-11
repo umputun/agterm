@@ -16,8 +16,8 @@
 #
 # It fails OPEN (reports) whenever the chain is unreadable or severed, e.g. a detached worker whose
 # spawner already exited: a missed guard is the behavior without this adapter, while a false silence
-# is a bug with no symptom. The argv is forwarded to the shared wrapper verbatim, so the adapter adds
-# a guard and changes nothing else; it never reads stdin, so a payload another hook wants is intact.
+# is a bug with no symptom. The argv reaches the shared wrapper unchanged except for the two payload
+# rewrites at the end.
 set -u
 
 [ -n "${AGTERM_SESSION_ID:-}" ] || exit 0
@@ -80,5 +80,42 @@ for _ in 1 2 3 4 5 6 7 8; do
   case "$base" in login | agterm) break ;; esac # reached the pane boundary
   p=$ppid
 done
+
+# the completed->active rewrite drops the caller's flags: a carried --auto-reset would idle the row on the
+# next visit while a background agent still runs. stdin is read only when it is not a terminal, and briefly,
+# so an inherited open pipe never hangs a hook; bash 3.2's read returns 1 at EOF and on timeout alike, so
+# the payload is tested, not the status.
+payload=
+[ -t 0 ] || IFS= read -r -d '' -t 2 payload || true
+
+field() { # key path value, array length for an array, empty when absent or unparseable
+  if [ -x /usr/bin/plutil ]; then
+    printf '%s' "$payload" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null
+  elif command -v jq >/dev/null 2>&1; then
+    printf '%s' "$payload" | jq -r --arg p "$1" \
+      'getpath($p | split(".") | map(tonumber? // .)) | if type == "array" then length else . // empty end' 2>/dev/null
+  fi
+}
+
+running_agent() {
+  n=$(field background_tasks)
+  case "$n" in '' | *[!0-9]*) return 1 ;; esac
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    if [ "$(field "background_tasks.$i.status")" = running ]; then
+      case "$(field "background_tasks.$i.type")" in subagent | workflow) return 0 ;; esac
+    fi
+    i=$((i + 1))
+  done
+  return 1
+}
+
+if [ -n "$payload" ]; then
+  if [ -n "$(field agent_id)" ]; then
+    [ "${1:-}" = active ] && set -- "$@" --if-idle
+  elif [ "${1:-}" = completed ] && [ "$(field hook_event_name)" = Stop ] && running_agent; then
+    set -- active --blink
+  fi
+fi
 
 exec "$status_wrapper" "$@"

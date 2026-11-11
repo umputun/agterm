@@ -307,6 +307,31 @@ struct ServerStreamsTests {
         return viewer
     }
 
+    @Test func aSkippedIfIdleWriteSendsThePresenterNoSound() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        let target = session.id.uuidString
+        _ = await harness.actions.setSessionStatus(target, window: nil, update: ControlSessionStatusUpdate(
+            status: .blocked, blink: nil, autoReset: nil, sound: "Glass"))
+        let played = await offPool { viewer.first { if case .sound = $0 { true } else { false } } }
+        #expect(played != nil)
+
+        _ = await harness.actions.setSessionStatus(target, window: nil, update: ControlSessionStatusUpdate(
+            status: .active, blink: nil, autoReset: nil, sound: "Glass", ifIdle: true))
+        _ = harness.actions.sendNotification(target, window: nil, title: "marker", body: "after the skipped write")
+
+        let next = await offPool {
+            viewer.first { body in
+                switch body {
+                case .sound, .notify: true
+                default: false
+                }
+            }
+        }
+        guard case .notify? = next else { Issue.record("expected the marker notification, got \(String(describing: next))"); return }
+    }
+
     @Test func aPickThePresenterAnswersSettles() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)
@@ -713,7 +738,8 @@ struct ServerStreamsTests {
         let request = await offPool { viewer.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let shown)? = request, let token = shown.token else { Issue.record("no tokened offer"); return }
         #expect(shown.job == job)
-        #expect(session.remoteOverlays.slot(nil)?.owner == harness.store.presentationHub?.presenterGeneration(session: session.id))
+        #expect(session.remoteOverlays.slot(nil)?.owner == harness.store.presentationHub?.presenterGeneration(session: session.id),
+                "job \(String(describing: harness.store.overlayJobs?.job(job)?.state)), presenter \(streams.presentationHub.hasPresenter(session: session.id))")
         #expect(streams.claimJobStream(job).ok == false)
         #expect(streams.claimJobStream(job, token: "other").ok == false)
         #expect(streams.claimJobStream(job, token: token).ok)

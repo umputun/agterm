@@ -206,6 +206,24 @@ struct OverlayRunJobTests {
         #expect(origin.frames() == [.started, .exited(0)])
     }
 
+    #if canImport(Darwin)
+    // regression: a descriptor another thread had not yet marked close-on-exec reached the overlay's program
+    @Test func anInheritableHelperDescriptorDoesNotReachTheProgram() throws {
+        let original = open("/dev/null", O_RDONLY | O_CLOEXEC)
+        try #require(original >= 0)
+        defer { close(original) }
+        let inheritable = fcntl(original, F_DUPFD, 202)
+        try #require(inheritable >= 0)
+        defer { close(inheritable) }
+        let origin = FakeOrigin()
+        origin.serve(reply: Self.okReply, context: context("test ! -e /dev/fd/\(inheritable)"))
+        let runner = OverlayJobRunner(socket: origin.helper)
+
+        #expect(runner.run(try runner.claim("job"), baseEnvironment: Self.base) == 0)
+        #expect(origin.frames() == [.started, .exited(0)])
+    }
+    #endif
+
     @Test func theTerminalTypeComesFromTheHelpersOwnTerminal() throws {
         let origin = FakeOrigin()
         origin.serve(reply: Self.okReply, context: context(#"test "$TERM" = xterm-kitty"#))

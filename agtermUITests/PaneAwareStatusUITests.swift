@@ -422,6 +422,19 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
                        "the owning pane's write should land")
     }
 
+    func testIfIdleStatusAppliesOnlyToAnIdleRow() throws {
+        let sessionA = try activeSessionID()
+        let ifIdleActive = #"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","ifIdle":true}}"#
+
+        try blockPane("blocked", pane: nil, target: sessionA)
+        XCTAssertEqual(try sendCommand(ifIdleActive)["ok"] as? Bool, true)
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked")
+
+        try blockPane("idle", pane: nil, target: sessionA)
+        XCTAssertEqual(try sendCommand(ifIdleActive)["ok"] as? Bool, true)
+        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "active")
+    }
+
     func testControlTypingClearsOnlyItsOwnPanesStatus() throws {
         let sessionA = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,

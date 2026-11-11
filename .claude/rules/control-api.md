@@ -44,7 +44,12 @@ paths:
 - Claude maps prompt/tool work to `active --blink`, Stop to `completed --auto-reset`, and a permission
   request to blocked. `PermissionRequest` fires as the prompt opens.
   `Notification[permission_prompt]` waits about six idle seconds and stays for the sandboxed network
-  prompt, which `PermissionRequest` skips. PostToolUse clears a prior block because there is no answer event.
+  prompt, which `PermissionRequest` skips. The main thread's PostToolUse clears a prior block because there is
+  no answer event; a subagent's cannot, being `--if-idle`.
+  `agterm-claude-status.sh` reads the hook payload (non-terminal stdin, 2-second bound, plutil or jq key paths):
+  an event carrying `agent_id` adds `--if-idle` to `active`, and a Stop whose `background_tasks` lists a
+  running subagent or workflow posts `active --blink` in place of `completed`, dropping the caller's flags
+  so `--auto-reset` cannot idle the row. Anything else, an unreadable payload included, posts argv.
 - Codex maps SessionStart idle; prompt/pre/post tool active; Stop ending `?` blocked, otherwise completed.
   Those first four report nothing for a null `transcript_path`: Codex's ephemeral memory consolidation
   thread fires them but never a user Stop, so they would leave the pane active.
@@ -1309,6 +1314,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 - `session.status` accepts idle/active/completed/blocked, blink, auto-reset, optional sound, `#rrggbb`
   color, fixed shape set, and pane. Build a fresh ephemeral indicator so omitted overrides clear.
+  `ifIdle` makes a write on a non-idle row `StatusWriteResult.skipped`: ok, no change, stamp, event or sound.
+  It is checked before pane precedence, so it never answers a refusal.
 - Validate sound before mutation and target playback. `default`/`beep` beeps; named system/custom sounds
   use cached `NSSound`. Without per-call sound, entering blocked may play configured default once;
   repeated blocked does not. Explicit per-call wins via `AgentStatus.effectiveSound`.

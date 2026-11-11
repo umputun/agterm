@@ -46,6 +46,7 @@ pid_t sh_forkpty_exec(char *const argv[], char *const envp[], const char *cwd,
     int error_pipe[2] = {-1, -1};
     int master_fd = -1;
     struct winsize initial_size = *size;
+    int table_size = getdtablesize();
     if (make_error_pipe(error_pipe) < 0) goto failed;
     pid_t child = forkpty(&master_fd, NULL, NULL, &initial_size);
     if (child < 0) goto failed;
@@ -62,6 +63,13 @@ pid_t sh_forkpty_exec(char *const argv[], char *const envp[], const char *cwd,
         sigset_t none;
         sigemptyset(&none);
         if (sigprocmask(SIG_SETMASK, &none, NULL) < 0) child_failed(error_pipe[1], errno);
+        /* another thread can open a descriptor and mark it close-on-exec only afterwards (Darwin sockets have
+           no SOCK_CLOEXEC); one opened between the two would otherwise outlive the host in the pane. Marking
+           keeps the error pipe open until exec, and the table size comes from the parent. */
+        for (int fd = STDERR_FILENO + 1; fd < table_size; fd++) {
+            int fd_flags = fcntl(fd, F_GETFD);
+            if (fd_flags >= 0 && !(fd_flags & FD_CLOEXEC)) fcntl(fd, F_SETFD, fd_flags | FD_CLOEXEC);
+        }
         if (chdir(cwd) < 0) child_failed(error_pipe[1], errno);
         execve(argv[0], argv, envp);
         child_failed(error_pipe[1], errno);

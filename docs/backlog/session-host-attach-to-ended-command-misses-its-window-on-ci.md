@@ -45,3 +45,16 @@ second outside CI: 4.39 s in, `waitpid` 0, errno 0, `p_stat` SRUN after 3.02 s, 
 log. The PTY held zmx's `session "<name>" created` and screen reset but not the payload's message, the
 shape of run 41899293201. Run alone right after, at load 46, it passed in 1.41 s. So a loaded local
 machine running the full suite can hit it, which is a place to capture stacks of the pane and host.
+
+Run 42929932710 (PR #959 head `c356020b`) failed it a sixth time, 3.94 s in, the shape of run 41899293201:
+`waitpid` 0, errno 0, `p_stat` SRUN after 3.12 s, the PTY holding zmx's `session "<name>" created` and screen
+reset but not the payload's message, empty exec-error pipe, `zmx list` and host log. Eight runs of the suite
+alone and seven full `swift test` runs on two free efficiency cores (`taskpolicy -b` beside two busy loops)
+did not reproduce it.
+
+The stall report now also lists every process carrying the daemon's name or the pane's pid and a one-second
+`sample` call graph of each, so the next failure shows where the attach client and any daemon wait. A forced
+report showed the old created-command daemon still alive in zmx's `Daemon.handleKill`, sleeping its 500 ms
+SIGHUP-to-SIGKILL grace after `zmx list` dropped it, beside the new daemon the pane's attach created under the
+same name. That overlap is normal teardown: zmx unlinks the session socket before that sleep (`loop.zig`, the
+daemon's shutdown defer), so the dying daemon cannot remove its successor's socket.

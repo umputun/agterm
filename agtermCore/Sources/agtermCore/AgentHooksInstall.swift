@@ -443,8 +443,6 @@ public enum AgentHooksInstall {
         }
     }
 
-    // build the command string a Claude hook runs: the quoted CLAUDE ADAPTER path plus the state argument. The
-    // adapter forwards the state to the generic wrapper verbatim once it decides the firing agent owns the pane.
     private static func wrapperCommand(scriptDir: String) -> String {
         shellQuote(claudeWrapperPath(scriptDir: scriptDir)) + " "
     }

@@ -15,7 +15,8 @@ struct ServerScratch {
         for directory in [root, runtime, bin] {
             try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         }
-        try writeExecutable(zmx, "#!/bin/sh\nexit 0\n")
+        // a link, not a script: writeExecutable's subprocess would block the main actor in every @MainActor suite's setup
+        try FileManager.default.createSymbolicLink(atPath: zmx, withDestinationPath: "/usr/bin/true")
     }
 
     var environment: [String: String] { ["XDG_RUNTIME_DIR": runtime, "HOME": root] }

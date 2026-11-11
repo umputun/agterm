@@ -9,6 +9,8 @@ extension Session {
         @Argument(help: "State: idle, active, completed, or blocked.") var state: String
         @Flag(name: .long, help: "Pulse the indicator for attention.") var blink = false
         @Flag(name: .long, help: "Reset the indicator to idle once the session is visited.") var autoReset = false
+        @Flag(name: .long, help: "Apply only while the session's status is idle; otherwise leave it unchanged.")
+        var ifIdle = false
         @Option(name: .long, help: """
             Play a sound when set: 'default' (or 'beep') for the system alert sound, or a system sound \
             name (Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, \
@@ -51,7 +53,8 @@ extension Session {
             ControlRequest(cmd: .sessionStatus, target: target.target,
                            args: options.withWindow(ControlArgs(pane: pane, paneID: paneID, status: state,
                                                                  blink: blink ? true : nil,
-                                                                 autoReset: autoReset ? true : nil, sound: sound,
+                                                                 autoReset: autoReset ? true : nil,
+                                                                 ifIdle: ifIdle ? true : nil, sound: sound,
                                                                  color: color, shape: shape)))
         }
     }

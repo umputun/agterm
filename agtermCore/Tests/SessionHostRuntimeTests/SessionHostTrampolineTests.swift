@@ -128,6 +128,21 @@ struct SessionHostTrampolineTests {
         #expect(fcntl(privateFD, F_GETFD) >= 0)
     }
 
+    // regression: a descriptor another thread had not yet marked close-on-exec reached the pane's program
+    @Test func inheritableHostDescriptorDoesNotReachTheExecutedChild() throws {
+        let original = open("/dev/null", O_RDONLY | O_CLOEXEC)
+        try #require(original >= 0)
+        defer { close(original) }
+        let inheritable = fcntl(original, F_DUPFD, 201)
+        try #require(inheritable >= 0)
+        defer { close(inheritable) }
+        let child = try PTYProcess.spawn(argv: [Self.probe, "fd", String(inheritable)], env: [:], cwd: "/tmp", rows: 24, cols: 80)
+        let result = try collect(child)
+        #expect(result.output == "closed\n")
+        #expect(result.status == 0)
+        #expect(fcntl(inheritable, F_GETFD) == 0)
+    }
+
     @Test func invalidCStringInputsAreRejectedBeforeForking() {
         #expect(throws: PTYProcess.SpawnError.invalidArguments) {
             try PTYProcess.spawn(argv: [], env: [:], cwd: "/tmp", rows: 24, cols: 80)

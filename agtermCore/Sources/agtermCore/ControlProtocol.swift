@@ -435,6 +435,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var blink: Bool?
     /// Whether the `session.status` indicator resets to idle once the session is visited (selected).
     public var autoReset: Bool?
+    /// `ifIdle` applies the `session.status` write only while the session's status is idle; otherwise it is an
+    /// ok no-op.
+    public var ifIdle: Bool?
     /// One-shot sound for `session.status` (caller-driven, not stored on the indicator): `default`/`beep`
     /// = the system alert, anything else a named `NSSound(named:)` sound (e.g. `Glass`, also resolving
     /// custom `~/Library/Sounds`). nil/empty = none; the Settings "Blocked sound" may still play on `blocked`.
@@ -521,7 +524,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 kinds: [String]? = nil, limit: Int? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, sidebarWidth: Double? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
-                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
+                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, ifIdle: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
                 path: String? = nil, color: String? = nil, textColor: String? = nil, shape: String? = nil,
                 opacity: Double? = nil, fit: String? = nil,
@@ -596,6 +599,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
+        self.ifIdle = ifIdle
         self.sound = sound
         self.ratio = ratio
         self.ratioDelta = ratioDelta
