@@ -243,6 +243,20 @@ public enum CommandRestore {
         argv.map(shellQuote).joined(separator: " ")
     }
 
+    /// Quote one word that sh, zsh, tcsh and fish all read alike: an apostrophe or a backslash goes
+    /// outside the quotes, escaped, since fish treats both specially inside single quotes.
+    public static func accountShellQuoted(_ value: String) -> String {
+        var quoted = "'"
+        for character in value {
+            switch character {
+            case "'": quoted += "'\\''"
+            case "\\": quoted += "'\\\\'"
+            default: quoted.append(character)
+            }
+        }
+        return quoted + "'"
+    }
+
     /// POSIX single-quote one argument: wrap in `'…'`, and render each embedded `'` as `'\''`.
     private static func shellQuote(_ arg: String) -> String {
         "'" + arg.replacingOccurrences(of: "'", with: "'\\''") + "'"

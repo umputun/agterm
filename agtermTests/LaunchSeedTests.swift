@@ -26,6 +26,19 @@ final class LaunchSeedTests: XCTestCase {
         XCTAssertEqual(provider.resolve(.left).initialInput, "'npm' 'run' 'dev'\n")
     }
 
+    func testOrdinaryCaptureUsesAccountShellQuoting() {
+        let session = restoredSession()
+        let argv = ["printf", "a\\\\b", "tail\\", "it's", ""]
+        session.pendingForegroundCommand = argv
+        let provider = ordinaryProvider(session: session, pane: .left)
+
+        let seed = provider.resolve(.left)
+
+        XCTAssertNil(seed.command)
+        XCTAssertEqual(seed.initialInput, argv.map(CommandRestore.accountShellQuoted).joined(separator: " ") + "\n")
+        XCTAssertNotEqual(seed.initialInput, CommandRestore.shellQuotedLine(argv) + "\n")
+    }
+
     func testOrdinaryPacesANonEmptyPinAndARestoredDurableCommand() {
         let pinned = restoredSession()
         pinned.pendingRestoreCommand = "tail -f /tmp/log"

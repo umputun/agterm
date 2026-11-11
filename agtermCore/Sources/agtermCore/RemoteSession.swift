@@ -110,22 +110,8 @@ public enum RemoteSession {
         try validate(host: host)
         let tail = operands.isEmpty ? [] : ["--"] + operands
         let chain = cliPathPrefix + " && agtermctl " + CommandRestore.shellQuotedLine(arguments + ["--json"] + tail)
-        let remote = ["/bin/sh", "-c", chain].map(accountShellQuoted).joined(separator: " ")
+        let remote = ["/bin/sh", "-c", chain].map(CommandRestore.accountShellQuoted).joined(separator: " ")
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
-    }
-
-    /// accountShellQuoted quotes `value` as one word that sh, zsh, tcsh and fish all read alike: an apostrophe or
-    /// a backslash goes outside the quotes, escaped, since fish treats both specially inside single quotes.
-    static func accountShellQuoted(_ value: String) -> String {
-        var quoted = "'"
-        for character in value {
-            switch character {
-            case "'": quoted += "'\\''"
-            case "\\": quoted += "'\\\\'"
-            default: quoted.append(character)
-            }
-        }
-        return quoted + "'"
     }
 
     /// sshd's PATH and a profile-less shell miss an installed CLI (exit 127), so `CommandPath`'s Mac directories and

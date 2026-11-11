@@ -3,6 +3,25 @@ import Testing
 @testable import agtermCore
 
 struct CommandRestoreTests {
+    @Test(arguments: ["/bin/sh", "/bin/bash", "/bin/zsh", "/bin/tcsh", "/usr/bin/fish",
+                      "/opt/homebrew/bin/fish", "/usr/local/bin/fish"].filter(FileManager.default.isExecutableFile))
+    func accountShellQuotingPreservesArguments(shell: String) throws {
+        let arguments = ["a\\\\b", "tail\\", "it's", "", "two words", "$HOME; echo unexpected"]
+        let command = (["/usr/bin/printf", "%s\\0"] + arguments)
+            .map(CommandRestore.accountShellQuoted).joined(separator: " ")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-c", command]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0)
+        #expect(data == Data((arguments.joined(separator: "\0") + "\0").utf8))
+    }
+
     /// Builds a synthetic `KERN_PROCARGS2` blob: host-order argc, NUL-terminated exec path, `padding`
     /// extra NULs, then each arg NUL-terminated.
     private func blob(argc: Int32, execPath: String, padding: Int, args: [String]) -> Data {
