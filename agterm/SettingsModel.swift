@@ -101,16 +101,18 @@ final class SettingsModel {
     /// via the CONFIG_CHANGE clone). Read outside only by the UI-test `debug.appearance` probe (bare form).
     private(set) var lastAppliedIsDark = false
 
-    /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme — the
-    /// system→settings half of light/dark sync. No-op unless following with both slots set, or when the
-    /// side is unchanged (`lastAppliedIsDark`). The RAW `theme = light:,dark:` text is IDENTICAL across
-    /// flips, so `writeGhosttyConfig()`/`apply()` would skip the reload — reload DIRECTLY instead; ghostty
-    /// already recorded the scheme (`set_color_scheme`) and re-resolves on `update_config`. Debounced, the
-    /// latest posted side wins. An automatic flip PRESERVES each session's ⌘+/⌘− zoom (unlike File ▸
+    /// appearanceChanged records a macOS appearance flip in libghostty with any theme, for its color
+    /// scheme report. With both sync slots set, also re-feed the config so libghostty re-resolves the
+    /// dual theme — the system→settings half of light/dark sync — unless the side is unchanged
+    /// (`lastAppliedIsDark`). The RAW `theme = light:,dark:` text is IDENTICAL across flips, so
+    /// `writeGhosttyConfig()`/`apply()` would skip the reload — reload DIRECTLY instead; ghostty
+    /// already recorded the scheme (`set_color_scheme`) and re-resolves on `update_config`. Debounced,
+    /// the latest posted side wins. An automatic flip PRESERVES each session's ⌘+/⌘− zoom (unlike File ▸
     /// Reload / `config.reload`) — wiping it on an OS schedule would surprise. A zero-surface reload is
     /// safe: the app-scheme set re-sides the chrome clone. `isDark` is the KVO-delivered side, never
     /// re-read from a view (whose `effectiveAppearance` lags around sleep/wake).
     private func appearanceChanged(isDark: Bool) {
+        GhosttyApp.shared.setColorScheme(isDark: isDark)
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
             guard let self else { return }

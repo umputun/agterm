@@ -37,7 +37,9 @@ paths:
   `followSystemAppearance` (`nil`/false by default). `ghosttyConfigLines()` has no `isDark`; it emits
   either one raw `theme = light:NAME,dark:NAME` conditional or the single theme.
 - `SystemAppearanceObserver` watches app-level `NSApplication.effectiveAppearance` via KVO and posts the
-  settled `isDark`. When following with both slots set and the side differs from the last feed,
+  settled `isDark`. `SettingsModel.appearanceChanged` first records every flip through
+  `GhosttyApp.setColorScheme`, which libghostty's color scheme report (`CSI ?996n`, mode 2031) answers
+  from with any theme. When following with both slots set and the side differs from the last feed,
   `SettingsModel.appearanceChanged` calls `reloadConfigPreservingSessionZoom`, which sets app and surface
   color schemes and directly re-feeds `update_config`. Direct feeding is required because the raw config
   text does not change. It reapplies per-session `font-size`; only explicit reloads clear zoom. Never move
