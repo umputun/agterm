@@ -72,6 +72,31 @@ struct ZmxRunnerTests {
         #expect(throws: (any Error).self) { try runner.list() }
     }
 
+    // a listing read cut short at the collector's grace parsed as no daemons, and the observer ended live sessions
+    @Test func aListingWhoseOutputNeverEndedFails() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        let hold = scratch.root + "/hold"
+        FileManager.default.createFile(atPath: hold, contents: Data())
+        let fake = scratch.bin + "/fake-zmx"
+        try writeExecutable(fake, "#!/bin/sh\n(while [ -e \(hold) ]; do sleep 0.05; done; printf 'name=agterm-a\\tclients=0\\n') &\n")
+        let runner = ProcessZmxRunner(zmxPath: fake, socketDirectory: scratch.runtime, placement: .direct, baseEnvironment: [:])
+
+        #expect(throws: (any Error).self) { try runner.list() }
+    }
+
+    @Test func aScreenWhoseOutputNeverEndedIsNone() throws {
+        let scratch = try ServerScratch()
+        defer { scratch.remove() }
+        let hold = scratch.root + "/hold"
+        FileManager.default.createFile(atPath: hold, contents: Data())
+        let fake = scratch.bin + "/fake-zmx"
+        try writeExecutable(fake, "#!/bin/sh\nprintf '1 80 24 0 0 0\\npartial\\n'\n(while [ -e \(hold) ]; do sleep 0.05; done; echo rest) &\n")
+        let runner = ProcessZmxRunner(zmxPath: fake, socketDirectory: scratch.runtime, placement: .direct, baseEnvironment: [:])
+
+        #expect(runner.screen("agterm-a", all: false) == nil)
+    }
+
     @Test func anEmptyListingIsNoDaemons() throws {
         let scratch = try ServerScratch()
         defer { scratch.remove() }

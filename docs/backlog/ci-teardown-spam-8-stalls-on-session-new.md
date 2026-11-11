@@ -108,3 +108,16 @@ artifact, so none has timings either:
 `keep_stuck_stackshots` now writes the copy without colons, through `sudo -n cat` into a runner-owned file,
 so a failed copy cannot leave a root-only file that fails the upload. The next stall's
 `spindump-stuck-stackshot.*.buf` is the evidence to read, with `spindump -i`.
+
+Run 42906633733 (PR #954 head `e8246f10`, 2026-11-10) stalled at `new-7`: `new-0` to `new-6` answered in 0.1 to
+0.6 s, the app was at 172% CPU and `vm.loadavg` at 20.1. It is the first run to upload a stuck stackshot, and
+`spindump -i` decodes it on a Mac, but every frame is a bare address: the system frames need the runner's
+shared cache (macOS build 25G332) and the app frames need that run's Release binary, neither of which survives
+the job. The decoded report contains one suspended sample with unsymbolicated frames, so the main thread's
+role in the stall remains unresolved. The next capture step is to decode the stackshot on the runner inside
+the step, or to keep the Release binary and its symbols with the evidence for later decoding.
+
+Run 42883406544 (PR #955 head `60e0a272`, 2026-11-10) stalled at `new-5`: `new-0` to `new-4` answered in 0.05 to
+1.08 s. At capture time, with the CLI already defunct, the app was at 171% CPU and the one-minute `vm.loadavg` at
+8.4. The app sample, the CLI sample and the spindump report failed as before. The artifact holds a raw stuck
+stackshot (`spindump-stuck-stackshot.2026-11-10-19-24-29.15324.buf`) and an empty `spindump-06-new-5.txt`.

@@ -615,6 +615,7 @@ final class AppActions {
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         library.renameWindow(id, to: field.stringValue)
+        NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)
     }
 
     /// Delete the frontmost window and its sessions: confirms while it still has sessions (the delete ends
@@ -627,6 +628,7 @@ final class AppActions {
         if sessionCount > 0, !confirmDelete(name: window.name, sessionCount: sessionCount) { return }
         WindowRegistry.shared.close(id)
         library.removeWindow(id)
+        NotificationCenter.default.post(name: .agtermWindowCatalogChanged, object: nil)
     }
 
     // MARK: - Inline rename

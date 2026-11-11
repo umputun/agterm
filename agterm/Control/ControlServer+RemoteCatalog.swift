@@ -110,6 +110,7 @@ extension ControlServer {
                 self.actions.openWindow?(existing)
                 WindowRegistry.shared.close(id)
                 self.library.removeWindow(id)
+                self.refreshWindowCache()
             }
         }
     }

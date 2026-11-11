@@ -60,8 +60,8 @@ extension AppActions {
 
     /// Publish `id` as frontmost after an imperative raise, since `WindowAccessor.reportFrontmost` fires on
     /// `didBecomeKey` and a step from the quick terminal raises with agterm INACTIVE — leaving the id stale,
-    /// so every later step recomputes from the same origin. The control twin omits the post below, its
-    /// dispatch refreshing that cache inline.
+    /// so every later step recomputes from the same origin. The control twin refreshes that cache directly
+    /// instead of posting.
     func takeFrontmost(_ id: WindowInfo.ID) {
         guard library.frontmostWindowID != id else { return }
         library.frontmostWindowID = id

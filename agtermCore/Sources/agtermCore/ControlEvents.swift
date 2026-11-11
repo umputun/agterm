@@ -208,12 +208,12 @@ public final class ControlEventRing {
         guard let cursor else { return .batch(anchor) }
         guard cursor.run == runID else { return .failure(.runChanged, anchor: anchor) }
         guard cursor.after <= currentSequence else { return .failure(.cursorAhead, anchor: anchor) }
-        if let oldest = entries.first?.seq, cursor.after < oldest - 1 {
-            return .failure(.cursorExpired, anchor: anchor)
-        }
+        guard cursor.after < currentSequence, let oldest = entries.first?.seq else { return .batch(anchor) }
+        guard cursor.after >= oldest - 1 else { return .failure(.cursorExpired, anchor: anchor) }
 
+        // subtract the boundary first to avoid UInt64 underflow at after == oldest - 1
         var items: [ControlEvent] = []
-        for event in entries where event.seq > cursor.after {
+        for event in entries[Int(cursor.after - (oldest - 1))...] {
             guard kinds == nil || kinds!.contains(event.kind) else { continue }
             items.append(event)
             if items.count == limit {

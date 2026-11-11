@@ -249,9 +249,12 @@ final class ControlServer {
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
         // a GUI-only sidebar toggle runs no control command, so window.list's cached copy would lag. queue
-        // nil (NOT .main) delivers synchronously on the posting @MainActor thread, so the refresh lands
-        // before the toggle returns; an async .main hop leaves a window for a stale fast-path read.
+        // nil delivers on the posting @MainActor thread, so the refresh lands before the toggle returns.
         NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: nil) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshWindowCache() }
+        }
+        // refresh before a catalog-changing GUI action returns
+        NotificationCenter.default.addObserver(forName: .agtermWindowCatalogChanged, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
         // window.list carries LIVE NSWindow geometry + fullscreen/zoom read at cache-build time, which a user
@@ -578,6 +581,11 @@ final class ControlServer {
          .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
     }
 
+    // these polling reads cannot change window nodes; skip the AppKit rebuild
+    nonisolated private static func leavesWindowsUnchanged(_ cmd: Command) -> Bool {
+        cmd == .eventsRead || cmd == .msgRead
+    }
+
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
     /// read error, the `maxLineBytes` cap, or the `readDeadlineSeconds` overall cap.
     nonisolated private static func readLine(_ conn: Int32) -> Data? {
@@ -645,7 +653,7 @@ final class ControlServer {
     private func dispatch(_ request: ControlRequest) async -> ControlResponse {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
-        defer { refreshWindowCache() }
+        defer { if !Self.leavesWindowsUnchanged(request.cmd) { refreshWindowCache() } }
         // every entry, a page's bridge included, reaches a remote window's server the one way the socket does
         if let route = remoteRoute(request) { return await runRemoteRoute(route) }
         if let refusal = pageCompanionRefusal(request) { return refusal }

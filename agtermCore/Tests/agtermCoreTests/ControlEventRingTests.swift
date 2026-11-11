@@ -61,6 +61,42 @@ struct ControlEventRingTests {
         #expect(expired == .failure(.cursorExpired, anchor: ControlEventBatch(run: runID, next: 3, items: [])))
     }
 
+    @Test func tailCursorReturnsEmptyBatchAtCurrentSequence() {
+        let subject = ring(capacity: 2)
+        #expect(subject.read(cursor: ControlEventCursor(run: runID, after: 0))
+            == .batch(ControlEventBatch(run: runID, next: 0, items: [])))
+
+        subject.append(draft(.status))
+        subject.append(draft(.notify))
+        subject.append(draft(.sessionCreated))
+
+        #expect(subject.read(cursor: ControlEventCursor(run: runID, after: 3))
+            == .batch(ControlEventBatch(run: runID, next: 3, items: [])))
+    }
+
+    @Test func runMismatchAtTailStillFails() {
+        let subject = ring()
+        subject.append(draft(.status))
+        let otherRun = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+
+        let result = subject.read(cursor: ControlEventCursor(run: otherRun, after: 1))
+
+        #expect(result == .failure(.runChanged, anchor: ControlEventBatch(run: runID, next: 1, items: [])))
+    }
+
+    @Test func midRingCursorAfterEvictionStartsAfterCursor() {
+        let subject = ring(capacity: 3)
+        for name in ["one", "two", "three", "four", "five"] { subject.append(draft(.status, name: name)) }
+
+        let all = subject.read(cursor: ControlEventCursor(run: runID, after: 3))
+        let limited = subject.read(cursor: ControlEventCursor(run: runID, after: 2), limit: 2)
+
+        #expect(all.batch?.items.map(\.payload.name) == ["four", "five"])
+        #expect(all.batch?.next == 5)
+        #expect(limited.batch?.items.map(\.payload.name) == ["three", "four"])
+        #expect(limited.batch?.next == 4)
+    }
+
     @Test func readsAreNonDestructiveAndIndependent() {
         let subject = ring()
         subject.append(draft(.status))
