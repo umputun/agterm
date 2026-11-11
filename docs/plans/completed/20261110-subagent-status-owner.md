@@ -169,7 +169,7 @@ Limitations, stated in the docs:
       `background_tasks` (from the `claude-releases` changelog), the upgrade note; `reference.md` `--if-idle`;
       `control-api.md` Claude mapping; `notifications.md` subagent rule
 - [x] full gates once: build, `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] verify every Overview requirement against the tests; move this plan to `docs/plans/completed/`
+- [x] verify every Overview requirement against the tests; move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - Manual check in an isolated Debug instance with the Debug CLI: a Claude session with a background subagent
