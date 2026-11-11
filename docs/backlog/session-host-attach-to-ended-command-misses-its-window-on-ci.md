@@ -58,3 +58,13 @@ report showed the old created-command daemon still alive in zmx's `Daemon.handle
 SIGHUP-to-SIGKILL grace after `zmx list` dropped it, beside the new daemon the pane's attach created under the
 same name. That overlap is normal teardown: zmx unlinks the session socket before that sleep (`loop.zig`, the
 daemon's shutdown defer), so the dying daemon cannot remove its successor's socket.
+
+A local full `swift test --package-path agtermCore` on 2026-11-11 (master `d3be266d` plus a one-line
+`CommandRestore.shellQuote` fix, load 22 to 25 with another worktree's `SessionHostRuntimeTests` running beside it)
+failed it a seventh time, 4.51 s in: `waitpid` 0, errno 0, `p_stat` SRUN after 3.01 s, the PTY holding zmx's
+`session "<name>" created` and screen reset but not the payload's message, empty exec-error pipe, `zmx list` and host
+log. The `ps` snapshot, taken after the last `waitpid` poll and after the report drained the PTY, found the attach
+client exiting (stat `?Es`, command shown only as `(zmx)`) and its child a zombie (`Z`, `<defunct>`); `sample` could
+not examine either. That places the client in exit at the snapshot, not where it spent the three seconds.
+[Inference] Exit-time controlling-terminal cleanup waiting on an unread PTY is one candidate; reading the master
+continuously during the wait would test it.
