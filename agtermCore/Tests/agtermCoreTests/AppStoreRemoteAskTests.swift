@@ -509,7 +509,8 @@ private let remoteCheckboxesOther = AskChoiceForm(choices: [ControlAskChoice(id:
 private let remoteCheckboxes = AskChoiceForm(choices: [ControlAskChoice(id: "a", label: "A"), ControlAskChoice(id: "b", label: "B")],
                                              multiple: true)
 
-struct RemoteFormAnswer: Sendable {
+// a 65 KB argument line made CI's log drop every later line of the run, failures included
+struct RemoteFormAnswer: Sendable, CustomTestStringConvertible {
     let form: AskForm
     let button: String?
     let text: String?
@@ -520,6 +521,11 @@ struct RemoteFormAnswer: Sendable {
         self.button = button
         self.text = text
         self.selected = selected
+    }
+
+    var testDescription: String {
+        let shown = text.map { $0.count > 80 ? "\($0.count) characters" : $0.debugDescription } ?? "nil"
+        return "form: \(form), button: \(button ?? "nil"), text: \(shown), selected: \(selected.map { "\($0)" } ?? "nil")"
     }
 
     func frame(id: String, owner: Int) -> PresentationAskAnswer {
