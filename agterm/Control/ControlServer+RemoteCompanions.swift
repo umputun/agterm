@@ -256,9 +256,9 @@ extension ControlServer {
     /// attachedParentRows are the top-level rows in `store` showing the origin parent of companion `remote`.
     func attachedParentRows(of remote: ControlRemoteSession, tree: ControlRemoteTree, host: String,
                             in store: AppStore) -> [Session] {
-        store.workspaces.flatMap(\.sessions).filter { row in
-            guard row.parentID == nil, row.remoteHost == host, let binding = row.remotePresentation?.binding else { return false }
-            return binding.remoteSessionID == remote.parent && binding.origin?.endpoint == tree.endpoint
+        guard let parent = remote.parent else { return [] }
+        return store.workspaces.flatMap(\.sessions).filter {
+            $0.parentID == nil && $0.showsOriginSession(parent, host: host, endpoint: tree.endpoint)
         }
     }
 

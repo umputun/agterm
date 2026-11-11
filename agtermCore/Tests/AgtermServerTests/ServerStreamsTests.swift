@@ -1200,7 +1200,8 @@ struct ServerStreamsTests {
         #expect(page.source == .text(path: path, line: 3))
     }
 
-    @Test(arguments: [("./gone.md", RemoteLinkRefusal.notFound), ("./gone.bin", .notFound), ("./data.bin", .notAPage)])
+    @Test(arguments: [("./gone.md", RemoteLinkRefusal.notFound), ("./gone.bin", .notFound), ("./data.bin", .notAPage),
+                      ("agterm://session/0F5C1E2A-3B4D-4E6F-8A9B-0C1D2E3F4A5B", .notAPage)])
     func aClickThatNamesNoPageIsRefused(raw: String, reason: RemoteLinkRefusal) async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)

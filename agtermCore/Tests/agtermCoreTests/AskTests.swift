@@ -560,7 +560,8 @@ struct AskTests {
     }
 }
 
-struct OtherAnswer: Sendable {
+// a 65 KB argument line made CI's log drop every later line of the run, failures included
+struct OtherAnswer: Sendable, CustomTestStringConvertible {
     let multiple: Bool
     let selected: [String]
     let text: String?
@@ -571,5 +572,10 @@ struct OtherAnswer: Sendable {
         self.selected = selected
         self.text = text
         self.accepted = accepted
+    }
+
+    var testDescription: String {
+        let shown = text.map { $0.count > 80 ? "\($0.count) characters" : $0.debugDescription } ?? "nil"
+        return "multiple: \(multiple), selected: \(selected), text: \(shown), accepted: \(accepted)"
     }
 }

@@ -120,15 +120,17 @@ public enum LinkPolicy {
         /// forwardRemote hands a path clicked in a pane attached from another Mac, as typed, to that Mac, which
         /// resolves and opens it; this Mac never reads or reveals it.
         case forwardRemote(String, session: UUID)
+        /// selectSession selects the row a session link names, read in the clicked pane's namespace.
+        case selectSession(UUID)
         case ignore
 
         /// localFile is the file a local route names, which a reveal chord selects in Finder instead; nil for a
-        /// web route, a forwarded one and an ignored link.
+        /// web route, a forwarded one, a session link and an ignored link.
         public var localFile: URL? {
             switch self {
             case .image(let url, _), .markdown(let url, _, _), .document(let url, _, _), .reveal(let url): return url
             case .text(let link): return link.url
-            case .browser, .overlay, .forwardRemote, .ignore: return nil
+            case .browser, .overlay, .forwardRemote, .selectSession, .ignore: return nil
             }
         }
     }
@@ -385,7 +387,8 @@ public enum LinkPolicy {
         clickIntent(modifiers: modifiers, mode: mode, origin: origin, mouseCaptured: mouseCaptured) == .browser
     }
 
-    /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
+    /// Maps a raw link to its route: a session link (`sessionLink`) decides first, then remote forwarding, then
+    /// `disposition`. A web link the overlay can show
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
     /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
     /// markdown or HTML file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
@@ -393,8 +396,22 @@ public enum LinkPolicy {
     /// local file. Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
                              localHosts: Set<String> = localHostNames, home: String = NSHomeDirectory()) -> Route {
+        if let id = sessionLink(raw) {
+            switch origin {
+            case .pane, .remotePane, .scratch: return .selectSession(id)
+            case .hud, .programOverlay, .quick: return .ignore
+            }
+        }
         if case .remotePane(let session) = origin, forwardsRemotely(raw) { return .forwardRemote(raw, session: session) }
         return route(disposition(for: raw, localHosts: localHosts, home: home), mode: mode, origin: origin)
+    }
+
+    private static let sessionLinkPrefix = "agterm://session/"
+
+    /// sessionLink accepts only the raw session authority and a hyphenated UUID, without URL normalization.
+    static func sessionLink(_ raw: String) -> UUID? {
+        guard raw.count == sessionLinkPrefix.count + 36, raw.prefix(sessionLinkPrefix.count).lowercased() == sessionLinkPrefix else { return nil } // 36: a hyphenated UUID
+        return UUID(uuidString: String(raw.dropFirst(sessionLinkPrefix.count)))
     }
 
     /// Maps a location `locations` offered, and the caller found on disk, to its route by the same origin rules.

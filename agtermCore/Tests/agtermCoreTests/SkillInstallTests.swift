@@ -134,6 +134,22 @@ struct SkillInstallTests {
         #expect(t == [.init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm")])
     }
 
+    @Test func customCodexRootLeavesClaudeAndLegacyHelperUnchanged() {
+        let custom = SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true, codexHome: "/custom/codex home")
+        #expect(custom == [
+            .init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm"),
+            .init(agent: "Codex", skillDirectory: "/custom/codex home/skills/agterm"),
+        ])
+        #expect(SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true)
+                == SkillInstall.installTargets(home: "/h", claudeExists: true, codexExists: true, codexHome: "/h/.codex"))
+        #expect(SkillInstall.skillDirectory(home: "/h", base: ".codex") == "/h/.codex/skills/agterm")
+    }
+
+    @Test func missingCustomCodexDoesNotSelectTheDefaultRoot() {
+        #expect(SkillInstall.installTargets(home: "/h", claudeExists: false, codexExists: false, codexHome: "/missing")
+                == [.init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm")])
+    }
+
     @Test func mayOverwriteWhenDirectoryAbsent() {
         #expect(SkillInstall.mayOverwrite(directoryExists: false, existingSKILL: nil) == true)
     }
@@ -166,7 +182,8 @@ struct SkillInstallTests {
         }
         let source = repository.appendingPathComponent("plugins/agterm/skills/agterm")
 
-        let report = try SkillInstall.install(source: source, home: home)
+        let install: (URL, URL) throws -> SkillInstall.Report = SkillInstall.install(source:home:)
+        let report = try install(source, home)
 
         #expect(report.installed.map(\.agent) == ["Claude Code", "Codex"])
         #expect(report.skipped.isEmpty)
@@ -174,7 +191,9 @@ struct SkillInstallTests {
         for target in report.installed {
             #expect(FileManager.default.fileExists(atPath: target.skillDirectory + "/SKILL.md"))
         }
-        #expect(try SkillInstall.install(source: source, home: home).freshSkillsDir == false)
+        let repeated = try SkillInstall.install(source: source, home: home, codexHome: nil)
+        #expect(repeated.installed == report.installed)
+        #expect(repeated.freshSkillsDir == false)
     }
 
     @Test func installLeavesAForeignSkillAlone() throws {

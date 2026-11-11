@@ -26,6 +26,7 @@ struct LinkOpener {
     var document: (URL, UUID, Int?, @escaping @MainActor (Bool) -> Void) -> Void = { _, _, _, done in done(false) }
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
+    var selectSession: (UUID, LinkPolicy.ClickOrigin, UUID?) -> Void = { _, _, _ in }
     /// exists answers for one candidate `LinkPolicy.locations` offered; it runs off the main actor.
     var exists: @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     /// forward hands a path clicked in a remote pane to the Mac it names a file on; nil when sent, else why not.
@@ -34,6 +35,7 @@ struct LinkOpener {
     var refuse: (UUID, RemoteLinkRefusal) -> Void = { _, _ in NSSound.beep() }
 
     private struct Click {
+        let origin: LinkPolicy.ClickOrigin
         let pane: UUID?
         let mode: LinkOpenMode
         let reveals: Bool
@@ -45,7 +47,7 @@ struct LinkOpener {
     /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
     /// leaves a web link to its web route.
     func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent) {
-        let click = Click(pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(), reveals: intent == .reveal)
+        let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(), reveals: intent == .reveal)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
         guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists
@@ -60,6 +62,9 @@ struct LinkOpener {
     private func carryOut(_ route: LinkPolicy.Route, _ click: Click) {
         if click.reveals, let file = route.localFile { return reveal(file) }
         switch route {
+        case .selectSession(let id):
+            guard !click.reveals else { return }
+            selectSession(id, click.origin, click.pane)
         case .browser(let url): open(url)
         case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
         case .image(let url, let session):

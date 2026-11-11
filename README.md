@@ -80,17 +80,23 @@ The Homebrew cask already installs the `agtermctl` command-line tool; from the D
 
 The skill is also published as a plugin from this repository, which puts it wherever your agent looks for one:
 
+### Claude Code
+
 ```sh
-# Claude Code
 claude plugin marketplace add umputun/agterm
 claude plugin install agterm@agterm
+```
 
-# Codex
+### Codex
+
+```sh
 codex plugin marketplace add umputun/agterm
 codex plugin add agterm@agterm
 ```
 
 Install the skill by one route or the other, never both: two copies leave it undefined which one the agent picks.
+
+The Help menu installers honor an exported `CODEX_HOME`; [Agent status](https://agterm.com/docs#status) has the details.
 
 ## Scripting agterm
 

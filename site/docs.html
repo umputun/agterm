@@ -3584,6 +3584,19 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               another host is ignored rather than revealed, so a stray link can't trigger a Finder network mount.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A ⌘-click on an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://session/&lt;id&gt;</span>
+              link in a pane, split or scratch selects that session and raises its window, with no confirmation.
+              Print one with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"</span>,
+              or use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[label](agterm://session/&lt;id&gt;)</span>
+              in Claude Code markdown, which Claude Code emits as OSC 8. In a session attached from another Mac,
+              the id is that Mac's and selects the one row here showing it; the click never attaches anything or acts there.
+              Nothing happens for an unknown or closed session, when the destination window is zoomed, has the dashboard
+              open or a picker pending, for any other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://</span>
+              form, on a ⌘⌥-click, or for a link in a HUD, the quick terminal or a program overlay.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Link detection follows the program in the pane. While one has mouse reporting on —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tmux</span> with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse on</span>, or stock
@@ -4026,6 +4039,17 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               config is recoverable.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Both the skill and hooks installers read exported
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span> from your interactive
+              login shell. A nonempty value selects the Codex directory, with relative paths resolved against
+              that shell's working directory. Unset or empty values, shell-launch failures, malformed output,
+              and timeouts fall back to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex</span>. OpenCode being absent does not affect Codex
+              discovery. The selected directory must already exist; a missing custom directory is skipped
+              without installing into
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Six Codex lifecycle events run a dedicated adapter.
               A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
               active and changes the row to blocked only after a real approval or structured question appears in that pane.
@@ -4113,6 +4137,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             >
               Add Codex hooks by hand
             </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              When you use
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span>, edit
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&lt;CODEX_HOME&gt;/config.toml</span> instead of
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>.
+            </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
               The installer never rewrites a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>

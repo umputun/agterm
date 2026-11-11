@@ -4,18 +4,18 @@ description: >
   Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
   manage sessions, companions and workspaces; split panes; toggle the scratch; run, hide or show overlays;
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
-  page session row;
+  page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code; type
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
-  Covers window/workspace/session addressing, AGTERM_* variables,
-  attaching another Mac's sessions, agterm-server windows, cookbook recipes, installed version, upgrades, diagnosing
+  Covers window/workspace/session addressing, session links, AGTERM_* variables,
+  attaching another Mac's sessions, agterm-server windows, cookbook recipes, version and upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
-  split the pane, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
+  split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
@@ -891,6 +891,21 @@ Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file, since a
 with no file list. Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
 The page steps between changes with `]`/`[` or `agtermctl session overlay changes --next|--prev`, which prints
 `N of M`; read back `text.changes` (`{count, current}`).
+
+## Linking to a session
+
+Print an OSC 8 link to this session, or use `[label](agterm://session/<id>)` in Claude Code markdown,
+which Claude Code emits as OSC 8:
+
+```bash
+printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"
+```
+
+A ⌘-click in a pane, split or scratch selects the session and raises its window without confirmation or
+revealing an attention pane; in a session attached from another Mac, the id is that Mac's and selects the
+one row here showing it, never attaching anything or acting there.
+Unknown or closed sessions, a destination window with zoom, dashboard or a pending picker, other `agterm://`
+forms, ⌘⌥-clicks and links in a HUD, quick terminal or program overlay do nothing.
 
 ## Displaying an image inline
 
