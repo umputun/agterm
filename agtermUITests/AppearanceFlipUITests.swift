@@ -102,6 +102,52 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         XCTAssertEqual(light, "Builtin Light", "a value browsed into the off-screen light slot must not commit")
     }
 
+    // #939: one theme for both appearances made the color scheme query answer light on a dark Mac.
+    func testColorSchemeQueryReportsDarkWithOneThemeForBothAppearances() throws {
+        let flipped = try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)
+        XCTAssertEqual((flipped["result"] as? [String: Any])?["text"] as? String, "dark")
+        let synced = try sendCommand(#"{"cmd":"theme.set","args":{"light":"Builtin Dark","dark":"Builtin Dark"}}"#)
+        XCTAssertEqual(synced["ok"] as? Bool, true, "theme.set should succeed: \(synced)")
+        XCTAssertTrue(poll(until: appliedAppearance() == "dark", timeout: 8), "the dark side must be applied")
+
+        let report = stateDir.appendingPathComponent("scheme-report")
+        try startSchemeProbe(writingTo: report, sequence: "\u{1b}[?996n", bytes: 9)
+        XCTAssertTrue(poll(until: contents(of: report) == "\u{1b}[?997;1n", timeout: 10),
+                      "expected the dark report, got \(contents(of: report).debugDescription)")
+    }
+
+    func testColorSchemeSubscriptionReportsAppearanceFlipWithPlainTheme() throws {
+        let start = try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"light"}}"#)
+        XCTAssertEqual((start["result"] as? [String: Any])?["text"] as? String, "light")
+        let plain = try sendCommand(#"{"cmd":"theme.set","args":{"name":"Builtin Dark"}}"#)
+        XCTAssertEqual(plain["ok"] as? Bool, true, "theme.set should succeed: \(plain)")
+
+        let reports = stateDir.appendingPathComponent("scheme-reports")
+        try startSchemeProbe(writingTo: reports, sequence: "\u{1b}[?2031h\u{1b}[?996n", bytes: 200)
+        XCTAssertTrue(poll(until: contents(of: reports) == "\u{1b}[?997;2n", timeout: 10),
+                      "expected the light report first, got \(contents(of: reports).debugDescription)")
+
+        let flipped = try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)
+        XCTAssertEqual((flipped["result"] as? [String: Any])?["text"] as? String, "dark")
+        XCTAssertTrue(poll(until: contents(of: reports).hasSuffix("\u{1b}[?997;1n"), timeout: 10),
+                      "expected a dark report after the flip, got \(contents(of: reports).debugDescription)")
+    }
+
+    private func startSchemeProbe(writingTo file: URL, sequence: String, bytes: Int) throws {
+        let script = "stty -icanon -echo min 1; printf '\(sequence)'; dd bs=1 count=\(bytes) of=\(file.path) 2>/dev/null"
+        let created = try sendControlCommand("session.new", args: ["command": "/bin/sh -c \"\(script)\""])
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command should succeed: \(created)")
+    }
+
+    private func contents(of file: URL) -> String {
+        (try? String(contentsOf: file, encoding: .utf8)) ?? ""
+    }
+
+    private func appliedAppearance() -> String? {
+        let response = try? sendCommand(#"{"cmd":"debug.appearance"}"#)
+        return (response?["result"] as? [String: Any])?["text"] as? String
+    }
+
     /// Open the live-preview theme picker via View ▸ Select Theme…; it opens on the next runloop tick, so
     /// wait for the field.
     private func openThemePicker() {

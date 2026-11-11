@@ -5,7 +5,7 @@ added: 2026-09-14
 ---
 # remove surface free backport after a ghostty pin bump
 
-The patch in `scripts/ghostty-patches/` keeps the app mailbox draining during surface teardown, including
+Patch `0001` in `scripts/ghostty-patches/` keeps the app mailbox draining during surface teardown, including
 until in-flight frame callbacks finish. Remove it when `GHOSTTY_REV` includes an equivalent upstream fix;
 [ghostty PR 14444](https://github.com/ghostty-org/ghostty/pull/14444) must also keep its drain active
 through `renderer.deinit()` to qualify. The patch README describes the required setup and cache cleanup.

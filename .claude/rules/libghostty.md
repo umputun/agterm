@@ -69,8 +69,8 @@ paths:
   foreground, and the theme foreground for both when neither is set.
   Tint borderless New Session through `.tint`; its label ignores foreground style.
 - Pass `theme = light:X,dark:Y` raw. The pinned libghostty supports conditional themes, but
-  `set_color_scheme` only changes conditional state and emits an unhandled soft reload. agterm must set
-  app and surface schemes, then call `update_config`.
+  `set_color_scheme` does not re-resolve the theme: it changes conditional state and emits an
+  unhandled soft reload. agterm must set app and surface schemes, then call `update_config`.
 - A dark launch must re-side the app config through `update_config` BEFORE the first surface exists;
   `GhosttyApp.syncLaunchColorScheme`, called from `applicationDidFinishLaunching`, owns that.
   `Surface.init` rebuilds a surface config whose conditional state differs from the app's, keeps only

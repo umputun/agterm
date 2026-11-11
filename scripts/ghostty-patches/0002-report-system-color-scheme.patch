@@ -1,0 +1,157 @@
+--- a/src/App.zig
++++ b/src/App.zig
+@@ -69,6 +69,11 @@
+ last_notification_time: ?std.Io.Timestamp = null,
+ last_notification_digest: u64 = 0,
+ 
++/// The current system color scheme. This is kept separate from conditional
++/// configuration state so mode 2031 remains correct for non-conditional
++/// themes.
++system_color_scheme: std.atomic.Value(apprt.ColorScheme) = .init(.light),
++
+ /// The conditional state of the configuration. See the equivalent field
+ /// in the Surface struct for more information. In this case, this applies
+ /// to the app-level config and as a default for new surfaces.
+@@ -460,6 +465,11 @@
+     rt_app: *apprt.App,
+     scheme: apprt.ColorScheme,
+ ) !void {
++    // Cache the system color scheme and notify every surface when it changes.
++    if (self.system_color_scheme.swap(scheme, .monotonic) != scheme) {
++        try self.performAllAction(rt_app, .system_color_scheme_changed);
++    }
++
+     const new_scheme: configpkg.ConditionalState.Theme = switch (scheme) {
+         .light => .light,
+         .dark => .dark,
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -712,6 +712,7 @@
+             .size = size,
+             .full_config = config,
+             .config = io_config,
++            .system_color_scheme = &app.system_color_scheme,
+             .backend = .{ .exec = io_exec },
+             .mailbox = io_mailbox,
+             .renderer_state = &self.renderer_state,
+@@ -4888,9 +4889,6 @@
+     // Setup our conditional state which has the current color theme.
+     self.config_conditional_state.theme = new_scheme;
+     self.notifyConfigConditionalState();
+-
+-    // If mode 2031 is on, then we report the change live.
+-    self.queueIo(.{ .color_scheme_report = .{ .force = false } }, .unlocked);
+ }
+ 
+ pub fn posToViewport(self: Surface, xpos: f64, ypos: f64) terminal.point.Coordinate {
+@@ -4977,6 +4975,14 @@
+     }
+ 
+     switch (action.scoped(.surface).?) {
++        .system_color_scheme_changed => {
++            // Termio suppresses this report unless mode 2031 is enabled.
++            self.queueIo(
++                .{ .color_scheme_report = .{ .force = false } },
++                .unlocked,
++            );
++        },
++
+         .csi, .esc => |data| {
+             // We need to send the CSI/ESC sequence as a single write request.
+             // If you split it across two then the shell can interpret it
+--- a/src/apprt/structs.zig
++++ b/src/apprt/structs.zig
+@@ -224,7 +224,7 @@
+ };
+ 
+ /// The color scheme in use (light vs dark).
+-pub const ColorScheme = enum(u2) {
++pub const ColorScheme = enum(u8) {
+     light = 0,
+     dark = 1,
+ };
+--- a/src/input/Binding.zig
++++ b/src/input/Binding.zig
+@@ -962,6 +962,9 @@
+     /// this will report performable as false.
+     deactivate_all_key_tables,
+ 
++    /// Notify every terminal that the system color scheme changed.
++    system_color_scheme_changed,
++
+     /// Quit Ghostty.
+     quit,
+ 
+@@ -1388,6 +1391,7 @@
+             .start_search,
+             .end_search,
+             .reset,
++            .system_color_scheme_changed,
+             .copy_to_clipboard,
+             .copy_url_to_clipboard,
+             .copy_title_to_clipboard,
+--- a/src/input/command.zig
++++ b/src/input/command.zig
+@@ -748,6 +748,7 @@
+         => comptime &.{},
+ 
+         // No commands for obvious reasons
++        .system_color_scheme_changed,
+         .ignore,
+         .unbind,
+         => comptime &.{},
+--- a/src/termio/Options.zig
++++ b/src/termio/Options.zig
+@@ -1,5 +1,6 @@
+ //! The options that are used to configure a terminal IO implementation.
+ 
++const std = @import("std");
+ const xev = @import("../global.zig").xev;
+ const apprt = @import("../apprt.zig");
+ const renderer = @import("../renderer.zig");
+@@ -17,6 +18,9 @@
+ /// The derived configuration for this termio implementation.
+ config: termio.Termio.DerivedConfig,
+ 
++/// The system color scheme used for mode 2031 reports.
++system_color_scheme: *const std.atomic.Value(apprt.ColorScheme),
++
+ /// The backend for termio that implements where reads/writes are sourced.
+ backend: termio.Backend,
+ 
+--- a/src/termio/Termio.zig
++++ b/src/termio/Termio.zig
+@@ -37,6 +37,9 @@
+ /// The derived configuration for this termio implementation.
+ config: DerivedConfig,
+ 
++/// The system color scheme used for mode 2031 reports.
++system_color_scheme: *const std.atomic.Value(apprt.ColorScheme),
++
+ /// The terminal emulator internal state. This is the abstract "terminal"
+ /// that manages input, grid updating, etc. and is renderer-agnostic. It
+ /// just stores internal state about a grid.
+@@ -336,6 +339,7 @@
+         .alloc = alloc,
+         .terminal = term,
+         .config = opts.config,
++        .system_color_scheme = opts.system_color_scheme,
+         .renderer_state = opts.renderer_state,
+         .renderer_wakeup = opts.renderer_wakeup,
+         .renderer_mailbox = opts.renderer_mailbox,
+@@ -786,10 +790,11 @@
+     if (!force and !self.renderer_state.terminal.modes.get(.report_color_scheme)) {
+         return;
+     }
+-    const scheme: terminalpkg.device_status.ColorScheme = switch (self.config.conditional_state.theme) {
+-        .light => .light,
+-        .dark => .dark,
+-    };
++    const scheme: terminalpkg.device_status.ColorScheme =
++        switch (self.system_color_scheme.load(.monotonic)) {
++            .light => .light,
++            .dark => .dark,
++        };
+ 
+     var buf: [terminalpkg.device_status.max_color_scheme_report_encode_size]u8 = undefined;
+     var writer: std.Io.Writer = .fixed(&buf);

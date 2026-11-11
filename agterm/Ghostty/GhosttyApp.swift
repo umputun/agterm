@@ -250,6 +250,13 @@ final class GhosttyApp {
         if let derived = callbacks.takeDerivedAppConfig() { ghostty_config_free(derived) }
     }
 
+    /// setColorScheme records the system appearance in libghostty, which answers `CSI ?996n` and
+    /// mode 2031 from it.
+    func setColorScheme(isDark: Bool) {
+        guard let app else { return }
+        ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+    }
+
     /// Set the window translucency the chrome applies. `SettingsModel` calls this and every setter below at
     /// launch and on each change; the window re-syncs on `.agtermAppearanceChanged`.
     func setWindowTranslucency(opacity: Double, blurRadius: Int, ignoreReduceTransparency: Bool) {
