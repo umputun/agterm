@@ -2608,7 +2608,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
                 ># create a workspace, capture its id, open a session in it</span
               ><br /><span style="color: #6d82f3">ws</span>=$(agtermctl workspace new work)<br />agtermctl session new --workspace
               <span style="color: #f2b45c">"$ws"</span> --cwd ~/src/agterm<br /><br /><span style="color: #6b727a"
-                ># run a command as the session's process (argv-style; wrap in sh -c for shell syntax)</span
+                ># run a command as the session's process (a ; or &amp;&amp; list runs only its first command; wrap it in sh -c)</span
               ><br />agtermctl session new --command <span style="color: #f2b45c">"ssh user@host"</span><br />agtermctl session new --command
               <span style="color: #f2b45c">"zsh -lc 'make test'"</span> --wait
               <span style="color: #6b727a">&nbsp;&nbsp;# hold open after the command exits (press any key to close); needs --command</span><br />agtermctl session new

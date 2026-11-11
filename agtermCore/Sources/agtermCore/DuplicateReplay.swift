@@ -41,7 +41,7 @@ public enum DuplicateReplay {
     public struct Refusal: Error, Equatable, Sendable {
         public enum Reason: Equatable, Sendable {
             case replay(RestartReplay.Refusal)
-            /// backslash: the creation command reaches libghostty's argv splitter outside Live and fish's eval in
+            /// backslash: the creation command reaches libghostty's `bash -c` outside Live and fish's eval in
             /// Live, which read a backslash inside single quotes differently.
             case backslash
             case noExecutable

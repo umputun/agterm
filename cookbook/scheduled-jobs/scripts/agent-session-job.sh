@@ -45,8 +45,8 @@ for id in $(printf '%s' "$windows" | "$JQ" -r '.result.windows[] | select(.open)
     fi
 done
 
-# --command is split into argv by libghostty, not by a shell, so the quoted agent line goes into a
-# one-shot launcher that /bin/sh parses and the session command stays a plain two-word line
+# libghostty runs --command as `exec <line>` under bash, so the agent line with its quoted prompt goes
+# into a one-shot launcher that /bin/sh parses and the session command stays a plain two-word line
 launcher=$(mktemp "${TMPDIR:-/tmp}/agent-session-job.XXXXXX") || die "cannot create a launcher file"
 {
     echo "rm -f \"\$0\""

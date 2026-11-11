@@ -371,10 +371,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   - `--after`/`--before` anchor, which supplies workspace and insertion index.
   Reject both anchors, placement plus workspace, name plus ID, create without name, and missing name without
   create. Insert indices are clamped.
-- `--command` becomes raw libghostty `config.command`, not shell input. Ghostty quote-splits into argv and
-  executes directly, so operators, expansion, redirection, and globs require an explicit `sh -c` or
-  `zsh -lc`. GUI launch PATH lacks `/opt/homebrew/bin`; missing binaries exit 127, so use absolute paths
-  or a login shell.
+- `--command` becomes raw libghostty `config.command`, which on macOS runs under `login` as
+  `/bin/bash --noprofile --norc -c "exec -l <command>"` (`Exec.zig` at `GHOSTTY_REV`). Quotes, expansion,
+  redirection, pipes, and globs work, but `exec` replaces bash with the first command, so anything after
+  `;` or `&&` never runs: a list needs an explicit `sh -c` or `zsh -lc`. GUI launch PATH lacks
+  `/opt/homebrew/bin`; missing binaries exit 127, so use absolute paths or a login shell.
 - `initialCommand` persists and reruns only when restored-command support is enabled; fresh sessions always
   run it. Captured foreground takes precedence. Promoting a split survivor clears the exited pane's initial
   command.
@@ -451,7 +452,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   under the bare name), or its directory, launched unresolved, since the image alone turns `vimdiff` into plain vim.
   macOS withholds a platform binary's environment, so with no PATH read the system directories are searched and
   the image is the fallback. A bare name whose image is gone, as after an upgrade removed it, starts its own PATH's
-  first executable entry, and with no PATH read it is refused. Otherwise nothing executable refuses the pane; the restart checks see the path and image. An argument with a backslash is refused: libghostty's split and fish's Live
+  first executable entry, and with no PATH read it is refused. Otherwise nothing executable refuses the pane; the restart checks see the path and image. An argument with a backslash is refused: libghostty's bash and fish's Live
   `eval` read it differently. Only a `foregroundShell` becomes a plain shell; a daemon-leader shell program is refused.
 - `session.companion.convert` is its own wire command for the same older-app reason, with a CLI too-old text of its
   own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
