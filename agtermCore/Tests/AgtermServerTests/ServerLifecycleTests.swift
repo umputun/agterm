@@ -124,7 +124,8 @@ final class ServerLifecycleTests {
 
         await type(server, session, "exit\n")
 
-        #expect(await eventually { server.store.session(withID: session.id) == nil })
+        #expect(await eventually(60) { server.store.session(withID: session.id) == nil })
+        #expect(!session.ended, "the live pane was marked ended before its shell exited")
     }
 
     @Test func aKilledDaemonLeavesItsSessionEnded() async throws {

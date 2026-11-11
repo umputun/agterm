@@ -1,5 +1,5 @@
 diff --git a/src/App.zig b/src/App.zig
-index 840dac6ec..52c0c98bc 100644
+index 840dac6ec..b932ed527 100644
 --- a/src/App.zig
 +++ b/src/App.zig
 @@ -50,6 +50,12 @@ focused_surface: ?*Surface = null,
@@ -215,7 +215,7 @@ index 840dac6ec..52c0c98bc 100644
  // Wasm API.
  pub const Wasm = if (!builtin.target.isWasm()) struct {} else struct {
      const wasm = @import("os/wasm.zig");
-@@ -629,3 +755,250 @@ pub const Wasm = if (!builtin.target.isWasm()) struct {} else struct {
+@@ -629,3 +755,260 @@ pub const Wasm = if (!builtin.target.isWasm()) struct {} else struct {
      //     }
      // }
  };
@@ -305,6 +305,8 @@ index 840dac6ec..52c0c98bc 100644
 +}
 +
 +test "teardown finishes while another surface continues producing" {
++    if (builtin.single_threaded) return error.SkipZigTest;
++    const io = global.io();
 +    var app = teardownTestApp();
 +    defer app.deferred.deinit(app.alloc);
 +    var rt_storage: u8 align(@alignOf(apprt.Surface)) = 0;
@@ -322,6 +324,14 @@ index 840dac6ec..52c0c98bc 100644
 +    const producer = try std.Thread.spawn(.{}, Producer.run, .{ &app.mailbox, &stopping });
 +    defer producer.join();
 +    defer stopping.store(true, .release);
++    const capacity = @typeInfo(@FieldType(Mailbox.Queue, "data")).array.len;
++    while (true) {
++        app.mailbox.mutex.lockUncancelable(io);
++        const full = app.mailbox.len == capacity;
++        app.mailbox.mutex.unlock(io);
++        if (full) break;
++        try std.Io.sleep(io, .fromMilliseconds(1), .awake);
++    }
 +    var drain: TeardownDrain = .{ .app = &app, .surface = &closing };
 +    drain.start();
 +    drain.finish();

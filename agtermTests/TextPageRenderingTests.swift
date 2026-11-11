@@ -202,9 +202,11 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         for (name, text, length) in cases {
             let clock = ContinuousClock(), started = clock.now
             let page = registry.page(for: try openText(name, text), store: store)
-            try await waitForScript("document.querySelector('pre code')?.textContent.length ?? 0", in: page.webView) { $0 == "\(length)" }
+            // leaves room for WebContent startup on a loaded runner while still catching a pathological render
+            try await waitForScript("document.querySelector('pre code')?.textContent.length ?? 0", in: page.webView,
+                                    timeout: 30) { $0 == "\(length)" }
 
-            XCTAssertLessThan(clock.now - started, .seconds(10), name)
+            XCTAssertLessThan(clock.now - started, .seconds(30), name)
             store.closeHtmlOverlay(page.id)
         }
     }

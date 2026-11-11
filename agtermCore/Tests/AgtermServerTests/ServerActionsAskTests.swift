@@ -67,7 +67,7 @@ struct ServerActionsAskTests {
         var resolved: (reply: ControlResponse, owner: AskRegistry.Owner?)?
         let earlier = session.onRemoteAskEnded
         session.onRemoteAskEnded = { [harness] id in
-            resolved = (harness.actions.askResult(id, window: nil), AskRegistry.shared.owner(for: id))
+            resolved = (harness.actions.askResult(id, window: nil), harness.store.askRegistry.owner(for: id))
             earlier?(id)
         }
         let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
@@ -95,6 +95,18 @@ struct ServerActionsAskTests {
         #expect(harness.actions.cancelAsk(pending.id, window: nil).ok)
 
         #expect(harness.actions.askResult(pending.id, window: nil).result?.ask?.result == .cancelled)
+    }
+
+    // regression: results other tests retained in the shared registry evicted this server's finished ask
+    @Test func aFinishedAskIsRetainedInTheStoresRegistryOnly() throws {
+        let session = try newSession()
+        let pending = ask()
+        _ = harness.actions.openAsk(pending, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(), follow: false)
+
+        #expect(harness.actions.cancelAsk(pending.id, window: nil).ok)
+
+        #expect(harness.store.askRegistry.result(for: pending.id)?.result.result == .cancelled)
+        #expect(AskRegistry.shared.result(for: pending.id) == nil)
     }
 
     @Test func anAskOfAnEarlierRunIsUnknownToANewOne() throws {

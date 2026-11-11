@@ -1113,8 +1113,7 @@ struct ServerStreamsTests {
 
         let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
         let deadline = try #require(node?.interactions?.first { $0.id == job }?.deadline)
-        #expect(deadline > Date().timeIntervalSince1970)
-        #expect(deadline <= Date().addingTimeInterval(OverlayJobs.launchWindow).timeIntervalSince1970)
+        #expect(deadline == harness.jobClock.addingTimeInterval(OverlayJobs.launchWindow).timeIntervalSince1970)
     }
 
     @Test func aJobWhoseClaimReplyWasNotWrittenIsGivenUp() {

@@ -45,6 +45,10 @@ longer apply, and re-running `check.py`.
   `ZMX_EXIT_FILE` set, a session whose shell exits writes `exited` to that path, atomically, before its socket
   goes, so a session found gone without a record was killed; teardown then ends the shell's process group as
   upstream does. A killed session writes nothing, and the shell never sees the variable.
+- `0006-single-da-answer.patch` keeps a DA1/DA2 query from being answered twice. Until a client sends
+  Init, the daemon answers such queries itself, but upstream also forwards them to an attach it accepted
+  and has not yet heard Init from, whose terminal answers again; the program reads the spare reply as the
+  answer to its next query. The daemon now drops each query it answered from that output.
 - `ghostty/0001-formatter-unstyled-blanks.patch` fixes the snapshot a re-attach replays. The formatter
   wrote cells a program skipped with a cursor move as spaces under the previous cell's style, so a gap
   after a colored run came back painted; a skipped cell now closes the style first. Spaces the program

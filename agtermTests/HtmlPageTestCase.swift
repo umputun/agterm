@@ -83,8 +83,9 @@ class HtmlPageTestCase: XCTestCase {
         }
     }
 
-    func waitForScript(_ script: String, in view: WKWebView, _ matches: @escaping (String) -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(10)
+    func waitForScript(_ script: String, in view: WKWebView, timeout: TimeInterval = 10,
+                       _ matches: @escaping (String) -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
         while true {
             let value = try await view.evaluateJavaScript("String(\(script))") as? String ?? ""
             if matches(value) { return }

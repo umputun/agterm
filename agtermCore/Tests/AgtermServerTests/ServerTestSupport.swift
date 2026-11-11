@@ -138,6 +138,7 @@ final class ServerHarness {
     let catalog = CatalogRoot(id: UUID(), name: "testbox")
     let panes: ServerPanes
     let actions: ServerActions
+    let jobClock: Date
 
     init(shell: String = "/bin/zsh") throws {
         scratch = try ServerScratch()
@@ -148,9 +149,13 @@ final class ServerHarness {
         self.panes = panes
         store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: scratch.state)), paneFinalizer: { ids in
             MainActor.assumeIsolated { panes.end(ids) }
-        }, headless: true)
+        }, headless: true, askRegistry: AskRegistry())
         CatalogRoot.seedWorkspace(in: store)
-        actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes)
+        // a launch window on the real clock expires under a loaded run before the test claims the job
+        let jobClock = Date()
+        self.jobClock = jobClock
+        actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes,
+                                overlayJobs: OverlayJobs(now: { jobClock }))
         actions.streams.presentationHelloDeadline = 60
     }
 
