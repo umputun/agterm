@@ -1,8 +1,3 @@
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#endif
 import Foundation
 import Testing
 
@@ -21,7 +16,9 @@ struct ClaudeStatusHookTests {
 
     enum HookInput {
         case pipe(String)
+        #if canImport(Darwin)
         case terminal(String)
+        #endif
     }
 
     // spawns `chain` as nested processes — outermost first, one process per entry, each carrying that entry
@@ -83,14 +80,17 @@ struct ClaudeStatusHookTests {
         proc.environment = environment
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
+        #if canImport(Darwin)
         var ptyFD: Int32 = -1
         defer { if ptyFD >= 0 { close(ptyFD) } }
+        #endif
         switch input {
         case .pipe(let text):
             let pipe = Pipe()
             try pipe.fileHandleForWriting.write(contentsOf: Data(text.utf8))
             try pipe.fileHandleForWriting.close()
             proc.standardInput = pipe
+        #if canImport(Darwin)
         case .terminal(let text):
             ptyFD = posix_openpt(O_RDWR | O_NOCTTY)
             guard ptyFD >= 0, grantpt(ptyFD) == 0, unlockpt(ptyFD) == 0, let name = ptsname(ptyFD) else {
@@ -101,6 +101,7 @@ struct ClaudeStatusHookTests {
             let typed = Array((text + "\n\u{04}").utf8)
             guard write(ptyFD, typed, typed.count) == typed.count else { throw POSIXError(.EIO) }
             proc.standardInput = FileHandle(fileDescriptor: ttyFD, closeOnDealloc: true)
+        #endif
         }
         try proc.run()
         proc.waitUntilExit()
@@ -313,12 +314,14 @@ struct ClaudeStatusHookTests {
         #expect(result.exit == 0)
     }
 
+    #if canImport(Darwin)
     @Test func terminalInputIsNotRead() throws {
         let result = try run(chain: ["login", "claude"], args: ["active"],
                              input: .terminal(Self.payload("PostToolUse", agentID: "a1")))
         #expect(result.calls == ["active"])
         #expect(result.exit == 0)
     }
+    #endif
 
     @Test(.enabled(if: !FileManager.default.fileExists(atPath: "/usr/bin/plutil")))
     func noParserPostsArgv() throws {
