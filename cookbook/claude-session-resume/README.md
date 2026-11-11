@@ -19,7 +19,9 @@ Keep several Claude Code sessions open at once, and after the terminal restarts 
 
 - agterm 0.3.1 or later, with **Restore running commands on restart** turned on under Settings ▸ General ▸ Sessions. Both `AGTERM_SESSION_ID` and that setting predate the repository's earliest tagged release, so 0.3.1 is the first version that can be named, not the version the behavior arrived in.
 - `zsh`, or `fish`
-- Claude Code, with its conversations in `~/.claude/projects/` (or wherever `CLAUDE_CONFIG_DIR` points)
+- Claude Code, with its conversations in `~/.claude/projects/` (or wherever `CLAUDE_CONFIG_DIR` points).
+  The passthrough list matches the subcommands of Claude Code 2.1.319; a newer CLI can add one the
+  function does not know, which then gets a session flag prepended and ignores it.
 - Python 3.8 or later, plus both `zsh` and `fish`, only to run the bundled `test_claude_resume.py`. Using the recipe needs no Python.
 
 ## Setup
@@ -84,6 +86,8 @@ Claude can leave a `bridge-session`-only file after switching conversations thro
 
 On restart agterm replays the remembered command, the function recognizes "its own" id, sees the conversation already exists, and reopens exactly that one. Each tab, its own.
 
+Which account the tab belongs to is remembered separately, because the capture carries argv and not the environment. `CLAUDE_CONFIG_DIR` names the account on a launch you typed, and Claude Code has no flag that could carry it in argv instead, so a restored launch arrives without it. When the variable is set to something other than `~/.claude`, the function records that directory in `${XDG_STATE_HOME:-~/.local/state}/agterm-claude-resume/<tab-id>`, following the path the `opencode-session-resume` recipe already uses for its own state. A launch with the variable absent looks under the default account first and falls back to the recorded directory only when the default holds nothing for this tab, so a tab that really belongs to the default account is never redirected. The variable is passed to Claude Code only when that recorded account is the one picked: Claude Code reads a set `CLAUDE_CONFIG_DIR` as a separate account even when it names `~/.claude`, so a default-account launch keeps it unset.
+
 On the agterm side that replay is a foreground-process capture. At quit agterm records the argv of whatever the pane was running, and on relaunch it types that line back into the tab's fresh login shell with each argument single-quoted. Quoting suppresses alias expansion but not function lookup, which is why a shell function named `claude` still catches the replayed line; in zsh an alias would not. fish has no such distinction, since its `alias` defines a function.
 
 ## Limits
@@ -92,7 +96,9 @@ On the agterm side that replay is a foreground-process capture. At quit agterm r
 - **Rests on restore behavior its author verified empirically rather than from documentation.** It could change between agterm versions.
 - **One tab-owned conversation id at a time.** Simultaneous launches in the same tab can choose the same id and collide with Claude's transcript check. A split pane, a scratch pane and any overlay all run under the same `AGTERM_SESSION_ID` as the main pane, so a second `claude` in any of them counts as the same tab. A process that has switched elsewhere through `/resume` can leave a metadata-only id, which the next launch skips.
 - **It shadows the `claude` command** with a shell function. Passthrough is handled, but the list of subcommands and flags that must not be touched has to be kept current if the CLI grows new ones.
-- **It knows Claude Code's on-disk layout** (`~/.claude/projects/*/<id>.jsonl`). A Claude Code storage change can require a recipe update.
+- **It knows Claude Code's on-disk layout** (`~/.claude/projects/*/<id>.jsonl`, or the same tree under `CLAUDE_CONFIG_DIR`). A Claude Code storage change can require a recipe update.
+- **A second account leaves one small file behind.** Running under a non-default `CLAUDE_CONFIG_DIR` writes that directory's path to `${XDG_STATE_HOME:-~/.local/state}/agterm-claude-resume/<tab-id>`, and nothing removes it when the tab is closed. It holds a path and no credentials. A tab that only ever uses the default account writes nothing.
+- **The tab owns one conversation wherever it is used.** The lookup is by id across every project directory, deliberately, so the recipe does not have to reproduce Claude's project-path encoding. `claude --resume` reopens a conversation from the directory it was created in, so running `claude` in a tab you have since moved to another directory returns to the first directory's conversation rather than starting one for the new directory. Pin a different line with `agtermctl session restore` if you want a tab to come back to something else.
 - **zsh or fish only** (the zsh version uses `${:l}`, the `(N)` glob qualifier, and `emulate`; the fish version uses fish-only syntax throughout). Bash needs a rewrite.
 - **Existing conversations are not bound to tabs.** After installation, the first launch starts a conversation pinned to that tab. Conversations created by an older copy of this recipe are adopted by their matching tab id, but arbitrary earlier conversations are not.
 - **Claude's `/resume` picker does not rebind the tab.** It switches the running process, but the next launch returns to the conversation owned by the tab id. To make agterm capture another conversation, exit and run `claude --resume <id>` from the shell.
