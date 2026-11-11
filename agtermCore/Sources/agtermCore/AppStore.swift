@@ -243,6 +243,9 @@ public final class AppStore {
     /// server sets it; a store on the Mac keeps every surface rule.
     public let headless: Bool
 
+    /// askRegistry indexes this store's session asks and keeps their results.
+    public let askRegistry: AskRegistry
+
     public init(workspaces: [Workspace] = [], selectedSessionID: UUID? = nil,
                 persistence: PersistenceStore = PersistenceStore(),
                 recentClosedStore: RecentClosedStore? = nil,
@@ -251,8 +254,10 @@ public final class AppStore {
                 controlEventSink: ((ControlEventDraft) -> Void)? = nil,
                 paneFinalizer: (([UUID]) -> Void)?,
                 launchPaneDrop: (([UUID]) -> Void)? = nil,
-                headless: Bool = false) {
+                headless: Bool = false,
+                askRegistry: AskRegistry = .shared) {
         self.headless = headless
+        self.askRegistry = askRegistry
         self.workspaces = workspaces
         self.selectedSessionID = selectedSessionID
         self.persistence = persistence

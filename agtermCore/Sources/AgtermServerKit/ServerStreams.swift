@@ -8,7 +8,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     let store: AppStore
     let catalogID: UUID
     let presentationHub = PresentationHub(staleTimeout: 30)
-    let overlayJobs = OverlayJobs()
+    let overlayJobs: OverlayJobs
     var presentationStreams: [PresentationStream] = []
     var presentationHeartbeat: Task<Void, Never>?
     var presentationHelloDeadline: TimeInterval = 10
@@ -36,9 +36,10 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces())
     }
 
-    init(store: AppStore, catalogID: UUID) {
+    init(store: AppStore, catalogID: UUID, overlayJobs: OverlayJobs) {
         self.store = store
         self.catalogID = catalogID
+        self.overlayJobs = overlayJobs
         store.presentationHub = presentationHub
         store.overlayJobs = overlayJobs
         presentationHub.onPresenterLost = { [weak self] session in self?.presenterLost(session) }

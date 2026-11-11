@@ -7,6 +7,8 @@ paths:
 
 - `ci.yml` runs for pushes and PRs to `master`; concurrency cancels the older run for the same ref. All
   macOS jobs use `macos-26`. Releases are local; see `.claude/rules/release.md`.
+- `docs/ci-flakes.md` records every investigated intermittent failure by test name and log text; read it
+  before investigating a red run, and add an entry after one.
 - Every job carries its own `timeout-minutes`, with generous headroom over observed runtime. A job without
   one inherits GitHub's 360-minute default, so a wedge can hold its check pending for six hours. Give a new
   job a cap in the commit that adds it.
@@ -53,9 +55,14 @@ paths:
   Darwin-only behavior keeps its tests behind
   `#if canImport(Darwin)` beside the code; everything else runs on both platforms.
 - `build` and `hosted` each restore separate revision-keyed caches for libghostty and zmx, including each
-  build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. `build` runs Release
-  `scripts/build.sh`, the surface teardown script and the entitlement assertions. `build.sh` and
-  `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped app does.
+  build stamp, and install xcodegen. A zmx pin change does not rebuild libghostty. A libghostty cache miss
+  also runs the teardown patch's Zig tests inside `setup.sh`, and a zmx miss runs zmx's own `zig build test`;
+  bump the `ghosttykit-vN` or `zmx-vN` key when its gate changes, since a hit skips it. `build` runs Release
+  `scripts/build.sh`, the surface teardown script and the entitlement assertions. The teardown script fails
+  only on a control call unanswered for 60 s, and has no eight-producer case, removed after sustained runner
+  contention. `build.sh` and `release.sh` both pass `ARCHS=arm64`, so CI compiles the same slices the shipped
+  app does. Both app builds run under `scripts/with-helper-prebuild.sh`, which starts the Release helper
+  products before the app compile; the helper phase that otherwise builds them after the app still runs.
   `hosted` runs the Debug tests `scripts/test-app.sh` runs and needs nothing from `build`; it builds the
   bundled helpers itself. Staging and `xcodebuild build-for-testing` run in steps of their own, since one
   cache-hit run spent 1412s building and testing, and only `xcodebuild test-without-building` runs under the
@@ -66,7 +73,8 @@ paths:
   enable testability in the notarized Release app.
 - `hosted` sets the runner account's login shell to zsh, installs fish, and passes
   `TEST_RUNNER_AGTERM_REQUIRE_FISH=1` to `scripts/test-app.sh`. Its last step switches the login shell to
-  fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, with
+  fish with `dscl` and runs only `SessionHostFishSeamTests/testPlainLoginShellStartsIntegratedFish`, without
+  rebuilding, with
   `TEST_RUNNER_AGTERM_REQUIRE_FISH_LOGIN_SHELL=1`. Keep that order: switching before the hosted tests
   silently skips the zsh plain-login seam (#574), and the fish seam fails its login-shell check before the
   switch.

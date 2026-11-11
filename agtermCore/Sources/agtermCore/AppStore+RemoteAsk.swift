@@ -27,8 +27,8 @@ extension AppStore {
         let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
         if let refusal = askOfferRefusal(request, session: session.id, hub: hub) { return refusal }
-        guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner) else { return .slotTaken }
-        AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
+        guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner, registry: askRegistry) else { return .slotTaken }
+        askRegistry.register(id: ask.id, owner: .session(session.id, window: window))
         handOver(request, in: session, hub: hub)
         return .opened
     }
@@ -36,8 +36,8 @@ extension AppStore {
     /// openUnpresentedAsk books an ask a headless origin holds until a presenter can show it. False when the
     /// session's ask slot is taken.
     public func openUnpresentedAsk(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?, window: WindowInfo.ID) -> Bool {
-        guard session.openAsk(ask, paneIdentity: paneIdentity) else { return false }
-        AskRegistry.shared.register(id: ask.id, owner: .session(session.id, window: window))
+        guard session.openAsk(ask, paneIdentity: paneIdentity, registry: askRegistry) else { return false }
+        askRegistry.register(id: ask.id, owner: .session(session.id, window: window))
         return true
     }
 

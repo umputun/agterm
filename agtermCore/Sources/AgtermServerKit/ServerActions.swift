@@ -14,12 +14,13 @@ public final class ServerActions: ControlActions {
     /// operationsUnsaved is set while the operation table holds an entry its last write failed to save.
     var operationsUnsaved = false
 
-    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes) {
+    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes,
+         overlayJobs: OverlayJobs = OverlayJobs()) {
         self.store = store
         self.catalog = catalog
         self.identity = identity
         self.panes = panes
-        streams = ServerStreams(store: store, catalogID: catalog.id)
+        streams = ServerStreams(store: store, catalogID: catalog.id, overlayJobs: overlayJobs)
         streams.dispatch = { [weak self] request in
             await self?.serve(request) ?? ControlResponse(ok: false, error: "agterm-server is stopping")
         }

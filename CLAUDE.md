@@ -108,6 +108,8 @@ C-boundary concurrency before changing the bridge.
   files, and 800-line types; test configs raise file/type limits to 2000 and inherit all other rules.
   Disabled/tuned rules reflect deliberate conventions. Zero findings are required.
 - Every change must build, pass `swift test`, `make test-app`, and `make lint`.
+- An intermittent CI failure is looked up in `docs/ci-flakes.md` by test name or log text before it is
+  investigated, and gets an entry there once it is understood.
 - Run each gate ONCE, at the end, and scope everything else to what changed: a new or changed test runs
   via `-only-testing:<Target>/<Class>/<test>`. Never re-run a whole XCUITest suite to verify a narrow
   change; `agtermUITests/ControlAPIUITests` alone is 82 methods and about 7.5 minutes, and tells you
@@ -249,7 +251,8 @@ C-boundary concurrency before changing the bridge.
 
 - `scripts/setup.sh` builds upstream `ghostty-org/ghostty` at `GHOSTTY_REV` using
   `zig build -Demit-xcframework=true -Dxcframework-target=native`, after applying
-  `scripts/ghostty-patches/*.patch`. That directory documents each backport and its removal.
+  `scripts/ghostty-patches/*.patch`, then runs the teardown patch's Zig tests before staging anything.
+  That directory documents each backport, its tests and its removal.
 - `GHOSTTY_REV` is `83fb956` (v1.4.0, 2026-10-27), a plain reproducibility pin carrying upstream's
   hidden-surface GPU release.
   It sat at `4dcb09ada` (2026-04-30) from June while later builds blanked scrollback on a font-size

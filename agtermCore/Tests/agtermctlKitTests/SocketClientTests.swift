@@ -1647,13 +1647,16 @@ final class StubServer: @unchecked Sendable {
 
         var buffer = Data()
         var byte: UInt8 = 0
+        var complete = false
         while true {
             let n = read(conn, &byte, 1)
             if n <= 0 { break }
-            if byte == UInt8(ascii: "\n") { break }
+            if byte == UInt8(ascii: "\n") { complete = true; break }
             buffer.append(byte)
         }
         received = try? JSONDecoder().decode(ControlRequest.self, from: buffer)
+        // a request cut off before its newline means the client hung up, so nobody reads a reply
+        guard complete else { return }
 
         var data = canned
         data.append(UInt8(ascii: "\n"))
@@ -1661,7 +1664,7 @@ final class StubServer: @unchecked Sendable {
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             while offset < data.count {
-                let written = write(conn, base + offset, data.count - offset)
+                let written = UnixSocket.write(conn, base + offset, data.count - offset)
                 if written <= 0 { break }
                 offset += written
             }
@@ -1834,7 +1837,7 @@ private final class ScriptedStubServer: @unchecked Sendable {
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             while offset < data.count {
-                let written = write(conn, base + offset, data.count - offset)
+                let written = UnixSocket.write(conn, base + offset, data.count - offset)
                 if written <= 0 { break }
                 offset += written
             }

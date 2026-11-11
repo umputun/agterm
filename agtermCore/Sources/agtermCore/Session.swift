@@ -379,11 +379,13 @@ public final class Session: Identifiable {
     public private(set) var askReplica = false
     /// Sends a replica's outcome to its origin. Run once when it resolves; a dismissal skips it.
     @ObservationIgnored var onReplicaResolved: (@MainActor (ControlAskResult) -> Void)?
+    @ObservationIgnored private var askRegistry: AskRegistry = .shared
 
-    /// Reserves the session ask slot and its placement, refusing replacement of a pending ask.
+    /// openAsk reserves the session ask slot and its placement, refusing a second ask; `registry` keeps its result.
     @discardableResult
-    public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil) -> Bool {
+    public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil, registry: AskRegistry = .shared) -> Bool {
         guard askPending == nil, content == .terminal else { return false }
+        askRegistry = registry
         askPaneIdentity = paneIdentity
         askRemoteOwner = remoteOwner
         askPending = ask
@@ -421,8 +423,8 @@ public final class Session: Identifiable {
     public func resolveAsk(id: String, _ result: ControlAskResult) -> Bool {
         guard let ask = askPending, ask.id == id, result.result != .pending else { return false }
         let result = ask.expired(at: Date()) ? ControlAskResult(result: .cancelled) : result
-        if case let .session(sessionID, windowID) = AskRegistry.shared.owner(for: id), sessionID == self.id {
-            AskRegistry.shared.retain(id: id, result: result, window: windowID)
+        if case let .session(sessionID, windowID) = askRegistry.owner(for: id), sessionID == self.id {
+            askRegistry.retain(id: id, result: result, window: windowID)
         }
         let ended = onRemoteAskEnded
         let replicaResolved = onReplicaResolved

@@ -18,11 +18,15 @@ closes as well as the queue, and releases owned payloads for discarded messages.
 
 Remove the patch when `GHOSTTY_REV` includes an equivalent upstream fix whose drain also stays active
 through `renderer.deinit()`. Upstream PR 14444's current ordering does not yet meet that condition.
-Preserve the three shutdown regressions in `scripts/test-surface-teardown.py`: one title producer, eight
-title producers with one closed, and eight idle surfaces with one closed. CI runs them against the Release app.
+The patch's own Zig tests pin both regressions it fixes: a worker blocked on the full mailbox during teardown,
+and the deferred backlog that a quadratic drain once stalled on. `setup.sh` runs
+`zig build test -Dtest-filter=teardown -Demit-macos-app=false` after every libghostty build and stages nothing
+when one fails. `scripts/test-surface-teardown.py` closes surfaces in the Release app in CI, one busy title
+producer and one of eight idle surfaces, as a smoke of the built framework, failing only on a call unanswered
+in 60 s. It has no eight-producer case: on the 3-vCPU runner that case met severe contention and its calls
+stalled for seconds to minutes, so the Zig tests are what pin teardown under pressure.
 
-Run `zig fmt --check src/App.zig src/Surface.zig` and
-`zig build test -Dtest-filter=teardown -Demit-macos-app=false` in the patched checkout.
+Run `zig fmt --check src/App.zig src/Surface.zig` in the patched checkout when regenerating the patch.
 Do not change queue capacity or move `ghostty_surface_free` off the app thread.
 
 ## 0002: color scheme report follows the system appearance

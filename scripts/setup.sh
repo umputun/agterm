@@ -183,6 +183,9 @@ if $need_xc || $need_res; then
   echo "building GhosttyKit.xcframework with zig (a few minutes)..."
   ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
       -Dxcframework-target=native -Demit-macos-app=false )
+  # before staging, so a red test never leaves artifacts under a stamp that marks them current
+  echo "testing the teardown patch..."
+  ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build test -Dtest-filter=teardown -Demit-macos-app=false )
 
   if $need_xc; then
     echo "staging GhosttyKit.xcframework..."
@@ -234,6 +237,8 @@ if $need_zmx; then
 
   echo "building zmx with zig..."
   ( cd "$zmx_build" && "$ZMX_ZIG" build -Doptimize=ReleaseSafe -Dtarget="$ZMX_TARGET" )
+  echo "testing the zmx patches..."
+  ( cd "$zmx_build" && "$ZMX_ZIG" build test )
   rm -rf "$ZMX_STAGE_DIR"
   mkdir -p "$ZMX_STAGE_DIR"
   install -m 0755 "$zmx_build/zig-out/bin/zmx" "$ZMX_STAGE_DIR/zmx"
