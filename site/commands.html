@@ -1065,10 +1065,12 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> runs a program as the session's
                 process instead of the login shell (no echoed command line; the session closes when it exits). It runs
-                <em>argv-style</em> — tokenized with quotes respected, but <strong style="color: #bfbab0">no shell</strong>, so
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">;</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&amp;&amp;</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$VAR</span>, redirects and globs are not interpreted.
+                as one bash command: quotes,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$VAR</span>, redirects, pipes and globs work,
+                but a line joined with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">;</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&amp;&amp;</span> runs
+                <strong style="color: #bfbab0">only its first command</strong>.
                 It also inherits the app's GUI
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> (the launchd default — no
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>), so a bare Homebrew binary
@@ -1665,7 +1667,7 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> (only when showing) runs a program
-                instead of a login shell — argv-style with the same GUI-<span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>
+                instead of a login shell — run the same way, with the same GUI-<span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>
                 exit-127 caveat as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>, and
                 run-once. A scratch is expendable, so passing
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> while one is open respawns it.

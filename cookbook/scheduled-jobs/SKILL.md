@@ -99,8 +99,9 @@ The template follows four rules that any job driving agterm needs:
   workspace (`window list --json`, then `tree --json --window`) and pass `--window`.
 - A `--command` session starts with agterm's GUI PATH, not the job's. Wrap the program in
   `/usr/bin/env PATH=...` or spell it absolutely.
-- `--command` is split into argv by libghostty, not by a shell. Anything with quotes, `$` or
-  newlines goes through a script `/bin/sh` runs, as the template's launcher file does.
+- libghostty runs `--command` as `exec <line>` under bash, so only its first command runs. A line
+  built from job text (quotes, `$`, newlines) goes through a script `/bin/sh` runs, as the
+  template's launcher file does.
 - `--no-select` keeps the new session from taking focus while the user is working.
 
 The agent's working directory must already be trusted by that agent, or the session stops on the
