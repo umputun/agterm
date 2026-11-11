@@ -31,12 +31,17 @@ public enum SkillInstall {
     /// and/or Codex), falling back to creating Claude Code's (the primary) when NEITHER is, so the install
     /// is never a no-op. The caller supplies the existence flags (a filesystem check), keeping this pure.
     public static func installTargets(home: String, claudeExists: Bool, codexExists: Bool) -> [Target] {
+        installTargets(home: home, claudeExists: claudeExists, codexExists: codexExists, codexHome: home + "/.codex")
+    }
+
+    /// Uses the resolved Codex root; `codexExists` describes that root, not the default directory.
+    public static func installTargets(home: String, claudeExists: Bool, codexExists: Bool, codexHome: String) -> [Target] {
         var targets: [Target] = []
         if claudeExists {
             targets.append(Target(agent: "Claude Code", skillDirectory: skillDirectory(home: home, base: ".claude")))
         }
         if codexExists {
-            targets.append(Target(agent: "Codex", skillDirectory: skillDirectory(home: home, base: ".codex")))
+            targets.append(Target(agent: "Codex", skillDirectory: codexHome + "/skills/" + skillName))
         }
         if targets.isEmpty {
             targets.append(Target(agent: "Claude Code", skillDirectory: skillDirectory(home: home, base: ".claude")))
@@ -72,20 +77,31 @@ public enum SkillInstall {
 
     /// install copies `source` into every target `installTargets` picks for `home`, leaving a user-authored skill alone.
     public static func install(source: URL, home: URL) throws -> Report {
+        try install(source: source, home: home, codexHome: nil)
+    }
+
+    /// `codexHome` selects an existing custom root; a missing root is reported and never falls back.
+    public static func install(source: URL, home: URL, codexHome: URL?) throws -> Report {
         let fm = FileManager.default
         guard fm.fileExists(atPath: source.path) else { throw MissingSource() }
+        let codexDirectory = codexHome ?? home.appendingPathComponent(".codex")
+        let codexExists = fm.fileExists(atPath: codexDirectory.path)
         let targets = installTargets(home: home.path,
                                      claudeExists: fm.fileExists(atPath: home.path + "/.claude"),
-                                     codexExists: fm.fileExists(atPath: home.path + "/.codex"))
+                                     codexExists: codexExists, codexHome: codexDirectory.path)
         var report = Report()
+        if codexHome != nil, !codexExists {
+            report.skipped.append(Report.Skip(agent: "Codex", reason: "no \(codexDirectory.path) found"))
+        }
         for target in targets {
             let destination = URL(fileURLWithPath: target.skillDirectory)
+            let prefix = target.agent == "Codex" && codexHome != nil ? target.skillDirectory + ": " : ""
             // lstat semantics: a dangling symlink counts as present, where `fileExists` would read it as absent
             // and let the wipe below delete the user's link
             let directoryExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
             let existingSKILL = try? String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8)
             guard mayOverwrite(directoryExists: directoryExists, existingSKILL: existingSKILL) else {
-                report.skipped.append(Report.Skip(agent: target.agent, reason: "a different '\(skillName)' skill is already there — left untouched"))
+                report.skipped.append(Report.Skip(agent: target.agent, reason: prefix + "a different '\(skillName)' skill is already there — left untouched"))
                 continue
             }
             do {
@@ -96,7 +112,7 @@ public enum SkillInstall {
                 try DirectoryCopy.copy(source, to: destination)
                 report.installed.append(target)
             } catch {
-                report.skipped.append(Report.Skip(agent: target.agent, reason: error.localizedDescription))
+                report.skipped.append(Report.Skip(agent: target.agent, reason: prefix + error.localizedDescription))
             }
         }
         return report

@@ -77,10 +77,14 @@ public struct AgentHooksFiles {
     /// toolPath is the agtermctl baked into the wrappers, nil to leave their PATH fallback.
     public let toolPath: String?
 
-    public init(source: URL, home: URL, toolPath: String?) {
+    /// codexHome overrides the default `home/.codex`; a missing override is skipped without fallback.
+    public let codexHome: URL?
+
+    public init(source: URL, home: URL, toolPath: String?, codexHome: URL? = nil) {
         self.source = source
         self.home = home
         self.toolPath = toolPath
+        self.codexHome = codexHome
     }
 
     /// destination is where the scripts are installed and every config points.
@@ -250,9 +254,9 @@ public struct AgentHooksFiles {
         return nil
     }
 
-    /// mergeCodexConfig only touches a home that already has `~/.codex`, so a non-Codex home is not seeded.
+    /// Only touches an existing Codex root, so a missing configured root is not seeded.
     private func mergeCodexConfig(jqAvailable: Bool) throws -> CodexResult {
-        let codexDir = home.appendingPathComponent(".codex")
+        let codexDir = codexHome ?? home.appendingPathComponent(".codex")
         guard FileManager.default.fileExists(atPath: codexDir.path) else { return .noCodex }
         guard jqAvailable else { return .noJq }
         let config = codexDir.appendingPathComponent("config.toml")
@@ -287,22 +291,30 @@ extension AgentHooksFiles.Outcome {
 extension AgentHooksFiles.CodexResult {
     /// text is the one-line report of this outcome. It embeds no generated block: an NSAlert sizes itself to fit with
     /// no scroll and no cap (#430), so the two manual-merge cases send the user to the docs instead.
-    public var text: String {
+    public var text: String { text(codexHome: nil) }
+
+    /// Reports the selected root while preserving default-path wording for existing callers.
+    public func text(codexHome: String?) -> String {
+        let directory = codexHome ?? "~/.codex"
         let approve = "Run /hooks in Codex to review and approve them before they take effect."
         let manual = "See the Add Codex hooks by hand section of the agterm docs for the block to add, then run /hooks in Codex."
         switch self {
         case .merged:
-            return "Codex lifecycle hooks merged into ~/.codex/config.toml (any old codex-notify.sh notify line was removed). " + approve
+            return "Codex lifecycle hooks merged into \(directory)/config.toml (any old codex-notify.sh notify line was removed). " + approve
         case .alreadyConfigured:
-            return "Codex lifecycle hooks are already present in ~/.codex/config.toml. " + approve
+            return "Codex lifecycle hooks are already present in \(directory)/config.toml. " + approve
         case .hooksExist:
-            return "Your ~/.codex/config.toml already defines its own hooks, so agterm left it untouched. " + manual
+            return "Your \(directory)/config.toml already defines its own hooks, so agterm left it untouched. " + manual
         case .unparseable:
-            return "Your ~/.codex/config.toml isn't valid TOML, so agterm left it untouched. Fix it and run this again. " + manual
+            return "Your \(directory)/config.toml isn't valid TOML, so agterm left it untouched. Fix it and run this again. " + manual
         case .unreadable:
-            return "Your ~/.codex/config.toml exists but couldn't be read, so agterm left it untouched."
+            return "Your \(directory)/config.toml exists but couldn't be read, so agterm left it untouched."
         case .noCodex:
-            return "No ~/.codex found, so Codex hooks were skipped. Install Codex, then run this again."
+            if codexHome != nil {
+                return "No \(directory) found (your CODEX_HOME), so Codex hooks were skipped. "
+                    + "Mount or create it, or fix CODEX_HOME, then run this again."
+            }
+            return "No \(directory) found, so Codex hooks were skipped. Install Codex, then run this again."
         case .noJq:
             return "jq is not installed, so Codex hooks were skipped: their wrapper needs it. Install jq, then run this again."
         }

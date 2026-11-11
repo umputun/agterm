@@ -13,8 +13,6 @@ import agtermCore
 /// moved bundle) and no-ops on already-present entries.
 @MainActor
 enum AgentHooksInstaller {
-    private static var isRunning = false
-
     /// The bundled `Contents/Resources/agent-status`, nil when the build skipped bundling (a bare
     /// `swift build`).
     private static var bundledFolder: URL? {
@@ -24,14 +22,11 @@ enum AgentHooksInstaller {
     /// The bundled `agtermctl` at `Contents/MacOS/agtermctl`, or nil when this build skipped bundling.
     private static var bundledTool: URL? { Bundle.main.url(forAuxiliaryExecutable: CLIInstall.toolName) }
 
-    private static var destinationFolder: URL {
-        AgentHooksFiles.destination(home: FileManager.default.homeDirectoryForCurrentUser)
-    }
-
     typealias CodexResult = AgentHooksFiles.CodexResult
     typealias OpenCodeResult = AgentHooksFiles.OpenCodeResult
 
     private struct InstallOutcome {
+        let codexHome: String?
         let files: AgentHooksFiles.Outcome
         let opencode: OpenCodeResult
 
@@ -40,42 +35,43 @@ enum AgentHooksInstaller {
 
     /// Run the install and show a result alert.
     static func run() {
-        guard !isRunning else { return }
-        isRunning = true
-        Task {
-            defer { isRunning = false }
-            do {
-                let outcome = try await install()
-                present(style: outcome.isWarning ? .warning : .informational,
-                        title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                        text: successText(outcome),
-                        docs: outcome.files.codex.needsManualMerge ? codexManualDocsURL : nil)
-            } catch let error as AgentHooksFiles.Failure {
-                present(style: .warning, title: "Install Failed", text: error.message)
-            } catch {
-                present(style: .warning, title: "Install Failed", text: error.localizedDescription)
-            }
+        Task { await AgentInstallers.run(skill: false, hooks: true) }
+    }
+
+    static func run(probe: OpenCodeEnvironmentProbe.Result?) async {
+        do {
+            let outcome = try install(probe: probe)
+            present(style: outcome.isWarning ? .warning : .informational,
+                    title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
+                    text: outcome.text,
+                    docs: outcome.docs)
+        } catch let error as AgentHooksFiles.Failure {
+            present(style: .warning, title: "Install Failed", text: error.message)
+        } catch {
+            present(style: .warning, title: "Install Failed", text: error.localizedDescription)
         }
     }
 
-    private static func install() async throws -> InstallOutcome {
+    // Returns the same report the alert uses; an explicit home lets hosted fixtures cover the complete adapter.
+    static func install(
+        probe: OpenCodeEnvironmentProbe.Result?,
+        home: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) throws -> (isWarning: Bool, text: String, docs: URL?) {
         guard let bundledFolder else { throw AgentHooksFiles.Failure(message: "The agent-status scripts are not bundled in this build.") }
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let outcome = try AgentHooksFiles(source: bundledFolder, home: home, toolPath: bundledTool?.path).install()
-        let opencode = try await installOpenCodePlugin()
-        return InstallOutcome(files: outcome, opencode: opencode)
+        let files = AgentHooksFiles(source: bundledFolder, home: home, toolPath: bundledTool?.path,
+                                    codexHome: probe?.codexHome.map { URL(fileURLWithPath: $0) })
+        let outcome = try files.install()
+        let opencode = try installOpenCodePlugin(home: home, scriptDirectory: files.destination, probe: probe)
+        let result = InstallOutcome(codexHome: probe?.codexHome, files: outcome, opencode: opencode)
+        return (result.isWarning, successText(result, destination: files.destination),
+                outcome.codex.needsManualMerge ? codexManualDocsURL : nil)
     }
 
     // the version comes from the login shell's `opencode --version`, else from the chooser; the file work is shared
-    static func installOpenCodePlugin(
-        home: URL = FileManager.default.homeDirectoryForCurrentUser,
-        scriptDirectory: URL = destinationFolder,
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) async throws -> OpenCodeResult {
+    static func installOpenCodePlugin(home: URL, scriptDirectory: URL, probe: OpenCodeEnvironmentProbe.Result?) throws -> OpenCodeResult {
         let fm = FileManager.default
         let legacyDirectory = URL(fileURLWithPath: AgentHooksInstall.opencodePluginPath(home: home.path))
             .deletingLastPathComponent().deletingLastPathComponent().path
-        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
         var detected = probe?.version
         // no probe result and no default config: neither chooser answer could install anything
         if probe == nil, !fm.fileExists(atPath: legacyDirectory) { return .noOpenCode(directory: legacyDirectory) }
@@ -98,11 +94,11 @@ enum AgentHooksInstaller {
     }
 
     // the success-alert text, calling out anything an integration could not safely update and left alone.
-    private static func successText(_ outcome: InstallOutcome) -> String {
+    private static func successText(_ outcome: InstallOutcome, destination: URL) -> String {
         """
-        Scripts installed to \(destinationFolder.path).
+        Scripts installed to \(destination.path).
         \(outcome.files.claudeText)
-        \(outcome.files.codex.text)
+        \(outcome.files.codex.text(codexHome: outcome.codexHome))
         \(outcome.files.pi.text)
         \(outcome.opencode.text)
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).

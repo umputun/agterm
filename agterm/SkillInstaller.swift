@@ -19,9 +19,14 @@ enum SkillInstaller {
 
     /// Run the install and show a result alert.
     static func run() {
+        Task { await AgentInstallers.run(skill: true, hooks: false) }
+    }
+
+    static func run(probe: OpenCodeEnvironmentProbe.Result?) {
         // install throws only for a missing source; a failed copy is a per-target skip in the report
         guard let source = bundledFolder,
-              let report = try? SkillInstall.install(source: source, home: FileManager.default.homeDirectoryForCurrentUser) else {
+              let report = try? SkillInstall.install(source: source, home: FileManager.default.homeDirectoryForCurrentUser,
+                                                     codexHome: probe?.codexHome.map { URL(fileURLWithPath: $0) }) else {
             present(style: .warning, title: "Install Failed", text: "The agent skill is not bundled in this build.")
             return
         }

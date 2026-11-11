@@ -4039,6 +4039,14 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               config is recoverable.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Both the skill and hooks installers read exported <code>CODEX_HOME</code> from your interactive
+              login shell. A nonempty value selects the Codex directory, with relative paths resolved against
+              that shell's working directory. Unset or empty values, shell-launch failures, malformed output,
+              and timeouts fall back to <code>~/.codex</code>. OpenCode being absent does not affect Codex
+              discovery. The selected directory must already exist; a missing custom directory is skipped
+              without installing into <code>~/.codex</code>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Six Codex lifecycle events run a dedicated adapter.
               A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
               active and changes the row to blocked only after a real approval or structured question appears in that pane.
@@ -4126,6 +4134,12 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             >
               Add Codex hooks by hand
             </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              When you use <code>CODEX_HOME</code>, edit <code>&lt;CODEX_HOME&gt;/config.toml</code> instead of
+              <code>~/.codex/config.toml</code>. The installer resolves the exported value through your
+              interactive login shell; unset or empty values and failed or timed-out discovery use
+              <code>~/.codex</code>. Its result alert shows a custom destination when one is active.
+            </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
               The installer never rewrites a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>
