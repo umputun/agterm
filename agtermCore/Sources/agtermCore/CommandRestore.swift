@@ -237,8 +237,8 @@ public enum CommandRestore {
     }
 
     /// Render an argv into one POSIX shell command line, single-quoting each argument (so spaces, `$`,
-    /// globs and quotes survive intact) and space-joining; fed to a restored login shell via
-    /// `initial_input`. Quoting is a PARSER escape, so it inverts capture only for what `shouldRestore` accepted.
+    /// globs and quotes survive intact) and space-joining.
+    /// Quoting is a PARSER escape, so it inverts capture only for what `shouldRestore` accepted.
     public static func shellQuotedLine(_ argv: [String]) -> String {
         argv.map(shellQuote).joined(separator: " ")
     }
@@ -247,11 +247,11 @@ public enum CommandRestore {
     /// outside the quotes, escaped, since fish treats both specially inside single quotes.
     public static func accountShellQuoted(_ value: String) -> String {
         var quoted = "'"
-        for character in value {
-            switch character {
+        for scalar in value.unicodeScalars {
+            switch scalar {
             case "'": quoted += "'\\''"
             case "\\": quoted += "'\\\\'"
-            default: quoted.append(character)
+            default: quoted.unicodeScalars.append(scalar)
             }
         }
         return quoted + "'"

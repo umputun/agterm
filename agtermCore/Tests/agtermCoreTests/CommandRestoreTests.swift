@@ -6,7 +6,8 @@ struct CommandRestoreTests {
     @Test(arguments: ["/bin/sh", "/bin/bash", "/bin/zsh", "/bin/tcsh", "/usr/bin/fish",
                       "/opt/homebrew/bin/fish", "/usr/local/bin/fish"].filter(FileManager.default.isExecutableFile))
     func accountShellQuotingPreservesArguments(shell: String) throws {
-        let arguments = ["a\\\\b", "tail\\", "it's", "", "two words", "$HOME; echo unexpected"]
+        let arguments = ["a\\\\b", "tail\\", "it's", "", "two words", "$HOME; echo unexpected",
+                         "'\u{301}", "\u{600}'", "'\u{200D}"]
         let command = (["/usr/bin/printf", "%s\\0"] + arguments)
             .map(CommandRestore.accountShellQuoted).joined(separator: " ")
         let process = Process()
