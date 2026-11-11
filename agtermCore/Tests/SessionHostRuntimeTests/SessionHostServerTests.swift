@@ -870,10 +870,14 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             ended = lastWait == pane.pid
             if !ended { Thread.sleep(forTimeInterval: 0.02) }
         }
-        let report = ended ? "" : StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: clock.now - windowStart,
-                                                lastWait: lastWait, lastErrno: lastErrno).report(fixture: fixture)
-        #expect(ended, "the pane's attach to an ended command kept running\n\(report)")
+        let elapsed = clock.now - windowStart
+        #expect(ended, "the pane's attach to an ended command kept running")
         if !ended {
+            Issue.record("""
+                stall report:
+                \(StalledAttach(pane: pane, argv: paneArgv, daemon: name, elapsed: elapsed, lastWait: lastWait,
+                                lastErrno: lastErrno).report(fixture: fixture))
+                """)
             kill(pane.pid, SIGKILL)
             _ = waitpid(pane.pid, &status, 0)
         }
@@ -903,8 +907,50 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
                 exec error: \(SessionHostServerTests.available(pane.execErrorFD).debugDescription)
                 zmx list: \(listing)
                 host log: \(fixture.hostLog())
+                \(stacks())
                 """
         }
+
+        private func stacks() -> String {
+            let rows = SessionHostServerTests.capture(["/bin/ps", "-axo", "pid,ppid,pgid,stat,etime,command"], timeout: 5)
+                .split(separator: "\n").filter { row in
+                    let fields = row.split(separator: " ")
+                    return fields.count > 1 && (fields[0] == "\(pane.pid)" || fields[1] == "\(pane.pid)" || row.contains(daemon))
+                }
+            let pids = rows.compactMap { Int32($0.split(separator: " ").first ?? "") }
+            let samples = pids.map { pid in
+                let output = SessionHostServerTests.capture(["/usr/bin/sample", "\(pid)", "1"], timeout: 10)
+                let lines = output.split(separator: "\n", omittingEmptySubsequences: false)
+                let graph = lines.drop { !$0.hasPrefix("Call graph:") }.prefix { !$0.hasPrefix("Total number in stack") }.prefix(80)
+                return "sample \(pid):\n" + (graph.isEmpty ? lines.prefix(5) : graph).joined(separator: "\n")
+            }
+            return (["processes:"] + rows.map(String.init) + samples).joined(separator: "\n")
+        }
+    }
+
+    // output goes to a file: a full pipe would stall the command until the deadline killed it
+    private static func capture(_ argv: [String], timeout: TimeInterval) -> String {
+        let path = NSTemporaryDirectory() + "agterm-capture-\(UUID().uuidString)"
+        defer { unlink(path) }
+        guard FileManager.default.createFile(atPath: path, contents: nil), let output = FileHandle(forWritingAtPath: path) else {
+            return "\(argv[0]): no output file"
+        }
+        defer { try? output.close() }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: argv[0])
+        process.arguments = Array(argv.dropFirst())
+        process.standardOutput = output
+        process.standardError = output
+        do { try process.run() } catch { return "\(argv[0]) failed: \(error)" }
+        let deadline = Date().addingTimeInterval(timeout)
+        while process.isRunning, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        let timedOut = process.isRunning
+        if timedOut {
+            kill(process.processIdentifier, SIGKILL)
+            process.waitUntilExit()
+        }
+        let text = (try? String(contentsOfFile: path, encoding: .utf8)) ?? ""
+        return timedOut ? text + "\n\(argv[0]) timed out after \(Int(timeout)) s" : text
     }
 
     private static func available(_ fd: Int32) -> String {
