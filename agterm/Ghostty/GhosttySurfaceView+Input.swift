@@ -140,7 +140,7 @@ extension GhosttySurfaceView {
         var ke = buildKeyEvent(from: event, action: isFlagPress(event) ? GHOSTTY_ACTION_PRESS : GHOSTTY_ACTION_RELEASE)
         ke.text = nil
         _ = ghostty_surface_key(surface, ke)
-        guard clickIntent(event) != .normal, NSEvent.pressedMouseButtons == 0,
+        guard clickIntent(event) != .normal, !mouseButtonsDown(),
               let point = lastReportedMousePoint, point.x >= 0, point.y >= 0 else { return }
         refreshLinkHover(at: point, with: event)
     }
@@ -307,7 +307,7 @@ extension GhosttySurfaceView {
     /// ⌘-hovered link stays highlighted after the mouse leaves the terminal until ⌘ is released. Skipped
     /// mid-drag (a button down) so a selection crossing the edge isn't reported at `-1, -1`.
     override func mouseExited(with event: NSEvent) {
-        guard let surface, NSEvent.pressedMouseButtons == 0 else { return }
+        guard let surface, !mouseButtonsDown() else { return }
         pointerInside = false
         ghostty_surface_mouse_pos(surface, -1, -1, mods(event))
         lastReportedMousePoint = NSPoint(x: -1, y: -1)
