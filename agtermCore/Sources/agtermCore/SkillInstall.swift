@@ -75,9 +75,13 @@ public enum SkillInstall {
     /// MissingSource is thrown when the skill directory to copy does not exist.
     public struct MissingSource: Error, Equatable {}
 
-    /// `codexHome` selects an existing custom root; a missing root is reported and never falls back.
     /// install copies `source` into every target `installTargets` picks for `home`, leaving a user-authored skill alone.
-    public static func install(source: URL, home: URL, codexHome: URL? = nil) throws -> Report {
+    public static func install(source: URL, home: URL) throws -> Report {
+        try install(source: source, home: home, codexHome: nil)
+    }
+
+    /// `codexHome` selects an existing custom root; a missing root is reported and never falls back.
+    public static func install(source: URL, home: URL, codexHome: URL?) throws -> Report {
         let fm = FileManager.default
         guard fm.fileExists(atPath: source.path) else { throw MissingSource() }
         let codexDirectory = codexHome ?? home.appendingPathComponent(".codex")

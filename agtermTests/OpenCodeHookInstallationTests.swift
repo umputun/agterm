@@ -317,7 +317,8 @@ final class OpenCodeHookInstallationTests: XCTestCase {
         RunLoop.main.add(timer, forMode: .common)
         RunLoop.main.add(timer, forMode: .modalPanel)
         defer { timer.invalidate() }
-        let outcome = try await AgentHooksInstaller.installOpenCodePlugin(home: home, scriptDirectory: scripts, environment: environment)
+        let probe = await OpenCodeEnvironmentProbe.detect(environment: environment)
+        let outcome = try AgentHooksInstaller.installOpenCodePlugin(home: home, scriptDirectory: scripts, probe: probe)
         XCTAssertEqual(clickedChoice, button != nil, "manual selection should occur only when detection fails")
         return outcome
     }

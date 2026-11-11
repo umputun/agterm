@@ -310,6 +310,10 @@ extension AgentHooksFiles.CodexResult {
         case .unreadable:
             return "Your \(directory)/config.toml exists but couldn't be read, so agterm left it untouched."
         case .noCodex:
+            if codexHome != nil {
+                return "No \(directory) found (your CODEX_HOME), so Codex hooks were skipped. "
+                    + "Mount or create it, or fix CODEX_HOME, then run this again."
+            }
             return "No \(directory) found, so Codex hooks were skipped. Install Codex, then run this again."
         case .noJq:
             return "jq is not installed, so Codex hooks were skipped: their wrapper needs it. Install jq, then run this again."

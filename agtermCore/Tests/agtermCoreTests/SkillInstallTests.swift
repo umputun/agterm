@@ -182,7 +182,8 @@ struct SkillInstallTests {
         }
         let source = repository.appendingPathComponent("plugins/agterm/skills/agterm")
 
-        let report = try SkillInstall.install(source: source, home: home)
+        let install: (URL, URL) throws -> SkillInstall.Report = SkillInstall.install(source:home:)
+        let report = try install(source, home)
 
         #expect(report.installed.map(\.agent) == ["Claude Code", "Codex"])
         #expect(report.skipped.isEmpty)
@@ -190,7 +191,9 @@ struct SkillInstallTests {
         for target in report.installed {
             #expect(FileManager.default.fileExists(atPath: target.skillDirectory + "/SKILL.md"))
         }
-        #expect(try SkillInstall.install(source: source, home: home).freshSkillsDir == false)
+        let repeated = try SkillInstall.install(source: source, home: home, codexHome: nil)
+        #expect(repeated.installed == report.installed)
+        #expect(repeated.freshSkillsDir == false)
     }
 
     @Test func installLeavesAForeignSkillAlone() throws {

@@ -33,8 +33,48 @@ final class AgentHooksInstallerTests: XCTestCase {
         ]
         for (result, text) in zip(allCodexResults, expected) {
             XCTAssertEqual(result.text, text)
+            let custom = result == .noCodex
+                ? "No /custom/codex home found (your CODEX_HOME), so Codex hooks were skipped. "
+                  + "Mount or create it, or fix CODEX_HOME, then run this again."
+                : text.replacingOccurrences(of: "~/.codex", with: "/custom/codex home")
             XCTAssertEqual(result.text(codexHome: "/custom/codex home"),
-                           text.replacingOccurrences(of: "~/.codex", with: "/custom/codex home"))
+                           custom)
+        }
+    }
+
+    func testCapturedCodexRootControlsBothConfigMergeAndAlertText() throws {
+        let fm = FileManager.default
+        let directory = fm.temporaryDirectory.appendingPathComponent("hooks-report-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: directory) }
+        let home = directory.appendingPathComponent("home")
+        let defaultRoot = home.appendingPathComponent(".codex")
+        let custom = directory.appendingPathComponent("custom codex")
+        let defaultConfig = defaultRoot.appendingPathComponent("config.toml")
+        let original = "model = \"default\"\n"
+        try fm.createDirectory(at: defaultRoot, withIntermediateDirectories: true)
+        try original.write(to: defaultConfig, atomically: true, encoding: .utf8)
+        let probe = OpenCodeEnvironmentProbe.Result(version: .v1, v2ConfigurationDirectory: nil, codexHome: custom.path)
+
+        for rootExists in [false, true] {
+            if rootExists { try fm.createDirectory(at: custom, withIntermediateDirectories: true) }
+            let report = try AgentHooksInstaller.install(probe: probe, home: home)
+
+            XCTAssertFalse(report.isWarning)
+            XCTAssertNil(report.docs)
+            let config = custom.appendingPathComponent("config.toml")
+            if rootExists {
+                let contents = try String(contentsOf: config, encoding: .utf8)
+                XCTAssertTrue(contents.contains("[[hooks.SessionStart]]"))
+                XCTAssertTrue(contents.contains(AgentHooksFiles.destination(home: home).path))
+                XCTAssertTrue(report.text.contains("Codex lifecycle hooks merged into \(config.path)"))
+            } else {
+                XCTAssertFalse(fm.fileExists(atPath: custom.path))
+                XCTAssertTrue(report.text.contains("No \(custom.path) found (your CODEX_HOME), so Codex hooks were skipped. "
+                    + "Mount or create it, or fix CODEX_HOME, then run this again."))
+            }
+            XCTAssertEqual(try String(contentsOf: defaultConfig, encoding: .utf8), original)
+            XCTAssertFalse(fm.fileExists(atPath: defaultConfig.path + ".bak"))
+            XCTAssertFalse(report.text.contains("~/.codex"))
         }
     }
 
