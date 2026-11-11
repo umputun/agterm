@@ -4,7 +4,8 @@ import agtermCore
 /// Installs the bundled agent-status hooks package into the user's home: the scripts into
 /// `~/.config/agterm/agent-status/`, the bundled `agtermctl`'s absolute path baked into the wrapper, a
 /// marker-guarded `source` line in `~/.zshrc`/`~/.bashrc`/`~/.config/fish/config.fish`, the five Claude Code
-/// hooks merged into `~/.claude/settings.json`, the six Codex lifecycle hooks into `~/.codex/config.toml`,
+/// hooks merged into `~/.claude/settings.json`, the six Codex lifecycle hooks into `$CODEX_HOME/config.toml`
+/// (default `~/.codex`),
 /// and — when each is configured — Pi's lifecycle extension into `~/.pi/agent/extensions/` and OpenCode's
 /// plugin into `~/.config/opencode/plugins/`. Claude/Codex configs get a `.bak` first; the Codex step parses
 /// TOML and points at the docs for a manual merge when that file already has hooks or does not parse. The
@@ -52,7 +53,6 @@ enum AgentHooksInstaller {
         }
     }
 
-    // Returns the same report the alert uses; an explicit home lets hosted fixtures cover the complete adapter.
     static func install(
         probe: OpenCodeEnvironmentProbe.Result?,
         home: URL = FileManager.default.homeDirectoryForCurrentUser

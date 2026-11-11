@@ -80,8 +80,6 @@ The Homebrew cask already installs the `agtermctl` command-line tool; from the D
 
 The skill is also published as a plugin from this repository, which puts it wherever your agent looks for one:
 
-Install the skill by one route or the other, never both: two copies leave it undefined which one the agent picks.
-
 ### Claude Code
 
 ```sh
@@ -96,7 +94,9 @@ codex plugin marketplace add umputun/agterm
 codex plugin add agterm@agterm
 ```
 
-The Help menu's skill and hooks installers discover exported `CODEX_HOME` through your interactive login shell. A nonempty override selects the Codex directory; relative paths resolve against that shell's working directory. If unset, empty, or shell discovery fails or times out, they use `~/.codex`. The selected directory must already exist; a missing custom directory is reported and skipped rather than falling back.
+Install the skill by one route or the other, never both: two copies leave it undefined which one the agent picks.
+
+The Help menu installers honor an exported `CODEX_HOME`; [Agent status](https://agterm.com/docs#status) has the details.
 
 ## Scripting agterm
 

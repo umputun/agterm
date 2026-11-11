@@ -27,7 +27,7 @@ struct CodexInstallationTests {
         try "default config".write(to: defaultCodex.appendingPathComponent("config.toml"), atomically: true, encoding: .utf8)
     }
 
-    @Test func testCustomSkillInstallationAndRefreshPreserveDefaultRoot() throws {
+    @Test func customSkillInstallationAndRefreshPreserveDefaultRoot() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let first = try SkillInstall.install(source: source, home: home, codexHome: custom)
         let installed = custom.appendingPathComponent("skills/agterm/SKILL.md")
@@ -41,7 +41,7 @@ struct CodexInstallationTests {
         try assertDefaultUntouched()
     }
 
-    @Test func testCustomSkillOwnershipAndWriteFailureMessagesIncludeDestination() throws {
+    @Test func customSkillOwnershipAndWriteFailureMessagesIncludeDestination() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let destination = custom.appendingPathComponent("skills/agterm")
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
@@ -61,7 +61,7 @@ struct CodexInstallationTests {
         try assertDefaultUntouched()
     }
 
-    @Test func testMissingCustomRootSkipsCodexWithoutCreatingItOrUsingDefault() throws {
+    @Test func missingCustomRootSkipsCodexWithoutCreatingItOrUsingDefault() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.removeItem(at: custom)
         let report = try SkillInstall.install(source: source, home: home, codexHome: custom)
@@ -74,7 +74,7 @@ struct CodexInstallationTests {
         try assertDefaultUntouched()
     }
 
-    @Test func testDefaultSkillReportRetainsItsPathsAndReasons() throws {
+    @Test func defaultSkillReportRetainsItsPathsAndReasons() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let report = try SkillInstall.install(source: source, home: home)
         #expect(report.skipped.isEmpty)
@@ -87,7 +87,7 @@ struct CodexInstallationTests {
         #expect(skipped.skipped.first?.reason == "a different 'agterm' skill is already there — left untouched")
     }
 
-    @Test func testMissingDefaultRootSkipsCodexWithoutCreatingIt() throws {
+    @Test func missingDefaultRootSkipsCodexWithoutCreatingIt() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.removeItem(at: defaultCodex)
         let result = try SkillInstall.install(source: source, home: home)
@@ -97,7 +97,7 @@ struct CodexInstallationTests {
         #expect(!FileManager.default.fileExists(atPath: defaultCodex.path))
     }
 
-    @Test func testCustomHooksMergeBacksUpPreservesPermissionsAndIsIdempotent() throws {
+    @Test func customHooksMergeBacksUpPreservesPermissionsAndIsIdempotent() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let config = custom.appendingPathComponent("config.toml")
         let original = "model = \"test\"\n"
@@ -117,7 +117,7 @@ struct CodexInstallationTests {
         try assertDefaultUntouched()
     }
 
-    @Test func testCustomHooksPreserveSymlinkAndForeignOrUnreadableConfig() throws {
+    @Test func customHooksPreserveSymlinkAndForeignOrUnreadableConfig() throws {
         defer { try? FileManager.default.removeItem(at: directory) }
         let config = custom.appendingPathComponent("config.toml")
         let target = directory.appendingPathComponent("linked.toml")

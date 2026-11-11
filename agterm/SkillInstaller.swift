@@ -2,9 +2,9 @@ import AppKit
 import agtermCore
 
 /// Installs the bundled agent skill into the skills directories of the coding agents present on the machine:
-/// Claude Code (`~/.claude/skills/agterm/`) and Codex (`~/.codex/skills/agterm/`), both using the same
-/// SKILL.md Agent-Skill format, so an agent running INSIDE an agterm session learns to drive the app via
-/// `agtermctl`. The copy is `agtermCore.SkillInstall.install`; this type owns the alert. Idempotent, and it
+/// Claude Code (`~/.claude/skills/agterm/`) and Codex (`$CODEX_HOME/skills/agterm/`, default `~/.codex`),
+/// both using the same SKILL.md Agent-Skill format, so an agent running INSIDE an agterm session learns to
+/// drive the app via `agtermctl`. The copy is `agtermCore.SkillInstall.install`; this type owns the alert. Idempotent, and it
 /// refuses to overwrite a same-named skill the user authored.
 @MainActor
 enum SkillInstaller {
