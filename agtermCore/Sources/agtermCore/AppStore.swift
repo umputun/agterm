@@ -792,8 +792,7 @@ public final class AppStore {
         return selectSession(target)
     }
 
-    /// Why `navigateSession(direction)` cannot land, nil when it can. Only a `position` past the end of
-    /// `navigableSessions` misses; every other step lands somewhere in a non-empty list.
+    /// The error for a `position` past the end of `navigableSessions`; nil for any other direction.
     public func navigationError(_ direction: SessionNavigation) -> String? {
         guard case .position(let position) = direction else { return nil }
         let count = navigableSessions.count
