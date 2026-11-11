@@ -161,6 +161,16 @@ extension AppActions {
     /// is not the active one so `store` resolves there. A raise that fails (the window still attaching)
     /// drops the pick as a window step does.
     func selectAttention(windowID: WindowInfo.ID, sessionID: UUID) {
+        raiseAndSelect(windowID: windowID, sessionID: sessionID) { revealActiveBlockedPane(captured: $0) }
+    }
+
+    /// followSessionLink selects in the clicked pane's namespace and focuses without revealing a pane.
+    func followSessionLink(_ id: UUID, from origin: LinkPolicy.ClickOrigin, pane: UUID?) {
+        guard let target = library.sessionLinkTarget(id, from: origin, pane: pane) else { return }
+        raiseAndSelect(windowID: target.windowID, sessionID: target.sessionID) { _ in focusActiveSession() }
+    }
+
+    private func raiseAndSelect(windowID: WindowInfo.ID, sessionID: UUID, focus: (AgentIndicator?) -> Void) {
         guard canSelectAttention(windowID: windowID, sessionID: sessionID),
               let target = library.store(for: windowID) else { return }
         if windowID != library.activeWindowID {
@@ -169,7 +179,7 @@ extension AppActions {
         }
         target.noteUserActivity()
         let indicator = target.selectSession(sessionID)
-        revealActiveBlockedPane(captured: indicator)
+        focus(indicator)
     }
 
     /// revealRestoredWindow fronts the window a recent-closed reopen restored into. It publishes the id

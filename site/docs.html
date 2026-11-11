@@ -3584,6 +3584,19 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               another host is ignored rather than revealed, so a stray link can't trigger a Finder network mount.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A ⌘-click on an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://session/&lt;id&gt;</span>
+              link in a pane, split or scratch selects that session and raises its window, with no confirmation.
+              Print one with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"</span>,
+              or use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[label](agterm://session/&lt;id&gt;)</span>
+              in Claude Code markdown, which Claude Code emits as OSC 8. In a session attached from another Mac,
+              the id is that Mac's and selects the one row here showing it; the click never attaches anything or acts there.
+              Nothing happens for an unknown or closed session, when the destination window is zoomed, has the dashboard
+              open or a picker pending, for any other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://</span>
+              form, on a ⌘⌥-click, or for a link in a HUD, the quick terminal or a program overlay.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Link detection follows the program in the pane. While one has mouse reporting on —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tmux</span> with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse on</span>, or stock

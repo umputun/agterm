@@ -50,7 +50,7 @@ extension ControlServer {
         case .text(let link): openTextLink(link, forward: generation, completion: done)
         case .document(let url, _, let percent): openDocumentLink(url, session: id, sizePercent: percent, forward: generation,
                                                                   completion: done)
-        case .reveal, .ignore, .browser, .overlay, .forwardRemote:
+        case .reveal, .ignore, .browser, .overlay, .forwardRemote, .selectSession:
             refuseForwardedClick(.notAPage, session: id, generation: generation)
         }
     }

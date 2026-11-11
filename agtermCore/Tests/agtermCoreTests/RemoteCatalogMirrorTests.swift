@@ -682,6 +682,38 @@ final class RemoteCatalogMirrorTests {
         #expect(effects.added == [entry.id])
     }
 
+    @Test(arguments: [false, true])
+    func anEndedRowThatGainsAScratchTakesItsEndpointAndKeepsItsPanes(startedLive: Bool) throws {
+        let entry = session(panes: startedLive ? [pane()] : [], ended: !startedLive)
+        let id = UUID()
+        let scratch = CatalogPane(identity: id, daemon: ZmxSupport.scratchDaemonName(for: id),
+                                  endpoint: ControlZmxEndpoint(executable: "/srv/other-zmx", socketDirectory: "/run/other"))
+        _ = open([entry])
+        let row = try #require(store.session(withID: entry.id))
+        let before = try #require(row.remotePresentation?.binding)
+        if !startedLive { #expect(before.origin == nil) }
+
+        delta(1, .sessionChanged(withScratch(entry, scratch, ended: true)))
+
+        let binding = try #require(row.remotePresentation?.binding)
+        #expect(binding.origin?.endpoint == scratch.endpoint)
+        #expect(binding.daemonsByPane == before.daemonsByPane)
+        #expect(binding.remoteSessionID == before.remoteSessionID)
+        #expect(binding.presentationVersion == before.presentationVersion)
+        #expect(binding.catalogOwned == before.catalogOwned)
+        #expect(binding.originHeadless == before.originHeadless)
+
+        let moved = CatalogPane(identity: id, daemon: scratch.daemon,
+                                endpoint: ControlZmxEndpoint(executable: "/srv/moved-zmx", socketDirectory: "/run/moved"))
+        delta(2, .sessionChanged(withScratch(entry, moved, ended: true)))
+        #expect(row.remotePresentation?.binding.origin?.endpoint == moved.endpoint)
+        #expect(row.remotePresentation?.binding.daemonsByPane == before.daemonsByPane)
+
+        delta(3, .sessionChanged(withScratch(entry, nil, ended: true)))
+        #expect(row.remotePresentation?.binding.origin?.endpoint == moved.endpoint)
+        #expect(row.remotePresentation?.binding.daemonsByPane == before.daemonsByPane)
+    }
+
     @Test(arguments: [true, false])
     func aServerScratchStatusLandsOnTheScratch(byIdentity: Bool) throws {
         let scratch = scratchPane()
