@@ -9,6 +9,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
 
     private final class Followed {
         var opened: [URL] = []
+        var selected: [(UUID, LinkPolicy.ClickOrigin, UUID?)] = []
         var revealed: [URL] = []
         var overlaid: [(URL, UUID, Int?)] = []
         var images: [(URL, UUID)] = []
@@ -36,6 +37,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
     private func recordLinks(mode: LinkOpenMode, overlayOpens: Bool) -> Followed {
         let followed = Followed()
         LinkOpener.shared.mode = { mode }
+        LinkOpener.shared.selectSession = { followed.selected.append(($0, $1, $2)) }
         LinkOpener.shared.open = { followed.opened.append($0) }
         LinkOpener.shared.reveal = { followed.revealed.append($0) }
         LinkOpener.shared.overlay = { url, session, percent in
@@ -91,6 +93,68 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let remoteSession = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         remote.session = remoteSession
         XCTAssertEqual(remote.linkClickOrigin, .remotePane(remoteSession.id))
+    }
+
+    func testCommandClickOnAnOSC8SessionLinkSelectsItsTarget() throws {
+        let id = UUID()
+        let fixture = try LinkClickFixture(printing: "\\033]8;;agterm://session/\(id.uuidString)\\033\\\\example session\\033]8;;\\033\\\\")
+        defer { fixture.close() }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: [.command])
+        fixture.click(flags: [.command])
+        fixture.wait { !followed.selected.isEmpty }
+        XCTAssertEqual(followed.selected.map(\.0), [id], fixture.geometry)
+        XCTAssertEqual(followed.selected.map(\.1), [fixture.surface.linkClickOrigin])
+        XCTAssertEqual(followed.selected.map(\.2), [fixture.surface.linkClickPane])
+        XCTAssertTrue(followed.opened.isEmpty)
+    }
+
+    func testSessionLinkIntentsPreserveThePaneAndRevealDoesNothing() {
+        let session = Session(initialCwd: NSTemporaryDirectory())
+        let pane = bareSurface()
+        pane.session = session
+        let id = UUID()
+        let raw = "agterm://session/\(id.uuidString)"
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        pane.openLink(raw, intent: .reveal)
+        XCTAssertTrue(followed.selected.isEmpty)
+        XCTAssertTrue(followed.revealed.isEmpty)
+        pane.openLink(raw, intent: .browser)
+        pane.openLink(raw, intent: .normal)
+        XCTAssertEqual(followed.selected.map(\.0), [id, id])
+        XCTAssertEqual(followed.selected.map(\.1), [.pane(session.id), .pane(session.id)])
+        XCTAssertEqual(followed.selected.map(\.2), [session.paneIdentity, session.paneIdentity])
+        XCTAssertTrue(followed.revealed.isEmpty)
+        XCTAssertTrue(followed.opened.isEmpty)
+    }
+
+    func testCommandOptionSessionLinkClicksDoNothing() throws {
+        let fixture = try LinkClickFixture(printing: "\\033]8;;agterm://session/\(UUID().uuidString)\\033\\\\example session\\033]8;;\\033\\\\")
+        defer { fixture.close() }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let chords: [NSEvent.ModifierFlags] = [[.command, .option], [.command, .option, .shift]]
+        for flags in chords {
+            fixture.move(flags: flags)
+            fixture.click(flags: flags)
+        }
+        fixture.move(flags: [.command])
+        fixture.click(flags: [.command])
+        fixture.wait { !followed.selected.isEmpty }
+        XCTAssertEqual(followed.selected.count, 1, fixture.geometry)
+        XCTAssertTrue(followed.revealed.isEmpty)
+        XCTAssertTrue(followed.opened.isEmpty)
+    }
+
+    func testAHudSessionLinkNeverSelects() {
+        let hud = bareSurface()
+        hud.focusSession = Session(initialCwd: NSTemporaryDirectory())
+        hud.hudBodyFile = "/tmp/agterm-test-hud-body-missing"
+        defer { hud.hudBodyFile = nil }
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        hud.openLink("agterm://session/\(UUID().uuidString)", intent: .normal)
+        XCTAssertTrue(followed.selected.isEmpty)
+        XCTAssertTrue(followed.opened.isEmpty)
+        XCTAssertTrue(followed.revealed.isEmpty)
     }
 
     func testAPaneImagePathShowsOverTheSessionAndRevealsWhenItCannot() {

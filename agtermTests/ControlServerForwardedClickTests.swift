@@ -139,6 +139,7 @@ final class ControlServerForwardedClickTests: XCTestCase {
             (stateDir.appendingPathComponent("gone.md").path, session.paneIdentity, .notFound),
             ("src/gone.py:3", session.paneIdentity, .notFound),
             (binary, session.paneIdentity, .notAPage),
+            ("agterm://session/0F5C1E2A-3B4D-4E6F-8A9B-0C1D2E3F4A5B", session.paneIdentity, .notAPage),
             ("https://example.com/a", session.paneIdentity, .notAPage),
             (try write("x.md", "# x\n"), UUID(), .paneNotAttached),
         ]

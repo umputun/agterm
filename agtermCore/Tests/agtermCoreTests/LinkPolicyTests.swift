@@ -3,6 +3,49 @@ import Testing
 @testable import agtermCore
 
 struct LinkPolicyTests {
+    private static let linkID = UUID(uuidString: "0F5C1E2A-3B4D-4E6F-8A9B-0C1D2E3F4A5B")!
+    private static let sessionLinks = [
+        "agterm://session/0F5C1E2A-3B4D-4E6F-8A9B-0C1D2E3F4A5B",
+        "agterm://session/0f5c1e2a-3b4d-4e6f-8a9b-0c1d2e3f4a5b",
+        "AGTERM://SESSION/0F5C1E2A-3B4D-4E6F-8A9B-0C1D2E3F4A5B",
+    ]
+    private static let rejectedSessionLinks: [String] = {
+        let id = linkID.uuidString
+        let valid = "agterm://session/" + id
+        return [valid + "/", valid + "?", valid + "#", valid + "?a=1",
+                "agterm://@session/" + id, "agterm://u:p@session/" + id,
+                "agterm://session:80/" + id, "agterm://session:/" + id,
+                "agterm://session//" + id, "agterm://session/x/" + id,
+                "agterm:///session/" + id, "agterm:session/" + id,
+                "agterm://session/" + id.replacingOccurrences(of: "-", with: ""),
+                "agterm://session/{" + id + "}", "agterm://session/%30" + id.dropFirst(),
+                "agterm://window/" + id, "agterm://session", "agterm://session/",
+                valid + " ", " " + valid, "agterm://session/not-a-uuid"]
+    }()
+
+    @Test(arguments: sessionLinks)
+    func exactSessionLinksParseWithoutChangingDisposition(_ raw: String) {
+        #expect(LinkPolicy.sessionLink(raw) == Self.linkID)
+        #expect(LinkPolicy.disposition(for: raw) == .ignore)
+    }
+
+    @Test(arguments: LinkOpenMode.allCases, sessionLinks)
+    func sessionLinksSelectOnlyFromShellOrigins(_ mode: LinkOpenMode, _ raw: String) {
+        for origin in [LinkPolicy.ClickOrigin.pane(Self.session), .remotePane(Self.session), .scratch(Self.session)] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin) == .selectSession(Self.linkID))
+        }
+        for origin in [LinkPolicy.ClickOrigin.hud, .programOverlay, .quick] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin) == .ignore)
+        }
+    }
+
+    @Test(arguments: rejectedSessionLinks, LinkOpenMode.allCases)
+    func malformedSessionLinksAreIgnoredEverywhere(_ raw: String, _ mode: LinkOpenMode) {
+        #expect(LinkPolicy.sessionLink(raw) == nil)
+        for origin in [LinkPolicy.ClickOrigin.pane(Self.session), .remotePane(Self.session), .scratch(Self.session), .hud, .programOverlay, .quick] {
+            #expect(LinkPolicy.route(for: raw, mode: mode, origin: origin) == .ignore)
+        }
+    }
     // MARK: disposition (open / reveal / ignore)
 
     /// The garbage suffixes model a `String(cString:)` over-read past `len`: the trailing space + junk
@@ -636,6 +679,7 @@ struct LinkPolicyTests {
         #expect(LinkPolicy.Route.browser(web).localFile == nil)
         #expect(LinkPolicy.Route.overlay(web, session: session, sizePercent: nil).localFile == nil)
         #expect(LinkPolicy.Route.ignore.localFile == nil)
+        #expect(LinkPolicy.Route.selectSession(session).localFile == nil)
     }
 
     @Test(arguments: [("/x/app.log", nil, true), ("/x/run.OUT", nil, true), ("/x/app.log", 42, false), ("/x/notes.txt", nil, false),

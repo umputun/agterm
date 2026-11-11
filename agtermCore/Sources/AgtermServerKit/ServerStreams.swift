@@ -272,7 +272,7 @@ extension ServerStreams {
         case .markdown(let url, _, let percent): (source, sizePercent) = (.markdown(path: url.path(percentEncoded: false)), percent)
         case .text(let link): (source, sizePercent) = (.text(path: link.url.path(percentEncoded: false), line: link.line), link.sizePercent)
         case .document(let url, _, let percent): (source, sizePercent) = (.document(path: url.path(percentEncoded: false)), percent)
-        case .reveal, .ignore, .browser, .overlay, .forwardRemote: return nil
+        case .reveal, .ignore, .browser, .overlay, .forwardRemote, .selectSession: return nil
         }
         let navigation = if case .markdown = source { true } else { false }
         return (source, ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,

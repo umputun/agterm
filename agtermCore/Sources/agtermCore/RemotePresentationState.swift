@@ -51,6 +51,13 @@ public struct RemoteBinding: Equatable, Sendable {
 
     public func localPane(forRemote identity: UUID) -> UUID? { localByRemotePane[identity] }
 
+    /// replacingOrigin is this binding reached through `origin`, every pane mapping and flag kept.
+    func replacingOrigin(_ origin: Origin) -> RemoteBinding {
+        RemoteBinding(remoteSessionID: remoteSessionID, daemonsByLocalPane: daemonsByLocalPane,
+                      presentationVersion: presentationVersion, origin: origin, catalogOwned: catalogOwned,
+                      originHeadless: originHeadless)
+    }
+
     /// daemonsByPane is the origin daemon each local pane attaches to.
     public var daemonsByPane: [UUID: String] { daemonsByLocalPane }
 

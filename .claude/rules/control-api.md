@@ -771,6 +771,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
   sent. The click is a
   gesture with no control command: its page reads back as the replica page on the session node.
+- Session links use `LinkPolicy.sessionLink`: exactly `agterm://session/` (case-insensitive prefix) plus a
+  36-character hyphenated UUID (either case), with no suffix, query, fragment, credentials, port or encoding.
+  The raw string is checked, not URL components, so even an empty port is refused.
+  The `.selectSession` route precedes remote forwarding in every link-open mode, from pane, remote pane and
+  scratch only; quick terminal and program overlay clicks are ignored, as for the link-open overlay.
+  `WindowLibrary.sessionLinkTarget` takes the namespace from the clicked pane's binding: local shells use local
+  ids, mapped remote panes and catalog-owned scratches use the origin host and endpoint, and local splits use
+  local ids; missing bindings or endpoints and ambiguous origin matches select nothing.
+  `Session.showsOriginSession`, shared with `attachedParentRows`, matches that origin identity.
+  A scratch-only catalog row takes its origin from its scratch, without making it a reattachable pane.
+  `followSessionLink` uses gated `raiseAndSelect`: unknown or closed rows, zoom, dashboard and pending pickers
+  refuse; otherwise it raises the window and selects normally, focusing without an attention reveal or confirmation.
+  ⌘⌥ does nothing; ⌘⇧ selects like ⌘.
+  Both forwarded-click receivers refuse `.selectSession` with `.notAPage`; neither selects on the origin.
+  There is no control twin: `session select` and `window select` already cover selection, read back through
+  the existing selected/frontmost tree fields.
+  HUD links are deferred because a mirrored HUD carries no origin; their disposition stays ignored.
 - libghostty keeps a `:line[:column]` suffix in the path it hands over and resolves a relative path only when that
   exact path exists, so `./main.go:42` arrives raw. `LinkPolicy.locations` lists the candidates for such a link, the
   literal path first so a file named with a colon wins, then the path without the suffix. libghostty keeps a sentence's

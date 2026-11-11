@@ -120,6 +120,8 @@ public enum LinkPolicy {
         /// forwardRemote hands a path clicked in a pane attached from another Mac, as typed, to that Mac, which
         /// resolves and opens it; this Mac never reads or reveals it.
         case forwardRemote(String, session: UUID)
+        /// selectSession selects the row a session link names, read in the clicked pane's namespace.
+        case selectSession(UUID)
         case ignore
 
         /// localFile is the file a local route names, which a reveal chord selects in Finder instead; nil for a
@@ -128,7 +130,7 @@ public enum LinkPolicy {
             switch self {
             case .image(let url, _), .markdown(let url, _, _), .document(let url, _, _), .reveal(let url): return url
             case .text(let link): return link.url
-            case .browser, .overlay, .forwardRemote, .ignore: return nil
+            case .browser, .overlay, .forwardRemote, .selectSession, .ignore: return nil
             }
         }
     }
@@ -393,8 +395,22 @@ public enum LinkPolicy {
     /// local file. Whether the overlay is free right now is the caller's check.
     public static func route(for raw: String, mode: LinkOpenMode, origin: ClickOrigin,
                              localHosts: Set<String> = localHostNames, home: String = NSHomeDirectory()) -> Route {
+        if let id = sessionLink(raw) {
+            switch origin {
+            case .pane, .remotePane, .scratch: return .selectSession(id)
+            case .hud, .programOverlay, .quick: return .ignore
+            }
+        }
         if case .remotePane(let session) = origin, forwardsRemotely(raw) { return .forwardRemote(raw, session: session) }
         return route(disposition(for: raw, localHosts: localHosts, home: home), mode: mode, origin: origin)
+    }
+
+    private static let sessionLinkPrefix = "agterm://session/"
+
+    /// sessionLink accepts only the raw session authority and a hyphenated UUID, without URL normalization.
+    public static func sessionLink(_ raw: String) -> UUID? {
+        guard raw.count == sessionLinkPrefix.count + 36, raw.prefix(sessionLinkPrefix.count).lowercased() == sessionLinkPrefix else { return nil } // 36: a hyphenated UUID
+        return UUID(uuidString: String(raw.dropFirst(sessionLinkPrefix.count)))
     }
 
     /// Maps a location `locations` offered, and the caller found on disk, to its route by the same origin rules.

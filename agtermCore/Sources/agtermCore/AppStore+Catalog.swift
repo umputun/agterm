@@ -117,6 +117,7 @@ extension AppStore {
                 }
                 scheduleTreeChanged()
             }
+            refreshCatalogOrigin(session, scratch: fields.scratch?.pane, host: host)
             // the stream outlives the panes while the scratch runs, and what it showed goes with it
             if presented, !session.presentsCatalog {
                 withdrawRemoteReplicas(of: session)
@@ -223,10 +224,20 @@ extension AppStore {
         if fields.shown { emitPaneVisibility(.paneSplit, session: session, shown: true) }
     }
 
+    /// refreshCatalogOrigin points an ended row at its running scratch's server; catalogBinding covers every other rebind.
+    private func refreshCatalogOrigin(_ session: Session, scratch: CatalogPane?, host: String) {
+        guard let scratch, let state = session.remotePresentation else { return }
+        let origin = RemoteBinding.Origin(host: host, endpoint: scratch.endpoint, sessionName: session.id.uuidString)
+        guard state.binding.origin != origin else { return }
+        var updated = state
+        updated.binding = state.binding.replacingOrigin(origin)
+        session.remotePresentation = updated
+    }
+
     /// catalogBinding ties a row to its catalog session; local and catalog identities are the same.
     static func catalogBinding(_ entry: CatalogSession, host: String, protocolVersion: Int) -> RemoteBinding {
         let daemons = Dictionary(entry.panes.map { ($0.identity, $0.daemon) }) { first, _ in first }
-        let origin = entry.panes.first.map {
+        let origin = (entry.panes.first ?? entry.fields.scratch?.pane).map {
             RemoteBinding.Origin(host: host, endpoint: $0.endpoint, sessionName: entry.id.uuidString)
         }
         return RemoteBinding(remoteSessionID: entry.id.uuidString, daemonsByLocalPane: daemons,
