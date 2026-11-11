@@ -329,6 +329,7 @@ struct ClaudeStatusHookTests {
         for tool in ["ps", "dirname"] {
             try fm.createSymbolicLink(at: bin.appendingPathComponent(tool), withDestinationURL: URL(fileURLWithPath: "/usr/bin/\(tool)"))
         }
+        try fm.createSymbolicLink(at: bin.appendingPathComponent("bash"), withDestinationURL: URL(fileURLWithPath: "/bin/bash"))
 
         let result = try run(chain: ["login", "claude"], args: ["active"], extraEnv: ["PATH": bin.path],
                              input: .pipe(Self.payload("PostToolUse", agentID: "a1")))
