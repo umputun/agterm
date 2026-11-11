@@ -738,7 +738,8 @@ struct ServerStreamsTests {
         let request = await offPool { viewer.first { if case .overlayRequest = $0 { true } else { false } } }
         guard case .overlayRequest(let shown)? = request, let token = shown.token else { Issue.record("no tokened offer"); return }
         #expect(shown.job == job)
-        #expect(session.remoteOverlays.slot(nil)?.owner == harness.store.presentationHub?.presenterGeneration(session: session.id))
+        #expect(session.remoteOverlays.slot(nil)?.owner == harness.store.presentationHub?.presenterGeneration(session: session.id),
+                "job \(String(describing: harness.store.overlayJobs?.job(job)?.state)), presenter \(streams.presentationHub.hasPresenter(session: session.id))")
         #expect(streams.claimJobStream(job).ok == false)
         #expect(streams.claimJobStream(job, token: "other").ok == false)
         #expect(streams.claimJobStream(job, token: token).ok)
