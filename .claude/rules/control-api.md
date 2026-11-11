@@ -778,7 +778,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   scratch only; quick terminal and program overlay clicks are ignored, as for the link-open overlay.
   `WindowLibrary.sessionLinkTarget` takes the namespace from the clicked pane's binding: local shells use local
   ids, mapped remote panes and catalog-owned scratches use the origin host and endpoint, and local splits use
-  local ids; missing bindings or endpoints and ambiguous origin matches select nothing.
+  local ids; a scratch on any other row uses local ids.
+  A remote pane click with no binding or no clicked pane, a mapped pane whose binding has no origin endpoint,
+  and ambiguous origin matches select nothing.
   `Session.showsOriginSession`, shared with `attachedParentRows`, matches that origin identity.
   A scratch-only catalog row takes its origin from its scratch, without making it a reattachable pane.
   `followSessionLink` uses gated `raiseAndSelect`: unknown or closed rows, zoom, dashboard and pending pickers

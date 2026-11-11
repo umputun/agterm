@@ -125,7 +125,7 @@ public enum LinkPolicy {
         case ignore
 
         /// localFile is the file a local route names, which a reveal chord selects in Finder instead; nil for a
-        /// web route, a forwarded one and an ignored link.
+        /// web route, a forwarded one, a session link and an ignored link.
         public var localFile: URL? {
             switch self {
             case .image(let url, _), .markdown(let url, _, _), .document(let url, _, _), .reveal(let url): return url
@@ -387,7 +387,8 @@ public enum LinkPolicy {
         clickIntent(modifiers: modifiers, mode: mode, origin: origin, mouseCaptured: mouseCaptured) == .browser
     }
 
-    /// Maps a raw link to its route: `disposition` decides first. A web link the overlay can show
+    /// Maps a raw link to its route: a session link (`sessionLink`) decides first, then remote forwarding, then
+    /// `disposition`. A web link the overlay can show
     /// (`overlayCanShow`), clicked in a pane or the scratch terminal, goes to that session's overlay at the
     /// mode's size when `mode` is an overlay one; an image from there shows over the session in every mode, and a
     /// markdown or HTML file renders there at the mode's size, 95% in browser mode, since a browser would get the raw file.
@@ -408,7 +409,7 @@ public enum LinkPolicy {
     private static let sessionLinkPrefix = "agterm://session/"
 
     /// sessionLink accepts only the raw session authority and a hyphenated UUID, without URL normalization.
-    public static func sessionLink(_ raw: String) -> UUID? {
+    static func sessionLink(_ raw: String) -> UUID? {
         guard raw.count == sessionLinkPrefix.count + 36, raw.prefix(sessionLinkPrefix.count).lowercased() == sessionLinkPrefix else { return nil } // 36: a hyphenated UUID
         return UUID(uuidString: String(raw.dropFirst(sessionLinkPrefix.count)))
     }
