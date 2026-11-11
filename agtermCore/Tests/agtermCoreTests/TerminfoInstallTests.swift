@@ -422,9 +422,10 @@ private struct Fixture {
         process.standardError = err
         let input = Pipe()
         process.standardInput = input
-        try process.run()
+        // written before launch: a child that exits unread would SIGPIPE a later write on Linux
         if let stdin { try input.fileHandleForWriting.write(contentsOf: Data(stdin.utf8)) }
         try input.fileHandleForWriting.close()
+        try process.run()
         let stdout = out.fileHandleForReading.readDataToEndOfFile()
         let stderr = err.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()

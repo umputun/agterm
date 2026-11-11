@@ -75,9 +75,9 @@ struct CodexStatusHookTests {
         proc.standardInput = standardInput
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
-        try proc.run()
-        standardInput.fileHandleForWriting.write(Data(input.utf8))
+        try standardInput.fileHandleForWriting.write(contentsOf: Data(input.utf8))
         try standardInput.fileHandleForWriting.close()
+        try proc.run()
         proc.waitUntilExit()
 
         func lines(_ url: URL) -> [String] {
