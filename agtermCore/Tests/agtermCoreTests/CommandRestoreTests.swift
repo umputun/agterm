@@ -245,6 +245,23 @@ struct CommandRestoreTests {
         #expect(CommandRestore.shellQuotedLine(["echo", "it's"]) == "'echo' 'it'\\''s'")
     }
 
+    // a canonical search skipped an apostrophe fused with a combining mark, which then closed the quote.
+    @Test(arguments: ["/bin/sh", "/bin/bash", "/bin/zsh"])
+    func shellQuotedLineRoundTripsApostrophesFusedWithMarks(shell: String) throws {
+        let arguments = ["it's", "it'\u{301}s; echo INJECTED", "x'\u{FE0F}", "y'\u{1F3FB}"]
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-c", CommandRestore.shellQuotedLine(["/usr/bin/printf", "%s\\0"] + arguments)]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        #expect(process.terminationStatus == 0)
+        #expect(data == Data((arguments.joined(separator: "\0") + "\0").utf8))
+    }
+
     @Test func basenameTakesLastPathComponent() {
         #expect(CommandRestore.basename("/usr/bin/vim") == "vim")
         #expect(CommandRestore.basename("ssh") == "ssh")

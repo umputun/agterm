@@ -245,7 +245,7 @@ public enum CommandRestore {
 
     /// POSIX single-quote one argument: wrap in `'…'`, and render each embedded `'` as `'\''`.
     private static func shellQuote(_ arg: String) -> String {
-        "'" + arg.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        "'" + arg.replacingOccurrences(of: "'", with: "'\\''", options: .literal) + "'"
     }
 
     /// Parse a macOS `KERN_PROCARGS2` blob into the process's argv. Layout: a host-order `Int32` argc,
