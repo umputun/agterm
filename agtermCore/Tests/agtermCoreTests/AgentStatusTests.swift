@@ -58,6 +58,21 @@ struct AgentStatusTests {
         #expect(status.clearedBy(keystroke: keystroke, reset: reset) == cleared)
     }
 
+    @Test(arguments: [
+        (StatusReset.firstKey, StatusKeystroke.other, true),
+        (StatusReset.firstKey, StatusKeystroke.interrupt, true),
+        (StatusReset.firstKey, StatusKeystroke.submit, true),
+        (StatusReset.enter, StatusKeystroke.other, false),
+        (StatusReset.enter, StatusKeystroke.interrupt, false),
+        (StatusReset.enter, StatusKeystroke.submit, true),
+        (StatusReset.never, StatusKeystroke.other, false),
+        (StatusReset.never, StatusKeystroke.interrupt, false),
+        (StatusReset.never, StatusKeystroke.submit, false),
+    ])
+    func clearsBadgeFollowsTheResetMode(reset: StatusReset, keystroke: StatusKeystroke, cleared: Bool) {
+        #expect(reset.clearsBadge(on: keystroke) == cleared)
+    }
+
     @Test func indicatorClearsOnlyFromTheOwningPaneUnderTheResetMode() {
         let right = AgentIndicator(status: .completed, statusPane: .right)
         #expect(right.clearedBy(pane: .right, keystroke: .other, reset: .firstKey))

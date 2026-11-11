@@ -1593,7 +1593,7 @@
               A program in any session can raise a desktop notification (via OSC 9 / 777, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
               as a macOS banner and an unseen-count badge on the sidebar row, and the workspace row shows the total of its sessions, collapsed or expanded; clicking the
-              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge — or
+              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session or typing in it clears its badge (the Badge reset setting can limit typing to Enter or turn it off) — or
               clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
               so an orchestrator driving a session over the socket can acknowledge it without pulling focus
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unseen</span> count).
@@ -1732,7 +1732,8 @@
                   >›</span
                 ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, the Dock-icon
                 bounce for a background notification (off / once / until focused), the notification sound (None by
-                default), and the title-bar attention indicator.
+                default), the title-bar attention indicator, and a <strong style="color: #e6e1d7">Badge reset</strong> choice for when
+                typing in a session clears its badge (on the first key, on Enter, or disabled).
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

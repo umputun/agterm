@@ -283,7 +283,7 @@ extension GhosttySurfaceView {
     /// and an AX insert is never the Escape/Ctrl-C interrupt that clears an ACTIVE glyph, so it clears
     /// blocked/completed only, and only when the Status reset setting clears on the first key.
     private func insertFromAccessibility(_ text: String) {
-        onUserInput?()
+        onUserInput?(.other)
         onUserInputClearsStatus?(.other)
         // ends any live composition BEFORE either branch. `insertPasted` commits for itself now, so the
         // paste branch's second call is a no-op against the `hasMarkedText()` guard; the `insertText`

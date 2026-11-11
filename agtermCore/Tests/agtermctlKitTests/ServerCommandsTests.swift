@@ -334,8 +334,8 @@ final class Fixture {
         process.standardError = output
         let exited = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in exited.signal() }
+        try input.fileHandleForWriting.write(contentsOf: Data(stdin.utf8))
         try process.run()
-        input.fileHandleForWriting.write(Data(stdin.utf8))
         let finished = exited.wait(timeout: .now() + 20) == .success
         if !finished {
             // script's child leads the pty session: killing its group and script's hangs up and continues a stopped job

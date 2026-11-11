@@ -69,6 +69,7 @@ final class SettingsModel {
         applyWorkspaceRowClickExpands()
         applyAttentionButtonEnabled()
         applyStatusReset()
+        applyBadgeReset()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
@@ -337,6 +338,8 @@ final class SettingsModel {
     func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? settingsStore.save(settings) }
     /// nil restores the default (clear on the first key), keeping the stored file minimal.
     func setStatusReset(_ mode: StatusReset?) { settings.statusReset = mode?.rawValue; persistAndApply() }
+    /// nil restores the default (clear the unseen badge on the first key).
+    func setBadgeReset(_ mode: StatusReset?) { settings.badgeReset = mode?.rawValue; persistAndApply() }
     /// Persist where a new (⌘T) session opens (nil = home). Read only at the next `AppActions.newSession()`,
     /// so it just saves — no config rewrite or surface reload.
     func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
@@ -777,6 +780,7 @@ final class SettingsModel {
         applyWorkspaceRowClickExpands()
         applyAttentionButtonEnabled()
         applyStatusReset()
+        applyBadgeReset()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
         applyFlaggedViewLayout()
@@ -822,6 +826,10 @@ final class SettingsModel {
 
     private func applyStatusReset() {
         GhosttyApp.shared.setStatusReset(settings.effectiveStatusReset)
+    }
+
+    private func applyBadgeReset() {
+        GhosttyApp.shared.setBadgeReset(settings.effectiveBadgeReset)
     }
 
     private func applyInterfaceElements() {

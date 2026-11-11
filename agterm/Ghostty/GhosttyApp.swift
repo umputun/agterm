@@ -95,6 +95,8 @@ final class GhosttyApp {
     /// Which keystroke clears a blocked or completed glyph; read at keystroke time by the surface factories'
     /// status-clear closure. Settings-mirrored like `toolbarMode`.
     private(set) var statusReset: StatusReset = .firstKey
+    /// badgeReset mirrors the setting for `wirePane`'s input closure, read at keystroke time.
+    private(set) var badgeReset: StatusReset = .firstKey
     /// workspaceRowClickExpands mirrors the setting for `handleSingleClick`; on by default. The disclosure
     /// triangle, which AppKit toggles natively, and the row icon ignore it.
     private(set) var workspaceRowClickExpands: Bool = true
@@ -280,6 +282,10 @@ final class GhosttyApp {
 
     func setStatusReset(_ mode: StatusReset) {
         statusReset = mode
+    }
+
+    func setBadgeReset(_ mode: StatusReset) {
+        badgeReset = mode
     }
 
     func setHiddenInterfaceElements(_ elements: Set<InterfaceElement>) {

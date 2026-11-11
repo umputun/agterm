@@ -533,7 +533,7 @@ agtermctl session flag clear                              # unflag everything in
 
 An orchestrator relaying a session's output elsewhere (Telegram, another agent) fires `notify` to signal
 "your turn", which raises the session's red unseen badge. Nothing normally clears that badge except
-visiting the session — which pulls the selection to it. `session seen` clears it in place, so the badge
+typing in the session (as Settings ▸ Notifications ▸ Badge reset allows) or visiting it, which pulls the selection to it. `session seen` clears it in place, so the badge
 stays a real attention signal on the sessions a human tends while the driven ones stay clean.
 
 ```bash

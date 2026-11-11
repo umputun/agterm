@@ -371,6 +371,13 @@ private struct NotificationsSettingsView: View {
                 Toggle("Show notification badges", isOn: notificationBadgeEnabled)
                     .accessibilityIdentifier("settings-notification-badges")
 
+                Picker("Badge reset", selection: badgeReset) {
+                    Text("On first key").tag(StatusReset.firstKey)
+                    Text("On Enter").tag(StatusReset.enter)
+                    Text("Disabled").tag(StatusReset.never)
+                }
+                .accessibilityIdentifier("settings-badge-reset")
+
                 Picker("Bounce Dock icon", selection: dockBounce) {
                     Text("None").tag(DockBounce.off)
                     Text("Once").tag(DockBounce.once)
@@ -404,6 +411,11 @@ private struct NotificationsSettingsView: View {
     private var notificationBadgeEnabled: Binding<Bool> {
         Binding(get: { model.settings.notificationBadgeEnabled ?? true },
                 set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
+    }
+
+    private var badgeReset: Binding<StatusReset> {
+        Binding(get: { model.settings.effectiveBadgeReset },
+                set: { model.setBadgeReset($0 == .firstKey ? nil : $0) })
     }
 
     /// Resolves nil (the default) to `.off`.

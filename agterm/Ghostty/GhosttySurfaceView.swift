@@ -136,10 +136,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// control-driven; this is the one input-driven clear, for the decline case Claude Code fires no hook for.
     var onUserInputClearsStatus: ((StatusKeystroke) -> Void)?
 
-    /// Called on the main actor on EVERY keystroke to stamp user activity and reset the window's auto-follow
-    /// idle timer. Fires unconditionally, unlike `onUserInputClearsStatus`: ordinary typing in an idle
-    /// session must count as activity or the user is yanked to a blocked session mid-type.
-    var onUserInput: (() -> Void)?
+    /// onUserInput carries the key kind for Badge reset; every key counts as activity to hold off
+    /// auto-follow.
+    var onUserInput: ((StatusKeystroke) -> Void)?
     /// Called after a size push and after a cell-size change; a HUD panel is measured from this surface.
     var onGridChange: (() -> Void)?
 
