@@ -121,3 +121,10 @@ Run 42883406544 (PR #955 head `60e0a272`, 2026-11-10) stalled at `new-5`: `new-0
 1.08 s. At capture time, with the CLI already defunct, the app was at 171% CPU and the one-minute `vm.loadavg` at
 8.4. The app sample, the CLI sample and the spindump report failed as before. The artifact holds a raw stuck
 stackshot (`spindump-stuck-stackshot.2026-11-10-19-24-29.15324.buf`) and an empty `spindump-06-new-5.txt`.
+
+Run 43075160902 (master `c1404356`, 2026-11-11) stalled on the first `session close`, the shape of 42750078737:
+`new-0` to `new-7` answered in 0.03 to 1.45 s, all eight sessions realized at 5.4 s, and the close at 6.6 s
+got no reply in 5 s. At capture the app was at 173% CPU, seven producer pythons at 112% together, and the
+one-minute `vm.loadavg` at 26.2. The app sample, the CLI sample and the spindump report failed as before, and
+the artifact holds a raw stuck stackshot (`spindump-stuck-stackshot.2026-11-11-18-17-21.11789.buf`), still
+without the runner's symbols to decode it.
