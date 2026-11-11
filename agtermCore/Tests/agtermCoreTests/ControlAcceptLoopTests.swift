@@ -35,9 +35,19 @@ final class ControlAcceptLoopTests {
         #expect(late != nil, "stop must not close the listener the loop owns")
         #expect(loop.next() == nil)
         loop.finish()
-        let after = UnixSocket.connected(path: path)
-        defer { after.map { _ = close($0) } }
-        #expect(after == nil, "finish closes the listener; holders: \(after == nil ? "" : holders())")
+        let refused = connectRefused(within: 1)
+        #expect(refused, "finish closes the listener; holders: \(refused ? "" : holders())")
+    }
+
+    // a posix_spawn running in parallel, as other suites do, keeps a just-closed listener connectable for a moment
+    private func connectRefused(within seconds: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while true {
+            guard let fd = UnixSocket.connected(path: path) else { return true }
+            close(fd)
+            if Date() >= deadline { return false }
+            usleep(10_000)
+        }
     }
 
     private func holders() -> String {
