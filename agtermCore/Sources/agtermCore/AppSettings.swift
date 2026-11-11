@@ -421,6 +421,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Raw `StatusReset`: which keystroke clears a blocked or completed glyph. nil = `firstKey`, resolved by
     /// `effectiveStatusReset`.
     public var statusReset: String?
+    /// badgeReset is the raw `StatusReset` for which keystroke clears a session's unseen badge, nil for
+    /// `firstKey`.
+    public var badgeReset: String?
     /// Whether a right-click pastes the clipboard (ghostty `right-click-action`); nil = on, since agterm
     /// forwards right-/middle-click to libghostty. agterm has no terminal context menu, so paste-or-off is
     /// the whole meaningful choice.
@@ -507,7 +510,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
                 dockBounce: String? = nil, notificationSoundName: String? = nil,
-                blockedStatusSoundName: String? = nil, statusReset: String? = nil, rightClickPaste: Bool? = nil,
+                blockedStatusSoundName: String? = nil, statusReset: String? = nil, badgeReset: String? = nil,
+                rightClickPaste: Bool? = nil,
                 workspaceRowClickExpands: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 newSessionPlacement: String? = nil,
@@ -555,6 +559,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.notificationSoundName = notificationSoundName
         self.blockedStatusSoundName = blockedStatusSoundName
         self.statusReset = statusReset
+        self.badgeReset = badgeReset
         self.rightClickPaste = rightClickPaste
         self.workspaceRowClickExpands = workspaceRowClickExpands
         self.newSessionDirectory = newSessionDirectory
@@ -634,6 +639,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The resolved status-reset mode: the explicit `statusReset` when a KNOWN raw value, else `firstKey`.
     public var effectiveStatusReset: StatusReset {
         statusReset.flatMap(StatusReset.init(rawValue:)) ?? .firstKey
+    }
+
+    /// effectiveBadgeReset resolves `badgeReset`, an unknown raw value to `firstKey`.
+    public var effectiveBadgeReset: StatusReset {
+        badgeReset.flatMap(StatusReset.init(rawValue:)) ?? .firstKey
     }
 
     /// The resolved Dock-bounce mode: the explicit `dockBounce` when a KNOWN raw value, else `off`. The

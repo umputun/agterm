@@ -45,6 +45,11 @@ paths:
 - Selection and pane focus clear unseen state and delivered banners. App activation does not transition
   the retained first responder, which caused #155; the `didBecomeKey` observer therefore calls
   `clearUnseenOnRefocus` only when `liveFocus` says this pane is the key window's first responder.
+- A keystroke or dictated insert in a main or split pane clears a nonzero unseen count through that pane's
+  `onUserInput`, so a `notify` aimed at the session being typed in does not stick (#945). The key's kind and
+  `StatusReset.clearsBadge(on:)` under the Badge reset setting decide it: any key, a submit only, or never.
+  It leaves delivered banners alone, or the next key would pull a banner that just arrived. `session.type`
+  never fires `onUserInput`, so injected input clears nothing.
 - A pane swap clears delivered banners for that session. Notification identifiers encode the pane role and
   cannot be retagged in place, so leaving them delivered would make a later click reveal the wrong terminal.
   The unseen count is unchanged.

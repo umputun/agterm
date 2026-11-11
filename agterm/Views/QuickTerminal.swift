@@ -174,7 +174,7 @@ final class QuickTerminalController {
         if let surfaceView { return surfaceView }
         let view = GhosttySurfaceView(workingDirectory: cwdProvider(), env: envProvider())
         view.onExit = { [weak self] in self?.handleShellExit() }
-        view.onUserInput = onUserInput
+        view.onUserInput = { [weak self] _ in self?.onUserInput?() }
         surfaceView = view
         return view
     }

@@ -1,9 +1,18 @@
-/// StatusReset is which keystroke clears a `blocked` or `completed` glyph: the first key, a submit (Return),
-/// or none. Raw-stored in `AppSettings.statusReset`, resolved by `effectiveStatusReset`.
+/// StatusReset is which keystroke clears a `blocked` or `completed` glyph, or an unseen-notification badge:
+/// the first key, a submit (Return), or none. Raw-stored in `AppSettings.statusReset` and `badgeReset`.
 public enum StatusReset: String, Codable, Sendable, CaseIterable {
     case firstKey
     case enter
     case never
+
+    /// clearsBadge reports whether a keystroke typed into a session clears its unseen badge under this mode.
+    public func clearsBadge(on keystroke: StatusKeystroke) -> Bool {
+        switch self {
+        case .firstKey: return true
+        case .enter: return keystroke == .submit
+        case .never: return false
+        }
+    }
 }
 
 /// StatusKeystroke is what one keystroke means to the glyph: an interrupt (Escape or Ctrl-C), a submit

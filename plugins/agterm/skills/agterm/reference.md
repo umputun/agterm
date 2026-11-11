@@ -910,8 +910,8 @@ error keeps those names for compatibility.
   tinted) and the palette's "Tint Session: <Color>" / "Tint Session: None" for the active session.
 - `session seen [--target] [--window W]` — clear the session's unseen-notification badge without changing
   the selection, focus, or agent status. It is the focus-free counterpart to `notify`: `notify` (and a
-  terminal's own OSC 9/777) raise the red badge, and until now the only way to clear it was visiting the
-  session. Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
+  terminal's own OSC 9/777) raise the red badge, which otherwise clears only when the session is visited or
+  typed in (as Settings ▸ Notifications ▸ Badge reset allows). Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
   `unseen` field. This lets an orchestrator acknowledge a driven session's notifications over the socket
   while keeping the badge a real attention signal on the sessions a human tends.
 - `session restore (<command> | --none | --clear) [--pane left|right] [--pane-id TOKEN] [--target] [--window W]`

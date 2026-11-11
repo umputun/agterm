@@ -552,7 +552,14 @@ struct agtermApp: App {
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
-        view.onUserInput = { store.noteUserActivity() }
+        view.onUserInput = { keystroke in
+            store.noteUserActivity()
+            // typing in the session counts as seeing it, but its banners stay: a note that arrived
+            // mid-typing would vanish on the next key before it could be read.
+            guard (store.session(withID: sessionID)?.unseenCount ?? 0) > 0,
+                  GhosttyApp.shared.badgeReset.clearsBadge(on: keystroke) else { return }
+            store.clearUnseen(sessionID)
+        }
         view.onFontSizeChange = { [weak view] size in
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
@@ -853,7 +860,7 @@ struct agtermApp: App {
         }
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.
-        view.onUserInput = { store.noteUserActivity() }
+        view.onUserInput = { _ in store.noteUserActivity() }
         return view
     }
 
@@ -897,7 +904,7 @@ struct agtermApp: App {
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)
         // same idle-timer reset as the overlay: an idle auto-follow fire must not hide the scratch mid-typing.
-        view.onUserInput = { store.noteUserActivity() }
+        view.onUserInput = { _ in store.noteUserActivity() }
         // the scratch is searchable (⌘F), pinned to the same session as the panes: unlike the overlay/quick
         // terminal it stays alive across hides, so a bar over it is safe.
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: actions)

@@ -110,7 +110,7 @@ paths:
   Session info picker (`sessionInfoDisplay`, owned by [[sidebar]]) and the Multiple Windows toggle sharing the
   Sidebar section's last row, since the grid's eight toggles leave no half-cell, plus the quick terminal's panel size,
   which sits there rather than under Appearance's Window because the panel belongs to no window.
-  Notifications holds banner/badge/attention/bounce/sound. Agent Status holds colors/shapes, sound,
+  Notifications holds banner/badge/badge reset/attention/bounce/sound. Agent Status holds colors/shapes, sound,
   status reset, Navigation (attention-includes-active, attention-across-windows, auto-follow), and Reset,
   and must not scroll:
   `testAttentionIncludesActiveTogglePersists` requires Reset not to move when scrolled. Key Mapping holds the keyboard layout lock,
@@ -124,6 +124,9 @@ paths:
 - `statusReset` stores a raw `StatusReset` (`firstKey`|`enter`|`never`), nil for the default `firstKey`,
   resolved by `effectiveStatusReset` and mirrored to `GhosttyApp.statusReset`, which the surface factories'
   keystroke-clear closure reads at keystroke time. Reset to defaults clears it with the glyph settings.
+- `badgeReset` stores a raw `StatusReset` the same way, resolved by `effectiveBadgeReset` and mirrored to
+  `GhosttyApp.badgeReset` for `wirePane`'s input closure ([[notifications]]). Its picker sits in the
+  Notifications tab, so Agent Status's Reset leaves it alone.
 - Keep titlebar construction in `WindowContentView+Titlebar.swift` so `WindowContentView.swift` remains
   below the 1000-line limit. The Appearance tab lives in `AppearanceSettingsView.swift` for the same reason.
 - Keep Agent Status shape pickers in a trailing-aligned 80-point column wider than the 64.5...68-point

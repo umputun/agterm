@@ -932,6 +932,18 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func badgeResetDefaultsToFirstKeyAndResolvesKnownRawValues() throws {
+        #expect(AppSettings().badgeReset == nil)
+        #expect(AppSettings().effectiveBadgeReset == .firstKey)
+        #expect(AppSettings(badgeReset: "enter").effectiveBadgeReset == .enter)
+        #expect(AppSettings(badgeReset: "never").effectiveBadgeReset == .never)
+        #expect(AppSettings(badgeReset: "teleporter").effectiveBadgeReset == .firstKey)
+        #expect(AppSettings(statusReset: "never").effectiveBadgeReset == .firstKey)
+        let original = AppSettings(badgeReset: "enter")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+    }
+
     @Test func unknownInterfaceElementDecodesTolerantly() throws {
         // forward-compat rule: an unknown name is dropped from the resolved set and must not fail the
         // whole decode.
