@@ -62,6 +62,15 @@ public struct Responsibility: Sendable {
         try Self.check(posix_spawnattr_init(&attributes), operation: "posix_spawnattr_init")
         defer { posix_spawnattr_destroy(&attributes) }
         try Self.check(setDisclaim(&attributes, 1), operation: "responsibility_spawnattrs_setdisclaim")
+        // a descriptor another thread has not yet marked close-on-exec stays out of the host; only open streams
+        // are kept, and only when not close-on-exec, since inheriting clears the flag and a closed stream fails the spawn
+        try Self.check(posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT)), operation: "posix_spawnattr_setflags")
+        var actions: posix_spawn_file_actions_t?
+        try Self.check(posix_spawn_file_actions_init(&actions), operation: "posix_spawn_file_actions_init")
+        defer { posix_spawn_file_actions_destroy(&actions) }
+        for stream in [STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO] where fcntl(stream, F_GETFD) == 0 {
+            try Self.check(posix_spawn_file_actions_addinherit_np(&actions, stream), operation: "posix_spawn_file_actions_addinherit_np")
+        }
 
         var arguments = try Self.copyStrings(argv)
         defer { arguments.forEach { free($0) } }
@@ -71,7 +80,7 @@ public struct Responsibility: Sendable {
         let result = executable.withCString { path in
             arguments.withUnsafeMutableBufferPointer { args in
                 environment.withUnsafeMutableBufferPointer { vars in
-                    posix_spawn(&pid, path, nil, &attributes, args.baseAddress, vars.baseAddress)
+                    posix_spawn(&pid, path, &actions, &attributes, args.baseAddress, vars.baseAddress)
                 }
             }
         }

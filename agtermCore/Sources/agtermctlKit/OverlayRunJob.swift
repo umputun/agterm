@@ -183,6 +183,12 @@ final class OverlayJobRunner: @unchecked Sendable {
         var flags = POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP
         #if canImport(Darwin)
         if suspended { flags |= POSIX_SPAWN_START_SUSPENDED }
+        // a descriptor another thread has not yet marked close-on-exec stays out of the program; only open streams
+        // are kept, and only when not close-on-exec, since inheriting clears the flag and a closed stream fails the spawn
+        flags |= POSIX_SPAWN_CLOEXEC_DEFAULT
+        for stream in [STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO] where fcntl(stream, F_GETFD) == 0 {
+            posix_spawn_file_actions_addinherit_np(&actions, stream)
+        }
         let script = #"eval "$AGTERM_OVL_CMD""#
         #else
         // glibc has no START_SUSPENDED, so the shell stops itself before the command and spawn waits for the stop
