@@ -359,6 +359,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     // the nonisolated URL callback snapshots this during the synchronous release call.
     nonisolated let releaseIntent = OSAllocatedUnfairLock(initialState: LinkPolicy.ClickIntent.normal)
     var linkPressDragged = false
+    /// Whether any mouse button is down, system-wide; replaceable because a real click elsewhere answers it too.
+    var mouseButtonsDown: () -> Bool = { NSEvent.pressedMouseButtons != 0 }
 
     // admitted by the off-main SET_TITLE callback, completed by the main block it queues.
     nonisolated let titleAdmission = OSAllocatedUnfairLock(initialState: TitleAdmission())

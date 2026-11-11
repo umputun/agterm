@@ -455,6 +455,18 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(fixture.surface.mouseShape, GHOSTTY_MOUSE_SHAPE_POINTER, fixture.geometry)
     }
 
+    func testShiftPressedWithAButtonDownSkipsTheLinkHoverRefresh() throws {
+        let fixture = try LinkClickFixture(printing: "https://example.com/pr/1")
+        defer { fixture.close() }
+        _ = recordLinks(mode: .overlay, overlayOpens: true)
+        fixture.move(flags: .command)
+        fixture.wait { fixture.surface.mouseShape == GHOSTTY_MOUSE_SHAPE_POINTER }
+        fixture.surface.mouseButtonsDown = { true }
+        fixture.flagsChanged(keyCode: 56, flags: [.shift, .command])
+        fixture.wait { fixture.surface.mouseShape != GHOSTTY_MOUSE_SHAPE_POINTER }
+        XCTAssertNotEqual(fixture.surface.mouseShape, GHOSTTY_MOUSE_SHAPE_POINTER, fixture.geometry)
+    }
+
     func testCommandShiftClickOnAStillPointerWithoutAModifierChangeOpensTheBrowser() throws {
         let fixture = try LinkClickFixture(printing: "https://example.com/pr/1")
         defer { fixture.close() }
@@ -714,6 +726,7 @@ private final class LinkClickFixture {
         window.isReleasedWhenClosed = false
         surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "printf '\(prefix)\(text)'; cat")
         surface.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+        surface.mouseButtonsDown = { false }
         window.contentView?.addSubview(surface)
         surface.createSurface()
         XCTAssertTrue(surface.isRealized)
