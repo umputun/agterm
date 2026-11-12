@@ -517,6 +517,8 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
 /// replies with state its tree already shows.
 public struct PresentationPageResult: Codable, Equatable, Sendable {
     public static let maxText = 1024
+    /// deadline is how long the origin waits for a result before answering the caller without one.
+    public static let deadline = Duration.seconds(5)
 
     public var page: String
     public var seq: Int

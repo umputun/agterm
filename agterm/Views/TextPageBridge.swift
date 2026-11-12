@@ -126,7 +126,8 @@ final class TextPageBridge {
     }
 
     /// step moves to the next or previous match of the model's query, applying that query first when the page holds
-    /// an older revision, and answers the page's count and the match it reached.
+    /// an older revision, and answers the page's count and the match it reached. The model takes the result before
+    /// the answer, a move pausing a following log as the page does, so state read right after never lags the page.
     func step(forward: Bool, query: String, revision: Int) async -> Result<(matches: Int, current: Int), TextSearchFailure> {
         guard !documentPending, let webView else { return .failure(.notLoaded) }
         let arguments: [String: Any] = ["forward": forward, "query": query, "revision": revision]
@@ -134,17 +135,21 @@ final class TextPageBridge {
                                                            arguments: arguments, in: nil, contentWorld: world)
         guard let body = value as? [String: Any], let matches = (body["matches"] as? NSNumber)?.intValue,
               let current = (body["current"] as? NSNumber)?.intValue else { return .failure(.notLoaded) }
+store?.setTextSearchReport(pageID, revision: revision, query: query, matches: matches, current: current)
+if matches > 0, follower?.following == true { store?.setTextLogFollowing(pageID, following: false) }
         return .success((matches, current))
     }
 
     /// stepChange moves a diff page to its next or previous change and answers the page's count and the change it
-    /// reached.
+    /// reached, which the model takes before the answer.
     func stepChange(forward: Bool) async -> Result<TextChanges, TextChangesFailure> {
         guard !documentPending, let webView else { return .failure(.notLoaded) }
         let value = try? await webView.callAsyncJavaScript("return agtermTextChangeStep(forward)", arguments: ["forward": forward],
                                                            in: nil, contentWorld: world)
         guard let body = value as? [String: Any], let changes = Self.changes(body) else { return .failure(.notLoaded) }
-        return changes.count == 0 ? .failure(.noChanges) : .success(changes)
+        guard changes.count > 0 else { return .failure(.noChanges) }
+        changesReport(body)
+        return .success(changes)
     }
 
     /// stop ends the follower and drops every build in flight.

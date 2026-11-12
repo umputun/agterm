@@ -607,6 +607,25 @@ extension TextPageRenderingTests {
         page.apply(try XCTUnwrap(current))
     }
 
+    func testAStepCommitsItsCountsAndAMovedLogsPauseBeforeItAnswers() async throws {
+        let (overlay, _) = try openLog("one err\ntwo\nthree err\n")
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0.contains("three err") }
+
+        try search("none", on: page)
+        let none = try await step(true, on: page)
+        XCTAssertEqual(none, "0 of 0")
+        XCTAssertEqual(current?.logState?.following, true)
+
+        try search("err", on: page)
+        let reached = try await step(true, on: page)
+
+        XCTAssertEqual(reached.hasSuffix("of 2"), true, reached)
+        XCTAssertEqual(current?.textSearch?.matches, 2)
+        XCTAssertEqual(current?.logState?.following, false)
+    }
+
     func testAQueryAcrossHighlightSpansMatchesAndReachesTheModel() async throws {
         let (page, window) = try shown(try openText("main.go", "package main\n\nfunc main() {}\n\nvar x = main()\n"))
         defer { window.orderOut(nil) }

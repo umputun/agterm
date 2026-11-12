@@ -7,11 +7,17 @@ final class ControlServerTextPageTests: XCTestCase {
     private final class PresenterSink: PresentationSink {
         var generation = 0
         var opened = false
+        var bodies: [PresentationFrame.Body] = []
 
         func offer(_ frame: PresentationFrame) -> Bool {
             if !opened { generation = frame.gen }
             opened = true
+            bodies.append(frame.body)
             return true
+        }
+
+        var commands: [PresentationPageCommand] {
+            bodies.compactMap { if case .pageCommand(let command) = $0 { command } else { nil } }
         }
 
         func close(_: PresentationHub.CloseReason) {}
@@ -53,17 +59,20 @@ final class ControlServerTextPageTests: XCTestCase {
                                          page: .text(path: path, line: nil), textLog: textLog)
     }
 
-    private func present(_ session: Session) throws {
+    @discardableResult
+    private func present(_ session: Session, liveText: Bool = false) throws -> (sink: PresenterSink, id: PresentationHub.SubscriberID) {
         for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) {
             ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: pane)
             _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: pane)
         }
         server.attachPresentationHub()
         let sink = PresenterSink()
+        let kinds = PresentationHub.pageKinds + [PresentationHub.pageContentKind] + (liveText ? [PresentationHub.pageTextKind] : [])
         let id = try server.presentationHub.subscribe(
-            session: session.id, hello: PresentationHello(version: 1, kinds: PresentationHub.pageKinds + [PresentationHub.pageContentKind], mode: .presenter), sink: sink
+            session: session.id, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter), sink: sink
         ) { PresentationSnapshot(status: nil, hud: nil) }
         server.presentationHub.receive(PresentationFrame(gen: sink.generation, rev: 0, body: .presenterAcquire), from: id)
+        return (sink, id)
     }
 
     func testALogPageOpensWithItsRequestOnTheModel() throws {
@@ -91,7 +100,7 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertTrue(tail.ok, String(describing: tail.error))
     }
 
-    func testALogPageIsRefusedOnAPresentedSessionAndAPlainTextPageIsNot() throws {
+    func testAnOlderPresenterRefusesALogPageAndTakesAPlainTextPage() throws {
         let (_, session) = try addSession()
         try present(session)
 
@@ -105,27 +114,100 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertTrue(plain.ok, String(describing: plain.error))
     }
 
-    func testFollowAnswersTheStateItLeftOnTheModel() throws {
+    func testAPresenterWithLiveTextPagesIsHandedTheLogPage() throws {
+        let (_, session) = try addSession()
+        let (sink, _) = try present(session, liveText: true)
+
+        let opened = server.openSessionOverlay(session.id.uuidString, window: nil,
+                                               options: options(log.path, log: TextLog(tail: 20, follow: true)))
+
+        XCTAssertTrue(opened.ok, String(describing: opened.error))
+        XCTAssertNil(session.htmlOverlay)
+        XCTAssertEqual(session.remoteOverlays.slot(nil)?.page?.overlay.logState?.following, true)
+        let requests = sink.bodies.compactMap { if case .pageRequest(let page) = $0 { page } else { nil } }
+        XCTAssertEqual(requests.map(\.textLog), [TextLog(tail: 20, follow: true)])
+    }
+
+    func testAnOlderPresenterIsSentNoTextAction() async throws {
+        let (_, session) = try addSession()
+        let (sink, _) = try present(session)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let search = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("a"))
+        let step = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: true)
+
+        XCTAssertEqual(search.error, TextSearchFailure.remote.message)
+        XCTAssertEqual(step.error, TextChangesFailure.remote.message)
+        XCTAssertTrue(sink.commands.isEmpty)
+    }
+
+    func testAPresentersResultIsAppliedBeforeTheReply() async throws {
+        let (_, session) = try addSession()
+        let (sink, id) = try present(session, liveText: true)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil,
+                                                options: options(log.path, log: TextLog(tail: 20, follow: true))).ok)
+        let job = try XCTUnwrap(session.remoteOverlays.slot(nil)?.job)
+
+        let reply = Task { await self.server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .off) }
+        try await waitFor("the action reaches the presenter") { !sink.commands.isEmpty }
+        let command = try XCTUnwrap(sink.commands.last)
+        XCTAssertEqual(TextPageAction(command), .follow(.off))
+        let state = PresentationTextState(following: false, log: TextLogReport(lines: 2), revision: 0)
+        server.presentationHub.receive(PresentationFrame(gen: sink.generation, rev: 1, body: .pageResult(PresentationPageResult(
+            page: job, seq: command.seq, ok: true, text: "paused", state: state))), from: id)
+
+        let response = await reply.value
+        XCTAssertEqual(response, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: "paused")))
+        XCTAssertEqual(session.remoteOverlays.slot(nil)?.page?.overlay.logState?.following, false)
+        XCTAssertEqual(session.remoteOverlays.slot(nil)?.page?.overlay.logState?.report.lines, 2)
+    }
+
+    private func waitFor(_ what: String, _ condition: @escaping () -> Bool) async throws {
+        let deadline = Date().addingTimeInterval(5)
+        while !condition() {
+            guard Date() < deadline else { return XCTFail("\(what) not reached within 5s") }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    func testAnUnansweredActionEndsAtTheDeadlineAndAClosedPageEndsItsWait() async throws {
+        let (store, session) = try addSession()
+        let (sink, _) = try present(session, liveText: true)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+        store.remoteTextDeadline = .milliseconds(50)
+
+        let silent = await server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(silent.error, OverlayResultError.presenterSilent)
+
+        store.remoteTextDeadline = .seconds(60)
+        let reply = Task { await self.server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on) }
+        try await waitFor("the action reaches the presenter") { sink.commands.count == 2 }
+        XCTAssertTrue(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+        let closed = await reply.value
+        XCTAssertEqual(closed.error, OverlayResultError.viewerGone)
+    }
+
+    func testFollowAnswersTheStateItLeftOnTheModel() async throws {
         let (_, session) = try addSession()
         XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil,
                                                 options: options(log.path, log: TextLog(tail: 20, follow: true))).ok)
 
-        let paused = server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
+        let paused = await server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
 
         XCTAssertEqual(paused, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: "paused")))
         XCTAssertEqual(session.htmlOverlay?.logState?.following, false)
-        XCTAssertEqual(server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on).result?.text,
-                       "following")
+        let resumed = await server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(resumed.result?.text, "following")
     }
 
-    func testFollowRefusesAPlainTextPageAndAnEmptySlot() throws {
+    func testFollowRefusesAPlainTextPageAndAnEmptySlot() async throws {
         let (_, session) = try addSession()
-        XCTAssertEqual(server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
-                       OverlayHtmlError.noOverlay)
+        let empty = await server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(empty.error, OverlayHtmlError.noOverlay)
         XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
 
-        XCTAssertEqual(server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
-                       "no log page")
+        let plain = await server.setSessionOverlayFollow(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(plain.error, "no log page")
     }
 
     func testSearchSetsAndClosesTheQueryOnTheModelAndItsReadBack() async throws {
@@ -174,29 +256,29 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertEqual(remote.error, TextSearchFailure.remote.message)
     }
 
-    func testWrapAnswersTheStateItLeftOnTheModelAndItsReadBack() throws {
+    func testWrapAnswersTheStateItLeftOnTheModelAndItsReadBack() async throws {
         let (_, session) = try addSession()
         XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
 
-        let wrapped = server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
+        let wrapped = await server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
 
         XCTAssertEqual(wrapped, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: "wrapped")))
         XCTAssertEqual(try treeText(session)?.wrap, true)
-        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .off).result?.text,
-                       "unwrapped")
+        let unwrapped = await server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .off)
+        XCTAssertEqual(unwrapped.result?.text, "unwrapped")
         XCTAssertNil(try treeText(session)?.wrap)
     }
 
-    func testWrapRefusesAnEmptySlotAndAPresentedPage() throws {
+    func testWrapRefusesAnEmptySlotAndAPageAnOlderPresenterShows() async throws {
         let (_, session) = try addSession()
-        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
-                       OverlayHtmlError.noOverlay)
+        let empty = await server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(empty.error, OverlayHtmlError.noOverlay)
 
         try present(session)
         XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
 
-        XCTAssertEqual(server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on).error,
-                       TextWrapFailure.remote.message)
+        let remote = await server.setSessionOverlayWrap(session.id.uuidString, window: nil, pane: nil, mode: .on)
+        XCTAssertEqual(remote.error, TextWrapFailure.remote.message)
     }
 
     private func treeText(_ session: Session) throws -> ControlTextOverlayNode? {

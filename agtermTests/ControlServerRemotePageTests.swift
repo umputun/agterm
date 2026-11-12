@@ -358,7 +358,7 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertEqual(states(fix).last?.hidden, true)
     }
 
-    func testATextActionTheReplicaCannotRunIsRefusedWithAResultAndAdvancesNoSequence() async throws {
+    func testATextActionOnAPageThatIsNotTextAnswersTheLocalRefusalAndAdvancesNoSequence() async throws {
         let fix = try fixture()
         _ = try present(fix, page(.url("http://127.0.0.1:9/a")))
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 5, action: .hide)))
@@ -367,12 +367,55 @@ final class ControlServerRemotePageTests: XCTestCase {
 
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 6, action: .search,
                                                                     query: "x")))
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 7, action: .search)))
 
-        let results = fix.transport.sent.compactMap { if case .pageResult(let result) = $0 { result } else { nil } }
-        XCTAssertEqual(results, [PresentationPageResult(page: Self.origin.uuidString, seq: 6, ok: false,
-                                                        error: "text page actions are not supported")])
+        try await waitFor("both actions are answered") { self.results(fix).count == 2 }
+        XCTAssertEqual(results(fix), [
+            PresentationPageResult(page: Self.origin.uuidString, seq: 7, ok: false, error: "invalid text page action"),
+            PresentationPageResult(page: Self.origin.uuidString, seq: 6, ok: false, error: TextSearchFailure.notText.message),
+        ])
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(states(fix).count, before)
+    }
+
+    func testAnOriginTextActionRunsAsTheLocalCommandAndAnswersWithThePageState() async throws {
+        let fix = try fixture(files: ["/src/a.diff": ("text/plain", Data("@@ -1 +1 @@\n-a\n+b\n".utf8))])
+        _ = try present(fix, page(.text(path: "/src/a.diff", line: nil)))
+        try await waitFor("the diff reports its changes") { fix.session.htmlOverlay?.textChanges?.count == 1 }
+        let origin = Self.origin.uuidString
+
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: origin, seq: 1, action: .wrap, toggle: .on)))
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: origin, seq: 2, action: .changes, step: .next)))
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: origin, seq: 3, action: .follow, toggle: .on)))
+
+        try await waitFor("every action is answered") { self.results(fix).count == 3 }
+        let answered = results(fix)
+        XCTAssertEqual(answered.map(\.seq), [1, 2, 3])
+        XCTAssertEqual(answered[0].text, "wrapped")
+        XCTAssertEqual(answered[0].state?.wrap, true)
+        XCTAssertEqual(answered[1].text, "1 of 1")
+        XCTAssertEqual(answered[1].state?.changes, TextChanges(count: 1, current: 1))
+        XCTAssertEqual(answered[2], PresentationPageResult(page: origin, seq: 3, ok: false, error: "no log page",
+                                                           state: answered[1].state))
+    }
+
+    func testAQueuedTextActionNeverReachesAPageThatReplacedItsOwn() async throws {
+        let fix = try fixture(files: ["/src/a.txt": ("text/plain", Data("a\n".utf8))])
+        _ = try present(fix, page(.text(path: "/src/a.txt", line: nil)))
+        let first = try XCTUnwrap(fix.session.htmlOverlay?.id)
+
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 1, action: .wrap, toggle: .on)))
+        fix.store.closeReplicaPage(Self.origin.uuidString, forSession: fix.session.id)
+        _ = try present(fix, page(.text(path: "/src/a.txt", line: nil)))
+
+        try await waitFor("the action is answered") { !self.results(fix).isEmpty }
+        XCTAssertEqual(results(fix), [PresentationPageResult(page: Self.origin.uuidString, seq: 1, ok: false, error: "page not shown")])
+        XCTAssertNotEqual(fix.session.htmlOverlay?.id, first)
+        XCTAssertEqual(fix.session.htmlOverlay?.textWrap, false)
+    }
+
+    private func results(_ fix: Fixture) -> [PresentationPageResult] {
+        fix.transport.sent.compactMap { if case .pageResult(let result) = $0 { result } else { nil } }
     }
 
     func testTextCommandsOnAReplicaAnswerAsLocallyAndReachTheOrigin() async throws {
@@ -382,8 +425,8 @@ final class ControlServerRemotePageTests: XCTestCase {
         try await waitFor("the diff reports its changes") { fix.session.htmlOverlay?.textChanges?.count == 1 }
 
         let search = await fix.server.searchSessionOverlay(target, window: nil, pane: nil, request: .query("b"))
-        let wrap = fix.server.setSessionOverlayWrap(target, window: nil, pane: nil, mode: .on)
-        let follow = fix.server.setSessionOverlayFollow(target, window: nil, pane: nil, mode: .on)
+        let wrap = await fix.server.setSessionOverlayWrap(target, window: nil, pane: nil, mode: .on)
+        let follow = await fix.server.setSessionOverlayFollow(target, window: nil, pane: nil, mode: .on)
         let step = await fix.server.stepSessionOverlayChanges(target, window: nil, pane: nil, forward: true)
 
         XCTAssertTrue(search.ok, search.error ?? "")

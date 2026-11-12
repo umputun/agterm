@@ -10,10 +10,11 @@ extension ControlServer {
         return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
     }
 
-    /// textLogRefusal refuses a log page the placement rule hands to the presenting Mac, nil otherwise: that Mac would
-    /// get the text page without its log state, so it is refused rather than changed.
+    /// textLogRefusal refuses a log page the placement rule hands to a presenting Mac without live text pages, nil
+    /// otherwise: that Mac would show it as a static page, so it is refused rather than changed.
     func textLogRefusal(in store: AppStore, sessionID id: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {
-        guard options.textLog != nil, store.pageBelongsRemote(id, pane: options.pane) else { return nil }
+        guard options.textLog != nil, store.pageBelongsRemote(id, pane: options.pane),
+              store.presentationHub?.presenterSupports(PresentationHub.pageTextKind, session: id) != true else { return nil }
         return ControlResponse(ok: false, error: OverlayHtmlError.logRemote)
     }
 
@@ -43,40 +44,71 @@ extension ControlServer {
     /// setSessionOverlayFollow applies `mode` to the log page in the addressed slot; `result.text` is `following` or
     /// `paused`.
     func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
-                                 mode: ControlToggleMode) -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
-            switch store.setTextLogFollowing(id, pane: pane, mode: mode) {
-            case .failure(let failure):
-                return ControlResponse(ok: false, error: failure.message)
-            case .success(let following):
-                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: following ? "following" : "paused"))
-            }
-        }
+                                 mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .follow(mode))
     }
 
     /// setSessionOverlayWrap applies `mode` to the text page in the addressed slot; `result.text` is `wrapped` or
     /// `unwrapped`.
     func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
-                               mode: ControlToggleMode) -> ControlResponse {
-        resolver.resolveSession(target, window: window) { store, id in
-            switch store.setTextWrap(id, pane: pane, mode: mode) {
-            case .failure(let failure):
-                return ControlResponse(ok: false, error: failure.message)
-            case .success(let wrapped):
-                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: wrapped ? "wrapped" : "unwrapped"))
-            }
-        }
+                               mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .wrap(mode))
     }
 
     /// searchSessionOverlay sets or closes the query in the model, which reaches the page whenever it exists; a step
     /// goes to the loaded page once and answers `N of M`.
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                               request: TextSearchRequest) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .search(request))
+    }
+
+    /// stepSessionOverlayChanges moves the loaded diff page once and answers `N of M`.
+    func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
+                                   forward: Bool) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .changes(forward: forward))
+    }
+
+    /// textPageAction runs `action` on the text page in the addressed slot: on the presenting Mac when it shows the
+    /// page there, here otherwise. Both answer with the same local command, so replies and refusals match.
+    private func textPageAction(_ target: String?, window: String?, pane: OverlayPane?,
+                                _ action: TextPageAction) async -> ControlResponse {
         let store: AppStore, id: UUID
         switch resolver.resolveSessionTarget(target, window: window) {
         case .failure(let response): return response
         case .success(let resolved): (store, id) = resolved
         }
+        switch await store.remoteTextAction(id, pane: pane, action) {
+        case .local: return await runTextPageAction(action, in: store, sessionID: id, pane: pane)
+        case .failed(let error): return ControlResponse(ok: false, error: error)
+        case .answered(let result):
+            guard result.ok else { return ControlResponse(ok: false, error: result.error) }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: result.text))
+        }
+    }
+
+    /// runTextPageAction runs `action` on the text page this Mac shows in `pane`'s slot of session `id`.
+    func runTextPageAction(_ action: TextPageAction, in store: AppStore, sessionID id: UUID,
+                           pane: OverlayPane?) async -> ControlResponse {
+        switch action {
+        case .follow(let mode):
+            switch store.setTextLogFollowing(id, pane: pane, mode: mode) {
+            case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+            case .success(let following):
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: following ? "following" : "paused"))
+            }
+        case .wrap(let mode):
+            switch store.setTextWrap(id, pane: pane, mode: mode) {
+            case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+            case .success(let wrapped):
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: wrapped ? "wrapped" : "unwrapped"))
+            }
+        case .search(let request): return await searchTextPage(request, in: store, sessionID: id, pane: pane)
+        case .changes(let forward): return await stepTextChanges(forward: forward, in: store, sessionID: id, pane: pane)
+        }
+    }
+
+    private func searchTextPage(_ request: TextSearchRequest, in store: AppStore, sessionID id: UUID,
+                                pane: OverlayPane?) async -> ControlResponse {
         let page: HtmlOverlay
         switch store.textSearchPage(id, pane: pane) {
         case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
@@ -103,14 +135,8 @@ extension ControlServer {
         }
     }
 
-    /// stepSessionOverlayChanges moves the loaded diff page once and answers `N of M`.
-    func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
-                                   forward: Bool) async -> ControlResponse {
-        let store: AppStore, id: UUID
-        switch resolver.resolveSessionTarget(target, window: window) {
-        case .failure(let response): return response
-        case .success(let resolved): (store, id) = resolved
-        }
+    private func stepTextChanges(forward: Bool, in store: AppStore, sessionID id: UUID,
+                                 pane: OverlayPane?) async -> ControlResponse {
         let page: HtmlOverlay
         switch store.textChangesPage(id, pane: pane) {
         case .failure(let failure): return ControlResponse(ok: false, error: failure.message)

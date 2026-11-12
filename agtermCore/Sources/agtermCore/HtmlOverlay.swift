@@ -288,6 +288,21 @@ public struct HtmlOverlay: Equatable, Sendable {
         self.browse = browse
     }
 
+    /// mirror takes the text state the presenting Mac reported for this origin record of a page it shows; true when
+    /// following, the query or the wrap changed.
+    mutating func mirror(_ text: PresentationTextState) -> Bool {
+        let before = (logState?.following, textSearch?.query, textWrap)
+        if let following = text.following { logState?.following = following }
+        if let log = text.log { logState?.report = log }
+        searchRevision = text.revision
+        textSearch = text.query.flatMap {
+            $0.isEmpty ? nil : TextSearch(query: $0, matches: text.matches ?? 0, current: text.current ?? 0)
+        }
+        textWrap = text.wrap
+        textChanges = text.changes
+        return before != (logState?.following, textSearch?.query, textWrap)
+    }
+
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file
     /// must sit strictly inside the grant by whole path components, so `/a/bc` is not inside `/a/b`. A grant naming the
     /// file itself is refused: WebKit widens a single-file grant to the file's whole folder. `/` and `home` are

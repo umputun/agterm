@@ -283,31 +283,31 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agtermTests/ControlServerTextPageTests.swift`
 - Modify: `agtermTests/ControlServerRemotePageTests.swift`
 
-- [ ] make `setSessionOverlayFollow` and `setSessionOverlayWrap` async in the protocol, defaults and callers; move
+- [x] make `setSessionOverlayFollow` and `setSessionOverlayWrap` async in the protocol, defaults and callers; move
       their dispatcher arms to async helpers routed with `.sessionOverlaySearch`; local replies unchanged
-- [ ] open a log page on a remote slot when the presenter lists `page.text`; keep the refusal otherwise, reworded
+- [x] open a log page on a remote slot when the presenter lists `page.text`; keep the refusal otherwise, reworded
       to name the remote session
-- [ ] route follow, search, wrap and changes on a remote slot to the presenter and wait for `pageResult` within the
+- [x] route follow, search, wrap and changes on a remote slot to the presenter and wait for `pageResult` within the
       deadline; settle on page end, channel loss or presenter change
-- [ ] apply the four actions on the presenter and answer each with `pageResult` carrying the text state; existing
+- [x] apply the four actions on the presenter and answer each with `pageResult` carrying the text state; existing
       actions keep advancing `appliedSeq`
-- [ ] the origin applies the result's state before replying, and mirrors state reports into the remote page node:
+- [x] the origin applies the result's state before replying, and mirrors state reports into the remote page node:
       follow, query and wrap transitions emit `tree.changed`, counts do not
-- [ ] rewrite `ControlServerTextPageTests.swift:100` to the capability split: a `page.text` presenter opens the log
+- [x] rewrite `ControlServerTextPageTests.swift:100` to the capability split: a `page.text` presenter opens the log
       page, an older one gets the reworded refusal
-- [ ] write tests: each command's success and error text matches the local one (`N of M`, `no query`,
+- [x] write tests: each command's success and error text matches the local one (`N of M`, `no query`,
       `page not loaded`, `no log page`, `following`/`paused`, `wrapped`/`unwrapped`); `presenter did not answer`
       past the deadline
-- [ ] commit step results in `TextPageBridge.step`/`stepChange` (counts, current, a following log paused) before the
+- [x] commit step results in `TextPageBridge.step`/`stepChange` (counts, current, a following log paused) before the
       result is built; run text actions per page in sequence order at `applyReplicaPageCommand`
-- [ ] write tests: a `pageResult` frame travels presenter to origin through the Mac host end to end; `tree` read right
+- [x] write tests: a `pageResult` frame travels presenter to origin through the Mac host end to end; `tree` read right
       after a `follow off`, `wrap on`, search step or diff step reply shows the new value, and a following log reads
       paused right after a search step
-- [ ] write `AppStoreRemotePageTests` cases: a report changing only lines, matches or changes emits nothing; a follow,
+- [x] write `AppStoreRemotePageTests` cases: a report changing only lines, matches or changes emits nothing; a follow,
       query or wrap change emits once
-- [ ] write tests: query before load runs on load, step before load fails, rapid follow toggles, a step not replayed
+- [x] write tests: query before load runs on load, step before load fails, rapid follow toggles, a step not replayed
       after rebuild, mixed-version refusals in both directions
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 6: Clicked logs on remote panes
 

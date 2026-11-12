@@ -83,8 +83,9 @@ public struct RemotePage: Equatable, Sendable {
         return seq
     }
 
-    /// apply takes the presenter's report, true when the reported visibility changed. A report echoing the
-    /// pending request's sequence settles it; an older one leaves the request pending.
+    /// apply takes the presenter's report, true when the reported visibility, a log's following, the search query or
+    /// the wrap changed; counts alone never count. A report echoing the pending request's sequence settles it; an
+    /// older one leaves the request pending.
     mutating func apply(_ state: PresentationPageState) -> Bool {
         let wasHidden = hidden
         overlay.loadState = state.load
@@ -94,8 +95,12 @@ public struct RemotePage: Equatable, Sendable {
         }
         hidden = state.hidden
         if let requested, state.appliedSeq >= requested.seq { self.requested = nil }
-        return wasHidden != hidden
+        let textChanged = state.text.map { overlay.mirror($0) } ?? false
+        return wasHidden != hidden || textChanged
     }
+
+    /// apply takes the text state a `pageResult` carried; true on the same transitions as a report.
+    mutating func apply(_ text: PresentationTextState) -> Bool { overlay.mirror(text) }
 }
 
 /// RemoteOverlays is a session's remote overlay state on the origin: the reserved slots, and for each slot
