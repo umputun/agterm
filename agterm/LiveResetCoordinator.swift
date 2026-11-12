@@ -95,7 +95,8 @@ final class LiveResetCoordinator {
     }
 
     private static func confirmAlert(_ selection: LiveReset.Selection) -> Bool {
-        let text = LiveReset.dialogText(sessionCount: selection.sessionCount, outdatedSessions: selection.outdatedSessionCount)
+        let text = LiveReset.dialogText(sessionCount: selection.sessionCount, outdatedSessions: selection.outdatedSessionCount,
+                                        staleHostSessions: selection.staleHostSessionCount)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = text.title

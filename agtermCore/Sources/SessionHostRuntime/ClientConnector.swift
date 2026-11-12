@@ -14,9 +14,16 @@ final class ClientConnector {
 
     /// `startupTimeout` bounds finding or starting a host; `queueTimeout` bounds the wait for its hello
     /// once connected, since the host answers one client at a time and each creation can take seconds.
-    init(socketDirectory: String, environment: [String: String], startupTimeout: TimeInterval = 5,
+    convenience init(socketDirectory: String, environment: [String: String], startupTimeout: TimeInterval = 5,
+                     queueTimeout: TimeInterval = 30) throws {
+        try self.init(paths: SessionHost.paths(socketDirectory: socketDirectory, key: HostIdentity.endpointKey()),
+                      socketDirectory: socketDirectory, environment: environment, startupTimeout: startupTimeout,
+                      queueTimeout: queueTimeout)
+    }
+
+    init(paths: SessionHost.Paths, socketDirectory: String, environment: [String: String], startupTimeout: TimeInterval = 5,
          queueTimeout: TimeInterval = 30) throws {
-        paths = try SessionHost.paths(socketDirectory: socketDirectory)
+        self.paths = paths
         self.socketDirectory = socketDirectory
         self.environment = environment
         self.startupTimeout = startupTimeout
@@ -29,6 +36,12 @@ final class ClientConnector {
         guard Responsibility.system.isAvailable else { throw HostFailure.invalidIdentity }
         let deadline = ProcessInfo.processInfo.systemUptime + startupTimeout
         let connection = try open(deadline: deadline) ?? startHost(deadline: deadline)
+        return try handshake(connection, deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
+    }
+
+    /// connectExisting reaches the host already serving `paths` and never starts one; nil when none listens.
+    func connectExisting() throws -> (any ClientPeer)? {
+        guard let connection = try open(deadline: ProcessInfo.processInfo.systemUptime + startupTimeout) else { return nil }
         return try handshake(connection, deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
     }
 

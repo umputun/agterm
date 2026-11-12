@@ -1,9 +1,15 @@
 import Darwin
 import XCTest
 import AgtermResponsibility
+@testable import agterm
 import agtermCore
 
 final class SessionHostClientTests: XCTestCase {
+    static func hostPaths(socketDirectory: String) throws -> SessionHost.Paths {
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/agterm-session-host").path
+        return try SessionHost.paths(socketDirectory: socketDirectory, key: XCTUnwrap(HelperEndpointKey.shared.key(helper: helper)))
+    }
+
     func testClientWithLoginArgvCreatesDisclaimedHostInPaneDirectory() throws {
         try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
         let fixture = try Fixture()
@@ -169,7 +175,7 @@ final class SessionHostClientTests: XCTestCase {
             executable = bundle.appendingPathComponent("Contents/MacOS/agterm-session-host")
             zmx = bundle.appendingPathComponent("Contents/MacOS/zmx")
             let socketDir = directory.appendingPathComponent("pane").path
-            paths = try SessionHost.paths(socketDirectory: socketDir)
+            paths = try SessionHostClientTests.hostPaths(socketDirectory: socketDir)
             environment = ["ZMX_DIR": socketDir, "ZMX_SESSION": "", "ZMX_SESSION_PREFIX": "", "ZMX_NO_DETACH_KEY": "1",
                            "SHELL": "/bin/sh", "HOME": directory.path, "PATH": "/usr/bin:/bin", "TERM": "xterm-256color", "CLIENT_MARKER": "unique pane value"]
             try FileManager.default.createDirectory(at: executable.deletingLastPathComponent(), withIntermediateDirectories: true)

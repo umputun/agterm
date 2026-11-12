@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import MachO
 import agtermCore
 
 enum HostIdentity {
@@ -35,6 +36,26 @@ enum HostIdentity {
         var length = socklen_t(MemoryLayout<Int32>.size)
         guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &length) == 0, pid > 0 else { throw HostFailure.invalidIdentity }
         return try read(pid: pid)
+    }
+
+    /// endpointKey is this process's own. The image is the one loaded, not the file on disk, which an
+    /// update replaces under a running host.
+    static func endpointKey() throws -> String {
+        guard let uuid = loadedImageUUID() else { throw HostFailure.invalidIdentity }
+        var info = auditinfo_addr_t()
+        try hostCheck(getaudit_addr(&info, Int32(MemoryLayout<auditinfo_addr_t>.size)))
+        return SessionHost.endpointKey(imageUUID: uuid, auditSession: info.ai_asid)
+    }
+
+    private static func loadedImageUUID() -> UUID? {
+        guard let header = _dyld_get_image_header(0), header.pointee.magic == MH_MAGIC_64 else { return nil }
+        var command = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+        for _ in 0..<header.pointee.ncmds {
+            let load = command.load(as: load_command.self)
+            if load.cmd == UInt32(LC_UUID) { return UUID(uuid: command.load(as: uuid_command.self).uuid) }
+            command = command.advanced(by: Int(load.cmdsize))
+        }
+        return nil
     }
 
     static func canonical(_ path: String) -> String {

@@ -34,16 +34,17 @@ public enum LiveReset {
 
     /// Reason is why a pane was selected. `unsupervised`: its leader is orphaned or attributed to the app.
     /// `outdated`: its daemon was created before this state directory's recorded zmx build change.
+    /// `staleHost`: it is supervised by a session host of an earlier helper build or login session.
     public enum Reason: String, Codable, Sendable {
-        case unsupervised, outdated
+        case unsupervised, outdated, staleHost
     }
 
     /// The confirmed set written at quit and consumed once at the next launch.
     public struct Marker: Codable, Equatable, Sendable {
-        public static let currentVersion = 2
+        public static let currentVersion = 3
         /// supportedVersions lists what `LiveResetMarkerStore.consume` accepts: a reset confirmed under the
         /// previous version still runs after an update.
-        public static let supportedVersions: Set<Int> = [1, 2]
+        public static let supportedVersions: Set<Int> = [1, 2, 3]
         public let version: Int
         public let createdAt: Date
         public let targets: [Target]
@@ -66,13 +67,20 @@ public enum LiveReset {
         }
 
         public var sessionCount: Int { Set(targets.map(\.sessionID)).count }
-        public var outdatedSessionCount: Int { Set(targets.filter { $0.reason == .outdated }.map(\.sessionID)).count }
+        public var outdatedSessionCount: Int { sessionCount(.outdated) }
+        public var staleHostSessionCount: Int { sessionCount(.staleHost) }
+
+        private func sessionCount(_ reason: Reason) -> Int {
+            Set(targets.filter { $0.reason == reason }.map(\.sessionID)).count
+        }
     }
 
     /// select picks a pane created before `outdatedBefore` as outdated whatever its attribution, and
-    /// otherwise an orphaned or app-attributed one as unsupervised. A nil cutoff selects no outdated pane.
+    /// otherwise an orphaned or app-attributed one as unsupervised and a supervised one `staleHost` reports as
+    /// staleHost. A nil cutoff selects no outdated pane.
     public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord], outdatedBefore: Date? = nil,
-                              classify: (String, Int32) -> SessionHost.Attribution) -> Selection {
+                              classify: (String, Int32) -> SessionHost.Attribution,
+                              staleHost: (String, Int32) -> Bool = { _, _ in false }) -> Selection {
         let leaders = ZmxLeaderMap.leaders(in: records)
         let created = createdTimes(in: records)
         var seen: Set<UUID> = []
@@ -88,7 +96,8 @@ public enum LiveReset {
             if isOutdated(created: created[name], cutoff: outdatedBefore) { return target(.outdated) }
             switch classify(name, leader) {
             case .orphaned, .app: return target(.unsupervised)
-            case .supervisor, .unknown: return nil
+            case .supervisor: return staleHost(name, leader) ? target(.staleHost) : nil
+            case .unknown: return nil
             }
         }
         return Selection(targets: targets, inventoryComplete: claims.complete && !conflicted)
@@ -123,11 +132,13 @@ public enum LiveReset {
         }
     }
 
-    /// narrow kills an outdated target that is still created before `outdatedBefore`, and an unsupervised one
-    /// that is still orphaned; both must still be claimed and listed with the same leader.
+    /// narrow kills an outdated target that is still created before `outdatedBefore`, an unsupervised one that is
+    /// still orphaned, and a staleHost one still supervised by an earlier host or orphaned by its exit; each must
+    /// still be claimed and listed with the same leader.
     public static func narrow(marker: Marker, claimed: Set<UUID>?, records: [ZmxSessionRecord]?,
                               outdatedBefore: Date? = nil,
-                              classify: (String, Int32) -> SessionHost.Attribution) -> Narrowed {
+                              classify: (String, Int32) -> SessionHost.Attribution,
+                              staleHost: (String, Int32) -> Bool = { _, _ in false }) -> Narrowed {
         guard let records, let claimed else {
             let skipped = Dictionary(marker.targets.map { ($0, Disposition.skipped) }, uniquingKeysWith: { first, _ in first })
             return Narrowed(dispositions: skipped, inventoryFailed: records == nil)
@@ -141,6 +152,12 @@ public enum LiveReset {
             let qualifies = switch target.reason {
             case .outdated: isOutdated(created: record.createdAt, cutoff: outdatedBefore)
             case .unsupervised: classify(target.daemon, target.leaderPID) == .orphaned
+            case .staleHost:
+                switch classify(target.daemon, target.leaderPID) {
+                case .supervisor: staleHost(target.daemon, target.leaderPID)
+                case .orphaned: true
+                case .app, .unknown: false
+                }
             }
             dispositions[target] = qualifies ? .kill : .skipped
         }
@@ -226,10 +243,12 @@ public enum LiveReset {
     public static let markerFilename = "live-reset.json"
     public static let consumedFilename = "live-reset.consumed.json"
 
-    public static func dialogText(sessionCount: Int, outdatedSessions: Int = 0) -> (title: String, body: String) {
+    public static func dialogText(sessionCount: Int, outdatedSessions: Int = 0,
+                                  staleHostSessions: Int = 0) -> (title: String, body: String) {
         let noun = sessionCount == 1 ? "live session" : "live sessions"
         return (title: "Reset Live Sessions?",
                 body: "\(sessionCount) \(noun) will be reset. " + outdatedSentence(outdatedSessions, of: sessionCount)
+                    + staleHostSentence(staleHostSessions, of: sessionCount)
                     + "Agterm quits and reopens itself right away with your "
                     + "sessions and layout. Commands that were running in those sessions are started again where "
                     + "possible; other work running in them stops, and agent conversations may need to be resumed by hand.")
@@ -240,6 +259,13 @@ public enum LiveReset {
         let tail = "the last Live sessions update and will be recreated on the current one. "
         if outdated == total { return (total == 1 ? "It predates " : "They all predate ") + tail }
         return outdated == 1 ? "1 of them predates " + tail : "\(outdated) of them predate " + tail
+    }
+
+    private static func staleHostSentence(_ stale: Int, of total: Int) -> String {
+        guard stale > 0 else { return "" }
+        let tail = "under a helper from an earlier agterm version or login and will be moved to the current one. "
+        if stale == total { return (total == 1 ? "It runs " : "They all run ") + tail }
+        return stale == 1 ? "1 of them runs " + tail : "\(stale) of them run " + tail
     }
 
     public static func notificationText(outcome: Outcome) -> String? {

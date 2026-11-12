@@ -143,6 +143,11 @@ Check these in order:
   session keeps the zmx it was created with through app updates. `agtermctl zmx list` marks such rows
   `outdated`; Agterm ▸ Reset Live Sessions… (or `agtermctl zmx reset --force`) recreates them on the current
   zmx, with the same cost as any reset: running work stops and agent conversations need resuming.
+- **An older live session cannot reach the local network after an update, or reports `No user exists for
+  uid 501` after a forced logout.** A changed helper build or a new login gets its own session host, and a session
+  keeps the host it started under; `agtermctl tree --json` marks it `liveHostStale`. Agterm ▸ Reset Live
+  Sessions… (or `agtermctl zmx reset --force`) moves it to the current host, with the same cost as any reset;
+  at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it.
 - **Switching modes ends detached live processes.** Selecting Fresh shells or Re-run commands and restarting
   reaps the live daemons in this state directory. An unavailable launch that still requests Live sessions
   preserves its claimed daemons for a later eligible launch.

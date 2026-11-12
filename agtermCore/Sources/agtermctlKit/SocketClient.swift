@@ -576,8 +576,13 @@ struct SocketClient {
                     + (session.scratch ? " (scratch)" : "") + pendingTag + interactionTag
                 let splitCwdSuffix = session.splitCwd.map { $0 == session.cwd ? "" : "  split cwd: \($0)" } ?? ""
                 let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
-                let attribution = session.liveAttribution.map { "  live attribution: \($0)" } ?? ""
-                let splitAttribution = session.splitLiveAttribution.map { "  split live attribution: \($0)" } ?? ""
+                let earlier = " (earlier helper)"
+                let attribution = session.liveAttribution.map {
+                    "  live attribution: \($0)" + (session.liveHostStale == true ? earlier : "")
+                } ?? ""
+                let splitAttribution = session.splitLiveAttribution.map {
+                    "  split live attribution: \($0)" + (session.splitLiveHostStale == true ? earlier : "")
+                } ?? ""
                 let presentation = session.presentation.map {
                     "  presentation: \($0.state)" + ($0.mode == "presenter" ? ", presenter" : "")
                         + ($0.error.map { " (\($0))" } ?? "")

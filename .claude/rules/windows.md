@@ -213,6 +213,20 @@ session drag are out of scope.
 - `agterm-session-host` is a persistent responsibility root for Live daemons in one state directory.
   Reuse it across app restarts; host death leaves its panes orphaned and later panes can start a
   replacement host.
+- Each helper build and login session has its own host endpoint, `session-host-<key>` under the zmx socket
+  directory: the key is the first 12 hex digits of the helper image's `LC_UUID` plus the audit session id
+  (`agterm-session-host key`). An update or a forced logout therefore starts a new host for new panes
+  (#971), and the old one stays the root of its existing daemons, since responsibility cannot be moved.
+  The fixed `session-host` directory is a build predating keys; it is never served again.
+- A host whose panes are gone is retired, never killed: after every launch's reap `HostRetirer` runs
+  `agterm-session-host stop <dir>` off the main thread, which asks every other endpoint to stop and a host
+  refuses while it roots a live daemon. Reset Live Sessions… moves panes off an earlier host (`staleHost`),
+  and the relaunch's retirement then ends it.
+- The app finds hosts from their pidfiles (`LiveAttributionProbe.publishedHost`): a pid counts when its
+  process started no later than the pidfile was last written. The executable path is no test, since an
+  update deletes or moves the old host's image (measured: `proc_pidpath` fails or names the moved path).
+  The current key comes from running the bundled helper's `key`, cached by file identity
+  (`HelperEndpointKey`); when it cannot be read, no pane is called stale.
 - Keep all `responsibility_*` SPI lookups in the `AgtermResponsibility` target.
   If the SPI is unavailable, panes fall back to bare attach.
 - `SessionHostTrampoline` owns the `forkpty` child path through `execve`; no Swift runs there.
