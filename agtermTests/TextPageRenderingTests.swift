@@ -146,7 +146,7 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "three\n" }
     }
 
-    func testATextReplicaRendersFetchedBytesAndRefetchesOnReloadAndThemeChange() async throws {
+    func testATextReplicaRefetchesOnReloadAndRedrawsAThemeChangeFromWhatItShows() async throws {
         let url = pages.appendingPathComponent("main.go")
         try "package one\n".write(to: url, atomically: true, encoding: .utf8)
         let page = registry.page(for: openReplica(url.path, .text(line: 1)), store: store, replica: replicaLink())
@@ -158,11 +158,71 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try "package two\n".write(to: url, atomically: true, encoding: .utf8)
         XCTAssertNil(registry.reload(page.id, target: .original, store: store))
         try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package two\n" }
+        try "package three\n".write(to: url, atomically: true, encoding: .utf8)
         page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
         try await waitForVariable("--agterm-foreground", "#102030", in: page.webView)
 
-        try await waitFor("three fetches") { self.fetched.count == 3 }
-        XCTAssertEqual(fetched, [url.path, url.path, url.path])
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package two\n" }
+        XCTAssertEqual(fetched, [url.path, url.path])
+    }
+
+    @MainActor private final class TailGate {
+        var hang = false
+        var asked = 0
+    }
+
+    private func openReplicaLog(_ path: String) -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .replica(path: path, content: .text(line: nil)), replicaOf: UUID(),
+                                  textLog: TextLog(tail: 50, follow: true))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
+    }
+
+    func testAReplicaLogOverTheTextCapOpensFromItsTailAndFollowsTheFile() async throws {
+        let url = pages.appendingPathComponent("app.log")
+        let line = String(repeating: "x", count: 99) + "\n"
+        try String(repeating: line, count: TextPage.maxBytes / line.utf8.count + 1000).write(to: url, atomically: true, encoding: .utf8)
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: replicaLink(log: url.path))
+
+        try await waitFor("the tail is shown") { self.current?.logState?.report.lines == 50 }
+        XCTAssertTrue(fetched.isEmpty)
+        try append("last\n", to: url)
+        try await waitFor("the append is followed") { page.textPage?.follower?.snapshot?.text.hasSuffix(line + "last\n") == true }
+    }
+
+    func testAReplicaLogTheOriginCannotReadWaitsForIt() async throws {
+        let url = pages.appendingPathComponent("gone.log")
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: replicaLink(log: url.path))
+
+        try await waitFor("the page waits") { self.current?.logState?.report.waiting == true }
+        try "back\n".write(to: url, atomically: true, encoding: .utf8)
+        try await waitFor("the file is picked up") { page.textPage?.follower?.snapshot?.text == "back\n" }
+    }
+
+    func testAHideDuringAChannelReadLeavesTheLogAsItWasAndShowingCatchesUp() async throws {
+        let url = pages.appendingPathComponent("app.log")
+        try "one\n".write(to: url, atomically: true, encoding: .utf8)
+        let gate = TailGate(), disk = replicaLink(log: url.path)
+        let link = HtmlReplicaLink(fetch: disk.fetch, bridge: disk.bridge, logTail: { stamp in
+            gate.asked += 1
+            if gate.hang { try await Task.sleep(for: .seconds(60)) }
+            return try await disk.logTail(stamp)
+        })
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: link)
+        try await waitFor("the log is shown") { page.textPage?.follower?.snapshot?.text == "one\n" }
+        gate.hang = true
+        let asked = gate.asked
+        try await waitFor("a read is in flight") { gate.asked > asked }
+
+        page.setOnScreen(false)
+        try await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(current?.logState?.report, TextLogReport(lines: 1))
+        XCTAssertEqual(page.textPage?.follower?.snapshot?.text, "one\n")
+        gate.hang = false
+        try append("two\n", to: url)
+        page.setOnScreen(true)
+        try await waitFor("showing catches up") { page.textPage?.follower?.snapshot?.text == "one\ntwo\n" }
     }
 
     func testABinaryReplicaReportsAFailure() async throws {

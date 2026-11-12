@@ -151,7 +151,7 @@ final class LogFollower {
     }
 
     /// fileReader reads a local file on a detached task, never on the caller's actor.
-    static let fileReader: Reader = { path, tail, stamp in
+    nonisolated static let fileReader: Reader = { path, tail, stamp in
         await Task.detached(priority: .utility) { TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp) }.value
     }
 

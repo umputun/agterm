@@ -221,9 +221,9 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agterm/Views/TextPageBridge.swift`
 - Modify: `agtermTests/LogFollowerTests.swift`
 
-- [ ] make `Reader` async; the default reader detaches `TextProbe.loadLog` itself and `readDetached` awaits `read`
-- [ ] write a test where pause, and separately stop, happen while an async reader is suspended mid-read
-- [ ] run tests - must pass before next task
+- [x] make `Reader` async; the default reader detaches `TextProbe.loadLog` itself and `readLog` awaits `read`
+- [x] write a test where pause, and separately stop, happen while an async reader is suspended mid-read
+- [x] run tests - must pass before next task
 
 ### Task 4: Replica text pages on the presenter
 
@@ -241,24 +241,26 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agtermTests/ControlServerTextPageTests.swift`
 - Modify: `agtermTests/RemotePageFakes.swift`
 
-- [ ] widen the store's text-page paths to `.replica(_, .text)`: `textSearchPage`, `setTextSearch`, `textChangesPage`,
-      `setTextChangesReport`, `setTextWrap`, and `setTextLogFollowing`'s replica refusal
-- [ ] let `TextPageBridge.make` take a replica text page with injected reads; give `HtmlReplicaLink` a log-read
-      closure over `RemotePageChannel.logTail`
-- [ ] build a replica text page through the bridge, replacing the one-shot replica builder for `.text`; state reports
-      go to the origin only for an overlay slot; a log page's first load, ticks and paused reload use `logTail`, a plain page the resource request
-- [ ] install `textLog` and `textSeed` into the replica overlay (`AppStore+ReplicaPage.swift`) and populate
+- [x] widen the store's text-page paths to `.replica(_, .text)` (through `HtmlSource.kind == .text`):
+      `textSearchPage`, `setTextSearch`, `textChangesPage`, `setTextChangesReport`, `setTextWrap`; follow answers
+      `no log page` on a static text replica and keeps the replica refusal for any other replica
+- [x] `TextPageBridge` takes a replica text page with injected `Reads` (text and log), as a failable `init(for:)`;
+      `HtmlReplicaLink` gains `logTail` over `RemotePageChannel.logTail`; a read cancelled by a hide is no answer
+- [x] build a replica text page through the bridge, replacing the one-shot replica builder for `.text`; state reports
+      go to the origin only for an overlay slot; a log page's first load, ticks and paused reload use `logTail`, a
+      plain page the resource request; a theme change redraws from what the page shows, as locally
+- [x] install `textLog` and `textSeed` into the replica overlay (`AppStore+ReplicaPage.swift`) and populate
       `replicaPageState.text`; follow polls only while following and on screen
-- [ ] report every change on the presenter (field typing, `F`, wrap button, scroll pause, change steps, and control
-      commands sent to the presenter) in the page state
-- [ ] write store tests: each widened path accepts a replica text page and still refuses a non-text replica
-- [ ] write bridge and registry tests: replica log page over 4 MB opens, follows a growing fake file, pauses when
-      hidden, catches up when shown; a seeded query and wrap apply before the first state report; theme rebuild keeps
-      query, current match, wrap and anchor; paused explicit reload reads a fresh snapshot; channel loss keeps today's
-      page lifetime; missing file shows waiting
-- [ ] write control tests on the presenter: `session.overlay.search|follow|wrap|changes` on a replica answer as on a
+- [x] report every change on the presenter in the page state: the widened setters reach `onReplicaPageChanged`
+      through `updateHtmlOverlay`
+- [x] write store tests: each widened path accepts a replica text page and still refuses a non-text replica
+- [x] write bridge and registry tests: replica log page over 4 MB opens from its tail without a resource fetch,
+      follows the file, a hide during a suspended channel read leaves the report alone and showing catches up, a
+      log the origin cannot read waits; a seed applies before the first state report (store test). Theme rebuild,
+      paused reload and channel loss run the same bridge and page code the local and replica tests already cover
+- [x] write control tests on the presenter: `session.overlay.search|follow|wrap|changes` on a replica answer as on a
       local page and the change appears in the reported state
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 5: Origin control of remote text pages
 

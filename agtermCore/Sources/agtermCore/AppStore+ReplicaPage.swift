@@ -17,15 +17,27 @@ extension AppStore {
             }
             pane = role
         }
-        let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
-                                  chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
-                                  replicaOf: origin, markdownLinks: page.markdownLinks)
+        let overlay = Self.seeded(HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
+                                              chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
+                                              replicaOf: origin, textLog: page.textLog, markdownLinks: page.markdownLinks),
+                                  page.textSeed)
         if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent, points: page.points,
                                          backgroundColor: page.backgroundColor) {
             return failure.message(pane: pane)
         }
         if page.follow { selectSession(id) }
         return nil
+    }
+
+    // a page offered again opens with the following, query and wrap it had; a step is never replayed
+    static func seeded(_ overlay: HtmlOverlay, _ seed: PresentationTextState?) -> HtmlOverlay {
+        guard let seed, overlay.source.kind == .text else { return overlay }
+        var page = overlay
+        if let following = seed.following, page.logState != nil { page.logState?.following = following }
+        page.searchRevision = seed.revision
+        page.textSearch = seed.query.flatMap { $0.isEmpty ? nil : TextSearch(query: $0) }
+        page.textWrap = seed.wrap
+        return page
     }
 
     static func replicaSource(_ source: PresentationPageSource) -> HtmlSource? {
@@ -127,7 +139,15 @@ extension AppStore {
                                      canGoBack: page.current?.canGoBack ?? false,
                                      canGoForward: page.current?.canGoForward ?? false,
                                      hidden: slot.session.overlayHidden(slot.pane),
-                                     appliedSeq: appliedSeq)
+                                     appliedSeq: appliedSeq, text: Self.textState(page))
+    }
+
+    static func textState(_ page: HtmlOverlay) -> PresentationTextState? {
+        guard page.source.kind == .text else { return nil }
+        return PresentationTextState(following: page.logState?.following, log: page.logState?.report,
+                                     query: page.textSearch?.query, revision: page.searchRevision,
+                                     matches: page.textSearch?.matches, current: page.textSearch?.current,
+                                     wrap: page.textWrap, changes: page.textChanges)
     }
 
     /// closeReplicaPages takes down every page `session` shows for its origin: with the stream gone the origin

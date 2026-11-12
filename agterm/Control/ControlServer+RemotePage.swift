@@ -206,6 +206,10 @@ extension ControlServer {
             bridge: { [weak channel] request in
                 guard let channel else { throw RemotePageChannel.Failure.closed }
                 return try await channel.bridge(request)
+            },
+            logTail: { [weak channel] stamp in
+                guard let channel else { throw RemotePageChannel.Failure.closed }
+                return try await channel.logTail(since: stamp)
             })
     }
 }

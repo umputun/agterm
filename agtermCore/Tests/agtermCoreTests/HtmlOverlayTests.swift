@@ -1103,7 +1103,7 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textSearch == nil)
     }
 
-    @Test func aSearchAddressesOnlyALocalTextPage() throws {
+    @Test func aSearchAddressesOnlyATextPageLocalOrReplica() throws {
         let (store, session, _) = try logStore()
         #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
         #expect(store.textSearchPage(UUID(), pane: nil) == .failure(.page(.unknownSession)))
@@ -1115,9 +1115,16 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textSearch == nil)
         #expect(store.closeOverlay(session.id))
 
+        let replicaMarkdown = HtmlOverlay(source: .replica(path: "/tmp/a.md", content: .markdown), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replicaMarkdown, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.closeOverlay(session.id))
+
         let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
-        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.textSearchPage(session.id, pane: nil).map(\.id) == .success(replica.id))
+        #expect(store.setTextSearch(replica.id, query: "a") == 1)
+        #expect(session.htmlOverlay?.textSearch?.query == "a")
         #expect(store.closeOverlay(session.id))
 
         let log = logPage()
@@ -1235,11 +1242,17 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textWrap == false)
         #expect(store.closeOverlay(session.id))
 
+        let replicaMarkdown = HtmlOverlay(source: .replica(path: "/tmp/a.md", content: .markdown), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replicaMarkdown, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(replicaMarkdown.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
         let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
-        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
-        store.setTextWrap(replica.id, wrapped: true)
-        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .success(true))
+        #expect(session.htmlOverlay?.textWrap == true)
         #expect(store.closeOverlay(session.id))
 
         #expect(store.openOverlay(session.id, command: "less"))

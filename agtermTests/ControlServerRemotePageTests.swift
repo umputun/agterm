@@ -375,6 +375,28 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertEqual(states(fix).count, before)
     }
 
+    func testTextCommandsOnAReplicaAnswerAsLocallyAndReachTheOrigin() async throws {
+        let fix = try fixture(files: ["/src/a.diff": ("text/plain", Data("@@ -1 +1 @@\n-a\n+b\n".utf8))])
+        _ = try present(fix, page(.text(path: "/src/a.diff", line: nil)))
+        let target = fix.session.id.uuidString
+        try await waitFor("the diff reports its changes") { fix.session.htmlOverlay?.textChanges?.count == 1 }
+
+        let search = await fix.server.searchSessionOverlay(target, window: nil, pane: nil, request: .query("b"))
+        let wrap = fix.server.setSessionOverlayWrap(target, window: nil, pane: nil, mode: .on)
+        let follow = fix.server.setSessionOverlayFollow(target, window: nil, pane: nil, mode: .on)
+        let step = await fix.server.stepSessionOverlayChanges(target, window: nil, pane: nil, forward: true)
+
+        XCTAssertTrue(search.ok, search.error ?? "")
+        XCTAssertEqual(wrap.result?.text, "wrapped")
+        XCTAssertEqual(follow.error, "no log page")
+        XCTAssertEqual(step.result?.text, "1 of 1")
+        try await waitFor("the origin is told") { self.states(fix).last?.text?.changes?.current == 1 }
+        let text = try XCTUnwrap(states(fix).last?.text)
+        XCTAssertEqual(text.query, "b")
+        XCTAssertTrue(text.wrap)
+        XCTAssertNil(text.following)
+    }
+
     func testStateChangesInOneTurnAreReportedOnce() async throws {
         let fix = try fixture(files: ["/docs/index.html": html("<p>x</p>")])
         _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: nil)))
