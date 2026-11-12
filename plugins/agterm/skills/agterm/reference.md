@@ -2547,11 +2547,12 @@ its persisted snapshots against what zmx reports. With agterm stopped there is n
 
 Which programs are NOT re-run is controlled by `restore-denylist.conf` in the config directory (one
 command name per line, seeded with the terminal multiplexers `tmux`/`screen`/`zellij`). It is a plain
-user-edited file read at launch — there is no control command for it. Two more things are skipped
+user-edited file read at launch — there is no control command for it. Three more things are skipped
 whatever the denylist says, and the pane starts a plain shell. A control character in the command's
 name or any argument: the restored line is typed, so the line editor reads that byte as an editing key
 rather than as text. A byte sequence that was not valid UTF-8: it is captured lossily, so replaying it
-would run an argument the process never had.
+would run an argument the process never had. A `!` anywhere in a command re-run mode types into a csh or
+tcsh pane: those shells expand it as history even inside quotes.
 
 For a PER-SESSION, per-pane override that pins (or suppresses) what a pane restores, use
 `session restore` (in the session section above): it wins over the captured foreground, bypasses the

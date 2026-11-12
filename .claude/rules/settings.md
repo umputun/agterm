@@ -229,8 +229,10 @@ paths:
   `restore-denylist.conf`, seeded with `tmux`, `screen`, and `zellij`. A control character anywhere in the
   argv also refuses, matching what `session.restore set` rejects a pin for: the line is typed, so the line
   editor reads the byte before the shell parser and quoting cannot protect it. U+FFFD refuses with it,
-  since `parseProcArgs` decodes lossily and replaying it would run a different argument. Both refuse at
-  RENDER, keeping `hadForeground` true so a stale `initialCommand` stays preempted. A pin loaded from a
+  since `parseProcArgs` decodes lossily and replaying it would run a different argument. A `!` refuses when
+  the line is typed into csh or tcsh (`LaunchSeedPolicy.receivingShell`: ghostty `command`'s program, else
+  the account's login shell), which expand history even inside single quotes; Live's zsh and fish wrappers
+  keep it literal, and a deliberate pin is not checked. All refuse at RENDER, keeping `hadForeground` true so a stale `initialCommand` stays preempted. A pin loaded from a
   snapshot never passed the dispatcher's check, so `restoreInput` applies it again at the sink; both share
   `CommandRestore.hasControlCharacter`. Feed captured argv once through
   shell-quoted `config.initial_input` in rerun mode, then nil it. A wrapped live pane consumes the pending

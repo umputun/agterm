@@ -393,6 +393,11 @@ final class SurfaceFactorySeedTests: XCTestCase {
                      "a skipped or failed list paces every replaying live pane")
     }
 
+    func testThePolicyCarriesTheReceivingShell() {
+        XCTAssertEqual(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: agtermApp.LaunchSpawnContext()).receivingShell,
+                       GhosttyApp.shared.commandProgram ?? ZmxLaunch.passwordDatabaseLoginShell())
+    }
+
     private func services(_ registry: SpawnRegistry?) -> agtermApp.SurfaceServices {
         agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil, spawnRegistry: registry,
                                   launchContext: agtermApp.LaunchSpawnContext())
