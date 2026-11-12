@@ -144,7 +144,8 @@ waits forever on an absent app. SIGINT and SIGTERM use normal process behavior.
 
 `agtermctl tree [--json] [--window W]` — the workspace/session tree. Each session node:
 `id`, `name`, `cwd`, `splitCwd` (the split pane's last reported directory, falling back to its restored
-directory, then the primary cwd; omitted without a split or on older servers), `title` (the raw OSC terminal
+directory, then the primary cwd; omitted without a split or on older servers), `scratchCwd` (the scratch
+shell's last reported directory or where it started; omitted without a scratch or on older servers), `title` (the raw OSC terminal
 title, for example a remote host over SSH, omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split SHOWN side by side, the read side of `session split on|off`),
@@ -2111,14 +2112,14 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 `$AGT_*` form for any of them:
 
 - `{AGT_SESSION_NAME}` / `$AGT_SESSION_NAME` — the session's display name (the focused pane's terminal title, remote-settable via OSC).
-- `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the working directory of the pane the command fired from;
-  the scratch terminal reports the main pane's, since it tracks no cwd of its own. For a session opened
-  by `zmx attach` the path can be remote: the session starts with local HOME and follows subsequent cwd
+- `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the working directory of the pane the command fired from,
+  the scratch terminal included. For a session opened by `zmx attach` the path can be remote: the session starts with local HOME and follows subsequent cwd
   reports. See Remote sessions. On any session the command itself starts in that path only when it
   exists here as a directory, else in local HOME, so a deleted directory does not stop it; the variable
   keeps the reported path either way.
 - `{AGT_SESSION_HOST}` / `$AGT_SESSION_HOST` — the SSH destination of a session opened by `zmx attach`,
   verbatim as given (`user@alias` included); empty for a local session, an `ssh` typed into one included,
+  and from the scratch of an attached session, whose shell runs on this Mac,
   so branch on it: `if [ -n "$AGT_SESSION_HOST" ]; then ssh "$AGT_SESSION_HOST" uptime; fi` (a bare
   `&&` chain exits 1 on a local session and the runner reports that as a failure).
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
@@ -2523,7 +2524,8 @@ after a relaunch whatever the restore mode is.
 The pane reports the far side's working directory, and the local launches that would inherit it pick
 their start directory by one rule: the reported path when it exists here as a directory, else local
 HOME. Those launches are a custom command (its `$AGT_SESSION_PWD` keeps the reported path and
-`$AGT_SESSION_HOST` names the destination), the scratch terminal, an overlay opened without `--cwd`,
+`$AGT_SESSION_HOST` names the destination; one fired from the local scratch gets that shell's directory and an
+empty host), the scratch terminal, an overlay opened without `--cwd`,
 the quick terminal, a local split (the first one on a remote session that arrived without a split, or
 one opened after the attach-time split is closed), Duplicate Session, and New Session when it is set
 to open in the current session's directory. An explicit overlay `--cwd` is used as given. Quote both

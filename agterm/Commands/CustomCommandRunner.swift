@@ -495,7 +495,7 @@ final class CustomCommandRunner {
             sessionID: session.id.uuidString,
             sessionName: session.displayName,
             sessionPWD: session.cwd(for: pane),
-            sessionHost: TerminalText.sanitized(session.remoteHost ?? ""),
+            sessionHost: TerminalText.sanitized(session.remoteHost(for: pane) ?? ""),
             workspaceID: workspace?.id.uuidString ?? "",
             workspaceName: workspace?.name ?? "",
             windowID: windowID?.uuidString ?? "",

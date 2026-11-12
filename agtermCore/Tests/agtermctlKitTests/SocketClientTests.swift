@@ -1161,6 +1161,16 @@ struct SocketClientTests {
         #expect(output == "* work  [w]\n  * shell (split)  [s]  \(expected)")
     }
 
+    @Test(arguments: [("/other", "/main  scratch cwd: /other"), ("/main", "/main")])
+    func formatTreeIncludesOnlyADifferingScratchDirectory(_ scratchCwd: String, _ expected: String) throws {
+        let data = Data(#"{"id":"s","name":"shell","cwd":"/main","scratchCwd":"\#(scratchCwd)","active":true,"split":false,"overlay":false,"scratch":true,"flagged":false}"#.utf8)
+        let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true, sessions: [session])])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: tree))
+        let output = SocketClient.formatResponse(response)
+        #expect(output == "* work  [w]\n  * shell (scratch)  [s]  \(expected)")
+    }
+
     @Test func formatWindowResizeReportsAppliedWidthAndHeight() throws {
         let response = try JSONDecoder().decode(ControlResponse.self, from: Data(#"{"ok":true,"result":{"id":"w","width":1200,"height":800}}"#.utf8))
         #expect(SocketClient.formatResponse(response) == "1200 800")

@@ -557,6 +557,10 @@ public final class Session: Identifiable {
     /// close, the shell's own `exit`, or session/workspace/window teardown), after which a show spawns fresh.
     @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
 
+    /// The scratch shell's own cwd: where a local scratch started, then each PWD it reports. Separate from
+    /// `currentCwd` so a `cd` in the scratch never renames the row. Nil with no scratch; a departing scratch clears it.
+    @ObservationIgnored public var scratchCwd: String?
+
     /// Bumped on every `closeScratch` so the deck keys the scratch view's identity on it. A `--command`
     /// respawn closes and re-shows inside one store call, so `scratchActive` never dips where SwiftUI can
     /// see it and the torn-down view would otherwise stay mounted. Observed, never persisted.
@@ -648,18 +652,8 @@ public final class Session: Identifiable {
 
     /// The live `currentCwd` once a PWD report arrived, else `initialCwd`. Always the PRIMARY pane's, never
     /// focus-aware (cf. `focusedCwd`): it seeds new split, overlay, scratch and quick terminals. A custom
-    /// command's `AGT_SESSION_PWD` resolves through `cwd(for:)`, so the right pane's value can differ.
+    /// command's `AGT_SESSION_PWD` resolves through `cwd(for:)`, so the split's and scratch's values can differ.
     public var effectiveCwd: String { currentCwd ?? initialCwd }
-
-    /// The working directory for a given pane role: the split pane's while targeting `.right`, else the primary's.
-    public func cwd(for pane: CommandContext.Pane) -> String {
-        switch pane {
-        case .right:
-            return splitCwd ?? initialSplitCwd ?? effectiveCwd
-        case .left, .scratch:
-            return effectiveCwd
-        }
-    }
 
     /// The stable token of the surface currently in `pane`'s slot (`TerminalSurface.paneToken`), the inverse
     /// of `paneRole(forToken:)`; empty while the slot holds no surface.
@@ -672,16 +666,6 @@ public final class Session: Identifiable {
         case .scratch:
             return scratchSurface?.paneToken ?? scratchDaemon?.identity.uuidString ?? ""
         }
-    }
-
-    /// Where a LOCAL process for this session starts, given the pane path it would inherit: that path on a
-    /// local session; on a remote one, only when it exists here as a directory, else `homeDirectory`. The
-    /// reported path itself stays what `cwd(for:)` and `AGT_SESSION_PWD` carry.
-    public func localWorkingDirectory(reported path: String, homeDirectory: String) -> String {
-        guard remoteHost != nil else { return path }
-        var isDirectory: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
-        return exists && isDirectory.boolValue ? path : homeDirectory
     }
 
     /// The focused pane's surface: the split (right) while it has focus and exists, else the primary. With the

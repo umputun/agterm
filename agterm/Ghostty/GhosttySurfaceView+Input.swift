@@ -647,10 +647,13 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         session.flatMap { isSplitPane ? $0.splitPaneIdentity : $0.paneIdentity }
     }
 
-    /// The directory a relative link names a file in: this pane's reported cwd. Nil for the scratch, quick and
-    /// overlay terminals, whose own directory the app does not track, so a relative link there stays ignored.
+    /// The directory a relative link names a file in: this pane's reported cwd, a local scratch's included. Nil
+    /// for a remote window's scratch, whose directory is on the server, and for the quick and overlay
+    /// terminals, whose own directory the app does not track, so a relative link there stays ignored.
     var linkClickCwd: String? {
-        session.map { isSplitPane ? $0.cwd(for: .right) : $0.effectiveCwd }
+        if let session { return isSplitPane ? session.cwd(for: .right) : session.effectiveCwd }
+        guard let owner = scratchOwner, owner.catalogScratch == nil else { return nil }
+        return owner.cwd(for: .scratch)
     }
 
     /// Which kind of surface a clicked link came from, read off the ownership each factory already sets.

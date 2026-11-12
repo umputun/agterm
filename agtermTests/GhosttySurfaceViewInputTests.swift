@@ -95,6 +95,27 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertEqual(remote.linkClickOrigin, .remotePane(remoteSession.id))
     }
 
+    func testRelativeLinksInALocalScratchResolveAgainstItsOwnCwd() {
+        let store = AppStore(persistence: PersistenceStore(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-scratch-link-\(UUID().uuidString)")))
+        let workspace = store.addWorkspace(name: "work")
+        guard let session = store.addSession(toWorkspace: workspace.id, cwd: "/tmp/main", remoteHost: "box") else {
+            return XCTFail("no session")
+        }
+        let scratch = bareSurface()
+        scratch.watermarkSession = session
+        XCTAssertNil(scratch.linkClickCwd)
+
+        session.scratchSurface = scratch
+        session.scratchCwd = "/tmp/main/docs"
+        XCTAssertEqual(scratch.linkClickCwd, "/tmp/main/docs")
+
+        store.bindRemote(RemoteBinding(remoteSessionID: "r", daemonsByLocalPane: [:], presentationVersion: 1, catalogOwned: true),
+                         forSession: session.id)
+        session.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: true)
+        XCTAssertNil(scratch.linkClickCwd)
+    }
+
     func testCommandClickOnAnOSC8SessionLinkSelectsItsTarget() throws {
         let id = UUID()
         let fixture = try LinkClickFixture(printing: "\\033]8;;agterm://session/\(id.uuidString)\\033\\\\example session\\033]8;;\\033\\\\")

@@ -123,6 +123,31 @@ final class GhosttySurfaceViewTitleTests: XCTestCase {
         XCTAssertNil(session.oscTitle)
     }
 
+    func testScratchPwdReachesOnlyTheScratchCwd() {
+        let session = Session(initialCwd: "/tmp/start")
+        let view = GhosttySurfaceView(workingDirectory: session.initialCwd)
+        view.watermarkSession = session
+        session.scratchSurface = view
+
+        view.applyPwd("/tmp/start/\u{7}docs")
+
+        XCTAssertEqual(session.scratchCwd, "/tmp/start/docs")
+        XCTAssertNil(session.currentCwd)
+        XCTAssertNil(session.splitCwd)
+        XCTAssertEqual(session.displayName, "start")
+    }
+
+    func testAScratchNoLongerInItsSlotDropsItsPwd() {
+        let session = Session(initialCwd: "/tmp/start")
+        let view = GhosttySurfaceView(workingDirectory: session.initialCwd)
+        view.watermarkSession = session
+
+        view.applyPwd("/tmp/old")
+
+        XCTAssertNil(session.scratchCwd)
+        XCTAssertNil(session.currentCwd)
+    }
+
     private func makeView(split: Bool = false) -> (Session, GhosttySurfaceView) {
         let session = Session(initialCwd: "/tmp/start")
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd)

@@ -1706,14 +1706,30 @@ struct AppStorePaneTests {
         session.scratchActive = true
         let scratch = SpySurface()
         session.scratchSurface = scratch
+        session.scratchCwd = "/a/docs"
         #expect(store.closeScratch(session.id) == true)
         #expect(session.scratchActive == false)
         #expect(session.scratchSurface == nil)
+        #expect(session.scratchCwd == nil)
+        #expect(session.cwd(for: .scratch) == "/a")
         #expect(scratch.teardownCount == 1)
         #expect(session.scratchGeneration == 1)
         // closing again (no surface) is a no-op.
         #expect(store.closeScratch(session.id) == false)
         #expect(session.scratchGeneration == 1)
+    }
+
+    // a departed server scratch with no surface left its directory for the next daemon's scratch
+    @Test func dropScratchDaemonForgetsTheDepartedScratchsDirectory() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: false)
+        session.scratchCwd = "/srv/old"
+        store.dropScratchDaemon(session.id)
+        #expect(session.scratchDaemon == nil)
+        #expect(session.scratchCwd == nil)
+        #expect(session.cwd(for: .scratch) == "/a")
     }
 
     @Test func closeScratchClearsStuckSearchWhenScratchOwnsIt() {

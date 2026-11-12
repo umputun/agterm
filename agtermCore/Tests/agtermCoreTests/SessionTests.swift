@@ -430,6 +430,27 @@ struct SessionTests {
 
         session.initialSplitCwd = nil
         #expect(session.cwd(for: .right) == "/repo/primary")
+
+        session.scratchCwd = "/repo/docs"
+        #expect(session.cwd(for: .scratch) == "/repo/docs")
+        #expect(session.cwd(for: .left) == "/repo/primary")
+        #expect(session.focusedCwd == "/repo/primary")
+    }
+
+    @Test func remoteHostForPaneLeavesALocalScratchWithoutTheAttachHost() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/repo"))
+        let attached = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/srv", remoteHost: "box"))
+        #expect(local.remoteHost(for: .scratch) == nil)
+        #expect(attached.remoteHost(for: .left) == "box")
+        #expect(attached.remoteHost(for: .right) == "box")
+        #expect(attached.remoteHost(for: .scratch) == nil)
+
+        store.bindRemote(RemoteBinding(remoteSessionID: "r", daemonsByLocalPane: [:], presentationVersion: 1, catalogOwned: true),
+                         forSession: attached.id)
+        attached.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: true)
+        #expect(attached.remoteHost(for: .scratch) == "box")
     }
 
     @Test func localWorkingDirectoryKeepsAnyPathForALocalSession() {

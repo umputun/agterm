@@ -23,6 +23,12 @@ extension GhosttySurfaceView {
     /// surface's CURRENT slot even after a promote + re-split (#199).
     var paneToken: String { env["AGTERM_PANE_ID"] ?? "" }
 
+    /// The session whose live scratch this surface is, nil for every other surface.
+    var scratchOwner: Session? {
+        guard session == nil, let owner = watermarkSession, owner.scratchSurface === self else { return nil }
+        return owner
+    }
+
     var zmxSessionName: String? {
         guard backedByZmx, let paneIdentity = UUID(uuidString: paneToken) else { return nil }
         return ZmxSupport.daemonName(for: paneIdentity)
