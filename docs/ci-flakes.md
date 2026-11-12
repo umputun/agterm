@@ -111,6 +111,28 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   contended main actor did not fit in 8 s. The log cannot tell them apart.
 - **Fix.** The wait is 60 s, and `#expect(!session.ended)` makes a repeat of (a) name itself.
 
+### `SshConnectionPoolTests` cases waiting in `held()` on Linux
+
+- **Symptom.** `Expectation failed: await held()` in `callersArrivingDuringAStartShareIt`,
+  `closingDuringACheckStartsNothing`, `aConnectionThatFinishesStartingAfterCloseIsEndedAtOnce` and
+  `aPooledStreamOpensOnceItsConnectionAnswersAndKeepsWhatWasSentMeanwhile`, all 29 s after they started.
+- **Runs.** Job 131405859872 (run 43281980528).
+- **Cause, demonstrated.** `held()` gave the stub runner 5 s of wall-clock time to park. Every Linux run starts with
+  a scheduling stall in which trivial `@MainActor` tests report 22 to 33 s, passing runs included, so the deadline
+  could expire before the stub runner parked.
+- **Evidence.** Reproduced in `swift:6.3.2-noble` pinned to 4 CPUs (aarch64, CI is x86_64), unprivileged, full
+  suite with zmx. A trivial `ControlEventRingTests` case was reported started at +1.7 s, entered its body at
+  +20.5 s and ran in microseconds. A nonisolated probe reached the main actor in 0.7 s, but its continuation
+  after `MainActor.run` resumed 14.2 s later. Inside the stall a main-actor 5 ms `Task.sleep` woke after 16.7 s
+  and a `Task.yield` after 5.5 s; afterwards both took milliseconds. The CPUs were saturated until about 14 s.
+  A backtrace at 12 s showed concurrency worker threads held by synchronous test waits: six in
+  `HudHelperTests.Run.waitForExit` (`Thread.sleep`) and one in `OverlayRunJobTests.FakeOrigin.frames`
+  (`DispatchSemaphore.wait`). Skipping those two suites shortened the stall without removing it; one run per
+  configuration was too noisy to size their share. The stall's full cause is not established: neither the worker
+  count nor the number of queued tasks was measured.
+- **Fix.** `held()` gives up after 1000 `Task.yield` retries instead of a deadline, so a stall slows it but cannot
+  expire it. The startup stall itself remains.
+
 ### Linux test process killed by SIGPIPE
 
 - **Symptom.** The Linux core tests job ends with signal 13 about 6 s after `swift test` starts, before any test
