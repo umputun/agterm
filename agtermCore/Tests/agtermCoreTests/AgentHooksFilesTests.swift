@@ -55,6 +55,20 @@ struct AgentHooksFilesTests {
         #expect(try [".zshrc", ".bashrc", ".claude/settings.json", ".codex/config.toml"].map { try read(home, $0) } == before)
     }
 
+    @Test func appendingKeepsShellRCMode() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let bashrc = home.appendingPathComponent(".bashrc")
+        try "export EDITOR=vim\n".write(to: bashrc, atomically: false, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: bashrc.path)
+        let files = AgentHooksFiles(source: scripts, home: home, toolPath: toolPath)
+
+        _ = try files.install()
+
+        #expect(AgentHooksInstall.posixMode(ofFile: bashrc.path)?.intValue == 0o600)
+        #expect(try read(home, ".bashrc").contains(files.destination.appendingPathComponent(AgentHooksInstall.integrationRelativePath).path))
+    }
+
     @Test func bakingPreservesWrapperModesAcrossReinstall() throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }

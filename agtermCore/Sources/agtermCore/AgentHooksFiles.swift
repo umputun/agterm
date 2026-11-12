@@ -179,7 +179,8 @@ public struct AgentHooksFiles {
             let scriptName = fish ? AgentHooksInstall.fishIntegrationRelativePath : AgentHooksInstall.integrationRelativePath
             let result = AgentHooksInstall.appendShellRC(existing: existing, scriptDir: destination.path, scriptName: scriptName)
             guard result.changed else { continue }
-            try writePreservingSymlink(result.contents, to: rc)
+            let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: rc) ?? rc).path)
+            try writePreservingSymlink(result.contents, to: rc, posixMode: mode)
         }
     }
 
