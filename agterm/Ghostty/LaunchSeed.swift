@@ -32,6 +32,8 @@ struct LaunchSeedPolicy {
     /// Daemons whose reset could not be confirmed at this launch: the pane attaches with neither its
     /// captured replay nor its durable command, so a process that may still be running is not started twice.
     var suppressedDaemons: Set<String> = []
+    /// receivingShell is the shell an ordinary pane's replayed line is typed into.
+    var receivingShell: String?
 }
 
 extension LaunchSeedProvider {
@@ -131,11 +133,11 @@ extension LaunchSeedProvider {
     }
 
     /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell command
-    /// line + newline, or nil outside rerun mode or when `shouldRestore` refuses the argv — a denylisted
-    /// basename, a control character, or a lossily-decoded byte (→ plain shell).
+    /// line + newline, or nil outside rerun mode or when `shouldRestore` refuses the argv (→ plain shell).
     private static func restoreInitialInput(_ argv: [String]?, policy: LaunchSeedPolicy) -> String? {
         guard policy.restoreEnabled, let argv,
-              CommandRestore.shouldRestore(argv: argv, denylist: policy.denylist) else { return nil }
+              CommandRestore.shouldRestore(argv: argv, denylist: policy.denylist, receivingShell: policy.receivingShell)
+        else { return nil }
         return argv.map(CommandRestore.accountShellQuoted).joined(separator: " ") + "\n"
     }
 
