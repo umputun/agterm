@@ -333,17 +333,17 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agtermCore/Tests/AgtermServerTests/ServerCommandPolicyTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreRemotePageTests.swift`
 
-- [ ] remove the unconditional log refusal; probe a log through the tail path in `checkedPage`
-- [ ] carry the log request into the serving claim; a clicked log becomes a log page only when the connected
+- [x] remove the unconditional log refusal; probe a log through the tail path in `checkedPage`
+- [x] carry the log request into the serving claim; a clicked log becomes a log page only when the connected
       presenter lists `page.text`, the plain page otherwise, as on the Mac
-- [ ] admit `session.overlay.follow|search|wrap|changes` and implement them through the shared store path
-- [ ] `presenterShows` requires `page.text` for a log page; `offerPendingPage` sends `textSeed` from the latest
+- [x] admit `session.overlay.follow|search|wrap|changes` and implement them through the shared store path
+- [x] `presenterShows` requires `page.text` for a log page; `offerPendingPage` sends `textSeed` from the latest
       mirrored state and never a step
-- [ ] rewrite `ServerActionsOverlayTests.swift:76` to the capability split
-- [ ] write tests: a log over 4 MB opens, clicked log with and without `page.text`, each command over a fake
+- [x] rewrite `ServerActionsOverlayTests.swift:76` to the capability split
+- [x] write tests: a log over 4 MB opens, clicked log with and without `page.text`, each command over a fake
       presenter, a `pageResult` frame through `ServerStreams` end to end, re-offer seed applied before the first
       report, a held log page not offered to an older presenter, an open refused while only an older one is connected
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 8: Page sessions on agterm-server
 

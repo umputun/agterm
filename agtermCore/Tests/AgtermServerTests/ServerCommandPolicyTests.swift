@@ -3,7 +3,8 @@ import Testing
 import agtermCore
 
 struct ServerCommandPolicyTests {
-    @Test(arguments: [Command.tree, .version, .windowList, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle])
+    @Test(arguments: [Command.tree, .version, .windowList, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
+                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }

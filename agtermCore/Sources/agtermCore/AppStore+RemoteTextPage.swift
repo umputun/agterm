@@ -8,6 +8,17 @@ public enum RemoteTextOutcome: Equatable, Sendable {
     /// answered: the presenter's result, whose state this store already applied.
     case answered(PresentationPageResult)
     case failed(String)
+
+    /// response is the control reply for session `id` to an outcome the presenting Mac settled; nil for `.local`,
+    /// which the caller answers.
+    public func response(session id: UUID) -> ControlResponse? {
+        switch self {
+        case .local: nil
+        case .failed(let error): ControlResponse(ok: false, error: error)
+        case .answered(let result) where result.ok: ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: result.text))
+        case .answered(let result): ControlResponse(ok: false, error: result.error)
+        }
+    }
 }
 
 /// TextPageAction is one control action on a text page. It travels to the presenting Mac as a page command and runs

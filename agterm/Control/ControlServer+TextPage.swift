@@ -79,13 +79,8 @@ extension ControlServer {
         case .failure(let response): return response
         case .success(let resolved): (store, id) = resolved
         }
-        switch await store.remoteTextAction(id, pane: pane, action) {
-        case .local: return await runTextPageAction(action, in: store, sessionID: id, pane: pane)
-        case .failed(let error): return ControlResponse(ok: false, error: error)
-        case .answered(let result):
-            guard result.ok else { return ControlResponse(ok: false, error: result.error) }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: result.text))
-        }
+        if let reply = await store.remoteTextAction(id, pane: pane, action).response(session: id) { return reply }
+        return await runTextPageAction(action, in: store, sessionID: id, pane: pane)
     }
 
     /// runTextPageAction runs `action` on the text page this Mac shows in `pane`'s slot of session `id`.

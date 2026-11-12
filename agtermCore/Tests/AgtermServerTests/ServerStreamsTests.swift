@@ -1187,6 +1187,95 @@ struct ServerStreamsTests {
         }
     }
 
+    @Test func aClickedLogOpensAsALogPageOnlyOnAPresenterWithLiveTextPages() async throws {
+        let session = try clickSession()
+        let path = try write("app.log", "one\n")
+        let live = try await presenter(for: session)
+        try click("./app.log", on: session, from: live)
+        let logPage = try #require(await pageRequest(from: live))
+        #expect(logPage.source == .text(path: path, line: nil))
+        #expect(logPage.textLog == TextLog(tail: TextPage.defaultTail, follow: true))
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+        await drop(live, from: session)
+
+        let older = try await presenter(for: session, kinds: Self.olderKinds)
+        defer { older.disconnect() }
+        try click("./app.log", on: session, from: older)
+
+        let plain = try #require(await pageRequest(from: older))
+        #expect(plain.source == .text(path: path, line: nil))
+        #expect(plain.textLog == nil)
+    }
+
+    @Test func aLogPageWaitsPastAnOlderPresenterAndIsRefusedWhileOnlyItIsConnected() async throws {
+        let session = try newSession()
+        let options = logOptions(try write("app.log", "one\n"))
+        #expect(harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: options).ok)
+
+        let older = try await presenter(for: session, kinds: Self.olderKinds)
+        defer { older.disconnect() }
+
+        #expect(session.remoteOverlays.slot(nil)?.owner == nil)
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+        #expect(harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: options)
+            == ControlResponse(ok: false, error: OverlayHtmlError.logRemote))
+    }
+
+    @Test func textCommandsReachThePresenterAndAnswerWithItsResult() async throws {
+        let session = try newSession()
+        let target = session.id.uuidString
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        #expect(harness.actions.openSessionOverlay(target, window: nil, options: logOptions(try write("app.log", "one\n"))).ok)
+        let page = try #require(await pageRequest(from: viewer)).page
+
+        let follow = Task { await harness.actions.setSessionOverlayFollow(target, window: nil, pane: nil, mode: .off) }
+        try await answer(viewer, page: page, .follow(.off), text: "paused", PresentationTextState(following: false, revision: 0))
+        #expect(await follow.value == ControlResponse(ok: true, result: ControlResult(id: target, text: "paused")))
+        #expect(textNode(session)?.following == false)
+
+        let wrap = Task { await harness.actions.setSessionOverlayWrap(target, window: nil, pane: nil, mode: .on) }
+        try await answer(viewer, page: page, .wrap(.on), text: "wrapped", PresentationTextState(following: false, revision: 0, wrap: true))
+        #expect(await wrap.value.result?.text == "wrapped")
+        #expect(textNode(session)?.wrap == true)
+
+        let step = Task { await harness.actions.searchSessionOverlay(target, window: nil, pane: nil, request: .next) }
+        try await answer(viewer, page: page, .search(.next), text: "1 of 2",
+                         PresentationTextState(following: false, query: "x", revision: 1, matches: 2, current: 1, wrap: true))
+        #expect(await step.value.result?.text == "1 of 2")
+        #expect(textNode(session)?.search == ControlTextSearchNode(query: "x", matches: 2, current: 1))
+
+        let changes = Task { await harness.actions.stepSessionOverlayChanges(target, window: nil, pane: nil, forward: true) }
+        let command = try #require(await pageCommand(from: viewer))
+        #expect(TextPageAction(command) == .changes(forward: true))
+        try viewer.send(.pageResult(PresentationPageResult(page: page, seq: command.seq, ok: false, error: "no diff page")))
+        #expect(await changes.value == ControlResponse(ok: false, error: "no diff page"))
+    }
+
+    private static let olderKinds = PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageTextKind }
+
+    private func logOptions(_ path: String) -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                         page: .text(path: path, line: nil), textLog: TextLog(tail: 20, follow: true))
+    }
+
+    private func pageCommand(from viewer: Viewer) async -> PresentationPageCommand? {
+        let body = await offPool { viewer.first { if case .pageCommand = $0 { true } else { false } } }
+        guard case .pageCommand(let command)? = body else { return nil }
+        return command
+    }
+
+    private func answer(_ viewer: Viewer, page: String, _ action: TextPageAction, text: String,
+                        _ state: PresentationTextState) async throws {
+        let command = try #require(await pageCommand(from: viewer))
+        #expect(TextPageAction(command) == action)
+        try viewer.send(.pageResult(PresentationPageResult(page: page, seq: command.seq, ok: true, text: text, state: state)))
+    }
+
+    private func textNode(_ session: Session) -> ControlTextOverlayNode? {
+        harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.htmlOverlays?.first?.text
+    }
+
     @Test func aClickedTextLocationOpensAtItsLine() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)

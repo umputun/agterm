@@ -240,13 +240,15 @@ extension ServerStreams {
         let origin = LinkPolicy.ClickOrigin.pane(id)
         let candidates = LinkPolicy.locations(for: click.raw, origin: origin, cwd: target.cwd)
         let check = checkPage
+        // the generation check after the probe keeps this the presenter the page goes to
+        let liveText = presentationHub.presenterSupports(PresentationHub.pageTextKind, session: id)
         Task { @MainActor [weak self] in
             let (route, present, opening) = await Task.detached(priority: .userInitiated) {
                 let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
                 let route = LinkPolicy.resolvedRoute(for: click.raw, candidates: candidates, mode: click.mode, origin: origin,
                                                      exists: exists)
                 let present = route.localFile.map { exists($0.path(percentEncoded: false)) } ?? false
-                let opening = present ? Self.clickedPage(route).map { ($0.source, check($0.source, $0.options)) } : nil
+                let opening = present ? Self.clickedPage(route, logs: liveText).map { ($0.source, check($0.source, $0.options)) } : nil
                 return (route, present, opening)
             }.value
             guard let self, presentationHub.presenterGeneration(session: id) == generation else { return }
@@ -267,9 +269,12 @@ extension ServerStreams {
     }
 
     /// clickedPage is the page a click's route opens, with the options a Mac origin gives a clicked page; nil for a
-    /// route that opens none.
-    nonisolated static func clickedPage(_ route: LinkPolicy.Route) -> (source: HtmlSource, options: ControlSessionOverlayOpenOptions)? {
+    /// route that opens none. A log opens as a log page only when `logs` says the presenter can follow it.
+    nonisolated static func clickedPage(_ route: LinkPolicy.Route,
+                                        logs: Bool) -> (source: HtmlSource, options: ControlSessionOverlayOpenOptions)? {
         let source: HtmlSource, sizePercent: Int?
+        var textLog: TextLog?
+        if case .text(let link) = route, logs, link.opensAsLog { textLog = TextLog(tail: TextPage.defaultTail, follow: true) }
         switch route {
         case .image(let url, _): (source, sizePercent) = (.image(path: url.path(percentEncoded: false)), nil)
         case .markdown(let url, _, let percent): (source, sizePercent) = (.markdown(path: url.path(percentEncoded: false)), percent)
@@ -280,7 +285,7 @@ extension ServerStreams {
         let navigation = if case .markdown = source { true } else { false }
         return (source, ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                          backgroundColor: nil, page: source, navigation: navigation,
-                                                         clicked: true, forwarded: true))
+                                                         clicked: true, textLog: textLog, forwarded: true))
     }
 
     private func refuseLinkClick(_ reason: RemoteLinkRefusal, session id: UUID, generation: Int) {
