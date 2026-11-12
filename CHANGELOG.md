@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.42.1 - 2026-11-12
+
+### Improved
+
+- **Log pages and text-page controls on remote sessions.** A log ⌘-clicked in a session attached from another Mac opens as a log page there, and Follow, search, Wrap and change steps work on it as on a local page. `session overlay follow|search|wrap|changes` from the origin reach the page on the presenting Mac; a Mac on 0.42.0 gets the plain text page and refuses those controls. agterm-server serves log pages too, and its page rows show in a Mac's remote window #978 @umputun
+- a custom command run from the scratch terminal gets the scratch shell's own directory in `AGT_SESSION_PWD`, where it used to get the main pane's. Relative links in a local scratch resolve against that directory, and `tree` reads it back as `scratchCwd` #981 @umputun
+- `remote-session-restore` cookbook recipe: re-attaches sessions from other Macs into the workspaces they were in after a relaunch #973 @maxshevelev
+
+### Bug Fixes
+
+- after an update, new Live panes were still started by the old session host, so Local Network access failed in them; after a forced logout, new panes failed with `No user exists for uid 501`. A changed helper build or a new login now gets its own host, and Reset Live Sessions moves running panes onto it #972 @umputun #971
+- on an agterm-server Linux host, installing the agent status hooks left the hook wrappers without their executable bit, so status reporting failed #974 @Romancha
+- installing the agent status hooks on an agterm-server Linux host made a chmod 600 `.zshrc`, `.bashrc` or `config.fish` world-readable f52cb2bf @umputun
+- `mailbox-chat` recipe: under a Codex started without `--no-daemon`, mail for the starting pane went to whichever Codex thread started last. Such a Codex now refuses with an error naming `--no-daemon` #979 @umputun
+- `annotate-document` recipe: pages stopped painting on macOS 26 WebKit, and long inline code ran past the page edge b7316f1c fc6178b8 @umputun
+
 ## v0.42.0 - 2026-11-11
 
 ### New Features
