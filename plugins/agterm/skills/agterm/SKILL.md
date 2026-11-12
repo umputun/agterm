@@ -900,7 +900,7 @@ The page steps between changes with `]`/`[` or `agtermctl session overlay change
 ## Linking to a session
 
 Print an OSC 8 link to this session, or use `[label](agterm://session/<id>)` in Claude Code markdown,
-which Claude Code emits as OSC 8:
+which Claude Code emits as OSC 8. When Claude Code captures the mouse, use ⌘⇧-click:
 
 ```bash
 printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"
