@@ -18,13 +18,13 @@ final class ControlServerCatalogPageTests: XCTestCase {
 
     private struct Timeout: Error {}
 
-    /// Runner answers each page-attach with the next scripted reply, a held reply waiting for `release`.
     private final class Runner: RemoteCommandRunner, @unchecked Sendable {
         private let lock = NSLock()
         private var replies: [String] = []
         private var attaches = 0
         private var holding = false
         private var waiters: [CheckedContinuation<Void, Never>] = []
+        private var connected = true
 
         var attachCount: Int { lock.withLock { attaches } }
 
@@ -37,6 +37,7 @@ final class ControlServerCatalogPageTests: XCTestCase {
 
         func script(_ next: [String]) { lock.withLock { replies = next } }
         func hold() { lock.withLock { holding = true } }
+        func setConnection(up: Bool) { lock.withLock { connected = up } }
 
         func release() {
             let pending = lock.withLock {
@@ -49,6 +50,9 @@ final class ControlServerCatalogPageTests: XCTestCase {
 
         func run(_ argv: [String], deadline _: TimeInterval) async -> RemoteCommandResult {
             let line = (argv.last ?? "").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\\", with: "")
+            if argv.contains("-O") || argv.first == "/bin/sh" {
+                return RemoteCommandResult(status: lock.withLock { connected } ? 0 : 255, stdout: "", stderr: "")
+            }
             if line.contains("agtermctl version") { return RemoteCommandResult(status: 0, stdout: Self.versions, stderr: "") }
             guard line.contains("session overlay page-attach") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             let held = lock.withLock {
@@ -154,7 +158,13 @@ final class ControlServerCatalogPageTests: XCTestCase {
 
     private var row: Session? { remoteStore.session(withID: rowID) }
 
+    private var leases: Int { server.remoteCatalogs[remoteWindow]?.pool.load.reduce(0, +) ?? -1 }
+
     private var shownReplica: Bool { row?.htmlOverlay?.replicaOf != nil }
+
+    private func viewing(_ launches: Int) -> Bool {
+        shownReplica && launcher.launches.count == launches && server.catalogPageClaims.isEmpty
+    }
 
     private var failure: String? {
         guard case .unreadable(let reason)? = row?.htmlOverlay?.source else { return nil }
@@ -165,7 +175,7 @@ final class ControlServerCatalogPageTests: XCTestCase {
         runner.script([handed("t1")])
 
         try feed(rev: 0, [pageRow])
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(1) }
 
         XCTAssertEqual(row?.content, .page)
         XCTAssertEqual(runner.attachCount, 1)
@@ -190,7 +200,7 @@ final class ControlServerCatalogPageTests: XCTestCase {
         server.catalogPagePause = { [unowned self] in shownWhileWaiting = failure }
 
         try feed(rev: 0, [pageRow])
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(1) }
 
         XCTAssertEqual(shownWhileWaiting, "box cannot be reached, retrying")
         XCTAssertEqual(runner.attachCount, 2)
@@ -219,7 +229,7 @@ final class ControlServerCatalogPageTests: XCTestCase {
         try feed(rev: 1, [])
         try feed(rev: 2, [pageRow])
         runner.release()
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(1) }
 
         XCTAssertEqual(runner.attachCount, 2)
         XCTAssertEqual(launcher.launches.count, 1)
@@ -238,9 +248,10 @@ final class ControlServerCatalogPageTests: XCTestCase {
     }
 
     func testADetachedPageRowEndsItsViewAndClaimsAnotherWhenReattached() async throws {
-        runner.script([handed("t7"), handed("t8")])
+        runner.script([handed("t7"), handed("t8"), handed("t9")])
+        let baseline = leases
         try feed(rev: 0, [pageRow])
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(1) }
         let dispatch = try XCTUnwrap(HtmlOverlayRegistry.shared.dispatch)
 
         let detached = await dispatch(ControlRequest(cmd: .sessionDetach, target: rowID.uuidString))
@@ -248,17 +259,49 @@ final class ControlServerCatalogPageTests: XCTestCase {
         XCTAssertTrue(detached.ok, detached.error ?? "")
         XCTAssertNil(row)
         XCTAssertTrue(server.replicaPages.isEmpty)
+        XCTAssertEqual(leases, baseline)
         let reattached = await dispatch(ControlRequest(cmd: .sessionReattach, target: rowID.uuidString))
         XCTAssertTrue(reattached.ok, reattached.error ?? "")
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(2) }
         XCTAssertEqual(runner.attachCount, 2)
         XCTAssertTrue(launcher.launches[1].joined(separator: " ").contains("t8"))
+        _ = await dispatch(ControlRequest(cmd: .sessionDetach, target: rowID.uuidString))
+        XCTAssertEqual(leases, baseline)
+    }
+
+    func testNoClaimRunsBeforeItsSshConnectionIsUp() async throws {
+        runner.setConnection(up: false)
+        runner.script([handed("t10")])
+        var waiting: (attaches: Int, shown: String?)?
+        server.catalogPagePause = { [unowned self] in
+            waiting = waiting ?? (runner.attachCount, failure)
+            runner.setConnection(up: true)
+        }
+
+        try feed(rev: 0, [pageRow])
+        try await until { self.viewing(1) }
+
+        XCTAssertEqual(waiting?.attaches, 0)
+        XCTAssertEqual(waiting?.shown, "box cannot be reached, retrying")
+        XCTAssertEqual(runner.attachCount, 1)
+        XCTAssertEqual(launcher.launches.count, 1)
+    }
+
+    func testAPageChannelThatFailsToStartIsClaimedAgain() async throws {
+        launcher.failsNextLaunch = true
+        runner.script([handed("t11"), handed("t12")])
+
+        try feed(rev: 0, [pageRow])
+        try await until { self.shownReplica && self.launcher.launches.count == 1 && self.server.catalogPageClaims.isEmpty }
+
+        XCTAssertEqual(runner.attachCount, 2)
+        XCTAssertTrue(launcher.launches[0].joined(separator: " ").contains("t12"))
     }
 
     func testALostChannelShowsTheRowReconnectingAndClaimsAViewAgain() async throws {
         runner.script([handed("t5"), handed("t6")])
         try feed(rev: 0, [pageRow])
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(1) }
         let first = try XCTUnwrap(row?.htmlOverlay?.id)
 
         runner.hold()
@@ -268,7 +311,7 @@ final class ControlServerCatalogPageTests: XCTestCase {
         XCTAssertEqual(failure, "the page's connection to box ended, reconnecting")
         XCTAssertEqual(row?.content, .page)
         runner.release()
-        try await until { self.shownReplica && self.server.catalogPageClaims.isEmpty }
+        try await until { self.viewing(2) }
         XCTAssertNotEqual(row?.htmlOverlay?.id, first)
         XCTAssertEqual(launcher.launches.count, 2)
     }

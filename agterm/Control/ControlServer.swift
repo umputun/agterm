@@ -105,7 +105,7 @@ final class ControlServer {
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
     /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.
     var catalogPageClaims: Set<UUID> = []
-    /// The wait before a remote page row's claim is tried again; injectable like the clocks.
+    /// catalogPagePause is the wait before a remote page row's claim is tried again.
     var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
     var pendingReplicaStates: Set<UUID> = []

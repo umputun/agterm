@@ -180,6 +180,7 @@ final class FakePageLauncher: RemotePageLauncher {
     var reply: String? = #"{"ok":true,"result":{}}"#
     var holdCancels = false
     var failsLaunch = false
+    var failsNextLaunch = false
     var log: BoundedFile.TailRead?
     private(set) var launches: [[String]] = []
     private(set) var origins: [FakePageOrigin] = []
@@ -189,6 +190,10 @@ final class FakePageLauncher: RemotePageLauncher {
 
     func launch(_ argv: [String], onExit: @escaping @MainActor () -> Void) throws -> RemotePageHelper {
         if failsLaunch { throw POSIXError(.ENOENT) }
+        if failsNextLaunch {
+            failsNextLaunch = false
+            throw POSIXError(.ENOENT)
+        }
         var pair: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
         launches.append(argv)

@@ -11,8 +11,10 @@ struct ReplicaPageRecord {
     let origin: UUID
     let channel: RemotePageChannel?
     var appliedSeq = 0
-    /// poolUser is the ssh channel a catalog row's page holds for as long as it is shown.
+    /// poolUser is the ssh channel a catalog row's page holds in `pool` for as long as it is shown; the pool is kept
+    /// here because a closed row is gone from its store before its page is released.
     var poolUser: String?
+    var pool: SshConnectionPool?
     /// channelLost marks a page taken down because its channel ended rather than closed by anyone; the origin decides
     /// what that ends.
     var channelLost = false
@@ -57,7 +59,7 @@ extension ControlServer {
         }
         let local = slot.page.id
         let channel = argv.map { _ in RemotePageChannel() }
-        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser)
+        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser, pool: pool)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
                                             replica: channel.map { Self.link($0) })
         if let channel, let argv {
@@ -126,7 +128,7 @@ extension ControlServer {
     func replicaPageReleased(_ local: UUID, origin: UUID) {
         guard let record = replicaPages.removeValue(forKey: local) else { return }
         record.forward?.stop()
-        record.poolUser.map { catalogPool(forSession: record.session)?.release($0) }
+        record.poolUser.map { record.pool?.release($0) }
         pendingReplicaStates.remove(local)
         remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(
             page: origin.uuidString, reason: record.channelLost ? PresentationPageChange.channelLost : nil)))

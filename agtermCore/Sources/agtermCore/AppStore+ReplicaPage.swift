@@ -95,7 +95,10 @@ extension AppStore {
     public func showCatalogPageRefusal(_ reason: String, inRow rowID: UUID) {
         let failed = HtmlSource.unreadable(reason: reason)
         guard let row = catalogPageRow(rowID), !(row.overlayActive && row.htmlOverlay?.source == failed) else { return }
-        _ = openCatalogPage(HtmlOverlay(source: failed), inRow: rowID, backgroundColor: nil)
+        var page = HtmlOverlay(source: failed)
+        page.loadState = .failed
+        page.loadError = reason
+        _ = openCatalogPage(page, inRow: rowID, backgroundColor: nil)
     }
 
     private func clearCatalogPage(_ rowID: UUID) {

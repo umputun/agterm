@@ -194,6 +194,23 @@ final class RemoteCatalogMirrorTests {
         #expect(effects.removed == [page.id])
     }
 
+    @Test func aPageRowTakesTheEndpointACatalogChangeMovesItTo() throws {
+        let page = pageRow()
+        _ = open([page])
+        let row = try #require(store.session(withID: page.id))
+        store.showCatalogPageRefusal("waiting for box", inRow: page.id)
+        let shown = try #require(row.htmlOverlay?.id)
+        let moved = ControlZmxEndpoint(executable: "/opt/zmx", socketDirectory: "/run/zmx-2")
+        var changed = page.fields
+        changed.page = CatalogPage(kind: "url", identity: "https://example.com", endpoint: moved)
+
+        delta(1, .sessionChanged(changed))
+
+        #expect(store.session(withID: page.id) === row)
+        #expect(row.remotePresentation?.binding.origin?.endpoint == moved)
+        #expect(row.htmlOverlay?.id == shown)
+    }
+
     @Test func aPageRowsFailedPageIsReplacedOnlyByAnotherReason() throws {
         let page = pageRow()
         _ = open([page])
@@ -208,6 +225,8 @@ final class RemoteCatalogMirrorTests {
         #expect(repeated == waiting)
         #expect(row.htmlOverlay?.id != waiting)
         #expect(row.htmlOverlay?.source == .unreadable(reason: "no such page"))
+        #expect(row.htmlOverlay?.loadState == .failed)
+        #expect(row.htmlOverlay?.loadError == "no such page")
     }
 
     @Test func aFailedPageIsShownOnlyOnAServerPageRow() throws {

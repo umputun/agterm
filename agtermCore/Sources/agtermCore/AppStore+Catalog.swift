@@ -127,9 +127,12 @@ extension AppStore {
             return []
         }
         session.ended = false
-        guard let primary = entry.panes.first else { return [] }
-        var needsAttach: [UUID] = []
         let previous = session.remotePresentation?.binding
+        guard let primary = entry.panes.first else {
+            refreshCatalogBinding(session, entry: entry, host: host)
+            return []
+        }
+        var needsAttach: [UUID] = []
         if session.paneIdentity != primary.identity {
             if session.splitPaneIdentity == primary.identity {
                 if entry.panes.count > 1, entry.panes[1].identity == session.paneIdentity {
@@ -171,12 +174,15 @@ extension AppStore {
                 needsAttach.append(pane.identity)
             }
         }
-        if let state = session.remotePresentation {
-            var updated = state
-            updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
-            if updated != state { session.remotePresentation = updated }
-        }
+        refreshCatalogBinding(session, entry: entry, host: host)
         return Array(Set(needsAttach))
+    }
+
+    private func refreshCatalogBinding(_ session: Session, entry: CatalogSession, host: String) {
+        guard let state = session.remotePresentation else { return }
+        var updated = state
+        updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
+        if updated != state { session.remotePresentation = updated }
     }
 
     /// applyCatalogScratch keeps a row's scratch on the server's: a shown one attaches its daemon, a hidden one keeps
