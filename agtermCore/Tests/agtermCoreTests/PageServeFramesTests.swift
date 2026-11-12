@@ -13,7 +13,27 @@ struct PageServeFramesTests {
         .bridge(id: 4, request: #"{"cmd":"session.overlay.submit","args":{"value":"done\nwith newline"}}"#),
         .bridge(id: 5, request: #"{"cmd":"session.future.thing","args":{"newArgument":[1,{"x":true}]}}"#),
         .reply(id: 5, response: #"{"ok":true,"result":{"id":"s1","futureField":{"nested":1}}}"#),
+        .logTail(id: 6, stamp: nil),
+        .logTail(id: 7, stamp: stamp),
+        .logHead(id: 7, stamp: stamp, offset: 1_048_577),
+        .logUnchanged(id: 8),
     ]
+
+    static let stamp = BoundedFile.FileStamp(device: 16_777_231, inode: UInt64.max - 1, size: 3_145_728,
+                                             modifiedSeconds: 1_789_000_000, modifiedNanoseconds: 999_999_999)
+
+    @Test func aLogTailWithoutAStampSendsNoStampKey() throws {
+        let line = String(decoding: try PageServeCodec.encode(.logTail(id: 1, stamp: nil)), as: UTF8.self)
+
+        #expect(!line.contains("stamp"))
+        #expect(line.contains(#""kind":"log.tail""#))
+    }
+
+    @Test func anUnknownLogKindIsRefused() {
+        let line = Data(#"{"id":1,"kind":"log.rewind"}"#.utf8)
+
+        #expect(throws: PresentationCodec.FrameError.self) { try PageServeCodec.decode(line) }
+    }
 
     @Test(arguments: frames)
     func everyFrameSurvivesARoundTrip(_ frame: PageServeFrame) throws {

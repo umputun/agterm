@@ -43,6 +43,16 @@ public enum TextProbe {
     public struct LogRead: Sendable, Equatable {
         public let snapshot: LogTail.Snapshot?
         public let stamp: BoundedFile.FileStamp
+
+        public init(snapshot: LogTail.Snapshot?, stamp: BoundedFile.FileStamp) {
+            self.snapshot = snapshot
+            self.stamp = stamp
+        }
+
+        /// init builds what a log page shows from a tail read here or fetched from the origin.
+        public init(_ read: BoundedFile.TailRead, tail: Int) {
+            self.init(snapshot: LogTail.snapshot(read.data, offset: read.offset, maxLines: tail), stamp: read.stamp)
+        }
     }
 
     /// checkLog reads the last `tail` lines of a log the way its page will, so a binary or unreadable file is refused at
@@ -56,9 +66,7 @@ public enum TextProbe {
     public static func loadLog(path: String, tail: Int, unchangedFrom: BoundedFile.FileStamp? = nil) -> Result<LogRead?, Failure> {
         BoundedFile.readTail(path: path, maxBytes: TextPage.maxTailBytes, unchangedFrom: unchangedFrom)
             .mapError { _ in .unreadable(path) }
-            .map { read in
-                read.map { LogRead(snapshot: LogTail.snapshot($0.data, offset: $0.offset, maxLines: tail), stamp: $0.stamp) }
-            }
+            .map { read in read.map { LogRead($0, tail: tail) } }
     }
 
     /// checkLogDetached runs `checkLog` off the main actor, for a click.

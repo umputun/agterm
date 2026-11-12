@@ -132,7 +132,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {
-        store.claimRemotePage(token: token).map { ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks)) }
+        store.claimRemotePage(token: token).map {
+            ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks, log: $0.overlay.textLog))
+        }
     }
 
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {

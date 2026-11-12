@@ -1314,6 +1314,199 @@ struct ServerStreamsTests {
         #expect(!reply.ok)
     }
 
+    final class LogClient: @unchecked Sendable {
+        enum Answer: Equatable, Sendable {
+            case tail(BoundedFile.TailRead)
+            case unchanged
+            case failure(String)
+            case closed
+        }
+
+        private let fd: Int32
+        private var buffer = Data()
+
+        init(fd: Int32) {
+            var wait = timeval(tv_sec: 10, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
+            self.fd = fd
+        }
+
+        deinit { close(fd) }
+
+        func send(_ frame: PageServeFrame) throws {
+            let line = try PageServeCodec.encode(frame)
+            _ = line.withUnsafeBytes { UnixSocket.write(fd, $0.baseAddress!, $0.count) }
+        }
+
+        func frame() -> PageServeFrame? {
+            while true {
+                if let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                    let line = Data(buffer[buffer.startIndex..<newline])
+                    buffer.removeSubrange(buffer.startIndex...newline)
+                    return try? PageServeCodec.decode(line)
+                }
+                var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+                let count = read(fd, &chunk, chunk.count)
+                guard count > 0 else { return nil }
+                buffer.append(contentsOf: chunk[0..<count])
+            }
+        }
+
+        func answer(_ id: Int) -> Answer {
+            var head: (stamp: BoundedFile.FileStamp, offset: Int)?
+            var data = Data()
+            while let frame = frame() {
+                switch frame {
+                case .logUnchanged(id): return .unchanged
+                case .logHead(id, let stamp, let offset): head = (stamp, offset)
+                case .chunk(id, let bytes): data.append(bytes)
+                case .end(id): return head.map { .tail(BoundedFile.TailRead(data: data, offset: $0.offset, stamp: $0.stamp)) } ?? .closed
+                case .failure(id, let error): return .failure(error)
+                default: continue
+                }
+            }
+            return .closed
+        }
+    }
+
+    private func logChannel(_ source: HtmlSource, log: TextLog? = TextLog(tail: 50, follow: true)) async throws -> (LogClient, Viewer) {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        let overlay = HtmlOverlay(source: source, textLog: log)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: source, textLog: log)
+        #expect(streams.handOver(overlay, in: session, options: options) == .opened)
+        let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let shown)? = offered else {
+            viewer.disconnect()
+            throw POSIXError(.ENOENT)
+        }
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: overlay.id, token: shown.token)
+        return (LogClient(fd: pair[1]), viewer)
+    }
+
+    private func logFile(_ text: String) throws -> String {
+        let path = harness.scratch.root + "/log-\(UUID().uuidString).log"
+        try Data(text.utf8).write(to: URL(fileURLWithPath: path))
+        return path
+    }
+
+    private func stamp(_ path: String) throws -> BoundedFile.FileStamp {
+        guard case .success(let read?) = BoundedFile.readTail(path: path, maxBytes: 1, unchangedFrom: nil) else {
+            throw POSIXError(.EIO)
+        }
+        return read.stamp
+    }
+
+    @Test func aLogTailAnswersTheTailThenUnchangedUntilTheFileMoves() async throws {
+        let path = try logFile("a\nb\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        let first = try stamp(path)
+
+        let answers = try await offPool { () throws -> [LogClient.Answer] in
+            try client.send(.logTail(id: 1, stamp: nil))
+            let fresh = client.answer(1)
+            try client.send(.logTail(id: 2, stamp: first))
+            let same = client.answer(2)
+            let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("c\n".utf8))
+            try handle.close()
+            try client.send(.logTail(id: 3, stamp: first))
+            return [fresh, same, client.answer(3)]
+        }
+
+        #expect(answers[0] == .tail(BoundedFile.TailRead(data: Data("a\nb\n".utf8), offset: 0, stamp: first)))
+        #expect(answers[1] == .unchanged)
+        #expect(answers[2] == .tail(BoundedFile.TailRead(data: Data("a\nb\nc\n".utf8), offset: 0, stamp: try stamp(path))))
+    }
+
+    @Test func anEmptyOrTruncatedLogAnswersWhatTheFileHoldsNow() async throws {
+        let path = try logFile("one\ntwo\nthree\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        let before = try stamp(path)
+
+        let answers = try await offPool { () throws -> [LogClient.Answer] in
+            try Data("x\n".utf8).write(to: URL(fileURLWithPath: path))
+            try client.send(.logTail(id: 1, stamp: before))
+            let truncated = client.answer(1)
+            try Data().write(to: URL(fileURLWithPath: path))
+            try client.send(.logTail(id: 2, stamp: nil))
+            return [truncated, client.answer(2)]
+        }
+
+        guard case .tail(let truncated) = answers[0], case .tail(let empty) = answers[1] else {
+            Issue.record("expected two tails: \(answers)")
+            return
+        }
+        #expect(truncated.data == Data("x\n".utf8) && truncated.offset == 0)
+        #expect(empty.data.isEmpty && empty.offset == 0)
+    }
+
+    @Test func aLogPastTheTailCapAnswersOnlyItsLastBytes() async throws {
+        let path = try logFile(String(repeating: "0123456789\n", count: TextPage.maxTailBytes / 11 + 100))
+        let local = try BoundedFile.readTail(path: path, maxBytes: TextPage.maxTailBytes).get()
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == local.map { LogClient.Answer.tail($0) })
+        #expect(try #require(local).offset > 0)
+    }
+
+    @Test func aLogRemovedAfterItsPageOpenedAnswersAFailure() async throws {
+        let path = try logFile("a\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        try FileManager.default.removeItem(atPath: path)
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == .failure("file cannot be read"))
+    }
+
+    @Test(arguments: [false, true])
+    func aPageThatIsNotALogRefusesALogTail(markdown: Bool) async throws {
+        let path = try logFile("a\n")
+        let source: HtmlSource = markdown ? .markdown(path: path) : .text(path: path, line: nil)
+        let (client, viewer) = try await logChannel(source, log: markdown ? TextLog(tail: 50, follow: true) : nil)
+        defer { viewer.disconnect() }
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == .failure("not a log page"))
+    }
+
+    @Test func aCancelledLogTailStopsBeforeItsEnd() async throws {
+        let path = try logFile(String(repeating: "0123456789\n", count: TextPage.maxTailBytes / 11))
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            try client.send(.cancel(id: 1))
+            Thread.sleep(forTimeInterval: 0.3)
+            return client.answer(1)
+        }
+
+        #expect(answer == .failure(PageServeFrame.cancelled))
+    }
+
     private func eventually(_ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(60)
         while Date() < deadline {

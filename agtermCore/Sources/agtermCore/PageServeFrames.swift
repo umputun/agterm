@@ -18,6 +18,14 @@ public enum PageServeFrame: Equatable, Sendable {
     case bridge(id: Int, request: String)
     /// reply carries the origin's raw JSON response, passed to the page as received.
     case reply(id: Int, response: String)
+    /// logTail asks for a log page's file end, nothing when it still has `stamp`. Sent only to an origin listing
+    /// `page.text`: an older one cannot decode it and would end the page.
+    case logTail(id: Int, stamp: BoundedFile.FileStamp?)
+    /// logHead starts a log tail's answer with the file's stamp and the offset its bytes start at; chunks of the
+    /// raw bytes follow, then `end`.
+    case logHead(id: Int, stamp: BoundedFile.FileStamp, offset: Int)
+    /// logUnchanged ends a log tail request whose file still has the stamp it named.
+    case logUnchanged(id: Int)
 
     /// busy is the failure a request gets when the origin already runs as many of its kind as it takes.
     public static let busy = "too many requests in flight"
@@ -27,7 +35,8 @@ public enum PageServeFrame: Equatable, Sendable {
     public var id: Int {
         switch self {
         case .resource(let id, _), .head(let id, _), .chunk(let id, _), .end(let id), .failure(let id, _),
-             .cancel(let id), .bridge(let id, _), .reply(let id, _):
+             .cancel(let id), .bridge(let id, _), .reply(let id, _), .logTail(let id, _), .logHead(let id, _, _),
+             .logUnchanged(let id):
             return id
         }
     }
@@ -35,7 +44,7 @@ public enum PageServeFrame: Equatable, Sendable {
 
 extension PageServeFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, id, path, mimeType, data, error, request, response
+        case kind, id, path, mimeType, data, error, request, response, stamp, offset
     }
 
     public init(from decoder: Decoder) throws {
@@ -52,6 +61,11 @@ extension PageServeFrame: Codable {
         case "cancel": self = .cancel(id: id)
         case "bridge": self = .bridge(id: id, request: try container.decode(String.self, forKey: .request))
         case "reply": self = .reply(id: id, response: try container.decode(String.self, forKey: .response))
+        case "log.tail": self = .logTail(id: id, stamp: try container.decodeIfPresent(BoundedFile.FileStamp.self, forKey: .stamp))
+        case "log.head":
+            self = .logHead(id: id, stamp: try container.decode(BoundedFile.FileStamp.self, forKey: .stamp),
+                            offset: try container.decode(Int.self, forKey: .offset))
+        case "log.unchanged": self = .logUnchanged(id: id)
         default:
             throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "unknown kind \(kind)")
         }
@@ -83,6 +97,15 @@ extension PageServeFrame: Codable {
         case .reply(_, let response):
             try container.encode("reply", forKey: .kind)
             try container.encode(response, forKey: .response)
+        case .logTail(_, let stamp):
+            try container.encode("log.tail", forKey: .kind)
+            try container.encodeIfPresent(stamp, forKey: .stamp)
+        case .logHead(_, let stamp, let offset):
+            try container.encode("log.head", forKey: .kind)
+            try container.encode(stamp, forKey: .stamp)
+            try container.encode(offset, forKey: .offset)
+        case .logUnchanged:
+            try container.encode("log.unchanged", forKey: .kind)
         }
     }
 }

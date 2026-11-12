@@ -131,9 +131,16 @@ final class RemotePageChannel {
     static let limits = ControlStreamOwner.Limits(maxLineBytes: PageServeCodec.maxFrameBytes, maxPendingLines: 32,
                                                   writeTimeoutSeconds: 5)
 
+    // a resource's answer opens with its type, a log tail's with the file's stamp and offset or with no change
+    private enum Head {
+        case resource(mimeType: String)
+        case log(stamp: BoundedFile.FileStamp, offset: Int)
+        case unchanged
+    }
+
     private final class Transfer {
         let revision: @MainActor () -> Bool
-        var head: CheckedContinuation<String, Error>?
+        var head: CheckedContinuation<Head, Error>?
         var buffer: [Data] = []
         var pull: CheckedContinuation<Data?, Error>?
         var terminal: Result<Void, Error>?
@@ -206,6 +213,35 @@ final class RemotePageChannel {
     /// that asked, and an answer for one it no longer shows is dropped. The returned chunks are pulled one at
     /// a time, so a chunk's inbound permit is held until the page takes it.
     func fetch(_ path: String, current: @escaping @MainActor () -> Bool) async throws -> HtmlPageResource {
+        let (id, head) = try await request(.resource(id: 0, path: path), current: current)
+        guard case .resource(let mimeType) = head else {
+            cancel(id)
+            throw Failure.refused("not a file answer")
+        }
+        return HtmlPageResource(mimeType: mimeType, chunks: chunks(id))
+    }
+
+    /// logTail reads a log page's file end from the origin: nil when the file still has `stamp`, otherwise the raw
+    /// bytes with their offset and the file's new stamp, for `TextProbe.LogRead` to build the page's snapshot.
+    func logTail(since stamp: BoundedFile.FileStamp?) async throws -> BoundedFile.TailRead? {
+        let (id, head) = try await request(.logTail(id: 0, stamp: stamp), current: { true })
+        switch head {
+        case .unchanged:
+            // the same frame ended the transfer, so nothing remains to pull
+            transfers[id] = nil
+            return nil
+        case .resource:
+            cancel(id)
+            throw Failure.refused("not a log answer")
+        case .log(let fresh, let offset):
+            var data = Data()
+            for try await chunk in chunks(id) { data.append(chunk) }
+            return BoundedFile.TailRead(data: data, offset: offset, stamp: fresh)
+        }
+    }
+
+    // request sends one resource-kind request under a fresh id and waits for its answer's head
+    private func request(_ frame: PageServeFrame, current: @escaping @MainActor () -> Bool) async throws -> (Int, Head) {
         try await started()
         let id = allocate()
         try await admit(id, into: .resource)
@@ -214,31 +250,37 @@ final class RemotePageChannel {
             throw CancellationError()
         }
         do {
-            try send(.resource(id: id, path: path))
+            switch frame {
+            case .logTail(_, let stamp): try send(.logTail(id: id, stamp: stamp))
+            case .resource(_, let path): try send(.resource(id: id, path: path))
+            default: throw Failure.refused("not a resource request")
+            }
         } catch {
             if !closed { release(.resource) }
             throw error
         }
         let transfer = Transfer(revision: current)
         transfers[id] = transfer
-        let mimeType: String
         do {
-            mimeType = try await withTaskCancellationHandler {
-                try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<String, Error>) in transfer.head = waiter }
+            let head = try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { (waiter: CheckedContinuation<Head, Error>) in transfer.head = waiter }
             } onCancel: {
                 DispatchQueue.main.async { MainActor.assumeIsolated { [weak self] in self?.cancel(id) } }
             }
+            return (id, head)
         } catch {
             // a cancelled transfer stays until the origin's terminal frame frees its slot; any other ends here
             if transfers[id] === transfer, transfer.terminal != nil || !transfer.cancelled { transfers[id] = nil }
             throw error
         }
+    }
+
+    private func chunks(_ id: Int) -> AsyncThrowingStream<Data, Error> {
         let handle = TransferHandle(id: id, channel: self)
-        let chunks = AsyncThrowingStream<Data, Error>(unfolding: { [weak self] in
+        return AsyncThrowingStream<Data, Error>(unfolding: { [weak self] in
             guard let self else { throw Failure.closed }
             return try await self.pull(handle.id)
         })
-        return HtmlPageResource(mimeType: mimeType, chunks: chunks)
     }
 
     // a resource dropped before its last chunk was read, by a page that stopped the request before reading or
@@ -380,8 +422,20 @@ final class RemotePageChannel {
         case .head(let id, let mimeType):
             defer { permits.give() }
             guard let transfer = live(id) else { return }
-            transfer.head?.resume(returning: mimeType)
+            transfer.head?.resume(returning: .resource(mimeType: mimeType))
             transfer.head = nil
+        case .logHead(let id, let stamp, let offset):
+            defer { permits.give() }
+            guard let transfer = live(id) else { return }
+            transfer.head?.resume(returning: .log(stamp: stamp, offset: offset))
+            transfer.head = nil
+        case .logUnchanged(let id):
+            defer { permits.give() }
+            if let transfer = live(id) {
+                transfer.head?.resume(returning: .unchanged)
+                transfer.head = nil
+            }
+            end(id, .success(()))
         case .chunk(let id, let data):
             guard let transfer = live(id) else { return permits.give() }
             if let waiter = transfer.pull {
@@ -406,7 +460,7 @@ final class RemotePageChannel {
             guard let waiter = bridges.removeValue(forKey: id) else { return }
             release(.bridge)
             waiter.resume(returning: response)
-        case .resource, .cancel, .bridge:
+        case .resource, .cancel, .bridge, .logTail:
             permits.give()
             close("a frame only this Mac sends")
         }
