@@ -117,14 +117,21 @@ public enum CommandRestore {
         return others.filter { $0.ppid == pgid }.map(\.pid).sorted()
     }
 
-    /// Whether a captured argv should be re-run on restore: false for an empty argv, one whose `argv[0]`
-    /// basename is in the user-editable `restore-denylist.conf` (`parseDenylist` builds it, no built-in
-    /// entries), or one carrying an `isUnreplayable` scalar. Refusing HERE rather than at capture keeps
-    /// `hadForeground` true, so `restorePlan` still preempts a stale `initialCommand`.
-    public static func shouldRestore(argv: [String], denylist: Set<String>) -> Bool {
+    /// shouldRestore says whether a captured `argv` replays as typed into `receivingShell`, the interactive shell,
+    /// nil when nothing types it. Refusing here rather than at capture keeps `hadForeground` true, so
+    /// `restorePlan` still preempts a stale `initialCommand`.
+    public static func shouldRestore(argv: [String], denylist: Set<String>, receivingShell: String? = nil) -> Bool {
         guard let first = argv.first, !first.isEmpty else { return false }
         if argv.contains(where: { $0.unicodeScalars.contains(where: isUnreplayable) }) { return false }
+        if let receivingShell, expandsHistoryInsideQuotes(receivingShell), argv.contains(where: { $0.contains("!") }) {
+            return false
+        }
         return !denylist.contains(basename(first))
+    }
+
+    /// expandsHistoryInsideQuotes: interactive csh and tcsh substitute `!` history even inside single quotes.
+    private static func expandsHistoryInsideQuotes(_ shell: String) -> Bool {
+        ["tcsh", "csh"].contains(basename(shell))
     }
 
     /// Two unrelated reasons, one predicate because both end at the same plain shell: a control character

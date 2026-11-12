@@ -110,6 +110,8 @@ final class GhosttyApp {
     /// The Live pane shell ghostty `command` names, latched with the restore decision it feeds. A running
     /// daemon keeps the shell it started with, so a reload switching it would mislabel those panes.
     let liveCommandShell: String?
+    /// commandProgram is the program ghostty `command` starts, shell or not, nil when the setting is absent.
+    let commandProgram: String?
     var restoreRunningCommand: Bool { launchRestoreMode == .rerun }
     static func capturesForegroundOnExit(mode: RestoreMode) -> Bool { mode == .rerun || mode == .live }
     /// Whether the window title bar shows the attention bell icon; off by default. The title bar reads it via
@@ -172,11 +174,13 @@ final class GhosttyApp {
         let resolvedResources = Self.resolveResources()
         let initialSettings = Self.settingsStore().load()
         let configInputs = Self.resolveConfigInputs(settings: initialSettings)
-        let commandShell = Self.resolveLiveCommandShell(configInputs)
+        let command = Self.resolveCommand(configInputs)
+        let commandShell = command.flatMap(ZmxSupport.commandShell(fromCommand:))
         let restoreDecision = initialSettings.effectiveRestoreMode.launchDecision(
             liveUnavailableReason: ZmxLaunch.liveUnavailableReason(commandShell: commandShell))
         restoreLaunchDecision = restoreDecision
         liveCommandShell = commandShell
+        commandProgram = command.flatMap(ZmxSupport.commandProgram(fromCommand:))
         resourcesDir = resolvedResources
         let booted = ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS
         // libghostty adopts the user's numeric locale; CoreSVG mis-sizes symbols with decimal commas.
@@ -563,9 +567,9 @@ final class GhosttyApp {
         return sources
     }
 
-    /// resolveLiveCommandShell reads ghostty `command` from every config source and include, then
-    /// classifies the final raw value: an earlier supported one must not outlive a later unsupported one.
-    private static func resolveLiveCommandShell(_ inputs: ConfigInputs) -> String? {
+    /// resolveCommand reads ghostty `command` from every config source and include and returns the final raw
+    /// value, so callers classify it: an earlier supported one must not outlive a later unsupported one.
+    private static func resolveCommand(_ inputs: ConfigInputs) -> String? {
         let sources = configSources(ghosttyConfigPath: inputs.scopedURL.path,
                                     inheritGlobalConfig: inputs.inheritGlobalConfig)
         let pairs = GhosttyConfigText.keyValues(loading: sources, home: NSHomeDirectory()) {
@@ -574,7 +578,7 @@ final class GhosttyApp {
         guard case .value(let command) = GhosttyConfigText.lastSetting(of: "command", in: pairs, parse: { $0 }) else {
             return nil
         }
-        return ZmxSupport.commandShell(fromCommand: command)
+        return command
     }
 
     /// keyValues reads a config file's pairs; a missing or unreadable file yields none.

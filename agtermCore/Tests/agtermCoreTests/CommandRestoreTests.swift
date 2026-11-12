@@ -184,6 +184,24 @@ struct CommandRestoreTests {
         #expect(CommandRestore.shouldRestore(argv: ["echo", "naïve — ✓"], denylist: []))
     }
 
+    @Test(arguments: [
+        ("/bin/tcsh", ["grep", "!needle", "log"], false),
+        ("/bin/csh", ["echo", "fix!x"], false),
+        ("tcsh", ["printf", "%s", "!"], false),
+        ("/bin/tcsh", ["grep", "needle", "log"], true),
+        ("/bin/zsh", ["grep", "!needle", "log"], true),
+        ("/opt/homebrew/bin/fish", ["grep", "!needle", "log"], true),
+        ("/bin/bash", ["grep", "!needle", "log"], true),
+    ] as [(String, [String], Bool)])
+    func shouldRestoreRefusesABangOnlyForACshFamilyReceiver(shell: String, argv: [String], expected: Bool) {
+        #expect(CommandRestore.shouldRestore(argv: argv, denylist: [], receivingShell: shell) == expected)
+    }
+
+    @Test func shouldRestoreWithoutAReceiverKeepsABang() {
+        #expect(CommandRestore.shouldRestore(argv: ["grep", "!needle", "log"], denylist: []))
+        #expect(!CommandRestore.shouldRestore(argv: ["vim", "!x"], denylist: ["vim"], receivingShell: "/bin/zsh"))
+    }
+
     @Test func shouldRestoreRefusesLossilyDecodedArguments() {
         // the argument bytes must be RAW, not a Swift literal: "\u{FFFD}" encodes as valid UTF-8, which
         // would pin the genuine-U+FFFD case while proving nothing about lossy decoding.

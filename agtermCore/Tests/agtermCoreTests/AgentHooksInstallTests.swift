@@ -549,6 +549,20 @@ struct AgentHooksInstallTests {
         #expect(resolve("/home/user", "~/literal", nil, "/work") == "/work/~/literal")
     }
 
+    @Test(arguments: [
+        (String?.none, "/work", String?.none),
+        ("", "/work", nil),
+        ("/custom/codex", "/work", "/custom/codex"),
+        ("/custom/../codex/", "/work", "/codex"),
+        ("relative", "/work", "/work/relative"),
+        ("~/literal $HOME", "/work", "/work/~/literal $HOME"),
+        ("/custom/codex", "", nil),
+        ("relative", "work", nil),
+    ])
+    func codexHomeResolvesLikeTheShellWouldReadIt(value: String?, workingDirectory: String, expected: String?) {
+        #expect(AgentHooksInstall.Codex.home(codexHome: value, workingDirectory: workingDirectory) == expected)
+    }
+
     @Test func opencodeMajorVersionAcceptsReleaseAndPrereleaseOutput() {
         let outputs: [(String, AgentHooksInstall.OpenCode.Version)] = [
             ("1.18.31\n", .v1), ("2.0.12\n", .v2), (" v2.0.12 \n", .v2),

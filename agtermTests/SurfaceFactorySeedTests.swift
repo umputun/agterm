@@ -371,6 +371,19 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertEqual(agtermApp.quickTerminalCwd(library: nil), home)
     }
 
+    func testAnOrdinaryReplayTypesABangOnlyIntoAShellThatKeepsIt() {
+        let session = restoredSession()
+        let capture = ["grep", "!needle", "log"]
+        let seed = { (shell: String) -> LaunchSeed in
+            self.setPendingCapture(capture, on: .left, session: session)
+            let policy = LaunchSeedPolicy(restoreEnabled: true, denylist: [], runningNames: nil, receivingShell: shell)
+            return LaunchSeedProvider.pane(session: session, pane: .left, disposition: .ordinary, policy: policy).resolve(.left)
+        }
+
+        XCTAssertNil(seed("/bin/tcsh").initialInput)
+        XCTAssertEqual(seed("/bin/zsh").initialInput, "'grep' '!needle' 'log'\n")
+    }
+
     func testThePolicyCarriesTheReapsRunningNames() {
         let context = agtermApp.LaunchSpawnContext()
         context.runningNames = ["agterm-alive"]
@@ -378,6 +391,11 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertEqual(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: context).runningNames, ["agterm-alive"])
         XCTAssertNil(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: agtermApp.LaunchSpawnContext()).runningNames,
                      "a skipped or failed list paces every replaying live pane")
+    }
+
+    func testThePolicyCarriesTheReceivingShell() {
+        XCTAssertEqual(agtermApp.launchSeedPolicy(GhosttyApp.shared, context: agtermApp.LaunchSpawnContext()).receivingShell,
+                       GhosttyApp.shared.commandProgram ?? ZmxLaunch.passwordDatabaseLoginShell())
     }
 
     private func services(_ registry: SpawnRegistry?) -> agtermApp.SurfaceServices {

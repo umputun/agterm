@@ -391,6 +391,7 @@ spans intact, and format long catalogs as lists.
 - `keymap.md`: keymap parser, built-ins, custom commands/tokens, reload/edit.
 - `notifications.md`: OSC/control notifications, suppression, reveal, badges, status.
 - `ui-tests.md`: launch isolation including FB11763863, AppKit/XCUITest traps, cadence.
+- `tests.md`: shared state, clocks, waits, ptys and stubs that keep any suite from flaking on CI.
 - `libghostty.md`: surfaces, rendering, AppKit, theme, overlays, cursor.
 - `app-icon.md`: adaptive Icon Composer build.
 - `ci.md`: jobs, filters, coverage, badge.

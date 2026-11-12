@@ -198,14 +198,23 @@ public enum ZmxSupport {
     /// flags Live applies anyway. Anything else is nil, since Live starts the shell itself and cannot honor
     /// other programs or arguments.
     public static func commandShell(fromCommand command: String) -> String? {
+        let words = commandWords(command)
+        guard let shell = words.first, (shell as NSString).isAbsolutePath, shellKind(for: shell) != nil,
+              words.dropFirst().allSatisfy(liveShellFlags.contains) else { return nil }
+        return shell
+    }
+
+    /// commandProgram is the program a ghostty `command` value starts, nil for a blank value.
+    public static func commandProgram(fromCommand command: String) -> String? {
+        commandWords(command).first
+    }
+
+    private static func commandWords(_ command: String) -> [String] {
         var value = command
         for prefix in ["direct:", "shell:"] where value.hasPrefix(prefix) {
             value = String(value.dropFirst(prefix.count))
         }
-        let words = value.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard let shell = words.first, (shell as NSString).isAbsolutePath, shellKind(for: shell) != nil,
-              words.dropFirst().allSatisfy(liveShellFlags.contains) else { return nil }
-        return shell
+        return value.split(whereSeparator: \.isWhitespace).map(String.init)
     }
 
     private static let liveShellFlags: Set<String> = ["-l", "--login", "-i", "--interactive", "-il", "-li"]

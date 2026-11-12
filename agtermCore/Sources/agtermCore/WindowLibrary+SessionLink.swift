@@ -6,6 +6,14 @@ extension Session {
         guard remoteHost == host, let binding = remotePresentation?.binding else { return false }
         return binding.remoteSessionID == id && binding.origin?.endpoint == endpoint
     }
+
+    /// isOriginlessCatalogRow matches on host and session id alone: a catalog row with no pane has no endpoint to compare.
+    fileprivate func isOriginlessCatalogRow(_ id: String, host: String) -> Bool {
+        guard remoteHost == host, let binding = remotePresentation?.binding, binding.catalogOwned, binding.origin == nil else {
+            return false
+        }
+        return binding.remoteSessionID == id
+    }
 }
 
 /// SessionLinkTarget is the open window and live row a clicked session link selects.
@@ -38,7 +46,8 @@ extension WindowLibrary {
         var target: SessionLinkTarget?
         for window in openIDs() {
             guard let store = store(for: window) else { continue }
-            for row in store.workspaces.flatMap(\.sessions) where row.showsOriginSession(id.uuidString, host: host, endpoint: endpoint) {
+            for row in store.workspaces.flatMap(\.sessions)
+            where row.showsOriginSession(id.uuidString, host: host, endpoint: endpoint) || row.isOriginlessCatalogRow(id.uuidString, host: host) {
                 guard target == nil else { return nil }
                 target = SessionLinkTarget(windowID: window, sessionID: row.id)
             }

@@ -667,7 +667,8 @@ struct agtermApp: App {
     static func launchSeedPolicy(_ ghostty: GhosttyApp, context: LaunchSpawnContext) -> LaunchSeedPolicy {
         LaunchSeedPolicy(restoreEnabled: ghostty.restoreRunningCommand, denylist: ghostty.restoreDenylist,
                          runningNames: context.runningNames,
-                         suppressedDaemons: Set(context.suppressedLaunchPayloads.map(ZmxSupport.daemonName(for:))))
+                         suppressedDaemons: Set(context.suppressedLaunchPayloads.map(ZmxSupport.daemonName(for:))),
+                         receivingShell: ghostty.commandProgram ?? ZmxLaunch.passwordDatabaseLoginShell())
     }
 
     /// A wrapped pane's shell environment is zmx's own; every other disposition inherits the pane env.

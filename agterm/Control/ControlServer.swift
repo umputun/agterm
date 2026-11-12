@@ -409,6 +409,9 @@ final class ControlServer {
     /// instance create a fresh inode and lock that instead, which excludes nobody.
     private func releaseOwnership() {
         guard lockFD >= 0 else { return }
+        // a child spawned on another thread holds a copy of the descriptor until it execs,
+        // so close alone keeps the lock
+        flock(lockFD, LOCK_UN)
         close(lockFD)
         lockFD = -1
     }

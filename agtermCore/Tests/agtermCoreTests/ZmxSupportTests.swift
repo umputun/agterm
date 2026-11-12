@@ -435,6 +435,18 @@ struct ZmxSupportTests {
         #expect(ZmxSupport.commandShell(fromCommand: command) == expected)
     }
 
+    @Test(arguments: [
+        ("/bin/tcsh -l", "/bin/tcsh"),
+        ("direct:/bin/zsh -l", "/bin/zsh"),
+        ("shell:  /usr/local/bin/fish", "/usr/local/bin/fish"),
+        ("tmux new", "tmux"),
+        ("", nil),
+        ("   ", nil),
+    ] as [(String, String?)])
+    func commandProgramIsTheFirstWordOfAnyCommand(command: String, expected: String?) {
+        #expect(ZmxSupport.commandProgram(fromCommand: command) == expected)
+    }
+
     @Test func commandShellReplacesAnUnsupportedPasswordDatabaseShell() throws {
         let resources = try makeFishResources(withMarker: true)
         defer { try? FileManager.default.removeItem(at: resources) }
