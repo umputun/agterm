@@ -32,6 +32,7 @@ its *needs* column, so searching this page for `claude` or `kiro` finds those di
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI | [@brusnigin](https://github.com/brusnigin) |
 | [kimi-session-resume](kimi-session-resume/) | each tab reopens its own Kimi Code conversation after a restart | 0.16.0, Kimi Code, python3 | [@x9x9x9x9x9x91](https://github.com/x9x9x9x9x9x91) |
 | [opencode-session-resume](opencode-session-resume/) | each tab reopens its own opencode conversation after a restart | 0.3.1, zsh, opencode | [@cherkale](https://github.com/cherkale) |
+| [remote-session-restore](remote-session-restore/) | sessions attached from other Macs come back after a relaunch | 0.42.0, jq | [@maxshevelev](https://github.com/maxshevelev) |
 
 ### Agent status and workflows
 
