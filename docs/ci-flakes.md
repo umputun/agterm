@@ -133,6 +133,16 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 - **Fix.** `held()` gives up after 1000 `Task.yield` retries instead of a deadline, so a stall slows it but cannot
   expire it. The startup stall itself remains.
 
+### `ServerStreamsTests.twoViewsAreServedAtOnceAndBridgeRequestsRunOnTheServer`
+
+- **Symptom.** `no bridge replies: nil, Optional(...reply...)`: the first view's `session.rename` got no reply while
+  the second view's answered.
+- **Runs.** Job 131486876585 (run 43305271745), where every test in the process finished at about 62 s.
+- **Cause, demonstrated.** `LogClient` read each frame with a 10 s `SO_RCVTIMEO`, and a bridge reply needs a main
+  actor hop that thousands of parallel tests share on the runner. Holding the main actor 11 s during the rename
+  reproduces the message locally.
+- **Fix.** `LogClient` waits 60 s, as `Viewer` and `eventually` do; the same 11 s hold then passes.
+
 ### Linux test process killed by SIGPIPE
 
 - **Symptom.** The Linux core tests job ends with signal 13 about 6 s after `swift test` starts, before any test

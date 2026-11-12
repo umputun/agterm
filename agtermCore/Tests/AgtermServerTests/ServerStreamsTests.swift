@@ -1415,7 +1415,7 @@ struct ServerStreamsTests {
         private var buffer = Data()
 
         init(fd: Int32) {
-            var wait = timeval(tv_sec: 10, tv_usec: 0)
+            var wait = timeval(tv_sec: 60, tv_usec: 0)
             setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
             self.fd = fd
         }
