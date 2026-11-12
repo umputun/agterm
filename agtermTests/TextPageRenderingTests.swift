@@ -627,6 +627,42 @@ extension TextPageRenderingTests {
         XCTAssertEqual(current?.logState?.following, false)
     }
 
+    func testADiffPageReportsItsChangesOnlyOnceItIsReady() async throws {
+        let posted = try await postedUntil("changes", try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n"))
+        XCTAssertEqual(posted.prefix(2), ["ready", "changes"])
+    }
+
+    func testADiffPageWithNoChangesReportsItsCountOnlyOnceItIsReady() async throws {
+        let posted = try await postedUntil("changes", try openText("a.diff", "@@ -1 +1 @@\n a\n"))
+        XCTAssertEqual(posted.prefix(2), ["ready", "changes"])
+    }
+
+    func testASeededSearchReportsItsMatchesOnlyOnceThePageIsReady() async throws {
+        let overlay = try openText("a.txt", "a b a\n")
+        XCTAssertNotNil(store.setTextSearch(overlay.id, query: "a"))
+
+        let posted = try await postedUntil("report", try XCTUnwrap(current))
+
+        XCTAssertEqual(posted.prefix(2), ["ready", "report"])
+    }
+
+    private func postedUntil(_ key: String, _ overlay: HtmlOverlay) async throws -> [String] {
+        let page = registry.page(for: overlay, store: store)
+        defer { store.closeHtmlOverlay(page.id) }
+        page.webView.configuration.userContentController.addUserScript(WKUserScript(source: """
+            const handler = window.webkit.messageHandlers.agtermTextPage;
+            const post = handler.postMessage.bind(handler);
+            handler.postMessage = (body) => {
+              const root = document.documentElement;
+              root.dataset.posted = (root.dataset.posted || '') + Object.keys(body)[0] + ' ';
+              post(body);
+            };
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.rendererWorld))
+        try await waitForScript("document.documentElement.dataset.posted ?? ''", in: page.webView) { $0.contains(key) }
+        let posted = try await page.webView.evaluateJavaScript("document.documentElement.dataset.posted") as? String
+        return (posted ?? "").split(separator: " ").map(String.init)
+    }
+
     func testAChangeStepCommitsItsChangeBeforeItAnswers() async throws {
         let (page, window) = try shown(try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n@@ -5 +5 @@\n-c\n+d\n"))
         defer { window.orderOut(nil) }

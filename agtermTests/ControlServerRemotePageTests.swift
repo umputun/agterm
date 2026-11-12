@@ -363,6 +363,7 @@ final class ControlServerRemotePageTests: XCTestCase {
         _ = try present(fix, page(.url("http://127.0.0.1:9/a")))
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 5, action: .hide)))
         try await waitFor("the hide is reported") { self.states(fix).last?.appliedSeq == 5 }
+        try await waitFor("the page load fails") { self.states(fix).last?.load == .failed }
         let before = states(fix).count
 
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 6, action: .search,
@@ -432,7 +433,7 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertTrue(search.ok, search.error ?? "")
         XCTAssertEqual(wrap.result?.text, "wrapped")
         XCTAssertEqual(follow.error, "no log page")
-        XCTAssertEqual(step.result?.text, "1 of 1")
+        XCTAssertEqual(step.result?.text, "1 of 1", step.error ?? "")
         try await waitFor("the origin is told") { self.states(fix).last?.text?.changes?.current == 1 }
         let text = try XCTUnwrap(states(fix).last?.text)
         XCTAssertEqual(text.query, "b")

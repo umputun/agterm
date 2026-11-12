@@ -201,6 +201,27 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 - **Fix.** The per-file bound and the page wait are 30 s, a coarse end-to-end ceiling for a pathological slowdown
   rather than a latency target.
 
+### `ControlServerRemotePageTests.testATextActionOnAPageThatIsNotTextAnswersTheLocalRefusalAndAdvancesNoSequence`
+
+- **Symptom.** `XCTAssertEqual failed: ("5") is not equal to ("1")` on the state frame count.
+- **Runs.** 43224720127 (PR #978).
+- **Cause, demonstrated.** The page is a URL on the restricted port 9. Its own load reports (loading, loading,
+  failed `Not allowed to use restricted network port`, all at sequence 5) arrived after the baseline count;
+  reproduced locally with the frames printed. The refused text actions sent none.
+- **Fix.** The test waits for the load to end `failed` before it takes the baseline.
+
+### `ControlServerRemotePageTests.testTextCommandsOnAReplicaAnswerAsLocallyAndReachTheOrigin`
+
+- **Symptom.** `XCTAssertEqual failed: ("nil") is not equal to ("Optional("1 of 1")")`, then `the origin is told`
+  times out.
+- **Runs.** Local only, once in about 70 class runs.
+- **Cause, demonstrated.** `text.js` posted a diff page's first changes report, and a seeded search's first
+  report, before `ready`. A caller waiting for `textChanges` could step between the two messages while
+  `TextPageBridge` still held its document pending, which answers `page not loaded`. A script polling `tree`
+  for `text.changes` had the same window.
+- **Fix.** The page holds the counts it reports during setup and sends them after `ready`.
+  `TextPageRenderingTests` pins the message order for a diff with changes, one without, and a seeded search.
+
 ### Three earlier hosted failures, already fixed on master
 
 - `HtmlOverlayViewTests` line 48 read the page title before it arrived; fixed in #949.

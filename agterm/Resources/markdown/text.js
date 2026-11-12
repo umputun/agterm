@@ -37,6 +37,9 @@
   const send = (body) => {
     try { window.webkit.messageHandlers.agtermTextPage.postMessage(body); } catch (_) {}
   };
+  // counts reported while the page sets up wait for its ready, so a count the app holds means the page takes a step
+  let setup = [];
+  const publish = (body) => (setup ? setup.push(body) : send(body));
   // the vertical position last seen, kept across programmatic moves, so a horizontal scroll or a jump the page
   // made itself never reads as the user scrolling
   let lastTop = scroller.scrollTop;
@@ -106,6 +109,9 @@
     if (log && following) scrollTo(scroller.scrollHeight);
   });
   send({ ready: true });
+  const held = setup;
+  setup = null;
+  held.forEach(send);
 
   // lines as the gutter numbers them: a final line break opens no line of its own
   function lineCount() {
@@ -428,7 +434,7 @@
       previous.disabled = next.disabled = offsets.length === 0;
       close.disabled = query === '';
     };
-    const report = () => send({ report: { revision, query, matches: offsets.length, current: offsets.length ? current + 1 : 0 } });
+    const report = () => publish({ report: { revision, query, matches: offsets.length, current: offsets.length ? current + 1 : 0 } });
 
     // the match is brought into view only when it is not already shown below the bar
     const reveal = () => {
@@ -716,7 +722,7 @@
     let current = -1;
     const saved = Number(source.dataset.change);
     if (Number.isInteger(saved) && saved >= 1 && saved <= blocks.length) current = saved - 1;
-    const report = () => send({ changes: { count: blocks.length, current: current + 1 } });
+    const report = () => publish({ changes: { count: blocks.length, current: current + 1 } });
     if (!blocks.length) {
       report();
       return null;
