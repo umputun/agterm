@@ -11,7 +11,7 @@ public enum BoundedFile {
 
     /// FileStamp names one version of a file: a change of inode means it was replaced, of size or mtime that it
     /// was written.
-    public struct FileStamp: Sendable, Equatable {
+    public struct FileStamp: Codable, Sendable, Equatable {
         public let device: UInt64
         public let inode: UInt64
         public let size: Int
@@ -32,6 +32,12 @@ public enum BoundedFile {
         public let data: Data
         public let offset: Int
         public let stamp: FileStamp
+
+        public init(data: Data, offset: Int, stamp: FileStamp) {
+            self.data = data
+            self.offset = offset
+            self.stamp = stamp
+        }
     }
 
     /// check opens `path` and judges it without reading, for a caller deciding only whether a page can open.

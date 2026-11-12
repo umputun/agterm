@@ -219,6 +219,7 @@ extension AppStore {
             if let page = slot.page {
                 session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
                 session.remoteOverlays.updatePage(slot.job) { $0.claimed = false }
+                settleRemoteTextWaits(job: slot.job)
                 RemotePageEnds.shared.onWithdrawn?(page.overlay.id)
                 continue
             }

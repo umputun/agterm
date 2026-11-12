@@ -23,9 +23,17 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         private var recorded: [String] = []
         private var rev = 0
         private let versions: String
+        private var resultReads: [String] = []
+        private var results: [String] = []
         var created: UUID?
+        var createdPage: UUID?
 
         var operations: [String] { lock.withLock { recorded } }
+        var reads: [String] { lock.withLock { resultReads } }
+
+        func answerResults(_ outcomes: [ControlHtmlPageOutcome]) {
+            lock.withLock { results = outcomes.map { Self.json(ControlResponse(ok: true, result: ControlResult(pageOutcome: $0))) } }
+        }
 
         init() {
             var result = ControlResult()
@@ -38,12 +46,19 @@ final class ControlServerRemoteActionsTests: XCTestCase {
             let line = (argv.last ?? "").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\\", with: "")
             if argv.contains("-O") { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             if line.contains("agtermctl version") { return RemoteCommandResult(status: 0, stdout: versions, stderr: "") }
+            if line.contains("session overlay result") {
+                return lock.withLock {
+                    resultReads.append(line)
+                    return RemoteCommandResult(status: 0, stdout: results.isEmpty ? "" : results.removeFirst(), stderr: "")
+                }
+            }
             guard let opRange = line.range(of: "--op-id ") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
             let opID = String(line[opRange.upperBound...].prefix(36))
             return lock.withLock {
                 recorded.append(line)
                 rev += 1
-                var result = ControlResult(id: line.contains("session new") ? created?.uuidString : nil)
+                var result = ControlResult(id: line.contains("session new") ? created?.uuidString : nil,
+                                           pageID: line.contains("session overlay open") ? createdPage?.uuidString : nil)
                 result.receipt = CatalogReceipt(opID: opID, epoch: "e1", outcome: .applied, rev: rev)
                 return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: result)), stderr: "")
             }
@@ -220,6 +235,94 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertEqual(local.workspaces.flatMap(\.sessions).count, localRows)
         try feed(.delta(epoch: "e1", rev: 1, change: .sessionAdded(catalogSession(created, name: "new"), workspace: workspaceID, index: 1)))
         XCTAssertEqual(remoteStore.selectedSessionID, created)
+    }
+
+    func testAPageRowAskedForInARemoteWindowIsCreatedByTheServerAndNothingIsMadeHere() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let id = entry.id.uuidString
+        var page = ControlArgs()
+        page.url = "https://example.com/docs"
+        page.javascript = true
+
+        let session = try await send(.sessionPage, target: id, args: page)
+        let companion = try await send(.sessionCompanionPage, target: id, args: page)
+
+        for reply in [session, companion] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session overlay open --page --target \(id) --url=https://example.com/docs --js --op-id"))
+        XCTAssertTrue(runner.operations[1].contains("session overlay open --companion --target \(id) --url=https://example.com/docs --js"))
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
+    func testAnOverlayCloseOfAServerPageRowAsksTheServerToCloseTheRow() async throws {
+        let id = UUID()
+        let page = CatalogPage(kind: "url", identity: "https://example.invalid", endpoint: Self.endpoint)
+        try open([CatalogSession(fields: CatalogSessionFields(id: id, name: "docs", parent: nil, cwd: "/srv", primary: id, axis: nil,
+                                                              shown: false, lifecycle: .live, page: page), panes: [])])
+        try await until { self.remoteStore.session(withID: id)?.overlayActive == true }
+
+        let reply = try await send(.sessionOverlayClose, target: id.uuidString)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations.first?.contains("session close --target \(id.uuidString)") == true)
+        XCTAssertTrue(shownIDs().contains(id))
+    }
+
+    func testAPageCreatedInARemoteWindowReadsItsResultFromTheServer() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let page = UUID()
+        runner.createdPage = page
+        runner.answerResults([ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .pending),
+                              ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .submitted, value: "yes")])
+        var html = ControlArgs()
+        html.url = "https://example.com/form"
+        var read = ControlArgs()
+        read.page = page.uuidString
+
+        let created = try await send(.sessionPage, target: entry.id.uuidString, args: html)
+        let pending = try await send(.sessionOverlayResult, args: read)
+        let submitted = try await send(.sessionOverlayResult, args: read)
+
+        XCTAssertEqual(created.result?.pageID, page.uuidString)
+        XCTAssertEqual(pending.result?.pageOutcome?.outcome, .pending)
+        XCTAssertEqual(submitted.result?.pageOutcome, ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .submitted, value: "yes"))
+        XCTAssertEqual(runner.reads.count, 2)
+        XCTAssertTrue(runner.reads.allSatisfy { $0.contains("session overlay result --page \(page.uuidString)") })
+    }
+
+    func testAPageResultIsReadFromTheServerAfterTheWindowThatCreatedItClosed() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let page = UUID()
+        runner.createdPage = page
+        runner.answerResults([ControlHtmlPageOutcome(pageID: page.uuidString, outcome: .dismissed)])
+        var html = ControlArgs()
+        html.url = "https://example.com/form"
+        var read = ControlArgs()
+        read.page = page.uuidString
+        _ = try await send(.sessionPage, target: entry.id.uuidString, args: html)
+
+        library.closeWindow(remoteWindow)
+        try await until { self.server.remoteCatalogs[self.remoteWindow] == nil }
+        let reply = try await send(.sessionOverlayResult, args: read)
+
+        XCTAssertEqual(reply.result?.pageOutcome?.outcome, .dismissed)
+        XCTAssertEqual(runner.reads.count, 1)
+    }
+
+    func testAnUnknownPageResultIsAnsweredHereAndAsksNoServer() async throws {
+        try open([catalogSession()])
+        var read = ControlArgs()
+        read.page = UUID().uuidString
+
+        let reply = try await send(.sessionOverlayResult, args: read)
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(reply.error, OverlayHtmlError.unknownPage)
+        XCTAssertTrue(runner.reads.isEmpty)
     }
 
     func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {

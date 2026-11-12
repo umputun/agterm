@@ -153,6 +153,91 @@ final class RemoteCatalogMirrorTests {
         #expect(row.customName == "renamed")
     }
 
+    private func pageRow(_ id: UUID = UUID(), name: String = "docs") -> CatalogSession {
+        let page = CatalogPage(kind: "url", identity: "https://example.com", endpoint: Self.endpoint)
+        return CatalogSession(fields: CatalogSessionFields(id: id, name: name, parent: nil, cwd: "/srv", primary: id, axis: nil,
+                                                           shown: false, lifecycle: .live, page: page),
+                              panes: [])
+    }
+
+    @Test func aPageRowIsAPageBoundToItsServerWithNoPane() throws {
+        let page = pageRow()
+
+        _ = open([page])
+
+        let row = try #require(store.session(withID: page.id))
+        #expect(row.content == .page)
+        #expect(row.initialCommand == nil)
+        #expect(row.remotePresentation?.binding.catalogOwned == true)
+        #expect(row.remotePresentation?.binding.origin?.endpoint == Self.endpoint)
+        #expect(effects.added == [page.id])
+    }
+
+    @Test func aPageRowKeepsItsShownPageThroughARenameAndAReorderAndLeavesWithItsRemoval() throws {
+        let page = pageRow()
+        let other = session(panes: [pane()])
+        _ = open([page, other])
+        let row = try #require(store.session(withID: page.id))
+        store.showCatalogPageRefusal("waiting for box", inRow: page.id)
+        let shown = try #require(row.htmlOverlay?.id)
+        var renamed = page.fields
+        renamed.name = "manual"
+
+        delta(1, .sessionChanged(renamed))
+        delta(2, .sessionOrder([other.id, page.id], workspace: workspaceID))
+
+        #expect(store.session(withID: page.id) === row)
+        #expect(row.customName == "manual")
+        #expect(row.htmlOverlay?.id == shown)
+        delta(3, .sessionRemoved(page.id))
+        #expect(store.session(withID: page.id) == nil)
+        #expect(effects.removed == [page.id])
+    }
+
+    @Test func aPageRowTakesTheEndpointACatalogChangeMovesItTo() throws {
+        let page = pageRow()
+        _ = open([page])
+        let row = try #require(store.session(withID: page.id))
+        store.showCatalogPageRefusal("waiting for box", inRow: page.id)
+        let shown = try #require(row.htmlOverlay?.id)
+        let moved = ControlZmxEndpoint(executable: "/opt/zmx", socketDirectory: "/run/zmx-2")
+        var changed = page.fields
+        changed.page = CatalogPage(kind: "url", identity: "https://example.com", endpoint: moved)
+
+        delta(1, .sessionChanged(changed))
+
+        #expect(store.session(withID: page.id) === row)
+        #expect(row.remotePresentation?.binding.origin?.endpoint == moved)
+        #expect(row.htmlOverlay?.id == shown)
+    }
+
+    @Test func aPageRowsFailedPageIsReplacedOnlyByAnotherReason() throws {
+        let page = pageRow()
+        _ = open([page])
+        let row = try #require(store.session(withID: page.id))
+
+        store.showCatalogPageRefusal("waiting for box", inRow: page.id)
+        let waiting = try #require(row.htmlOverlay?.id)
+        store.showCatalogPageRefusal("waiting for box", inRow: page.id)
+        let repeated = row.htmlOverlay?.id
+        store.showCatalogPageRefusal("no such page", inRow: page.id)
+
+        #expect(repeated == waiting)
+        #expect(row.htmlOverlay?.id != waiting)
+        #expect(row.htmlOverlay?.source == .unreadable(reason: "no such page"))
+        #expect(row.htmlOverlay?.loadState == .failed)
+        #expect(row.htmlOverlay?.loadError == "no such page")
+    }
+
+    @Test func aFailedPageIsShownOnlyOnAServerPageRow() throws {
+        let terminal = session(panes: [pane()])
+        _ = open([terminal])
+
+        store.showCatalogPageRefusal("x", inRow: terminal.id)
+
+        #expect(store.session(withID: terminal.id)?.overlayActive == false)
+    }
+
     @Test func aLostDaemonKeepsTheRowAndItsScreenAndMarksItEnded() throws {
         let only = pane()
         let entry = session(panes: [only])

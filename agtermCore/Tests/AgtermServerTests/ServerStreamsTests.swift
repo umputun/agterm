@@ -1187,6 +1187,95 @@ struct ServerStreamsTests {
         }
     }
 
+    @Test func aClickedLogOpensAsALogPageOnlyOnAPresenterWithLiveTextPages() async throws {
+        let session = try clickSession()
+        let path = try write("app.log", "one\n")
+        let live = try await presenter(for: session)
+        try click("./app.log", on: session, from: live)
+        let logPage = try #require(await pageRequest(from: live))
+        #expect(logPage.source == .text(path: path, line: nil))
+        #expect(logPage.textLog == TextLog(tail: TextPage.defaultTail, follow: true))
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+        await drop(live, from: session)
+
+        let older = try await presenter(for: session, kinds: Self.olderKinds)
+        defer { older.disconnect() }
+        try click("./app.log", on: session, from: older)
+
+        let plain = try #require(await pageRequest(from: older))
+        #expect(plain.source == .text(path: path, line: nil))
+        #expect(plain.textLog == nil)
+    }
+
+    @Test func aLogPageWaitsPastAnOlderPresenterAndIsRefusedWhileOnlyItIsConnected() async throws {
+        let session = try newSession()
+        let options = logOptions(try write("app.log", "one\n"))
+        #expect(harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: options).ok)
+
+        let older = try await presenter(for: session, kinds: Self.olderKinds)
+        defer { older.disconnect() }
+
+        #expect(session.remoteOverlays.slot(nil)?.owner == nil)
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+        #expect(harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: options)
+            == ControlResponse(ok: false, error: OverlayHtmlError.logRemote))
+    }
+
+    @Test func textCommandsReachThePresenterAndAnswerWithItsResult() async throws {
+        let session = try newSession()
+        let target = session.id.uuidString
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        #expect(harness.actions.openSessionOverlay(target, window: nil, options: logOptions(try write("app.log", "one\n"))).ok)
+        let page = try #require(await pageRequest(from: viewer)).page
+
+        let follow = Task { await harness.actions.setSessionOverlayFollow(target, window: nil, pane: nil, mode: .off) }
+        try await answer(viewer, page: page, .follow(.off), text: "paused", PresentationTextState(following: false, revision: 0))
+        #expect(await follow.value == ControlResponse(ok: true, result: ControlResult(id: target, text: "paused")))
+        #expect(textNode(session)?.following == false)
+
+        let wrap = Task { await harness.actions.setSessionOverlayWrap(target, window: nil, pane: nil, mode: .on) }
+        try await answer(viewer, page: page, .wrap(.on), text: "wrapped", PresentationTextState(following: false, revision: 0, wrap: true))
+        #expect(await wrap.value.result?.text == "wrapped")
+        #expect(textNode(session)?.wrap == true)
+
+        let step = Task { await harness.actions.searchSessionOverlay(target, window: nil, pane: nil, request: .next) }
+        try await answer(viewer, page: page, .search(.next), text: "1 of 2",
+                         PresentationTextState(following: false, query: "x", revision: 1, matches: 2, current: 1, wrap: true))
+        #expect(await step.value.result?.text == "1 of 2")
+        #expect(textNode(session)?.search == ControlTextSearchNode(query: "x", matches: 2, current: 1))
+
+        let changes = Task { await harness.actions.stepSessionOverlayChanges(target, window: nil, pane: nil, forward: true) }
+        let command = try #require(await pageCommand(from: viewer))
+        #expect(TextPageAction(command) == .changes(forward: true))
+        try viewer.send(.pageResult(PresentationPageResult(page: page, seq: command.seq, ok: false, error: "no diff page")))
+        #expect(await changes.value == ControlResponse(ok: false, error: "no diff page"))
+    }
+
+    private static let olderKinds = PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageTextKind }
+
+    private func logOptions(_ path: String) -> ControlSessionOverlayOpenOptions {
+        ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                         page: .text(path: path, line: nil), textLog: TextLog(tail: 20, follow: true))
+    }
+
+    private func pageCommand(from viewer: Viewer) async -> PresentationPageCommand? {
+        let body = await offPool { viewer.first { if case .pageCommand = $0 { true } else { false } } }
+        guard case .pageCommand(let command)? = body else { return nil }
+        return command
+    }
+
+    private func answer(_ viewer: Viewer, page: String, _ action: TextPageAction, text: String,
+                        _ state: PresentationTextState) async throws {
+        let command = try #require(await pageCommand(from: viewer))
+        #expect(TextPageAction(command) == action)
+        try viewer.send(.pageResult(PresentationPageResult(page: page, seq: command.seq, ok: true, text: text, state: state)))
+    }
+
+    private func textNode(_ session: Session) -> ControlTextOverlayNode? {
+        harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }?.htmlOverlays?.first?.text
+    }
+
     @Test func aClickedTextLocationOpensAtItsLine() async throws {
         let session = try clickSession()
         let viewer = try await presenter(for: session)
@@ -1312,6 +1401,402 @@ struct ServerStreamsTests {
         let reply = harness.actions.setSessionOverlayVisibility(session.id.uuidString, window: nil, pane: nil, mode: .hide)
 
         #expect(!reply.ok)
+    }
+
+    final class LogClient: @unchecked Sendable {
+        enum Answer: Equatable, Sendable {
+            case tail(BoundedFile.TailRead)
+            case unchanged
+            case failure(String)
+            case closed
+        }
+
+        private let fd: Int32
+        private var buffer = Data()
+
+        init(fd: Int32) {
+            var wait = timeval(tv_sec: 60, tv_usec: 0)
+            setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &wait, socklen_t(MemoryLayout<timeval>.size))
+            self.fd = fd
+        }
+
+        deinit { close(fd) }
+
+        func send(_ frame: PageServeFrame) throws {
+            let line = try PageServeCodec.encode(frame)
+            _ = line.withUnsafeBytes { UnixSocket.write(fd, $0.baseAddress!, $0.count) }
+        }
+
+        func frame() -> PageServeFrame? {
+            while true {
+                if let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                    let line = Data(buffer[buffer.startIndex..<newline])
+                    buffer.removeSubrange(buffer.startIndex...newline)
+                    return try? PageServeCodec.decode(line)
+                }
+                var chunk = [UInt8](repeating: 0, count: 64 * 1024)
+                let count = read(fd, &chunk, chunk.count)
+                guard count > 0 else { return nil }
+                buffer.append(contentsOf: chunk[0..<count])
+            }
+        }
+
+        func answer(_ id: Int) -> Answer {
+            var head: (stamp: BoundedFile.FileStamp, offset: Int)?
+            var data = Data()
+            while let frame = frame() {
+                switch frame {
+                case .logUnchanged(id): return .unchanged
+                case .logHead(id, let stamp, let offset): head = (stamp, offset)
+                case .chunk(id, let bytes): data.append(bytes)
+                case .end(id): return head.map { .tail(BoundedFile.TailRead(data: data, offset: $0.offset, stamp: $0.stamp)) } ?? .closed
+                case .failure(id, let error): return .failure(error)
+                default: continue
+                }
+            }
+            return .closed
+        }
+    }
+
+    private func logChannel(_ source: HtmlSource, log: TextLog? = TextLog(tail: 50, follow: true)) async throws -> (LogClient, Viewer) {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        let overlay = HtmlOverlay(source: source, textLog: log)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: source, textLog: log)
+        #expect(streams.handOver(overlay, in: session, options: options) == .opened)
+        let offered = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let shown)? = offered else {
+            viewer.disconnect()
+            throw POSIXError(.ENOENT)
+        }
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: overlay.id, token: shown.token)
+        return (LogClient(fd: pair[1]), viewer)
+    }
+
+    private func logFile(_ text: String) throws -> String {
+        let path = harness.scratch.root + "/log-\(UUID().uuidString).log"
+        try Data(text.utf8).write(to: URL(fileURLWithPath: path))
+        return path
+    }
+
+    private func stamp(_ path: String) throws -> BoundedFile.FileStamp {
+        guard case .success(let read?) = BoundedFile.readTail(path: path, maxBytes: 1, unchangedFrom: nil) else {
+            throw POSIXError(.EIO)
+        }
+        return read.stamp
+    }
+
+    @Test func aLogTailAnswersTheTailThenUnchangedUntilTheFileMoves() async throws {
+        let path = try logFile("a\nb\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        let first = try stamp(path)
+
+        let answers = try await offPool { () throws -> [LogClient.Answer] in
+            try client.send(.logTail(id: 1, stamp: nil))
+            let fresh = client.answer(1)
+            try client.send(.logTail(id: 2, stamp: first))
+            let same = client.answer(2)
+            let handle = try FileHandle(forWritingTo: URL(fileURLWithPath: path))
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("c\n".utf8))
+            try handle.close()
+            try client.send(.logTail(id: 3, stamp: first))
+            return [fresh, same, client.answer(3)]
+        }
+
+        #expect(answers[0] == .tail(BoundedFile.TailRead(data: Data("a\nb\n".utf8), offset: 0, stamp: first)))
+        #expect(answers[1] == .unchanged)
+        #expect(answers[2] == .tail(BoundedFile.TailRead(data: Data("a\nb\nc\n".utf8), offset: 0, stamp: try stamp(path))))
+    }
+
+    @Test func anEmptyOrTruncatedLogAnswersWhatTheFileHoldsNow() async throws {
+        let path = try logFile("one\ntwo\nthree\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        let before = try stamp(path)
+
+        let answers = try await offPool { () throws -> [LogClient.Answer] in
+            try Data("x\n".utf8).write(to: URL(fileURLWithPath: path))
+            try client.send(.logTail(id: 1, stamp: before))
+            let truncated = client.answer(1)
+            try Data().write(to: URL(fileURLWithPath: path))
+            try client.send(.logTail(id: 2, stamp: nil))
+            return [truncated, client.answer(2)]
+        }
+
+        guard case .tail(let truncated) = answers[0], case .tail(let empty) = answers[1] else {
+            Issue.record("expected two tails: \(answers)")
+            return
+        }
+        #expect(truncated.data == Data("x\n".utf8) && truncated.offset == 0)
+        #expect(empty.data.isEmpty && empty.offset == 0)
+    }
+
+    @Test func aLogPastTheTailCapAnswersOnlyItsLastBytes() async throws {
+        let path = try logFile(String(repeating: "0123456789\n", count: TextPage.maxTailBytes / 11 + 100))
+        let local = try BoundedFile.readTail(path: path, maxBytes: TextPage.maxTailBytes).get()
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == local.map { LogClient.Answer.tail($0) })
+        #expect(try #require(local).offset > 0)
+    }
+
+    @Test func aLogRemovedAfterItsPageOpenedAnswersAFailure() async throws {
+        let path = try logFile("a\n")
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+        try FileManager.default.removeItem(atPath: path)
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == .failure("file cannot be read"))
+    }
+
+    @Test(arguments: [false, true])
+    func aPageThatIsNotALogRefusesALogTail(markdown: Bool) async throws {
+        let path = try logFile("a\n")
+        let source: HtmlSource = markdown ? .markdown(path: path) : .text(path: path, line: nil)
+        let (client, viewer) = try await logChannel(source, log: markdown ? TextLog(tail: 50, follow: true) : nil)
+        defer { viewer.disconnect() }
+
+        let answer = try await offPool { () throws -> LogClient.Answer in
+            try client.send(.logTail(id: 1, stamp: nil))
+            return client.answer(1)
+        }
+
+        #expect(answer == .failure("not a log page"))
+    }
+
+    @Test func aLogTailCancelledMidAnswerStopsBeforeItsEnd() async throws {
+        let path = try logFile(String(repeating: "0123456789\n", count: TextPage.maxTailBytes / 11))
+        let (client, viewer) = try await logChannel(.text(path: path, line: nil))
+        defer { viewer.disconnect() }
+
+        let frames = try await offPool { () throws -> [PageServeFrame] in
+            try client.send(.logTail(id: 1, stamp: nil))
+            var frames: [PageServeFrame] = []
+            while let frame = client.frame() {
+                frames.append(frame)
+                if case .chunk = frame { break }
+            }
+            try client.send(.cancel(id: 1))
+            while let frame = client.frame() {
+                frames.append(frame)
+                if case .end = frame { break }
+                if case .failure = frame { break }
+            }
+            return frames
+        }
+
+        guard case .logHead(1, _, _)? = frames.first else {
+            Issue.record("no log head: \(frames.prefix(1))")
+            return
+        }
+        #expect(frames.last == .failure(id: 1, error: PageServeFrame.cancelled))
+        let chunks = frames.filter { if case .chunk = $0 { true } else { false } }.count
+        #expect(chunks >= 1 && chunks < TextPage.maxTailBytes / PageServeCodec.maxChunkBytes)
+    }
+
+    private func pageRow() async throws -> Session {
+        let path = harness.scratch.root + "/row.html"
+        try Data("<p>row</p>".utf8).write(to: URL(fileURLWithPath: path))
+        var args = ControlArgs()
+        args.html = path
+        let anchor = try newSession()
+        return try harness.session(await harness.actions.serve(ControlRequest(cmd: .sessionPage, target: anchor.id.uuidString,
+                                                                              args: args)))
+    }
+
+    private func view(_ row: Session) throws -> LogClient {
+        let offer = harness.actions.attachCompanionPage(row.id.uuidString, window: nil)
+        let token = try #require(offer.result?.companionPage?.token, "\(offer)")
+        let claimed = streams.claimPageStream(token)
+        let claim = try #require(claimed.result?.id.flatMap(UUID.init(uuidString:)), "\(claimed)")
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        streams.adoptPageServeStream(descriptor: pair[0], page: claim, token: token)
+        return LogClient(fd: pair[1])
+    }
+
+    private func bridge(_ client: LogClient, _ request: String) async throws -> PageServeFrame? {
+        try await offPool { () throws -> PageServeFrame? in
+            try client.send(.bridge(id: 1, request: request))
+            return client.frame()
+        }
+    }
+
+    @Test func anAttachmentTokenIsClaimedOnceAndExpires() async throws {
+        let row = try await pageRow()
+        let terminal = try newSession()
+        let now = Date()
+        streams.now = { now }
+        let first = try #require(harness.actions.attachCompanionPage(row.id.uuidString, window: nil).result?.companionPage)
+        let late = try #require(harness.actions.attachCompanionPage(row.id.uuidString, window: nil).result?.companionPage)
+
+        #expect(streams.claimPageStream(first.token).ok)
+        #expect(streams.claimPageStream(first.token) == ControlResponse(ok: false, error: "page not claimable"))
+        streams.now = { now.addingTimeInterval(AppStore.pageClaimWindow + 1) }
+        #expect(streams.claimPageStream(late.token) == ControlResponse(ok: false, error: "page not claimable"))
+        #expect(first.page == row.htmlOverlay?.id.uuidString)
+        #expect(harness.actions.attachCompanionPage(terminal.id.uuidString, window: nil)
+            == ControlResponse(ok: false, error: "not a page session"))
+    }
+
+    @Test func twoViewsAreServedAtOnceAndBridgeRequestsRunOnTheServer() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        let renamed = try await bridge(first, #"{"cmd":"session.rename","args":{"name":"docs"}}"#)
+        let typed = try await bridge(second, #"{"cmd":"session.type","args":{"text":"ls"}}"#)
+
+        guard case .reply(1, let renameReply)? = renamed, case .reply(1, let typeReply)? = typed else {
+            Issue.record("no bridge replies: \(String(describing: renamed)), \(String(describing: typed))")
+            return
+        }
+        #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(renameReply.utf8)).ok)
+        #expect(row.displayName == "docs")
+        #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(typeReply.utf8)).error
+            == "session.type: not available on a page session")
+    }
+
+    @Test func closingThePageRowEndsEveryView() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        _ = harness.actions.closeSession(row.id.uuidString, window: nil)
+
+        let ends = await offPool { (first.frame(), second.frame()) }
+        #expect(ends.0 == nil && ends.1 == nil)
+        #expect(await eventually { streams.pageAttachments.streams.isEmpty })
+    }
+
+    @Test func stoppingTheServerEndsEveryViewAndKeepsThePageRow() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        streams.shutdown()
+
+        #expect(await eventually { streams.pageAttachments.streams.isEmpty })
+        let ends = await offPool { (first.frame(), second.frame()) }
+        #expect(ends.0 == nil && ends.1 == nil)
+        #expect(harness.store.session(withID: row.id) === row)
+        #expect(row.htmlOverlay != nil)
+    }
+
+    private func pagePresenter(for row: Session) async throws -> Viewer {
+        let request = ControlRequest(cmd: .zmxPresent, target: row.id.uuidString)
+        let reply = await harness.actions.serve(request)
+        #expect(reply.ok, "\(reply)")
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        #expect(streams.adopt(fds[0], request: request, response: reply, written: true))
+        let viewer = Viewer(fd: fds[1])
+        try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
+                                                 mode: .presenter)))
+        let snapshot = await offPool { viewer.first { if case .snapshot = $0 { true } else { false } } }
+        guard case .snapshot(let shown)? = snapshot else { Issue.record("no snapshot"); return viewer }
+        #expect(shown.layout == nil)
+        try viewer.send(.presenterAcquire)
+        let granted = await offPool { viewer.first { $0 == .presenterGranted || $0 == .presenterRefused } }
+        #expect(granted == .presenterGranted)
+        return viewer
+    }
+
+    private static func guiAsk() -> PendingAsk {
+        PendingAsk(id: UUID().uuidString, title: "publish?", buttons: [ControlAskButton(id: "yes", label: "Yes")], style: .gui)
+    }
+
+    @Test func aGuiAskHeldOnAPageRowReachesItsPresenterAndItsAnswerSettles() async throws {
+        let row = try await pageRow()
+        var args = ControlArgs()
+        args.title = "publish?"
+        args.buttons = [ControlAskButton(id: "yes", label: "Yes")]
+        args.style = "gui"
+        let opened = await harness.actions.serve(ControlRequest(cmd: .askOpen, target: row.id.uuidString, args: args))
+        let id = try #require(opened.result?.id, "\(opened)")
+
+        let viewer = try await pagePresenter(for: row)
+        defer { viewer.disconnect() }
+
+        let offered = await offPool { viewer.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = offered else { Issue.record("no ask offer"); return }
+        #expect(shown.id == id)
+        #expect(shown.pane == nil)
+        try viewer.send(.askResolve(PresentationAskAnswer(id: shown.id, owner: shown.owner, button: "yes")))
+        #expect(await eventually { askOutcome(id)?.id == "yes" })
+    }
+
+    @Test func aCancelledAskOnAPageRowIsWithdrawnFromItsPresenter() async throws {
+        let row = try await pageRow()
+        let viewer = try await pagePresenter(for: row)
+        defer { viewer.disconnect() }
+        let ask = Self.guiAsk()
+        #expect(openAsk(ask, on: row).ok)
+        #expect(await offPool { viewer.first { if case .askRequest = $0 { true } else { false } } } != nil)
+
+        #expect(harness.actions.cancelAsk(ask.id, window: nil).ok)
+
+        let dismiss = await offPool { viewer.first { if case .askDismiss = $0 { true } else { false } } }
+        guard case .askDismiss(let ref)? = dismiss else { Issue.record("no ask dismiss"); return }
+        #expect(ref.id == ask.id)
+        #expect(askOutcome(ask.id)?.result == .cancelled)
+    }
+
+    @Test func aPickOnAPageRowIsAnsweredByItsPresenter() async throws {
+        let row = try await pageRow()
+        let viewer = try await pagePresenter(for: row)
+        defer { viewer.disconnect() }
+        let pick = PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")])
+
+        #expect(harness.actions.openPick(pick, session: row.id.uuidString, window: nil, follow: false).ok)
+        let request = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
+        guard case .pickRequest(let shown)? = request else { Issue.record("no pick request"); return }
+        try viewer.send(.pickResolve(PresentationPickAnswer(id: shown.id, owner: shown.owner, item: "a")))
+
+        #expect(await eventually { harness.actions.pickResult(pick.id, window: nil).result?.pick?.result == .picked })
+    }
+
+    @Test func aPageRowsPresenterLeavingKeepsItsViewAndHandsTheAskToTheNext() async throws {
+        let row = try await pageRow()
+        let view = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 1 })
+        let first = try await pagePresenter(for: row)
+        let ask = Self.guiAsk()
+        #expect(openAsk(ask, on: row).ok)
+        #expect(await offPool { first.first { if case .askRequest = $0 { true } else { false } } } != nil)
+
+        await drop(first, from: row)
+
+        #expect(await eventually { row.askPending?.id == ask.id && !row.askPresentedRemotely })
+        #expect(streams.pageAttachments.streams.count == 1)
+        let next = try await pagePresenter(for: row)
+        defer { next.disconnect() }
+        let offered = await offPool { next.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = offered else { Issue.record("no ask offer"); return }
+        #expect(shown.id == ask.id)
+        let renamed = try await bridge(view, #"{"cmd":"session.rename","args":{"name":"still served"}}"#)
+        guard case .reply(1, let reply)? = renamed else { Issue.record("no bridge reply: \(String(describing: renamed))"); return }
+        #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(reply.utf8)).ok)
     }
 
     private func eventually(_ condition: () -> Bool) async -> Bool {

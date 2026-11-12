@@ -444,10 +444,13 @@ public struct ControlDispatcher {
             return await dispatchSessionOverlaySearch(request)
         case .sessionOverlayChanges:
             return await dispatchSessionOverlayChanges(request)
+        case .sessionOverlayFollow:
+            return await dispatchSessionOverlayFollow(request)
+        case .sessionOverlayWrap:
+            return await dispatchSessionOverlayWrap(request)
         case .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload,
              .sessionOverlayNavigate, .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy,
-             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
-             .sessionOverlayWrap:
+             .sessionOverlayText, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             return dispatchSessionOverlayCommand(request)
         case .sessionBackground:
             return dispatchSessionBackground(request)

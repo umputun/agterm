@@ -176,11 +176,11 @@ public protocol ControlActions {
     /// setSessionOverlayFollow sets whether the log page in the addressed slot follows its file; `result.text` names
     /// the state left.
     func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
-                                 mode: ControlToggleMode) -> ControlResponse
+                                 mode: ControlToggleMode) async -> ControlResponse
     /// setSessionOverlayWrap sets whether the text page in the addressed slot wraps long lines; `result.text` names
     /// the state left.
     func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
-                               mode: ControlToggleMode) -> ControlResponse
+                               mode: ControlToggleMode) async -> ControlResponse
     /// Answers the page in the addressed slot with `value` and closes it; `session.overlay.result --page` reads it.
     func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse
     /// The selector outcome of page `pageID`, readable after the page and its session are gone.

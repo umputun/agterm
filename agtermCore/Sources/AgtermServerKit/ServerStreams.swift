@@ -31,6 +31,11 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     /// catalogWorkspaces projects the store's workspaces into the catalog.
     var catalogWorkspaces: @MainActor () -> [CatalogWorkspace] = { [] }
     var catalogVersions = CatalogVersions(server: "", protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
+    /// pageAttachments are the server's page rows handed to the Macs that attach them.
+    lazy var pageAttachments = PageAttachmentBook(clock: { [unowned self] in now() }, servedPage: { [unowned self] id, page in
+        guard let row = store.session(withID: id), row.content == .page, row.htmlOverlay?.id == page else { return nil }
+        return row.htmlOverlay
+    })
     /// catalogHub numbers the catalog in this run's epoch, the same one respawn counts carry.
     lazy var catalogHub = CatalogHub(epoch: originEpoch, staleTimeout: 30) { [unowned self] in
         CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces())
@@ -113,7 +118,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
-        case .pageState, .pageClosed, .pageRejected:
+        case .pageState, .pageResult, .pageClosed, .pageRejected:
             store.receiveRemotePageFrame(body, forSession: sessionID)
         case .linkClick(let click):
             receiveLinkClick(click, forSession: sessionID)
@@ -132,7 +137,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {
-        store.claimRemotePage(token: token).map { ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks)) }
+        store.claimRemotePage(token: token).map {
+            ($0.overlay.id, PageServeClaim(source: $0.overlay.source, links: $0.overlay.markdownLinks, log: $0.overlay.textLog))
+        }
     }
 
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {
@@ -146,6 +153,20 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     func pageChannelLost(_ page: UUID) { store.withdrawRemotePage(page) }
+
+    func claimPageAttachment(_ token: String) -> ControlResponse? { pageAttachments.claim(token) }
+
+    func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool {
+        pageAttachments.adopt(descriptor: descriptor, claim: claim, host: self)
+    }
+
+    func dropPageAttachmentClaim(_ claim: UUID) -> Bool { pageAttachments.dropClaim(claim) }
+
+    func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) { pageAttachments.closed(attachment) }
+
+    func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {
+        pageAttachments.serves(attachment, page: page) ? (attachment.session, nil, catalogID) : nil
+    }
 
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool { store.remotePageClaimToken(page) == token }
 
@@ -221,6 +242,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         shutdownCatalogStreams()
         for stream in overlayJobStreams.values { stream.shutdown() }
         for stream in pageServeStreams.values { stream.shutdown() }
+        pageAttachments.shutdown()
     }
 }
 
@@ -238,13 +260,15 @@ extension ServerStreams {
         let origin = LinkPolicy.ClickOrigin.pane(id)
         let candidates = LinkPolicy.locations(for: click.raw, origin: origin, cwd: target.cwd)
         let check = checkPage
+        // the generation check after the probe keeps this the presenter the page goes to
+        let liveText = presentationHub.presenterSupports(PresentationHub.pageTextKind, session: id)
         Task { @MainActor [weak self] in
             let (route, present, opening) = await Task.detached(priority: .userInitiated) {
                 let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
                 let route = LinkPolicy.resolvedRoute(for: click.raw, candidates: candidates, mode: click.mode, origin: origin,
                                                      exists: exists)
                 let present = route.localFile.map { exists($0.path(percentEncoded: false)) } ?? false
-                let opening = present ? Self.clickedPage(route).map { ($0.source, check($0.source, $0.options)) } : nil
+                let opening = present ? Self.clickedPage(route, logs: liveText).map { ($0.source, check($0.source, $0.options)) } : nil
                 return (route, present, opening)
             }.value
             guard let self, presentationHub.presenterGeneration(session: id) == generation else { return }
@@ -265,9 +289,12 @@ extension ServerStreams {
     }
 
     /// clickedPage is the page a click's route opens, with the options a Mac origin gives a clicked page; nil for a
-    /// route that opens none.
-    nonisolated static func clickedPage(_ route: LinkPolicy.Route) -> (source: HtmlSource, options: ControlSessionOverlayOpenOptions)? {
+    /// route that opens none. A log opens as a log page only when `logs` says the presenter can follow it.
+    nonisolated static func clickedPage(_ route: LinkPolicy.Route,
+                                        logs: Bool) -> (source: HtmlSource, options: ControlSessionOverlayOpenOptions)? {
         let source: HtmlSource, sizePercent: Int?
+        var textLog: TextLog?
+        if case .text(let link) = route, logs, link.opensAsLog { textLog = TextLog(tail: TextPage.defaultTail, follow: true) }
         switch route {
         case .image(let url, _): (source, sizePercent) = (.image(path: url.path(percentEncoded: false)), nil)
         case .markdown(let url, _, let percent): (source, sizePercent) = (.markdown(path: url.path(percentEncoded: false)), percent)
@@ -278,7 +305,7 @@ extension ServerStreams {
         let navigation = if case .markdown = source { true } else { false }
         return (source, ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                          backgroundColor: nil, page: source, navigation: navigation,
-                                                         clicked: true, forwarded: true))
+                                                         clicked: true, textLog: textLog, forwarded: true))
     }
 
     private func refuseLinkClick(_ reason: RemoteLinkRefusal, session id: UUID, generation: Int) {

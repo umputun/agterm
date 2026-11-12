@@ -121,7 +121,7 @@ final class RemoteCatalogClientTests {
         let probe = ran.first?.joined(separator: " ") ?? ""
         #expect(probe.contains("version") && probe.contains("--json"))
         #expect(transport.argv.first?.last?.contains("agtermctl catalog subscribe") == true)
-        #expect(transport.links.first?.sent == [.hello(CatalogHello(version: CatalogCodec.version))])
+        #expect(transport.links.first?.sent == [.hello(CatalogHello(version: CatalogCodec.version, pageRows: true))])
         #expect(mirror.state == .connecting)
     }
 
@@ -163,7 +163,7 @@ final class RemoteCatalogClientTests {
 
         #expect(first.stopped)
         #expect(transport.links.count == 2)
-        #expect(transport.links.last?.sent == [.hello(CatalogHello(version: CatalogCodec.version))])
+        #expect(transport.links.last?.sent == [.hello(CatalogHello(version: CatalogCodec.version, pageRows: true))])
     }
 
     @Test func aLostStreamShowsDisconnectedAndReconnectsAfterTheBackoff() async throws {

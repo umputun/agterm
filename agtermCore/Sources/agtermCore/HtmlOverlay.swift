@@ -122,7 +122,7 @@ struct HtmlOrigin: Equatable {
 }
 
 /// TextLog is a text page's request to show only a log's last `tail` lines, following its end when `follow` is set.
-public struct TextLog: Equatable, Sendable {
+public struct TextLog: Codable, Equatable, Sendable {
     public let tail: Int
     public let follow: Bool
 
@@ -134,7 +134,7 @@ public struct TextLog: Equatable, Sendable {
 
 /// TextLogReport is what the app last read for a log page: the lines shown, a clipped first line, a file that is
 /// missing (`waiting`) or turned binary (`unreadable`, the last good text still shown).
-public struct TextLogReport: Equatable, Sendable {
+public struct TextLogReport: Codable, Equatable, Sendable {
     public var lines = 0
     public var clipped = false
     public var waiting = false
@@ -161,7 +161,7 @@ public struct TextLogState: Equatable, Sendable {
 
 /// TextChanges is a diff page's count of changes, a change being one run of removed and added lines, and the one it
 /// last stepped to, from 1 and 0 before any step.
-public struct TextChanges: Equatable, Sendable {
+public struct TextChanges: Codable, Equatable, Sendable {
     public let count: Int
     public let current: Int
 
@@ -174,6 +174,9 @@ public struct TextChanges: Equatable, Sendable {
 /// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
 /// with no match.
 public struct TextSearch: Equatable, Sendable {
+    /// maxQuery bounds a query in characters; `setTextSearch` cuts a longer one, so the page searches what is stored.
+    public static let maxQuery = 16384
+
     public let query: String
     public var matches: Int
     public var current: Int
@@ -245,7 +248,7 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var searchRevision = 0
     /// textChanges is a diff page's last report on its changes, nil until it reports and on any other page.
     public internal(set) var textChanges: TextChanges?
-    /// textWrap is whether a text page wraps long lines; a replica keeps its own in the page.
+    /// textWrap is whether a text page wraps long lines.
     public internal(set) var textWrap = false
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
@@ -265,6 +268,11 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
+    public init(pageRow source: HtmlSource, options: ControlSessionOverlayOpenOptions) {
+        self.init(source: source, navigation: options.navigation, javascript: options.javascript, chromeless: options.chromeless,
+                  persistent: options.persistent, browse: options.browse)
+    }
+
     /// init drops navigation from a markdown page without `markdownLinks`, so its strip never offers Back and
     /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
@@ -283,6 +291,21 @@ public struct HtmlOverlay: Equatable, Sendable {
         self.chromeless = chromeless
         self.persistent = persistent
         self.browse = browse
+    }
+
+    /// mirror takes the text state the presenting Mac reported for this origin record of a page it shows; true when
+    /// following, the query or the wrap changed.
+    mutating func mirror(_ text: PresentationTextState) -> Bool {
+        let before = (logState?.following, textSearch?.query, textWrap)
+        if let following = text.following { logState?.following = following }
+        if let log = text.log { logState?.report = log }
+        searchRevision = text.revision
+        textSearch = text.query.flatMap {
+            $0.isEmpty ? nil : TextSearch(query: $0, matches: text.matches ?? 0, current: text.current ?? 0)
+        }
+        textWrap = text.wrap
+        textChanges = text.changes
+        return before != (logState?.following, textSearch?.query, textWrap)
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file

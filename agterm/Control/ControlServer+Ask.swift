@@ -180,7 +180,7 @@ extension ControlServer {
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
-        case .pageState, .pageClosed, .pageRejected:
+        case .pageState, .pageResult, .pageClosed, .pageRejected:
             receiveRemotePageFrame(body, in: store, forSession: sessionID)
         case .linkClick(let click):
             receiveForwardedClick(click, forSession: sessionID)

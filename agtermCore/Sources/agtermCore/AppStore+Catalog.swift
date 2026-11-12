@@ -72,7 +72,7 @@ extension AppStore {
         let session = Session(id: fields.id, initialCwd: TerminalText.sanitized(fields.cwd),
                               customName: TerminalText.sanitized(fields.name).trimmedOrNil,
                               paneIdentity: entry.panes.first?.identity ?? fields.primary, remoteHost: host,
-                              remoteSessionID: fields.id.uuidString)
+                              remoteSessionID: fields.id.uuidString, content: fields.page == nil ? .terminal : .page)
         session.parentID = fields.parent
         if fields.lifecycle == .ended {
             session.ended = true
@@ -127,9 +127,12 @@ extension AppStore {
             return []
         }
         session.ended = false
-        guard let primary = entry.panes.first else { return [] }
-        var needsAttach: [UUID] = []
         let previous = session.remotePresentation?.binding
+        guard let primary = entry.panes.first else {
+            refreshCatalogBinding(session, entry: entry, host: host)
+            return []
+        }
+        var needsAttach: [UUID] = []
         if session.paneIdentity != primary.identity {
             if session.splitPaneIdentity == primary.identity {
                 if entry.panes.count > 1, entry.panes[1].identity == session.paneIdentity {
@@ -171,12 +174,15 @@ extension AppStore {
                 needsAttach.append(pane.identity)
             }
         }
-        if let state = session.remotePresentation {
-            var updated = state
-            updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
-            if updated != state { session.remotePresentation = updated }
-        }
+        refreshCatalogBinding(session, entry: entry, host: host)
         return Array(Set(needsAttach))
+    }
+
+    private func refreshCatalogBinding(_ session: Session, entry: CatalogSession, host: String) {
+        guard let state = session.remotePresentation else { return }
+        var updated = state
+        updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
+        if updated != state { session.remotePresentation = updated }
     }
 
     /// applyCatalogScratch keeps a row's scratch on the server's: a shown one attaches its daemon, a hidden one keeps
@@ -237,9 +243,8 @@ extension AppStore {
     /// catalogBinding ties a row to its catalog session; local and catalog identities are the same.
     static func catalogBinding(_ entry: CatalogSession, host: String, protocolVersion: Int) -> RemoteBinding {
         let daemons = Dictionary(entry.panes.map { ($0.identity, $0.daemon) }) { first, _ in first }
-        let origin = (entry.panes.first ?? entry.fields.scratch?.pane).map {
-            RemoteBinding.Origin(host: host, endpoint: $0.endpoint, sessionName: entry.id.uuidString)
-        }
+        let endpoint = (entry.panes.first ?? entry.fields.scratch?.pane)?.endpoint ?? entry.fields.page?.endpoint
+        let origin = endpoint.map { RemoteBinding.Origin(host: host, endpoint: $0, sessionName: entry.id.uuidString) }
         return RemoteBinding(remoteSessionID: entry.id.uuidString, daemonsByLocalPane: daemons,
                              presentationVersion: protocolVersion, origin: origin, catalogOwned: true, originHeadless: true)
     }

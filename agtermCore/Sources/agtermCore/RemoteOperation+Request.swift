@@ -10,7 +10,7 @@ public enum RemoteOperationParse: Equatable, Sendable {
 extension RemoteOperation {
     /// structuralCommands are the commands a remote window sends to its server instead of running on this Mac.
     public static let structuralCommands: Set<Command> = [
-        .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose,
+        .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose,
         .sessionMove, .sessionScratch, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
     ]
 
@@ -48,6 +48,18 @@ extension RemoteOperation {
                 return refuse("a companion takes no workspace or placement: it lands under its parent")
             }
             return session(request.target, in: store) { .operation(.newCompanion(parent: $0, shell: shell), select: select) }
+        case .sessionCompanionPage, .sessionPage:
+            let companion = request.cmd == .sessionCompanionPage
+            let row = companion ? "page companion" : "page session"
+            let needsPage = companion ? OverlayHtmlError.companionNeedsPage : OverlayHtmlError.pageSessionNeedsPage
+            switch ControlDispatcher.pageRowOptions(args, row: row, needsPage: needsPage) {
+            case .rejected(let response): return .refused(response)
+            case .options(let options):
+                guard let page = RemotePageOptions(options) else { return refuse(needsPage) }
+                return session(request.target, in: store) {
+                    .operation(.newPage(anchor: $0, companion: companion, page: page), select: options.follow)
+                }
+            }
         case .sessionSplit:
             if let axis = args.axis, SplitAxis(rawValue: axis) == nil { return refuse("invalid split axis: \(axis) (vertical|horizontal)") }
             guard let mode = ControlToggleMode.parse(args.mode) else { return refuse("session.split mode must be on, off or toggle") }

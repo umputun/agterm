@@ -337,12 +337,19 @@ public struct PresentationPage: Codable, Equatable, Sendable {
     public var follow: Bool
     /// markdownLinks is the link grant the origin froze at open; nil, and left out of the frame, for any other page.
     public var markdownLinks: MarkdownLinkGrant?
+    /// textLog makes a text page a log page; sent only to a presenter listing `page.text`, which an older one ignores.
+    public var textLog: TextLog?
+    /// textSeed is the text state a re-offered page resumes with, applied before its first render and report.
+    public var textSeed: PresentationTextState?
 
     public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
                 javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
                 pane: PresentationPane?, sizePercent: Int?, points: OverlayPointSize = OverlayPointSize(),
-                follow: Bool, markdownLinks: MarkdownLinkGrant? = nil) {
+                follow: Bool, markdownLinks: MarkdownLinkGrant? = nil, textLog: TextLog? = nil,
+                textSeed: PresentationTextState? = nil) {
         self.markdownLinks = markdownLinks
+        self.textLog = textLog
+        self.textSeed = textSeed
         self.page = page
         self.token = token
         self.source = source
@@ -384,9 +391,24 @@ public struct PresentationPageChange: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationPageAction is what the origin asks of a handed-over page.
+/// PresentationPageAction is what the origin asks of a handed-over page. The text actions go only to a presenter
+/// listing `page.text`: an older one cannot decode them and would end the stream.
 public enum PresentationPageAction: String, Codable, Sendable {
     case hide, show, reloadOriginal, reloadCurrent, back, forward, browser, resize
+    case follow, search, wrap, changes
+
+    /// answersWithResult says the presenter answers this action with a `pageResult` rather than only `appliedSeq`.
+    public var answersWithResult: Bool {
+        switch self {
+        case .follow, .search, .wrap, .changes: return true
+        case .hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize: return false
+        }
+    }
+}
+
+/// PresentationTextStep is a one-shot move on a text page: a search step or close, or a diff change step.
+public enum PresentationTextStep: String, Codable, Sendable {
+    case next, prev, close
 }
 
 /// PresentationPageCommand is one origin request for a handed-over page. `seq` grows per page, and the
@@ -401,9 +423,15 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
     /// merge asks a resize to keep the axes it does not name, for a picture the presenter sized itself; nil, and
     /// left out of the frame, for every other command, which replaces the size whole.
     public var merge: Bool?
+    /// toggle is a follow or wrap request's mode.
+    public var toggle: ControlToggleMode?
+    /// query is a search request's new query; a search carries either it or a step.
+    public var query: String?
+    public var step: PresentationTextStep?
 
     public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil,
-                points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil) {
+                points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil, toggle: ControlToggleMode? = nil,
+                query: String? = nil, step: PresentationTextStep? = nil) {
         self.page = page
         self.seq = seq
         self.action = action
@@ -411,6 +439,9 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
         width = points.width
         height = points.height
         self.merge = merge
+        self.toggle = toggle
+        self.query = query
+        self.step = step
     }
 
     public var points: OverlayPointSize {
@@ -439,9 +470,11 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
     public var canGoForward: Bool
     public var hidden: Bool
     public var appliedSeq: Int
+    /// text is a text page's live state; an origin predating `page.text` ignores the key.
+    public var text: PresentationTextState?
 
     public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,
-                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int) {
+                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int, text: PresentationTextState? = nil) {
         self.page = page
         self.title = title.map { String($0.prefix(Self.maxTitle)) }
         self.address = address.map { String($0.prefix(Self.maxAddress)) }
@@ -451,6 +484,57 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
         self.canGoForward = canGoForward
         self.hidden = hidden
         self.appliedSeq = appliedSeq
+        self.text = text
+    }
+}
+
+/// PresentationTextState is a text page's live state on the presenter: a log page's following and last read, the
+/// search query under the presenter's revision with its counts, wrap, and a diff page's changes.
+public struct PresentationTextState: Codable, Equatable, Sendable {
+    public var following: Bool?
+    public var log: TextLogReport?
+    public var query: String?
+    public var revision: Int
+    public var matches: Int?
+    public var current: Int?
+    public var wrap: Bool
+    public var changes: TextChanges?
+
+    public init(following: Bool? = nil, log: TextLogReport? = nil, query: String? = nil, revision: Int = 0,
+                matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil) {
+        self.following = following
+        self.log = log
+        self.query = query.map { String($0.prefix(TextSearch.maxQuery)) }
+        self.revision = revision
+        self.matches = matches
+        self.current = current
+        self.wrap = wrap
+        self.changes = changes
+    }
+}
+
+/// PresentationPageResult answers one text action by its `seq`, with the page's text state after it, so the origin
+/// replies with state its tree already shows.
+public struct PresentationPageResult: Codable, Equatable, Sendable {
+    public static let maxText = 1024
+    /// deadline is how long the origin waits for a result before answering the caller without one.
+    public static let deadline = Duration.seconds(5)
+
+    public var page: String
+    public var seq: Int
+    public var ok: Bool
+    public var text: String?
+    public var error: String?
+    public var state: PresentationTextState?
+
+    public init(page: String, seq: Int, ok: Bool, text: String? = nil, error: String? = nil,
+                state: PresentationTextState? = nil) {
+        self.page = page
+        self.seq = seq
+        self.ok = ok
+        self.text = text.map { String($0.prefix(Self.maxText)) }
+        self.error = error.map { String($0.prefix(Self.maxText)) }
+        self.state = state
     }
 }
 
@@ -657,6 +741,8 @@ public struct PresentationFrame: Equatable, Sendable {
         case pageClosed(PresentationPageChange)
         case pageCommand(PresentationPageCommand)
         case pageState(PresentationPageState)
+        /// pageResult: the presenter's answer to one text action, by its sequence number.
+        case pageResult(PresentationPageResult)
         /// The origin respawned a pane's shell under the same daemon name; carries that pane's new count alone.
         case respawn(PresentationRespawns)
         /// linkClick: the presenter forwards a path clicked in one of the session's panes for the origin to open.
@@ -705,6 +791,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .pageClosed: return "page.closed"
             case .pageCommand: return "page.command"
             case .pageState: return "page.state"
+            case .pageResult: return "page.result"
             case .respawn: return "pane.respawn"
             case .linkClick: return "link.click"
             case .linkRefused: return "link.refused"
@@ -772,6 +859,7 @@ extension PresentationFrame: Codable {
         case "page.closed": body = .pageClosed(try container.decode(PresentationPageChange.self, forKey: .page))
         case "page.command": body = .pageCommand(try container.decode(PresentationPageCommand.self, forKey: .page))
         case "page.state": body = .pageState(try container.decode(PresentationPageState.self, forKey: .page))
+        case "page.result": body = .pageResult(try container.decode(PresentationPageResult.self, forKey: .page))
         case "pane.respawn": body = .respawn(try container.decode(PresentationRespawns.self, forKey: .respawn))
         case "link.click": body = .linkClick(try container.decode(PresentationLinkClick.self, forKey: .link))
         case "link.refused": body = .linkRefused(try container.decode(PresentationLinkRefusal.self, forKey: .link))
@@ -811,6 +899,7 @@ extension PresentationFrame: Codable {
             try container.encode(change, forKey: .page)
         case .pageCommand(let command): try container.encode(command, forKey: .page)
         case .pageState(let state): try container.encode(state, forKey: .page)
+        case .pageResult(let result): try container.encode(result, forKey: .page)
         case .respawn(let respawns): try container.encode(respawns, forKey: .respawn)
         case .linkClick(let click): try container.encode(click, forKey: .link)
         case .linkRefused(let refusal): try container.encode(refusal, forKey: .link)

@@ -710,6 +710,31 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(fifo, "file cannot be read")
     }
 
+    func testAMacLogPageServesItsTailOverItsChannel() throws {
+        let fix = try fixture()
+        let log = docs.appendingPathComponent("app.log")
+        try Data("one\ntwo\n".utf8).write(to: log)
+        let page = HtmlSource.text(path: log.path, line: nil), tail = TextLog(tail: 50, follow: true)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       page: page, textLog: tail)
+        XCTAssertEqual(fix.store.openRemotePage(fix.session.id, overlay: HtmlOverlay(source: page, textLog: tail), options: options),
+                       .opened)
+        let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
+
+        let frames = offMain { () -> [PageServeFrame] in
+            client.send(.logTail(id: 1, stamp: nil))
+            var frames: [PageServeFrame] = []
+            while let frame = client.frame() {
+                frames.append(frame)
+                if case .end(1) = frame { break }
+            }
+            return frames
+        }
+
+        let local = try XCTUnwrap(try BoundedFile.readTail(path: log.path, maxBytes: TextPage.maxTailBytes).get())
+        XCTAssertEqual(frames, [.logHead(id: 1, stamp: local.stamp, offset: 0), .chunk(id: 1, data: local.data), .end(id: 1)])
+    }
+
     func testAContentPageHasNoBridge() throws {
         let fix = try fixture()
         let readme = docs.appendingPathComponent("README.md")

@@ -220,6 +220,46 @@ final class ControlServerForwardedClickTests: XCTestCase {
         XCTAssertEqual(session.remoteOverlays.slot(nil)?.job, presenter.requests.last?.page)
     }
 
+    func testAClickedLogReachesAPresenterWithLiveTextPagesAsALogPage() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, liveText: true)
+
+        click(try write("app.log", "one\n"), in: session, pane: session.paneIdentity)
+        try await waitUntil { presenter.requests.count == 1 }
+
+        XCTAssertEqual(presenter.requests.first?.textLog, TextLog(tail: TextPage.defaultTail, follow: true))
+        XCTAssertEqual(session.remoteOverlays.slot(nil)?.page?.overlay.logState?.following, true)
+    }
+
+    func testAClickedLogReachesAnOlderPresenterAsAPlainTextPage() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session)
+        let file = try write("app.log", "one\n")
+
+        click(file, in: session, pane: session.paneIdentity)
+        try await waitUntil { presenter.requests.count == 1 }
+
+        XCTAssertEqual(presenter.requests.first?.source, .text(path: file, line: nil))
+        XCTAssertNil(presenter.requests.first?.textLog)
+        XCTAssertTrue(presenter.refusals.isEmpty)
+    }
+
+    func testAForwardedClickReplacesAHiddenClickedLogPage() async throws {
+        let (_, session) = try addSession()
+        let presenter = try present(session, liveText: true)
+        click(try write("a.log", "a\n"), in: session, pane: session.paneIdentity)
+        try await waitUntil { presenter.requests.count == 1 }
+        let first = try XCTUnwrap(presenter.requests.first)
+        hide(first.page, in: session)
+
+        click(try write("b.log", "b\n"), in: session, pane: session.paneIdentity)
+        try await waitUntil { presenter.requests.count == 2 }
+
+        XCTAssertTrue(presenter.bodies.contains(.pageClose(PresentationPageChange(page: first.page))))
+        XCTAssertEqual(session.remoteOverlays.slot(nil)?.job, presenter.requests.last?.page)
+        XCTAssertNotNil(presenter.requests.last?.textLog)
+    }
+
     // regression: a refused forwarded click released the hidden clicked page this Mac shows itself
     func testARefusedForwardedClickLeavesAHiddenPageShownHere() async throws {
         let (store, session) = try addSession()
@@ -266,12 +306,13 @@ final class ControlServerForwardedClickTests: XCTestCase {
 
     private var subscriber: PresentationHub.SubscriberID?
 
-    private func present(_ session: Session) throws -> Presenter {
+    private func present(_ session: Session, liveText: Bool = false) throws -> Presenter {
         for pane in [session.paneIdentity] + [session.splitPaneIdentity].compactMap({ $0 }) { lead(.follower, pane: pane) }
         server.attachPresentationHub()
         let sink = Presenter()
         let kinds = PresentationHub.pageKinds + [PresentationHub.pageContentKind, PresentationHub.pageDocumentKind,
                                                  PresentationHub.linkClickKind, PresentationHub.pageLinksKind]
+            + (liveText ? [PresentationHub.pageTextKind] : [])
         let id = try server.presentationHub.subscribe(
             session: session.id, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter), sink: sink
         ) { PresentationSnapshot(status: nil, hud: nil) }

@@ -128,24 +128,6 @@ extension ControlDispatcher {
             }
         case .sessionOverlayText:
             return dispatchSessionOverlayText(request)
-        case .sessionOverlayFollow:
-            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
-                return ControlResponse(ok: false, error: "invalid overlay follow mode: \(request.args?.mode ?? "toggle")")
-            }
-            switch parseOverlayPane(request.args?.pane) {
-            case .rejected(let response): return response
-            case .pane(let pane):
-                return actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
-            }
-        case .sessionOverlayWrap:
-            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
-                return ControlResponse(ok: false, error: "invalid overlay wrap mode: \(request.args?.mode ?? "toggle")")
-            }
-            switch parseOverlayPane(request.args?.pane) {
-            case .rejected(let response): return response
-            case .pane(let pane):
-                return actions.setSessionOverlayWrap(request.target, window: request.args?.window, pane: pane, mode: mode)
-            }
         case .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle:
             let mode: OverlayVisibilityMode = request.cmd == .sessionOverlayHide ? .hide
                 : (request.cmd == .sessionOverlayShow ? .show : .toggle)
@@ -332,6 +314,30 @@ extension ControlDispatcher {
         case .rejected(let response): return response
         case .pane(let pane):
             return await actions.searchSessionOverlay(request.target, window: request.args?.window, pane: pane, request: search)
+        }
+    }
+
+    /// dispatchSessionOverlayFollow takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayFollow(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay follow mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayFollow(request.target, window: request.args?.window, pane: pane, mode: mode)
+        }
+    }
+
+    /// dispatchSessionOverlayWrap takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayWrap(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay wrap mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayWrap(request.target, window: request.args?.window, pane: pane, mode: mode)
         }
     }
 

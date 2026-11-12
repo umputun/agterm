@@ -860,7 +860,9 @@ agtermctl session overlay follow off --target "$AGTERM_SESSION_ID"   # pause; on
 (1 to 100,000) and alone shows them once without following. It is not `--follow`, which selects the session. A
 ⌘-click on a `.log` or `.out` path opens the same following page; `app.log:120` still opens the plain page at that
 line. The user pauses by scrolling up and resumes at the bottom or with Resume. Read back `text.tail`, `following`,
-`lines`, `clipped`, `waiting` (file missing) and `unreadable`. A log page is refused on a session another Mac presents.
+`lines`, `clipped`, `waiting` (file missing) and `unreadable`. On a session another Mac presents, the log page and
+`follow`, `search`, `wrap` and `changes` work on that Mac when its agterm shows live text pages; an older one refuses
+them.
 
 Search a text or log page, not the terminal under it:
 
@@ -881,8 +883,7 @@ agtermctl session overlay wrap on --target "$AGTERM_SESSION_ID"   # off unwraps,
 ```
 
 The user wraps with the bar's Wrap button or `w`. A page opens unwrapped and keeps its choice until it closes. Read
-back `text.wrap`, true while wrapped and omitted otherwise. On a page shown for another Mac the toggle stays in the
-page: a redraw drops it, `text.wrap` omits it, and the command answers `no text page`.
+back `text.wrap`, true while wrapped and omitted otherwise.
 
 To show the user changes, write each changed file's diff to its own `.diff` file and list them as links; a ⌘-click
 opens it as a read-only text page:
@@ -1076,8 +1077,10 @@ agterm-server runs sessions on a Linux host; `agtermctl window remote open HOST`
 mirroring them over ssh, and every shell keeps running on the host across disconnects. Inside such a
 session, `agtermctl` on the host talks to agterm-server, which serves the session, workspace, overlay,
 HUD, ask and pick commands and refuses the ones that change a Mac window (`window list` still answers). reference.md "remote server" lists the commands,
-the read-back and what the server refuses. `agtermctl server install HOST`, run on the Mac, installs or upgrades
-the server release matching that app's own bundle (reference.md "server").
+the read-back and what the server refuses. `session overlay open --page|--companion` there makes a page row
+from a file on the host or a URL, which a Mac's remote window shows as a page row.
+`agtermctl server install HOST`, run on the Mac, installs or upgrades the server release matching that app's own
+bundle (reference.md "server").
 
 ## Troubleshooting and reporting
 

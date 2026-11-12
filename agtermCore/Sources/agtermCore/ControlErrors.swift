@@ -9,6 +9,8 @@ public enum OverlayResultError {
     public static let shownElsewhere = "overlay is shown on another Mac"
     /// The stream the overlay was handed to is gone, so nothing can reach the surface to resize it.
     public static let viewerGone = "the viewer showing this overlay is gone"
+    /// presenterSilent answers a text page action the presenting Mac sent no result for within the deadline.
+    public static let presenterSilent = "presenter did not answer"
     /// The command and its environment exceed what the helper reads in one frame.
     public static let tooLarge = "overlay command too large to show on another Mac"
 }
@@ -81,12 +83,13 @@ public enum OverlayHtmlError {
     public static let lineNotPositive = "session.overlay.open: --line must be 1 or more"
     public static let tailWithoutText = "session.overlay.open: --tail and --follow-file require --text"
     public static let tailWithLine = "session.overlay.open: --tail and --follow-file cannot be combined with --line"
-    public static let logRemote = "session.overlay.open: a log page is not shown on another Mac"
+    public static let logRemote = "session.overlay.open: the Mac presenting this session cannot show a log page"
     public static let tailRange = "session.overlay.open: --tail must be 1...\(TextPage.maxTail)"
     public static let searchRequest = "session.overlay.search needs text, --next, --prev or --close"
     public static let searchTextWithStep = "session.overlay.search: text cannot be combined with --next, --prev or --close"
     public static let companionNeedsPage = "a page companion needs --html or --url"
     public static let pageSessionNeedsPage = "a page session needs --html or --url"
+    public static let serverLoopbackRow = "a page on agterm-server's loopback cannot be a page session: no Mac would reach it"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"

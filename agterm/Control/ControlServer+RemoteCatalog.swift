@@ -160,7 +160,11 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
                                                "printf '%s\\n' 'agterm: \(host) listed a scratch agterm cannot address'; exit 1"])
     }
 
-    func catalogRowAdded(_ session: Session) { server?.startRemotePresentation(for: session) }
+    /// catalogRowAdded starts a row's presentation stream, and a page row's page beside it.
+    func catalogRowAdded(_ session: Session) {
+        if session.content == .page { server?.attachCatalogPage(session.id) }
+        server?.startRemotePresentation(for: session)
+    }
 
     func catalogRowRemoved(_ sessionID: UUID) { server?.stopRemotePresentation(sessionID) }
 

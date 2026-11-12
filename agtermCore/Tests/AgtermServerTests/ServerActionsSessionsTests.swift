@@ -230,4 +230,94 @@ struct ServerActionsSessionsTests {
         #expect(harness.actions.renameSession(target, window: nil, name: "x")
             == ControlResponse(ok: false, error: ControlResolve.notFoundMessage(noun: "session", target: target)))
     }
+
+    private func pageRow(_ cmd: Command, target: String, url: String = "https://example.com/") async -> ControlResponse {
+        var args = ControlArgs()
+        args.url = url
+        return await harness.actions.serve(ControlRequest(cmd: cmd, target: target, args: args))
+    }
+
+    @Test func pageSessionsAndPageCompanionsAreRowsWithNoDaemon() async throws {
+        let anchor = try harness.session(newSession())
+        let launches = harness.runner.launches.count
+
+        let root = await pageRow(.sessionPage, target: anchor.id.uuidString)
+        let companion = await pageRow(.sessionCompanionPage, target: anchor.id.uuidString)
+
+        let rootRow = try harness.session(root)
+        let companionRow = try harness.session(companion)
+        #expect(root.result?.pageID == rootRow.htmlOverlay?.id.uuidString)
+        #expect(rootRow.content == .page && rootRow.parentID == nil)
+        #expect(companionRow.content == .page && companionRow.parentID == anchor.id)
+        #expect(companion.result?.parent == anchor.id.uuidString)
+        #expect(rootRow.htmlOverlay?.source == .url(try #require(URL(string: "https://example.com/"))))
+        #expect(harness.runner.launches.count == launches)
+        let nodes = harness.store.controlTree().workspaces.flatMap(\.sessions)
+        #expect(nodes.filter { $0.content == "page" }.count == 2)
+    }
+
+    @Test func aLoopbackPageRowIsRefusedAtCreation() async throws {
+        let anchor = try harness.session(newSession())
+        let count = harness.store.workspaces.flatMap(\.sessions).count
+
+        let root = await pageRow(.sessionPage, target: anchor.id.uuidString, url: "http://localhost:3000/")
+        let companion = await pageRow(.sessionCompanionPage, target: anchor.id.uuidString, url: "http://127.0.0.1:8080/")
+
+        #expect(root == ControlResponse(ok: false, error: OverlayHtmlError.serverLoopbackRow))
+        #expect(companion == ControlResponse(ok: false, error: OverlayHtmlError.serverLoopbackRow))
+        #expect(harness.store.workspaces.flatMap(\.sessions).count == count)
+    }
+
+    @Test func terminalCommandsOnAPageRowAreRefusedAGuiAskIsTakenAndTextCommandsFindNoTextPage() async throws {
+        let anchor = try harness.session(newSession())
+        let row = try harness.session(await pageRow(.sessionPage, target: anchor.id.uuidString)).id.uuidString
+        var typed = ControlArgs()
+        typed.text = "ls\n"
+        var split = ControlArgs()
+        split.mode = "on"
+        var hud = ControlArgs()
+        hud.message = "hi"
+        var program = ControlArgs()
+        program.command = "true"
+        var ask = ControlArgs()
+        ask.title = "sure?"
+        ask.buttons = [ControlAskButton(id: "yes", label: "Yes")]
+        var gui = ask
+        gui.style = "gui"
+        let refused: [(Command, ControlArgs?)] = [(.sessionType, typed), (.sessionText, nil), (.sessionSplit, split),
+                                                  (.sessionScratch, split), (.sessionHudOpen, hud),
+                                                  (.sessionOverlayOpen, program), (.askOpen, ask)]
+
+        for (cmd, args) in refused {
+            let reply = await harness.actions.serve(ControlRequest(cmd: cmd, target: row, args: args))
+            #expect(reply == ControlResponse(ok: false, error: "\(cmd.rawValue): not available on a page session"))
+        }
+        let guiAsk = await harness.actions.serve(ControlRequest(cmd: .askOpen, target: row, args: gui))
+        #expect(guiAsk.ok, "\(guiAsk)")
+        let follow = await harness.actions.setSessionOverlayFollow(row, window: nil, pane: nil, mode: .on)
+        let wrap = await harness.actions.setSessionOverlayWrap(row, window: nil, pane: nil, mode: .on)
+        let search = await harness.actions.searchSessionOverlay(row, window: nil, pane: nil, request: .next)
+        let changes = await harness.actions.stepSessionOverlayChanges(row, window: nil, pane: nil, forward: true)
+        #expect([follow, wrap, search, changes].map(\.error) == [TextLogFollowFailure.notLog.message, TextWrapFailure.notText.message,
+                                                                 TextSearchFailure.notText.message, TextChangesFailure.notDiff.message])
+    }
+
+    @Test func aPageRowIsSavedAndReopenedOnRestart() async throws {
+        let anchor = try harness.session(newSession())
+        var args = ControlArgs()
+        args.url = "https://example.com/docs"
+        args.javascript = true
+        let row = try harness.session(await harness.actions.serve(ControlRequest(cmd: .sessionPage, target: anchor.id.uuidString,
+                                                                                  args: args)))
+        harness.store.save()
+
+        let restarted = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: harness.scratch.state)),
+                                 paneFinalizer: nil, headless: true, askRegistry: AskRegistry())
+        restarted.restore(from: try PersistenceStore(directory: URL(fileURLWithPath: harness.scratch.state)).loadChecked())
+
+        let restored = try #require(restarted.session(withID: row.id))
+        #expect(restored.content == .page)
+        #expect(restored.htmlOverlay?.source == row.htmlOverlay?.source)
+        #expect(restored.htmlOverlay?.javascript == true)
+    }
 }

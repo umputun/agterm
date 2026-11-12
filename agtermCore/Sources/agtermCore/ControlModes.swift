@@ -12,7 +12,7 @@ public struct ControlEventReadOptions: Equatable, Sendable {
 }
 
 /// Parsed binary control mode with the shared default/toggle semantics used by mode-bearing commands.
-public enum ControlToggleMode: Equatable, Sendable {
+public enum ControlToggleMode: String, Codable, Equatable, Sendable {
     case on
     case off
     case toggle

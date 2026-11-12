@@ -284,6 +284,25 @@ struct PresentationHubTests {
         #expect(presenterSink.bodies.first == .hello(hello))
     }
 
+    @Test func onlyThePresentersPageResultReachesTheHost() throws {
+        let hub = makeHub()
+        var received: [PresentationFrame.Body] = []
+        hub.onPresenterFrame = { _, body in received.append(body) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.pageTextKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let result = PresentationFrame.Body.pageResult(PresentationPageResult(page: "p1", seq: 1, ok: true, text: "following"))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: result), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: result), from: presenter)
+
+        #expect(received == [result])
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageTextKind))
+    }
+
     @Test(arguments: [true, false])
     func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
         let hub = makeHub()

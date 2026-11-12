@@ -38,7 +38,11 @@ extension ServerActions {
     /// openPage checks a file page's file here, where it lives, then hands the page to the presenting Mac, which
     /// fetches its content over a page channel.
     func openPage(_ page: HtmlSource, in session: Session, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
-        if case .text = page, options.textLog != nil { return ControlResponse(ok: false, error: OverlayHtmlError.logRemote) }
+        // with no Mac connected the log page waits for one; a connected one without live text pages would show it static
+        if options.textLog != nil, let hub = store.presentationHub, hub.hasPresenter(session: session.id),
+           !hub.presenterSupports(PresentationHub.pageTextKind, session: session.id) {
+            return ControlResponse(ok: false, error: OverlayHtmlError.logRemote)
+        }
         let checked: ControlSessionOverlayOpenOptions
         switch Self.checkedPage(page, options: options) {
         case .failure(let failure): return ControlResponse(ok: false, error: "session.overlay.open: \(failure.message)")
@@ -79,7 +83,8 @@ extension ServerActions {
             if case .failure(let failure) = MarkdownFile.check(path: path) { return .failure(PageCheckFailure(message: "\(failure)")) }
             return .success(options.navigation ? options.with(markdownLinks: MarkdownPage.linkGrant(for: path)) : options)
         case .text(let path, _):
-            if case .failure(let failure) = TextProbe.check(path: path) { return .failure(PageCheckFailure(message: "\(failure)")) }
+            let checked = options.textLog.map { TextProbe.checkLog(path: path, tail: $0.tail) } ?? TextProbe.check(path: path)
+            if case .failure(let failure) = checked { return .failure(PageCheckFailure(message: "\(failure)")) }
             return .success(options)
         case .document(let path):
             guard case .success(let data) = BoundedFile.read(path: path, maxBytes: DocumentPage.maxBytes), DocumentPage.page(data) != nil
@@ -128,6 +133,50 @@ extension ServerActions {
             }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
         }
+    }
+
+    /// setSessionOverlayFollow sets following on the log page the presenting Mac shows in the addressed slot.
+    public func setSessionOverlayFollow(_ target: String?, window: String?, pane: OverlayPane?,
+                                        mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .follow(mode))
+    }
+
+    /// setSessionOverlayWrap sets wrapping on the text page the presenting Mac shows in the addressed slot.
+    public func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
+                                      mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .wrap(mode))
+    }
+
+    /// searchSessionOverlay sets, steps or closes the search on the text page the presenting Mac shows.
+    public func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
+                                     request: TextSearchRequest) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .search(request))
+    }
+
+    /// stepSessionOverlayChanges steps the diff page the presenting Mac shows.
+    public func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
+                                          forward: Bool) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .changes(forward: forward))
+    }
+
+    // a server shows no page itself, so an action the presenting Mac cannot run gets the store's refusal for the slot
+    private func textPageAction(_ target: String?, window: String?, pane: OverlayPane?,
+                                _ action: TextPageAction) async -> ControlResponse {
+        if let refusal = windowRefusal(window) { return refusal }
+        let session: Session
+        switch resolveSession(target) {
+        case .success(let found): session = found
+        case .failure(let refusal): return refusal.response
+        }
+        if let reply = await store.remoteTextAction(session.id, pane: pane, action).response(session: session.id) { return reply }
+        var failure = OverlayHtmlError.notHtml
+        switch action {
+        case .follow(let mode): if case .failure(let refused) = store.setTextLogFollowing(session.id, pane: pane, mode: mode) { failure = refused.message }
+        case .wrap(let mode): if case .failure(let refused) = store.setTextWrap(session.id, pane: pane, mode: mode) { failure = refused.message }
+        case .search: if case .failure(let refused) = store.textSearchPage(session.id, pane: pane) { failure = refused.message }
+        case .changes: if case .failure(let refused) = store.textChangesPage(session.id, pane: pane) { failure = refused.message }
+        }
+        return ControlResponse(ok: false, error: failure)
     }
 
     // `local` means no page is handed out on the slot, which on a headless origin means there is no page at all

@@ -7,7 +7,8 @@ public enum ServerCommandPolicy {
     static let served: Set<Command> = [
         .tree, .version, .windowList,
         .sessionNew, .sessionRename, .sessionClose, .sessionMove, .sessionSplit, .sessionSplitClose, .sessionSwap,
-        .sessionCompanionNew, .sessionText, .sessionType, .sessionScratch,
+        .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
+        .sessionScratch,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
         .zmxTree, .zmxPresent, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe,
@@ -15,6 +16,7 @@ public enum ServerCommandPolicy {
         .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
         .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,
         .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
+        .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

@@ -67,13 +67,42 @@ struct ServerActionsOverlayTests {
         #expect(open(session, page: .image(path: notImage)).error == "session.overlay.open: \(ImageFile.Failure.notAnImage(notImage))")
     }
 
-    @Test func aLogPageIsRefusedSinceItWouldBeShownOnAnotherMac() throws {
+    @Test func aLogOverTheWholeFileCapWaitsForAMacWhileAPlainTextPageIsRefused() throws {
         let session = try newSession()
-        let path = try file("app.log", Array("line\n".utf8))
+        let line = String(repeating: "x", count: 99) + "\n"
+        let path = try file("big.log", Array(String(repeating: line, count: TextPage.maxBytes / 100 + 10).utf8))
 
-        let reply = open(session, page: .text(path: path, line: nil), textLog: TextLog(tail: 10, follow: true))
+        #expect(open(session, page: .text(path: path, line: nil)).error == "session.overlay.open: \(TextProbe.Failure.tooLarge(path))")
+        #expect(open(session, page: .text(path: path, line: nil), textLog: TextLog(tail: 10, follow: true)).ok)
 
-        #expect(reply == ControlResponse(ok: false, error: OverlayHtmlError.logRemote))
+        let slot = try #require(session.remoteOverlays.slot(nil))
+        #expect(slot.owner == nil)
+        #expect(slot.page?.overlay.textLog == TextLog(tail: 10, follow: true))
+    }
+
+    @Test func textCommandsOnAnEmptySlotGetTheSlotsRefusal() async throws {
+        let id = try newSession().id.uuidString
+
+        let follow = await harness.actions.setSessionOverlayFollow(id, window: nil, pane: nil, mode: .on)
+        let wrap = await harness.actions.setSessionOverlayWrap(id, window: nil, pane: nil, mode: .on)
+        let search = await harness.actions.searchSessionOverlay(id, window: nil, pane: nil, request: .next)
+        let changes = await harness.actions.stepSessionOverlayChanges(id, window: nil, pane: nil, forward: true)
+
+        #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayHtmlError.noOverlay, count: 4))
+    }
+
+    @Test func textCommandsOnALogHeldForNoMacAnswerThatTheViewerIsGone() async throws {
+        let session = try newSession()
+        let id = session.id.uuidString
+        let path = try file("app.log", Array("one\ntwo\n".utf8))
+        #expect(open(session, page: .text(path: path, line: nil), textLog: TextLog(tail: 10, follow: true)).ok)
+
+        let follow = await harness.actions.setSessionOverlayFollow(id, window: nil, pane: nil, mode: .on)
+        let wrap = await harness.actions.setSessionOverlayWrap(id, window: nil, pane: nil, mode: .on)
+        let search = await harness.actions.searchSessionOverlay(id, window: nil, pane: nil, request: .next)
+        let changes = await harness.actions.stepSessionOverlayChanges(id, window: nil, pane: nil, forward: true)
+
+        #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayResultError.viewerGone, count: 4))
     }
 
     @Test func followUpsOnAnEmptySlotAreRefused() throws {

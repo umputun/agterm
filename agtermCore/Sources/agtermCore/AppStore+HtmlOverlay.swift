@@ -235,8 +235,9 @@ extension AppStore {
         case .success(let found): page = found
         case .failure(let failure): return .failure(.page(failure))
         }
-        if page.replicaOf != nil { return .failure(.page(.replica)) }
-        guard let state = page.logState else { return .failure(.notLog) }
+        guard let state = page.logState else {
+            return .failure(page.replicaOf == nil || page.source.kind == .text ? .notLog : .page(.replica))
+        }
         let following: Bool
         switch mode {
         case .on: following = true
@@ -268,25 +269,26 @@ extension AppStore {
         }
     }
 
-    /// textSearchPage finds the local text page in the slot `pane` addresses, for a search request. A slot the placement
-    /// rule hands to the presenting Mac is refused, since presentation state carries no search.
+    /// textSearchPage finds the text page in the slot `pane` addresses, for a search request: a local one, or one this Mac
+    /// shows for another Mac. A slot the placement rule hands to the presenting Mac is refused.
     public func textSearchPage(_ sessionID: UUID, pane: OverlayPane?) -> Result<HtmlOverlay, TextSearchFailure> {
         if pageBelongsRemote(sessionID, pane: pane) { return .failure(.remote) }
         switch htmlOverlay(sessionID, pane: pane) {
         case .failure(let failure): return .failure(.page(failure))
         case .success(let page):
-            guard case .text = page.source else { return .failure(.notText) }
+            guard page.source.kind == .text else { return .failure(.notText) }
             return .success(page)
         }
     }
 
-    /// setTextSearch sets text page `id`'s query, an empty one closing the search, from control or the page's own
-    /// field. A change bumps `searchRevision`, clears the report, emits `tree.changed` and returns the new revision;
-    /// nil for no change or a page that is not a text page.
+    /// setTextSearch sets text page `id`'s query, cut to `TextSearch.maxQuery`, an empty one closing the search, from
+    /// control or the page's own field. A change bumps `searchRevision`, clears the report, emits `tree.changed` and
+    /// returns the new revision; nil for no change or a page that is not a text page.
     @discardableResult public func setTextSearch(_ id: UUID, query: String) -> Int? {
+        let query = String(query.prefix(TextSearch.maxQuery))
         var revision: Int?
         updateHtmlOverlay(id) {
-            guard case .text = $0.source, ($0.textSearch?.query ?? "") != query else { return }
+            guard $0.source.kind == .text, ($0.textSearch?.query ?? "") != query else { return }
             $0.searchRevision += 1
             $0.textSearch = query.isEmpty ? nil : TextSearch(query: query)
             revision = $0.searchRevision
@@ -314,10 +316,13 @@ extension AppStore {
         case .failure(.remote): return .failure(.remote)
         case .failure: return .failure(.notDiff)
         case .success(let page):
-            guard case .text(let path, _) = page.source, page.textLog == nil, TextPage.isDiff(file: path) else {
+            switch page.source {
+            case .text(let path, _), .replica(let path, .text):
+                guard page.textLog == nil, TextPage.isDiff(file: path) else { return .failure(.notDiff) }
+                return .success(page)
+            default:
                 return .failure(.notDiff)
             }
-            return .success(page)
         }
     }
 
@@ -325,7 +330,7 @@ extension AppStore {
     /// under way. Never emitted, like `setTextSearchReport`.
     public func setTextChangesReport(_ id: UUID, changes: TextChanges?) {
         updateHtmlOverlay(id) {
-            guard case .text = $0.source, $0.textChanges != changes else { return }
+            guard $0.source.kind == .text, $0.textChanges != changes else { return }
             $0.textChanges = changes
         }
     }
@@ -350,7 +355,7 @@ extension AppStore {
     public func setTextWrap(_ id: UUID, wrapped: Bool) {
         var changed = false
         updateHtmlOverlay(id) {
-            guard case .text = $0.source, $0.textWrap != wrapped else { return }
+            guard $0.source.kind == .text, $0.textWrap != wrapped else { return }
             $0.textWrap = wrapped
             changed = true
         }

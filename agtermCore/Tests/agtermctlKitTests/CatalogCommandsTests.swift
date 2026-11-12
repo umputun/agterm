@@ -77,6 +77,8 @@ struct CatalogCommandsTests {
         (["session", "split", "visibility"], .sessionSplit), (["session", "split", "close"], .sessionSplitClose),
         (["session", "swap"], .sessionSwap), (["workspace", "new"], .workspaceNew), (["workspace", "rename", "x"], .workspaceRename),
         (["workspace", "move", "--to", "up"], .workspaceMove), (["session", "new", "--parent", "s1"], .sessionCompanionNew),
+        (["session", "overlay", "open", "--page", "--url", "https://example.com"], .sessionPage),
+        (["session", "overlay", "open", "--companion", "--url", "https://example.com"], .sessionCompanionPage),
     ])
     func everyStructuralCommandTakesAnOperationId(_ words: [String], _ cmd: Command) throws {
         let parsed = try Agtermctl.parseAsRoot(words + ["--op-id", "op-1", "--epoch", "e1"])
@@ -87,5 +89,47 @@ struct CatalogCommandsTests {
         #expect(request.cmd == cmd)
         #expect(request.args?.opID == "op-1")
         #expect(request.args?.epoch == "e1")
+    }
+
+    @Test func aPlainOverlayOpenRefusesAnOperationId() {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "--url", "https://example.com", "--op-id", "op-1", "--epoch", "e1"])
+        }
+    }
+
+    private static func page(_ configure: (inout ControlArgs) -> Void) -> ControlArgs {
+        var args = ControlArgs()
+        configure(&args)
+        return args
+    }
+
+    @Test(arguments: [
+        (true, page { $0.url = "https://example.com/-a"; $0.navigation = true; $0.javascript = true }),
+        (false, page { $0.url = "http://localhost:3000"; $0.chromeless = true; $0.color = "#102030" }),
+        (false, page { $0.url = "https://example.com"; $0.persistent = true; $0.browse = true }),
+        (true, page { $0.html = "/srv/-doc.html"; $0.cwd = "/srv" }),
+        (false, page { $0.html = "/srv/doc.html" }),
+    ])
+    @MainActor
+    func aForwardedPageRowParsesBackToThePageItWasAskedFor(_ companion: Bool, _ args: ControlArgs) throws {
+        let row = companion ? "page companion" : "page session"
+        guard case .options(let asked) = ControlDispatcher.pageRowOptions(args, row: row, needsPage: "needs a page") else {
+            Issue.record("the page row was refused")
+            return
+        }
+        let anchor = UUID()
+        let operation = RemoteOperation.newPage(anchor: anchor, companion: companion, page: try #require(RemotePageOptions(asked)))
+
+        let parsed = try Agtermctl.parseAsRoot(operation.words + ["--op-id", "op-1", "--epoch", "e1"])
+        let request = try #require(parsed as? any RequestCommand).makeRequest()
+
+        #expect(request.cmd == (companion ? .sessionCompanionPage : .sessionPage))
+        #expect(request.target == anchor.uuidString)
+        #expect(request.args?.opID == "op-1")
+        guard case .options(let sent) = ControlDispatcher.pageRowOptions(request.args, row: row, needsPage: "needs a page") else {
+            Issue.record("the forwarded page row was refused")
+            return
+        }
+        #expect(sent == asked)
     }
 }

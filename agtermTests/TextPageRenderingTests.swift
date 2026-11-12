@@ -146,7 +146,7 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "three\n" }
     }
 
-    func testATextReplicaRendersFetchedBytesAndRefetchesOnReloadAndThemeChange() async throws {
+    func testATextReplicaRefetchesOnReloadAndRedrawsAThemeChangeFromWhatItShows() async throws {
         let url = pages.appendingPathComponent("main.go")
         try "package one\n".write(to: url, atomically: true, encoding: .utf8)
         let page = registry.page(for: openReplica(url.path, .text(line: 1)), store: store, replica: replicaLink())
@@ -158,11 +158,71 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try "package two\n".write(to: url, atomically: true, encoding: .utf8)
         XCTAssertNil(registry.reload(page.id, target: .original, store: store))
         try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package two\n" }
+        try "package three\n".write(to: url, atomically: true, encoding: .utf8)
         page.applyTheme(HtmlOverlayTheme(background: "#000000", foreground: "#102030", dark: true))
         try await waitForVariable("--agterm-foreground", "#102030", in: page.webView)
 
-        try await waitFor("three fetches") { self.fetched.count == 3 }
-        XCTAssertEqual(fetched, [url.path, url.path, url.path])
+        try await waitForScript("document.querySelector('pre code')?.textContent ?? ''", in: page.webView) { $0 == "package two\n" }
+        XCTAssertEqual(fetched, [url.path, url.path])
+    }
+
+    @MainActor private final class TailGate {
+        var hang = false
+        var asked = 0
+    }
+
+    private func openReplicaLog(_ path: String) -> HtmlOverlay {
+        let overlay = HtmlOverlay(source: .replica(path: path, content: .text(line: nil)), replicaOf: UUID(),
+                                  textLog: TextLog(tail: 50, follow: true))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
+    }
+
+    func testAReplicaLogOverTheTextCapOpensFromItsTailAndFollowsTheFile() async throws {
+        let url = pages.appendingPathComponent("app.log")
+        let line = String(repeating: "x", count: 99) + "\n"
+        try String(repeating: line, count: TextPage.maxBytes / line.utf8.count + 1000).write(to: url, atomically: true, encoding: .utf8)
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: replicaLink(log: url.path))
+
+        try await waitFor("the tail is shown") { self.current?.logState?.report.lines == 50 }
+        XCTAssertTrue(fetched.isEmpty)
+        try append("last\n", to: url)
+        try await waitFor("the append is followed") { page.textPage?.follower?.snapshot?.text.hasSuffix(line + "last\n") == true }
+    }
+
+    func testAReplicaLogTheOriginCannotReadWaitsForIt() async throws {
+        let url = pages.appendingPathComponent("gone.log")
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: replicaLink(log: url.path))
+
+        try await waitFor("the page waits") { self.current?.logState?.report.waiting == true }
+        try "back\n".write(to: url, atomically: true, encoding: .utf8)
+        try await waitFor("the file is picked up") { page.textPage?.follower?.snapshot?.text == "back\n" }
+    }
+
+    func testAHideDuringAChannelReadLeavesTheLogAsItWasAndShowingCatchesUp() async throws {
+        let url = pages.appendingPathComponent("app.log")
+        try "one\n".write(to: url, atomically: true, encoding: .utf8)
+        let gate = TailGate(), disk = replicaLink(log: url.path)
+        let link = HtmlReplicaLink(fetch: disk.fetch, bridge: disk.bridge, logTail: { stamp in
+            gate.asked += 1
+            if gate.hang { try await Task.sleep(for: .seconds(60)) }
+            return try await disk.logTail(stamp)
+        })
+        let page = registry.page(for: openReplicaLog(url.path), store: store, replica: link)
+        try await waitFor("the log is shown") { page.textPage?.follower?.snapshot?.text == "one\n" }
+        gate.hang = true
+        let asked = gate.asked
+        try await waitFor("a read is in flight") { gate.asked > asked }
+
+        page.setOnScreen(false)
+        try await Task.sleep(for: .milliseconds(200))
+
+        XCTAssertEqual(current?.logState?.report, TextLogReport(lines: 1))
+        XCTAssertEqual(page.textPage?.follower?.snapshot?.text, "one\n")
+        gate.hang = false
+        try append("two\n", to: url)
+        page.setOnScreen(true)
+        try await waitFor("showing catches up") { page.textPage?.follower?.snapshot?.text == "one\ntwo\n" }
     }
 
     func testABinaryReplicaReportsAFailure() async throws {
@@ -547,6 +607,75 @@ extension TextPageRenderingTests {
         page.apply(try XCTUnwrap(current))
     }
 
+    func testAStepCommitsItsCountsAndAMovedLogsPauseBeforeItAnswers() async throws {
+        let (overlay, _) = try openLog("one err\ntwo\nthree err\n")
+        let (page, window) = try shown(overlay)
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0.contains("three err") }
+        page.webView.configuration.userContentController.removeAllScriptMessageHandlers()
+
+        try search("none", on: page)
+        let none = try await step(true, on: page)
+        XCTAssertEqual(none, "0 of 0")
+        XCTAssertEqual(current?.logState?.following, true)
+
+        try search("err", on: page)
+        let reached = try await step(true, on: page)
+
+        XCTAssertEqual(reached.hasSuffix("of 2"), true, reached)
+        XCTAssertEqual(current?.textSearch?.matches, 2)
+        XCTAssertEqual(current?.logState?.following, false)
+    }
+
+    func testADiffPageReportsItsChangesOnlyOnceItIsReady() async throws {
+        let posted = try await postedUntil("changes", try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n"))
+        XCTAssertEqual(posted.prefix(2), ["ready", "changes"])
+    }
+
+    func testADiffPageWithNoChangesReportsItsCountOnlyOnceItIsReady() async throws {
+        let posted = try await postedUntil("changes", try openText("a.diff", "@@ -1 +1 @@\n a\n"))
+        XCTAssertEqual(posted.prefix(2), ["ready", "changes"])
+    }
+
+    func testASeededSearchReportsItsMatchesOnlyOnceThePageIsReady() async throws {
+        let overlay = try openText("a.txt", "a b a\n")
+        XCTAssertNotNil(store.setTextSearch(overlay.id, query: "a"))
+
+        let posted = try await postedUntil("report", try XCTUnwrap(current))
+
+        XCTAssertEqual(posted.prefix(2), ["ready", "report"])
+    }
+
+    private func postedUntil(_ key: String, _ overlay: HtmlOverlay) async throws -> [String] {
+        let page = registry.page(for: overlay, store: store)
+        defer { store.closeHtmlOverlay(page.id) }
+        page.webView.configuration.userContentController.addUserScript(WKUserScript(source: """
+            const handler = window.webkit.messageHandlers.agtermTextPage;
+            const post = handler.postMessage.bind(handler);
+            handler.postMessage = (body) => {
+              const root = document.documentElement;
+              root.dataset.posted = (root.dataset.posted || '') + Object.keys(body)[0] + ' ';
+              post(body);
+            };
+            """, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.rendererWorld))
+        try await waitForScript("document.documentElement.dataset.posted ?? ''", in: page.webView) { $0.contains(key) }
+        let posted = try await page.webView.evaluateJavaScript("document.documentElement.dataset.posted") as? String
+        return (posted ?? "").split(separator: " ").map(String.init)
+    }
+
+    func testAChangeStepCommitsItsChangeBeforeItAnswers() async throws {
+        let (page, window) = try shown(try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n@@ -5 +5 @@\n-c\n+d\n"))
+        defer { window.orderOut(nil) }
+        try await waitFor("the diff reports its changes") { self.current?.textChanges?.count == 2 }
+        page.webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        let bridge = try XCTUnwrap(page.textPage)
+
+        let reached = try await bridge.stepChange(forward: true).get()
+
+        XCTAssertEqual(reached, TextChanges(count: 2, current: 1))
+        XCTAssertEqual(current?.textChanges, reached)
+    }
+
     func testAQueryAcrossHighlightSpansMatchesAndReachesTheModel() async throws {
         let (page, window) = try shown(try openText("main.go", "package main\n\nfunc main() {}\n\nvar x = main()\n"))
         defer { window.orderOut(nil) }
@@ -861,6 +990,24 @@ extension TextPageRenderingTests {
         let field = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').value")
         XCTAssertEqual(field as? String, "abc")
         try await waitForScript(Self.count, in: page.webView) { $0.hasSuffix("of 2") }
+    }
+
+    // regression: an over-limit query was searched whole while the presenter reported it cut
+    func testAnOverLimitQueryIsSearchedReportedAndShownAsTheModelStoresIt() async throws {
+        let cut = String(repeating: "a", count: TextSearch.maxQuery)
+        let (page, window) = try shown(try openText("long.txt", cut + "\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0 == cut + "\n" }
+
+        store.setTextSearch(page.id, query: cut + "z")
+        page.apply(try XCTUnwrap(current))
+
+        try await waitFor("the cut query's counts") { self.current?.textSearch?.matches == 1 }
+        XCTAssertEqual(current?.textSearch?.query, cut)
+        let field = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').value")
+        XCTAssertEqual(field as? String, cut)
+        let limit = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').maxLength")
+        XCTAssertEqual((limit as? NSNumber)?.intValue, TextSearch.maxQuery)
     }
 
     // regression: CRs kept in pushed text but dropped from the highlighted DOM threw inside the highlight window

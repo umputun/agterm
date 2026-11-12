@@ -28,6 +28,30 @@ public struct RemoteShellOptions: Equatable, Sendable {
     }
 }
 
+/// RemotePageOptions are the page a new page row on the server shows: a file there or a URL, and its page flags.
+public struct RemotePageOptions: Equatable, Sendable {
+    let source: HtmlSource
+    let options: ControlSessionOverlayOpenOptions
+
+    init?(_ options: ControlSessionOverlayOpenOptions) {
+        guard let source = options.page else { return nil }
+        self.source = source
+        self.options = options
+    }
+
+    /// words carry each value joined to its flag, so a value starting with `-` is never read as an option.
+    var words: [String] {
+        let page: [String] = switch source {
+        case .file(let path, let grant): ["--html=" + path] + (grant.map { ["--cwd=" + $0] } ?? [])
+        case .url(let url): ["--url=" + url.absoluteString]
+        default: []
+        }
+        let flags = [(options.navigation, "--navigation"), (options.javascript, "--js"), (options.chromeless, "--chromeless"),
+                     (options.persistent, "--persistent"), (options.browse, "--browse")].filter(\.0).map(\.1)
+        return page + flags + (options.backgroundColor.map { ["--background-color=" + $0] } ?? [])
+    }
+}
+
 /// RemoteOperationTarget is the row an operation acts on, which its pending or unknown mark is shown with.
 public enum RemoteOperationTarget: Equatable, Hashable, Sendable {
     case session(UUID)
@@ -39,6 +63,8 @@ public enum RemoteOperation: Equatable, Sendable {
     /// newSession lands in `workspace`, beside `anchor` when it is `.after` or `.before`.
     case newSession(workspace: UUID, anchor: RemoteSessionPlacement? = nil, shell: RemoteShellOptions = RemoteShellOptions())
     case newCompanion(parent: UUID, shell: RemoteShellOptions = RemoteShellOptions())
+    /// newPage is a page row: a page companion of `anchor`, or a top-level page session after its group.
+    case newPage(anchor: UUID, companion: Bool, page: RemotePageOptions)
     case setSplit(UUID, shown: Bool, axis: String?)
     /// setScratch shows or hides the server's scratch; a command replaces the one there is with a scratch running it.
     case setScratch(UUID, shown: Bool, command: String? = nil)
@@ -56,6 +82,7 @@ public enum RemoteOperation: Equatable, Sendable {
         switch self {
         case .newSession: "New Session"
         case .newCompanion: "New Companion"
+        case .newPage(_, let companion, _): companion ? "New Page Companion" : "New Page Session"
         case .setSplit(_, let shown, _): shown ? "Show Split" : "Hide Split"
         case .setScratch(_, let shown, _): shown ? "Show Scratch" : "Hide Scratch"
         case .closeSplit: "Close Split"
@@ -73,7 +100,7 @@ public enum RemoteOperation: Equatable, Sendable {
     public var target: RemoteOperationTarget? {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
-        case .newCompanion(let id, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
+        case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
              .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id): .session(id)
         case .newWorkspace: nil
         case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _): .workspace(id)
@@ -115,6 +142,8 @@ public enum RemoteOperation: Equatable, Sendable {
                 }
             }() + shell.words
         case .newCompanion(let parent, let shell): ["session", "new", "--parent", parent.uuidString] + shell.words
+        case .newPage(let anchor, let companion, let page):
+            ["session", "overlay", "open", companion ? "--companion" : "--page", "--target", anchor.uuidString] + page.words
         case .setSplit(let id, let shown, let axis):
             ["session", "split", "visibility", shown ? "on" : "off", "--target", id.uuidString] + (axis.map { ["--axis", $0] } ?? [])
         case .setScratch(let id, let shown, let command):

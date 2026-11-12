@@ -11,13 +11,17 @@ struct ReplicaPageRecord {
     let origin: UUID
     let channel: RemotePageChannel?
     var appliedSeq = 0
-    /// poolUser is the ssh channel a catalog row's page holds for as long as it is shown.
+    /// poolUser is the ssh channel a catalog row's page holds in `pool` for as long as it is shown; the pool is kept
+    /// here because a closed row is gone from its store before its page is released.
     var poolUser: String?
+    var pool: SshConnectionPool?
     /// channelLost marks a page taken down because its channel ended rather than closed by anyone; the origin decides
     /// what that ends.
     var channelLost = false
     /// forward is the port forward a page on the origin's loopback is loaded through.
     var forward: PageForward?
+    /// textActions is the last origin text action queued on the page; each runs after the one before it.
+    var textActions: Task<Void, Never>?
 }
 
 extension ControlServer {
@@ -55,7 +59,7 @@ extension ControlServer {
         }
         let local = slot.page.id
         let channel = argv.map { _ in RemotePageChannel() }
-        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser)
+        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser, pool: pool)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
                                             replica: channel.map { Self.link($0) })
         if let channel, let argv {
@@ -124,7 +128,7 @@ extension ControlServer {
     func replicaPageReleased(_ local: UUID, origin: UUID) {
         guard let record = replicaPages.removeValue(forKey: local) else { return }
         record.forward?.stop()
-        record.poolUser.map { catalogPool(forSession: record.session)?.release($0) }
+        record.poolUser.map { record.pool?.release($0) }
         pendingReplicaStates.remove(local)
         remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(
             page: origin.uuidString, reason: record.channelLost ? PresentationPageChange.channelLost : nil)))
@@ -145,8 +149,12 @@ extension ControlServer {
     /// applyReplicaPageCommand runs one origin request on the page shown for it, then reports the page's state
     /// with that request's sequence number.
     func applyReplicaPageCommand(_ command: PresentationPageCommand, forSession id: UUID) {
-        guard let store = library.store(forSession: id), let slot = store.replicaPage(command.page, forSession: id) else { return }
+        guard let store = library.store(forSession: id), let slot = store.replicaPage(command.page, forSession: id) else {
+            if command.action.answersWithResult { answerTextAction(command, forSession: id, error: "page not shown") }
+            return
+        }
         let local = slot.page.id
+        if command.action.answersWithResult { return queueTextAction(command, forSession: id, local: local) }
         let registry = HtmlOverlayRegistry.shared
         var refusal: String?
         switch command.action {
@@ -158,6 +166,7 @@ extension ControlServer {
         case .browser: refusal = registry.navigate(local, .browser)
         case .resize: store.resizeReplicaPage(command.page, forSession: id, sizePercent: command.sizePercent,
                                               points: command.points, merge: command.merge == true)
+        case .follow, .search, .wrap, .changes: return
         }
         if let refusal {
             replicaLogger.notice("origin request \(command.action.rawValue, privacy: .public) not applied: \(refusal, privacy: .public)")
@@ -166,6 +175,32 @@ extension ControlServer {
         record.appliedSeq = max(record.appliedSeq, command.seq)
         replicaPages[local] = record
         replicaPageChanged(local)
+    }
+
+    /// queueTextAction runs an origin text action on page `local` after the ones queued before it, then answers it with
+    /// the page's text state. A page closed or replaced meanwhile is refused, never acted on in its successor.
+    private func queueTextAction(_ command: PresentationPageCommand, forSession id: UUID, local: UUID) {
+        guard let action = TextPageAction(command) else {
+            return answerTextAction(command, forSession: id, error: "invalid text page action")
+        }
+        guard replicaPages[local] != nil else { return answerTextAction(command, forSession: id, error: "page not shown") }
+        let previous = replicaPages[local]?.textActions
+        replicaPages[local]?.textActions = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self else { return }
+            guard let store = library.store(forSession: id), let slot = store.replicaPage(command.page, forSession: id),
+                  slot.page.id == local else { return answerTextAction(command, forSession: id, error: "page not shown") }
+            let response = await runTextPageAction(action, in: store, sessionID: id, pane: slot.pane)
+            let state = store.replicaPageState(local, appliedSeq: replicaPages[local]?.appliedSeq ?? 0)?.text
+            remoteClients[id]?.answer(.pageResult(PresentationPageResult(
+                page: command.page, seq: command.seq, ok: response.ok, text: response.result?.text, error: response.error,
+                state: state)))
+        }
+    }
+
+    private func answerTextAction(_ command: PresentationPageCommand, forSession id: UUID, error: String) {
+        replicaLogger.notice("origin request \(command.action.rawValue, privacy: .public) not applied: \(error, privacy: .public)")
+        remoteClients[id]?.answer(.pageResult(PresentationPageResult(page: command.page, seq: command.seq, ok: false, error: error)))
     }
 
     /// replicaPageChanged queues a state report for page `local`; reports are sent once per main-queue turn,
@@ -200,6 +235,10 @@ extension ControlServer {
             bridge: { [weak channel] request in
                 guard let channel else { throw RemotePageChannel.Failure.closed }
                 return try await channel.bridge(request)
+            },
+            logTail: { [weak channel] stamp in
+                guard let channel else { throw RemotePageChannel.Failure.closed }
+                return try await channel.logTail(since: stamp)
             })
     }
 }

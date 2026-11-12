@@ -19,7 +19,8 @@ extension ControlServer: PageServeHost {
     func claimRemotePage(token: String) -> (page: UUID, served: PageServeClaim)? {
         for store in openStores {
             guard let claim = store.claimRemotePage(token: token) else { continue }
-            return (claim.overlay.id, PageServeClaim(source: claim.overlay.source, links: claim.overlay.markdownLinks))
+            return (claim.overlay.id, PageServeClaim(source: claim.overlay.source, links: claim.overlay.markdownLinks,
+                                                     log: claim.overlay.textLog))
         }
         return nil
     }

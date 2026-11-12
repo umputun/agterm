@@ -62,12 +62,12 @@ public extension ControlActions {
     }
 
     func setSessionOverlayFollow(_: String?, window _: String?, pane _: OverlayPane?,
-                                 mode _: ControlToggleMode) -> ControlResponse {
+                                 mode _: ControlToggleMode) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.follow"))
     }
 
     func setSessionOverlayWrap(_: String?, window _: String?, pane _: OverlayPane?,
-                               mode _: ControlToggleMode) -> ControlResponse {
+                               mode _: ControlToggleMode) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.wrap"))
     }
 

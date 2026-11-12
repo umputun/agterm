@@ -7,8 +7,9 @@ import agtermCore
 /// check; it keeps the last snapshot and the paused scroll offset for a rebuilt document, and reports to the store.
 @MainActor
 final class LogFollower {
-    /// Reader reads `path`'s last lines, nil when the file still has the given stamp.
-    typealias Reader = @Sendable (String, Int, BoundedFile.FileStamp?) -> Result<TextProbe.LogRead?, TextProbe.Failure>
+    /// Reader reads `path`'s last lines, nil when the file still has the given stamp. It runs off the main actor and
+    /// may suspend: a replica page's reader waits on its channel.
+    typealias Reader = @Sendable (String, Int, BoundedFile.FileStamp?) async -> Result<TextProbe.LogRead?, TextProbe.Failure>
 
     /// Shift is how the text a push carries relates to what the page shows: `dropped` lines left its front, `cut`
     /// when the new start falls inside a line, `replaced` when the file is not the one the page's text came from.
@@ -51,7 +52,7 @@ final class LogFollower {
 
     init(path: String, log: TextLog, following: Bool, pageID: UUID, store: AppStore?, webView: WKWebView?,
          world: WKContentWorld, interval: Duration = .seconds(1),
-         read: @escaping Reader = { TextProbe.loadLog(path: $0, tail: $1, unchangedFrom: $2) }) {
+         read: @escaping Reader = LogFollower.fileReader) {
         self.path = path
         tail = log.tail
         self.following = following
@@ -120,7 +121,7 @@ final class LogFollower {
         guard !documentPending, store?.htmlOverlaySlot(pageID) != nil else { return }
         readSequence += 1
         let mine = readSequence, epoch = pauseEpoch
-        let result = await readDetached(unchangedFrom: stamp)
+        let result = await readLog(unchangedFrom: stamp)
         guard mine == readSequence, epoch == pauseEpoch else { return }
         apply(result)
     }
@@ -144,14 +145,18 @@ final class LogFollower {
     private func refresh() async {
         readSequence += 1
         let mine = readSequence
-        let result = await readDetached(unchangedFrom: nil)
+        let result = await readLog(unchangedFrom: nil)
         guard mine == readSequence else { return }
         apply(result)
     }
 
-    private func readDetached(unchangedFrom: BoundedFile.FileStamp?) async -> Result<TextProbe.LogRead?, TextProbe.Failure> {
-        let read = read, path = path, tail = tail
-        return await Task.detached(priority: .utility) { read(path, tail, unchangedFrom) }.value
+    /// fileReader reads a local file on a detached task, never on the caller's actor.
+    nonisolated static let fileReader: Reader = { path, tail, stamp in
+        await Task.detached(priority: .utility) { TextProbe.loadLog(path: path, tail: tail, unchangedFrom: stamp) }.value
+    }
+
+    private func readLog(unchangedFrom: BoundedFile.FileStamp?) async -> Result<TextProbe.LogRead?, TextProbe.Failure> {
+        await read(path, tail, unchangedFrom)
     }
 
     private func apply(_ result: Result<TextProbe.LogRead?, TextProbe.Failure>) {

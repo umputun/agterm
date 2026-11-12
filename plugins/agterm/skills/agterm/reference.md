@@ -1196,7 +1196,8 @@ error keeps those names for compatibility.
   not `--follow`, which selects the session. The page has a bar with follow and search and no line numbers; a user scroll up pauses,
   the bottom or Resume follows again. A rotated, truncated or recreated file is picked up by the next check, a missing
   one shows waiting, and binary data keeps the last text marked unreadable. Both refuse `--line` and need `--text`.
-  A log page is refused on a session another Mac presents (`a log page is not shown on another Mac`). Wire fields
+  On a session another Mac presents, a log page opens there when that Mac's agterm shows live text pages, and is
+  refused otherwise (`session.overlay.open: the Mac presenting this session cannot show a log page`). Wire fields
   `tail` and `followFile`; `text` adds `tail`, `following`, `lines`, `clipped` (the first line is the end of one longer
   than 2 MB), `waiting` and `unreadable`, omitted on a plain page. A ⌘-click on a `.log` or `.out` path opens it
   following, and a `path:line` location the plain page.
@@ -1210,8 +1211,9 @@ error keeps those names for compatibility.
   next or previous match, wrapping, pauses a following log page, and returns `result.text` as `N of M`; it is
   refused `no search query: set one first` without a query and `page not loaded` before the page exists, while a
   query set then runs when it loads. An empty slot answers `no overlay`, a program `the overlay is not an html page`,
-  any other page, one shown for another Mac included, `no text page`, and a slot handed to the presenting Mac
-  `remote page: search it on the Mac that shows it`.
+  and any other page `no text page`. A slot handed to the presenting Mac runs it there and answers with that Mac's
+  result, as `follow`, `changes` and `wrap` do (Remote sessions); a presenting agterm too old for live text pages
+  answers `remote page: search it on the Mac that shows it`.
   Wire `text` and `to` (`next`, `prev`, `close`). Read back `htmlOverlays[].text.search`: `{query, matches,
   current}`, current from 1 and 0 with no match, omitted with no query. The page's own field (`/` or ⌘F, `n`/`N`,
   Esc) sets the same query.
@@ -1219,17 +1221,17 @@ error keeps those names for compatibility.
   - step the `.diff` or `.patch` page in the addressed slot to its next or previous change, a change being one run of
   removed and added lines inside a hunk; it wraps, and after the user scrolled away it goes on from the view. Returns
   `result.text` as `N of M`. Refused `no diff page` for any other page, `no changes` for a patch without any,
-  `page not loaded` before the page exists, and `remote page: step it on the Mac that shows it` for a slot handed to
-  the presenting Mac. Wire `to` (`next`, `prev`). Read back `htmlOverlays[].text.changes`: `{count, current}`,
-  current 0 before any step, omitted on any other page and until the page reports. The page's own buttons and the
+  `page not loaded` before the page exists, and, from a presenting agterm too old for live text pages,
+  `remote page: step it on the Mac that shows it`. Wire `to` (`next`, `prev`). Read back
+  `htmlOverlays[].text.changes`: `{count, current}`, current 0 before any step, omitted on any other page and until
+  the page reports. The page's own buttons and the
   `]`/`[` keys step the same way.
 - `session overlay wrap on|off|toggle [--pane left|right] [--target] [--window W]`
   - wrap the long lines of the text, log or diff page in the addressed slot, unwrap them, or toggle; returns
   `result.text` `wrapped` or `unwrapped`. A page opens unwrapped and keeps its choice until it closes. Refused
-  `no text page` for any other page, one shown for another Mac included, and `remote page: wrap it on the Mac that
-  shows it` for a slot handed to the presenting Mac. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while
-  wrapped and omitted otherwise. The page's Wrap button and `w` toggle the same state; on a page shown for another Mac
-  that toggle stays in the page, unreported, and a redraw drops it.
+  `no text page` for any other page, and, from a presenting agterm too old for live text pages, `remote page: wrap it
+  on the Mac that shows it`. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while wrapped and omitted
+  otherwise. The page's Wrap button and `w` toggle the same state.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,
@@ -1247,6 +1249,7 @@ error keeps those names for compatibility.
   view, and closing it there closes every view. Each view has its own browser state, and the page's own
   reload and navigation act on that view; its other commands run on the other Mac. The row mirrors no
   status, notification or context. A loopback `--url` is refused, since it names a server on the other Mac.
+  On a row of a remote window, agterm-server creates the companion (an `--html` path is a path on the host).
   `zmx attach HOST ID` shows a page companion again under the one row here attached to its parent, and a
   top-level page session as a top-level row.
   The page and the row end together: when the page submits or `session overlay close` runs on it, the row
@@ -1267,7 +1270,8 @@ error keeps those names for compatibility.
   `session move` puts it anywhere else. It holds companions like any session (`session new --parent`, New
   Companion, the page's own `session.companion.new`), and Convert to Companion works on it. The page flags,
   refusals and `--block` are those of `--companion`, which `--page` cannot be combined with; `--follow` selects
-  the new row. A target attached from another Mac only places it: the page is always this Mac's. Wire command
+  the new row. A target attached from another Mac only places it: the page is this Mac's. On a row of a remote
+  window, agterm-server creates it. Wire command
   `session.page`. Returns `result.id` (the new session; the human output prints it) and `result.pageID`.
   Against an app too old for page sessions the CLI prints `error: the running app is too old for page
   sessions`, with nothing created. Read back from the tree node's `content: "page"` with no `parent`.
@@ -1554,18 +1558,33 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
 - `catalog op OPID [--epoch E --rev N]`: what became of an operation id: `applied` (with its revision),
   `noop`, `refused` (with the error), `fenced` or `unknown`; an id the server does not hold is recorded so
   the command is refused if it arrives later.
-- Operation ids: the session and workspace structure commands take `--op-id ID --epoch E`; the server keeps
+- Operation ids: the session and workspace structure commands, and `session overlay open` with `--page` or
+  `--companion` (`--op-id requires --companion or --page` otherwise), take `--op-id ID --epoch E`; the server keeps
   the last 512 receipts, so the same id within them is not run twice, and answers `result.receipt` `{opID, epoch, outcome, rev?, error?}`; `--expect-panes ID,ID` and `session
   scratch --expect-scratch ID|none` refuse a target that changed; all need `--op-id`. A Mac app refuses an
   operation id.
-- On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available
-  on agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap,
-  quick, dashboard, zoom and more; `window list` and the presenter bridges `zmx present`, `run-job` and
-  `page-serve` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick
-  needs a session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held
-  until a Mac presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an
-  ask or pick ends unanswered, at its `--timeout`. `version` adds `headless: true` and
-  `versions`.
+- On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
+  agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
+  dashboard, zoom and more; `window list` and the presenter bridges `zmx present`, `run-job`, `page-serve` and
+  `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
+  session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held until a Mac
+  presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an ask or pick ends
+  unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap` and `changes` are
+  served; a text action on a page held for no Mac answers `the viewer showing this overlay is gone`. `version` adds
+  `headless: true` and `versions`.
+- Page rows on agterm-server: `session overlay open --page|--companion --html FILE|--url URL` makes a page session
+  or page companion there, FILE a path on the host; a loopback `--url` is refused (`a page on agterm-server's
+  loopback cannot be a page session: no Mac would reach it`), and terminal commands and a terminal `ask open` on the
+  row answer `<cmd>: not available on a page session`; a GUI ask or a pick on it shows on the Mac presenting the row.
+  The catalog lists the row with no panes. A remote window shows it as a page row,
+  each Mac claiming its own view over ssh (`session overlay page-attach`). Without a view the row shows a failed
+  page naming why: `waiting for HOST` and `HOST cannot be reached, retrying` retry on their own, `the page's
+  connection to HOST ended, reconnecting` claims a new view, and a refusal from the server stays shown; detaching
+  and reattaching the row claims again. Only the server's removal closes the row: `session overlay close` on it, as
+  its page's own close, closes it there; `session detach` ends this Mac's view and `session reattach` claims a new
+  one. A page made from a remote window keeps its outcome on the server, where `--block` and `session overlay result
+  --page` read it, after that window closed too. A Mac too old for page rows is sent none, and a companion of a page
+  row shows there as a top-level row.
 
 ## surface
 
@@ -2506,8 +2525,15 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   fetches the file over the same channel, the origin serving only that file, or a markdown file's pictures in its
   own folder, under the same size limits, and shows the same page with no bridge; an image opened without a size
   is sized for that Mac's screen. Its `htmlOverlays` lists `image`, `markdown`, `document` or `text` with `replica: true`.
-  A presenting Mac too old for these pages keeps the refusal (`a viewer presents this session`). A log page
-  (`--tail`, `--follow-file`) is refused there, and a clicked `.log` opens as the plain text page.
+  A presenting Mac too old for these pages keeps the refusal (`a viewer presents this session`).
+- A presenting Mac whose agterm shows live text pages (its hello lists `page.text`) also shows log pages
+  (`--tail`, `--follow-file`, a clicked `.log` or `.out`). On the origin, `session overlay follow`, `search`, `wrap`
+  and `changes` aimed at such a page run on that Mac and answer with its result, the replies a local page gives, or
+  `presenter did not answer` after 5 seconds. The page's own bar works there, the same commands run there against
+  its copy, and its following, search, wrap and changes read back in the origin's `htmlOverlays[].text`. An older
+  presenting Mac refuses a log page (`session.overlay.open: the Mac presenting this session cannot show a log
+  page`), opens a clicked log as the plain text page, and `search`, `changes` and `wrap` answer `remote page:
+  ... on the Mac that shows it`.
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
   and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
 - While the stream is not up the row's indicator says so and names the host. It retries on its own, at

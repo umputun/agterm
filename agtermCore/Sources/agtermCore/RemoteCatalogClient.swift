@@ -100,7 +100,7 @@ public final class RemoteCatalogClient {
         lastFrame = now()
         link = transport.open(argv, onLine: { [weak self] line in self?.receive(line, generation: current) },
                               onClose: { [weak self] reason in self?.closed(reason, generation: current) })
-        send(.hello(CatalogHello(version: CatalogCodec.version)))
+        send(.hello(CatalogHello(version: CatalogCodec.version, pageRows: true)))
         startWatchdog()
     }
 

@@ -22,6 +22,16 @@ struct SessionTests {
         #expect(session.overlayCommand == "review")
     }
 
+    @Test func aPageSessionTakesAGuiAskButNotATerminalOne() {
+        let page = Session(initialCwd: "/tmp", content: .page)
+        let terminal = PendingAsk(id: "t", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")])
+        let gui = PendingAsk(id: "g", title: "Continue?", buttons: [ControlAskButton(id: "yes", label: "Yes")], style: .gui)
+
+        #expect(!page.openAsk(terminal))
+        #expect(page.openAsk(gui))
+        #expect(page.askPending == gui)
+    }
+
     @Test func askCoversBothPanesWhenSessionWideAndOnlyItsOwnWhenAnchored() {
         let session = Session(initialCwd: "/tmp")
         let split = UUID()

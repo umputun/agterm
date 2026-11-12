@@ -69,7 +69,7 @@ extension AppStore {
         if headless, case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
             source = .forwarded(url.absoluteString)
         }
-        let shows = presenterShows(source, session: sessionID)
+        let shows = presenterShows(source, log: overlay.textLog != nil, session: sessionID)
         if !shows, !headless { return .unsupported }
         if case .url(let url) = source, HtmlSource.isLoopback(url) { return .loopback }
         if case .forwarded = source, hub.hasPresenter(session: sessionID), !shows { return .loopback }
@@ -81,7 +81,8 @@ extension AppStore {
             chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
             browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
             pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
-            points: presentablePoints(points, session: sessionID), follow: options.follow, markdownLinks: overlay.markdownLinks)
+            points: presentablePoints(points, session: sessionID), follow: options.follow, markdownLinks: overlay.markdownLinks,
+            textLog: overlay.textLog)
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
@@ -107,10 +108,12 @@ extension AppStore {
         return .opened
     }
 
-    /// presenterShows is whether `sessionID`'s presenter speaks the page frames and, for a content page, its sources.
-    private func presenterShows(_ source: PresentationPageSource, session sessionID: UUID) -> Bool {
+    /// presenterShows is whether `sessionID`'s presenter speaks the page frames and, for a content page, its sources;
+    /// a log page also needs live text pages, which an older presenter would show as a static page.
+    private func presenterShows(_ source: PresentationPageSource, log: Bool, session sessionID: UUID) -> Bool {
         guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
               PresentationHub.pageKinds.allSatisfy({ hub.presenterSupports($0, session: sessionID) }) else { return false }
+        if log, !hub.presenterSupports(PresentationHub.pageTextKind, session: sessionID) { return false }
         if source.isContent, !hub.presenterSupports(PresentationHub.pageContentKind, session: sessionID) { return false }
         if case .document = source { return hub.presenterSupports(PresentationHub.pageDocumentKind, session: sessionID) }
         if case .forwarded = source { return hub.presenterSupports(PresentationHub.pageForwardKind, session: sessionID) }
@@ -139,9 +142,10 @@ extension AppStore {
     @discardableResult
     func offerPendingPage(_ slot: RemoteOverlaySlot, in session: Session, now: Date) -> Bool {
         guard slot.owner == nil, var request = slot.page?.request, let hub = presentationHub,
-              presenterShows(request.source, session: session.id) else { return false }
+              presenterShows(request.source, log: request.textLog != nil, session: session.id) else { return false }
         let owner = hub.presenterGeneration(session: session.id)
         request.token = UUID().uuidString
+        request.textSeed = slot.page.flatMap { Self.textState($0.overlay) }
         // a picture the presenter sizes goes unsized, its point overrides following as the merge resize they were made by
         let merged = slot.presenterSized ? slot.points : OverlayPointSize()
         if !slot.presenterSized { request.sizePercent = slot.sizePercent }
@@ -172,6 +176,8 @@ extension AppStore {
             var changed = false
             session.remoteOverlays.updatePage(state.page) { changed = $0.apply(state) }
             if changed { scheduleTreeChanged() }
+        case .pageResult(let result):
+            receiveRemoteTextResult(result, in: session)
         case .pageRejected(let change), .pageClosed(let change):
             // only the offer holding the page reports its end; a copy this origin already withdrew says nothing, except
             // a dismissal its presenter sent before seeing the withdrawal, which the channel's end overtook
@@ -280,6 +286,7 @@ extension AppStore {
     func endRemotePage(_ job: String, in session: Session) {
         guard let slot = session.remoteOverlays.slot(job: job), let page = slot.page else { return }
         session.remoteOverlays.remove(job: job)
+        settleRemoteTextWaits(job: job)
         HtmlPageOutcomes.shared.dismiss(page.overlay.id)
         scheduleTreeChanged()
         RemotePageEnds.shared.onEnd?(page.overlay.id)
@@ -322,6 +329,7 @@ extension AppStore {
             page.claimed = false
             page.withdrawnFrom = slot.owner
         }
+        settleRemoteTextWaits(job: slot.job)
         RemotePageEnds.shared.onWithdrawn?(page)
         scheduleTreeChanged()
     }

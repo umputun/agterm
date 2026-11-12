@@ -18,6 +18,7 @@ final class FakePageOrigin: @unchecked Sendable {
     private let chunkSize: Int
     private let reply: String?
     private let holdCancels: Bool
+    var log: BoundedFile.TailRead?
 
     init(fd: Int32, files: [String: (String, Data)], held: Set<String>, chunkSize: Int, reply: String?,
          holdCancels: Bool) {
@@ -96,6 +97,8 @@ final class FakePageOrigin: @unchecked Sendable {
             if answerCancel { write(.failure(id: id, error: PageServeFrame.cancelled)) }
         case .bridge(let id, _):
             if let reply { write(.reply(id: id, response: reply)) }
+        case .logTail(let id, let stamp):
+            answerLog(id, stamp)
         default:
             return
         }
@@ -117,6 +120,22 @@ final class FakePageOrigin: @unchecked Sendable {
             guard write(.chunk(id: id, data: data.subdata(in: offset..<end))) else { return }
             state.withLock { chunksWritten += 1 }
             offset = end
+        }
+        write(.end(id: id))
+    }
+
+    private func answerLog(_ id: Int, _ stamp: BoundedFile.FileStamp?) {
+        guard let log else {
+            write(.failure(id: id, error: "not a log page"))
+            return
+        }
+        guard log.stamp != stamp else {
+            write(.logUnchanged(id: id))
+            return
+        }
+        write(.logHead(id: id, stamp: log.stamp, offset: log.offset))
+        for start in stride(from: 0, to: log.data.count, by: chunkSize) {
+            write(.chunk(id: id, data: log.data.subdata(in: start..<min(start + chunkSize, log.data.count))))
         }
         write(.end(id: id))
     }
@@ -161,6 +180,8 @@ final class FakePageLauncher: RemotePageLauncher {
     var reply: String? = #"{"ok":true,"result":{}}"#
     var holdCancels = false
     var failsLaunch = false
+    var failsNextLaunch = false
+    var log: BoundedFile.TailRead?
     private(set) var launches: [[String]] = []
     private(set) var origins: [FakePageOrigin] = []
     private(set) var helpers: [Helper] = []
@@ -169,11 +190,16 @@ final class FakePageLauncher: RemotePageLauncher {
 
     func launch(_ argv: [String], onExit: @escaping @MainActor () -> Void) throws -> RemotePageHelper {
         if failsLaunch { throw POSIXError(.ENOENT) }
+        if failsNextLaunch {
+            failsNextLaunch = false
+            throw POSIXError(.ENOENT)
+        }
         var pair: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, SOCK_STREAM, 0, &pair) == 0 else { throw POSIXError(.EIO) }
         launches.append(argv)
         let origin = FakePageOrigin(fd: pair[1], files: files, held: held, chunkSize: chunkSize, reply: reply,
                                     holdCancels: holdCancels)
+        origin.log = log
         origins.append(origin)
         origin.start()
         let helper = Helper(descriptor: pair[0], onExit: onExit)

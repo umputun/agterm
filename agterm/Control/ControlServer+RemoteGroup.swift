@@ -21,7 +21,7 @@ extension ControlServer {
         }
         let attached = remote.content == "page"
             ? await attachRemotePage(remote.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: remote.name),
-                                     at: .root(store: store, workspace: workspace), select: true)
+                                     presentation: PagePresentation(tree), at: .root(store: store, workspace: workspace), select: true)
             : attach(remote, from: tree, host: host, placement: RemotePlacement(store: store, workspace: workspace))
         guard attached.ok, let parentID = attached.result?.id.flatMap(UUID.init(uuidString:)) else { return attached }
 
@@ -60,7 +60,7 @@ extension ControlServer {
         }
         let reply = row.content == "page"
             ? await attachRemotePage(row.id, origin: RemoteBinding.Origin(host: host, endpoint: tree.endpoint, sessionName: row.name),
-                                     at: .companion(of: parentID), select: false)
+                                     presentation: PagePresentation(tree), at: .companion(of: parentID), select: false)
             : attach(row, from: tree, host: host,
                      placement: RemotePlacement(store: store, workspace: workspace, parent: parentID, select: false))
         guard reply.ok, let id = reply.result?.id else {

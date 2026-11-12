@@ -1073,6 +1073,23 @@ struct HtmlOverlayTests {
         #expect(events.count == opened + 2)
     }
 
+    @Test func anOverLimitQueryIsStoredCutAndReportedAsStored() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let cut = String(repeating: "a", count: TextSearch.maxQuery)
+
+        #expect(store.setTextSearch(page.id, query: cut + "z") == 1)
+        #expect(store.setTextSearch(page.id, query: cut + "y") == nil)
+        #expect(session.htmlOverlay?.textSearch?.query == cut)
+        store.setTextSearchReport(page.id, revision: 1, query: cut, matches: 2, current: 1)
+
+        let stored = try #require(session.htmlOverlay)
+        let state = try #require(AppStore.textState(stored))
+        #expect(state.query == cut)
+        #expect(state.matches == 2)
+    }
+
     @Test func aReportIsKeptOnlyForTheCurrentRevisionAndEmitsNothing() throws {
         let (store, session, events) = try logStore()
         let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
@@ -1103,7 +1120,7 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textSearch == nil)
     }
 
-    @Test func aSearchAddressesOnlyALocalTextPage() throws {
+    @Test func aSearchAddressesOnlyATextPageLocalOrReplica() throws {
         let (store, session, _) = try logStore()
         #expect(store.textSearchPage(session.id, pane: nil) == .failure(.page(.noOverlay)))
         #expect(store.textSearchPage(UUID(), pane: nil) == .failure(.page(.unknownSession)))
@@ -1115,9 +1132,16 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textSearch == nil)
         #expect(store.closeOverlay(session.id))
 
+        let replicaMarkdown = HtmlOverlay(source: .replica(path: "/tmp/a.md", content: .markdown), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replicaMarkdown, sizePercent: nil) == nil)
+        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.closeOverlay(session.id))
+
         let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
-        #expect(store.textSearchPage(session.id, pane: nil) == .failure(.notText))
+        #expect(store.textSearchPage(session.id, pane: nil).map(\.id) == .success(replica.id))
+        #expect(store.setTextSearch(replica.id, query: "a") == 1)
+        #expect(session.htmlOverlay?.textSearch?.query == "a")
         #expect(store.closeOverlay(session.id))
 
         let log = logPage()
@@ -1235,11 +1259,17 @@ struct HtmlOverlayTests {
         #expect(session.htmlOverlay?.textWrap == false)
         #expect(store.closeOverlay(session.id))
 
+        let replicaMarkdown = HtmlOverlay(source: .replica(path: "/tmp/a.md", content: .markdown), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replicaMarkdown, sizePercent: nil) == nil)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
+        store.setTextWrap(replicaMarkdown.id, wrapped: true)
+        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.closeOverlay(session.id))
+
         let replica = HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())
         #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
-        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .failure(.notText))
-        store.setTextWrap(replica.id, wrapped: true)
-        #expect(session.htmlOverlay?.textWrap == false)
+        #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .success(true))
+        #expect(session.htmlOverlay?.textWrap == true)
         #expect(store.closeOverlay(session.id))
 
         #expect(store.openOverlay(session.id, command: "less"))

@@ -131,7 +131,7 @@ extension ServerActions {
     }
 
     /// catalogWorkspaces is the headless store as the catalog: workspaces and sessions in order, each live session
-    /// with its left pane and, while it has a split, its right one. An ended session lists no pane.
+    /// with its left pane and, while it has a split, its right one. An ended session and a page row list no pane.
     func catalogWorkspaces() -> [CatalogWorkspace] {
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)
@@ -139,18 +139,22 @@ extension ServerActions {
             CatalogWorkspace(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
                 var identities = [session.paneIdentity]
                 if session.hasSplit, let split = session.splitPaneIdentity { identities.append(split) }
-                let panes = session.ended ? [] : identities.map {
+                let panes = session.ended || session.content == .page ? [] : identities.map {
                     CatalogPane(identity: $0, daemon: ZmxSupport.daemonName(for: $0), endpoint: endpoint)
                 }
                 let scratch = session.scratchDaemon.map {
                     CatalogScratch(pane: CatalogPane(identity: $0.identity, daemon: ZmxSupport.scratchDaemonName(for: $0.identity),
                                                      endpoint: endpoint), shown: $0.shown)
                 }
+                let page = session.content == .page ? session.htmlOverlay.map { overlay in
+                    CatalogPage(kind: { if case .url = overlay.source { "url" } else { "file" } }(), identity: overlay.identity,
+                                endpoint: endpoint)
+                } : nil
                 let fields = CatalogSessionFields(id: session.id, name: session.displayName, parent: session.parentID,
-                                                  cwd: session.effectiveCwd, primary: session.paneIdentity,
+                                                  cwd: session.effectiveCwd, primary: page == nil ? session.paneIdentity : session.id,
                                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                                   shown: session.hasSplit && session.isSplit,
-                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch)
+                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch, page: page)
                 return CatalogSession(fields: fields, panes: panes)
             })
         }

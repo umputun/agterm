@@ -39,6 +39,22 @@ struct PaneObserverTests {
 
     private var later: Date { Date().addingTimeInterval(1) }
 
+    @Test func aPageRowOutlivesListingsThatNameNoDaemonOfIt() async throws {
+        let anchor = try session()
+        var args = ControlArgs()
+        args.url = "https://example.com/"
+        let reply = await harness.actions.serve(ControlRequest(cmd: .sessionPage, target: anchor.id.uuidString, args: args))
+        let row = try harness.session(reply)
+
+        observer.apply([record(anchor.paneIdentity)], listedAt: later)
+        observer.apply([], listedAt: later)
+
+        #expect(harness.store.session(withID: row.id) === row)
+        #expect(!row.ended)
+        #expect(row.htmlOverlay != nil)
+        #expect(row.daemonBackedPanes.isEmpty)
+    }
+
     @Test func listedPanesAreAdoptedAfterARestart() throws {
         let session = try session(split: true)
         let split = try #require(session.splitPaneIdentity)

@@ -17,15 +17,27 @@ extension AppStore {
             }
             pane = role
         }
-        let overlay = HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
-                                  chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
-                                  replicaOf: origin, markdownLinks: page.markdownLinks)
+        let overlay = Self.seeded(HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,
+                                              chromeless: page.chromeless, persistent: page.persistent, browse: page.browse,
+                                              replicaOf: origin, textLog: page.textLog, markdownLinks: page.markdownLinks),
+                                  page.textSeed)
         if let failure = openHtmlOverlay(id, pane: pane, overlay: overlay, sizePercent: page.sizePercent, points: page.points,
                                          backgroundColor: page.backgroundColor) {
             return failure.message(pane: pane)
         }
         if page.follow { selectSession(id) }
         return nil
+    }
+
+    // a page offered again opens with the following, query and wrap it had; a step is never replayed
+    static func seeded(_ overlay: HtmlOverlay, _ seed: PresentationTextState?) -> HtmlOverlay {
+        guard let seed, overlay.source.kind == .text else { return overlay }
+        var page = overlay
+        if let following = seed.following, page.logState != nil { page.logState?.following = following }
+        page.searchRevision = seed.revision
+        page.textSearch = seed.query.flatMap { $0.isEmpty ? nil : TextSearch(query: $0) }
+        page.textWrap = seed.wrap
+        return page
     }
 
     static func replicaSource(_ source: PresentationPageSource) -> HtmlSource? {
@@ -67,6 +79,48 @@ extension AppStore {
             return .failure(.init("the workspace here is gone"))
         }
         return showReplicaPage(overlay, backgroundColor: page.backgroundColor, in: row)
+    }
+
+    /// showCatalogPage shows server page row `rowID`'s page in that row, nil once it shows. The row stays whatever
+    /// happens: the catalog owns it.
+    public func showCatalogPage(_ page: PresentationPage, inRow rowID: UUID) -> String? {
+        guard let overlay = Self.replicaOverlay(page) else { return "the page cannot be shown here" }
+        if let failure = openCatalogPage(overlay, inRow: rowID, backgroundColor: page.backgroundColor) { return failure }
+        HtmlPageOutcomes.shared.register(overlay.id)
+        return nil
+    }
+
+    /// showCatalogPageRefusal shows why page row `rowID` shows no page from its server, as the row's failed page; a
+    /// row already showing that reason is left as it is.
+    public func showCatalogPageRefusal(_ reason: String, inRow rowID: UUID) {
+        let failed = HtmlSource.unreadable(reason: reason)
+        guard let row = catalogPageRow(rowID), !(row.overlayActive && row.htmlOverlay?.source == failed) else { return }
+        var page = HtmlOverlay(source: failed)
+        page.loadState = .failed
+        page.loadError = reason
+        _ = openCatalogPage(page, inRow: rowID, backgroundColor: nil)
+    }
+
+    private func clearCatalogPage(_ rowID: UUID) {
+        guard let row = catalogPageRow(rowID), row.overlayActive else { return }
+        row.overlayActive = false
+        row.overlayHidden = false
+        row.teardownOverlaySlot()
+        row.overlayBackgroundColor = nil
+        scheduleTreeChanged()
+    }
+
+    private func openCatalogPage(_ overlay: HtmlOverlay, inRow rowID: UUID, backgroundColor: String?) -> String? {
+        guard catalogPageRow(rowID) != nil else { return "the row here is gone" }
+        clearCatalogPage(rowID)
+        return openHtmlOverlay(rowID, pane: nil, overlay: overlay, sizePercent: nil, backgroundColor: backgroundColor)?
+            .message(pane: nil)
+    }
+
+    private func catalogPageRow(_ rowID: UUID) -> Session? {
+        guard let row = session(withID: rowID), row.content == .page,
+              row.remotePresentation?.binding.catalogOwned == true else { return nil }
+        return row
     }
 
     private static func replicaOverlay(_ page: PresentationPage) -> HtmlOverlay? {
@@ -127,7 +181,15 @@ extension AppStore {
                                      canGoBack: page.current?.canGoBack ?? false,
                                      canGoForward: page.current?.canGoForward ?? false,
                                      hidden: slot.session.overlayHidden(slot.pane),
-                                     appliedSeq: appliedSeq)
+                                     appliedSeq: appliedSeq, text: Self.textState(page))
+    }
+
+    static func textState(_ page: HtmlOverlay) -> PresentationTextState? {
+        guard page.source.kind == .text else { return nil }
+        return PresentationTextState(following: page.logState?.following, log: page.logState?.report,
+                                     query: page.textSearch?.query, revision: page.searchRevision,
+                                     matches: page.textSearch?.matches, current: page.textSearch?.current,
+                                     wrap: page.textWrap, changes: page.textChanges)
     }
 
     /// closeReplicaPages takes down every page `session` shows for its origin: with the stream gone the origin

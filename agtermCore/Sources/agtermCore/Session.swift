@@ -382,9 +382,10 @@ public final class Session: Identifiable {
     @ObservationIgnored private var askRegistry: AskRegistry = .shared
 
     /// openAsk reserves the session ask slot and its placement, refusing a second ask; `registry` keeps its result.
+    /// A page session takes only a GUI ask: a terminal one draws in a terminal it does not have.
     @discardableResult
     public func openAsk(_ ask: PendingAsk, paneIdentity: UUID? = nil, remoteOwner: Int? = nil, registry: AskRegistry = .shared) -> Bool {
-        guard askPending == nil, content == .terminal else { return false }
+        guard askPending == nil, content == .terminal || ask.style == .gui else { return false }
         askRegistry = registry
         askPaneIdentity = paneIdentity
         askRemoteOwner = remoteOwner

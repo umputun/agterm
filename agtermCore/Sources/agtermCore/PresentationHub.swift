@@ -67,7 +67,8 @@ public final class PresentationHub {
     /// The frame kinds this origin can produce.
     public static let supportedKinds = ["status", "hud", "notify", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
-                                        statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind]
+                                        statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
+                                        pageTextKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -96,6 +97,9 @@ public final class PresentationHub {
     /// pageForwardKind is a presenter's capability of reaching a headless origin's loopback URL page through an ssh
     /// forward it opens.
     public static let pageForwardKind = "page.forward"
+    /// pageTextKind advertises live text pages: log pages, the text page actions, their `pageResult` answers and the
+    /// text state in `pageState`.
+    public static let pageTextKind = "page.text"
     /// statusShapesKind advertises the expanded status-shape set.
     public static let statusShapesKind = "status.shapes"
     /// statusCheckmarkKind advertises `StatusShape.checkmark`, added after `status.shapes` shipped.
@@ -219,7 +223,7 @@ public final class PresentationHub {
             send(granted ? .presenterGranted : .presenterRefused, to: id)
             if granted { onPresenterGranted?(subscriber.session) }
         case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
-             .pageState, .linkClick:
+             .pageState, .pageResult, .linkClick:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break

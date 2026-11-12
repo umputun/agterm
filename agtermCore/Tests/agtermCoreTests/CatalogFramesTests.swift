@@ -64,6 +64,9 @@ struct CatalogFramesTests {
         .delta(epoch: "e1", rev: 9, change: .paneAdded(CatalogFixture.pane(), session: UUID())),
         .delta(epoch: "e1", rev: 10, change: .paneChanged(CatalogFixture.pane(), session: UUID())),
         .delta(epoch: "e1", rev: 11, change: .paneRemoved(UUID(), session: UUID())),
+        .hello(CatalogHello(version: 1, pageRows: true)),
+        .delta(epoch: "e1", rev: 12, change: .sessionAdded(CatalogFixture.pageRow(), workspace: UUID(), index: 0)),
+        .unknown(kind: CatalogFrame.skipKind, epoch: "e1", rev: 13),
     ])
     func everyFrameRoundTrips(_ frame: CatalogFrame) throws {
         let line = try CatalogCodec.encode(frame)
@@ -76,6 +79,16 @@ struct CatalogFramesTests {
         let line = Data(#"{"kind":"session.teleported","epoch":"e1","rev":3,"id":"x"}"#.utf8)
 
         #expect(try CatalogCodec.decode(line) == .unknown(kind: "session.teleported", epoch: "e1", rev: 3))
+    }
+
+    @Test func aHelloAndASessionWithoutPageFieldsDecodeAsBefore() throws {
+        let hello = Data(#"{"kind":"hello","hello":{"version":1}}"#.utf8)
+        let fields = CatalogFixture.session().fields
+        let encoded = try JSONEncoder().encode(fields)
+
+        #expect(try CatalogCodec.decode(hello) == .hello(CatalogHello(version: 1)))
+        #expect(!String(decoding: encoded, as: UTF8.self).contains("page"))
+        #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encoded).page == nil)
     }
 
     @Test func versionsTravelWithTheProtocolKeyword() throws {

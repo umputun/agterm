@@ -103,6 +103,13 @@ final class ControlServer {
     var remoteLinkRefusalHuds: [UUID: Int] = [:]
     /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
+    /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.
+    var catalogPageClaims: Set<UUID> = []
+    /// forwardedPages names the server each page a remote window created lives on, so its result is read there after
+    /// that window is gone; `ControlServer+RemoteActions` owns them.
+    var forwardedPages: [UUID: String] = [:]
+    /// catalogPagePause is the wait before a remote page row's claim is tried again.
+    var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
@@ -191,12 +198,9 @@ final class ControlServer {
     var liveReset: LiveResetCoordinator?
     /// The scheduler's rows for `hooks.list`, wired by `agtermApp` once the controller exists.
     var hookStatus: () -> [ControlHookEntry] = { [] }
-    /// companionPageTokens are page-companion attachments handed to another Mac and not claimed yet, by token.
-    var companionPageTokens: [String: CompanionPageToken] = [:]
-    /// pendingCompanionClaims are claimed attachments whose channel is not adopted yet, by claim id.
-    var pendingCompanionClaims: [UUID: CompanionPageServing] = [:]
-    /// companionPageStreams are the live channels of page-companion attachments, by claim id.
-    var companionPageStreams: [UUID: PageServeStream] = [:]
+    /// pageAttachments are this Mac's page rows handed to other Macs.
+    lazy var pageAttachments = PageAttachmentBook(clock: { [unowned self] in hudClock() },
+                                                  servedPage: { [unowned self] in servedPage(session: $0, page: $1) })
     /// originEpoch names this app run in respawn counts, so a viewer never reads a restarted counter as older.
     let originEpoch = UUID().uuidString
     /// respawnGenerations counts each session's pane respawns by daemon name, for the presentation snapshot.
@@ -366,6 +370,7 @@ final class ControlServer {
         // or a bind that failed) still holds one and would otherwise keep it for the whole process.
         defer { releaseOwnership() }
         shutdownPresentationStreams()
+        pageAttachments.shutdown()
         stopRemoteCatalogs()
         stopRemotePresentations()
         guard let loop = listener else { return }
@@ -532,7 +537,7 @@ final class ControlServer {
         // a remote window's structural command is decided here and sent from a worker, so the accept thread
         // never waits on ssh while local structural commands keep their inline order
         if let route = runBlocking({ await server.remoteRoute(request) }) {
-            guard case .send = route else {
+            if case .refused = route {
                 _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
                 return
             }
