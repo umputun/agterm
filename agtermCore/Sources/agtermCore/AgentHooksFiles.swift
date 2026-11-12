@@ -119,7 +119,8 @@ public struct AgentHooksFiles {
         for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {
             let wrapper = destination.appendingPathComponent(name)
             let original = try String(contentsOf: wrapper, encoding: .utf8)
-            try writePreservingSymlink(AgentHooksInstall.bakeAgtermctlPath(into: original, toolPath: toolPath), to: wrapper)
+            let mode = AgentHooksInstall.posixMode(ofFile: (Self.symlinkTarget(of: wrapper) ?? wrapper).path)
+            try writePreservingSymlink(AgentHooksInstall.bakeAgtermctlPath(into: original, toolPath: toolPath), to: wrapper, posixMode: mode)
         }
     }
 
