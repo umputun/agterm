@@ -3603,7 +3603,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Print one with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"</span>,
               or use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[label](agterm://session/&lt;id&gt;)</span>
-              in Claude Code markdown, which Claude Code emits as OSC 8. In a session attached from another Mac,
+              in Claude Code markdown, which Claude Code emits as OSC 8. When Claude Code captures the mouse, use ⌘⇧-click. In a session attached from another Mac,
               the id is that Mac's and selects the one row here showing it; the click never attaches anything or acts there.
               Nothing happens for an unknown or closed session, when the destination window is zoomed, has the dashboard
               open or a picker pending, for any other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://</span>
