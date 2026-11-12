@@ -282,7 +282,7 @@ public final class RemotePresentationClient {
             }
         case .ack, .presenterAcquire, .linkClick, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
              .overlayClosed, .unknown,
-             .pageRejected, .pageClosed, .pageState:
+             .pageRejected, .pageClosed, .pageState, .pageResult:
             break
         }
     }

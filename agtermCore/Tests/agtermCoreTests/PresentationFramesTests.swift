@@ -127,6 +127,22 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 52, body: .linkClick(PresentationLinkClick(
             raw: "src/main.py:42", pane: UUID(), mode: .overlay75))),
         PresentationFrame(gen: 1, rev: 53, body: .linkRefused(PresentationLinkRefusal(reason: .notFound))),
+        PresentationFrame(gen: 1, rev: 55, body: .pageRequest(PresentationPage(
+            page: "p10", token: "t10", source: .text(path: "/tmp/app.log", line: nil), identity: "app.log",
+            chromeless: false, javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+            pane: nil, sizePercent: 95, follow: false, textLog: TextLog(tail: 200, follow: true),
+            textSeed: PresentationTextState(following: false, query: "error", revision: 3, wrap: true)))),
+        PresentationFrame(gen: 1, rev: 56, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 1, action: .follow, toggle: .toggle))),
+        PresentationFrame(gen: 1, rev: 57, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 2, action: .search, query: "timeout"))),
+        PresentationFrame(gen: 1, rev: 58, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 3, action: .changes, step: .prev))),
+        PresentationFrame(gen: 1, rev: 59, body: .pageState(PresentationPageState(
+            page: "p10", title: nil, address: "/tmp/app.log", load: .loaded, error: nil, canGoBack: false, canGoForward: false,
+            hidden: false, appliedSeq: 3, text: PresentationTextState(
+                following: true, log: TextLogReport(lines: 200, clipped: true), query: "timeout", revision: 4, matches: 7,
+                current: 2, wrap: false, changes: TextChanges(count: 5, current: 1))))),
+        PresentationFrame(gen: 1, rev: 60, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 2, ok: true, text: "2 of 7", state: PresentationTextState(query: "timeout", revision: 4, matches: 7, current: 2)))),
+        PresentationFrame(gen: 1, rev: 61, body: .pageResult(PresentationPageResult(page: "p10", seq: 3, ok: false, error: "no query"))),
     ]
 
     @Test(arguments: [
@@ -240,6 +256,70 @@ struct PresentationFramesTests {
         #expect(state.address?.count == PresentationPageState.maxAddress)
         #expect(state.error?.count == PresentationPageState.maxError)
         #expect(try PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageState(state))).count
+            < PresentationCodec.maxFrameBytes)
+    }
+
+    @Test func textFieldsFromAnOlderPeerDecodeAsAbsent() throws {
+        let request = #"{"kind":"page.request","gen":1,"rev":1,"page":{"page":"p1","token":"t1","source":{"text":{"path":"/tmp/a.log"}},"#
+            + #""identity":"a.log","chromeless":false,"javascript":false,"navigation":false,"browse":false,"#
+            + #""persistent":false,"follow":false}}"#
+        let state = #"{"kind":"page.state","gen":1,"rev":2,"page":{"page":"p1","load":"loaded","canGoBack":false,"#
+            + #""canGoForward":false,"hidden":false,"appliedSeq":0}}"#
+        let command = #"{"kind":"page.command","gen":1,"rev":3,"page":{"page":"p1","seq":1,"action":"hide"}}"#
+
+        guard case .pageRequest(let page) = try PresentationCodec.decode(Data(request.utf8)).body,
+              case .pageState(let decoded) = try PresentationCodec.decode(Data(state.utf8)).body,
+              case .pageCommand(let hide) = try PresentationCodec.decode(Data(command.utf8)).body else { throw DecodedOtherKind() }
+
+        #expect(page.textLog == nil && page.textSeed == nil)
+        #expect(decoded.text == nil)
+        #expect(hide.toggle == nil && hide.query == nil && hide.step == nil)
+    }
+
+    @Test func aPlainPageSendsNoTextKeys() throws {
+        let page = PresentationPage(page: "p1", token: "t1", source: .text(path: "/tmp/a.go", line: 3), identity: "a.go", chromeless: false,
+                                    javascript: false, navigation: false, browse: false, persistent: false, backgroundColor: nil,
+                                    pane: nil, sizePercent: nil, follow: false)
+        let state = PresentationPageState(page: "p1", title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
+                                          canGoForward: false, hidden: false, appliedSeq: 0)
+
+        let request = String(decoding: try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .pageRequest(page))), as: UTF8.self)
+        let report = String(decoding: try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .pageState(state))), as: UTF8.self)
+
+        #expect(!request.contains("textLog") && !request.contains("textSeed"))
+        #expect(!report.contains(#""text""#))
+    }
+
+    @Test func aTextActionIsNotDecodableAsAnOlderAction() {
+        let line = Data(#"{"kind":"page.command","gen":1,"rev":1,"page":{"page":"p1","seq":1,"action":"rewind"}}"#.utf8)
+
+        #expect(throws: (any Error).self) { try PresentationCodec.decode(line) }
+    }
+
+    @Test func onlyTheTextActionsAnswerWithAResult() {
+        let answering = Set([PresentationPageAction.follow, .search, .wrap, .changes])
+
+        for action in [PresentationPageAction.hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize,
+                       .follow, .search, .wrap, .changes] {
+            #expect(action.answersWithResult == answering.contains(action))
+        }
+    }
+
+    @Test func toggleModesTravelAsTheirWireSpellings() throws {
+        let encoded = try JSONEncoder().encode([ControlToggleMode.on, .off, .toggle])
+
+        #expect(String(decoding: encoded, as: UTF8.self) == #"["on","off","toggle"]"#)
+    }
+
+    @Test func textStateAndResultBoundTheirStrings() throws {
+        let long = String(repeating: "q", count: 100_000)
+        let state = PresentationTextState(query: long, revision: 1)
+        let result = PresentationPageResult(page: "p1", seq: 1, ok: false, text: long, error: long, state: state)
+
+        #expect(state.query?.count == PresentationTextState.maxQuery)
+        #expect(result.text?.count == PresentationPageResult.maxText)
+        #expect(result.error?.count == PresentationPageResult.maxText)
+        #expect(try PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageResult(result))).count
             < PresentationCodec.maxFrameBytes)
     }
 

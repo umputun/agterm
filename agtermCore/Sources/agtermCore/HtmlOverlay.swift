@@ -122,7 +122,7 @@ struct HtmlOrigin: Equatable {
 }
 
 /// TextLog is a text page's request to show only a log's last `tail` lines, following its end when `follow` is set.
-public struct TextLog: Equatable, Sendable {
+public struct TextLog: Codable, Equatable, Sendable {
     public let tail: Int
     public let follow: Bool
 
@@ -134,7 +134,7 @@ public struct TextLog: Equatable, Sendable {
 
 /// TextLogReport is what the app last read for a log page: the lines shown, a clipped first line, a file that is
 /// missing (`waiting`) or turned binary (`unreadable`, the last good text still shown).
-public struct TextLogReport: Equatable, Sendable {
+public struct TextLogReport: Codable, Equatable, Sendable {
     public var lines = 0
     public var clipped = false
     public var waiting = false
@@ -161,7 +161,7 @@ public struct TextLogState: Equatable, Sendable {
 
 /// TextChanges is a diff page's count of changes, a change being one run of removed and added lines, and the one it
 /// last stepped to, from 1 and 0 before any step.
-public struct TextChanges: Equatable, Sendable {
+public struct TextChanges: Codable, Equatable, Sendable {
     public let count: Int
     public let current: Int
 

@@ -113,7 +113,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             store.rejectRemoteOverlay(change.job, forSession: sessionID)
         case .overlayClosed(let change):
             store.remoteOverlaySurfaceClosed(change.job, forSession: sessionID)
-        case .pageState, .pageClosed, .pageRejected:
+        case .pageState, .pageResult, .pageClosed, .pageRejected:
             store.receiveRemotePageFrame(body, forSession: sessionID)
         case .linkClick(let click):
             receiveLinkClick(click, forSession: sessionID)
