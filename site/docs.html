@@ -3470,6 +3470,11 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
                 >keybind = super+opt+ctrl+key_g=text:hello</span
               >
               works on any layout. agterm's bundled defaults already use it for ⌘C, ⌘V, and ⌘A.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global:</span> keybinds and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_visibility</span> are
+              Ghostty.app features agterm does not host, so they parse and never fire; the system-wide chord agterm registers is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> in
+              <a href="#keymap" style="color: #6d82f3">keymap.conf</a>.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Programs can read and write the macOS clipboard over OSC 52. agterm prompts before a program
