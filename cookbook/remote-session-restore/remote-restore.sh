@@ -52,9 +52,11 @@ unlock() {
     rmdir "$LOCK" 2>/dev/null || true
 }
 
-# session id -> workspace id for every session of window $1, tab-separated
+# session id -> workspace id for every session of window $1, tab-separated; fails when the tree
+# cannot be read, a window closed meanwhile included
 placement() {
-    agt tree --window "$1" --json 2>/dev/null | jq -r '
+    json=$(agt tree --window "$1" --json 2>/dev/null) && [ -n "$json" ] || return 1
+    printf '%s' "$json" | jq -r '
         .result.tree.workspaces[] | .id as $ws | .sessions[] | [.id, $ws] | @tsv' 2>/dev/null
 }
 
@@ -67,18 +69,27 @@ record() {
 $line
 EOF
     [ "$session" != - ] || exit 0
-    # the event names the workspace the row was created in; the tree, read now, also has any move
-    # made since, which a hook queued behind other events would otherwise miss
-    if [ "$kind" = remote.opened ] && [ "$window" != - ]; then
-        now=$(placement "$window" | awk -F '\t' -v s="$session" '$1 == s { print $2 }')
-        [ -z "$now" ] || workspace=$now
+    if [ "$kind" = remote.opened ]; then
+        # a row of an agterm-server window carries its own id, and zmx attach cannot bring it back
+        [ "$id" != "$session" ] || exit 0
+        # the event names the workspace the row was created in; the tree, read now, also has any move
+        # made since, which a hook queued behind other events would otherwise miss. A tree that reads
+        # fine without the row means it closed while this event waited, and remote.closed has run.
+        if [ "$window" != - ] && map=$(placement "$window"); then
+            workspace=$(printf '%s\n' "$map" | awk -F '\t' -v s="$session" '$1 == s { print $2 }')
+            [ -n "$workspace" ] || exit 0
+        fi
     fi
 
     mkdir -p "$STATE"
     lock
-    # a row is keyed by this Mac's session id: an undo re-opens the same one
+    # a row is keyed by this Mac's session id: an undo re-opens the same one. An attach also settles
+    # a waiting line for the same session and window, or a retry would attach it a second time.
     if [ -f "$ROWS" ]; then
-        awk -F '\t' -v s="$session" '$5 != s' "$ROWS" > "$ROWS.tmp"
+        awk -F '\t' -v s="$session" -v k="$kind" -v h="$host" -v i="$id" -v w="$window" '
+            $5 == s { next }
+            k == "remote.opened" && $5 == "-" && $1 == h && $2 == i && $3 == w { next }
+            { print }' "$ROWS" > "$ROWS.tmp"
     else
         : > "$ROWS.tmp"
     fi
@@ -95,7 +106,8 @@ sync() {
     [ -n "$window" ] && [ -s "$ROWS" ] || exit 0
     # most tree changes are in windows with no remote row; skip the tree read for those
     awk -F '\t' -v w="$window" '$3 == w { found = 1 } END { exit !found }' "$ROWS" || exit 0
-    map=$(placement "$window")
+    # a window closing can change its tree before its rows' remote.closed records finish
+    map=$(placement "$window") || exit 0
     [ -n "$map" ] || exit 0
     lock
     if [ -f "$ROWS" ]; then
