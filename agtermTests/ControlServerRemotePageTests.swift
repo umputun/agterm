@@ -359,11 +359,12 @@ final class ControlServerRemotePageTests: XCTestCase {
     }
 
     func testATextActionOnAPageThatIsNotTextAnswersTheLocalRefusalAndAdvancesNoSequence() async throws {
-        let fix = try fixture()
-        _ = try present(fix, page(.url("http://127.0.0.1:9/a")))
+        let fix = try fixture(files: ["/docs/index.html": html("<p>x</p>")])
+        _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: nil)))
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 5, action: .hide)))
-        try await waitFor("the hide is reported") { self.states(fix).last?.appliedSeq == 5 }
-        try await waitFor("the page load fails") { self.states(fix).last?.load == .failed }
+        try await waitFor("the loaded page reports the hide") {
+            self.states(fix).last.map { $0.appliedSeq == 5 && $0.load == .loaded } == true
+        }
         let before = states(fix).count
 
         try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 6, action: .search,

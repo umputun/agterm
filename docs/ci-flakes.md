@@ -204,11 +204,13 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 ### `ControlServerRemotePageTests.testATextActionOnAPageThatIsNotTextAnswersTheLocalRefusalAndAdvancesNoSequence`
 
 - **Symptom.** `XCTAssertEqual failed: ("5") is not equal to ("1")` on the state frame count.
-- **Runs.** 43224720127 (PR #978).
-- **Cause, demonstrated.** The page is a URL on the restricted port 9. Its own load reports (loading, loading,
+- **Runs.** 43224720127 (PR #978); 43230065480 failed the first fix, `the page load fails not reached within 10.0s`.
+- **Cause, demonstrated.** The page was a URL on the restricted port 9. Its own load reports (loading, loading,
   failed `Not allowed to use restricted network port`, all at sequence 5) arrived after the baseline count;
-  reproduced locally with the frames printed. The refused text actions sent none.
-- **Fix.** The test waits for the load to end `failed` before it takes the baseline.
+  reproduced locally with the frames printed. The refused text actions sent none. Waiting for the failed load
+  did not hold on the runner, where that load never reported `failed` within 10 s.
+- **Fix.** The test shows an HTML file page through the fixture's channel, which needs no network, and waits for
+  a report with the hide's sequence and `loaded` before it takes the baseline.
 
 ### `ControlServerRemotePageTests.testTextCommandsOnAReplicaAnswerAsLocallyAndReachTheOrigin`
 
