@@ -182,7 +182,7 @@ holds the pane the shortcut fired from, so `session type --pane "$AGT_PANE"` typ
 Run a command AS the session's process (closes when it exits, no echoed command line):
 
 ```bash
-agtermctl session new --command "ssh host -p 22"     # a default-PATH binary, no echoed command line; a ; or && list would run only its first command
+agtermctl session new --command "ssh host -p 22"     # a default-PATH binary, no echoed command line; wrap a ; or && list in sh -c
 agtermctl session new --command "zsh -lc 'htop'"     # Homebrew/non-default binary: --command has the app's GUI PATH, so wrap in a login shell (or use an absolute path); bare "htop" exits 127
 agtermctl session new --command "zsh -lc 'make test'" --wait   # HOLD the row open after the command exits (press any key to close) so its final output stays readable; --wait needs --command
 ```

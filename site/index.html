@@ -54,7 +54,7 @@
         "author": { "@type": "Person", "name": "Umputun", "url": "https://github.com/umputun" },
         "codeRepository": "https://github.com/umputun/agterm",
         "downloadUrl": "https://github.com/umputun/agterm/releases",
-        "softwareVersion": "0.41.1"
+        "softwareVersion": "0.42.0"
       }
     </script>
   </head>
@@ -656,41 +656,10 @@
               Open a session running on another Mac as a row in this sidebar, split included, with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl zmx attach HOST ID</span>.
               Its status glyph, notifications, HUD and title-bar context follow it here, and its panes take this Mac's size. The
-              other Mac runs agterm in Live sessions mode and is reached over key-based ssh.
-              <a href="/docs#remote-sessions" style="color: #6d82f3">Remote sessions</a>
-            </p>
-          </div>
-          <div style="grid-column: 1 / -1; background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 36px">
-            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px">
-              <span
-                style="
-                  font-family: &quot;JetBrains Mono&quot;, monospace;
-                  font-size: 11.5px;
-                  color: #e6e1d7;
-                  border: 1px solid rgba(255, 255, 255, 0.16);
-                  background: rgba(255, 255, 255, 0.04);
-                  padding: 3px 8px;
-                  border-radius: 6px;
-                "
-                >linux</span
-              >
-              <h3
-                style="
-                  font-family: &quot;JetBrains Mono&quot;, monospace;
-                  font-weight: 700;
-                  font-size: 19px;
-                  margin: 0;
-                  letter-spacing: -0.01em;
-                "
-              >
-                Remote server
-              </h3>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0">
-              Run your sessions on a Linux host under agterm-server and open them in a remote window on the Mac. Every shell keeps
-              running on the host when the Mac sleeps, the network drops or the window closes, and the next connection finds it as it
-              was. Splits, companions, the scratch, overlays, asks and pages work as they do locally, and agents on the host report
-              their status to the Mac showing them.
+              other Mac runs agterm in Live sessions mode and is reached over key-based ssh. A Linux host can run your sessions
+              too: under agterm-server every shell keeps running when the Mac sleeps, the network drops or the window closes, and
+              a remote window on the Mac shows them with splits, companions, the scratch, overlays, asks, pages and agent status.
+              <a href="/docs#remote-sessions" style="color: #6d82f3">Remote sessions</a> ·
               <a href="/docs#remote-server" style="color: #6d82f3">Remote server</a>
             </p>
           </div>

@@ -97,11 +97,11 @@ The template follows four rules that any job driving agterm needs:
 
 - Every `agtermctl` call defaults to the frontmost window. Find the window holding the target
   workspace (`window list --json`, then `tree --json --window`) and pass `--window`.
-- A `--command` session starts with agterm's GUI PATH, not the job's. Wrap the program in
-  `/usr/bin/env PATH=...` or spell it absolutely.
-- libghostty runs `--command` as `exec <line>` under bash, so only its first command runs. A line
-  built from job text (quotes, `$`, newlines) goes through a script `/bin/sh` runs, as the
-  template's launcher file does.
+- Outside Live sessions a `--command` session starts with agterm's GUI PATH, not the job's. Wrap the
+  program in `/usr/bin/env PATH=...` or spell it absolutely.
+- Outside Live sessions libghostty runs `--command` as `exec <line>` under bash: wrap a command list
+  in `sh -c`. A line built from job text (quotes, `$`, newlines) goes through a script `/bin/sh`
+  runs, as the template's launcher file does.
 - `--no-select` keeps the new session from taking focus while the user is working.
 
 The agent's working directory must already be trusted by that agent, or the session stops on the

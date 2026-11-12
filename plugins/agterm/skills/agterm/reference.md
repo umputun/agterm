@@ -475,7 +475,7 @@ buys nothing. A caller with no tree uses `version`.
   existing one or creates it when absent (idempotent). `--command` runs that command as the session's
   process instead of the login shell (no echoed command line; the session closes when the command
   exits). libghostty runs it under bash as `exec <line>`: quotes, `$VAR`, redirects, pipes and globs
-  work, but a `;` or `&&` list runs only its first command, since `exec` replaces bash. It inherits the
+  work; wrap a `;` or `&&` list in `sh -c`. It inherits the
   app's GUI `PATH` (the launchd default — no `/opt/homebrew/bin`), so a bare Homebrew or other
   non-default binary fails with exit 127.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
@@ -754,8 +754,8 @@ error keeps those names for compatibility.
   on screen starts it there without switching and without taking the keyboard, which goes to the
   scratch once that session is selected; `--follow` selects the target, as on `session overlay open`.
   `--command` (only when showing) runs that program as the
-  scratch's process instead of a login shell — run as `session new --command` runs it (a `;` or `&&`
-  list runs only its first command, and it inherits the app's GUI
+  scratch's process instead of a login shell — run as `session new --command` runs it (wrap a `;` or `&&`
+  list in `sh -c`, and it inherits the app's GUI
   `PATH`, so the same exit-127 caveat as `session new --command`: wrap in `"zsh -lc '…'"` or use an
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
   shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not

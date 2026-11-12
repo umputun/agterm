@@ -371,10 +371,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   - `--after`/`--before` anchor, which supplies workspace and insertion index.
   Reject both anchors, placement plus workspace, name plus ID, create without name, and missing name without
   create. Insert indices are clamped.
-- `--command` becomes raw libghostty `config.command`, which on macOS runs under `login` as
-  `/bin/bash --noprofile --norc -c "exec -l <command>"` (`Exec.zig` at `GHOSTTY_REV`). Quotes, expansion,
-  redirection, pipes, and globs work, but `exec` replaces bash with the first command, so anything after
-  `;` or `&&` never runs: a list needs an explicit `sh -c` or `zsh -lc`. GUI launch PATH lacks
+- Outside Live sessions `--command` becomes raw libghostty `config.command`, which on macOS runs under
+  `login` as `/bin/bash --noprofile --norc -c "exec -l <command>"` (`Exec.zig` at `GHOSTTY_REV`). Quotes,
+  expansion, redirection, pipes, and globs work; wrap a command list in `sh -c` or `zsh -lc`. GUI launch PATH lacks
   `/opt/homebrew/bin`; missing binaries exit 127, so use absolute paths or a login shell.
 - `initialCommand` persists and reruns only when restored-command support is enabled; fresh sessions always
   run it. Captured foreground takes precedence. Promoting a split survivor clears the exited pane's initial

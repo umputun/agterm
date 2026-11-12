@@ -1066,11 +1066,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> runs a program as the session's
                 process instead of the login shell (no echoed command line; the session closes when it exits). It runs
                 as one bash command: quotes,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$VAR</span>, redirects, pipes and globs work,
-                but a line joined with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$VAR</span>, redirects, pipes and globs work;
+                wrap a list joined with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">;</span> or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&amp;&amp;</span> runs
-                <strong style="color: #bfbab0">only its first command</strong>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&amp;&amp;</span> in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sh -c</span>.
                 It also inherits the app's GUI
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> (the launchd default — no
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>), so a bare Homebrew binary

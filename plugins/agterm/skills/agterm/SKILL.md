@@ -348,8 +348,8 @@ omitted when expanded).
   create (and focus) a session. Target the workspace by id/prefix (`--workspace`) OR by name
   (`--workspace-name`, mutually exclusive); add `--create-workspace` to reuse-or-create the named
   workspace when absent. `--command` runs that program as the session process instead of a login shell
-  (bash runs it as `exec <line>`, so a `;` or `&&` list runs only its first command, and it gets the app's
-  GUI `PATH` — a Homebrew/non-default binary needs an absolute path or a
+  (outside Live sessions bash runs it as `exec <line>`, so wrap a `;` or `&&` list in `sh -c`, and it gets the
+  app's GUI `PATH` — a Homebrew/non-default binary needs an absolute path or a
   `zsh -lc '…'` wrapper, else exit 127; same caveat for `session scratch --command` and `session overlay
   open` below);
   `--wait` (with `--command`, else an error) HOLDS the session open after the command exits, showing the
