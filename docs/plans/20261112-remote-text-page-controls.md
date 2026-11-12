@@ -123,10 +123,11 @@ The presenting Mac renders and owns the live page state, as it already owns the 
   `PresentationPageResult.deadline` (5 seconds), and answers `presenter did not answer` past it; the wait also settles
   on page end, channel loss or presenter change. Adopted presentation streams have their own readers, so the wait
   does not block the result it waits for.
-- Ordering: control-issued text actions on one page (from the origin or from `agtermctl` on the presenting Mac) run
-  in sequence order at the presenter's page-execution seam (`applyReplicaPageCommand`), each awaited before the next
-  starts. The accept loop is not relied on: page bridge requests and page-serve relays run outside it. The page's own
-  field and keys keep acting at once in `text.js`, guarded by the existing revision and report checks, as locally.
+- Ordering: the origin's text actions on one page run in sequence order on the presenter (`applyReplicaPageCommand`),
+  each awaited before the next starts and each resolving its page when it runs, so a replaced page is never touched.
+  Calls made on the presenting Mac itself, its socket, page bridges and the page's own field and keys, stay on their
+  existing paths: each step is one script call, so no source can tear another's step, and the revision and report
+  checks guard the rest, as locally.
 - A completed step commits its result before `pageResult` is built: `TextPageBridge.step` and `stepChange` write
   the counts, the current match or change, and a following log's pause into the model, so the captured state never
   depends on the order of the page's script messages.

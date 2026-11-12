@@ -319,7 +319,7 @@
     field.placeholder = 'Find';
     field.spellcheck = false;
     field.autocomplete = 'off';
-    // TextSearch.maxQuery, counted here in UTF-16 units, so a typed query is never cut by the model
+    // counted in UTF-16 units so typed input fits TextSearch.maxQuery
     field.maxLength = 16384;
     const counter = document.createElement('span');
     counter.className = 'agterm-count';
