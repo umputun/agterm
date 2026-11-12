@@ -25,10 +25,13 @@ C-boundary concurrency before changing the bridge.
 - For every new capability, propose useful control API/CLI coverage: protocol command and arguments,
   dispatch, `agtermctl`, read-back, and tests. Control-native features count; skip only chrome with nothing
   meaningful to drive.
-- A session attached from another Mac is a normal view, not an extra.
-  Every new or changed capability that works locally works there too, unless it was explicitly deferred
-  or declined: design the remote path (presentation, page serving, control routing) together with the
-  local one, and a missing remote path is part of the task, never an exclusion to note.
+- A remote session, attached from another Mac or served by an agterm-server Linux host, is a normal view,
+  not an extra.
+  Every new or changed capability that works locally works there too: design the remote path (presentation,
+  page serving, control routing) together with the local one, and a missing remote path is part of the task.
+  The only exception is one Eugene approves in a direct AskUserQuestion that explains what would not work
+  remotely, why, and what supporting it would cost; a plan line, PR note or peer's agreement is not that
+  approval.
 - For each hideable titlebar/sidebar element, ask whether it should join host-free `InterfaceElement` and
   Settings > Interface. Never add that preference without approval.
   A control enabled there stays visible and is disabled when it cannot act; never show or hide it by state.
