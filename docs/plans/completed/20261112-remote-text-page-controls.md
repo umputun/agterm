@@ -407,32 +407,32 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `site/commands.html`
 - Modify: `.claude/rules/control-api.md`
 
-- [ ] `CatalogSessionFields.page: CatalogPage?` (`kind` file or url, `identity` text) marks a page row, whose
+- [x] `CatalogSessionFields.page: CatalogPage?` (`kind` file or url, `identity` text) marks a page row, whose
       `primary` is the row's own id; `CatalogHello.pageRows: Bool?`, set by `RemoteCatalogClient.open`'s outgoing
       hello, declares that this Mac shows page rows
-- [ ] older viewers (no `pageRows`): `CatalogHub` keeps one revision and one diff of the full catalog; such a
+- [x] older viewers (no `pageRows`): `CatalogHub` keeps one revision and one diff of the full catalog; such a
       subscriber gets the filtered snapshot, and on each refresh the changes between the filtered previous and next
       catalogs, sent at the first of that refresh's revisions, the rest as `catalog.skip` deltas, a new change kind
       an older viewer decodes as `.unknown` and steps past. Indices come from diffing the filtered catalogs; a
       companion whose page root is filtered loses its `parent` in the filtered view, so it shows as a top-level row
-- [ ] `AppStore.insertCatalogSession` builds a page row as `.page` content (`Session.content` is a `let`), and
+- [x] `AppStore.insertCatalogSession` builds a page row as `.page` content (`Session.content` is a `let`), and
       `catalogRowAdded` starts no presentation stream for it: its one stream is the page channel, claimed through the
       server's `session.companion.page.attach` and rendered with the shared replica builder; the binding keeps the
       server session id and `catalogOwned`, and carries the origin endpoint a page row has no `CatalogPane` for
-- [ ] channel loss or a server restart re-claims while the catalog still lists the row, never closing it; a removal
+- [x] channel loss or a server restart re-claims while the catalog still lists the row, never closing it; a removal
       from the catalog closes it; `session.detach` closes the channel and keeps the row, `session.reattach` claims again
-- [ ] rename, move, close and companion placement of a server page row go through the existing catalog operations;
+- [x] rename, move, close and companion placement of a server page row go through the existing catalog operations;
       `session.page` and `session.companion.page` in a server window are forwarded to the server through
       `RemoteOperation` instead of refused as `localOnlyCommands`
-- [ ] write tests: catalog round trip with and without `page` and `pageRows`; for an older viewer, a hidden page
+- [x] write tests: catalog round trip with and without `page` and `pageRows`; for an older viewer, a hidden page
       between terminal rows, page changes, then visible insertion, move and removal without a revision gap or
       reorder, and a page root's companion shown top-level; the mirror attaching in place with a stable row id and no
       duplicate; detach and reattach; re-claim after channel loss and after restart; rename, move and close of a page
       row; `session.page` forwarded from a server window
-- [ ] update the skill, docs, command reference and control-api rules: remove the remote refusals, state the
+- [x] update the skill, docs, command reference and control-api rules: remove the remote refusals, state the
       `page.text` gate, the older-peer messages, the presenter-side control and page sessions on agterm-server
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
