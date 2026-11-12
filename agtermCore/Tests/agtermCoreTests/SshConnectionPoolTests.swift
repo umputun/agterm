@@ -34,9 +34,9 @@ final class SshConnectionPoolTests {
         for _ in 0..<50 { await Task.yield() }
     }
 
+    // bounded by retries, not wall time: the Linux start-of-run scheduling stall outlasts any short deadline
     private func held() async -> Bool {
-        let deadline = Date().addingTimeInterval(5)
-        while gate == nil, Date() < deadline { try? await Task.sleep(for: .milliseconds(5)) }
+        for _ in 0..<1000 where gate == nil { await Task.yield() }
         return gate != nil
     }
 
