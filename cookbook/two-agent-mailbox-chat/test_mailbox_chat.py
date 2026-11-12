@@ -301,6 +301,16 @@ class SayTest(StateTest):
                     call()
         self.assertEqual(fake.calls, [])
 
+    def test_deliver_under_the_codex_daemon_is_refused(self):
+        fake = self.use(FakeRun())
+        for argv in (["deliver"], ["deliver", "--pane", RIGHT]):
+            with self.subTest(argv=argv), mock.patch.object(mc, "find_codex_pid", return_value=777), \
+                    mock.patch.object(mc, "is_codex_daemon", return_value=True), \
+                    mock.patch("sys.stdout", new_callable=io.StringIO) as out:
+                self.assertEqual(mc.main(argv), 1)
+                self.assertIn("--no-daemon", json.loads(out.getvalue())["error"])
+        self.assertEqual(fake.calls, [])
+
     def test_identity_under_an_interactive_codex_is_kept(self):
         with mock.patch.object(mc, "find_codex_pid", return_value=777), \
                 mock.patch.object(mc, "is_codex_daemon", return_value=False):
