@@ -55,6 +55,28 @@ struct AgentHooksFilesTests {
         #expect(try [".zshrc", ".bashrc", ".claude/settings.json", ".codex/config.toml"].map { try read(home, $0) } == before)
     }
 
+    @Test func bakingPreservesWrapperModesAcrossReinstall() throws {
+        let home = try makeHome()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let source = home.appendingPathComponent("resources/agent-status")
+        try FileManager.default.createDirectory(at: source.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try DirectoryCopy.copy(scripts, to: source)
+        let wrappers = [(AgentHooksInstall.wrapperName, 0o700), (AgentHooksInstall.codexWrapperName, 0o750)]
+        for (name, mode) in wrappers {
+            try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: mode)], ofItemAtPath: source.appendingPathComponent(name).path)
+        }
+        let files = AgentHooksFiles(source: source, home: home, toolPath: toolPath)
+
+        for installation in 1...2 {
+            _ = try files.install()
+            for (name, mode) in wrappers {
+                let wrapper = files.destination.appendingPathComponent(name)
+                #expect(AgentHooksInstall.posixMode(ofFile: wrapper.path)?.intValue == mode, "Installation \(installation): \(name)")
+                #expect(try String(contentsOf: wrapper, encoding: .utf8).contains(toolPath))
+            }
+        }
+    }
+
     @Test func missingJqSkipsOnlyCodex() throws {
         let home = try makeHome()
         defer { try? FileManager.default.removeItem(at: home) }
