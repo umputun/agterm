@@ -76,16 +76,31 @@ final class ControlServerCatalogPageTests: XCTestCase {
 
     private final class Transport: RemotePresentationTransport {
         final class Link: RemotePresentationLink {
-            func send(_: Data) {}
+            var sent: [PresentationFrame.Body] = []
+            func send(_ line: Data) {
+                if let frame = try? PresentationCodec.decode(line.dropLast()) { sent.append(frame.body) }
+            }
             func stop() {}
         }
 
         var catalog: (@MainActor (Data) -> Void)?
+        var present: (link: Link, onLine: @MainActor (Data) -> Void, onClose: @MainActor (String) -> Void)?
+        var presentOpens = 0
 
         func open(_ argv: [String], onLine: @escaping @MainActor (Data) -> Void,
-                  onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+                  onClose: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+            let link = Link()
             if argv.last?.contains("catalog subscribe") == true { catalog = onLine }
-            return Link()
+            if argv.last?.contains("zmx present") == true {
+                present = (link, onLine, onClose)
+                presentOpens += 1
+            }
+            return link
+        }
+
+        @MainActor func feedPresent(_ body: PresentationFrame.Body, rev: Int) throws {
+            let line = try PresentationCodec.encode(PresentationFrame(gen: 3, rev: rev, body: body)).dropLast()
+            present?.onLine(Data(line))
         }
     }
 
@@ -314,5 +329,39 @@ final class ControlServerCatalogPageTests: XCTestCase {
         try await until { self.viewing(2) }
         XCTAssertNotEqual(row?.htmlOverlay?.id, first)
         XCTAssertEqual(launcher.launches.count, 2)
+    }
+
+    func testAPageRowShowsTheGuiAskItsServerHandsOverAndSendsTheAnswerBack() async throws {
+        runner.script([handed("t13")])
+        try feed(rev: 0, [pageRow])
+        try await until { self.viewing(1) && self.transport.present != nil }
+        let page = try XCTUnwrap(row?.htmlOverlay?.id)
+        try transport.feedPresent(.hello(PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)), rev: 0)
+        try transport.feedPresent(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let ask = PresentationAsk(PendingAsk(id: "a1", title: "publish?", buttons: [ControlAskButton(id: "yes", label: "Yes")],
+                                             style: .gui), pane: nil, owner: 2)
+
+        try transport.feedPresent(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(row?.askPending?.id, "a1")
+        XCTAssertEqual(row?.askReplica, true)
+        row?.resolveAsk(id: "a1", ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        XCTAssertEqual(transport.present?.link.sent.last, .askResolve(PresentationAskAnswer(id: "a1", owner: 2, button: "yes")))
+        XCTAssertEqual(row?.htmlOverlay?.id, page)
+        XCTAssertEqual(launcher.launches.count, 1)
+    }
+
+    func testAPageRowsLostPresentationStreamReconnectsAndLeavesItsPageAlone() async throws {
+        runner.script([handed("t14")])
+        try feed(rev: 0, [pageRow])
+        try await until { self.viewing(1) && self.transport.present != nil }
+        let page = try XCTUnwrap(row?.htmlOverlay?.id)
+
+        transport.present?.onClose("connection lost")
+
+        try await until { self.transport.presentOpens == 2 }
+        XCTAssertEqual(row?.htmlOverlay?.id, page)
+        XCTAssertEqual(launcher.launches.count, 1)
+        XCTAssertEqual(runner.attachCount, 1)
     }
 }

@@ -1574,8 +1574,9 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   `headless: true` and `versions`.
 - Page rows on agterm-server: `session overlay open --page|--companion --html FILE|--url URL` makes a page session
   or page companion there, FILE a path on the host; a loopback `--url` is refused (`a page on agterm-server's
-  loopback cannot be a page session: no Mac would reach it`), and terminal commands and `ask open` on the row answer
-  `<cmd>: not available on a page session`, no Mac presenting an ask there. The catalog lists the row with no panes. A remote window shows it as a page row,
+  loopback cannot be a page session: no Mac would reach it`), and terminal commands and a terminal `ask open` on the
+  row answer `<cmd>: not available on a page session`; a GUI ask or a pick on it shows on the Mac presenting the row.
+  The catalog lists the row with no panes. A remote window shows it as a page row,
   each Mac claiming its own view over ssh (`session overlay page-attach`). Without a view the row shows a failed
   page naming why: `waiting for HOST` and `HOST cannot be reached, retrying` retry on their own, `the page's
   connection to HOST ended, reconnecting` claims a new view, and a refusal from the server stays shown; detaching

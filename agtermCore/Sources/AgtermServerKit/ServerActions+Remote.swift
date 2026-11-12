@@ -34,8 +34,9 @@ extension ServerActions {
         switch resolveSession(target) {
         case .failure(let refusal): return refusal.response
         case .success(let session):
-            // a session whose panes are gone keeps a stream while its scratch still runs
-            guard session.allPanesBackedByZmx || session.scratchDaemon != nil else {
+            // a session whose panes are gone keeps a stream while its scratch still runs; a page row has no daemon
+            // but takes its asks and picks through one
+            guard session.allPanesBackedByZmx || session.scratchDaemon != nil || session.content == .page else {
                 return ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it")
             }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))

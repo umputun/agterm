@@ -268,7 +268,7 @@ struct ServerActionsSessionsTests {
         #expect(harness.store.workspaces.flatMap(\.sessions).count == count)
     }
 
-    @Test func terminalCommandsOnAPageRowAreRefusedAndTextCommandsFindNoTextPage() async throws {
+    @Test func terminalCommandsOnAPageRowAreRefusedAGuiAskIsTakenAndTextCommandsFindNoTextPage() async throws {
         let anchor = try harness.session(newSession())
         let row = try harness.session(await pageRow(.sessionPage, target: anchor.id.uuidString)).id.uuidString
         var typed = ControlArgs()
@@ -286,12 +286,14 @@ struct ServerActionsSessionsTests {
         gui.style = "gui"
         let refused: [(Command, ControlArgs?)] = [(.sessionType, typed), (.sessionText, nil), (.sessionSplit, split),
                                                   (.sessionScratch, split), (.sessionHudOpen, hud),
-                                                  (.sessionOverlayOpen, program), (.askOpen, ask), (.askOpen, gui)]
+                                                  (.sessionOverlayOpen, program), (.askOpen, ask)]
 
         for (cmd, args) in refused {
             let reply = await harness.actions.serve(ControlRequest(cmd: cmd, target: row, args: args))
             #expect(reply == ControlResponse(ok: false, error: "\(cmd.rawValue): not available on a page session"))
         }
+        let guiAsk = await harness.actions.serve(ControlRequest(cmd: .askOpen, target: row, args: gui))
+        #expect(guiAsk.ok, "\(guiAsk)")
         let follow = await harness.actions.setSessionOverlayFollow(row, window: nil, pane: nil, mode: .on)
         let wrap = await harness.actions.setSessionOverlayWrap(row, window: nil, pane: nil, mode: .on)
         let search = await harness.actions.searchSessionOverlay(row, window: nil, pane: nil, request: .next)

@@ -144,7 +144,10 @@ extension ControlServer {
     // a page is attachable as soon as it exists, so there is nothing to wait for
     private func attachOriginPage(_ pending: CreatedCompanion, endpoint: ControlZmxEndpoint) async -> CompanionAttach {
         let origin = RemoteBinding.Origin(host: pending.host, endpoint: endpoint, sessionName: pending.id)
-        let attached = await attachRemotePage(pending.id, origin: origin, at: .companion(of: pending.parent), select: pending.select)
+        let parent = library.store(forSession: pending.parent)?.session(withID: pending.parent)?.remotePresentation?.binding
+        let presentation = PagePresentation(version: parent?.presentationVersion, headless: parent?.originHeadless == true)
+        let attached = await attachRemotePage(pending.id, origin: origin, presentation: presentation,
+                                              at: .companion(of: pending.parent), select: pending.select)
         return attached.ok ? .attached(attached) : .failed(attached.error ?? "attach failed")
     }
 
@@ -155,10 +158,25 @@ extension ControlServer {
         case root(store: AppStore, workspace: UUID)
     }
 
+    /// PagePresentation is what the origin said of its presentation stream: its version and whether it has no screen.
+    struct PagePresentation {
+        let version: Int?
+        let headless: Bool
+
+        init(version: Int?, headless: Bool) {
+            self.version = version
+            self.headless = headless
+        }
+
+        init(_ tree: ControlRemoteTree) {
+            self.init(version: tree.presentation, headless: tree.headless == true)
+        }
+    }
+
     /// attachRemotePage asks `origin.host` for one attachment of its page session `originSession` and shows it at
     /// `spot` here. The page stays that Mac's: closing the row here ends only this attachment's channel.
-    func attachRemotePage(_ originSession: String, origin binding: RemoteBinding.Origin, at spot: RemotePageSpot,
-                          select: Bool) async -> ControlResponse {
+    func attachRemotePage(_ originSession: String, origin binding: RemoteBinding.Origin, presentation: PagePresentation,
+                          at spot: RemotePageSpot, select: Bool) async -> ControlResponse {
         let host = binding.host
         let argv: [String]
         do {
@@ -212,10 +230,13 @@ extension ControlServer {
             }
         }
         // the origin's page session, so New Companion on the row has that Mac make one there; the origin's endpoint
-        // is what lets a companion attached later find this row as its parent
-        store.bindRemote(RemoteBinding(remoteSessionID: originSession, daemonsByLocalPane: [:], presentationVersion: nil,
-                                       origin: binding),
+        // is what lets a companion attached later find this row as its parent. Only a headless origin streams to a
+        // page row: another Mac shows that page's asks and picks in its own window.
+        store.bindRemote(RemoteBinding(remoteSessionID: originSession, daemonsByLocalPane: [:],
+                                       presentationVersion: presentation.headless ? presentation.version : nil,
+                                       origin: binding, originHeadless: presentation.headless),
                          forSession: row.id)
+        if presentation.headless { startRemotePresentation(for: row) }
         guard let overlay = row.htmlOverlay, let origin = overlay.replicaOf,
               let serve = try? RemoteSession.pageServeCommand(host: host, token: page.token) else {
             store.closeSession(row.id)
@@ -271,7 +292,8 @@ extension ControlServer {
             guard let workspace = store.currentWorkspaceID else {
                 return ControlResponse(ok: false, error: "no window to attach into")
             }
-            return await attachRemotePage(remote.id, origin: origin, at: .root(store: store, workspace: workspace), select: true)
+            return await attachRemotePage(remote.id, origin: origin, presentation: PagePresentation(tree),
+                                          at: .root(store: store, workspace: workspace), select: true)
         }
         let rows = attachedParentRows(of: remote, tree: tree, host: host, in: store)
         guard rows.count == 1, let parent = rows.first else {
@@ -279,7 +301,8 @@ extension ControlServer {
                 ? "attach the page's parent session from \(host) first"
                 : "more than one row here shows the page's parent")
         }
-        return await attachRemotePage(remote.id, origin: origin, at: .companion(of: parent.id), select: true)
+        return await attachRemotePage(remote.id, origin: origin, presentation: PagePresentation(tree),
+                                      at: .companion(of: parent.id), select: true)
     }
 
     // the parent's store and workspace are read again after every wait: the row may have moved or closed meanwhile

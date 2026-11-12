@@ -92,6 +92,7 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
         let (pageServer, _, _) = try makeServer(pages, store: store, row: row)
         let endpoint = ControlZmxEndpoint(executable: "/Applications/agterm.app/zmx", socketDirectory: "/tmp/agterm-zmx-abc")
         let page = await pageServer.attachRemotePage(created, origin: RemoteBinding.Origin(host: "buildbox", endpoint: endpoint, sessionName: "c"),
+                                                     presentation: .init(version: nil, headless: false),
                                                      at: .companion(of: row.id), select: false)
         XCTAssertEqual(page.error, "the agterm on buildbox is too old for page companions")
     }
@@ -405,9 +406,49 @@ final class ControlServerRemoteCompanionsTests: XCTestCase {
             + #""cwd":"/repo","panes":[{"pane":"left","daemon":"agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3"}]}"#
     }
 
-    private func tree(sessions: String) -> RemoteCommandResult {
+    private func tree(sessions: String, headless: Bool = false) -> RemoteCommandResult {
         RemoteCommandResult(status: 0, stdout: #"{"ok":true,"result":{"remote":{"#
             + #""endpoint":{"executable":"/Applications/agterm.app/zmx","socketDirectory":"/tmp/agterm-zmx-abc"},"#
+            + (headless ? #""presentation":1,"headless":true,"# : "")
             + #""sessions":[\#(sessions)]}}}"#, stderr: "")
+    }
+
+    @MainActor
+    private final class PresentTransport: RemotePresentationTransport {
+        final class Link: RemotePresentationLink {
+            func send(_: Data) {}
+            func stop() {}
+        }
+
+        var opened: [[String]] = []
+
+        func open(_ argv: [String], onLine _: @escaping @MainActor (Data) -> Void,
+                  onClose _: @escaping @MainActor (String) -> Void) -> RemotePresentationLink {
+            opened.append(argv)
+            return Link()
+        }
+    }
+
+    func testAPageAttachedFromAServerStreamsItsPresentationAndOneFromAMacDoesNot() async throws {
+        let root = #"{"id":"page-root","name":"dash","windowID":"w1","windowName":"main","workspaceID":"ws1","#
+            + #""workspaceName":"work","cwd":"/srv","panes":[],"content":"page"}"#
+        for headless in [true, false] {
+            let listing = tree(sessions: root, headless: headless)
+            let (server, store, _) = try makeServer(ScriptedRunner([listing, pageAttach("page-root")]))
+            server.pageLauncher = FakePageLauncher()
+            let transport = PresentTransport()
+            server.remoteTransport = transport
+
+            let attached = await server.attachRemoteSession(host: "buildbox", session: "page-root", window: nil)
+
+            XCTAssertTrue(attached.ok, attached.error ?? "")
+            let rowID = try XCTUnwrap(attached.result?.id.flatMap(UUID.init(uuidString:)))
+            let binding = store.session(withID: rowID)?.remotePresentation?.binding
+            XCTAssertEqual(binding?.originHeadless, headless)
+            XCTAssertEqual(binding?.presentationVersion, headless ? 1 : nil)
+            XCTAssertEqual(server.remoteClients[rowID] != nil, headless, "headless \(headless)")
+            XCTAssertEqual(transport.opened.count, headless ? 1 : 0, "headless \(headless)")
+            server.stopRemotePresentations()
+        }
     }
 }
