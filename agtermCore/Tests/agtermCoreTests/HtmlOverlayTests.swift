@@ -1073,6 +1073,23 @@ struct HtmlOverlayTests {
         #expect(events.count == opened + 2)
     }
 
+    @Test func anOverLimitQueryIsStoredCutAndReportedAsStored() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let cut = String(repeating: "a", count: TextSearch.maxQuery)
+
+        #expect(store.setTextSearch(page.id, query: cut + "z") == 1)
+        #expect(store.setTextSearch(page.id, query: cut + "y") == nil)
+        #expect(session.htmlOverlay?.textSearch?.query == cut)
+        store.setTextSearchReport(page.id, revision: 1, query: cut, matches: 2, current: 1)
+
+        let stored = try #require(session.htmlOverlay)
+        let state = try #require(AppStore.textState(stored))
+        #expect(state.query == cut)
+        #expect(state.matches == 2)
+    }
+
     @Test func aReportIsKeptOnlyForTheCurrentRevisionAndEmitsNothing() throws {
         let (store, session, events) = try logStore()
         let page = HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))

@@ -174,6 +174,9 @@ public struct TextChanges: Codable, Equatable, Sendable {
 /// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
 /// with no match.
 public struct TextSearch: Equatable, Sendable {
+    /// maxQuery bounds a query in characters; `setTextSearch` cuts a longer one, so the page searches what is stored.
+    public static let maxQuery = 16384
+
     public let query: String
     public var matches: Int
     public var current: Int

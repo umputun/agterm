@@ -319,6 +319,8 @@
     field.placeholder = 'Find';
     field.spellcheck = false;
     field.autocomplete = 'off';
+    // TextSearch.maxQuery, counted here in UTF-16 units, so a typed query is never cut by the model
+    field.maxLength = 16384;
     const counter = document.createElement('span');
     counter.className = 'agterm-count';
     const previous = control('M3.5 10.5 8 6l4.5 4.5', 'Previous match');

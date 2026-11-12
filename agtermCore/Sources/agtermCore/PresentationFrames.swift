@@ -491,9 +491,6 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
 /// PresentationTextState is a text page's live state on the presenter: a log page's following and last read, the
 /// search query under the presenter's revision with its counts, wrap, and a diff page's changes.
 public struct PresentationTextState: Codable, Equatable, Sendable {
-    /// maxQuery bounds the query a frame carries; a longer one is cut to it.
-    public static let maxQuery = 16384
-
     public var following: Bool?
     public var log: TextLogReport?
     public var query: String?
@@ -507,7 +504,7 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
                 matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil) {
         self.following = following
         self.log = log
-        self.query = query.map { String($0.prefix(Self.maxQuery)) }
+        self.query = query.map { String($0.prefix(TextSearch.maxQuery)) }
         self.revision = revision
         self.matches = matches
         self.current = current

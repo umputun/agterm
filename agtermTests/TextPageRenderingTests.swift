@@ -923,6 +923,24 @@ extension TextPageRenderingTests {
         try await waitForScript(Self.count, in: page.webView) { $0.hasSuffix("of 2") }
     }
 
+    // regression: an over-limit query was searched whole while the presenter reported it cut
+    func testAnOverLimitQueryIsSearchedReportedAndShownAsTheModelStoresIt() async throws {
+        let cut = String(repeating: "a", count: TextSearch.maxQuery)
+        let (page, window) = try shown(try openText("long.txt", cut + "\n"))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.code, in: page.webView) { $0 == cut + "\n" }
+
+        store.setTextSearch(page.id, query: cut + "z")
+        page.apply(try XCTUnwrap(current))
+
+        try await waitFor("the cut query's counts") { self.current?.textSearch?.matches == 1 }
+        XCTAssertEqual(current?.textSearch?.query, cut)
+        let field = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').value")
+        XCTAssertEqual(field as? String, cut)
+        let limit = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-search input').maxLength")
+        XCTAssertEqual((limit as? NSNumber)?.intValue, TextSearch.maxQuery)
+    }
+
     // regression: CRs kept in pushed text but dropped from the highlighted DOM threw inside the highlight window
     func testAHighlightedCRLFLogKeepsSearchingAndFollowingThroughAnAppend() async throws {
         let (overlay, url) = try openLog("{\"a\": 1}\r\n{\"a\": 2}\r\n", name: "events.json")

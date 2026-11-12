@@ -281,10 +281,11 @@ extension AppStore {
         }
     }
 
-    /// setTextSearch sets text page `id`'s query, an empty one closing the search, from control or the page's own
-    /// field. A change bumps `searchRevision`, clears the report, emits `tree.changed` and returns the new revision;
-    /// nil for no change or a page that is not a text page.
+    /// setTextSearch sets text page `id`'s query, cut to `TextSearch.maxQuery`, an empty one closing the search, from
+    /// control or the page's own field. A change bumps `searchRevision`, clears the report, emits `tree.changed` and
+    /// returns the new revision; nil for no change or a page that is not a text page.
     @discardableResult public func setTextSearch(_ id: UUID, query: String) -> Int? {
+        let query = String(query.prefix(TextSearch.maxQuery))
         var revision: Int?
         updateHtmlOverlay(id) {
             guard $0.source.kind == .text, ($0.textSearch?.query ?? "") != query else { return }

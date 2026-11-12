@@ -316,7 +316,7 @@ struct PresentationFramesTests {
         let state = PresentationTextState(query: long, revision: 1)
         let result = PresentationPageResult(page: "p1", seq: 1, ok: false, text: long, error: long, state: state)
 
-        #expect(state.query?.count == PresentationTextState.maxQuery)
+        #expect(state.query?.count == TextSearch.maxQuery)
         #expect(result.text?.count == PresentationPageResult.maxText)
         #expect(result.error?.count == PresentationPageResult.maxText)
         #expect(try PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageResult(result))).count
