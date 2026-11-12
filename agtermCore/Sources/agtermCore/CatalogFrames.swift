@@ -52,9 +52,11 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
     public var lifecycle: CatalogLifecycle
     /// scratch is the session's server scratch while its daemon runs, an ended session's included.
     public var scratch: CatalogScratch?
+    /// page marks a page row, which has no pane; its `primary` is its own id.
+    public var page: CatalogPage?
 
     public init(id: UUID, name: String, parent: UUID?, cwd: String, primary: UUID, axis: String?, shown: Bool,
-                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil) {
+                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil, page: CatalogPage? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
@@ -64,6 +66,21 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
         self.shown = shown
         self.lifecycle = lifecycle
         self.scratch = scratch
+        self.page = page
+    }
+}
+
+/// CatalogPage is a page row's page: `file` or `url`, its identity text, and the server's zmx endpoint, which
+/// names the server for the row's binding as a pane's endpoint does.
+public struct CatalogPage: Codable, Equatable, Sendable {
+    public var kind: String
+    public var identity: String
+    public var endpoint: ControlZmxEndpoint
+
+    public init(kind: String, identity: String, endpoint: ControlZmxEndpoint) {
+        self.kind = kind
+        self.identity = identity
+        self.endpoint = endpoint
     }
 }
 
@@ -183,11 +200,14 @@ public struct CatalogHello: Codable, Equatable, Sendable {
     /// epoch is set on the server's answer, never on the viewer's opening hello.
     public var epoch: String?
     public var versions: CatalogVersions?
+    /// pageRows is set on a viewer's opening hello when it shows page rows; an older viewer is sent none.
+    public var pageRows: Bool?
 
-    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil) {
+    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil, pageRows: Bool? = nil) {
         self.version = version
         self.epoch = epoch
         self.versions = versions
+        self.pageRows = pageRows
     }
 }
 
@@ -203,6 +223,11 @@ public enum CatalogFrame: Equatable, Sendable {
     case ping
     case ack
     case unknown(kind: String, epoch: String?, rev: Int?)
+}
+
+extension CatalogFrame {
+    /// skipKind is a revision with no change for this viewer: one a viewer without page rows is not sent.
+    public static let skipKind = "catalog.skip"
 }
 
 extension CatalogFrame: Codable {

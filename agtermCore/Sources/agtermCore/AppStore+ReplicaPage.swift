@@ -81,6 +81,45 @@ extension AppStore {
         return showReplicaPage(overlay, backgroundColor: page.backgroundColor, in: row)
     }
 
+    /// showCatalogPage shows server page row `rowID`'s page in that row, nil once it shows. The row stays whatever
+    /// happens: the catalog owns it.
+    public func showCatalogPage(_ page: PresentationPage, inRow rowID: UUID) -> String? {
+        guard let overlay = Self.replicaOverlay(page) else { return "the page cannot be shown here" }
+        if let failure = openCatalogPage(overlay, inRow: rowID, backgroundColor: page.backgroundColor) { return failure }
+        HtmlPageOutcomes.shared.register(overlay.id)
+        return nil
+    }
+
+    /// showCatalogPageRefusal shows why page row `rowID` shows no page from its server, as the row's failed page; a
+    /// row already showing that reason is left as it is.
+    public func showCatalogPageRefusal(_ reason: String, inRow rowID: UUID) {
+        let failed = HtmlSource.unreadable(reason: reason)
+        guard let row = catalogPageRow(rowID), !(row.overlayActive && row.htmlOverlay?.source == failed) else { return }
+        _ = openCatalogPage(HtmlOverlay(source: failed), inRow: rowID, backgroundColor: nil)
+    }
+
+    private func clearCatalogPage(_ rowID: UUID) {
+        guard let row = catalogPageRow(rowID), row.overlayActive else { return }
+        row.overlayActive = false
+        row.overlayHidden = false
+        row.teardownOverlaySlot()
+        row.overlayBackgroundColor = nil
+        scheduleTreeChanged()
+    }
+
+    private func openCatalogPage(_ overlay: HtmlOverlay, inRow rowID: UUID, backgroundColor: String?) -> String? {
+        guard catalogPageRow(rowID) != nil else { return "the row here is gone" }
+        clearCatalogPage(rowID)
+        return openHtmlOverlay(rowID, pane: nil, overlay: overlay, sizePercent: nil, backgroundColor: backgroundColor)?
+            .message(pane: nil)
+    }
+
+    private func catalogPageRow(_ rowID: UUID) -> Session? {
+        guard let row = session(withID: rowID), row.content == .page,
+              row.remotePresentation?.binding.catalogOwned == true else { return nil }
+        return row
+    }
+
     private static func replicaOverlay(_ page: PresentationPage) -> HtmlOverlay? {
         guard let origin = UUID(uuidString: page.page), let source = replicaSource(page.source) else { return nil }
         return HtmlOverlay(source: source, navigation: page.navigation, javascript: page.javascript,

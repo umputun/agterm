@@ -94,6 +94,21 @@ struct ServerCatalogTests {
         #expect(projected.fields.lifecycle == .live)
     }
 
+    @Test func aPageRowCarriesItsPageAndNoPane() async throws {
+        let anchor = try await newSession()
+        var args = ControlArgs()
+        args.url = "https://example.com/docs"
+        let row = try harness.session(await serve(.sessionPage, target: anchor.id.uuidString, args: args))
+        let pane = try #require(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == anchor.id }?.panes.first)
+
+        let projected = try #require(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == row.id })
+
+        #expect(projected.panes.isEmpty)
+        #expect(projected.fields.primary == row.id)
+        #expect(projected.fields.page == CatalogPage(kind: "url", identity: "https://example.com", endpoint: pane.endpoint))
+        #expect(hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == anchor.id }?.fields.page == nil)
+    }
+
     @Test func aCompanionCarriesItsParent() async throws {
         let parent = try await newSession()
         let reply = await serve(.sessionCompanionNew, target: parent.id.uuidString)

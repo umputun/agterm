@@ -103,6 +103,10 @@ final class ControlServer {
     var remoteLinkRefusalHuds: [UUID: Int] = [:]
     /// pageLauncher and forwardLauncher start a page's channel helper and port forward; injectable so a hosted test needs no ssh.
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
+    /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.
+    var catalogPageClaims: Set<UUID> = []
+    /// The wait before a remote page row's claim is tried again; injectable like the clocks.
+    var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false

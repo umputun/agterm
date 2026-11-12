@@ -5,7 +5,7 @@ extension ServerActions {
     /// receiptCommands are the served structural commands; any other command refuses an `opID`.
     static let receiptCommands: Set<Command> = [
         .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionMove,
-        .sessionCompanionNew, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
+        .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
     ]
 
     public var takesOperationReceipts: Bool { true }

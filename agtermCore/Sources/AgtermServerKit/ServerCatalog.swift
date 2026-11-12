@@ -146,11 +146,15 @@ extension ServerActions {
                     CatalogScratch(pane: CatalogPane(identity: $0.identity, daemon: ZmxSupport.scratchDaemonName(for: $0.identity),
                                                      endpoint: endpoint), shown: $0.shown)
                 }
+                let page = session.content == .page ? session.htmlOverlay.map { overlay in
+                    CatalogPage(kind: { if case .url = overlay.source { "url" } else { "file" } }(), identity: overlay.identity,
+                                endpoint: endpoint)
+                } : nil
                 let fields = CatalogSessionFields(id: session.id, name: session.displayName, parent: session.parentID,
-                                                  cwd: session.effectiveCwd, primary: session.paneIdentity,
+                                                  cwd: session.effectiveCwd, primary: page == nil ? session.paneIdentity : session.id,
                                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                                   shown: session.hasSplit && session.isSplit,
-                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch)
+                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch, page: page)
                 return CatalogSession(fields: fields, panes: panes)
             })
         }

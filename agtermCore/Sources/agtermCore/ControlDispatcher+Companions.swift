@@ -37,7 +37,7 @@ extension ControlDispatcher {
         }
     }
 
-    private enum PageRowParse {
+    enum PageRowParse {
         case options(ControlSessionOverlayOpenOptions)
         case rejected(ControlResponse)
 
@@ -45,7 +45,7 @@ extension ControlDispatcher {
     }
 
     // a page row's page is the row, so it is always full size and session-wide
-    private static func pageRowOptions(_ args: ControlArgs?, row: String, needsPage: String) -> PageRowParse {
+    static func pageRowOptions(_ args: ControlArgs?, row: String, needsPage: String) -> PageRowParse {
         let page: HtmlSource
         switch overlayContent(command: args?.command ?? "", args: args) {
         case .rejected(let response): return .rejected(response)

@@ -693,6 +693,7 @@ struct Session: ParsableCommand {
                 cannot be combined with --size-percent.
                 """)
             var pane: String?
+            @OptionGroup var operation: OperationOptions
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
@@ -711,6 +712,7 @@ struct Session: ParsableCommand {
             // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if companion, page { throw ValidationError("--page cannot be combined with --companion") }
+                if operation.opID != nil, rowFlag == nil { throw ValidationError("--op-id requires --companion or --page") }
                 if let rowFlag, html == nil && url == nil { throw ValidationError("\(rowFlag) requires --html or --url") }
                 if let rowFlag, pane != nil || sizePercent != nil || width != nil || height != nil {
                     throw ValidationError("\(rowFlag) is full size: it takes no --pane, --size-percent, --width or --height")
@@ -759,7 +761,7 @@ struct Session: ParsableCommand {
             }
 
             func makeRequest() throws -> ControlRequest {
-                ControlRequest(cmd: companion ? .sessionCompanionPage : page ? .sessionPage : .sessionOverlayOpen, target: target.target,
+                operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionPage : page ? .sessionPage : .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: html == nil ? cwd : cwd.map(Overlay.absolutePath),
                                                                      command: command, wait: wait ? true : nil,
                                                                      sizePercent: sizePercent, follow: follow ? true : nil,
@@ -772,7 +774,7 @@ struct Session: ParsableCommand {
                                                                      image: image.map(Overlay.absolutePath),
                                                                      markdownFile: markdown.map(Overlay.absolutePath),
                                                                      textFile: text.map(Overlay.absolutePath), line: line,
-                                                                     tail: tail, followFile: followFile ? true : nil)))
+                                                                     tail: tail, followFile: followFile ? true : nil))))
             }
 
             func run() throws {

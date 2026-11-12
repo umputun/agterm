@@ -72,7 +72,7 @@ extension AppStore {
         let session = Session(id: fields.id, initialCwd: TerminalText.sanitized(fields.cwd),
                               customName: TerminalText.sanitized(fields.name).trimmedOrNil,
                               paneIdentity: entry.panes.first?.identity ?? fields.primary, remoteHost: host,
-                              remoteSessionID: fields.id.uuidString)
+                              remoteSessionID: fields.id.uuidString, content: fields.page == nil ? .terminal : .page)
         session.parentID = fields.parent
         if fields.lifecycle == .ended {
             session.ended = true
@@ -237,9 +237,8 @@ extension AppStore {
     /// catalogBinding ties a row to its catalog session; local and catalog identities are the same.
     static func catalogBinding(_ entry: CatalogSession, host: String, protocolVersion: Int) -> RemoteBinding {
         let daemons = Dictionary(entry.panes.map { ($0.identity, $0.daemon) }) { first, _ in first }
-        let origin = (entry.panes.first ?? entry.fields.scratch?.pane).map {
-            RemoteBinding.Origin(host: host, endpoint: $0.endpoint, sessionName: entry.id.uuidString)
-        }
+        let endpoint = (entry.panes.first ?? entry.fields.scratch?.pane)?.endpoint ?? entry.fields.page?.endpoint
+        let origin = endpoint.map { RemoteBinding.Origin(host: host, endpoint: $0, sessionName: entry.id.uuidString) }
         return RemoteBinding(remoteSessionID: entry.id.uuidString, daemonsByLocalPane: daemons,
                              presentationVersion: protocolVersion, origin: origin, catalogOwned: true, originHeadless: true)
     }

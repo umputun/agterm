@@ -10,8 +10,7 @@ enum RemoteRoute: Sendable {
 extension ControlServer {
     /// localOnlyCommands make shells or rows on this Mac, which a remote window shows only from its server.
     static let localOnlyCommands: Set<Command> = [
-        .sessionCompanionDuplicate, .sessionCompanionPage, .sessionCompanionConvert, .sessionPage, .zmxAttach, .zmxAttachGroup,
-        .recentOpen,
+        .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxAttach, .zmxAttachGroup, .recentOpen,
     ]
 
     /// remoteRoute reads `request` once, on the main actor, before it is dispatched: nil runs it here as usual; a
@@ -44,6 +43,8 @@ extension ControlServer {
     }
 
     private func route(_ request: ControlRequest, in store: AppStore, actions: RemoteCatalogActions) -> RemoteRoute {
+        // a page row lists no pane, which preparation would read as an ended session
+        if let refusal = pageCompanionRefusal(request) { return .refused(refusal) }
         switch RemoteOperation.parse(request, in: store) {
         case .refused(let response):
             return .refused(response)

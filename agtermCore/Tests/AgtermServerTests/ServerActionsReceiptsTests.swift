@@ -96,6 +96,22 @@ struct ServerActionsReceiptsTests {
         #expect(retried.result?.receipt?.outcome == .refused)
     }
 
+    @Test(arguments: [Command.sessionPage, .sessionCompanionPage])
+    func aPageRowCreatedUnderAnOperationIdIsAppliedOnce(_ cmd: Command) async throws {
+        let anchor = try harness.session(await plain(.sessionNew))
+        var page = ControlArgs()
+        page.url = "https://example.com/"
+        let first = await serve(cmd, target: anchor.id.uuidString, page, op: "page-row")
+        let count = sessionCount
+
+        let repeated = await serve(cmd, target: anchor.id.uuidString, page, op: "page-row")
+
+        #expect(first.result?.receipt?.outcome == .applied)
+        #expect(repeated.result?.receipt == first.result?.receipt)
+        #expect(sessionCount == count)
+        #expect(harness.store.session(withID: try #require(first.result?.id.flatMap(UUID.init)))?.content == .page)
+    }
+
     @Test func aTerminalCommandOnAPageRowIsARefusedReceiptThatStaysRefused() async throws {
         let anchor = try harness.session(await plain(.sessionNew))
         var page = ControlArgs()

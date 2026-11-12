@@ -71,6 +71,33 @@ struct RemoteOperationRequestTests {
         #expect(parse(.sessionCompanionNew) == .operation(.newCompanion(parent: first.id), select: true))
     }
 
+    @Test func aPageRowIsCreatedOnTheServerAndSelectedOnlyWhenFollowed() throws {
+        let page = { (follow: Bool?) in
+            self.parse(.sessionPage, target: self.second.id.uuidString) { $0.url = "https://example.com"; $0.follow = follow }
+        }
+        guard case .operation(.newPage(let anchor, let companion, let options), let select) = page(nil) else {
+            Issue.record("not a page row: \(page(nil))")
+            return
+        }
+
+        #expect(anchor == second.id)
+        #expect(!companion)
+        #expect(options.words == ["--url=https://example.com"])
+        #expect(!select)
+        guard case .operation(.newPage(second.id, false, _), select: true) = page(true) else {
+            Issue.record("a followed page row is not selected: \(page(true))")
+            return
+        }
+        let companionRow = parse(.sessionCompanionPage) { $0.url = "https://example.com" }
+        #expect(companionRow == .operation(.newPage(anchor: first.id, companion: true, page: options), select: false))
+    }
+
+    @Test func aPageRowRefusesWhatALocalOneRefuses() {
+        #expect(refusal(parse(.sessionPage) { $0.url = "https://example.com"; $0.pane = "left" })
+            == "a page session is full size: it takes no --pane, --size-percent, --width or --height")
+        #expect(refusal(parse(.sessionCompanionPage) { $0.command = "htop" }) == OverlayHtmlError.companionNeedsPage)
+    }
+
     @Test(arguments: [(nil, true), ("on", true), ("off", false)] as [(String?, Bool)])
     func aSplitResolvesItsModeAgainstTheRow(_ mode: String?, _ shown: Bool) {
         let parsed = parse(.sessionSplit, target: first.id.uuidString) { $0.mode = mode; $0.axis = "horizontal" }

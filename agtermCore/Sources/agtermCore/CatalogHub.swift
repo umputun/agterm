@@ -28,11 +28,14 @@ public final class CatalogHub {
 
     private final class Subscriber {
         let sink: CatalogSink
+        /// pageRows is whether the viewer shows page rows; an older one is sent the catalog without them.
+        let pageRows: Bool
         // the first ping still unanswered; a late heartbeat sends a ping before it can call the subscriber stale
         var pingedAt: Date?
 
-        init(sink: CatalogSink) {
+        init(sink: CatalogSink, pageRows: Bool) {
             self.sink = sink
+            self.pageRows = pageRows
         }
     }
 
@@ -61,7 +64,8 @@ public final class CatalogHub {
     }
 
     /// refresh projects the store again and publishes what changed, one revision per change. Nothing changed
-    /// publishes nothing, so callers run it after anything that may have changed the catalog.
+    /// publishes nothing, so callers run it after anything that may have changed the catalog. A viewer without page
+    /// rows gets the same revisions: the changes of its filtered catalog first, then a skip for each one left.
     public func refresh() {
         let next = stamped(source())
         guard let previous = current else {
@@ -69,14 +73,49 @@ public final class CatalogHub {
             return
         }
         guard previous.workspaces != next.workspaces else { return }
+        let first = rev + 1
         var state = previous
+        var frames: [CatalogFrame] = []
         for change in previous.changes(to: next) {
             rev += 1
             state.apply(change)
-            broadcast(.delta(epoch: epoch, rev: rev, change: change))
+            frames.append(.delta(epoch: epoch, rev: rev, change: change))
         }
         state.rev = rev
         current = state
+        let older = subscribers.values.contains { !$0.pageRows } ? withoutPageRowFrames(from: previous, to: state, first: first) : []
+        for (id, subscriber) in subscribers {
+            for frame in subscriber.pageRows ? frames : older {
+                guard send(frame, to: id) else { break }
+            }
+        }
+    }
+
+    /// withoutPageRowFrames are revisions `first...rev` for a viewer without page rows. A filtered diff longer than
+    /// the full one cannot fit those revisions, so that viewer takes the filtered snapshot at `rev` instead.
+    private func withoutPageRowFrames(from previous: CatalogSnapshot, to next: CatalogSnapshot, first: Int) -> [CatalogFrame] {
+        let filtered = Self.withoutPageRows(next)
+        let changes = Self.withoutPageRows(previous).changes(to: filtered)
+        guard changes.count <= rev - first + 1 else { return (try? CatalogCodec.snapshotFrames(filtered)) ?? [] }
+        let deltas = changes.enumerated().map { CatalogFrame.delta(epoch: epoch, rev: first + $0.offset, change: $0.element) }
+        let skips = (first + changes.count..<rev + 1).map { CatalogFrame.unknown(kind: CatalogFrame.skipKind, epoch: epoch, rev: $0) }
+        return deltas + skips
+    }
+
+    /// withoutPageRows is `snapshot` as a viewer without page rows sees it: a companion of a page row shows top-level.
+    static func withoutPageRows(_ snapshot: CatalogSnapshot) -> CatalogSnapshot {
+        let pages = Set(snapshot.workspaces.flatMap(\.sessions).filter { $0.fields.page != nil }.map(\.id))
+        guard !pages.isEmpty else { return snapshot }
+        var filtered = snapshot
+        for index in filtered.workspaces.indices {
+            filtered.workspaces[index].sessions = filtered.workspaces[index].sessions.compactMap { session in
+                guard !pages.contains(session.id) else { return nil }
+                var session = session
+                if let parent = session.fields.parent, pages.contains(parent) { session.fields.parent = nil }
+                return session
+            }
+        }
+        return filtered
     }
 
     /// subscribe registers a viewer and sends it hello, then the snapshot. Pending changes are published to
@@ -84,10 +123,11 @@ public final class CatalogHub {
     @discardableResult
     public func subscribe(hello: CatalogHello, sink: CatalogSink, versions: CatalogVersions) throws -> SubscriberID {
         guard hello.version >= 1 else { throw SubscribeError.unsupportedVersion(hello.version) }
-        let state = snapshot()
+        let pageRows = hello.pageRows == true
+        let state = pageRows ? snapshot() : Self.withoutPageRows(snapshot())
         lastID += 1
         let id = SubscriberID(value: lastID)
-        subscribers[id] = Subscriber(sink: sink)
+        subscribers[id] = Subscriber(sink: sink, pageRows: pageRows)
         let answer = CatalogHello(version: min(hello.version, CatalogCodec.version), epoch: epoch, versions: versions)
         let frames: [CatalogFrame]
         do {
@@ -135,10 +175,6 @@ public final class CatalogHub {
         snapshot.epoch = epoch
         snapshot.rev = rev
         return snapshot
-    }
-
-    private func broadcast(_ frame: CatalogFrame) {
-        for id in subscribers.keys { send(frame, to: id) }
     }
 
     @discardableResult

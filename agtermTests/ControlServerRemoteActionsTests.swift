@@ -222,6 +222,24 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertEqual(remoteStore.selectedSessionID, created)
     }
 
+    func testAPageRowAskedForInARemoteWindowIsCreatedByTheServerAndNothingIsMadeHere() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let id = entry.id.uuidString
+        var page = ControlArgs()
+        page.url = "https://example.com/docs"
+        page.javascript = true
+
+        let session = try await send(.sessionPage, target: id, args: page)
+        let companion = try await send(.sessionCompanionPage, target: id, args: page)
+
+        for reply in [session, companion] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session overlay open --page --target \(id) --url=https://example.com/docs --js --op-id"))
+        XCTAssertTrue(runner.operations[1].contains("session overlay open --companion --target \(id) --url=https://example.com/docs --js"))
+        XCTAssertEqual(shownIDs(), [entry.id])
+    }
+
     func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
         let entry = catalogSession()
         try open([entry])
