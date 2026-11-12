@@ -31,6 +31,11 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     /// catalogWorkspaces projects the store's workspaces into the catalog.
     var catalogWorkspaces: @MainActor () -> [CatalogWorkspace] = { [] }
     var catalogVersions = CatalogVersions(server: "", protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
+    /// pageAttachments are the server's page rows handed to the Macs that attach them.
+    lazy var pageAttachments = PageAttachmentBook(clock: { [unowned self] in now() }, servedPage: { [unowned self] id, page in
+        guard let row = store.session(withID: id), row.content == .page, row.htmlOverlay?.id == page else { return nil }
+        return row.htmlOverlay
+    })
     /// catalogHub numbers the catalog in this run's epoch, the same one respawn counts carry.
     lazy var catalogHub = CatalogHub(epoch: originEpoch, staleTimeout: 30) { [unowned self] in
         CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces())
@@ -149,6 +154,20 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
     func pageChannelLost(_ page: UUID) { store.withdrawRemotePage(page) }
 
+    func claimPageAttachment(_ token: String) -> ControlResponse? { pageAttachments.claim(token) }
+
+    func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool {
+        pageAttachments.adopt(descriptor: descriptor, claim: claim, host: self)
+    }
+
+    func dropPageAttachmentClaim(_ claim: UUID) -> Bool { pageAttachments.dropClaim(claim) }
+
+    func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) { pageAttachments.closed(attachment) }
+
+    func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {
+        pageAttachments.serves(attachment, page: page) ? (attachment.session, nil, catalogID) : nil
+    }
+
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool { store.remotePageClaimToken(page) == token }
 
     func endRemotePage(_ page: UUID) {
@@ -223,6 +242,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         shutdownCatalogStreams()
         for stream in overlayJobStreams.values { stream.shutdown() }
         for stream in pageServeStreams.values { stream.shutdown() }
+        pageAttachments.shutdown()
     }
 }
 

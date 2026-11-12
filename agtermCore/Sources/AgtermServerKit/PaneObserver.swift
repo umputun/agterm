@@ -55,7 +55,8 @@ final class PaneObserver {
         let records = panes.endUnownedScratches(records)
         let listed = Dictionary(records.map { ($0.name, $0) }) { first, _ in first }
         var missing: [(session: Session, identities: [UUID])] = []
-        for session in store.workspaces.flatMap(\.sessions) where !session.ended {
+        // a page row has no daemon, so its absence from a listing never ends it
+        for session in store.workspaces.flatMap(\.sessions) where !session.ended && session.content == .terminal {
             var gone: [UUID] = []
             for (identity, role) in panesOf(session) {
                 if let record = listed[ZmxSupport.daemonName(for: identity)] {

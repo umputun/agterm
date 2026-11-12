@@ -5,7 +5,6 @@ import agtermCore
 extension ServerActions {
     public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse { unserved("readEvents") }
     public func duplicateSession(_ target: String?, window: String?) -> ControlResponse { unserved("duplicateSession") }
-    public func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse { unserved("attachCompanionPage") }
     public func selectSession(_ target: String?, window: String?) -> ControlResponse { unserved("selectSession") }
     public func goSession(window: String?, direction: SessionNavigation) -> ControlResponse { unserved("goSession") }
     public func revealSession(_ target: String?, window: String?) -> ControlResponse { unserved("revealSession") }

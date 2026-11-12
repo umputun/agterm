@@ -360,29 +360,29 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agtermCore/Tests/AgtermServerTests/ServerCommandPolicyTests.swift`
 - Modify: `agtermCore/Tests/AgtermServerTests/ServerStreamsTests.swift`
 
-- [ ] admit `session.page`, `session.companion.page` and `session.companion.page.attach`; create HTML file and URL
+- [x] admit `session.page`, `session.companion.page` and `session.companion.page.attach`; create HTML file and URL
       rows through the shared `AppStore.addPageSession`/`addPageCompanion` and the dispatcher's existing
       `pageRowOptions`; a loopback URL page is refused as on the Mac
-- [ ] keep page rows out of the daemon lifecycle: `PaneObserver` skips them (no pane, daemon or exit record, so never
+- [x] keep page rows out of the daemon lifecycle: `PaneObserver` skips them (no pane, daemon or exit record, so never
       marked ended), and `ServerCatalog` projects them with no terminal pane
-- [ ] serve an attachment per view: a per-claim token claimed into a `PageServeStream` in companion mode on the
+- [x] serve an attachment per view: a per-claim token claimed into a `PageServeStream` in companion mode on the
       server's `PageServeHost`; the page's final release ends every view; a file page's bridge requests run through the
       server's own dispatcher
-- [ ] save and restore page rows through the shared `PageSnapshot` path (`openRestoredPages`) when the server restarts
-- [ ] hoist `ControlServer.pageCompanionRefusal` into agtermCore and call it from `ServerActions.serve`, so split,
+- [x] save and restore page rows through the shared `PageSnapshot` path (`openRestoredPages`) when the server restarts
+- [x] hoist `ControlServer.pageCompanionRefusal` into agtermCore and call it from `ServerActions.serve`, so split,
       type, scratch, HUD, ask and the other terminal commands on a server page row are refused as on the Mac;
       `session.overlay.follow|search|wrap|changes` on a page row answer `no text page`, as a Mac page row does, since
       rows hold only HTML file and URL pages
-- [ ] hoist the companion attach token and claim book (`companionPageTokens`, `companionPageStreams`) into agtermCore,
+- [x] hoist the companion attach token and claim book (`companionPageTokens`, `companionPageStreams`) into agtermCore,
       shared by both hosts, never duplicated in AgtermServerKit
-- [ ] skip page rows in the server's pane-identity readers (`ServerActions+Receipts.swift:98`,
+- [x] skip page rows in the server's pane-identity readers (`ServerActions+Receipts.swift:98`,
       `ServerActions+Remote.swift:17`) as `locallyManagedPaneIdentities` does on the Mac
-- [ ] refuse a loopback URL page row at creation on the server: it names the server's host, and a page row has no
+- [x] refuse a loopback URL page row at creation on the server: it names the server's host, and a page row has no
       `page.forward` path, so no Mac could ever show it (Mac page rows keep today's refusal at attach)
-- [ ] write tests: each creation command and refusal, the terminal-command refusals on a page row, an observer tick
+- [x] write tests: each creation command and refusal, the terminal-command refusals on a page row, an observer tick
       and startup adoption with an empty daemon listing leave a page row live, attach token claim and expiry, two
       views served at once, restore after restart, bridge requests dispatched on the server
-- [ ] run tests - must pass before next task
+- [x] run tests - must pass before next task
 
 ### Task 9: Server page rows in Mac remote windows, docs and gates
 

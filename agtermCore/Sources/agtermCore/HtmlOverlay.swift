@@ -268,6 +268,12 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
+    /// init(pageRow:options:) is a page session's page, `source` with the open options it was asked with.
+    public init(pageRow source: HtmlSource, options: ControlSessionOverlayOpenOptions) {
+        self.init(source: source, navigation: options.navigation, javascript: options.javascript, chromeless: options.chromeless,
+                  persistent: options.persistent, browse: options.browse)
+    }
+
     /// init drops navigation from a markdown page without `markdownLinks`, so its strip never offers Back and
     /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,

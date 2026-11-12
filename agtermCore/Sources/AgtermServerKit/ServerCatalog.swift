@@ -131,7 +131,7 @@ extension ServerActions {
     }
 
     /// catalogWorkspaces is the headless store as the catalog: workspaces and sessions in order, each live session
-    /// with its left pane and, while it has a split, its right one. An ended session lists no pane.
+    /// with its left pane and, while it has a split, its right one. An ended session and a page row list no pane.
     func catalogWorkspaces() -> [CatalogWorkspace] {
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)
@@ -139,7 +139,7 @@ extension ServerActions {
             CatalogWorkspace(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
                 var identities = [session.paneIdentity]
                 if session.hasSplit, let split = session.splitPaneIdentity { identities.append(split) }
-                let panes = session.ended ? [] : identities.map {
+                let panes = session.ended || session.content == .page ? [] : identities.map {
                     CatalogPane(identity: $0, daemon: ZmxSupport.daemonName(for: $0), endpoint: endpoint)
                 }
                 let scratch = session.scratchDaemon.map {

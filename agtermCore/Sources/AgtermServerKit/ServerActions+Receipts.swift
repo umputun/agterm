@@ -25,7 +25,8 @@ extension ServerActions {
             let refusal = CatalogReceipt(opID: opID, epoch: hub.epoch, outcome: .refused, error: error)
             return save(refusal, into: &table) ? Self.reply(refusal) : Self.unsaved(opID)
         }
-        let refusal = request.args?.panes.flatMap { paneRefusal(request.target, expected: $0) }
+        let refusal = pageRowRefusal(request)?.error
+            ?? request.args?.panes.flatMap { paneRefusal(request.target, expected: $0) }
             ?? request.args?.scratch.flatMap { scratchRefusal(request.target, expected: $0) }
         if let refusal {
             let receipt = CatalogReceipt(opID: opID, epoch: hub.epoch, outcome: .refused, error: refusal)
@@ -95,7 +96,8 @@ extension ServerActions {
     /// a target that resolves to no session is left to the command's own error.
     private func paneRefusal(_ target: String?, expected: [String]) -> String? {
         guard case .success(let session) = resolveSession(target) else { return nil }
-        var current = [session.paneIdentity.uuidString]
+        // a page row's catalog entry lists no pane
+        var current = session.content == .page ? [] : [session.paneIdentity.uuidString]
         if session.hasSplit, let split = session.splitPaneIdentity { current.append(split.uuidString) }
         return current == expected.map { $0.uppercased() } ? nil : "the session's panes changed; take the catalog again"
     }

@@ -4,7 +4,8 @@ import agtermCore
 
 struct ServerCommandPolicyTests {
     @Test(arguments: [Command.tree, .version, .windowList, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
-                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges])
+                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionPage,
+                      .sessionCompanionPage, .sessionCompanionPageAttach])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }

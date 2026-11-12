@@ -1611,6 +1611,98 @@ struct ServerStreamsTests {
         #expect(chunks >= 1 && chunks < TextPage.maxTailBytes / PageServeCodec.maxChunkBytes)
     }
 
+    private func pageRow() async throws -> Session {
+        let path = harness.scratch.root + "/row.html"
+        try Data("<p>row</p>".utf8).write(to: URL(fileURLWithPath: path))
+        var args = ControlArgs()
+        args.html = path
+        let anchor = try newSession()
+        return try harness.session(await harness.actions.serve(ControlRequest(cmd: .sessionPage, target: anchor.id.uuidString,
+                                                                              args: args)))
+    }
+
+    private func view(_ row: Session) throws -> LogClient {
+        let offer = harness.actions.attachCompanionPage(row.id.uuidString, window: nil)
+        let token = try #require(offer.result?.companionPage?.token, "\(offer)")
+        let claimed = streams.claimPageStream(token)
+        let claim = try #require(claimed.result?.id.flatMap(UUID.init(uuidString:)), "\(claimed)")
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        streams.adoptPageServeStream(descriptor: pair[0], page: claim, token: token)
+        return LogClient(fd: pair[1])
+    }
+
+    private func bridge(_ client: LogClient, _ request: String) async throws -> PageServeFrame? {
+        try await offPool { () throws -> PageServeFrame? in
+            try client.send(.bridge(id: 1, request: request))
+            return client.frame()
+        }
+    }
+
+    @Test func anAttachmentTokenIsClaimedOnceAndExpires() async throws {
+        let row = try await pageRow()
+        let terminal = try newSession()
+        let now = Date()
+        streams.now = { now }
+        let first = try #require(harness.actions.attachCompanionPage(row.id.uuidString, window: nil).result?.companionPage)
+        let late = try #require(harness.actions.attachCompanionPage(row.id.uuidString, window: nil).result?.companionPage)
+
+        #expect(streams.claimPageStream(first.token).ok)
+        #expect(streams.claimPageStream(first.token) == ControlResponse(ok: false, error: "page not claimable"))
+        streams.now = { now.addingTimeInterval(AppStore.pageClaimWindow + 1) }
+        #expect(streams.claimPageStream(late.token) == ControlResponse(ok: false, error: "page not claimable"))
+        #expect(first.page == row.htmlOverlay?.id.uuidString)
+        #expect(harness.actions.attachCompanionPage(terminal.id.uuidString, window: nil)
+            == ControlResponse(ok: false, error: "not a page session"))
+    }
+
+    @Test func twoViewsAreServedAtOnceAndBridgeRequestsRunOnTheServer() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        let renamed = try await bridge(first, #"{"cmd":"session.rename","args":{"name":"docs"}}"#)
+        let typed = try await bridge(second, #"{"cmd":"session.type","args":{"text":"ls"}}"#)
+
+        guard case .reply(1, let renameReply)? = renamed, case .reply(1, let typeReply)? = typed else {
+            Issue.record("no bridge replies: \(String(describing: renamed)), \(String(describing: typed))")
+            return
+        }
+        #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(renameReply.utf8)).ok)
+        #expect(row.displayName == "docs")
+        #expect(try JSONDecoder().decode(ControlResponse.self, from: Data(typeReply.utf8)).error
+            == "session.type: not available on a page session")
+    }
+
+    @Test func closingThePageRowEndsEveryView() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        _ = harness.actions.closeSession(row.id.uuidString, window: nil)
+
+        let ends = await offPool { (first.frame(), second.frame()) }
+        #expect(ends.0 == nil && ends.1 == nil)
+        #expect(await eventually { streams.pageAttachments.streams.isEmpty })
+    }
+
+    @Test func stoppingTheServerEndsEveryViewAndKeepsThePageRow() async throws {
+        let row = try await pageRow()
+        let first = try view(row)
+        let second = try view(row)
+        #expect(await eventually { streams.pageAttachments.streams.count == 2 })
+
+        streams.shutdown()
+
+        #expect(await eventually { streams.pageAttachments.streams.isEmpty })
+        let ends = await offPool { (first.frame(), second.frame()) }
+        #expect(ends.0 == nil && ends.1 == nil)
+        #expect(harness.store.session(withID: row.id) === row)
+        #expect(row.htmlOverlay != nil)
+    }
+
     private func eventually(_ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(60)
         while Date() < deadline {

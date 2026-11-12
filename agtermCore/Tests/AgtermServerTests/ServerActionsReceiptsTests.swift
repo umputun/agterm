@@ -96,6 +96,23 @@ struct ServerActionsReceiptsTests {
         #expect(retried.result?.receipt?.outcome == .refused)
     }
 
+    @Test func aTerminalCommandOnAPageRowIsARefusedReceiptThatStaysRefused() async throws {
+        let anchor = try harness.session(await plain(.sessionNew))
+        var page = ControlArgs()
+        page.url = "https://example.com/"
+        let row = try harness.session(await plain(.sessionPage, target: anchor.id.uuidString, page)).id.uuidString
+        var split = ControlArgs()
+        split.mode = "on"
+
+        let reply = await serve(.sessionSplit, target: row, split, op: "page-split")
+        let repeated = await serve(.sessionSplit, target: row, split, op: "page-split")
+
+        #expect(reply.result?.receipt?.outcome == .refused)
+        #expect(reply.error == "session.split: not available on a page session")
+        #expect(repeated == reply)
+        #expect(harness.store.session(withID: try #require(UUID(uuidString: row)))?.hasSplit == false)
+    }
+
     @Test func anotherEpochIsRefusedBeforeTheCommandRuns() async {
         let count = sessionCount
 

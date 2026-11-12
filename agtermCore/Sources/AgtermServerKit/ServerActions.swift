@@ -34,10 +34,19 @@ public final class ServerActions: ControlActions {
     func serve(_ request: ControlRequest) async -> ControlResponse {
         if let refusal = ServerCommandPolicy.refusal(request.cmd) { return ControlResponse(ok: false, error: refusal) }
         if let opID = request.args?.opID { return await serveOperation(request, opID: opID) }
+        if let refusal = pageRowRefusal(request) { return refusal }
         let response = await ControlDispatcher(actions: self).dispatch(request)
             ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
         streams.catalogHub.refresh()
         return response
+    }
+
+    /// pageRowRefusal answers a command a page row cannot take; an operation records it as its refused receipt.
+    func pageRowRefusal(_ request: ControlRequest) -> ControlResponse? {
+        PageSessionRefusal.refusal(request) { target, _ in
+            if case .success(let session) = resolveSession(target) { return session.content == .page }
+            return false
+        }
     }
 
     public func claimOverlayJob(_ job: String) -> ControlResponse { streams.claimJobStream(job) }

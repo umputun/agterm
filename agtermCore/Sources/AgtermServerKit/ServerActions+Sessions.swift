@@ -136,6 +136,42 @@ extension ServerActions {
         }
     }
 
+    /// createPageCompanion creates a page row under the target, shown by each Mac that attaches it.
+    public func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        withPageRow(target, window: window, options: options) { parent, overlay in
+            store.addPageCompanion(to: parent.id, overlay: overlay, select: false, backgroundColor: options.backgroundColor)
+        }
+    }
+
+    /// createPageSession creates a top-level page row after the target's group.
+    public func createPageSession(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        withPageRow(target, window: window, options: options) { anchor, overlay in
+            store.addPageSession(after: anchor.id, overlay: overlay, select: false, backgroundColor: options.backgroundColor)
+        }
+    }
+
+    /// attachCompanionPage answers `session.companion.page.attach`: a token for one view of the page row.
+    public func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse {
+        withSession(target, window: window) { streams.pageAttachments.offer($0) }
+    }
+
+    private func withPageRow(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions,
+                             create: (Session, HtmlOverlay) -> Result<Session, CompanionRefusal>) -> ControlResponse {
+        withSession(target, window: window) { session in
+            guard let page = options.page else { return ControlResponse(ok: false, error: OverlayHtmlError.pageSessionNeedsPage) }
+            // a page row has no forward path, so the server's loopback would load on the viewing Mac
+            if case .url(let url) = page, HtmlSource.isLoopback(url.absoluteString) {
+                return ControlResponse(ok: false, error: OverlayHtmlError.serverLoopbackRow)
+            }
+            let overlay = HtmlOverlay(pageRow: page, options: options)
+            guard case .success(let row) = create(session, overlay) else {
+                return ControlResponse(ok: false, error: "could not create page session")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: row.id.uuidString, pageID: overlay.id.uuidString,
+                                                                   parent: row.parentID?.uuidString))
+        }
+    }
+
     public func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse {
         withSession(target, window: window) { session in
             let identity: UUID

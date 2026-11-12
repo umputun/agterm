@@ -89,6 +89,7 @@ public enum OverlayHtmlError {
     public static let searchTextWithStep = "session.overlay.search: text cannot be combined with --next, --prev or --close"
     public static let companionNeedsPage = "a page companion needs --html or --url"
     public static let pageSessionNeedsPage = "a page session needs --html or --url"
+    public static let serverLoopbackRow = "a page on agterm-server's loopback cannot be a page session: no Mac would reach it"
     /// presenter: a page is shown on this Mac, so it is refused while another Mac presents the session.
     public static let presenter = "a viewer presents this session: an html overlay would open where nobody sees it"
     public static let noOverlay = "no overlay"
