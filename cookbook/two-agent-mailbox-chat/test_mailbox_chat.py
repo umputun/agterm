@@ -86,6 +86,8 @@ class StateTest(unittest.TestCase):
             mock.patch.object(mc, "AGTERMCTL", "agtermctl"),
             mock.patch.dict(os.environ, {"AGTERM_SESSION_ID": SID, "AGTERM_PANE_ID": LEFT}, clear=False),
             mock.patch.object(mc, "find_codex_pid", return_value=None),
+            # the real reader calls macOS sysctl, which the Linux CI runner's libc lacks
+            mock.patch.object(mc, "process_argv", return_value=None),
         ]
         for p in patches:
             p.start()
