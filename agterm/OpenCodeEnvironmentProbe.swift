@@ -56,13 +56,7 @@ enum OpenCodeEnvironmentProbe {
         let fields = output.stdout[boundary.upperBound...].split(separator: "\0", maxSplits: 6, omittingEmptySubsequences: false).map(String.init)
         guard fields.count == 7 else { return nil }
         let home = fields[0].isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : fields[0]
-        let codexHome: String?
-        if !timedOut, !fields[5].isEmpty, fields[1].hasPrefix("/") {
-            let absolute = fields[5].hasPrefix("/") ? fields[5] : fields[1] + "/" + fields[5]
-            codexHome = URL(fileURLWithPath: absolute).standardizedFileURL.path
-        } else {
-            codexHome = nil
-        }
+        let codexHome = timedOut ? nil : AgentHooksInstall.Codex.home(codexHome: fields[5], workingDirectory: fields[1])
         return Result(
             version: !timedOut && process.terminationStatus == 0 ? AgentHooksInstall.OpenCode.Version(versionOutput: fields[6]) : nil,
             v2ConfigurationDirectory: AgentHooksInstall.OpenCode.configurationDirectory(

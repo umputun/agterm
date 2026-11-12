@@ -98,6 +98,52 @@ struct ServerHookInstallTests {
         #expect(FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".claude/settings.json").path))
     }
 
+    @Test func codexHomeReceivesTheHooksAndTheSkill() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.directory(".codex")
+        try fixture.directory("custom-codex")
+        try fixture.tool("jq", printing: "")
+        let codexHome = fixture.home.appendingPathComponent("custom-codex").path
+
+        let report = try install(fixture, environment: ["CODEX_HOME": codexHome])
+
+        #expect(report.complete)
+        #expect(report.lines.contains(AgentHooksFiles.CodexResult.merged.text(codexHome: codexHome)))
+        #expect(try fixture.read("custom-codex/config.toml").contains(".config/agterm/agent-status"))
+        #expect(FileManager.default.fileExists(atPath: codexHome + "/skills/agterm/SKILL.md"))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".codex/config.toml").path))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".codex/skills").path))
+    }
+
+    @Test func missingCodexHomeIsReportedWithoutFallingBackToTheDefault() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.directory(".codex")
+        try fixture.tool("jq", printing: "")
+        let codexHome = fixture.home.appendingPathComponent("absent-codex").path
+
+        let report = try install(fixture, environment: ["CODEX_HOME": codexHome])
+
+        #expect(!report.complete)
+        #expect(report.lines.contains(AgentHooksFiles.CodexResult.noCodex.text(codexHome: codexHome)))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".codex/config.toml").path))
+        #expect(!FileManager.default.fileExists(atPath: fixture.home.appendingPathComponent(".codex/skills").path))
+    }
+
+    @Test func emptyCodexHomeUsesTheDefault() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try fixture.directory(".codex")
+        try fixture.tool("jq", printing: "")
+
+        let report = try install(fixture, environment: ["CODEX_HOME": ""])
+
+        #expect(report.complete)
+        #expect(report.lines.contains(AgentHooksFiles.CodexResult.merged.text))
+        #expect(try fixture.read(".codex/config.toml").contains(".config/agterm/agent-status"))
+    }
+
     @Test func openCodeVersionComesFromItsCommand() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.root) }

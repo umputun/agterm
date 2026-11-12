@@ -96,6 +96,16 @@ public enum AgentHooksInstall {
         }
     }
 
+    public enum Codex {
+        /// home resolves a `CODEX_HOME` value to Codex's root, nil for the default `~/.codex`: unset, empty, or no
+        /// absolute `workingDirectory`. A relative value joins `workingDirectory`, never expanded.
+        public static func home(codexHome: String?, workingDirectory: String) -> String? {
+            guard let codexHome, !codexHome.isEmpty, workingDirectory.hasPrefix("/") else { return nil }
+            let absolute = codexHome.hasPrefix("/") ? codexHome : workingDirectory + "/" + codexHome
+            return URL(fileURLWithPath: absolute).standardizedFileURL.path
+        }
+    }
+
     /// The shell integration scripts sourced from the user's rc files / config.fish, relative to the script
     /// directory.
     public static let integrationRelativePath = "shell/integration.sh"
