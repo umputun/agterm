@@ -401,9 +401,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   origin's `zmx tree` until the new id is attachable, then attaches it under the row through `attach(_:placement:)`.
   Creation is never retried or done locally; a created but unattached companion is named in the error. The three
   creation commands are in `waitsOnNetwork`, local ones included; `session.companion.convert` is local only and is not.
-- A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view: a
-  per-claim token in `companionPageTokens`, claimed through `claimPageServe` into a `PageServeStream` in companion mode,
-  keyed by claim in `companionPageStreams`. A claim, an expired token, an unanswered reply or EOF ends only that view,
+- A remote parent's page companion is the origin's page. `session.companion.page.attach` hands out one view through
+  the host's `PageAttachmentBook` (`ControlServer.pageAttachments`, `ServerStreams.pageAttachments` on agterm-server):
+  a per-claim token, claimed through `claimPageServe` into a `PageServeStream` in companion mode, kept by claim.
+  A claim, an expired token, an unanswered reply or EOF ends only that view,
   never `endRemotePage`; `HtmlOverlayReleases.onServedRelease` at the page's final release ends every view, so a
   soft-closed page keeps serving through undo. URL pages get the same channel for lifetime only (no bridge), and a
   loopback URL is refused at both ends. `zmx tree` lists a page companion with no panes when its parent is listed; the
@@ -440,8 +441,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.page` creates a top-level page session, its own wire command for the same reason, with the CLI
   too-old text `the running app is too old for page sessions`. `AppStore.addPageSession` places it after the
   anchor's whole group with the anchor's local focused cwd (`--cwd` stays the file grant) and shares `addPage`,
-  open and refusal included, with `addPageCompanion`. A remote anchor only places it; creation is never
-  forwarded. The reply is `id` and `pageID`; the read-back is `content: "page"` with no `parent`.
+  open and refusal included, with `addPageCompanion`. An anchor attached from another Mac only places it; on a
+  remote window's row, `session.page` and `session.companion.page` are created by its server
+  (`RemoteOperation.newPage`, forwarded with an operation id). The reply is `id` and `pageID`; the read-back is
+  `content: "page"` with no `parent`.
 - `session.companion.duplicate` is its own wire command for the same older-app reason.
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then
@@ -460,7 +463,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
   slot, then the target and its companions re-pointed at it, keeping every `Session` object. `ConvertRefusal.message`
   is the refusal text both surfaces show, and a remote row is refused, never forwarded to its origin.
-- `ControlServer.pageCompanionRefusal` is the one pre-dispatch guard, covering the socket and a page's bridge.
+- `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
+  route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
   window's zoom target, and never refuses a zoom hide, which stays idempotent.
 - `AppStore.closeOverlay` on a page session closes the session before slot teardown; the strip X and ⌘W go
@@ -869,22 +873,24 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A log page is a text page with `HtmlOverlay.textLog` (`--tail`, `--follow-file`, wire `tail`/`followFile`, or a plain
   click on a `TextPage.isLog` file). The request and the live `logState` ride the model, not `HtmlSource`, so
   `presentationSource`, replicas and the fork's `.text` matches are untouched, and the CLI can change following before a
-  view exists. `TextPageBridge` owns the page side of every local text page, so `HtmlOverlayRegistry.swift` keeps only
-  hook lines; its `LogFollower` reads a log page's file: one `fstat` per second while following and on screen, a
+  view exists. `TextPageBridge` owns the page side of every text page, a replica's included, whose reads go over its
+  page channel, so `HtmlOverlayRegistry.swift` keeps only hook lines; its `LogFollower` reads a log page's file:
+  one `fstat` per second while following and on screen, a
   `LogTail` snapshot only when the stamp moved, its own read sequence and pause epoch (never `textLoad`), and a
   document build that holds ticks until `text.js` reports ready.
   `setTextLogFollowing` emits `tree.changed`, `setTextLogReport` never, so ticks wake no hook.
-  `textLogRefusal` refuses a log page `pageBelongsRemote` hands to the presenter, whose page would lose its state;
-  a clicked log there opens as the plain page. `session.overlay.follow` sets following and answers `following` or
-  `paused`; it is not `--follow`, which selects.
+  `textLogRefusal` refuses a log page `pageBelongsRemote` hands to a presenter not listing `page.text`, which would
+  show it static; a clicked log there opens as the plain page.
+  `session.overlay.follow` sets following and answers `following` or `paused`; it is not `--follow`, which selects.
 - A text page searches itself (`session.overlay.search TEXT | --to next|prev|close`), separate from `session.search`,
   which searches a terminal. The query lives on the model (`HtmlOverlay.textSearch`) with a `searchRevision` every set
   or close bumps; the page reports matches and current under that revision and `setTextSearchReport` drops any other,
   emitting nothing. A query set before the view exists runs when it loads and survives rebuilds; a step is a one-shot
   push to the loaded page, refused `page not loaded` before it, and answers `N of M`. The page's own field writes the
   same model, and the bridge marks the revisions that field produced, so their pushes never overwrite its typing.
-  An empty slot and a program keep the slot lookup's own refusals; any other page, a replica included, is refused
-  `no text page`, and a slot `pageBelongsRemote` hands to the presenter `remote page`. Read back `htmlOverlays[].text.search`, omitted with no query.
+  An empty slot and a program keep the slot lookup's own refusals, and any other page is refused `no text page`.
+  A slot `pageBelongsRemote` hands to the presenter runs the action there (Remote sessions); a store asked directly
+  refuses it `remote page`. Read back `htmlOverlays[].text.search`, omitted with no query.
 - A plain `.diff`/`.patch` page (`TextPage.isDiff`) steps between its changes (`session.overlay.changes --to next|prev`).
   `TextPage.html` marks it `data-diff` outside the highlight cap, since a full-context patch is the large case. The page
   parses changes from hunk counts, so headers between hunks never count, and posts `{count, current}` on ready and each
@@ -897,9 +903,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A text page wraps long lines (`session.overlay.wrap on|off|toggle`, the bar's Wrap button, `w`).
   `HtmlOverlay.textWrap` lives per page, starts off and is never persisted; a rebuild carries it as `data-wrap`.
   The bridge records the page's toggle in the model, and `TextPageBridge.apply` pushes every model change back, so a control
-  call crossing a click leaves both on the model's value. Refusals are `textSearchPage`'s; a replica's
-  toggle stays in the page, unrecorded, unreported and dropped by a rebuild, as its search is. Every row is one line box of the same height, so `text.js` places line starts from each line's ending
-  newline and the end from the code element's last fragment: a diff marker's zero-size rect is empty. The gutter,
+  call crossing a click leaves both on the model's value. Refusals are `textSearchPage`'s.
+  Every row is one line box of the same height, so `text.js` places line starts from each line's ending newline
+  and the end from the code element's last fragment: a diff marker's zero-size rect is empty. The gutter,
   target, diff and change bands all read those rows. A toggle reports a log page's offset, which a rebuild reopens at.
   Read back `htmlOverlays[].text.wrap`, omitted while unwrapped.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
@@ -2161,6 +2167,21 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `PresentationHub.pageLinksKind`; any other gets `HtmlOverlay.withoutLinks()` in the request and in the record the
   claim serves from, since an older presenter would fetch the original spelling and `.md` pictures. A markdown or
   text page companion of a remote parent stays refused.
+- A log page and the text actions go only to a presenter listing `PresentationHub.pageTextKind` (`page.text`): an older
+  one ignores `textLog` and shows the log static, and a text action it cannot decode ends the whole stream.
+  The open request carries `textLog`, the claim serves the log's end over the page channel, and the presenter's
+  `TextPageBridge` follows it there.
+  On the origin `follow`, `search`, `wrap` and `changes` aimed at such a slot go out as `pageCommand`s with a sequence
+  number (`AppStore.remoteTextAction`) and wait at most `PresentationPageResult.deadline` for the matching
+  `pageResult`, which answers with the presenter's reply and its text state; no result is `presenter did not answer`,
+  and a page that ends or is withdrawn meanwhile answers `the viewer showing this overlay is gone`.
+  The presenter runs each one through `runTextPageAction`, the local command, queued per page so they apply in order,
+  against the replica, which the same commands also reach on its own socket.
+  Every text-state change on a replica, its bar's included, rides `pageState.text` and is mirrored into the origin's
+  record; a re-offer seeds the new replica with following, query and wrap (`textSeed`), never a step.
+  An older presenter gets `OverlayHtmlError.logRemote` for a log page, the plain page for a clicked log, and the
+  store's `remote page` refusals for search, changes and wrap.
+  A headless origin answers a text action on a page held for no presenter `the viewer showing this overlay is gone`.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,
   each reply meaning requested, not applied. `navigate browser` reaches it
@@ -2170,7 +2191,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   until a mirrored `pageState` echoes that sequence; an older sequence never overwrites a pending request.
   On the presenter a socket `overlay.submit` on a replica is refused (`replicaSubmit`) and leaves it open.
 - The origin's `htmlOverlays` lists the page with `remote: true`: its own fields from the origin record, the
-  live ones (`state`, `error`, `page`, `title`, history, `hidden`) from the presenter's coalesced `pageState`,
+  live ones (`state`, `error`, `page`, `title`, history, `hidden`, `text`) from the presenter's coalesced `pageState`,
   and no `zoom`. The presenter lists its replica with `replica: true`; for a file replica `file` names the origin
   path, a URL replica retains `url`.
 - A presenter that refuses the page answers `pageRejected`; the origin's open already answered ok, so the page
@@ -2226,6 +2247,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   never queued; `RemoteWindowViewState` keeps what this Mac detached and its kept views.
 - A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
   `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
+- The server keeps page rows: `session.page`, `session.companion.page` and `session.companion.page.attach` are
+  served, the page rows take operation receipts, and a loopback URL is refused
+  (`OverlayHtmlError.serverLoopbackRow`), since a page row has no forward path.
+  The catalog marks one with `CatalogSessionFields.page`, no panes and its own id as `primary`.
+  A viewer's hello sets `CatalogHello.pageRows`; `CatalogHub` sends any other viewer the catalog without page rows,
+  diffing the filtered catalogs and padding the revisions it skips with `catalog.skip` frames, an unknown kind an older
+  viewer steps past. A companion of a filtered page row loses its `parent` there and shows top-level.
+- A remote window builds a page row as `.page` content with no presentation stream (`catalogRowAdded`):
+  `ControlServer+CatalogPage` claims a view through the server's `page-attach` and shows it with the shared replica
+  builder. Waiting for the catalog connection, an unreachable server and a channel end retry, and each shows the
+  reason as the row's failed page; a server refusal stays shown and is not retried. The row closes only when the
+  catalog removes it; `session.detach` ends the view and `session.reattach` claims a new one.
 - Under musl every `ServerProcess` spawn re-execs the server as `CleanExec`, which closes inherited
   descriptors in the single-threaded child: musl has no closefrom file action, and Foundation opens files
   without `O_CLOEXEC`.
