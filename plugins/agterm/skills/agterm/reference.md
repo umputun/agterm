@@ -25,11 +25,17 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 
 ## events
 
-`agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N]` continuously
-prints control events. Each poll is one ordinary socket connection and one `events.read` response.
-The CLI immediately reads again after a non-empty page and waits 250 ms after an empty page.
+`agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N] [--poll]`
+continuously prints control events. It opens one `events.stream` connection: the reply is the
+`events.read` anchor batch, then every later event is pushed to it as one line — no polling.
+`--poll` forces the old transport, and a server without `events.stream` (or agterm-server) makes the
+CLI fall back to it automatically: one ordinary socket connection and one `events.read` response per
+poll, reading again immediately after a non-empty page and 250 ms after an empty one. A full stream
+cap on a current server falls back too, but says so with one notice on stderr; stdout stays event
+lines only. Either way the
+printed lines and the cursor semantics are identical.
 
-With no cursor, the first read subscribes from now: it returns an empty batch anchored at the current
+With no cursor, the open subscribes from now: the anchor batch is empty and anchored at the current
 tail, and the CLI prints only later events. The app keeps a non-destructive ring of the latest 4,096
 events for its current process run. Independent readers do not consume one another's events.
 
@@ -88,7 +94,8 @@ one bare `ControlEvent` JSON object per line and flushes promptly.
 
 `--kind` may be repeated or comma-separated. Unknown kinds are errors. Filtering advances the global
 cursor across nonmatching events, so changing a filter does not replay skipped history. `--limit`
-defaults to 100 and accepts 1 through 1,000.
+defaults to 100 and accepts 1 through 1,000; on the stream it caps only the anchor batch, later
+events arriving one per line.
 
 The raw `events.read` response stores the batch under `result.events`:
 

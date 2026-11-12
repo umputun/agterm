@@ -19,8 +19,8 @@ paths:
 
 ## Control API
 
-- `agtermctl` drives app/store actions over a local Unix socket. One-shot commands and polled
-  `events.read` are in scope; terminal-output streaming is not.
+- `agtermctl` drives app/store actions over a local Unix socket. One-shot commands, `events.read`
+  polling, and the `events.stream` push transport are in scope; terminal-output streaming is not.
 - `agtermCore` owns protocol types, target/socket resolution, and host-free dispatch.
   `ControlServer` owns the socket and app-side effects; blocking accept/read runs off-main and requests
   hop to the main actor. SwiftPM `agtermctlKit` owns ArgumentParser and `SocketClient`.
@@ -103,6 +103,20 @@ paths:
 - `agtermctl events` branches on the connect errno: once it holds a cursor it retries `ECONNREFUSED`
   with that cursor, bounded by `EventStreamState.retryBudget`, and treats every other failure as fatal.
   A change to what a refused or absent server returns must keep that path in step.
+- `events.stream` is the transport `agtermctl events` opens first: the reply is the `events.read`
+  anchor batch, then each sequenced event is one JSON `ControlEvent` line on the same connection until
+  the subscriber hangs up (no ping frames; EOF is the unsubscribe). Admission reserves a subscriber
+  slot in `EventStreamHub` BEFORE the anchor read, so an event landing in the open window is buffered
+  and flushed past the anchor cursor at commit — never lost to the open sequence; that buffer obeys
+  the same cap as a committed queue, and an overflow during the open window drops the reservation,
+  with commit refusing adoption so the accept loop closes the connection. Cap 32 concurrent
+  streams; past it the reply is `EventStreamHub.capacityRefusal` and the connection closes. A server
+  that predates the command fails request decode, and the CLI falls back to `events.read` polling
+  for the rest of the run (`--poll` forces that from the start); only the capacity refusal says so
+  on stderr — the fallback a current server causes is visible, the one an old server causes is not.
+  An error reply carrying an events payload is a cursor
+  verdict, surfaced exactly as polling surfaces it, never a fallback. `events.read` itself is
+  unchanged and stays the fallback contract for old CLIs, remote windows, and agterm-server.
   `reference.md` owns the user contract.
 - `ControlServer.init` takes an exclusive non-blocking `flock` on `<socketPath>.lock`, and start refuses
   to bind while another process holds it. A second instance on the SAME state directory never gets here:
@@ -169,7 +183,7 @@ The public commands, which no surface states a COUNT of: a total is stated nowhe
 adding one is an edit to this list and the surfaces that document the command itself, never a synchronized
 renumbering. Do not reintroduce a count anywhere.
 
-- `tree`, `events.read`
+- `tree`, `events.read`, `events.stream`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
 - `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
@@ -1907,12 +1921,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   a second Mac.
 - Commands leave the accept thread in two ways. `zmx.tree`, `zmx.attach` and `zmx.attach.group` wait on the network,
   so `handleConnection` moves each to a worker thread and that thread's descriptor close moves with it.
-  `zmx.present`, `session.overlay.job.run` and `session.overlay.page.serve` are streaming hand-offs: each is
+  `zmx.present`, `session.overlay.job.run`, `session.overlay.page.serve` and `events.stream` are
+  streaming hand-offs: each is
   dispatched inline, its
   ordinary reply is written, and on ok the descriptor passes to a `ControlStreamOwner` whose reader thread
   is the only one that closes it. A remote `overlay.close` does not leave the thread: it replies at once.
   Everything else stays inline, because dispatch
-  refreshes the window cache in the same execution the fast path reads. Running an ssh inline instead
+  refreshes the window cache in the same execution the fast path reads — except the window-independent
+  `events.read`/`events.stream`, which skip the refresh and instead `events.read` answers anchor,
+  at-tail and cursor-error reads from the ring's lock-guarded tail snapshot with no main-actor hop at
+  all (a cursor behind the tail still falls through; `ControlServerTests` pins byte-parity with
+  `readEvents`). Running an ssh inline instead
   makes `zmx tree <this machine>` DEADLOCK: the far side's own `agtermctl` waits in the backlog this
   connection is holding. Local `zmx.list` blocks that thread too, on a subprocess bounded at 3s, and
   stays inline deliberately — contention is not deadlock. `ControlServerTests` pins the free accept

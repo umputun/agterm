@@ -3,6 +3,10 @@
 public enum Command: String, Codable, Sendable {
     case tree
     case eventsRead = "events.read"
+    /// events.stream anchors like events.read, then keeps the connection: every appended event is
+    /// pushed as one JSON ControlEvent line until the subscriber hangs up. An app that predates it
+    /// fails to decode the request, which is the CLI's cue to fall back to polling events.read.
+    case eventsStream = "events.stream"
     case workspaceNew = "workspace.new"
     case workspaceRename = "workspace.rename"
     case workspaceDelete = "workspace.delete"

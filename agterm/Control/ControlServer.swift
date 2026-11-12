@@ -76,6 +76,11 @@ final class ControlServer {
     /// here because an extension cannot hold it. Main-actor only.
     let presentationHub = PresentationHub(staleTimeout: 30)
     var presentationStreams: [PresentationStream] = []
+    /// Push streams for `events.stream` subscribers. `ControlServer+EventStream` owns the logic.
+    let eventStreamHub = EventStreamHub()
+    /// The event ring's position, readable from the accept thread's events fast path; same object as
+    /// the library ring's tail, held here because `library` itself is main-actor isolated.
+    let controlEventTail: ControlEventTail
     /// Remote overlay jobs this Mac handed to presenters.
     let overlayJobs = OverlayJobs()
     var overlayJobStreams: [String: OverlayJobStream] = [:]
@@ -122,6 +127,9 @@ final class ControlServer {
     /// cache (which the main-actor path populates) and for `tree --window` on an OPEN window (building the
     /// tree needs the main actor). Only the closed-window error and `window.list` land here.
     nonisolated func fastPathResponse(for request: ControlRequest) -> ControlResponse? {
+        if request.cmd == .eventsRead, let response = fastPathEventsReadResponse(for: request) {
+            return response
+        }
         let nodes = cachedWindows()
         guard !nodes.isEmpty else { return nil }
         switch request.cmd {
@@ -231,6 +239,9 @@ final class ControlServer {
         self.bundleURL = bundleURL
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
+        self.controlEventTail = library.controlEventTail
+        // every sequenced event fans out to adopted events.stream connections
+        _ = library.eventTaps.add { [eventStreamHub] event in eventStreamHub.fanout(event) }
         AskRegistry.shared.resolveOwner = { [weak library] owner in
             switch owner {
             case .window(let id): PickRegistry.shared.controller(for: id)?.pendingAsk
@@ -529,6 +540,24 @@ final class ControlServer {
             return
         }
 
+        // an events stream keeps its connection the same way: the anchor reply is ordinary, then
+        // every appended event is one framed line, so the accept thread goes straight back to
+        // accepting. The reservation made during admission already buffers events past the anchor.
+        if request.cmd == .eventsStream {
+            let admitted = runBlocking { await server.eventsStreamAdmission(request) }
+            guard server.responseWriter(conn, admitted.response) else {
+                if let reservation = admitted.reservation {
+                    runBlocking { await server.abandonEventStreamReservation(reservation) }
+                }
+                return
+            }
+            guard let reservation = admitted.reservation, let anchor = admitted.response.result?.events else { return }
+            if runBlocking({ await server.commitEventStream(reservation: reservation, descriptor: conn, anchor: anchor) }) {
+                handedOff = true
+            }
+            return
+        }
+
         // a remote window's structural command is decided here and sent from a worker, so the accept thread
         // never waits on ssh while local structural commands keep their inline order
         if let route = runBlocking({ await server.remoteRoute(request) }) {
@@ -584,9 +613,9 @@ final class ControlServer {
          .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
     }
 
-    // these polling reads cannot change window nodes; skip the AppKit rebuild
+    // these reads cannot change window nodes; skip the AppKit rebuild
     nonisolated private static func leavesWindowsUnchanged(_ cmd: Command) -> Bool {
-        cmd == .eventsRead || cmd == .msgRead
+        cmd == .eventsRead || cmd == .eventsStream || cmd == .msgRead
     }
 
     /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
@@ -653,7 +682,7 @@ final class ControlServer {
 
     /// Execute a request against the store/actions seam. Never throws across the socket: any failure is a
     /// `{"ok":false,"error":…}` response.
-    private func dispatch(_ request: ControlRequest) async -> ControlResponse {
+    func dispatch(_ request: ControlRequest) async -> ControlResponse {
         // refresh the read cache in this same main-actor execution, so the background fast path sees the new
         // state without a separate, stallable hop.
         defer { if !Self.leavesWindowsUnchanged(request.cmd) { refreshWindowCache() } }
@@ -663,8 +692,10 @@ final class ControlServer {
         if let response = await ControlDispatcher(actions: self).dispatch(request) {
             return response
         }
+        // `eventsStream` never reaches this switch — ControlDispatcher answers it — but the anchor
+        // reply it would produce here is the same `readEvents` answer.
         switch request.cmd {
-        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+        case .tree, .eventsRead, .eventsStream, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove,
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
