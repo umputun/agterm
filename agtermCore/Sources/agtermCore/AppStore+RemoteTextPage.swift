@@ -72,10 +72,13 @@ extension AppStore {
     /// at most `remoteTextDeadline`. A presenter that does not list `page.text` is never sent one: it cannot decode
     /// the action and would end the whole presentation.
     public func remoteTextAction(_ sessionID: UUID, pane: OverlayPane?, _ action: TextPageAction) async -> RemoteTextOutcome {
-        guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil,
-              let hub = presentationHub, hub.presenterSupports(PresentationHub.pageTextKind, session: sessionID)
+        guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil
         else { return .local }
-        guard hub.presenterGeneration(session: sessionID) == slot.owner else { return .failed(OverlayResultError.viewerGone) }
+        // a headless origin holds the page with no owner until a presenter connects
+        guard let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else {
+            return .failed(OverlayResultError.viewerGone)
+        }
+        guard hub.presenterSupports(PresentationHub.pageTextKind, session: sessionID) else { return .local }
         var seq = 0
         session.remoteOverlays.updatePage(slot.job) { seq = $0.nextSeq() }
         let wait = RemoteTextWait(job: slot.job, seq: seq)

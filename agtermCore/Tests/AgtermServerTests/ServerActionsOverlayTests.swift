@@ -91,6 +91,20 @@ struct ServerActionsOverlayTests {
         #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayHtmlError.noOverlay, count: 4))
     }
 
+    @Test func textCommandsOnALogHeldForNoMacAnswerThatTheViewerIsGone() async throws {
+        let session = try newSession()
+        let id = session.id.uuidString
+        let path = try file("app.log", Array("one\ntwo\n".utf8))
+        #expect(open(session, page: .text(path: path, line: nil), textLog: TextLog(tail: 10, follow: true)).ok)
+
+        let follow = await harness.actions.setSessionOverlayFollow(id, window: nil, pane: nil, mode: .on)
+        let wrap = await harness.actions.setSessionOverlayWrap(id, window: nil, pane: nil, mode: .on)
+        let search = await harness.actions.searchSessionOverlay(id, window: nil, pane: nil, request: .next)
+        let changes = await harness.actions.stepSessionOverlayChanges(id, window: nil, pane: nil, forward: true)
+
+        #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayResultError.viewerGone, count: 4))
+    }
+
     @Test func followUpsOnAnEmptySlotAreRefused() throws {
         let session = try newSession()
         let id = session.id.uuidString
