@@ -131,7 +131,6 @@ final class RemotePageChannel {
     static let limits = ControlStreamOwner.Limits(maxLineBytes: PageServeCodec.maxFrameBytes, maxPendingLines: 32,
                                                   writeTimeoutSeconds: 5)
 
-    // a resource's answer opens with its type, a log tail's with the file's stamp and offset or with no change
     private enum Head {
         case resource(mimeType: String)
         case log(stamp: BoundedFile.FileStamp, offset: Int)
@@ -240,7 +239,6 @@ final class RemotePageChannel {
         }
     }
 
-    // request sends one resource-kind request under a fresh id and waits for its answer's head
     private func request(_ frame: PageServeFrame, current: @escaping @MainActor () -> Bool) async throws -> (Int, Head) {
         try await started()
         let id = allocate()

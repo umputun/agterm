@@ -1492,19 +1492,34 @@ struct ServerStreamsTests {
         #expect(answer == .failure("not a log page"))
     }
 
-    @Test func aCancelledLogTailStopsBeforeItsEnd() async throws {
+    @Test func aLogTailCancelledMidAnswerStopsBeforeItsEnd() async throws {
         let path = try logFile(String(repeating: "0123456789\n", count: TextPage.maxTailBytes / 11))
         let (client, viewer) = try await logChannel(.text(path: path, line: nil))
         defer { viewer.disconnect() }
 
-        let answer = try await offPool { () throws -> LogClient.Answer in
+        let frames = try await offPool { () throws -> [PageServeFrame] in
             try client.send(.logTail(id: 1, stamp: nil))
+            var frames: [PageServeFrame] = []
+            while let frame = client.frame() {
+                frames.append(frame)
+                if case .chunk = frame { break }
+            }
             try client.send(.cancel(id: 1))
-            Thread.sleep(forTimeInterval: 0.3)
-            return client.answer(1)
+            while let frame = client.frame() {
+                frames.append(frame)
+                if case .end = frame { break }
+                if case .failure = frame { break }
+            }
+            return frames
         }
 
-        #expect(answer == .failure(PageServeFrame.cancelled))
+        guard case .logHead(1, _, _)? = frames.first else {
+            Issue.record("no log head: \(frames.prefix(1))")
+            return
+        }
+        #expect(frames.last == .failure(id: 1, error: PageServeFrame.cancelled))
+        let chunks = frames.filter { if case .chunk = $0 { true } else { false } }.count
+        #expect(chunks >= 1 && chunks < TextPage.maxTailBytes / PageServeCodec.maxChunkBytes)
     }
 
     private func eventually(_ condition: () -> Bool) async -> Bool {
