@@ -1,7 +1,6 @@
 import Foundation
 import agtermCore
 
-/// Serves this Mac's page rows to the Macs that attach them, through the shared `PageAttachmentBook`.
 extension ControlServer {
     /// attachCompanionPage answers `session.companion.page.attach`: a token for one `page-serve` claim, and the page.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse {

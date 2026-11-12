@@ -268,7 +268,6 @@ public struct HtmlOverlay: Equatable, Sendable {
     public var reloadRevision = 0
     public var reloadTarget = HtmlReloadTarget.original
 
-    /// init(pageRow:options:) is a page session's page, `source` with the open options it was asked with.
     public init(pageRow source: HtmlSource, options: ControlSessionOverlayOpenOptions) {
         self.init(source: source, navigation: options.navigation, javascript: options.javascript, chromeless: options.chromeless,
                   persistent: options.persistent, browse: options.browse)
