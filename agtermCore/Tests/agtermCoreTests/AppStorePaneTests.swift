@@ -1719,6 +1719,19 @@ struct AppStorePaneTests {
         #expect(session.scratchGeneration == 1)
     }
 
+    // a departed server scratch with no surface left its directory for the next daemon's scratch
+    @Test func dropScratchDaemonForgetsTheDepartedScratchsDirectory() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: false)
+        session.scratchCwd = "/srv/old"
+        store.dropScratchDaemon(session.id)
+        #expect(session.scratchDaemon == nil)
+        #expect(session.scratchCwd == nil)
+        #expect(session.cwd(for: .scratch) == "/a")
+    }
+
     @Test func closeScratchClearsStuckSearchWhenScratchOwnsIt() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

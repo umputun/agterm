@@ -340,7 +340,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
   link but a weak watermark one; its PWD reaches only `Session.scratchCwd`, never the row's cwd or title.
-  A local scratch seeds that field with its start directory, so `AGT_SESSION_PWD` and `AGT_SESSION_HOST` agree. GUI surfaces are Command-J, titlebar, View, and palette.
+  A local scratch seeds that field with its start directory, so `AGT_SESSION_PWD` and
+  `AGT_SESSION_HOST` agree.
+  GUI surfaces are Command-J, titlebar, View, and palette.
   Showing never selects; `--follow` does, as on `overlay.open`. An unselected session's scratch still
   spawns, the deck mounting every session, and takes no focus: `deckActive` gates the grab.
   `ControlActions` keeps the four-argument requirement and defaults the `follow:` overload to it.

@@ -198,11 +198,12 @@ extension AppStore {
     }
 
     /// releaseScratchOwnedState drops what a departing scratch owned: a `.scratch`-tagged block (a main/split tag
-    /// survives), its background label, since a respawn runs another program, and its mailbox.
+    /// survives), its background label, since a respawn runs another program, its mailbox, and its directory.
     func releaseScratchOwnedState(of session: Session, token: String) {
         clearIndicatorOwnedByPane(.scratch, of: session)
         dropPaneBackground(.scratch, of: session)
         disposeMailbox(token: token)
+        session.scratchCwd = nil
     }
 
     /// clearPaneOwnedState drops what the program in `pane` owned when its shell is replaced in place: its
@@ -674,7 +675,6 @@ extension AppStore {
         releaseScratchOwnedState(of: session, token: scratch.paneToken)
         scratch.teardown()
         session.scratchSurface = nil
-        session.scratchCwd = nil
         session.scratchGeneration += 1
         return true
     }

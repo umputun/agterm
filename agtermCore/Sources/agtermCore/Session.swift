@@ -558,7 +558,7 @@ public final class Session: Identifiable {
     @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
 
     /// The scratch shell's own cwd: where a local scratch started, then each PWD it reports. Separate from
-    /// `currentCwd` so a `cd` in the scratch never renames the row. Nil with no scratch; `closeScratch` clears it.
+    /// `currentCwd` so a `cd` in the scratch never renames the row. Nil with no scratch; a departing scratch clears it.
     @ObservationIgnored public var scratchCwd: String?
 
     /// Bumped on every `closeScratch` so the deck keys the scratch view's identity on it. A `--command`
