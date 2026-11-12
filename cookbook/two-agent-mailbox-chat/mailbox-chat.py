@@ -195,6 +195,10 @@ def own_identity() -> tuple[str, str]:
     if not sid or not pane:
         raise ChatError("AGTERM_SESSION_ID and AGTERM_PANE_ID are unset: not inside an agterm pane, "
                         "or the agent strips them from its tool commands (see Setup)")
+    pid = find_codex_pid(os.getppid())
+    if pid is not None and is_codex_daemon(pid):
+        raise ChatError("running under Codex's shared app-server, whose AGTERM_* ids belong to the pane that "
+                        "started it: start codex with --no-daemon (see Setup)")
     return sid, pane
 
 
@@ -335,8 +339,11 @@ class Courier:
         reg = read_json(self.path)
         if not reg or reg.get("session") != self.sid or not reg.get("thread"):
             return None
-        # codex queue accepts mail for a thread nobody runs, so it would be acked and lost
-        return reg if pid_alive(reg.get("pid")) else None
+        # codex queue accepts mail for a thread nobody runs, so it would be acked and lost; a registration
+        # the shared app-server made names whichever of its threads started last, not this pane's
+        if not pid_alive(reg.get("pid")) or is_codex_daemon(reg["pid"]):
+            return None
+        return reg
 
     def register(self, thread: str, pid: int, executable: str | None) -> None:
         reg: dict[str, Any] = {"session": self.sid, "thread": thread, "pid": pid}
@@ -477,6 +484,13 @@ def is_codex_exec(pid: int) -> bool:
     return argv is None or codex_subcommand(argv) in ("exec", "e")
 
 
+def is_codex_daemon(pid: int) -> bool:
+    """whether codex is the shared app-server, which runs every client's hooks and commands with the ids of
+    the pane that started it."""
+    argv = process_argv(pid)
+    return argv is not None and codex_subcommand(argv) == "app-server"
+
+
 def hook_event() -> dict[str, Any]:
     try:
         value = json.loads(sys.stdin.read() or "{}")
@@ -508,7 +522,7 @@ def codex_hook() -> int:
             return 0
         pid = find_codex_pid(os.getppid())
         # a nested `codex exec` fires SessionStart too and would take over the pane's thread
-        if pid is None or is_codex_exec(pid):
+        if pid is None or is_codex_exec(pid) or is_codex_daemon(pid):
             return 0
         Courier(sid, pane).register(str(thread), pid, executable_path(pid))
         # detached, so codex's startup never waits on queue calls into its own thread
