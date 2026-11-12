@@ -783,6 +783,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A remote pane click with no binding or no clicked pane, a mapped pane whose binding has no origin endpoint,
   and ambiguous origin matches select nothing.
   `Session.showsOriginSession`, shared with `attachedParentRows`, matches that origin identity.
+  A catalog row that arrived already ended has no origin, so the link alone also matches it on host and session id.
   A scratch-only catalog row takes its origin from its scratch, without making it a reattachable pane.
   `followSessionLink` uses gated `raiseAndSelect`: unknown or closed rows, zoom, dashboard and pending pickers
   refuse; otherwise it raises the window and selects normally, focusing without an attention reveal or confirmation.

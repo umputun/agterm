@@ -149,7 +149,8 @@ final class WindowLibrarySessionLinkTests {
                                                      workspaces: [CatalogWorkspace(id: UUID(), name: "w", sessions: [a, b, late])])))
         let aRow = try #require(store.session(withID: a.id))
         #expect(library.sessionLinkTarget(b.id, from: .scratch(late.id), pane: nil) == nil)
-        #expect(library.sessionLinkTarget(late.id, from: .pane(a.id), pane: aRow.paneIdentity) == nil)
+        #expect(library.sessionLinkTarget(late.id, from: .pane(a.id), pane: aRow.paneIdentity)
+                == SessionLinkTarget(windowID: window.id, sessionID: late.id))
         var fields = late.fields
         let id = UUID()
         fields.scratch = CatalogScratch(pane: CatalogPane(identity: id, daemon: ZmxSupport.scratchDaemonName(for: id),
@@ -191,7 +192,8 @@ final class WindowLibrarySessionLinkTests {
         #expect(library.sessionLinkTarget(localRow.id, from: .scratch(clicked.id), pane: nil) == nil)
         #expect(library.sessionLinkTarget(ended.id, from: .pane(clicked.id), pane: clicked.paneIdentity)
                 == SessionLinkTarget(windowID: window.id, sessionID: ended.id))
-        #expect(library.sessionLinkTarget(empty.id, from: .pane(clicked.id), pane: clicked.paneIdentity) == nil)
+        #expect(library.sessionLinkTarget(empty.id, from: .pane(clicked.id), pane: clicked.paneIdentity)
+                == SessionLinkTarget(windowID: window.id, sessionID: empty.id))
         #expect(library.sessionLinkTarget(b.id, from: .scratch(empty.id), pane: nil) == nil)
         withExtendedLifetime((binder, mirror)) {}
     }
