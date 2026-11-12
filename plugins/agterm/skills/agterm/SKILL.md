@@ -273,6 +273,8 @@ Poll this after an unattended create),
 entries in `surfaces` report their own Boolean, while scratch and overlays omit it),
 `liveAttribution` and `splitLiveAttribution` (local Live pane attribution, including hidden splits;
 [values and omission rules](reference.md#tree)),
+`liveHostStale` and `splitLiveHostStale` (true for a pane whose session host is from an earlier agterm
+build or login, which `zmx reset` moves to the current one; omitted otherwise),
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
 session; a remote row is not persisted, so a per-session attach is gone after a relaunch, while a remote window rebuilds its rows),
 `remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
@@ -750,8 +752,9 @@ stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --
 daemon and the process in it; all three are required because this kills a backend process that reaches a
 pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace ·
 `zmx reset --force` - Agterm ▸ Reset Live Sessions… without the dialog: ends every live session this app
-does not supervise, or that predates the last Live sessions update, at the next launch and recreates it under
-the session host, quitting and reopening
+does not supervise, that predates the last Live sessions update, or that runs under the session host of an
+earlier agterm build or login, at the next launch and recreates it under the current session host, quitting
+and reopening
 agterm right after the reply; refused outside Live mode, on an incomplete inventory, and with nothing to
 reset ·
 `zmx tree [HOST]` - attachable sessions across EVERY open window, on another Mac with a HOST or this app

@@ -334,7 +334,7 @@ final class SessionHostFishSeamTests: XCTestCase {
             resources = bundle.appendingPathComponent("Contents/Resources/ghostty")
             configHome = directory.appendingPathComponent("config")
             promptLog = directory.appendingPathComponent("fish-prompts")
-            paths = try SessionHost.paths(socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: directory.path))
+            paths = try SessionHostClientTests.hostPaths(socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: directory.path))
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
                                                         attributes: [.posixPermissions: 0o700])

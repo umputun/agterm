@@ -216,6 +216,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// Process attribution for each local Live pane; this does not describe permission grants.
     public let liveAttribution: String?
     public let splitLiveAttribution: String?
+    /// liveHostStale is true when the pane's session host is from an earlier helper build or login session;
+    /// omitted otherwise.
+    public let liveHostStale: Bool?
+    public let splitLiveHostStale: Bool?
     /// Divider direction for a live split (`vertical`=left/right, `horizontal`=top/bottom); nil without one.
     public let splitAxis: String?
     /// The primary-pane fraction (0.05...0.95) of the pane area below the titlebar band, for a session that
@@ -418,6 +422,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
                 context: String? = nil, remoteHost: String? = nil, splitCwd: String? = nil,
                 liveAttribution: String? = nil, splitLiveAttribution: String? = nil,
+                liveHostStale: Bool? = nil, splitLiveHostStale: Bool? = nil,
                 presentation: ControlPresentationNode? = nil, presenters: ControlPresentersNode? = nil,
                 remoteOverlays: [ControlRemoteOverlayNode]? = nil, htmlOverlays: [ControlHtmlOverlayNode]? = nil,
                 hiddenOverlays: [String]? = nil, lastSelectedAt: Double? = nil,
@@ -485,6 +490,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.remoteHost = remoteHost
         self.liveAttribution = liveAttribution
         self.splitLiveAttribution = splitLiveAttribution
+        self.liveHostStale = liveHostStale
+        self.splitLiveHostStale = splitLiveHostStale
         self.presentation = presentation
         self.presenters = presenters
         self.remoteOverlays = remoteOverlays

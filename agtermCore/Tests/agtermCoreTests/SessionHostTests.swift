@@ -16,6 +16,31 @@ struct SessionHostTests {
         #expect(SessionHost.classify(leader: 10, responsible: .live(20), hostPid: nil, appPid: nil) == .unknown)
     }
 
+    @Test func placementMarksPanesRootedOnAHostOtherThanTheCurrentOneAsStale() {
+        let roots = SessionHost.Roots(hosts: [20, 21], current: .running(20))
+        let cases: [(SessionHost.ResponsibleProcess, SessionHost.Placement)] = [
+            (.live(20), .init(attribution: .supervisor, staleHost: false)),
+            (.live(21), .init(attribution: .supervisor, staleHost: true)),
+            (.live(30), .init(attribution: .app, staleHost: false)),
+            (.live(40), .init(attribution: .unknown, staleHost: false)),
+            (.dead, .init(attribution: .orphaned, staleHost: false)),
+        ]
+        for (responsible, expected) in cases {
+            #expect(SessionHost.place(leader: 10, responsible: responsible, roots: roots, appPid: 30) == expected)
+        }
+        let noCurrent = SessionHost.Roots(hosts: [21], current: .absent)
+        #expect(SessionHost.place(leader: 10, responsible: .live(21), roots: noCurrent, appPid: 30)
+            == .init(attribution: .supervisor, staleHost: true))
+    }
+
+    @Test func placementWithAnUnknownCurrentKeyKeepsSupervisionAndNeverMarksStale() {
+        let roots = SessionHost.Roots(hosts: [20, 21], current: .unknown)
+        for host: Int32 in [20, 21] {
+            #expect(SessionHost.place(leader: 10, responsible: .live(host), roots: roots, appPid: 30)
+                == .init(attribution: .supervisor, staleHost: false))
+        }
+    }
+
     private let hello = SessionHost.Hello(bundleID: "com.umputun.agterm", bundlePath: "/Applications/agterm.app")
 
     @Test func helloUsesTheDocumentedWireKeys() throws {
@@ -126,6 +151,45 @@ struct SessionHostTests {
         }
         #expect(throws: SessionHost.Rejection.socketPathTooLong) {
             try SessionHost.paths(socketDirectory: "/" + String(repeating: "é", count: 45))
+        }
+    }
+
+    @Test func endpointKeyJoinsTheImageUUIDPrefixAndTheAuditSession() throws {
+        let uuid = try #require(UUID(uuidString: "0A1B2C3D-4E5F-6071-8293-A4B5C6D7E8F9"))
+        #expect(SessionHost.endpointKey(imageUUID: uuid, auditSession: 100003) == "0a1b2c3d4e5f-100003")
+    }
+
+    @Test func keyedPathsLiveInTheirOwnEndpointDirectory() throws {
+        let paths = try SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test", key: "0a1b2c3d4e5f-100003")
+        let directory = "/tmp/agterm-zmx-test/session-host-0a1b2c3d4e5f-100003"
+        #expect(paths.socket == directory + "/session-host.sock")
+        #expect(paths.ownerLock == directory + "/session-host.lock")
+        #expect(paths.spawnLock == directory + "/session-host.spawn.lock")
+        #expect(paths.pidfile == directory + "/session-host.pid")
+        #expect(paths.log == directory + "/session-host.log")
+        #expect(try SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test", endpoint: "session-host") ==
+                SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test"))
+    }
+
+    @Test(arguments: ["", "0a1b2c3d4e5f", "0a1b2c3d4e5f-", "0A1B2C3D4E5F-1", "0a1b2c3d4e5-1", "0a1b2c3d4e5fa-1",
+                      "0a1b2c3d4e5g-1", "0a1b2c3d4e5f--1", "0a1b2c3d4e5f-12345678901", "0a1b2c3d4e5f-1-2",
+                      "../../etc-1", "0a1b2c3d4e5f-١"])
+    func malformedEndpointKeysAreRejected(_ key: String) {
+        #expect(throws: SessionHost.Rejection.invalidEndpointKey) {
+            try SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test", key: key)
+        }
+    }
+
+    @Test(arguments: [("session-host", true), ("session-host-0a1b2c3d4e5f-100003", true), ("session-host-", false),
+                      ("session-host-0a1b2c3d4e5f", false), ("session-hostx", false), ("zmx.sock", false),
+                      ("session-host-../x-1", false)])
+    func endpointNamesAreTheLegacyDirectoryOrAKeyedOne(_ name: String, _ accepted: Bool) {
+        #expect(SessionHost.isEndpointName(name) == accepted)
+    }
+
+    @Test func endpointOutsideTheNamingIsRejected() {
+        #expect(throws: SessionHost.Rejection.invalidEndpointKey) {
+            try SessionHost.paths(socketDirectory: "/tmp/agterm-zmx-test", endpoint: "../escape")
         }
     }
 

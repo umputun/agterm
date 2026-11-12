@@ -3,6 +3,7 @@ import XCTest
 @testable import agterm
 import agtermCore
 import AgtermResponsibility
+import os
 
 /// Hosted coverage for the zmx group's app arms: the join against the live claim walk, and the refusals
 /// that must not read as an empty inventory.
@@ -31,7 +32,7 @@ final class ControlServerZmxTests: XCTestCase {
         let probe = LiveAttributionProbe(responsible: { pid in
             lookups[pid, default: 0] += 1
             return .live(pid == 100 ? 100 : root)
-        }, hostPID: { _ in 100 }, appPID: 300)
+        }, hosts: { _ in .current(100) }, appPID: 300)
         let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
                                    identity: AppIdentity(version: "test", commit: "test"), zmxForegroundResolver: resolver, zmxClient: client,
                                    liveAttributionProbe: probe, socketPath: stateDir.appendingPathComponent("tree.sock").path)
@@ -75,18 +76,30 @@ final class ControlServerZmxTests: XCTestCase {
         let baseline = try XCTUnwrap(Responsibility.system.responsibleProcess(of: getpid()))
         let client = ZmxClient(executablePath: fixture.zmx.path, socketDirectory: try XCTUnwrap(fixture.environment["ZMX_DIR"]))
         let probe = LiveAttributionProbe(appPID: baseline)
-        XCTAssertEqual(probe.hostPID(client.endpoint), host)
+        let endpoint = URL(fileURLWithPath: fixture.paths.pidfile).deletingLastPathComponent().lastPathComponent
+        XCTAssertEqual(LiveAttributionProbe.publishedHosts(client.endpoint), .init(pids: [endpoint: host], current: endpoint))
         do {
             defer { try? String(host).write(toFile: fixture.paths.pidfile, atomically: false, encoding: .utf8) }
             try String(getpid()).write(toFile: fixture.paths.pidfile, atomically: false, encoding: .utf8)
-            XCTAssertNil(probe.hostPID(client.endpoint))
+            var written = [timeval(tv_sec: 1000, tv_usec: 0), timeval(tv_sec: 1000, tv_usec: 0)]
+            XCTAssertEqual(utimes(fixture.paths.pidfile, &written), 0)
+            XCTAssertEqual(LiveAttributionProbe.publishedHosts(client.endpoint).pids, [:])
         }
         let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
                                    identity: AppIdentity(version: "test", commit: "test"), zmxClient: client,
                                    liveAttributionProbe: probe, socketPath: stateDir.appendingPathComponent("real-tree.sock").path)
         var nodes = server.buildTree(in: store).workspaces.flatMap(\.sessions)
         XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveAttribution, "supervisor")
+        XCTAssertNil(nodes.first { $0.id == supervised.id.uuidString }?.liveHostStale)
         XCTAssertEqual(nodes.first { $0.id == bare.id.uuidString }?.liveAttribution, "app")
+        let keyed = URL(fileURLWithPath: fixture.paths.pidfile).deletingLastPathComponent()
+        let legacy = keyed.deletingLastPathComponent().appendingPathComponent(SessionHost.legacyEndpoint)
+        try FileManager.default.moveItem(at: keyed, to: legacy)
+        nodes = server.buildTree(in: store).workspaces.flatMap(\.sessions)
+        try FileManager.default.moveItem(at: legacy, to: keyed)
+        XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveAttribution, "supervisor")
+        XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveHostStale, true)
+        XCTAssertNil(nodes.first { $0.id == bare.id.uuidString }?.liveHostStale)
         XCTAssertEqual(kill(host, SIGKILL), 0)
         let deadline = Date().addingTimeInterval(3)
         repeat {
@@ -96,6 +109,67 @@ final class ControlServerZmxTests: XCTestCase {
         } while Date() < deadline
         XCTAssertEqual(nodes.first { $0.id == supervised.id.uuidString }?.liveAttribution, "orphaned")
         XCTAssertEqual(nodes.first { $0.id == bare.id.uuidString }?.liveAttribution, "app")
+    }
+
+    func testTreeMarksAPaneOnAnotherHostStaleOnlyWhileTheCurrentKeyIsKnown() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.workspaces.first)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        let row = "name=\(ZmxSupport.daemonName(for: session.paneIdentity))\tpid=200\tclients=1"
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", runner: { _ in row })
+        let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
+        func node(current: String?) throws -> ControlSessionNode {
+            let probe = LiveAttributionProbe(responsible: { $0 == 200 ? .live(101) : .live($0) },
+                                             hosts: { _ in .init(pids: ["current": 100, "earlier": 101], current: current) },
+                                             appPID: 300)
+            let server = ControlServer(library: library, actions: AppActions(library: library), settingsModel: settingsModel,
+                                       identity: AppIdentity(version: "test", commit: "test"), zmxForegroundResolver: resolver,
+                                       zmxClient: client, liveAttributionProbe: probe,
+                                       socketPath: stateDir.appendingPathComponent("stale.sock").path)
+            return try XCTUnwrap(server.buildTree(in: store).workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+        }
+        XCTAssertEqual(try node(current: "current").liveAttribution, "supervisor")
+        XCTAssertEqual(try node(current: "current").liveHostStale, true)
+        XCTAssertEqual(try node(current: "missing").liveHostStale, true)
+        XCTAssertEqual(try node(current: nil).liveAttribution, "supervisor")
+        XCTAssertNil(try node(current: nil).liveHostStale)
+    }
+
+    func testPublishedHostTakesAPidStartedBeforeThePidfileWasWritten() throws {
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let pidfile = stateDir.appendingPathComponent("pid").path
+        try "\(getpid())\n".write(toFile: pidfile, atomically: false, encoding: .utf8)
+        XCTAssertEqual(LiveAttributionProbe.publishedHost(pidfile: pidfile), getpid())
+        var written = [timeval(tv_sec: 1000, tv_usec: 0), timeval(tv_sec: 1000, tv_usec: 0)]
+        XCTAssertEqual(utimes(pidfile, &written), 0)
+        XCTAssertNil(LiveAttributionProbe.publishedHost(pidfile: pidfile))
+        for content in ["", "garbage", "0", "-5", "2147483647"] {
+            try content.write(toFile: pidfile, atomically: false, encoding: .utf8)
+            XCTAssertNil(LiveAttributionProbe.publishedHost(pidfile: pidfile), content)
+        }
+        XCTAssertNil(LiveAttributionProbe.publishedHost(pidfile: stateDir.appendingPathComponent("absent").path))
+    }
+
+    func testHelperEndpointKeyRunsOncePerHelperFileAndRetriesAFailure() throws {
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let helper = stateDir.appendingPathComponent("agterm-session-host")
+        try Data("one".utf8).write(to: helper)
+        let answers = OSAllocatedUnfairLock(initialState: ["0a1b2c3d4e5f-100003", "garbage", "0a1b2c3d4e5f-100004"])
+        let runs = OSAllocatedUnfairLock(initialState: 0)
+        let cache = HelperEndpointKey(run: { _ in
+            runs.withLock { $0 += 1 }
+            return answers.withLock { $0.removeFirst() }
+        })
+        XCTAssertEqual(cache.key(helper: helper.path), "0a1b2c3d4e5f-100003")
+        XCTAssertEqual(cache.key(helper: helper.path), "0a1b2c3d4e5f-100003")
+        XCTAssertEqual(runs.withLock { $0 }, 1)
+        try FileManager.default.removeItem(at: helper)
+        try Data("two".utf8).write(to: helper)
+        XCTAssertNil(cache.key(helper: helper.path))
+        XCTAssertEqual(cache.key(helper: helper.path), "0a1b2c3d4e5f-100004")
+        XCTAssertEqual(runs.withLock { $0 }, 3)
+        XCTAssertNil(cache.key(helper: stateDir.appendingPathComponent("absent").path))
     }
 
     private var stateDir: URL!
@@ -1227,4 +1301,8 @@ private final class RecordingTransport: RemotePresentationTransport {
         launches.append(argv)
         return Link()
     }
+}
+
+extension LiveAttributionProbe.Hosts {
+    static func current(_ pid: pid_t) -> Self { .init(pids: ["current": pid], current: "current") }
 }

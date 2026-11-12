@@ -860,7 +860,8 @@ final class ControlServer {
                                               zmxResolver: zmxForegroundResolver)
                 }
             },
-            liveAttribution: { attributions[$0] },
+            liveAttribution: { attributions[$0]?.attribution },
+            liveHostStale: { attributions[$0]?.staleHost == true },
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },

@@ -134,6 +134,40 @@ struct AppStoreTreeProjectionTests {
         #expect(overridden.paneBackgrounds == PaneBackgrounds(right: peer))
     }
 
+    @Test func liveHostStaleIsReportedPerPaneAndOmittedWhenFalse() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "live")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface(backedByZmx: true)
+        session.hasSplit = true
+        session.isSplit = true
+        let split = UUID()
+        session.splitPaneIdentity = split
+        session.splitSurface = SpySurface(backedByZmx: true)
+        let tree = store.controlTree(paneForeground: { _ in nil }, liveAttribution: { _ in .supervisor },
+                                     liveHostStale: { $0 == split })
+        let node = try #require(tree.workspaces.first?.sessions.first)
+        #expect(node.liveHostStale == nil)
+        #expect(node.splitLiveHostStale == true)
+        let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
+        #expect(json.contains(#""splitLiveHostStale":true"#))
+        #expect(!json.contains(#""liveHostStale""#))
+    }
+
+    @Test func liveHostStaleIsOmittedForOrdinaryAndRemotePanes() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "ordinary")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        session.surface = SpySurface()
+        let remote = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "example"))
+        remote.surface = SpySurface(backedByZmx: true)
+        let tree = store.controlTree(paneForeground: { _ in nil }, liveAttribution: { _ in .supervisor },
+                                     liveHostStale: { _ in true })
+        let json = String(decoding: try JSONEncoder().encode(tree), as: UTF8.self)
+        #expect(!json.contains("LiveHostStale"))
+        #expect(!json.contains("liveHostStale"))
+    }
+
     @Test func attributionIsOmittedForOrdinaryAndRemotePanes() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "ordinary")

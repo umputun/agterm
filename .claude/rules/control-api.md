@@ -1604,8 +1604,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   disposition it attaches with once shown; otherwise `zmx tree` drops a session with a hidden split (#762).
 - `liveAttribution`/`splitLiveAttribution` report the observed responsibility attribution of a local Live
   pane's leader process, probed from `sessionLeaderPIDs`: `supervisor`, `app`, `orphaned` or `unknown`,
-  from `SessionHost.classify`. Omitted for a non-Live or remote pane; the split field covers a hidden
-  split. `windows.md` owns the host lifecycle behind them.
+  from `SessionHost.place`. Omitted for a non-Live or remote pane; the split field covers a hidden
+  split. `liveHostStale`/`splitLiveHostStale` are true for a `supervisor` pane whose host is not the current
+  key's, omitted otherwise. `windows.md` owns the host lifecycle behind them.
 - `realized` reports the MAIN pane's `TerminalSurface.isRealized`, populated host-free in
   `AppStore.controlTree` (no app closure — `isRealized` is on the protocol) and false for an empty slot, so
   only a server predating the field omits it. It exists because `session.new` answers `ok` for a model
@@ -1759,12 +1760,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Live is not both the configured and the launched mode, when the listing failed, when the claim walk is
   incomplete or claims a pane twice, and when no pane is selected.
   `LiveReset.select` in agtermCore joins `paneClaims()` to the listing; the dialog counts distinct sessions
-  and the reply carries `result.liveReset` (sessions, panes, pending, and `outdated` sessions when any) plus
-  the dialog body as `text`.
-- A pane is selected for one of two reasons, carried on each marker target. `outdated`: its daemon's
+  and the reply carries `result.liveReset` (sessions, panes, pending, and `outdated` and `staleHost` sessions
+  when any) plus the dialog body as `text`.
+- A pane is selected for one of three reasons, carried on each marker target. `outdated`: its daemon's
   `created=` from `zmx list` is before the launch's `ZmxBuildRecord` cutoff, whatever its attribution, which
   is what reaches supervised panes still running a zmx from before an update. `unsupervised`: otherwise, an
-  orphaned or app-attributed leader. A pane that qualifies for both is recorded as `outdated`.
+  orphaned or app-attributed leader. `staleHost`: otherwise, a supervised leader whose host is from an earlier
+  helper build or login session. The first reason that applies is recorded.
 - `ZmxBuildRecord` is `zmx-build.json` in the state directory. The build phase copies `.zmx-build-stamp` into
   the bundle as `Resources/zmx/BUILD`; `restoredRuntime` compares it with the record before
   `LaunchOrchestration.run`, dates a different or missing id at the current whole second (zmx's `created`
@@ -1781,8 +1783,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   checked snapshot save succeeded, then spawns the relauncher; a relauncher that cannot start removes the
   marker. The next launch consumes the marker before any kill and only NARROWS it: a target is killed when
   it is still claimed, still listed with the same leader pid, and still qualifies for its reason (created
-  before the cutoff, or orphaned); gone restores normally; anything else is skipped. `consume` accepts marker
-  versions 1 and 2, and a version-1 target reads as `unsupervised`. Every selected leader is polled whatever the batched kill reported, and a
+  before the cutoff; orphaned; on an earlier host, or orphaned since that host ended); gone restores normally;
+  anything else is skipped. `consume` accepts marker versions 1 to 3, and a version-1 target reads as
+  `unsupervised`; version 3 added `staleHost`, so an older build discards such a marker. Every selected leader is polled whatever the batched kill reported, and a
   survivor's pane gets neither its replay nor its durable command at that launch.
   A confirmed reset arms and skips the quit alert only while Live is still both modes
   (`armablePending`): a mode change after confirmation leaves the next launch unable to suppress a

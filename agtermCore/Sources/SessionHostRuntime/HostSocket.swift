@@ -46,8 +46,8 @@ final class HostEndpoint {
     private var owner: Int32 = -1
     private var ownsPath = false
 
-    init(socketDirectory: String) throws {
-        paths = try SessionHost.paths(socketDirectory: socketDirectory)
+    init(socketDirectory: String, paths: SessionHost.Paths) throws {
+        self.paths = paths
         do {
             try Self.privateDirectory(socketDirectory)
             try Self.privateDirectory(URL(fileURLWithPath: paths.socket).deletingLastPathComponent().path)

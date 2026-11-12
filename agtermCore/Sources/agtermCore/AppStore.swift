@@ -347,6 +347,7 @@ public final class AppStore {
     public func controlTree(paneForeground: (Session) -> CommandRestore.PaneForeground?,
                             splitPaneForeground: (Session) -> CommandRestore.PaneForeground? = { _ in nil },
                             liveAttribution: (UUID) -> SessionHost.Attribution? = { _ in nil },
+                            liveHostStale: (UUID) -> Bool = { _ in false },
                             fontSize: (Session) -> Double? = { _ in nil },
                             splitFontSize: (Session) -> Double? = { _ in nil },
                             scratchFontSize: (Session) -> Double? = { _ in nil },
@@ -376,6 +377,8 @@ public final class AppStore {
                     ? liveAttribution(session.paneIdentity) ?? .unknown : nil
                 let splitAttribution: SessionHost.Attribution? = local && session.hasSplit && session.splitSurface?.backedByZmx == true
                     ? session.splitPaneIdentity.flatMap(liveAttribution) ?? .unknown : nil
+                let mainStale = mainAttribution != nil && liveHostStale(session.paneIdentity)
+                let splitStale = splitAttribution != nil && session.splitPaneIdentity.map(liveHostStale) == true
                 let idle = session.agentIndicator.status == .idle
                 let status = idle ? nil : session.agentIndicator.status.rawValue
                 let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
@@ -447,6 +450,7 @@ public final class AppStore {
                                           context: session.effectiveContext, remoteHost: session.remoteHost,
                                           splitCwd: session.hasSplit ? session.cwd(for: .right) : nil,
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
+                                          liveHostStale: mainStale ? true : nil, splitLiveHostStale: splitStale ? true : nil,
                                           presentation: presentationNode(of: session), presenters: presentersNode(of: session),
                                           remoteOverlays: remoteOverlayNodes(of: session),
                                           htmlOverlays: htmlOverlayNodes(session, zoom: htmlZoom),

@@ -4292,7 +4292,9 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 replaces every such session at once: the dialog says how many it resets, agterm quits and reopens itself with the
                 same sessions and layout, and each captured command starts again where possible. Other work running in those
                 sessions stops, and agent conversations may need to be resumed by hand. The same item also recreates sessions that
-                predate the last Live sessions update, so they pick up its changes. Other sessions under the host are left alone,
+                predate the last Live sessions update, so they pick up its changes, and moves sessions still running under the
+                session host of an earlier agterm build or login to the current one; such a host can block a tool's access to
+                the local network after an update, and agterm asks it to stop at every launch, which it does once no live session runs under it. Other sessions are left alone,
                 and a notification afterwards says how many sessions the reset covered.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx reset --force</span> does the same without the dialog.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx list</span> shows every daemon and the pane that claims it,

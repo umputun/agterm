@@ -44,7 +44,7 @@ enum LiveResetConsumer {
         let records = client.sessionRecords(timeout: min(deps.listTimeout, max(remaining(), 0.1)))
         let narrowed = LiveReset.narrow(marker: marker, claimed: claimed, records: records,
                                         outdatedBefore: deps.outdatedBefore,
-                                        classify: deps.probe.classifier(endpoint: client.endpoint))
+                                        place: deps.probe.placer(endpoint: client.endpoint))
         let kill = narrowed.kill
         var survivors: Set<pid_t> = []
         if !kill.isEmpty {
@@ -71,7 +71,8 @@ enum LiveResetConsumer {
 }
 
 /// The launch steps that must follow one another once the library exists: the reset consumer, then the
-/// ordinary reap over the inventory the library collected, then the foreground resolver's refresh.
+/// ordinary reap over the inventory the library collected, then the foreground resolver's refresh and the
+/// retirement of session hosts the reset and the reap left with nothing to root.
 @MainActor
 enum LaunchOrchestration {
     struct Inputs {
@@ -80,6 +81,7 @@ enum LaunchOrchestration {
         let resolver: ZmxForegroundResolver
         let context: agtermApp.LaunchSpawnContext
         let launchDecision: RestoreLaunchDecision
+        var retireHosts: (ControlZmxEndpoint) -> Void = HostRetirer.retire
     }
 
     /// A launch that did not get Live cannot suppress a survivor's ordinary seed, so a marker found by it
@@ -96,6 +98,31 @@ enum LaunchOrchestration {
         inputs.context.runningNames = inputs.client.reap(knownPaneIdentities: inputs.context.launchInventory,
                                                          launchDecision: inputs.launchDecision).runningNames
         inputs.resolver.noteLifecycleChange()
+        inputs.retireHosts(inputs.client.endpoint)
         return outcome
+    }
+}
+
+/// HostRetirer asks the bundled helper, off the main thread, to stop every session host of an earlier build or
+/// login session. A host still rooting a live pane refuses and stays; the helper never touches its own key's.
+enum HostRetirer {
+    private static let logger = Logger(subsystem: "com.umputun.agterm", category: "HostRetirer")
+
+    static func retire(_ endpoint: ControlZmxEndpoint) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: endpoint.socketDirectory)) ?? []
+        guard names.contains(where: SessionHost.isEndpointName) else { return }
+        // best effort: the helper's per-endpoint budgets can exceed this, and a timeout leaves idle hosts for a later launch
+        let invocation = ZmxClient.Invocation(executablePath: ZmxLaunch.sessionHostPath, arguments: ["stop", endpoint.socketDirectory],
+                                              environment: [:], timeout: 30, mergesStderr: true)
+        DispatchQueue.global(qos: .utility).async {
+            do {
+                let report = try ZmxClient.run(invocation).trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !report.isEmpty else { return }
+                let level: OSLogType = report.contains(" failed: ") ? .error : .info
+                logger.log(level: level, "session host retirement: \(report, privacy: .public)")
+            } catch {
+                logger.error("session host retirement failed: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 }

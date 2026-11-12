@@ -14,6 +14,14 @@ final class ZmxLaunchTests: XCTestCase {
                        "/Applications/agterm.app/Contents/MacOS/agterm-session-host")
     }
 
+    func testRunningAppSessionHostPathFollowsTheSameOverrideAsPanes() {
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/agterm-session-host").path
+        XCTAssertEqual(ZmxLaunch.sessionHostPath, helper)
+        setenv("AGTERM_SESSION_HOST_PATH", "/tmp/debug-host", 1)
+        defer { unsetenv("AGTERM_SESSION_HOST_PATH") }
+        XCTAssertEqual(ZmxLaunch.sessionHostPath, ZmxLaunch.allowDebugOverride ? "/tmp/debug-host" : helper)
+    }
+
     func testRerunNeverRendersTheAvailableClient() {
         let configuration = ZmxSupport.Configuration(executablePath: "/bundle/zmx", environment: ["SHELL": "/bin/zsh", "ZDOTDIR": "/bundle/zsh"],
                                                      daemonName: "pane", socketDirectory: "/tmp/zmx", paneID: "pane", sessionHostExecutablePath: "/bundle/host")

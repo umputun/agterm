@@ -57,11 +57,17 @@ public final class Host {
         self.upkeepNow = upkeepNow
     }
 
+    /// endpointKey is the key this helper image creates daemons through in the caller's login session.
+    public static func endpointKey() throws -> String {
+        try HostIdentity.endpointKey()
+    }
+
     public static func run(socketDirectory: String) throws {
         let identity = try HostIdentity.read(pid: getpid())
         guard Responsibility.system.isAvailable else { throw Responsibility.SpawnError.unavailable }
         let executable = URL(fileURLWithPath: identity.bundlePath).appendingPathComponent("Contents/MacOS/zmx").path
-        let endpoint = try HostEndpoint(socketDirectory: socketDirectory)
+        let paths = try SessionHost.paths(socketDirectory: socketDirectory, key: HostIdentity.endpointKey())
+        let endpoint = try HostEndpoint(socketDirectory: socketDirectory, paths: paths)
         defer { endpoint.close() }
         try hostCheck(setsid())
         try redirectStandardIO(logPath: endpoint.paths.log)

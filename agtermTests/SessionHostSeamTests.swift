@@ -84,7 +84,7 @@ final class SessionHostSeamTests: XCTestCase {
             zmx = bundle.appendingPathComponent("Contents/MacOS/zmx")
             resources = bundle.appendingPathComponent("Contents/Resources/ghostty")
             zdotdir = directory.appendingPathComponent("custom zsh")
-            paths = try SessionHost.paths(socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: directory.path))
+            paths = try SessionHostClientTests.hostPaths(socketDirectory: ZmxSupport.socketDirectory(forStateDirectory: directory.path))
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
             let physical = try XCTUnwrap(realpath(directory.path, nil))
             physicalDirectory = String(cString: physical)

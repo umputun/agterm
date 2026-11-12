@@ -343,8 +343,9 @@ the pane becomes `orphaned`; the same happens to panes whose session host dies. 
 `orphaned` pane remain responsible for themselves until the pane is replaced. Restarting agterm does not
 repair this.
 
-Agterm ▸ Reset Live Sessions… replaces every `orphaned` and `app` pane at once, and every pane whose daemon
-was created before the recorded first launch with this zmx build, whatever its attribution. The dialog says how many
+Agterm ▸ Reset Live Sessions… replaces every `orphaned` and `app` pane at once, every pane whose daemon
+was created before the recorded first launch with this zmx build, whatever its attribution, and every
+`supervisor` pane whose session host is from an earlier agterm build or login. The dialog says how many
 live sessions it resets; on Reset, agterm quits, ends those sessions' processes at the next launch and
 reopens itself with the same sessions and layout, starting each captured command again where possible.
 Other work running in those sessions stops, and agent conversations may need to be resumed by hand.
@@ -357,6 +358,23 @@ System Settings ▸ Privacy & Security ▸ Full Disk Access; the
 [folder-access section](#a-command-cannot-read-downloads-desktop-or-documents) explains the scope of that grant.
 Full Disk Access does not grant the microphone. Its permission is controlled separately under
 System Settings ▸ Privacy & Security ▸ Microphone.
+
+## A live session started before an update or a logout cannot reach the local network
+
+A command in a live session fails to reach a host on your network (`No route to host`, `EHOSTUNREACH`)
+while the same command works in a new session, or, after macOS forced a logout, a command in an older
+session reports `No user exists for uid 501`.
+
+A live session whose pane reads `supervisor` was started through a small helper process, the session
+host, and stays tied to the host that started it. Since [#971](https://github.com/umputun/agterm/issues/971)
+a changed helper build or a new login gets its own host, so new sessions always start under the current
+one; a session that was already running keeps its earlier host, because macOS cannot move a running
+process to another.
+
+`agtermctl tree --json` marks such a pane with `liveHostStale` (or `splitLiveHostStale`). Agterm ▸ Reset
+Live Sessions… moves those sessions to the current host, as described in the previous section. At every
+launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
+shared host that agterm used before #971 counts as an earlier host.
 
 ## Reporting a problem
 

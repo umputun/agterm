@@ -1176,6 +1176,19 @@ struct SocketClientTests {
         let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
         #expect(output.contains("live attribution: supervisor"))
         #expect(output.contains("split live attribution: orphaned"))
+        #expect(!output.contains("earlier helper"))
+    }
+
+    @Test func formatTreeMarksAPaneOnAnEarlierHelper() throws {
+        let data = Data(#"""
+        {"id":"s","name":"shell","cwd":"/main","active":true,"split":false,"hasSplit":true,
+         "overlay":false,"scratch":false,"flagged":false,"liveAttribution":"supervisor","splitLiveAttribution":"supervisor",
+         "splitLiveHostStale":true}
+        """#.utf8)
+        let session = try JSONDecoder().decode(ControlSessionNode.self, from: data)
+        let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w", name: "work", active: true, sessions: [session])])
+        let output = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
+        #expect(output.contains("  live attribution: supervisor  split live attribution: supervisor (earlier helper)"))
     }
 
     @Test func formatTreeShowsTheViewersStreamStateAndTheOriginsMirrorCount() {

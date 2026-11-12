@@ -73,7 +73,7 @@ final class LiveResetConsumerTests: XCTestCase {
         let responsible: (pid_t) -> SessionHost.ResponsibleProcess = supervised ? { _ in .live(400) } : { .live($0) }
         var deps = LiveResetConsumer.Dependencies(
             markerStore: store,
-            probe: LiveAttributionProbe(responsible: responsible, hostPID: { _ in 400 }, appPID: 300))
+            probe: LiveAttributionProbe(responsible: responsible, hosts: { _ in .current(400) }, appPID: 300))
         deps.outdatedBefore = outdatedBefore
         deps.poll = ZmxClient.LeaderPoll(now: { [self] in clock }, sleep: { [self] in clock = clock.advanced(by: $0) })
         deps.isAlive = { [self] in alive.contains($0) }
@@ -259,12 +259,16 @@ final class LiveResetConsumerTests: XCTestCase {
         rows = [row(session, leader: 10)]
         try store.write(LiveReset.Marker(targets: [target(session, leader: 10)]))
         let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
-        let launch = LaunchOrchestration.Inputs(library: library, client: makeClient(), resolver: resolver, context: context,
-                                                launchDecision: RestoreLaunchDecision(requested: .live, active: .rerun, liveUnavailableReason: "unsupported shell"))
+        var retired: [ControlZmxEndpoint] = []
+        let client = makeClient()
+        let launch = LaunchOrchestration.Inputs(library: library, client: client, resolver: resolver, context: context,
+                                                launchDecision: RestoreLaunchDecision(requested: .live, active: .rerun, liveUnavailableReason: "unsupported shell"),
+                                                retireHosts: { retired.append($0) })
 
         let outcome = LaunchOrchestration.run(launch, consumer: dependencies())
 
         XCTAssertNil(outcome)
+        XCTAssertEqual(retired, [client.endpoint], "hosts are retired whatever mode the launch got")
         XCTAssertEqual(invocations.map(\.[0]), ["list"], "only the ordinary reap listed; the consumer never ran")
         XCTAssertTrue(context.suppressedLaunchPayloads.isEmpty)
         XCTAssertFalse(FileManager.default.fileExists(atPath: stateDir.appendingPathComponent(LiveReset.markerFilename).path))
@@ -284,10 +288,13 @@ final class LiveResetConsumerTests: XCTestCase {
         let resolver = ZmxForegroundResolver(leaderProvider: { _ in [:] }, leaderProbe: { .foreground($0) })
         let decision = RestoreLaunchDecision(requested: .live, active: .live, liveUnavailableReason: nil)
 
+        var listsBeforeRetirement: Int?
         let launch = LaunchOrchestration.Inputs(library: library, client: client, resolver: resolver, context: context,
-                                                launchDecision: decision)
+                                                launchDecision: decision,
+                                                retireHosts: { [self] _ in listsBeforeRetirement = invocations.count })
         let outcome = LaunchOrchestration.run(launch, consumer: dependencies())
 
+        XCTAssertEqual(listsBeforeRetirement, 3, "hosts are retired after the consumer's kill and the reap")
         XCTAssertNotNil(context.launchInventory, "the library handed its inventory to the context before anything ran")
         XCTAssertEqual(outcome?.panes.killed, 1)
         XCTAssertEqual(invocations.map(\.[0]), ["list", "kill", "list"], "consumer listing and kill, then the ordinary reap's listing")

@@ -266,12 +266,16 @@ public struct ControlLiveResetStatus: Codable, Sendable, Equatable {
     public let pending: Bool
     /// outdated is how many of `sessions` predate the recorded zmx build change; omitted when none.
     public let outdated: Int?
+    /// staleHost is how many of `sessions` run under a session host of an earlier helper build or login;
+    /// omitted when none.
+    public let staleHost: Int?
 
-    public init(sessions: Int, panes: Int, pending: Bool, outdated: Int? = nil) {
+    public init(sessions: Int, panes: Int, pending: Bool, outdated: Int? = nil, staleHost: Int? = nil) {
         self.sessions = sessions
         self.panes = panes
         self.pending = pending
         self.outdated = outdated
+        self.staleHost = staleHost
     }
 }
 

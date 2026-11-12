@@ -47,6 +47,12 @@ enum ZmxLaunch {
         return bundleURL.appendingPathComponent("Contents/MacOS/zmx").path
     }
 
+    /// sessionHostPath is the helper this app's panes run, so its key names the host they create.
+    static var sessionHostPath: String {
+        sessionHostExecutablePath(bundleURL: Bundle.main.bundleURL, environment: ProcessInfo.processInfo.environment,
+                                  allowDebugOverride: allowDebugOverride)
+    }
+
     static func sessionHostExecutablePath(bundleURL: URL, environment: [String: String],
                                           allowDebugOverride: Bool) -> String {
         if allowDebugOverride, let override = environment["AGTERM_SESSION_HOST_PATH"], !override.isEmpty {

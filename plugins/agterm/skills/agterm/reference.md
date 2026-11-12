@@ -165,6 +165,8 @@ the bundled persistent host, `app` the running agterm, `orphaned` a self-respons
 dead responsible process, and `unknown` an unavailable reading or an unrelated live responsible process;
 omitted for non-Live and remote panes; the split field includes hidden splits and is omitted without a
 split; these describe attribution, not permission grants),
+`liveHostStale` and `splitLiveHostStale` (true for a `supervisor` pane whose host is from an earlier agterm
+build or login, which `zmx reset` moves to the current one; omitted otherwise),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
 local session; a remote row is never written to disk, so a per-session attach is gone after a relaunch, while a
 remote window rebuilds its rows from the server's catalog),
@@ -2354,12 +2356,14 @@ before the session host existed keeps its own macOS permission identity, so ever
 it asks for the microphone again; the reset ends those sessions' processes at the next launch and recreates
 them under the host, starting their captured commands again where possible. It also covers every session
 whose daemon predates the recorded first launch with this zmx build: live sessions keep the zmx they started
-with through updates, so they miss a zmx change until recreated. agterm quits and reopens itself
+with through updates, so they miss a zmx change until recreated. It also moves every session still under
+the session host of an earlier agterm build or login, which can block local network access after an
+update, to the current host; at every launch agterm asks each earlier host to stop, and one stops once no live session runs under it. agterm quits and reopens itself
 right after answering, so running work in the affected sessions stops and agent conversations may need to be
 resumed by hand; run from inside one of those sessions it kills the calling shell. Other supervised
 sessions are left alone. It refuses outside Live sessions mode, while a mode change waits for a restart,
 on an incomplete pane inventory, and when nothing needs resetting. The reply carries `result.liveReset`
-with the session and pane counts, plus `outdated` sessions when any; the next launch re-checks every session and only ever resets fewer than
+with the session and pane counts, plus `outdated` and `staleHost` sessions when any; the next launch re-checks every session and only ever resets fewer than
 confirmed, and the tree's top-level `liveReset` reports `pending` until the quit and `last` for the launch
 that consumed the reset.
 
