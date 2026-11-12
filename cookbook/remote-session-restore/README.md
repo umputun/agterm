@@ -63,6 +63,7 @@ agtermctl hooks reload
 
 The list lives in `~/.local/state/agterm-remote-restore/`. Set `AGT_REMOTE_RESTORE_DIR` in front of the
 command in each hook line to keep it elsewhere, for example one list per agterm state directory.
+The keymap command and a `retry` or `list` by hand need the same prefix, or they read the default list.
 
 Only a row attached while these hooks run in an agterm that reports `remoteSessionID` gets on the list.
 One attached before the hooks were loaded, or by an older agterm, is missing from it however the hooks
@@ -104,7 +105,10 @@ here, tab-separated.
 Every `remote.opened` and `remote.closed` event carries the far side's id for the session the row shows,
 `remoteSessionID`, along with its `host`, `window` and `workspace`. `record` keys the list by the row's
 own session id here, so a closed row leaves the list and an undo of that close puts it back. A quit sends
-no `remote.closed`, which is why the list outlives it.
+no `remote.closed`, which is why the list outlives it. Attaching a session that waits on the list settles
+its waiting line, so a later `retry` does not attach it again.
+Rows of an agterm-server remote window also send `remote.opened`, with their own id as `remoteSessionID`;
+`zmx attach` cannot bring those back, so they are not listed.
 
 `replay` runs on `app.launched`, once the restored windows are in the tree. Before attaching anything, it
 asks each host once with `zmx tree HOST`:
@@ -120,7 +124,9 @@ Moving a session to another workspace sends no event of its own, only `tree.chan
 `sync` answers that one: when the window holds a listed row, it reads the window's tree and writes down
 each listed row's current workspace. Most tree changes are in windows without a remote row, and for
 those it stops before calling `agtermctl`. `record` reads the tree too rather than trusting the event's
-workspace, since the row may have moved while its event waited in the hook's queue.
+workspace, since the row may have moved while its event waited in the hook's queue. The opened and closed
+events run in separate queues, so a tree that no longer has the row means it was closed meanwhile, and
+`record` leaves it off; the event's workspace is used only when the tree cannot be read.
 
 `zmx attach` puts a row in whatever workspace holds the window's selection, which is still settling while
 a launch restores its windows. So `replay` attaches first and then moves the row to its recorded
