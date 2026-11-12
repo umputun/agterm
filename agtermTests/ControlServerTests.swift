@@ -116,6 +116,22 @@ final class ControlServerTests: XCTestCase {
         XCTAssertEqual(next.boundSocketPath, socketPath)
     }
 
+    // a child spawned on another thread holds a copy of the lock's descriptor until it execs
+    func testStopReleasesTheLockWhileACopyOfItsDescriptorIsOpen() throws {
+        let owner = makeServer()
+        let resolved = try XCTUnwrap(realpath(ControlResolve.ownershipLockPath(forSocket: socketPath), nil))
+        let lockPath = String(cString: resolved)
+        free(resolved)
+        let held = try XCTUnwrap(descriptor(openOn: lockPath))
+        let copy = dup(held)
+        XCTAssertGreaterThanOrEqual(copy, 0)
+        defer { close(copy) }
+
+        owner.stop()
+
+        XCTAssertEqual(makeServer().resolvedSocketPath, socketPath, "the stopped owner's lock should be free")
+    }
+
     /// `start()` re-runs from every window scene's task, so a server refused while the owner was alive
     /// reaches it again once the owner quits. It must then serve — and advertise — the real path.
     func testAServerThatBindsAfterRefusingAdvertisesTheRealPath() {
@@ -585,6 +601,15 @@ final class ControlServerTests: XCTestCase {
             }
         }
         return addr
+    }
+
+    private func descriptor(openOn path: String) -> Int32? {
+        let entries = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd")) ?? []
+        for fd in entries.compactMap({ Int32($0) }) {
+            var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+            if fcntl(fd, F_GETPATH, &buffer) == 0, String(cString: buffer) == path { return fd }
+        }
+        return nil
     }
 
     private func connects(to path: String) -> Bool {
