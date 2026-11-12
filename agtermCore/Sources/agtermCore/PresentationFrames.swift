@@ -491,7 +491,7 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
 /// PresentationTextState is a text page's live state on the presenter: a log page's following and last read, the
 /// search query under the presenter's revision with its counts, wrap, and a diff page's changes.
 public struct PresentationTextState: Codable, Equatable, Sendable {
-    /// maxQuery bounds the query a frame carries; a longer one is refused before it is sent.
+    /// maxQuery bounds the query a frame carries; a longer one is cut to it.
     public static let maxQuery = 16384
 
     public var following: Bool?

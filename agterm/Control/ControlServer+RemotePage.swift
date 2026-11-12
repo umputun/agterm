@@ -163,6 +163,11 @@ extension ControlServer {
         if let refusal {
             replicaLogger.notice("origin request \(command.action.rawValue, privacy: .public) not applied: \(refusal, privacy: .public)")
         }
+        if command.action.answersWithResult {
+            remoteClients[id]?.answer(.pageResult(PresentationPageResult(page: command.page, seq: command.seq, ok: false,
+                                                                         error: refusal)))
+            return
+        }
         guard var record = replicaPages[local] else { return }
         record.appliedSeq = max(record.appliedSeq, command.seq)
         replicaPages[local] = record

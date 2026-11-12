@@ -358,6 +358,23 @@ final class ControlServerRemotePageTests: XCTestCase {
         XCTAssertEqual(states(fix).last?.hidden, true)
     }
 
+    func testATextActionTheReplicaCannotRunIsRefusedWithAResultAndAdvancesNoSequence() async throws {
+        let fix = try fixture()
+        _ = try present(fix, page(.url("http://127.0.0.1:9/a")))
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 5, action: .hide)))
+        try await waitFor("the hide is reported") { self.states(fix).last?.appliedSeq == 5 }
+        let before = states(fix).count
+
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: Self.origin.uuidString, seq: 6, action: .search,
+                                                                    query: "x")))
+
+        let results = fix.transport.sent.compactMap { if case .pageResult(let result) = $0 { result } else { nil } }
+        XCTAssertEqual(results, [PresentationPageResult(page: Self.origin.uuidString, seq: 6, ok: false,
+                                                        error: "text page actions are not supported")])
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(states(fix).count, before)
+    }
+
     func testStateChangesInOneTurnAreReportedOnce() async throws {
         let fix = try fixture(files: ["/docs/index.html": html("<p>x</p>")])
         _ = try present(fix, page(.file(path: "/docs/index.html", grantRoot: nil)))
