@@ -135,8 +135,8 @@ final class TextPageBridge {
                                                            arguments: arguments, in: nil, contentWorld: world)
         guard let body = value as? [String: Any], let matches = (body["matches"] as? NSNumber)?.intValue,
               let current = (body["current"] as? NSNumber)?.intValue else { return .failure(.notLoaded) }
-store?.setTextSearchReport(pageID, revision: revision, query: query, matches: matches, current: current)
-if matches > 0, follower?.following == true { store?.setTextLogFollowing(pageID, following: false) }
+        store?.setTextSearchReport(pageID, revision: revision, query: query, matches: matches, current: current)
+        if matches > 0, follower?.following == true { store?.setTextLogFollowing(pageID, following: false) }
         return .success((matches, current))
     }
 

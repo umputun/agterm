@@ -612,6 +612,7 @@ extension TextPageRenderingTests {
         let (page, window) = try shown(overlay)
         defer { window.orderOut(nil) }
         try await waitForScript(Self.code, in: page.webView) { $0.contains("three err") }
+        page.webView.configuration.userContentController.removeAllScriptMessageHandlers()
 
         try search("none", on: page)
         let none = try await step(true, on: page)
@@ -624,6 +625,19 @@ extension TextPageRenderingTests {
         XCTAssertEqual(reached.hasSuffix("of 2"), true, reached)
         XCTAssertEqual(current?.textSearch?.matches, 2)
         XCTAssertEqual(current?.logState?.following, false)
+    }
+
+    func testAChangeStepCommitsItsChangeBeforeItAnswers() async throws {
+        let (page, window) = try shown(try openText("a.diff", "@@ -1 +1 @@\n-a\n+b\n@@ -5 +5 @@\n-c\n+d\n"))
+        defer { window.orderOut(nil) }
+        try await waitFor("the diff reports its changes") { self.current?.textChanges?.count == 2 }
+        page.webView.configuration.userContentController.removeAllScriptMessageHandlers()
+        let bridge = try XCTUnwrap(page.textPage)
+
+        let reached = try await bridge.stepChange(forward: true).get()
+
+        XCTAssertEqual(reached, TextChanges(count: 2, current: 1))
+        XCTAssertEqual(current?.textChanges, reached)
     }
 
     func testAQueryAcrossHighlightSpansMatchesAndReachesTheModel() async throws {

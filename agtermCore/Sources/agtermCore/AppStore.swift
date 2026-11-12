@@ -187,9 +187,8 @@ public final class AppStore {
     @ObservationIgnored public var onRemoteRowVisibility: ((Session, Bool) -> Void)?
     /// onReplicaPageChanged is told the local id of a page shown for an origin whose reported state changed.
     @ObservationIgnored public var onReplicaPageChanged: ((UUID) -> Void)?
-    /// The text page actions sent to a presenter and still waiting for its result.
     @ObservationIgnored var remoteTextWaits: [RemoteTextWait: CheckedContinuation<RemoteTextOutcome, Never>] = [:]
-    /// How long a text page action waits for the presenter's result.
+    /// remoteTextDeadline is how long a text page action waits for the presenter's result.
     @ObservationIgnored public var remoteTextDeadline = PresentationPageResult.deadline
     @ObservationIgnored let paneFinalizer: (([UUID]) -> Void)?
 

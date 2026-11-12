@@ -9,7 +9,7 @@ public enum OverlayResultError {
     public static let shownElsewhere = "overlay is shown on another Mac"
     /// The stream the overlay was handed to is gone, so nothing can reach the surface to resize it.
     public static let viewerGone = "the viewer showing this overlay is gone"
-    /// The presenting Mac took a text page action and sent no result within `PresentationPageResult.deadline`.
+    /// presenterSilent answers a text page action the presenting Mac sent no result for within the deadline.
     public static let presenterSilent = "presenter did not answer"
     /// The command and its environment exceed what the helper reads in one frame.
     public static let tooLarge = "overlay command too large to show on another Mac"

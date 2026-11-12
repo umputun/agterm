@@ -49,8 +49,6 @@ public enum TextPageAction: Equatable, Sendable {
     }
 }
 
-/// RemoteTextWait names one text page action waiting for its result: the page and the sequence number it was sent
-/// under.
 struct RemoteTextWait: Hashable {
     let job: String
     let seq: Int
