@@ -316,9 +316,9 @@ The presenting Mac renders and owns the live page state, as it already owns the 
 - Modify: `agterm/Control/ControlServer+ForwardedClick.swift`
 - Modify: `agtermTests/ControlServerRemoteLinkClickTests.swift`
 
-- [ ] a forwarded click on a log opens a log page when both ends list `page.text`, the plain page otherwise
-- [ ] write tests for both capability cases and for a hidden clicked log page being replaced
-- [ ] run tests - must pass before next task
+- [x] a forwarded click on a log opens a log page when both ends list `page.text`, the plain page otherwise
+- [x] write tests for both capability cases and for a hidden clicked log page being replaced
+- [x] run tests - must pass before next task
 
 ### Task 7: agterm-server origin
 

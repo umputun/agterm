@@ -24,8 +24,10 @@ extension ControlServer {
         let id = link.session
         guard canShowLinkOverlay(session: id, forwarded: forward != nil) else { return completion(false) }
         let path = link.url.path(percentEncoded: false)
-        // a page the presenting Mac is handed stays the static text page it already shows there
-        let log = link.opensAsLog && library.store(forSession: id)?.pageBelongsRemote(id, pane: nil) == false
+        // a presenting Mac without live text pages is handed the plain page it can show
+        let log = link.opensAsLog && library.store(forSession: id).map {
+            !$0.pageBelongsRemote(id, pane: nil) || $0.presentationHub?.presenterSupports(PresentationHub.pageTextKind, session: id) == true
+        } == true
         Task { @MainActor [weak self] in
             let checked = log ? await TextProbe.checkLogDetached(path: path) : await TextProbe.checkDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id, forwarded: forward != nil),
