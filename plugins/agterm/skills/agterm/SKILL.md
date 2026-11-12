@@ -107,11 +107,12 @@ its slot until it closes, so opening another there is refused. Separately, the a
 or whatever share Settings sets instead; not part of the tree and not owned by a window).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `splitCwd`, `title`, `active`, `split`, `overlay`, `hud`, `ask`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
+`id`, `name`, `cwd`, `splitCwd`, `scratchCwd`, `title`, `active`, `split`, `overlay`, `hud`, `ask`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `splitCwd` is the split pane's last
 reported directory, falling back to its restored directory, then the primary cwd. It is present for a
-shown or hidden split and omitted without one or on older servers. `surfaces[].id` is the
+shown or hidden split and omitted without one or on older servers. `scratchCwd` is the scratch shell's own
+directory, present while a scratch exists, shown or hidden. `surfaces[].id` is the
 control address for `surface zoom` and `surface cursor` (`left`, `right`, `scratch`, `overlay`,
 `overlay-left`, or `overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries
 read-only top-level fields — `idleMs` (ms since the last user input in the window), `autoFollowMs`

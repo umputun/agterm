@@ -1706,9 +1706,12 @@ struct AppStorePaneTests {
         session.scratchActive = true
         let scratch = SpySurface()
         session.scratchSurface = scratch
+        session.scratchCwd = "/a/docs"
         #expect(store.closeScratch(session.id) == true)
         #expect(session.scratchActive == false)
         #expect(session.scratchSurface == nil)
+        #expect(session.scratchCwd == nil)
+        #expect(session.cwd(for: .scratch) == "/a")
         #expect(scratch.teardownCount == 1)
         #expect(session.scratchGeneration == 1)
         // closing again (no surface) is a no-op.

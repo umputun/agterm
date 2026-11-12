@@ -322,6 +322,17 @@ final class SurfaceFactorySeedTests: XCTestCase {
         XCTAssertEqual(overlaySurface(for: session).workingDirectory, "/nowhere/explicit")
     }
 
+    func testALocalScratchRecordsWhereItStarted() {
+        let local = Session(initialCwd: "/nowhere")
+        local.currentCwd = "/nowhere/primary"
+        _ = scratchSurface(for: local)
+        XCTAssertEqual(local.scratchCwd, "/nowhere/primary")
+
+        let attached = remoteSession(reportedCwd: stateDir.appendingPathComponent("only-on-the-remote").path)
+        _ = scratchSurface(for: attached)
+        XCTAssertEqual(attached.scratchCwd, NSHomeDirectory())
+    }
+
     func testLocalSessionFactoriesKeepTheirInheritedPaths() {
         let session = Session(initialCwd: "/nowhere")
         session.currentCwd = "/nowhere/primary"

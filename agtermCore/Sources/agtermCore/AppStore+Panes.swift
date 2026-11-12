@@ -674,6 +674,7 @@ extension AppStore {
         releaseScratchOwnedState(of: session, token: scratch.paneToken)
         scratch.teardown()
         session.scratchSurface = nil
+        session.scratchCwd = nil
         session.scratchGeneration += 1
         return true
     }

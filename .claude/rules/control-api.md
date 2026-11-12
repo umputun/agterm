@@ -339,7 +339,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   tree. `ProcessSweeper` is nil by default because a test's fake listing names real pids.
 - `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
-  PWD/title link but a weak watermark link. GUI surfaces are Command-J, titlebar, View, and palette.
+  link but a weak watermark one; its PWD reaches only `Session.scratchCwd`, never the row's cwd or title.
+  A local scratch seeds that field with its start directory, so `AGT_SESSION_PWD` and `AGT_SESSION_HOST` agree. GUI surfaces are Command-J, titlebar, View, and palette.
   Showing never selects; `--follow` does, as on `overlay.open`. An unselected session's scratch still
   spawns, the deck mounting every session, and takes no focus: `deckActive` gates the grab.
   `ControlActions` keeps the four-argument requirement and defaults the `follow:` overload to it.
@@ -797,7 +798,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   trailing `.`, `?`, `!` or `;` too, so a path ending in one also lists up to three spellings with one character
   removed at a time (`trimmedSpellings`), each split for a suffix the same way; a relative link is joined to
   the clicking pane's session cwd before any scheme parse, and a first segment with a colon is never a directory, so
-  `http://localhost:3000` stays a web link. The scratch, quick and overlay terminals pass no cwd. Every candidate has
+  `http://localhost:3000` stays a web link. A local scratch passes its own cwd; a remote window's scratch, whose
+  directory is the server's, and the quick and overlay terminals pass none. Every candidate has
   passed `guardedLocalPath` (absolute, no `//`, no automount root) and a remote pane offers none, so a refused path
   is never stat'ed. `LinkOpener` checks them off the main actor and routes the first that exists; with none on disk
   the link keeps its typed route.
@@ -1570,6 +1572,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the last reported split cwd to its restored initial cwd, then the primary effective cwd. Omitted without
   a split or on older servers; it is model read-back, not a fresh process query. `title` stays the raw
   primary OSC title; exposing `splitTitle` is deferred.
+- `scratchCwd` reports `cwd(for: .scratch)` while a scratch surface exists, shown or hidden: its last reported
+  or start directory, else the primary effective cwd. `closeScratch` clears it with the surface.
 - `window.resize` echoes the applied frame size after `setFrame`, rounded to integer points like
   `window.list` geometry, as `result.width`/`result.height`. Human output is `W H`.
 - Session nodes include foreground/split foreground argv, idle shell basenames, background spec, overlay

@@ -990,4 +990,32 @@ struct AppStoreTreeProjectionTests {
         let json = String(decoding: try JSONEncoder().encode(node), as: UTF8.self)
         #expect(json.contains(#""zoom":1.25"#))
     }
+
+    @Test(arguments: [false, true])
+    func scratchCwdReportsTheScratchsOwnOrPrimaryDirectoryEvenWhenHidden(shown: Bool) throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/primary"))
+        session.scratchSurface = SpySurface()
+        session.scratchActive = shown
+        for (reported, expected): (String?, String) in [(nil, "/primary"), ("/primary/docs", "/primary/docs")] {
+            session.scratchCwd = reported
+            let node = store.controlTree().workspaces[0].sessions[0]
+            let data = try JSONEncoder().encode(node)
+            let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            #expect(json["scratchCwd"] as? String == expected)
+            #expect(node.cwd == "/primary")
+            #expect(try JSONDecoder().decode(ControlSessionNode.self, from: data) == node)
+        }
+    }
+
+    @Test func noScratchOmitsTheScratchDirectoryEvenWithAStaleValue() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/primary"))
+        session.scratchCwd = "/stale"
+        let node = store.controlTree().workspaces[0].sessions[0]
+        let json = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(node)) as? [String: Any])
+        #expect(json["scratchCwd"] == nil)
+    }
 }

@@ -141,6 +141,23 @@ final class CustomCommandRunnerTests: XCTestCase {
         XCTAssertEqual(scratchContext.paneID, scratch.uuidString)
     }
 
+    func testAScratchCommandOnAnAttachedSessionNamesTheLocalScratchShell() throws {
+        let fixture = try fixture()
+        let workspace = try XCTUnwrap(fixture.store.workspaces.first?.id)
+        let session = try XCTUnwrap(fixture.store.addSession(toWorkspace: workspace, cwd: "/srv", remoteHost: "box"))
+        let before = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .scratch)
+        session.scratchCwd = "/Users/me/docs"
+
+        let scratch = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .scratch)
+        let left = fixture.runner.context(for: session, in: fixture.store, selectionSurface: nil, pane: .left)
+
+        XCTAssertEqual(before.sessionPWD, "/srv")
+        XCTAssertEqual(scratch.sessionPWD, "/Users/me/docs")
+        XCTAssertEqual(scratch.sessionHost, "")
+        XCTAssertEqual(left.sessionPWD, "/srv")
+        XCTAssertEqual(left.sessionHost, "box")
+    }
+
     func testMenuFunctionKeyConsumesRepeatAndRelease() throws {
         try assertMenuFunctionKeyOwnership(keymap: "map f5 next_session\n")
     }

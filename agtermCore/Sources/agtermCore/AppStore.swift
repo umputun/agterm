@@ -449,6 +449,7 @@ public final class AppStore {
                                           realized: session.surface?.isRealized ?? false,
                                           context: session.effectiveContext, remoteHost: session.remoteHost,
                                           splitCwd: session.hasSplit ? session.cwd(for: .right) : nil,
+                                          scratchCwd: session.scratchSurface == nil ? nil : session.cwd(for: .scratch),
                                           liveAttribution: mainAttribution?.rawValue, splitLiveAttribution: splitAttribution?.rawValue,
                                           liveHostStale: mainStale ? true : nil, splitLiveHostStale: splitStale ? true : nil,
                                           presentation: presentationNode(of: session), presenters: presentersNode(of: session),

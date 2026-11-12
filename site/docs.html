@@ -3159,7 +3159,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               exists here as a directory, else in your home. A custom command still sees the reported path in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_PWD</span> and the
               destination in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_HOST</span>,
-              empty for a local session, so it can reach the remote directory itself. When another client leads at a different
+              empty for a local session, so it can reach the remote directory itself; one fired from the scratch, a local shell,
+              sees that shell's directory and no destination. When another client leads at a different
               terminal size, local cursor and screen-text reads can disagree with the application's layout; automation relying on
               those reads is unsupported in that state.
             </p>

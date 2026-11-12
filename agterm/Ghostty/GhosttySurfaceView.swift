@@ -70,8 +70,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     let backedByZmx: Bool
 
     /// The session whose visual config this surface inherits when it deliberately has no `session`: the scratch
-    /// renders the owner's watermark without its OSC title/PWD reports mutating the session model. Nil for
-    /// overlays and quick terminals; main/split use `session`.
+    /// renders the owner's watermark and reports its PWD only to `scratchCwd`. Nil for overlays and quick terminals.
     weak var watermarkSession: Session?
 
     /// Whether this is the session's split (right) pane. Routes `applyPwd`/`applyTitle` to the session's
@@ -511,6 +510,10 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // no save(): OSC 7 fires on every cd/prompt redraw and would thrash the disk. live cwd is persisted on
         // quit and on structural mutations, so a crash loses only cwd changes since the last save. the
         // equality guard matters likewise: an equal write still notifies observers and churns the reconcile.
+        if let owner = scratchOwner {
+            owner.scratchCwd = pwd
+            return
+        }
         if isSplitPane {
             if session?.splitCwd != pwd { session?.splitCwd = pwd }
         } else {

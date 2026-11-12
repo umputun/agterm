@@ -147,7 +147,9 @@ paths:
   in `{...}` or `$...` form, no-op with notice; empty `{AGT_SESSION_PWD}` can turn `rm -rf .../*` into a
   root glob. Commands using only `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE` may run sessionless.
 - `{AGT_SESSION_HOST}`/`$AGT_SESSION_HOST` is the SSH destination of a `zmx attach` session, empty
-  otherwise; an `ssh` typed into a local session leaves it empty while `AGT_SESSION_PWD` still follows
+  otherwise and from that session's scratch, a local shell (`Session.remoteHost(for:)`); a remote window's
+  scratch attaches the server's shell and keeps it.
+  An `ssh` typed into a local session leaves it empty while `AGT_SESSION_PWD` still follows
   any cwd reports that shell emits. `AGT_SESSION_PWD` stays the pane's reported path, remote or not; the
   command's execution directory comes separately from `Session.localWorkingDirectory`, which returns
   that path for a local session and, for a remote one, only when it exists here as a directory, else

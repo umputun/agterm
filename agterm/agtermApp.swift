@@ -882,9 +882,9 @@ struct agtermApp: App {
     }
 
     /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the overlay it is
-    /// NOT operationally wired to the session (no `view.session`/`isSplitPane`), so its PWD/title never clobber
-    /// the sidebar name, but it keeps a weak visual-config link for the watermark and — unlike the overlay —
-    /// stays alive when hidden. Runs a login shell, or `session.scratchCommand` (`session.scratch --command`)
+    /// NOT operationally wired to the session (no `view.session`/`isSplitPane`), so its title never clobbers the
+    /// sidebar name and its PWD goes only to `scratchCwd`; it keeps a weak link for the watermark and — unlike
+    /// the overlay — stays alive when hidden. Runs a login shell, or `session.scratchCommand` (`session.scratch --command`)
     /// RUN-ONCE. `autoFocus` grabs first responder on show (winning the SwiftUI/AppKit responder race); the
     /// shell's `exit` runs `closeScratch`, hiding + tearing down so the next show is fresh.
     @MainActor
@@ -897,6 +897,8 @@ struct agtermApp: App {
         let cwd = session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: NSHomeDirectory())
         // a remote window's scratch is its server's: a stopped attach keeps its screen until it reconnects
         let catalogScratch = session.catalogScratch
+        // a server scratch's directory is the server's, known only once it reports one
+        if catalogScratch == nil { session.scratchCwd = cwd }
         let view = GhosttySurfaceView(workingDirectory: cwd, fontSize: session.fontSize.map(Float.init), command: command,
                                       autoFocus: !suppressAutoFocus,
                                       env: env.merging(catalogScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 })
