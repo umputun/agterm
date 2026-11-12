@@ -470,7 +470,7 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
     public var canGoForward: Bool
     public var hidden: Bool
     public var appliedSeq: Int
-    /// text is a text page's live state, sent only to an origin listing `page.text`.
+    /// text is a text page's live state; an origin predating `page.text` ignores the key.
     public var text: PresentationTextState?
 
     public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,

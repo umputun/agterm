@@ -282,9 +282,11 @@ struct ServerActionsSessionsTests {
         var ask = ControlArgs()
         ask.title = "sure?"
         ask.buttons = [ControlAskButton(id: "yes", label: "Yes")]
+        var gui = ask
+        gui.style = "gui"
         let refused: [(Command, ControlArgs?)] = [(.sessionType, typed), (.sessionText, nil), (.sessionSplit, split),
                                                   (.sessionScratch, split), (.sessionHudOpen, hud),
-                                                  (.sessionOverlayOpen, program), (.askOpen, ask)]
+                                                  (.sessionOverlayOpen, program), (.askOpen, ask), (.askOpen, gui)]
 
         for (cmd, args) in refused {
             let reply = await harness.actions.serve(ControlRequest(cmd: cmd, target: row, args: args))

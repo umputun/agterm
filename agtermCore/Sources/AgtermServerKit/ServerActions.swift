@@ -43,10 +43,14 @@ public final class ServerActions: ControlActions {
 
     /// pageRowRefusal answers a command a page row cannot take; an operation records it as its refused receipt.
     func pageRowRefusal(_ request: ControlRequest) -> ControlResponse? {
-        PageSessionRefusal.refusal(request) { target, _ in
-            if case .success(let session) = resolveSession(target) { return session.content == .page }
+        let isPage: (String?, String?) -> Bool = { target, _ in
+            if case .success(let session) = self.resolveSession(target) { return session.content == .page }
             return false
         }
+        if let refusal = PageSessionRefusal.refusal(request, isPageSession: isPage) { return refusal }
+        // a Mac shows a GUI ask in its own window; here only a presentation stream would, and a page row has none
+        guard request.cmd == .askOpen, isPage(request.target, nil) else { return nil }
+        return ControlResponse(ok: false, error: "ask.open: not available on a page session")
     }
 
     public func claimOverlayJob(_ job: String) -> ControlResponse { streams.claimJobStream(job) }

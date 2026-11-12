@@ -105,6 +105,9 @@ final class ControlServer {
     var pageLauncher: RemotePageLauncher = RemotePageProcess()
     /// catalogPageClaims are the remote page rows a claim runs for; `ControlServer+CatalogPage` owns them.
     var catalogPageClaims: Set<UUID> = []
+    /// forwardedPages names the server each page a remote window created lives on, so its result is read there after
+    /// that window is gone; `ControlServer+RemoteActions` owns them.
+    var forwardedPages: [UUID: String] = [:]
     /// catalogPagePause is the wait before a remote page row's claim is tried again.
     var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
@@ -534,7 +537,7 @@ final class ControlServer {
         // a remote window's structural command is decided here and sent from a worker, so the accept thread
         // never waits on ssh while local structural commands keep their inline order
         if let route = runBlocking({ await server.remoteRoute(request) }) {
-            guard case .send = route else {
+            if case .refused = route {
                 _ = server.responseWriter(conn, runBlocking { await server.runRemoteRoute(route) })
                 return
             }

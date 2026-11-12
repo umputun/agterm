@@ -4,6 +4,7 @@ import agtermCore
 /// RemoteRoute is where a control request on a remote window's rows goes: to the window's server, or refused here.
 enum RemoteRoute: Sendable {
     case send(RemoteCatalogActions, PreparedRemoteOperation, select: Bool)
+    case pageResult(host: String, page: UUID)
     case refused(ControlResponse)
 }
 
@@ -18,6 +19,11 @@ extension ControlServer {
     func remoteRoute(_ request: ControlRequest) -> RemoteRoute? {
         if request.cmd == .sessionClose, let target = request.args?.targets?.first ?? request.target, target.lowercased() != "active" {
             return closeRoute(request, target: target)
+        }
+        if request.cmd == .sessionOverlayClose, request.args?.pane == nil, let route = pageRowCloseRoute(request) { return route }
+        if request.cmd == .sessionOverlayResult, let page = request.args?.page.flatMap(UUID.init(uuidString:)),
+           HtmlPageOutcomes.shared.outcome(for: page) == nil, let host = forwardedPages[page] {
+            return .pageResult(host: host, page: page)
         }
         let structural = RemoteOperation.structuralCommands.contains(request.cmd)
         guard structural || Self.localOnlyCommands.contains(request.cmd),
@@ -42,6 +48,15 @@ extension ControlServer {
         }
     }
 
+    /// pageRowCloseRoute closes a server page row on its server, as its page's own close does; a page row attached
+    /// from another Mac keeps the local close, which ends only this view.
+    private func pageRowCloseRoute(_ request: ControlRequest) -> RemoteRoute? {
+        guard case .success(let (store, id)) = resolver.resolveSessionTarget(request.target, window: request.args?.window),
+              let actions = store.remoteActions, let row = store.session(withID: id), row.content == .page,
+              row.remotePresentation?.binding.catalogOwned == true else { return nil }
+        return route(ControlRequest(cmd: .sessionClose, target: id.uuidString), in: store, actions: actions)
+    }
+
     private func route(_ request: ControlRequest, in store: AppStore, actions: RemoteCatalogActions) -> RemoteRoute {
         // a page row lists no pane, which preparation would read as an ended session
         if let refusal = pageCompanionRefusal(request) { return .refused(refusal) }
@@ -63,8 +78,27 @@ extension ControlServer {
             return response
         case .send(let actions, let prepared, let select):
             defer { refreshWindowCache() }
-            return await actions.send(prepared, selectingCreated: select)
+            let reply = await actions.send(prepared, selectingCreated: select)
+            if case .newPage = prepared.operation, reply.ok, let page = reply.result?.pageID.flatMap(UUID.init(uuidString:)) {
+                forwardedPages[page] = actions.mirror.host
+            }
+            return reply
+        case .pageResult(let host, let page):
+            return await serverPageResult(page, host: host)
         }
+    }
+
+    // a server page's outcome lives on the server, the replica shown here holding only a view of it
+    private func serverPageResult(_ page: UUID, host: String) async -> ControlResponse {
+        guard let argv = try? RemoteSession.controlCommand(host: host, arguments: ["session", "overlay", "result",
+                                                                                   "--page", page.uuidString]) else {
+            return ControlResponse(ok: false, error: "\(host) cannot be addressed")
+        }
+        let result = await remoteRunner.run(argv, deadline: Self.remoteTreeDeadline)
+        guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
+            return ControlResponse(ok: false, error: "\(host) did not answer for page \(page.uuidString)")
+        }
+        return reply
     }
 
     /// routedStore is the store the local dispatch would act on for `request`: the target's owner, or the

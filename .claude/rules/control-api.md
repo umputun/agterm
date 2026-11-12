@@ -444,7 +444,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   open and refusal included, with `addPageCompanion`. An anchor attached from another Mac only places it; on a
   remote window's row, `session.page` and `session.companion.page` are created by its server
   (`RemoteOperation.newPage`, forwarded with an operation id). The reply is `id` and `pageID`; the read-back is
-  `content: "page"` with no `parent`.
+  `content: "page"` with no `parent`. `ControlServer.forwardedPages` keeps each forwarded page's host for the app's
+  lifetime, so `overlay.result --page` reads the server's outcome after the window is gone, and an overlay close of a
+  server page row is forwarded as `session.close`. agterm-server refuses `ask.open` on a page row: no presentation
+  stream reaches one.
 - `session.companion.duplicate` is its own wire command for the same older-app reason.
   `ControlServer.duplicateCompanion` plans every pane through `ForegroundProcess.replayObservation` and host-free
   `DuplicateReplay` from one fresh leader listing before creating anything; `AppStore.duplicateAsCompanion` then

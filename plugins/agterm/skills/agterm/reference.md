@@ -1574,13 +1574,15 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   `headless: true` and `versions`.
 - Page rows on agterm-server: `session overlay open --page|--companion --html FILE|--url URL` makes a page session
   or page companion there, FILE a path on the host; a loopback `--url` is refused (`a page on agterm-server's
-  loopback cannot be a page session: no Mac would reach it`), and terminal commands on the row answer `<cmd>: not
-  available on a page session`. The catalog lists the row with no panes. A remote window shows it as a page row,
+  loopback cannot be a page session: no Mac would reach it`), and terminal commands and `ask open` on the row answer
+  `<cmd>: not available on a page session`, no Mac presenting an ask there. The catalog lists the row with no panes. A remote window shows it as a page row,
   each Mac claiming its own view over ssh (`session overlay page-attach`). Without a view the row shows a failed
   page naming why: `waiting for HOST` and `HOST cannot be reached, retrying` retry on their own, `the page's
   connection to HOST ended, reconnecting` claims a new view, and a refusal from the server stays shown; detaching
-  and reattaching the row claims again. Only the server's removal closes the row; `session detach` ends this Mac's
-  view and `session reattach` claims a new one. A Mac too old for page rows is sent none, and a companion of a page
+  and reattaching the row claims again. Only the server's removal closes the row: `session overlay close` on it, as
+  its page's own close, closes it there; `session detach` ends this Mac's view and `session reattach` claims a new
+  one. A page made from a remote window keeps its outcome on the server, where `--block` and `session overlay result
+  --page` read it, after that window closed too. A Mac too old for page rows is sent none, and a companion of a page
   row shows there as a top-level row.
 
 ## surface
