@@ -33,11 +33,8 @@ public enum HostRetirement {
         do {
             let connector = try ClientConnector(paths: paths, socketDirectory: socketDirectory, environment: [:],
                                                 startupTimeout: 2, queueTimeout: 5)
-            guard let peer = try connector.connectExisting() else { return .absent }
-            defer { peer.close() }
-            let deadline = ProcessInfo.processInfo.systemUptime + 15
-            try peer.send(SessionHost.encodeFrame(SessionHost.Request.stop), deadline: deadline)
-            switch try peer.receive(deadline: deadline) {
+            guard let reply = try connector.stopExisting(replyTimeout: 15) else { return .absent }
+            switch reply {
             case .stopped: return .stopped
             case .error(let failure): return .refused(failure.message)
             case .hello, .ok: return .failed("unexpected reply")

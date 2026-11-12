@@ -156,6 +156,33 @@ final class SessionHostClientTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.directory.path))
     }
 
+    // regression: retirement read the host's image path, which names the old bundle an update moved aside.
+    func testStopRetiresAnIdleHostWhoseBundleWasMovedAside() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.startClient(name: fixture.names[0])
+        _ = try fixture.waitForLeaders(count: 1)
+        let host = try fixture.hostPID()
+        defer { kill(host, SIGKILL) }
+        try fixture.endClients()
+        let keyed = URL(fileURLWithPath: fixture.paths.pidfile).deletingLastPathComponent()
+        try FileManager.default.moveItem(at: keyed, to: keyed.deletingLastPathComponent().appendingPathComponent(SessionHost.legacyEndpoint))
+        let bundle = fixture.executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let movedAside = bundle.deletingLastPathComponent().appendingPathComponent("Previous.app")
+        try FileManager.default.moveItem(at: bundle, to: movedAside)
+        try FileManager.default.copyItem(at: movedAside, to: bundle)
+        var path = [UInt8](repeating: 0, count: 4096)
+        XCTAssertGreaterThan(proc_pidpath(host, &path, UInt32(path.count)), 0)
+        XCTAssertTrue(String(decoding: path.prefix { $0 != 0 }, as: UTF8.self).contains("/Previous.app/"),
+                      "the live host's image must name the moved bundle")
+        let output = try fixture.runHelper(["stop", keyed.deletingLastPathComponent().path])
+        XCTAssertEqual(output, "\(SessionHost.legacyEndpoint) stopped\n")
+        let deadline = Date().addingTimeInterval(10)
+        while kill(host, 0) == 0 && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+        XCTAssertEqual(kill(host, 0), -1)
+    }
+
     final class Fixture {
         let directory = URL(fileURLWithPath: "/tmp/shc-\(UUID().uuidString)")
         let names = ["agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "agterm-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"]
@@ -375,9 +402,28 @@ final class SessionHostClientTests: XCTestCase {
             return String(decoding: bytes.prefix { $0 != 0 }, as: UTF8.self)
         }
 
+        func endClients() throws {
+            for pid in clients { kill(pid, SIGKILL); var status: Int32 = 0; _ = waitpid(pid, &status, 0) }
+            clients = []
+            for name in names { _ = try? runZmx(["kill", name, "--force"]) }
+            let deadline = Date().addingTimeInterval(10)
+            while try !ZmxListParser.parse(runZmx(["list"])).isEmpty {
+                guard Date() < deadline else { throw POSIXError(.ETIMEDOUT) }
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+        }
+
+        func runHelper(_ arguments: [String]) throws -> String {
+            try run(executable, arguments)
+        }
+
         private func runZmx(_ arguments: [String]) throws -> String {
+            try run(zmx, arguments)
+        }
+
+        private func run(_ program: URL, _ arguments: [String]) throws -> String {
             let process = Process()
-            process.executableURL = zmx
+            process.executableURL = program
             process.arguments = arguments
             process.environment = environment
             process.currentDirectoryURL = directory

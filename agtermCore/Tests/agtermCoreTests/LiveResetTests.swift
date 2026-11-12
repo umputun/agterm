@@ -96,7 +96,7 @@ struct LiveResetTests {
         let records = [Self.record(Self.paneA, leader: 10, created: 1000)]
 
         let selection = LiveReset.select(claims: claims, records: records, outdatedBefore: Self.cutoff,
-                                         classify: { _, _ in attribution }, staleHost: { _, _ in stale })
+                                         place: { _, _ in .init(attribution: attribution, staleHost: stale) })
 
         #expect(selection.targets == reason.map { [Self.target(Self.paneA, leader: 10, reason: $0)] } ?? [])
     }
@@ -106,9 +106,20 @@ struct LiveResetTests {
         let records = [Self.record(Self.paneA, leader: 10, created: 999)]
 
         let selection = LiveReset.select(claims: claims, records: records, outdatedBefore: Self.cutoff,
-                                         classify: { _, _ in .supervisor }, staleHost: { _, _ in true })
+                                         place: { _, _ in .init(attribution: .supervisor, staleHost: true) })
 
         #expect(selection.targets == [Self.target(Self.paneA, leader: 10, reason: .outdated)])
+    }
+
+    @Test func attributionAloneNeverSelectsOrKillsASupervisedPaneAsStaleHost() {
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10, created: 1000)]
+        #expect(LiveReset.select(claims: claims, records: records, classify: { _, _ in .supervisor }).targets.isEmpty)
+
+        let target = Self.target(Self.paneA, leader: 10, reason: .staleHost)
+        let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: [Self.paneA], records: records,
+                                        classify: { _, _ in .supervisor })
+        #expect(narrowed.dispositions[target] == .skipped)
     }
 
     @Test func selectExcludesPanesWithoutAReadableLeader() {
@@ -203,7 +214,7 @@ struct LiveResetTests {
         let target = Self.target(Self.paneA, leader: 10, reason: .staleHost)
         let narrowed = LiveReset.narrow(marker: Self.marker([target]), claimed: [Self.paneA],
                                         records: [Self.record(Self.paneA, leader: 10)],
-                                        classify: { _, _ in attribution }, staleHost: { _, _ in stale })
+                                        place: { _, _ in .init(attribution: attribution, staleHost: stale) })
 
         #expect(narrowed.dispositions[target] == disposition)
     }

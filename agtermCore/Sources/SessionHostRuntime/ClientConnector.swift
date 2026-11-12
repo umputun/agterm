@@ -39,10 +39,17 @@ final class ClientConnector {
         return try handshake(connection, deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
     }
 
-    /// connectExisting reaches the host already serving `paths` and never starts one; nil when none listens.
-    func connectExisting() throws -> (any ClientPeer)? {
+    /// stopExisting asks the host already serving `paths` to stop and returns its answer; nil when none listens.
+    /// The host's image goes unchecked because an update moves or deletes it; a stop carries no pane, and the host
+    /// refuses while it roots one.
+    func stopExisting(replyTimeout: TimeInterval) throws -> SessionHost.Response? {
         guard let connection = try open(deadline: ProcessInfo.processInfo.systemUptime + startupTimeout) else { return nil }
-        return try handshake(connection, deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
+        defer { close(connection.fd) }
+        try greet(connection, pid: HostIdentity.peerPID(fd: connection.fd),
+                  deadline: ProcessInfo.processInfo.systemUptime + queueTimeout)
+        let deadline = ProcessInfo.processInfo.systemUptime + replyTimeout
+        try connection.writeFrame(SessionHost.encodeFrame(SessionHost.Request.stop), deadline: deadline)
+        return try connection.readResponse(deadline: deadline)
     }
 
     /// Holds the spawn lock only until a socket is reachable, so the handshake wait never blocks
@@ -126,13 +133,18 @@ final class ClientConnector {
         var transferred = false
         defer { if !transferred { close(connection.fd) } }
         let peer = try HostIdentity.peer(fd: connection.fd)
-        guard SessionHost.handshakeAccepts(local: identity, remote: peer) else { throw HostFailure.invalidIdentity }
-        try connection.writeFrame(SessionHost.encodeFrame(SessionHost.Request.hello(identity)), deadline: deadline)
-        guard case .hello(let hello) = try connection.readResponse(deadline: deadline),
-              SessionHost.handshakeAccepts(local: identity, remote: hello), hello.pid == peer.pid,
-              let pid = peer.pid, Responsibility.system.responsibleProcess(of: pid) == pid else { throw HostFailure.invalidIdentity }
+        guard SessionHost.handshakeAccepts(local: identity, remote: peer), let pid = peer.pid else { throw HostFailure.invalidIdentity }
+        try greet(connection, pid: pid, deadline: deadline)
         transferred = true
         return NativeClientPeer(connection: connection)
+    }
+
+    /// greet exchanges hellos and requires the answer to come from `pid`, a host responsible for itself.
+    private func greet(_ connection: HostConnection, pid: Int32, deadline: TimeInterval) throws {
+        try connection.writeFrame(SessionHost.encodeFrame(SessionHost.Request.hello(identity)), deadline: deadline)
+        guard case .hello(let hello) = try connection.readResponse(deadline: deadline),
+              SessionHost.handshakeAccepts(local: identity, remote: hello), hello.pid == pid,
+              Responsibility.system.responsibleProcess(of: pid) == pid else { throw HostFailure.invalidIdentity }
     }
 }
 

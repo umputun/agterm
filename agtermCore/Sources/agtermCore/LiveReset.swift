@@ -75,12 +75,11 @@ public enum LiveReset {
         }
     }
 
-    /// select picks a pane created before `outdatedBefore` as outdated whatever its attribution, and
-    /// otherwise an orphaned or app-attributed one as unsupervised and a supervised one `staleHost` reports as
-    /// staleHost. A nil cutoff selects no outdated pane.
+    /// select picks a pane created before `outdatedBefore` as outdated whatever its placement, and otherwise an
+    /// orphaned or app-attributed one as unsupervised and a supervised one on an earlier host as staleHost.
+    /// A nil cutoff selects no outdated pane.
     public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord], outdatedBefore: Date? = nil,
-                              classify: (String, Int32) -> SessionHost.Attribution,
-                              staleHost: (String, Int32) -> Bool = { _, _ in false }) -> Selection {
+                              place: (String, Int32) -> SessionHost.Placement) -> Selection {
         let leaders = ZmxLeaderMap.leaders(in: records)
         let created = createdTimes(in: records)
         var seen: Set<UUID> = []
@@ -94,13 +93,21 @@ public enum LiveReset {
                        reason: reason)
             }
             if isOutdated(created: created[name], cutoff: outdatedBefore) { return target(.outdated) }
-            switch classify(name, leader) {
+            let placement = place(name, leader)
+            switch placement.attribution {
             case .orphaned, .app: return target(.unsupervised)
-            case .supervisor: return staleHost(name, leader) ? target(.staleHost) : nil
+            case .supervisor: return placement.staleHost ? target(.staleHost) : nil
             case .unknown: return nil
             }
         }
         return Selection(targets: targets, inventoryComplete: claims.complete && !conflicted)
+    }
+
+    /// select with an attribution alone never picks a staleHost pane.
+    public static func select(claims: ZmxClaimWalk, records: [ZmxSessionRecord], outdatedBefore: Date? = nil,
+                              classify: (String, Int32) -> SessionHost.Attribution) -> Selection {
+        select(claims: claims, records: records, outdatedBefore: outdatedBefore,
+               place: { SessionHost.Placement(attribution: classify($0, $1), staleHost: false) })
     }
 
     public static func isOutdated(created: Date?, cutoff: Date?) -> Bool {
@@ -137,8 +144,7 @@ public enum LiveReset {
     /// still be claimed and listed with the same leader.
     public static func narrow(marker: Marker, claimed: Set<UUID>?, records: [ZmxSessionRecord]?,
                               outdatedBefore: Date? = nil,
-                              classify: (String, Int32) -> SessionHost.Attribution,
-                              staleHost: (String, Int32) -> Bool = { _, _ in false }) -> Narrowed {
+                              place: (String, Int32) -> SessionHost.Placement) -> Narrowed {
         guard let records, let claimed else {
             let skipped = Dictionary(marker.targets.map { ($0, Disposition.skipped) }, uniquingKeysWith: { first, _ in first })
             return Narrowed(dispositions: skipped, inventoryFailed: records == nil)
@@ -149,19 +155,25 @@ public enum LiveReset {
             guard claimed.contains(target.paneIdentity) else { dispositions[target] = .skipped; continue }
             guard let record = byName[target.daemon] else { dispositions[target] = .gone; continue }
             guard record.leaderPID == target.leaderPID else { dispositions[target] = .skipped; continue }
-            let qualifies = switch target.reason {
-            case .outdated: isOutdated(created: record.createdAt, cutoff: outdatedBefore)
-            case .unsupervised: classify(target.daemon, target.leaderPID) == .orphaned
+            let qualifies: Bool
+            switch target.reason {
+            case .outdated: qualifies = isOutdated(created: record.createdAt, cutoff: outdatedBefore)
+            case .unsupervised: qualifies = place(target.daemon, target.leaderPID).attribution == .orphaned
             case .staleHost:
-                switch classify(target.daemon, target.leaderPID) {
-                case .supervisor: staleHost(target.daemon, target.leaderPID)
-                case .orphaned: true
-                case .app, .unknown: false
-                }
+                let placement = place(target.daemon, target.leaderPID)
+                qualifies = placement.attribution == .orphaned || (placement.attribution == .supervisor && placement.staleHost)
             }
             dispositions[target] = qualifies ? .kill : .skipped
         }
         return Narrowed(dispositions: dispositions, inventoryFailed: false)
+    }
+
+    /// narrow with an attribution alone never kills a staleHost target that is still supervised.
+    public static func narrow(marker: Marker, claimed: Set<UUID>?, records: [ZmxSessionRecord]?,
+                              outdatedBefore: Date? = nil,
+                              classify: (String, Int32) -> SessionHost.Attribution) -> Narrowed {
+        narrow(marker: marker, claimed: claimed, records: records, outdatedBefore: outdatedBefore,
+               place: { SessionHost.Placement(attribution: classify($0, $1), staleHost: false) })
     }
 
     public struct PaneCounts: Codable, Equatable, Sendable {

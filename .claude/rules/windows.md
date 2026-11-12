@@ -221,10 +221,13 @@ session drag are out of scope.
 - A host whose panes are gone is retired, never killed: after every launch's reap `HostRetirer` runs
   `agterm-session-host stop <dir>` off the main thread, which asks every other endpoint to stop and a host
   refuses while it roots a live daemon. Reset Live Sessions… moves panes off an earlier host (`staleHost`),
-  and the relaunch's retirement then ends it.
+  and the relaunch's retirement then ends it. The stop client (`ClientConnector.stopExisting`) checks the
+  host's socket credentials, pid, hello and self-responsibility but never its image; pane creation keeps
+  the image check.
 - The app finds hosts from their pidfiles (`LiveAttributionProbe.publishedHost`): a pid counts when its
-  process started no later than the pidfile was last written. The executable path is no test, since an
-  update deletes or moves the old host's image (measured: `proc_pidpath` fails or names the moved path).
+  process started no later than the pidfile was last written. The executable path is no test after an
+  update. Measured: `proc_pidpath` keeps the old path when a new file lands there, names the moved path
+  when the old bundle is moved aside, and fails when nothing is left at the path.
   The current key comes from running the bundled helper's `key`, cached by file identity
   (`HelperEndpointKey`); when it cannot be read, no pane is called stale.
 - Keep all `responsibility_*` SPI lookups in the `AgtermResponsibility` target.

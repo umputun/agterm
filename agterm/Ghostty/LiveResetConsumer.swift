@@ -42,10 +42,9 @@ enum LiveResetConsumer {
         let claims = library.paneClaims()
         let claimed: Set<UUID>? = claims.complete ? Set(claims.claims.map(\.paneIdentity)) : nil
         let records = client.sessionRecords(timeout: min(deps.listTimeout, max(remaining(), 0.1)))
-        let place = deps.probe.placer(endpoint: client.endpoint)
         let narrowed = LiveReset.narrow(marker: marker, claimed: claimed, records: records,
                                         outdatedBefore: deps.outdatedBefore,
-                                        classify: { place($0, $1).attribution }, staleHost: { place($0, $1).staleHost })
+                                        place: deps.probe.placer(endpoint: client.endpoint))
         let kill = narrowed.kill
         var survivors: Set<pid_t> = []
         if !kill.isEmpty {
@@ -112,14 +111,15 @@ enum HostRetirer {
     static func retire(_ endpoint: ControlZmxEndpoint) {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: endpoint.socketDirectory)) ?? []
         guard names.contains(where: SessionHost.isEndpointName) else { return }
-        let helper = URL(fileURLWithPath: endpoint.executable).deletingLastPathComponent().appendingPathComponent("agterm-session-host")
         // best effort: the helper's per-endpoint budgets can exceed this, and a timeout leaves idle hosts for a later launch
-        let invocation = ZmxClient.Invocation(executablePath: helper.path, arguments: ["stop", endpoint.socketDirectory],
+        let invocation = ZmxClient.Invocation(executablePath: ZmxLaunch.sessionHostPath, arguments: ["stop", endpoint.socketDirectory],
                                               environment: [:], timeout: 30, mergesStderr: true)
         DispatchQueue.global(qos: .utility).async {
             do {
                 let report = try ZmxClient.run(invocation).trimmingCharacters(in: .whitespacesAndNewlines)
-                if !report.isEmpty { logger.info("session host retirement: \(report, privacy: .public)") }
+                guard !report.isEmpty else { return }
+                let level: OSLogType = report.contains(" failed: ") ? .error : .info
+                logger.log(level: level, "session host retirement: \(report, privacy: .public)")
             } catch {
                 logger.error("session host retirement failed: \(String(describing: error), privacy: .public)")
             }

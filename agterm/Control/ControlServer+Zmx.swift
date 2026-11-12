@@ -58,9 +58,8 @@ extension ControlServer {
     /// liveResetSelection covers open and saved panes; nil when the listing failed, which refuses the action.
     func liveResetSelection() -> LiveReset.Selection? {
         guard let zmxClient, let records = zmxClient.sessionRecords() else { return nil }
-        let place = liveAttributionProbe.placer(endpoint: zmxClient.endpoint)
         return LiveReset.select(claims: library.paneClaims(), records: records, outdatedBefore: zmxOutdatedBefore,
-                                classify: { place($0, $1).attribution }, staleHost: { place($0, $1).staleHost })
+                                place: liveAttributionProbe.placer(endpoint: zmxClient.endpoint))
     }
 
     /// Observed daemons joined against the panes that claim them, with the restore status as a header.
@@ -486,8 +485,7 @@ struct LiveAttributionProbe {
                   let pid = publishedHost(pidfile: paths.pidfile) else { continue }
             result.pids[name] = pid
         }
-        let helper = URL(fileURLWithPath: endpoint.executable).deletingLastPathComponent().appendingPathComponent("agterm-session-host")
-        result.current = HelperEndpointKey.shared.key(helper: helper.path).flatMap { try? SessionHost.endpointName(key: $0) }
+        result.current = HelperEndpointKey.shared.key(helper: ZmxLaunch.sessionHostPath).flatMap { try? SessionHost.endpointName(key: $0) }
         return result
     }
 

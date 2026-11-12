@@ -29,13 +29,18 @@ enum HostIdentity {
     }
 
     static func peer(fd: Int32) throws -> SessionHost.Hello {
+        try read(pid: peerPID(fd: fd))
+    }
+
+    /// peerPID is the socket peer's pid once it runs as this user, read from the kernel and not from its image.
+    static func peerPID(fd: Int32) throws -> Int32 {
         var uid: uid_t = 0
         var gid: gid_t = 0
         guard getpeereid(fd, &uid, &gid) == 0, uid == geteuid() else { throw HostFailure.invalidIdentity }
         var pid: Int32 = 0
         var length = socklen_t(MemoryLayout<Int32>.size)
         guard getsockopt(fd, SOL_LOCAL, LOCAL_PEERPID, &pid, &length) == 0, pid > 0 else { throw HostFailure.invalidIdentity }
-        return try read(pid: pid)
+        return pid
     }
 
     /// endpointKey is this process's own. The image is the one loaded, not the file on disk, which an
