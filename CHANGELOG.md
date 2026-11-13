@@ -6,6 +6,7 @@
 
 - **Live sessions no longer close when macOS force-quits a program started in one.** A GUI program switched off in System Settings ▸ General ▸ Login Items ▸ Allow in the Background, started from a live session after agterm had been quit and opened again, was force-quit by macOS about 30 seconds later, and the live sessions macOS had grouped with it closed too. On macOS 27 and later agterm starts the session host as its own background job, so the force-quit reaches only the program. Sessions started before this update keep their old host until Agterm ▸ Reset Live Sessions… moves them #987 @umputun #985
 - with the keyboard layout lock on, layout switches made in another app were reverted to the locked layout, and leaving agterm did not restore the earlier one. The lock now holds only while agterm is the active app #988 @umputun
+- on macOS 15 the Claude status hook handled every main-agent event as a subagent's, so a row showing blocked or completed stayed that way after Claude went back to work, and a Stop while a background subagent ran showed completed. Reinstall from Help ▸ Install Agent Status Hooks to pick it up 5cc32465 @umputun #990
 
 ## v0.42.1 - 2026-11-12
 
