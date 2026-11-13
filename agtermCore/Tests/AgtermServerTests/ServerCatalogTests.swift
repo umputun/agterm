@@ -43,6 +43,74 @@ struct ServerCatalogTests {
         try harness.session(await serve(.sessionNew))
     }
 
+    @MainActor
+    private final class MacEffects: RemoteCatalogEffects {
+        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func catalogRowAdded(_: Session) {}
+        func catalogRowRemoved(_: UUID) {}
+        func catalogRowEnded(_: UUID) {}
+        func catalogPaneNeedsAttach(_: UUID, session _: UUID) {}
+        func catalogBound(_: UUID) -> Bool { true }
+        func catalogStateChanged(_: RemoteCatalogMirror.State) {}
+    }
+
+    @MainActor
+    private final class MacWindow {
+        let store: AppStore
+        let effects = MacEffects()
+        let mirror: RemoteCatalogMirror
+
+        init(directory: String) {
+            store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: directory)))
+            mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState())
+        }
+
+        func receive(_ snapshot: CatalogSnapshot) throws {
+            _ = mirror.receive(try CatalogCodec.decode(CatalogCodec.encode(.snapshot(snapshot))))
+        }
+    }
+
+    private func macWindow() -> MacWindow { MacWindow(directory: harness.scratch.root + "/mac") }
+
+    @Test func anUnnamedSessionOnTheMacFollowsItsTerminalTitle() async throws {
+        let session = try await newSession()
+        let mac = macWindow()
+
+        try mac.receive(hub.snapshot())
+        let row = try #require(mac.store.session(withID: session.id))
+        row.oscTitle = "omp"
+
+        #expect(row.displayName == "omp")
+    }
+
+    @Test func renamingASessionToItsOwnLabelPublishesTheManualName() async throws {
+        let session = try await newSession()
+        let label = session.displayName
+        let sink = try subscribe()
+
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: label))
+
+        guard case .sessionChanged(let fields)? = sink.changes.last else { Issue.record("no session change"); return }
+        #expect(fields.name == label)
+        #expect(fields.customName == label)
+    }
+
+    @Test func clearingTheNameOnTheServerReturnsTheMacRowToItsTerminalTitle() async throws {
+        let session = try await newSession()
+        let mac = macWindow()
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: "build"))
+        try mac.receive(hub.snapshot())
+        let row = try #require(mac.store.session(withID: session.id))
+        row.oscTitle = "omp"
+        #expect(row.displayName == "build")
+
+        _ = await serve(.sessionRename, target: session.id.uuidString, args: ControlArgs(name: ""))
+        try mac.receive(hub.snapshot())
+
+        #expect(row.displayName == "omp")
+        #expect(row.oscTitle == "omp")
+    }
+
     @Test func theLiveCatalogCarriesTheScratchAndTheSavedStoreDoesNot() async throws {
         let session = try await newSession()
         _ = await serve(.sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: "on"))
