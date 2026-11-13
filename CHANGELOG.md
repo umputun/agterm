@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.42.2 - 2026-11-13
+
+### Bug Fixes
+
+- **Live sessions no longer close when macOS force-quits a program started in one.** A GUI program switched off in System Settings ▸ General ▸ Login Items ▸ Allow in the Background, started from a live session after agterm had been quit and opened again, was force-quit by macOS about 30 seconds later, and the live sessions macOS had grouped with it closed too. On macOS 27 and later agterm starts the session host as its own background job, so the force-quit reaches only the program. Sessions started before this update keep their old host until Agterm ▸ Reset Live Sessions… moves them #987 @umputun #985
+- with the keyboard layout lock on, layout switches made in another app were reverted to the locked layout, and leaving agterm did not restore the earlier one. The lock now holds only while agterm is the active app #988 @umputun
+
 ## v0.42.1 - 2026-11-12
 
 ### Improved
