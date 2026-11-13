@@ -70,7 +70,7 @@ extension AppStore {
         let host = context.host
         let fields = entry.fields
         let session = Session(id: fields.id, initialCwd: TerminalText.sanitized(fields.cwd),
-                              customName: TerminalText.sanitized(fields.name).trimmedOrNil,
+                              customName: catalogCustomName(fields),
                               paneIdentity: entry.panes.first?.identity ?? fields.primary, remoteHost: host,
                               remoteSessionID: fields.id.uuidString, content: fields.page == nil ? .terminal : .page)
         session.parentID = fields.parent
@@ -101,7 +101,7 @@ extension AppStore {
     func updateCatalogSession(_ session: Session, to entry: CatalogSession, context: CatalogRowContext) -> [UUID] {
         let fields = entry.fields
         let host = context.host
-        let name = TerminalText.sanitized(fields.name).trimmedOrNil
+        let name = catalogCustomName(fields)
         if session.customName != name { session.customName = name }
         if session.currentCwd != fields.cwd { session.currentCwd = TerminalText.sanitized(fields.cwd) }
         if session.parentID != fields.parent { session.parentID = fields.parent }
@@ -183,6 +183,13 @@ extension AppStore {
         var updated = state
         updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
         if updated != state { session.remotePresentation = updated }
+    }
+
+    /// catalogCustomName is a row's manual name. A terminal row takes the server's `customName`, so an unnamed one
+    /// follows its terminal title; a page row keeps the label in `name`, which its own overlay cannot always supply.
+    private func catalogCustomName(_ fields: CatalogSessionFields) -> String? {
+        let name = fields.page == nil ? fields.customName ?? fields.name : fields.name
+        return TerminalText.sanitized(name).trimmedOrNil
     }
 
     /// applyCatalogScratch keeps a row's scratch on the server's: a shown one attaches its daemon, a hidden one keeps

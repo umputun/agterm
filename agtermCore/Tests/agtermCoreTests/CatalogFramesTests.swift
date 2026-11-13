@@ -91,6 +91,19 @@ struct CatalogFramesTests {
         #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encoded).page == nil)
     }
 
+    @Test func anEmptyCustomNameTravelsAsEmptyAndAnOlderServerOmitsIt() throws {
+        var unnamed = CatalogFixture.session().fields
+        unnamed.customName = ""
+        let legacy = CatalogFixture.session().fields
+
+        let decoded = try JSONDecoder().decode(CatalogSessionFields.self, from: JSONEncoder().encode(unnamed))
+        let encodedLegacy = try JSONEncoder().encode(legacy)
+
+        #expect(decoded.customName == "")
+        #expect(!String(decoding: encodedLegacy, as: UTF8.self).contains("customName"))
+        #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encodedLegacy).customName == nil)
+    }
+
     @Test func versionsTravelWithTheProtocolKeyword() throws {
         let json = String(decoding: try JSONEncoder().encode(CatalogFixture.versions), as: UTF8.self)
 

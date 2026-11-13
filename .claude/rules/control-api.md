@@ -2250,6 +2250,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   standalone `RemoteSession.forwardCommand` runs it too, or its forward outlives the link with the page's port dead.
   Structural actions go to the server through `RemoteCatalogActions` and are disabled while disconnected,
   never queued; `RemoteWindowViewState` keeps what this Mac detached and its kept views.
+- A catalog session's `name` is its resolved label and `customName` its manual name, `""` when it has none.
+  A remote window's terminal row takes `customName` as its own, so an unnamed row follows its terminal title as a
+  local one does (#991); a page row takes `name`. An omitted `customName` marks an older server, whose `name` is
+  taken instead, so the server sends `""` for an unnamed session, never nil.
 - A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
   `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
 - The server keeps page rows: `session.page`, `session.companion.page` and `session.companion.page.attach` are

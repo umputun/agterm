@@ -54,9 +54,13 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
     public var scratch: CatalogScratch?
     /// page marks a page row, which has no pane; its `primary` is its own id.
     public var page: CatalogPage?
+    /// customName is the session's manual name, empty when it has none, while `name` is its resolved label. A
+    /// server predating it omits it, and its `name` then stands in as the manual name.
+    public var customName: String?
 
     public init(id: UUID, name: String, parent: UUID?, cwd: String, primary: UUID, axis: String?, shown: Bool,
-                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil, page: CatalogPage? = nil) {
+                lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil, page: CatalogPage? = nil,
+                customName: String? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
@@ -67,6 +71,7 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
         self.lifecycle = lifecycle
         self.scratch = scratch
         self.page = page
+        self.customName = customName
     }
 }
 

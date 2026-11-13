@@ -173,6 +173,42 @@ final class RemoteCatalogMirrorTests {
         #expect(effects.added == [page.id])
     }
 
+    @Test func anUnnamedRowFollowsItsTitleAndANamedOneKeepsItsName() throws {
+        var unnamed = session(name: "srv", panes: [pane()])
+        unnamed.fields.customName = ""
+        var named = session(name: "build", panes: [pane()])
+        named.fields.customName = "build"
+        _ = open([unnamed, named])
+        let unnamedRow = try #require(store.session(withID: unnamed.id))
+        let namedRow = try #require(store.session(withID: named.id))
+
+        unnamedRow.oscTitle = "omp"
+        namedRow.oscTitle = "omp"
+
+        #expect(unnamedRow.customName == nil)
+        #expect(unnamedRow.displayName == "omp")
+        #expect(namedRow.displayName == "build")
+    }
+
+    @Test func aRowFromAServerWithoutCustomNameKeepsTheCatalogNameOverItsTitle() throws {
+        let legacy = session(name: "srv", panes: [pane()])
+        _ = open([legacy])
+        let row = try #require(store.session(withID: legacy.id))
+
+        row.oscTitle = "omp"
+
+        #expect(row.displayName == "srv")
+    }
+
+    @Test func aPageRowKeepsItsCatalogLabelBesideAnEmptyCustomName() throws {
+        var page = pageRow()
+        page.fields.customName = ""
+
+        _ = open([page])
+
+        #expect(try #require(store.session(withID: page.id)).customName == "docs")
+    }
+
     @Test func aPageRowKeepsItsShownPageThroughARenameAndAReorderAndLeavesWithItsRemoval() throws {
         let page = pageRow()
         let other = session(panes: [pane()])

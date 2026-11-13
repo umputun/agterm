@@ -154,7 +154,8 @@ extension ServerActions {
                                                   cwd: session.effectiveCwd, primary: page == nil ? session.paneIdentity : session.id,
                                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                                   shown: session.hasSplit && session.isSplit,
-                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch, page: page)
+                                                  lifecycle: session.ended ? .ended : .live, scratch: scratch, page: page,
+                                                  customName: session.customName ?? "")
                 return CatalogSession(fields: fields, panes: panes)
             })
         }
