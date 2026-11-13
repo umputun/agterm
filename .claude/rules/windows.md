@@ -57,8 +57,8 @@ session drag are out of scope.
   `agtermCore` imports no `os`, since the agterm-linux fork builds it on Linux.
 - Bootstrap never throws. Load a valid index; otherwise recover every UUID-named per-window file before
   considering legacy migration or an empty seed. Recovered files are appended before `loadStore`, named
-  `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open with a
-  default workspace/session. The library is never empty after launch.
+  `window N`, all opened, and the first made frontmost. Missing/corrupt window snapshots open as an
+  empty tree. The library is never empty after launch.
 
 ## Scene lifecycle
 

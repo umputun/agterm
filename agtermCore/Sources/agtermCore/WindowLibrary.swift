@@ -32,8 +32,8 @@ public struct WindowInfo: Codable, Sendable, Identifiable, Equatable {
 /// loaded; the persisted open-set in `windows.json` records which to reopen on the next launch.
 ///
 /// Recovery contract (never throws, mirrors `PersistenceStore.load()`): a corrupt or version-mismatched
-/// `windows.json` counts as absent → migrate legacy `workspaces.json` if present, else seed one window; a
-/// missing/corrupt per-window file opens with an empty `Snapshot` (one default workspace + session), so the
+/// `windows.json` counts as absent → recover orphaned `windows/<id>.json` files, else migrate legacy
+/// `workspaces.json`, else seed one window; a missing/corrupt per-window file opens as an empty tree, so the
 /// window set is always valid and non-empty.
 @Observable
 @MainActor
