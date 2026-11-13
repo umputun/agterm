@@ -167,6 +167,8 @@ final class SessionHostClientTests: XCTestCase {
         defer { kill(host, SIGKILL) }
         let jobs = fixture.hostJobs()
         XCTAssertEqual(jobs.count, ProcessInfo.processInfo.isOperatingSystemAtLeast(.init(majorVersion: 27, minorVersion: 0, patchVersion: 0)) ? 1 : 0)
+        let endpointDirectory = URL(fileURLWithPath: fixture.paths.socket).deletingLastPathComponent().path
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: endpointDirectory).filter { $0.hasSuffix(".plist") }, [])
         let keyed = URL(fileURLWithPath: fixture.paths.pidfile).deletingLastPathComponent()
         try FileManager.default.moveItem(at: keyed, to: keyed.deletingLastPathComponent().appendingPathComponent(SessionHost.legacyEndpoint))
         XCTAssertEqual(try fixture.runHelper(["stop", keyed.deletingLastPathComponent().path]),
@@ -188,6 +190,30 @@ final class SessionHostClientTests: XCTestCase {
         while (kill(host, 0) == 0 || !fixture.hostJobs().isEmpty) && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
         XCTAssertEqual(kill(host, 0), -1)
         XCTAssertEqual(fixture.hostJobs(), [])
+    }
+
+    func testJobHostThatFindsTheEndpointTakenRemovesOnlyItsOwnJob() throws {
+        try XCTSkipUnless(Responsibility.system.isAvailable, "Required responsibility symbols are absent")
+        try XCTSkipUnless(ProcessInfo.processInfo.isOperatingSystemAtLeast(.init(majorVersion: 27, minorVersion: 0, patchVersion: 0)),
+                          "the session host starts as a launchd job on macOS 27 and later")
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        try fixture.startClient(name: fixture.names[0])
+        _ = try fixture.waitForLeaders(count: 1)
+        let host = try fixture.hostPID()
+        defer { kill(host, SIGKILL) }
+        let jobs = fixture.hostJobs()
+        XCTAssertEqual(jobs.count, 1)
+        let key = try fixture.runHelper(["key"]).trimmingCharacters(in: .whitespacesAndNewlines)
+        try fixture.bootstrapHostJob(label: "\(fixture.bundleID).session-host.\(key).duplicate", key: key)
+        let deadline = Date().addingTimeInterval(10)
+        while fixture.hostJobs() != jobs && Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+        XCTAssertEqual(fixture.hostJobs(), jobs)
+        XCTAssertEqual(kill(host, 0), 0)
+        try fixture.startClient(name: fixture.names[1])
+        _ = try fixture.waitForLeaders(count: 2)
+        XCTAssertEqual(try fixture.hostPID(), host)
+        XCTAssertEqual(fixture.hostJobs(), jobs)
     }
 
     final class Fixture {
@@ -400,6 +426,21 @@ final class SessionHostClientTests: XCTestCase {
             let prefix = "\(bundleID).session-host."
             return String(decoding: data, as: UTF8.self).split(separator: "\n")
                 .compactMap { $0.split(separator: "\t").last.map(String.init) }.filter { $0.hasPrefix(prefix) }.sorted()
+        }
+
+        func bootstrapHostJob(label: String, key: String) throws {
+            let plist = directory.appendingPathComponent("\(label).plist")
+            let job: [String: Any] = ["Label": label, "RunAtLoad": true, "KeepAlive": false, "AbandonProcessGroup": true,
+                                      "ProgramArguments": [executable.path, "host", environment["ZMX_DIR"] ?? "", key, label]]
+            try PropertyListSerialization.data(fromPropertyList: job, format: .xml, options: 0).write(to: plist)
+            let bootstrap = Process()
+            bootstrap.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+            bootstrap.arguments = ["bootstrap", "gui/\(getuid())", plist.path]
+            try bootstrap.run()
+            let deadline = Date().addingTimeInterval(5)
+            while bootstrap.isRunning && Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+            if bootstrap.isRunning { kill(bootstrap.processIdentifier, SIGKILL); bootstrap.waitUntilExit(); throw POSIXError(.ETIMEDOUT) }
+            XCTAssertEqual(bootstrap.terminationStatus, 0)
         }
 
         private func removeHostJobs() {

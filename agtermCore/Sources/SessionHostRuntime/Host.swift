@@ -66,16 +66,34 @@ public final class Host {
     }
 
     /// run serves the endpoint of this image and login session until a stop is accepted. A launchd host gets
-    /// the `key` its client waits on and its job `label`, which it removes once stopped.
+    /// the `key` its client waits on and its job `label`, which it removes however serving ends.
     public static func run(socketDirectory: String, job: (key: String, label: String)? = nil) throws {
         let identity = try HostIdentity.read(pid: getpid())
         guard Responsibility.system.isAvailable else { throw Responsibility.SpawnError.unavailable }
-        let executable = URL(fileURLWithPath: identity.bundlePath).appendingPathComponent("Contents/MacOS/zmx").path
         let key = try HostIdentity.endpointKey()
         if let job, job.key != key || !job.label.hasPrefix(HostJob.labelPrefix(bundleID: identity.bundleID, key: key)) {
             logger.error("session host job \(job.label, privacy: .public) with key \(job.key, privacy: .public) is not this host's, key \(key, privacy: .public)")
             throw HostFailure.invalidIdentity
         }
+        guard let job else { return try serve(socketDirectory: socketDirectory, identity: identity, key: key) }
+        var failure: (any Error)?
+        do {
+            try serve(socketDirectory: socketDirectory, identity: identity, key: key)
+        } catch {
+            logger.error("session host job \(job.label, privacy: .public) ended: \(String(describing: error), privacy: .public)")
+            failure = error
+        }
+        // the bootout ends this process, so it runs after serve closed the endpoint: a client arriving
+        // meanwhile starts a new host
+        let outcome = HostJob.bootout(label: job.label, deadline: ProcessInfo.processInfo.systemUptime + 2)
+        if outcome != .succeeded {
+            logger.error("session host job \(job.label, privacy: .public) bootout: \(String(describing: outcome), privacy: .public)")
+        }
+        if let failure { throw failure }
+    }
+
+    private static func serve(socketDirectory: String, identity: SessionHost.Hello, key: String) throws {
+        let executable = URL(fileURLWithPath: identity.bundlePath).appendingPathComponent("Contents/MacOS/zmx").path
         let paths = try SessionHost.paths(socketDirectory: socketDirectory, key: key)
         let endpoint = try HostEndpoint(socketDirectory: socketDirectory, paths: paths)
         defer { endpoint.close() }
@@ -85,10 +103,6 @@ public final class Host {
         let backend = NativeHostBackend(socketDirectory: socketDirectory, zmxPath: executable, environment: ProcessInfo.processInfo.environment)
         let host = try Host(configuration: .init(socketDirectory: socketDirectory, identity: identity, zmxPath: executable), backend: backend)
         try host.serve(endpoint)
-        guard let job else { return }
-        // the bootout ends this process, so the endpoint goes first: a client arriving meanwhile starts a new host
-        endpoint.close()
-        _ = HostJob.bootout(label: job.label, deadline: ProcessInfo.processInfo.systemUptime + 2)
     }
 
     func handle(ensure request: SessionHost.Ensure) -> SessionHost.Response {

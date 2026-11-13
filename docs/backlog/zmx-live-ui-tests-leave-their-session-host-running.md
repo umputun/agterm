@@ -26,4 +26,6 @@ a row without a live leader, so if daemons are ever kept after their command end
 
 Not worth it: that entry point ships in the bundled helper and only tests would call it, and the
 project keeps no production code that exists only to serve tests. A leaked test host stays a manual
-cleanup by pid, which the `lsappinfo` check after a hosted or UI test run already catches.
+cleanup by pid, which the `lsappinfo` check after a hosted or UI test run already catches. On macOS 27 and
+later the host runs as a launchd job with a coalition of its own and is absent from `lsappinfo`; a leaked
+one shows as a loaded `<bundleID>.session-host.*` job in `launchctl list` instead.

@@ -386,10 +386,10 @@ macOS ends such a program together with the group of processes it was started in
 from an earlier run of agterm put its sessions in that run's group
 ([#985](https://github.com/umputun/agterm/issues/985)). On macOS 27 and later agterm starts the session host
 as its own background job, so the force-quit reaches only the program. Sessions under a host started by an
-earlier agterm build stay exposed until Agterm ▸ Reset Live Sessions… moves them. So do sessions whose host
-macOS refused to start as a job: agterm then starts it the earlier way and logs
-`session host job ... failed` under the `com.umputun.agterm` subsystem. Switching the program on in Allow in
-the Background also stops the force-quit.
+earlier agterm build stay exposed until Agterm ▸ Reset Live Sessions… moves them. When macOS refuses to start
+the host as a job, agterm starts it the earlier way and logs `session host job ... failed` under the
+`com.umputun.agterm` subsystem; sessions under that host stay exposed, and a reset does not move them.
+Switching the program on in Allow in the Background stops the force-quit in every case.
 
 ## Reporting a problem
 

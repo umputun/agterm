@@ -224,7 +224,8 @@ session drag are out of scope.
   coalition, live panes included (#985). Responsibility disclaim does not change the coalition.
   Each attempt has a unique label, `<bundleID>.session-host.<key>.<nonce>`, and a 0600 plist removed once
   bootstrap returns. The host takes the key and label as arguments, exits when either is not its own, and
-  boots out its label after an accepted stop.
+  tries to boot out its label after serving ends, including on error.
+  A job host ends with the GUI login session, so the forced-logout case above applies to a spawned host only.
   A definite bootstrap failure falls back to the disclaimed spawn, which keeps the shared coalition;
   a timed-out one never starts a second host. Older macOS keeps the spawn.
 - A host whose panes are gone is retired, never killed: after every launch's reap `HostRetirer` runs
