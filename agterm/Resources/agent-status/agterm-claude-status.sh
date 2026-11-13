@@ -90,7 +90,7 @@ payload=
 
 field() { # key path value, array length for an array, empty when absent or unparseable
   if [ -x /usr/bin/plutil ]; then
-    printf '%s' "$payload" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null
+    if v=$(printf '%s' "$payload" | /usr/bin/plutil -extract "$1" raw -o - - 2>/dev/null); then printf '%s' "$v"; fi
   elif command -v jq >/dev/null 2>&1; then
     printf '%s' "$payload" | jq -r --arg p "$1" \
       'getpath($p | split(".") | map(tonumber? // .)) | if type == "array" then length else . // empty end' 2>/dev/null
