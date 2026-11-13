@@ -510,6 +510,36 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
     }
 
     @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
+    func jobHostWhoseJobIsAbsentStillStopsCleanly() throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let key = try Fixture.endpointKey(of: fixture.executable)
+        let child = try fixture.start(job: [key, HostJob.labelPrefix(bundleID: fixture.identity.bundleID, key: key) + "deadbeef"])
+        #expect(try String(contentsOfFile: fixture.paths.pidfile, encoding: .utf8) == "\(child)\n")
+        #expect(try fixture.exchange(.stop).last == .stopped)
+        try fixture.waitForExit()
+        #expect(!FileManager.default.fileExists(atPath: fixture.paths.socket))
+    }
+
+    enum JobMismatch: CaseIterable { case key, label }
+
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"),
+          arguments: JobMismatch.allCases)
+    func jobHostRefusesAnotherEndpointBeforeTakingOne(_ mismatch: JobMismatch) throws {
+        let fixture = try Fixture()
+        defer { fixture.cleanup() }
+        let own = try Fixture.endpointKey(of: fixture.executable)
+        let key = mismatch == .key ? "000000000000-1" : own
+        let bundleID = mismatch == .label ? "com.example.other" : fixture.identity.bundleID
+        let error = #expect(throws: FixtureCommandError.self) {
+            try fixture.run(fixture.executable, arguments: ["host", fixture.socketDirectory, key, HostJob.labelPrefix(bundleID: bundleID, key: key) + "deadbeef"])
+        }
+        #expect(error?.status == 1)
+        #expect(!FileManager.default.fileExists(atPath: fixture.paths.socket))
+        #expect(!FileManager.default.fileExists(atPath: fixture.paths.pidfile))
+    }
+
+    @Test(.enabled(if: sessionHostFixtureReady, "needs the responsibility SPI and the staged zmx from scripts/setup.sh"))
     func stopCommandSkipsTheCurrentEndpointAndReportsAbsentOnes() throws {
         let fixture = try Fixture()
         defer { fixture.cleanup() }
@@ -1455,9 +1485,9 @@ private let sessionHostFixtureReady = Responsibility.system.isAvailable
             return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        @discardableResult func start() throws -> Int32 {
+        @discardableResult func start(job: [String] = []) throws -> Int32 {
             let child = try Responsibility.system.spawnDisclaimed(executable: executable.path,
-                                                                  argv: [executable.path, "host", environment["ZMX_DIR"]!], env: environment)
+                                                                  argv: [executable.path, "host", environment["ZMX_DIR"]!] + job, env: environment)
             pid = child
             let deadline = Date().addingTimeInterval(5)
             while Date() < deadline {

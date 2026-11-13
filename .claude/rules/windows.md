@@ -218,6 +218,15 @@ session drag are out of scope.
   (`agterm-session-host key`). An update or a forced logout therefore starts a new host for new panes
   (#971), and the old one stays the root of its existing daemons, since responsibility cannot be moved.
   The fixed `session-host` directory is a build predating keys; it is never served again.
+- On macOS 27 and later the client starts the host as a launchd job in `gui/<uid>` (`HostJob`), so the host
+  and its daemons get a coalition of their own. A spawned host stays in the coalition of the agterm that
+  started it, and loginwindow force-quitting a program BTM disallows in the background ends that whole
+  coalition, live panes included (#985). Responsibility disclaim does not change the coalition.
+  Each attempt has a unique label, `<bundleID>.session-host.<key>.<nonce>`, and a 0600 plist removed once
+  bootstrap returns. The host takes the key and label as arguments, exits when either is not its own, and
+  boots out its label after an accepted stop.
+  A definite bootstrap failure falls back to the disclaimed spawn, which keeps the shared coalition;
+  a timed-out one never starts a second host. Older macOS keeps the spawn.
 - A host whose panes are gone is retired, never killed: after every launch's reap `HostRetirer` runs
   `agterm-session-host stop <dir>` off the main thread, which asks every other endpoint to stop and a host
   refuses while it roots a live daemon. Reset Live Sessions… moves panes off an earlier host (`staleHost`),
