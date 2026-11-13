@@ -316,14 +316,16 @@ paths:
   size in Appearance, which `testSidebarDensityPickerPersistsAndTheAppearanceTabFits` keeps from scrolling.
   The control catalog carries it as `sidebar.density`.
 - `terminalInputSource` is a macOS input source id, nil = off. `InputSourceLock` in `agtermCore` decides and
-  `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while any
-  agterm window is key, whatever holds first responder there (terminals, pages, palettes, ask dialogs,
-  rename fields, Settings, alerts), reselects on every source-change notification, and
-  restores the earlier source when no agterm window is key and in `applicationWillTerminate`.
+  `TerminalInputSource` is the only caller of Text Input Source selection: it selects the id while agterm
+  is active and any of its windows is key, whatever holds first responder there (terminals, pages, palettes,
+  ask dialogs, rename fields, Settings, alerts), reselects on every source-change notification, and
+  restores the earlier source otherwise and in `applicationWillTerminate`.
   One app-wide rule, because a responder-scoped lock released in some text fields and not others.
-  It keys on key-window changes, never app activation, because the quick terminal takes key
-  while agterm stays inactive. The source-change notification is delivered to an inactive app (measured
-  with the quick panel key), so the observer needs no suspension override.
+  Key window alone is not enough: a long-running instance was measured enforcing over other apps with
+  agterm in the background, the window still reporting key unidentified. `isActive` is true while the
+  quick panel is key over another app (measured), so the gate keeps it, and activation edges are observed
+  alongside key-window ones. The source-change notification reaches agterm while it is inactive and another
+  app is frontmost (measured), so the observer needs no suspension override.
   Selection is system-wide and macOS restores nothing itself (measured with the per-document input source
   option off), so a crash leaves the id selected; never persist the baseline to restore at the next
   launch, which would overwrite a later choice made elsewhere.
