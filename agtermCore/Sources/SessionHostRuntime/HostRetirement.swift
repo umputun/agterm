@@ -31,7 +31,7 @@ public enum HostRetirement {
 
     private static func stop(paths: SessionHost.Paths, socketDirectory: String) -> Outcome {
         do {
-            let connector = try ClientConnector(paths: paths, socketDirectory: socketDirectory, environment: [:],
+            let connector = try ClientConnector(paths: paths, key: nil, socketDirectory: socketDirectory, environment: [:],
                                                 startupTimeout: 2, queueTimeout: 5)
             guard let reply = try connector.stopExisting(replyTimeout: 15) else { return .absent }
             switch reply {

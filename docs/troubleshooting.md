@@ -376,6 +376,21 @@ Live Sessions… moves those sessions to the current host, as described in the p
 launch agterm asks each earlier host to stop, and one stops once no live session runs under it. The single
 shared host that agterm used before #971 counts as an earlier host.
 
+## Live sessions close when macOS force-quits a program started in one
+
+About 30 seconds after a GUI program starts from a live session, macOS force-quits it, and live sessions
+close with it. This happens when the program is switched off in the Allow in the Background list under
+System Settings ▸ General ▸ Login Items, and agterm was quit and opened again since those sessions started.
+
+macOS ends such a program together with the group of processes it was started in. A session host started
+from an earlier run of agterm put its sessions in that run's group
+([#985](https://github.com/umputun/agterm/issues/985)). On macOS 27 and later agterm starts the session host
+as its own background job, so the force-quit reaches only the program. Sessions under a host started by an
+earlier agterm build stay exposed until Agterm ▸ Reset Live Sessions… moves them. When macOS refuses to start
+the host as a job, agterm starts it the earlier way and logs `session host job ... failed` under the
+`com.umputun.agterm` subsystem; sessions under that host stay exposed, and a reset does not move them.
+Switching the program on in Allow in the Background stops the force-quit in every case.
+
 ## Reporting a problem
 
 Collect this before filing:
