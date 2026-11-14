@@ -34,8 +34,7 @@ struct ServerActionsInfoTests {
 
         _ = harness.actions.setSessionInfo(session.id.uuidString, window: nil, info: try info("soon", hideAfter: 0.05))
 
-        let deadline = Date().addingTimeInterval(30)
-        while session.info != nil, Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
+        await harness.actions.infoAutoHide[session.id]?.task.value
         #expect(session.info == nil)
     }
 

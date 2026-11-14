@@ -111,6 +111,18 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   contended main actor did not fit in 8 s. The log cannot tell them apart.
 - **Fix.** The wait is 60 s, and `#expect(!session.ended)` makes a repeat of (a) name itself.
 
+### `ServerActionsInfoTests.anInfoLineWithHideAfterExpiresOnTheServer`
+
+- **Symptom.** `(session.info → SessionInfo(source: "soon", ...)) == nil` at line 39, after 49 s on Linux and
+  58 s on macOS, in the same run on both.
+- **Runs.** Jobs 132567710924 (Unit tests) and 132567710941 (Linux core tests), PR #999's first run of the test.
+- **Cause, inferred from CI timing, not reproduced locally.** The main actor was saturated by parallel suites for
+  about 50 s: the synchronous `anInfoLineIsSetAndCleared` took 56 s and 66 s, and the failure fired 2 ms before
+  `aRefreshedLineReplacesTheEarlierExpiry` passed. The test polled `session.info` against a 30 s wall-clock
+  deadline, so it could resume after the stall, find the deadline gone and fail before the 0.05 s expiry task,
+  also waiting for the main actor, cleared the line.
+- **Fix.** The test awaits the armed expiry task itself (`infoAutoHide[id]?.task.value`) instead of the clock.
+
 ### `SshConnectionPoolTests` cases waiting in `held()` on Linux
 
 - **Symptom.** `Expectation failed: await held()` in `callersArrivingDuringAStartShareIt`,
