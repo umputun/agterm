@@ -18,6 +18,25 @@ struct ControlEventDispatcherTests {
         #expect(actions.calls == [.eventsRead(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100))])
     }
 
+    @Test func streamAnchorsThroughTheSameReadPathAndValidation() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let batch = ControlEventBatch(run: run, next: 12, items: [])
+        actions.nextEventsReadResponse = ControlResponse(ok: true, result: ControlResult(events: batch))
+
+        let anchored = await dispatcher.dispatch(ControlRequest(
+            cmd: .eventsStream, args: ControlArgs(after: "9", run: run.uuidString, kinds: ["status"])
+        ))
+        let rejected = await dispatcher.dispatch(ControlRequest(
+            cmd: .eventsStream, args: ControlArgs(run: run.uuidString)
+        ))
+
+        #expect(anchored == actions.nextEventsReadResponse)
+        #expect(actions.calls == [.eventsRead(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: run, after: 9), kinds: [.status], limit: 100))])
+        #expect(rejected == ControlResponse(ok: false, error: "events.read requires --run and --after together"))
+    }
+
     @Test func parsesCursorKindsAndMaximumLimit() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

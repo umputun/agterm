@@ -179,6 +179,19 @@ struct ControlEventRingTests {
 
         #expect(result == .failure(.cursorAhead, anchor: ControlEventBatch(run: runID, next: 1, items: [])))
     }
+
+    @Test func tailTracksAppendsAndEviction() {
+        let subject = ring(capacity: 2)
+
+        #expect(subject.tail.read() == ControlEventTail.Snapshot(run: runID, next: 0, oldest: nil))
+
+        subject.append(draft(.status, name: "one"))
+        #expect(subject.tail.read() == ControlEventTail.Snapshot(run: runID, next: 1, oldest: 1))
+
+        subject.append(draft(.notify, name: "two"))
+        subject.append(draft(.sessionCreated, name: "three"))
+        #expect(subject.tail.read() == ControlEventTail.Snapshot(run: runID, next: 3, oldest: 2))
+    }
 }
 
 private extension ControlEventReadResult {

@@ -591,6 +591,109 @@ final class ControlServerTests: XCTestCase {
         wait(for: [remoteFinished], timeout: 10)
     }
 
+    /// The accept thread's `events.read` fast path must answer every tail-only outcome byte-identically
+    /// to the main-actor ring read, and fall through for a cursor with pending entries.
+    func testEventsReadFastPathMatchesRingReads() throws {
+        let runID = UUID()
+        let ring = ControlEventRing(capacity: 2, runID: runID, now: { Date(timeIntervalSince1970: 100) })
+        ring.append(ControlEventDraft(kind: .status, payload: ControlEventPayload(name: "one")))
+        ring.append(ControlEventDraft(kind: .notify, payload: ControlEventPayload(name: "two")))
+        ring.append(ControlEventDraft(kind: .treeChanged, window: "win"))
+        let library = WindowLibrary(directory: stateDir, controlEventRing: ring)
+        let server = makeServer(library: library)
+        server.start()
+
+        let cases: [(String, ControlEventReadOptions)] = [
+            (#"{"cmd":"events.read"}"#, ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)),
+            (#"{"cmd":"events.read","args":{"run":"\#(runID.uuidString)","after":"3"}}"#,
+             ControlEventReadOptions(cursor: ControlEventCursor(run: runID, after: 3), kinds: nil, limit: 100)),
+            (#"{"cmd":"events.read","args":{"run":"\#(runID.uuidString)","after":"4"}}"#,
+             ControlEventReadOptions(cursor: ControlEventCursor(run: runID, after: 4), kinds: nil, limit: 100)),
+            (#"{"cmd":"events.read","args":{"run":"\#(UUID().uuidString)","after":"1"}}"#,
+             ControlEventReadOptions(cursor: ControlEventCursor(run: UUID(), after: 1), kinds: nil, limit: 100)),
+            (#"{"cmd":"events.read","args":{"run":"\#(runID.uuidString)","after":"0"}}"#,
+             ControlEventReadOptions(cursor: ControlEventCursor(run: runID, after: 0), kinds: nil, limit: 100)),
+            (#"{"cmd":"events.read","args":{"run":"\#(runID.uuidString)","after":"2"}}"#,
+             ControlEventReadOptions(cursor: ControlEventCursor(run: runID, after: 2), kinds: nil, limit: 100)),
+        ]
+
+        for (line, options) in cases {
+            let path = socketPath!
+            let answered = expectation(description: "round trip answered")
+            var replyText: String?
+            Thread {
+                replyText = Self.roundTrip(line, at: path)
+                answered.fulfill()
+            }.start()
+            wait(for: [answered], timeout: 5)
+            let reply = try JSONDecoder().decode(ControlResponse.self, from: Data(try XCTUnwrap(replyText).utf8))
+            XCTAssertEqual(reply, library.readEvents(options), "fast path diverged for \(line)")
+        }
+    }
+
+    /// One `events.stream` connection: the anchor reply is ordinary, then a sequenced event lands on
+    /// the same connection as one framed line, without the client polling again.
+    func testEventsStreamAnchorsThenPushesFramedEvents() throws {
+        let library = WindowLibrary(directory: stateDir)
+        let server = makeServer(library: library)
+        server.start()
+
+        let fd = Self.connectFD(to: socketPath)
+        XCTAssertGreaterThanOrEqual(fd, 0)
+        defer { close(fd) }
+        let payload = Array(#"{"cmd":"events.stream"}"#.utf8 + [UInt8(ascii: "\n")])
+        XCTAssertEqual(payload.withUnsafeBufferPointer { Darwin.write(fd, $0.baseAddress!, $0.count) }, payload.count)
+
+        let anchored = expectation(description: "anchor reply read")
+        let framed = expectation(description: "event frame read")
+        let reader = LineReaderThread()
+        var replies = 0
+        reader.start(fd: fd) {
+            replies += 1
+            if replies == 1 { anchored.fulfill() }
+            if replies == 2 { framed.fulfill() }
+        }
+        wait(for: [anchored], timeout: 5)
+
+        let reply = try JSONDecoder().decode(ControlResponse.self, from: Data(reader.collected[0].utf8))
+        XCTAssertTrue(reply.ok, "the anchor reply should succeed: \(reader.collected[0])")
+        let anchor = try XCTUnwrap(reply.result?.events)
+        XCTAssertEqual(anchor.run, library.controlEventTail.read().run)
+        XCTAssertTrue(anchor.items.isEmpty, "a nil-cursor anchor replays no history")
+
+        library.emitAppLaunched()
+
+        wait(for: [framed], timeout: 5)
+        let event = try JSONDecoder().decode(ControlEvent.self, from: Data(reader.collected[1].utf8))
+        XCTAssertEqual(event.kind, .appLaunched)
+        XCTAssertEqual(event.seq, anchor.next + 1, "the frame follows the anchor cursor")
+    }
+
+    /// The hub's cap is part of admission: a stream past it gets its error reply and the connection
+    /// closes rather than being adopted or parked.
+    func testAStreamPastTheCapacityLimitIsRefused() throws {
+        let server = makeServer()
+        server.start()
+        var reservations: [UUID] = []
+        for _ in 0..<EventStreamHub.subscriberLimit {
+            reservations.append(try XCTUnwrap(server.eventStreamHub.reserve(kinds: nil)))
+        }
+        defer { for id in reservations { server.eventStreamHub.release(id) } }
+
+        let path = socketPath!
+        let answered = expectation(description: "refusal answered")
+        var replyText: String?
+        Thread {
+            replyText = Self.roundTrip(#"{"cmd":"events.stream"}"#, at: path)
+            answered.fulfill()
+        }.start()
+        wait(for: [answered], timeout: 5)
+        let reply = try JSONDecoder().decode(ControlResponse.self, from: Data(try XCTUnwrap(replyText).utf8))
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertTrue(reply.error?.contains("too many concurrent event streams") == true, reply.error ?? "")
+    }
+
     nonisolated private static func address(for path: String) -> sockaddr_un {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
@@ -685,4 +788,35 @@ private final class BlockingRemoteRunner: RemoteCommandRunner, @unchecked Sendab
         onEntered?()
         release.wait()
     }
+}
+
+/// Reads newline-delimited lines from `fd` on its own thread into a locked list until EOF, so a
+/// @MainActor test can watch a pushed stream without blocking the actor the server dispatches on.
+private final class LineReaderThread: @unchecked Sendable {
+    private let lock = NSLock()
+    private var collectedLines: [String] = []
+
+    func start(fd: Int32, onLine: @escaping () -> Void) {
+        let reader = Thread { [self] in
+            var buffer = Data()
+            var chunk = [UInt8](repeating: 0, count: 4096)
+            while true {
+                let count = read(fd, &chunk, chunk.count)
+                if count <= 0 { break }
+                buffer.append(contentsOf: chunk[0..<count])
+                while let newline = buffer.firstIndex(of: UInt8(ascii: "\n")) {
+                    let line = String(decoding: buffer[buffer.startIndex..<newline], as: UTF8.self)
+                    buffer.removeSubrange(buffer.startIndex...newline)
+                    lock.lock()
+                    collectedLines.append(line)
+                    lock.unlock()
+                    onLine()
+                }
+            }
+        }
+        reader.name = "test.event-stream.reader"
+        reader.start()
+    }
+
+    var collected: [String] { lock.withLock { collectedLines } }
 }

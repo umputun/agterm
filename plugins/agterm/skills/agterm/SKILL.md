@@ -83,8 +83,9 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
 - Add `--json` to any command to get the raw JSON response (machine-readable). Without it, ordinary
   mutations print `ok`, batch close/move prints the affected session count, and `tree`/`list` print a
   human listing.
-- Commands other than `events` and `session wait` make one request per invocation. Those two poll with a
-  fresh connection for each request. Mutating commands return the affected/new id; batch session mutations return the
+- Commands other than `events` and `session wait` make one request per invocation. `events` holds
+  one push stream connection (`session wait` still polls with a fresh connection per request).
+  Mutating commands return the affected/new id; batch session mutations return the
   number actually changed. Create commands (`session new`, `session duplicate`, `workspace new`,
   `window new`) print the new id.
 
