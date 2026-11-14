@@ -1764,7 +1764,7 @@ extension TextPageRenderingTests {
         defer { window.orderOut(nil) }
         window.setContentSize(NSSize(width: 440, height: 300))
         page.webView.frame = try XCTUnwrap(window.contentView).bounds
-        try await waitForScript("document.documentElement.clientWidth", in: page.webView) { $0 == "440" }
+        try await waitForScript("window.innerWidth", in: page.webView) { $0 == "440" }
         try await waitForScript(Self.fileButton, in: page.webView) { $0 == "\(long) 1/2" }
         let fits = """
             (() => {
@@ -1783,7 +1783,7 @@ extension TextPageRenderingTests {
         let stepped = try await page.webView.evaluateJavaScript(fits) as? String
         window.setContentSize(NSSize(width: 1200, height: 300))
         page.webView.frame = try XCTUnwrap(window.contentView).bounds
-        try await waitForScript("document.documentElement.clientWidth", in: page.webView) { $0 == "1200" }
+        try await waitForScript("window.innerWidth", in: page.webView) { $0 == "1200" }
         let wide = try await page.webView.evaluateJavaScript("""
             (() => {
               const path = document.querySelector('.agterm-file-path'), label = document.querySelector('.agterm-changes span');

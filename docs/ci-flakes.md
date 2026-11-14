@@ -234,12 +234,14 @@ Each entry separates a demonstrated cause from one that is only consistent with 
 - **Fix.** The page holds the counts it reports during setup and sends them after `ready`.
   `TextPageRenderingTests` pins the message order for a diff with changes, one without, and a seeded search.
 
-### Three earlier hosted failures, already fixed on master
+### Earlier hosted failures, already fixed on master
 
 - `HtmlOverlayViewTests` line 48 read the page title before it arrived; fixed in #949.
 - `testTheBarFitsANarrowPageFollowingAndPaused` overflowed when the runner showed a scroll bar; fixed in b7884db7.
 - `testAWrappedFollowingLogStaysAtItsEndWhenItNarrows` waited for a width a 17 px runner scroll bar never allows;
   fixed in the #934 squash.
+- `testTheFileButtonLeavesTheSearchControlsOnANarrowPage` waited for `clientWidth` 1200 and read 1183 under the same
+  scroll bar; it waits for `window.innerWidth` since #997.
 
 A WebContent crash appears in passing hosted runs as well as failing ones and was not linked to any failure
 above. That it follows the drag and paste tests releasing their named pasteboards is an inference.
