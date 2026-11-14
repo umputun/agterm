@@ -59,18 +59,20 @@ struct SplitRatioAccessor: NSViewRepresentable {
     let deckVisible: Bool
     let onPersist: () -> Void
 
-    func makeNSView(context _: Context) -> SplitProbeView {
+    func makeNSView(context: Context) -> SplitProbeView {
         let view = SplitProbeView(session: session)
         view.onPersist = onPersist
         view.titlebarHeight = titlebarHeight
+        view.deckTop = context.environment.terminalDeckTop
         view.dividerColor = dividerColor
         view.suspended = suspended
         view.deckVisible = deckVisible
         return view
     }
-    func updateNSView(_ nsView: SplitProbeView, context _: Context) {
+    func updateNSView(_ nsView: SplitProbeView, context: Context) {
         nsView.onPersist = onPersist
         nsView.titlebarHeight = titlebarHeight // re-clip on a toolbar-mode change (changes titlebarHeight)
+        nsView.deckTop = context.environment.terminalDeckTop
         nsView.dividerColor = dividerColor
         nsView.suspended = suspended
         nsView.deckVisible = deckVisible
@@ -83,6 +85,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
         var dividerColor: NSColor = .separatorColor { didSet { if dividerColor != oldValue { updateDividerStrip() } } }
         var deckVisible: Bool = true { didSet { if deckVisible != oldValue { updateNativeDividerCursor() } } }
+        /// deckTop is `terminalDeckTop`, the window-space edge `DeckPaneInset` lays the panes below.
+        var deckTop: CGFloat = 0 { didSet { if deckTop != oldValue { needsLayout = true } } }
         var suspended: Bool = false {
             didSet {
                 guard suspended != oldValue else { return }
@@ -103,9 +107,11 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private var dividerStrip: CALayer?
         private var dividerTracking: NSTrackingArea?
         private var restored = false
-        /// The split's top safe-area inset and axis length when the ratio was last applied; a change in
-        /// either re-arms `restored`.
-        private var restoredSafeAreaTop: CGFloat = 0
+        /// restoredContentInset, restoredNativeTop and restoredAxisLength are the geometry the ratio was last
+        /// applied at; any change re-arms `restored`. The native inset stays a trigger even where it no longer
+        /// positions the divider: SwiftUI moves a hidden top/bottom divider when it flips.
+        private var restoredContentInset: CGFloat = 0
+        private var restoredNativeTop: CGFloat = 0
         private var restoredAxisLength: CGFloat = 0
         /// Primary-pane extent at the previous in-band press, nil when that press missed the band.
         private var lastPressPrimaryExtent: CGFloat?
@@ -150,12 +156,10 @@ struct SplitRatioAccessor: NSViewRepresentable {
             updateDividerStrip()
         }
 
-        /// Apply the stored ratio once the split has a real extent, and again whenever the safe-area inset or
-        /// the axis length changed under it. A background split first lays out at a stale 1pt inset; when the
-        /// real one arrives the divider has to be re-applied, or the top pane keeps the stale position and
-        /// overruns the titlebar, and the next window resize falls back to SwiftUI's own even split of the
-        /// content space (#539). SwiftUI also redistributes a resize by its own rule: one shrink below the
-        /// second pane's extent leaves the primary pane at zero (#691).
+        /// restoreDivider applies the stored ratio once the split has a real extent, and again whenever its
+        /// geometry changed under it, or the top pane keeps a stale position and the next window resize falls
+        /// back to SwiftUI's own even split of the content space (#539). SwiftUI also redistributes a resize by
+        /// its own rule: one shrink below the second pane's extent leaves the primary pane at zero (#691).
         private func restoreDivider() {
             guard !suspended, let split = splitView else { return }
             if restored, geometryChanged(in: split) { restored = false }
@@ -166,14 +170,16 @@ struct SplitRatioAccessor: NSViewRepresentable {
             // marked applied BEFORE the move: `setPosition` posts `didResizeSubviews` synchronously, and
             // `rearmOnGeometryChange` would otherwise re-arm off the very geometry this pass is applying.
             restored = true
-            restoredSafeAreaTop = split.safeAreaInsets.top
+            restoredContentInset = contentInset(of: split)
+            restoredNativeTop = split.safeAreaInsets.top
             restoredAxisLength = axisLength(of: split)
             split.setPosition(dividerPosition(for: ratio, in: split), ofDividerAt: 0)
             session.splitRatio = ratio
         }
 
         private func geometryChanged(in split: NSSplitView) -> Bool {
-            split.safeAreaInsets.top != restoredSafeAreaTop || axisLength(of: split) != restoredAxisLength
+            contentInset(of: split) != restoredContentInset || axisLength(of: split) != restoredAxisLength
+                || split.safeAreaInsets.top != restoredNativeTop
         }
 
         /// Catch the geometry change from the split's own resize notification, because macOS 27 never
@@ -243,10 +249,16 @@ struct SplitRatioAccessor: NSViewRepresentable {
             split.isVertical ? split.bounds.width : split.bounds.height
         }
 
-        /// The band a compact-mode split overruns into, which SwiftUI lays the primary pane out below.
-        /// Top/bottom only: a TOP inset does not touch width, so a left/right ratio is content space already.
+        /// contentInset is the band above a top/bottom split's primary pane: how far the split rises above the
+        /// deck top, which `DeckPaneInset` lays the pane below, or the native inset the pane host consumes when
+        /// the deck top is zero. A left/right ratio needs none, since a top inset does not touch width.
         private func contentInset(of split: NSSplitView) -> CGFloat {
-            split.isVertical ? 0 : split.safeAreaInsets.top
+            guard !split.isVertical else { return 0 }
+            guard deckTop > 0, let contentH = split.window?.contentView?.bounds.height else {
+                return split.safeAreaInsets.top
+            }
+            let splitTop = contentH - split.convert(split.bounds, to: nil).maxY
+            return max(0, deckTop - splitTop)
         }
 
         /// Where the divider goes for a stored ratio, which is a fraction of the pane area BELOW the band.
