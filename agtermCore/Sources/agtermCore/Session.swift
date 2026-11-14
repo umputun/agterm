@@ -77,10 +77,16 @@ public final class Session: Identifiable {
     /// local daemon that does not exist. Structural `paneIdentity` stays valid either way.
     public var locallyManagedPaneIdentities: [UUID] {
         guard remoteHost == nil, content == .terminal else { return [] }
-        return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
+        return [paneIdentity] + [splitPaneIdentity, localScratchIdentity].compactMap { $0 }
     }
 
-    /// ScratchDaemon is a scratch behind a zmx daemon on agterm-server rather than a surface here.
+    /// localScratchIdentity is the daemon behind this instance's own scratch: a Live scratch on the Mac, the
+    /// server's scratch on agterm-server. Nil for a remote row, whose scratch belongs to its host.
+    public var localScratchIdentity: UUID? {
+        remoteHost == nil && content == .terminal ? scratchDaemon?.identity : nil
+    }
+
+    /// ScratchDaemon is a scratch behind a zmx daemon: a Live scratch here, or agterm-server's.
     public struct ScratchDaemon: Equatable, Sendable {
         public var identity: UUID
         public var shown: Bool
@@ -91,8 +97,8 @@ public final class Session: Identifiable {
         }
     }
 
-    /// scratchDaemon is the server's scratch: on agterm-server its own state, in a remote window the catalog's, and
-    /// never saved.
+    /// scratchDaemon is the daemon-backed scratch: a Live scratch on a Mac, saved hidden; on agterm-server its own
+    /// state; in a remote window the catalog's. `shown` is read only for a server's scratch.
     public var scratchDaemon: ScratchDaemon?
 
     /// catalogMail is a remote window row's unacked mail per pane identity, as its server's catalog last reported it.
@@ -194,6 +200,7 @@ public final class Session: Identifiable {
         switch surface {
         case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? daemonBackedPanes.contains(paneIdentity)
         case .split: (splitSurface ?? self.surface)?.backedByZmx ?? splitPaneIdentity.map(daemonBackedPanes.contains) ?? false
+        case .scratch: scratchSurface?.backedByZmx == true ? true : nil
         default: nil
         }
     }

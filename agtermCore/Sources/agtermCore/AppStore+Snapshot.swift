@@ -66,7 +66,8 @@ extension AppStore {
                         context: session.context,
                         lastSelectedAt: session.lastSelectedAt?.timeIntervalSince1970,
                         tint: session.tint, parentID: session.parentID,
-                        collapsed: session.isExpanded ? nil : true, ended: session.ended ? true : nil)
+                        collapsed: session.isExpanded ? nil : true, ended: session.ended ? true : nil,
+                        scratchPaneIdentity: headless ? nil : session.localScratchIdentity)
     }
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
@@ -108,6 +109,7 @@ extension AppStore {
         session.parentID = snapshot.parentID
         session.isExpanded = !(snapshot.collapsed ?? false)
         session.ended = snapshot.ended ?? false
+        session.scratchDaemon = snapshot.scratchPaneIdentity.map { Session.ScratchDaemon(identity: $0, shown: false) }
         session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
         session.initialCommand = snapshot.initialCommand
         session.commandWait = snapshot.commandWait ?? false

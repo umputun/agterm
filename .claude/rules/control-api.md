@@ -209,8 +209,8 @@ pipeline; the CLI owns the typed option surface, deliberately narrower than ssh'
 never writes a clipboard: the write arrives in the pane's bytes, so every attached terminal applies its own
 `clipboard-write` policy, and a session attached from another Mac gets the text on the Mac showing it.
 `TerminalClipboard` in `agtermCore` owns the sequence, the size bound and the daemon resolution.
-It takes no target: the daemon is the one zmx named in the pane's environment, so scratch, quick and
-overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemonName` rejects is too.
+It takes no target: the daemon is the one zmx named in the pane's environment, so quick and overlay
+terminals and a scratch outside Live sessions, which have none, are refused, and a name `ZmxSupport.isDaemonName` rejects is too.
 `zmx print` reads no reply and exits 0 on a dropped connection, so exit 0 confirms neither receipt nor a
 pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
 may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
@@ -338,7 +338,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   This is what a closed terminal does: `nohup`, `disown`ed and other background jobs are never signalled,
   and a foreground program that ignores hangups survives a close. Do not widen it to the shell's process
   tree. `ProcessSweeper` is nil by default because a test's fake listing names real pids.
-- `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
+- `session.scratch` is a third login shell with on/off/toggle; in Live sessions mode it is the daemon
+  `Session.ScratchDaemon` names, saved and restored hidden, claimed, reaped and reset like a pane's, and
+  ended by its shell's exit or `--command`; a requested-Live fallback keeps it for the next Live launch. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
   link but a weak watermark one; its PWD reaches only `Session.scratchCwd`, never the row's cwd or title.
   A local scratch seeds that field with its start directory, so `AGT_SESSION_PWD` and
@@ -2387,7 +2389,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A covered pane ATTACHED from another Mac refuses all three with `pane is in use on the Mac it runs
   on; take the lead to drive it from here`: its daemon is an ssh away and these reads are synchronous.
 - `session.lead [--pane]` is the control twin of the cover's key. A pane that already leads answers ok;
-  one with no reported role answers `pane has no lead to take`; scratch is refused. Read back `lead`.
+  one with no reported role answers `pane has no lead to take`; a scratch outside Live sessions is refused.
+  Read back `lead`.
   It has no menu item or chord: the cover is its GUI surface.
 - The far side runs the ORIGIN's zmx, so both Macs need the patch. Against an older origin nothing is
   reported, no pane is covered, and the pre-patch behaviour holds: the attach follows until a typed key.

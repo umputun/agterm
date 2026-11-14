@@ -19,10 +19,37 @@ extension agtermApp {
     @MainActor @discardableResult
     static func reattachPane(_ old: GhosttySurfaceView, claim: Bool, cover: Bool = true, services: SurfaceServices) -> Bool {
         let lead = ZmxLeadAttachment(claim: claim)
+        if let owner = old.scratchOwner { return reattachScratch(old, session: owner, lead: lead, cover: cover, services: services) }
         guard let session = old.session,
               let identity = old.isSplitPane ? session.splitPaneIdentity : session.paneIdentity,
               let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
         else { return false }
         return replacePane(old, launch: launch, lead: lead, cover: cover, services: services) != nil
+    }
+
+    /// reattachScratch swaps a Live scratch's surface for a fresh attach of its daemon, keeping its shown state and
+    /// identity; the bumped `scratchGeneration` remounts the host.
+    @MainActor
+    private static func reattachScratch(_ old: GhosttySurfaceView, session: Session, lead: ZmxLeadAttachment, cover: Bool,
+                                        services: SurfaceServices) -> Bool {
+        guard let identity = session.localScratchIdentity, old.paneToken == identity.uuidString,
+              let store = services.library.store(forSession: session.id),
+              let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
+        else { return false }
+        let fontSize = old.currentFontSize() ?? session.fontSize
+        let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
+                                      command: launch.command, waitAfterCommand: launch.wait,
+                                      env: launch.environment, backedByZmx: true)
+        wireScratch(view, session: session, store: store, actions: services.actions)
+        ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: cover)
+        // the old client's exit must not close the scratch the new one now owns
+        _ = old.claimProcessExit()
+        let hadFocus = old.window?.firstResponder === old
+        if session.searchSurface === old { session.clearSearch() }
+        session.scratchSurface = view
+        session.scratchGeneration += 1
+        old.destroySurface()
+        if hadFocus { view.focusAfterReparent() }
+        return true
     }
 }

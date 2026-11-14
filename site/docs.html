@@ -4291,7 +4291,7 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                   style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">Live mode reattaches the running process.</strong> Every primary and split pane
-                starts through zmx. Scratch, overlay, and quick terminals stay temporary. A clean quit ends the attach client while
+                starts through zmx, and so does the scratch, which comes back hidden. Overlay and quick terminals stay temporary. A clean quit ends the attach client while
                 the daemon and its process continue, and captures each open pane's foreground command as a fallback. The next launch
                 attaches to the same name. A surviving daemon ignores the fallback payload; if an orderly machine restart removed the
                 daemon, zmx creates it with the captured command and later launches reattach normally. A pane starts a fresh shell

@@ -141,6 +141,7 @@ extension WindowContentView {
                              isActive: focusable && !session.coverOverlayVisible,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.holdsKey,
                              onScreen: deckInteractive && isActive && !fullOverlay)
+                    .overlay { PaneLeadCover(session: session, pane: .scratch, background: terminalColor, foreground: chromeText) }
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch-\(session.scratchGeneration)")
@@ -267,8 +268,8 @@ extension WindowContentView {
                     Color.clear
                         .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
                 }
-                PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText,
-                              hidden: covered)
+                PaneLeadCover(session: session, pane: pane == .left ? .left : .right, background: terminalColor,
+                              foreground: chromeText, hidden: covered)
                 paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
             }
             .hudPaneAnchor(pane)

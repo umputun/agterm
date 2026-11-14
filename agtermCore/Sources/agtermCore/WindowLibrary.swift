@@ -908,15 +908,13 @@ public final class WindowLibrary {
             // through the ownership projection, so this stays one predicate: an empty list is a session
             // whose daemons are not ours to claim, and inventing rows for it would name daemons that do
             // not exist here
-            var owned = session.locallyManagedPaneIdentities.makeIterator()
-            guard let primary = owned.next() else { continue }
-            claims.append(site.claim(.left, identity: primary))
-            guard session.hasSplit else { continue }
-            guard let split = owned.next() else {
-                complete = false
-                continue
+            let owned = session.locallyManagedPaneIdentities
+            guard !owned.isEmpty else { continue }
+            claims.append(site.claim(.left, identity: session.paneIdentity))
+            if session.hasSplit {
+                if let split = session.splitPaneIdentity { claims.append(site.claim(.right, identity: split)) } else { complete = false }
             }
-            claims.append(site.claim(.right, identity: split))
+            if let scratch = session.localScratchIdentity { claims.append(site.claim(.scratch, identity: scratch)) }
         }
         return ZmxClaimWalk(claims: claims, complete: complete)
     }
@@ -940,12 +938,10 @@ public final class WindowLibrary {
                 } else {
                     complete = false
                 }
-                guard (session.hasSplit ?? false) || (session.isSplit ?? false) else { continue }
-                guard let split = session.splitPaneIdentity else {
-                    complete = false
-                    continue
+                if (session.hasSplit ?? false) || (session.isSplit ?? false) {
+                    if let split = session.splitPaneIdentity { claims.append(site.claim(.right, identity: split)) } else { complete = false }
                 }
-                claims.append(site.claim(.right, identity: split))
+                if let scratch = session.scratchPaneIdentity { claims.append(site.claim(.scratch, identity: scratch)) }
             }
         }
         return ZmxClaimWalk(claims: claims, complete: complete)

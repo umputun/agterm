@@ -92,6 +92,46 @@ final class WindowLibraryClaimsTests {
         #expect(walk.claims.first?.sessionID == live.id)
     }
 
+    @Test func anOpenWindowClaimsALiveScratch() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.store(for: library.windows[0].id))
+        let live = try #require(store.workspaces.first?.sessions.first)
+        let scratch = UUID()
+        store.recordLiveScratch(live.id, identity: scratch)
+
+        let walk = library.paneClaims()
+
+        #expect(walk.complete)
+        #expect(walk.claims.map(\.paneIdentity) == [live.paneIdentity, scratch])
+        #expect(walk.claims.map(\.pane) == [.left, .scratch])
+    }
+
+    @Test func aClosedWindowClaimsItsSavedScratch() throws {
+        let windowID = UUID()
+        let pane = UUID()
+        let scratch = UUID()
+        var saved = session(pane: pane)
+        saved.scratchPaneIdentity = scratch
+        try writeIndex([try writeOpenDecoy(), WindowEntry(id: windowID, name: "work", isOpen: false)])
+        try writeWindowFile(windowID, snapshot(session: saved))
+
+        let walk = WindowLibrary(directory: directory).paneClaims()
+
+        let mine = walk.claims.filter { $0.windowID == windowID }
+        #expect(mine.map(\.paneIdentity) == [pane, scratch])
+        #expect(mine.map(\.pane) == [.left, .scratch])
+    }
+
+    @Test func aRemoteRowsScratchClaimsNoLocalDaemon() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.store(for: library.windows[0].id))
+        let live = try #require(store.workspaces.first?.sessions.first)
+        let remote = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/a", remoteHost: "buildbox"))
+        remote.scratchDaemon = Session.ScratchDaemon(identity: UUID(), shown: true)
+
+        #expect(library.paneClaims().claims.map(\.paneIdentity) == [live.paneIdentity])
+    }
+
     @Test func remoteSessionClaimsNoLocalDaemon() throws {
         let library = WindowLibrary(directory: directory)
         let windowID = try #require(library.windows.first?.id)

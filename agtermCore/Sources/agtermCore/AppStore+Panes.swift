@@ -31,9 +31,7 @@ extension AppStore {
         for session in sessions {
             ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
         }
-        // a remote window's scratch is its server's daemon, never this Mac's to end
-        let scratches = sessions.filter { $0.remoteHost == nil }.compactMap(\.scratchDaemon?.identity)
-        let identities = (PaneIdentityInventory.identities(in: sessions) + scratches).filter { $0 != alreadyFinalized }
+        let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
     }
 
@@ -670,11 +668,11 @@ extension AppStore {
         if emitVisibility { emitPaneVisibility(.paneScratch, session: session, shown: session.scratchActive) }
     }
 
-    /// Closes the scratch terminal: hides it AND tears down its surface, so a later show starts a fresh
-    /// shell. Used on the scratch shell's own `exit` and on session/workspace/window teardown; false with no
-    /// scratch surface.
+    /// closeScratch hides the scratch and tears down its surface, ending the Live daemon its shell ran in, so the next
+    /// show starts a fresh shell. False with no scratch surface.
     @discardableResult public func closeScratch(_ sessionID: UUID, emitVisibility: Bool = true) -> Bool {
         guard let session = session(withID: sessionID), let scratch = session.scratchSurface else { return false }
+        let daemon = headless ? nil : session.localScratchIdentity
         let wasShown = session.scratchActive
         session.scratchActive = false
         if wasShown, emitVisibility { emitPaneVisibility(.paneScratch, session: session, shown: false) }
@@ -685,6 +683,44 @@ extension AppStore {
         scratch.teardown()
         session.scratchSurface = nil
         session.scratchGeneration += 1
+        // a requested-Live fallback runs a plain shell beside the daemon it keeps for the next Live launch
+        if let daemon, scratch.paneToken == daemon.uuidString { endLiveScratch(daemon, of: session) }
         return true
+    }
+
+    /// replaceScratch closes the scratch and ends this instance's saved Live scratch daemon whatever the surface runs,
+    /// so `session.scratch --command` starts its program in a new daemon. False with neither to end.
+    @discardableResult public func replaceScratch(_ sessionID: UUID, emitVisibility: Bool = true) -> Bool {
+        let closed = closeScratch(sessionID, emitVisibility: emitVisibility)
+        guard let session = session(withID: sessionID), !headless, let daemon = session.localScratchIdentity else { return closed }
+        // a relaunch restores it hidden with no surface; a requested-Live fallback shows a plain shell beside it
+        releaseScratchOwnedState(of: session, token: daemon.uuidString)
+        endLiveScratch(daemon, of: session)
+        return true
+    }
+
+    /// recordLiveScratch saves `identity` as the daemon behind the Live scratch of a local row, so a relaunch adopts it.
+    public func recordLiveScratch(_ sessionID: UUID, identity: UUID) {
+        guard let session = session(withID: sessionID), session.remoteHost == nil, session.content == .terminal,
+              session.scratchDaemon?.identity != identity else { return }
+        session.scratchDaemon = Session.ScratchDaemon(identity: identity, shown: false)
+        savePaneLayout(session)
+        scheduleTreeChanged()
+    }
+
+    /// forgetSavedScratch drops a saved scratch daemon a launch that did not request Live sessions cannot use.
+    public func forgetSavedScratch(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), session.localScratchIdentity != nil else { return }
+        session.scratchDaemon = nil
+        savePaneLayout(session)
+        scheduleTreeChanged()
+    }
+
+    private func endLiveScratch(_ identity: UUID, of session: Session) {
+        ZmxLeadBook.shared.forget(pane: identity)
+        paneFinalizer?([identity])
+        session.scratchDaemon = nil
+        savePaneLayout(session)
+        scheduleTreeChanged()
     }
 }

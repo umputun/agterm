@@ -1646,7 +1646,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session lead [--pane left|right] [--target T] [--window W]
+                agtermctl session lead [--pane left|right|scratch] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.lead</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1655,7 +1655,7 @@
                 the other Mac, exactly as pressing a key on the cover does. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> defaults to the primary pane.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                A pane that already leads answers ok. One whose terminal reports no lead answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane has no lead to take</span>. Read each pane's
+                A pane that already leads answers ok. One whose terminal reports no lead answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane has no lead to take</span>, and a scratch outside Live sessions <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the scratch terminal has no lead</span>. Read each pane's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lead</span> from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>.
               </p>
             </div>
@@ -4350,7 +4350,7 @@
                 Every daemon behind a live session and every pane expecting one, joined, under the restore status as a header. Shows who owns each daemon, how many clients are attached, and which are left over.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                A <em>closed</em> window's panes are claimed with zero clients: that is the resting state after you close a window, not a leak, which is why the owner's window state is its own column. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> means the pane inventory was incomplete, so no row can be called an orphan and nothing can be pruned.
+                A <em>closed</em> window's panes are claimed with zero clients: that is the resting state after you close a window, not a leak, which is why the owner's window state is its own column. A claim's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span> is <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span> for a Live scratch's daemon. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown</span> means the pane inventory was incomplete, so no row can be called an orphan and nothing can be pruned.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> adds <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.zmx.endpoint.executable</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.zmx.endpoint.socketDirectory</span> to the header — what another machine needs to reach these daemons. A server older than remote sessions omits the key. A row created before the recorded first launch with this zmx build carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">outdated: true</span> and reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">outdated</span> beside its observation; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx reset</span> recreates the claimed ones.
@@ -4670,7 +4670,7 @@
                 Copy text to the clipboard of every terminal showing the pane the command runs in. The text goes out through the pane itself, so it reaches the Mac you are looking at: for a session attached from another Mac that is the Mac showing it, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pbcopy</span> would fill the clipboard of the Mac the command runs on. The Mac the session runs on receives it too. It needs no terminal, so an agent's shell tool can run it.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TEXT</span> is copied as given; without it the text is read from standard input byte for byte, a trailing newline included. Text that starts with a dash is read as an option: pipe it on standard input, or put <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--</span> before it. Empty text is refused, and so is text over about 6 MB. Run it in a main or split pane started under Live sessions: a scratch, quick or overlay terminal, and a pane started in another restore mode, is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">this pane has no zmx daemon</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TEXT</span> is copied as given; without it the text is read from standard input byte for byte, a trailing newline included. Text that starts with a dash is read as an option: pipe it on standard input, or put <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--</span> before it. Empty text is refused, and so is text over about 6 MB. Run it in a main, split or scratch pane started under Live sessions: a quick or overlay terminal, and a pane started in another restore mode, is refused with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">this pane has no zmx daemon</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Each receiving terminal applies its own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clipboard-write</span> setting, so one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask</span> prompts and one set to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">deny</span> drops the copy. Exit status 0 does not confirm that the session or any terminal received the text. A copy made while the pane's program is in the middle of heavy output can land inside one of its escape sequences and garble that one sequence.

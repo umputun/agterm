@@ -166,7 +166,7 @@ you open overlays / type into whatever the user has selected, not your own sessi
 - **Live sessions** runs every primary and split pane through zmx and reattaches to the same process. It requires
   zsh or fish as the macOS login shell, or as the absolute path in the ghostty `command` agterm loads
   (ghostty.conf, an inherited global config, or their includes), which then replaces the login shell in
-  Live panes. Scratch, overlay, and quick terminals stay temporary.
+  Live panes. The scratch runs in a daemon of its own and comes back hidden; overlay and quick terminals stay temporary.
 
 Upgrading: with Live sessions already active, install the new version, quit agterm and open it again. Local
 primary and split panes reattach to the same processes and no reset is needed. `agtermctl version` adds an
@@ -433,7 +433,7 @@ omitted when expanded).
   legacy left/right behavior. The GUI actions are ⌘D for vertical and ⌘⇧D for horizontal; either
   transposes a shown split of the other orientation. Hide keeps it alive; `close` destroys the pane and
   whatever runs in it.
-- `session lead [--pane left|right]`: for a session shared with another Mac, take the lead of a pane here
+- `session lead [--pane left|right|scratch]`: for a session shared with another Mac, take the lead of a pane here
   (what a key press on its "in use" cover does). `tree`'s `surfaces[].lead` reads `leader`/`follower`/
   `unowned`. On the Mac the session runs on, a covered pane still takes `session type`/`text`.
 - `session restart --pane-id ID [--command LINE]`: end one pane's shell and its foreground program, and start a

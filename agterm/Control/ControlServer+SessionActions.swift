@@ -422,8 +422,9 @@ extension ControlServer: ControlActions {
             let respawningVisible = want && session.scratchActive && session.scratchSurface != nil
                 && !(command ?? "").isEmpty
             if want, let command, !command.isEmpty {
-                // closeScratch clears scratchActive, so the toggle below re-shows it and the factory uses it.
-                if session.scratchSurface != nil { store.closeScratch(id, emitVisibility: !respawningVisible) }
+                // replaceScratch clears scratchActive and ends a Live scratch's daemon, so the toggle below re-shows
+                // it and the factory starts the command in a new one.
+                store.replaceScratch(id, emitVisibility: !respawningVisible)
                 session.scratchCommand = command
             }
             if want, follow, store.selectedSessionID != id { store.selectSession(id) }

@@ -30,7 +30,8 @@ extension AppStore {
         guard session.remoteHost == nil, session.content != .page else { return nil }
         let panes = [session.paneIdentity] + (session.hasSplit ? [session.splitPaneIdentity].compactMap { $0 } : [])
         return PresentationLayout(panes: panes, primary: session.paneIdentity,
-                                  axis: session.hasSplit ? session.splitAxis.rawValue : nil, shown: session.isSplit)
+                                  axis: session.hasSplit ? session.splitAxis.rawValue : nil, shown: session.isSplit,
+                                  scratch: headless ? nil : session.localScratchIdentity)
     }
 
     func savePaneLayout(_ session: Session) {

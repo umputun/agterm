@@ -6,12 +6,15 @@ public struct PresentationLayout: Codable, Equatable, Sendable {
     public var primary: UUID
     public var axis: String?
     public var shown: Bool
+    /// scratch is the origin's Live scratch daemon identity; nil without one and from an older origin.
+    public var scratch: UUID?
 
-    public init(panes: [UUID], primary: UUID, axis: String? = nil, shown: Bool) {
+    public init(panes: [UUID], primary: UUID, axis: String? = nil, shown: Bool, scratch: UUID? = nil) {
         self.panes = panes
         self.primary = primary
         self.axis = axis
         self.shown = shown
+        self.scratch = scratch
     }
 
     public var isValid: Bool {
@@ -21,7 +24,7 @@ public struct PresentationLayout: Codable, Equatable, Sendable {
 
     static let invalid = PresentationLayout(panes: [], primary: UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)), shown: false)
 
-    private enum CodingKeys: String, CodingKey { case panes, primary, axis, shown }
+    private enum CodingKeys: String, CodingKey { case panes, primary, axis, shown, scratch }
 
     public init(from decoder: Decoder) throws {
         // a bad layout must not discard the rest of a snapshot or disconnect its stream
@@ -31,6 +34,7 @@ public struct PresentationLayout: Codable, Equatable, Sendable {
             primary = try fields.decode(UUID.self, forKey: .primary)
             axis = try fields.decodeIfPresent(String.self, forKey: .axis)
             shown = try fields.decode(Bool.self, forKey: .shown)
+            scratch = try? fields.decodeIfPresent(UUID.self, forKey: .scratch)
         } catch {
             self = .invalid
         }

@@ -103,7 +103,7 @@ public enum RemoteTreeMerger {
     }
 
     /// candidates joins the windows' sessions with `daemons`, each session's running daemon by pane (`left`,
-    /// `right`), for a host that knows them without a zmx inventory: agterm-server.
+    /// `right`, `scratch`), for a host that knows them without a zmx inventory: agterm-server.
     public static func candidates(windows: [RemoteWindowProjection], daemons running: [String: [String: String]],
                                   endpoint: ControlZmxEndpoint, headless: Bool = false) -> ControlRemoteTree {
         // this command promises every row it returns is attachable, so a name `zmx attach` would
@@ -174,7 +174,8 @@ public enum RemoteTreeMerger {
                                     splitAxis: node.hasSplit == true ? node.splitAxis : nil, panes: panes,
                                     status: node.status, statusColor: node.statusColor,
                                     statusShape: node.statusShape, parent: node.parent,
-                                    companions: node.parent == nil ? members(of: node, in: workspace) : nil)
+                                    companions: node.parent == nil ? members(of: node, in: workspace) : nil,
+                                    scratch: daemons["scratch"].map { ControlRemotePane(pane: "scratch", daemon: $0) })
     }
 
     private static func remotePageRoot(_ node: ControlSessionNode, window: RemoteWindowProjection,

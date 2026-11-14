@@ -288,16 +288,17 @@
 - Tests: `agtermCoreTests/SessionTests.swift`, `SnapshotRoundTripTests.swift`, `PresentationLayoutTests.swift`,
   `agtermTests/ControlServerScratchTests.swift`, `ControlServerPaneLeadTests.swift` (or the existing lead suite)
 
-- [ ] in Live sessions mode a Mac scratch runs in a zmx daemon identified by `Session.ScratchDaemon`, started
+- [x] in Live sessions mode a Mac scratch runs in a zmx daemon identified by `Session.ScratchDaemon`, started
       through `agterm-session-host` like a pane
-- [ ] hide, close and shell exit keep today's visible behavior (exit closes and hides it, the next show starts a
+- [x] hide, close and shell exit keep today's visible behavior (exit closes and hides it, the next show starts a
       fresh shell); an app restart adopts the daemon and restores the scratch hidden
-- [ ] reap, claim and Live reset treat scratch daemons like pane daemons
-- [ ] lead and cover follow the pane rules; `session.lead --pane scratch` takes the lead back
-- [ ] layout and discovery describe the scratch so a viewer can attach it
-- [ ] tests: daemon created, hidden and shown, closed, exit then next show starts a fresh daemon, adopted after app
+- [x] reap, claim and Live reset treat scratch daemons like pane daemons
+- [x] lead and cover follow the pane rules; `session.lead --pane scratch` takes the lead back
+- [x] layout and discovery describe the scratch so a viewer can attach it
+- [x] tests: daemon created, hidden and shown, closed, exit then next show starts a fresh daemon, adopted after app
       restart, reaped by reset, lead taken and covered, outside Live mode a plain shell
 - [ ] TCC: check microphone, screen recording and Accessibility from a daemon scratch against a pane, as #574 did
+      (passive statuses match a pane; the prompt-and-grant check is under Post-Completion)
 
 ### Task 6: Lifecycle of rows attached from another host
 
@@ -453,5 +454,8 @@ Finder reveal and `keymap.run`; Mac app lifecycle commands.
 - a second Mac: attach, relaunch the viewing Mac (rows return), terminate from the viewer then reopen, a new split
   and scratch run on the origin, a cleared status stays cleared after a reconnect
 - host reboot behavior of exit records (unsettled in the audit) checked against the restart and Ended paths
+- TCC for a Live scratch (Task 5): in an isolated Debug instance a pane and a scratch, each in its own daemon, read the
+  same passive statuses (microphone not determined, screen capture false, Accessibility false). Equal statuses do not
+  show which process a prompt or grant is attributed to; repeat #574's microphone prompt from a daemon scratch.
 
 Smells pre-check: skipped — non-Go project

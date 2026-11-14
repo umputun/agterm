@@ -288,7 +288,7 @@ default/left target (the main pane, or the promoted split survivor once the prim
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
 of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
-Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `paneID` is the surface's
+Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
 overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
 pane's [msg](#msg) mailbox and is omitted at zero. `lead` is `leader`, `follower`
@@ -748,9 +748,10 @@ error keeps those names for compatibility.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a
   surface is not ready. The new primary supplies `tree`'s `cwd`/`title`/`foreground`/`restoreCommand`/
   `commandWait`; the other side supplies `splitCwd`/`splitForeground`/`splitRestoreCommand`/`splitCommandWait`.
-- `session lead [--pane left|right] [--target] [--window W]`: take the lead of a pane for this Mac, as a
+- `session lead [--pane left|right|scratch] [--target] [--window W]`: take the lead of a pane for this Mac, as a
   key press on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
-  `pane has no lead to take` when its terminal reports none. Read back `surfaces[].lead`.
+  `pane has no lead to take` when its terminal reports none, `the scratch terminal has no lead` for a scratch
+  outside Live sessions. Read back `surfaces[].lead`.
 - `session scratch [on|off|toggle] [--command CMD] [--follow] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
   `exit` in it closes it and the next `on` spawns a fresh shell. Showing it on a session that is not
@@ -2362,7 +2363,7 @@ header. `state` is `claimed`, `orphan`, `unknown`, `conflicted`, `pendingClose` 
 `observation` is `running`, `unreadable` or `absent`, separate from the client count because a daemon that
 is gone and one zmx could not read are different answers. A CLOSED window's panes are `claimed` with zero
 clients. That is the resting state after you close a window, not a leak, which is why the owner's window
-state is its own column. `unknown` means the pane inventory was incomplete, so no row can be called an orphan.
+state is its own column. A claim's `pane` is `left`, `right`, or `scratch` for a Live scratch's daemon. `unknown` means the pane inventory was incomplete, so no row can be called an orphan.
 The header also carries `endpoint.executable` and `endpoint.socketDirectory`, which is what another machine
 needs to reach these daemons; a server older than remote sessions omits the key. A row whose daemon was
 created before the recorded first launch with this zmx build carries `outdated: true` (omitted otherwise).
@@ -2648,7 +2649,7 @@ text on the Mac showing it, and on the Mac it runs on as well.
   included. Text that starts with `-` is read as an option, and `-h` or `--help` prints help and exits 0
   with nothing copied: pipe such text on stdin, or write `agtermctl clipboard set -- "-text"`. Refused when empty, and above about 6 MB (libghostty drops a longer clipboard write whole).
 - Needs no terminal, so an agent's shell tool can run it. It does need the pane's own environment:
-  `ZMX_SESSION` and `ZMX_DIR`, which a main or split pane started under Live sessions carries. A scratch,
+  `ZMX_SESSION` and `ZMX_DIR`, which a main, split or scratch pane started under Live sessions carries. A
   quick or overlay terminal, and a pane started in another restore mode, is refused with `this pane has
   no zmx daemon; run it in a main or split pane started under Live sessions`. `pbcopy` is a fallback
   there only when the clipboard wanted is this Mac's own: an overlay shown on another Mac still runs here.
