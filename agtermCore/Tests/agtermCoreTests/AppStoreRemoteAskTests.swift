@@ -428,7 +428,7 @@ struct AppStoreRemoteAskTests {
         #expect(AskRegistry.shared.result(for: pending.id)?.result.result == .cancelled)
         #expect(Array(presenter.bodies.dropFirst(frameCount)) == [
             .askDismiss(PresentationAskRef(id: pending.id, owner: 1)),
-            .layout(PresentationLayout(panes: [session.paneIdentity], primary: session.paneIdentity, shown: false)),
+            .layout(PresentationLayout(panes: [session.paneIdentity], primary: session.paneIdentity, shown: false, scratchShown: false)),
         ])
     }
 

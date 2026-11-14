@@ -305,8 +305,35 @@ extension ControlServer {
                                       at: .companion(of: parent.id), select: true)
     }
 
-    // the parent's store and workspace are read again after every wait: the row may have moved or closed meanwhile
     private func attachCreatedCompanion(_ pending: CreatedCompanion) async -> CompanionAttach {
+        let outcome = await attachWhenListed(pending.id, host: pending.host, closed: "its parent row here was closed") { [library] in
+            guard let store = library.store(forSession: pending.parent),
+                  let workspace = store.workspace(forSession: pending.parent)?.id else { return nil }
+            return RemotePlacement(store: store, workspace: workspace, parent: pending.parent, select: pending.select)
+        }
+        if case .attached(let attached) = outcome, let tint = pending.tint, let id = attached.result?.id.flatMap(UUID.init(uuidString:)) {
+            library.store(forSession: id)?.setTint(tint, forSession: id)
+        }
+        return outcome
+    }
+
+    /// attachCreated attaches `created`, a session the origin of attached row `row` just made, beside the row: after
+    /// it, or at its slot when `atSlot`, so the row can move under it.
+    func attachCreated(_ created: String, host: String, beside row: UUID, atSlot: Bool) async -> ControlResponse {
+        let outcome = await attachWhenListed(created, host: host, closed: "its row here was closed") { [library] in
+            guard let store = library.store(forSession: row), let location = store.sessionLocation(ofSession: row) else { return nil }
+            return RemotePlacement(store: store, workspace: location.workspace, select: !atSlot,
+                                   index: atSlot ? location.index : location.index + 1)
+        }
+        switch outcome {
+        case .attached(let response): return response
+        case .failed(let reason): return ControlResponse(ok: false, error: reason)
+        }
+    }
+
+    // the destination is read again after every wait: the row may have moved or closed meanwhile
+    private func attachWhenListed(_ id: String, host: String, closed: String,
+                                  place: () -> RemotePlacement?) async -> CompanionAttach {
         let deadline = hudClock().addingTimeInterval(Self.remoteCompanionReadyBudget)
         var reason = "it did not become attachable"
         var waited = false
@@ -315,22 +342,15 @@ extension ControlServer {
             waited = true
             let remaining = deadline.timeIntervalSince(hudClock())
             guard remaining > 0 else { return .failed(reason) }
-            let listing = await remoteTree(host: pending.host, deadline: min(Self.remoteTreeDeadline, remaining))
+            let listing = await remoteTree(host: host, deadline: min(Self.remoteTreeDeadline, remaining))
             guard let tree = listing.result?.remote else {
                 reason = listing.error ?? reason
                 continue
             }
-            guard let remote = tree.sessions.first(where: { $0.id == pending.id }) else { continue }
-            guard let store = library.store(forSession: pending.parent),
-                  let workspace = store.workspace(forSession: pending.parent)?.id else {
-                return .failed("its parent row here was closed")
-            }
-            let placement = RemotePlacement(store: store, workspace: workspace, parent: pending.parent, select: pending.select)
-            let attached = attach(remote, from: tree, host: pending.host, placement: placement)
+            guard let remote = tree.sessions.first(where: { $0.id == id }) else { continue }
+            guard let placement = place() else { return .failed(closed) }
+            let attached = attach(remote, from: tree, host: host, placement: placement)
             guard attached.ok else { return .failed(attached.error ?? "attach failed") }
-            if let tint = pending.tint, let id = attached.result?.id.flatMap(UUID.init(uuidString:)) {
-                store.setTint(tint, forSession: id)
-            }
             return .attached(attached)
         }
     }

@@ -608,6 +608,18 @@ struct AppStoreCompanionsTests {
         #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
     }
 
+    @Test func nestMovesTheRowAndItsCompanionsUnderTheNewParent() throws {
+        let g = try CompanionGroup()
+        let fresh = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/fresh", at: 0))
+
+        g.store.nest(g.parent.id, under: fresh.id)
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+        #expect(g.after.parentID == nil)
+        #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
+    }
+
     @Test func revertConversionRegroupsUnderTheTargetAndRestoresTheSelection() throws {
         let g = try CompanionGroup()
         g.store.selectSession(g.after.id)
@@ -903,6 +915,19 @@ struct AppStoreCompanionsTests {
         #expect(terminal.parentID == page.id)
         #expect(nested.parentID == page.id)
         #expect(page.htmlOverlay?.id == overlay.id)
+    }
+
+    @Test func closeExactlyLiftsACompanionItWasNotGivenToTheTopLevel() throws {
+        let g = try CompanionGroup()
+
+        let closed = g.store.closeExactly([g.parent.id, g.first.id])
+
+        #expect(Set(closed) == [g.parent.id, g.first.id])
+        #expect(g.store.session(withID: g.parent.id) == nil)
+        #expect(g.store.session(withID: g.first.id) == nil)
+        #expect(g.store.session(withID: g.second.id) === g.second)
+        #expect(g.second.parentID == nil)
+        #expect(g.store.session(withID: g.after.id) === g.after)
     }
 }
 

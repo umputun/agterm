@@ -457,6 +457,10 @@ private final class FakeAttacher: RemoteAttaching {
 
     func hudGeneration(session: String) -> Int? { generation }
 
+    func attachedRoute(_: ControlRequest) -> RemoteRoute? { nil }
+
+    func runRemoteRoute(_: RemoteRoute) async -> ControlResponse { ControlResponse(ok: false) }
+
     func answerTree(_ response: ControlResponse, call: Int = 0) {
         trees[call].resume(returning: response)
     }

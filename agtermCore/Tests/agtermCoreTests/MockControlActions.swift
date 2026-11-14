@@ -17,6 +17,7 @@ final class MockControlActions: ControlActions {
         case sessionGo(window: String?, SessionNavigation)
         case sessionClose(target: String?, window: String?)
         case sessionCloseBatch(targets: [String], window: String?)
+        case sessionTerminate(targets: [String], window: String?, undoable: Bool)
         case sessionRename(target: String?, window: String?, String)
         case sessionReveal(target: String?, window: String?)
         case workspaceNew(window: String?, String?, collapsed: Bool)
@@ -80,6 +81,7 @@ final class MockControlActions: ControlActions {
         case zmxScreen(name: String, fullBuffer: Bool, lines: Int?)
         case zmxPrune
         case zmxKill(target: String, window: String?, pane: ZmxPaneRole)
+        case zmxKillPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String)
         case zmxReset
         case zmxTree(host: String?)
         case zmxAttach(host: String, session: String)
@@ -272,6 +274,11 @@ final class MockControlActions: ControlActions {
 
     func closeSessions(_ targets: [String], window: String?) -> ControlResponse {
         calls.append(.sessionCloseBatch(targets: targets, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
+        calls.append(.sessionTerminate(targets: targets, window: window, undoable: undoable))
         return ControlResponse(ok: true)
     }
 
@@ -616,6 +623,11 @@ final class MockControlActions: ControlActions {
 
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse {
         calls.append(.zmxKill(target: target, window: window, pane: pane))
+        return nextZmxKillResponse
+    }
+
+    func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse {
+        calls.append(.zmxKillPane(target: target, window: window, pane: pane, paneID: paneID))
         return nextZmxKillResponse
     }
 

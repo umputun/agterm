@@ -132,8 +132,8 @@ public enum RemoteOperation: Equatable, Sendable {
     case restart(UUID, pane: ZmxPaneRole, command: String?)
     case duplicateCompanion(UUID)
     case convertCompanion(UUID)
-    /// killDaemon ends one pane's daemon on the server.
-    case killDaemon(UUID, pane: ZmxPaneRole)
+    /// killDaemon ends one pane's daemon on the server; `paneID` pins it to that pane, as `zmx.kill.pane` does.
+    case killDaemon(UUID, pane: ZmxPaneRole, paneID: String? = nil)
 
     public var label: String {
         switch self {
@@ -170,7 +170,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
              .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
-             .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _): .session(id)
+             .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _, _): .session(id)
         // a batch is marked on its first row
         case .closeSessions(let ids), .moveSessions(let ids, _): ids.first.map { .session($0) }
         case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags: nil
@@ -242,7 +242,8 @@ public enum RemoteOperation: Equatable, Sendable {
             ["session", "restart", "--target", id.uuidString, "--pane", pane.rawValue] + (command.map { ["--command=" + $0] } ?? [])
         case .duplicateCompanion(let id): ["session", "duplicate", "--companion", "--target", id.uuidString]
         case .convertCompanion(let id): ["session", "convert", "--companion", "--target", id.uuidString]
-        case .killDaemon(let id, let pane): ["zmx", "kill", "--target", id.uuidString, "--pane", pane.rawValue, "--force"]
+        case .killDaemon(let id, let pane, let paneID):
+            ["zmx", "kill", "--target", id.uuidString, "--pane", pane.rawValue] + (paneID.map { ["--pane-id", $0] } ?? []) + ["--force"]
         }
     }
 

@@ -47,13 +47,27 @@ extension ControlServer {
         if undoable, closeGraceUndoEnabled {
             guard store.softCloseSession(id) else { return ControlResponse(ok: false, error: "could not close session") }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, affected: group, undoable: true,
-                                                                   closed: closing.map(\.uuidString)))
+                                                                   closed: closing.map(\.uuidString),
+                                                                   recentID: store.pendingRecentID(ofClosedSession: id)?.uuidString))
         }
-        store.closeSession(id)
+        let recent = store.closeSession(id)
         let closed = closing.filter { store.session(withID: $0) == nil }
         return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, affected: group,
                                                                undoable: undoable ? false : nil,
-                                                               closed: closed.map(\.uuidString)))
+                                                               closed: closed.map(\.uuidString), recentID: recent?.uuidString))
+    }
+
+    /// terminateSessions closes rows that run here; `attachedRoute` sends any row attached from another host to its
+    /// origin first, so one reaching this is refused rather than detached.
+    func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
+        let attached = targets.contains { target in
+            guard case .success(let (store, id)) = resolver.resolveSessionTarget(target, window: window),
+                  let row = store.session(withID: id) else { return false }
+            return AttachedOrigin(row) != nil
+        }
+        if attached { return ControlResponse(ok: false, error: "session.terminate on an attached session must run on its origin") }
+        return targets.count == 1 ? closeSession(targets[0], window: window, undoable: undoable)
+            : closeSessions(targets, window: window, undoable: undoable)
     }
 
     private var closeGraceUndoEnabled: Bool {

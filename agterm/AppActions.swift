@@ -189,6 +189,8 @@ final class AppActions {
             performRemote(.newSession(workspace: workspace, anchor: .after(id), shell: shell), in: store, select: true)
             return
         }
+        if forwardAttached(ControlRequest(cmd: .sessionDuplicate, target: id.uuidString), row: id, in: store,
+                           action: "Duplicate Session") { return }
         guard let session = store.duplicateSession(id) else { return }
         store.noteUserActivity()
         store.selectSession(session.id)
@@ -695,6 +697,9 @@ final class AppActions {
         if session.scratchActive { setScratchShown(false, of: session, in: store); return }
         let shown = !(session.isSplit && (axis == nil || axis == session.splitAxis))
         if performRemote(.setSplit(session.id, shown: shown, axis: axis?.rawValue), in: store) { return }
+        let split = ControlRequest(cmd: .sessionSplit, target: session.id.uuidString,
+                                   args: ControlArgs(mode: shown ? "on" : "off", axis: axis?.rawValue))
+        if forwardAttached(split, row: session.id, in: store, action: "Split") { return }
         store.toggleSplit(session.id, axis: axis)
         focusSplitPane(session, wantSplit: session.splitFocused)
     }
@@ -710,6 +715,8 @@ final class AppActions {
         guard session.hasSplit, !session.fullOverlayVisible else { return }
         if session.scratchActive { setScratchShown(false, of: session, in: store); return }
         if performRemote(.closeSplit(session.id), in: store) { return }
+        if forwardAttached(ControlRequest(cmd: .sessionSplitClose, target: session.id.uuidString), row: session.id, in: store,
+                           action: "Close Split") { return }
         store.closeSplit(session.id)
         focusSplitPane(session, wantSplit: false)
     }

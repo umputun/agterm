@@ -148,6 +148,30 @@ struct ServerActionsSessionsTests {
         #expect(Set(harness.runner.kills) == names)
     }
 
+    @Test func terminateClosesAsCloseDoes() throws {
+        let one = try harness.session(newSession())
+        let two = try harness.session(newSession())
+        let three = try harness.session(newSession())
+
+        let single = harness.actions.terminateSessions([one.id.uuidString], window: nil, undoable: false)
+        let batch = harness.actions.terminateSessions([two.id.uuidString, three.id.uuidString], window: nil, undoable: false)
+
+        #expect(single.result?.closed == [one.id.uuidString])
+        #expect(batch.result?.affected == 2)
+        #expect([one, two, three].allSatisfy { harness.store.session(withID: $0.id) == nil })
+        #expect(Set(harness.runner.kills) == Set([one, two, three].map { ZmxSupport.daemonName(for: $0.paneIdentity) }))
+    }
+
+    @Test func terminateRefusesAnUndoableClose() throws {
+        let session = try harness.session(newSession())
+
+        let reply = harness.actions.terminateSessions([session.id.uuidString], window: nil, undoable: true)
+
+        #expect(reply == ControlResponse(ok: false, error: "session.close --undoable is not supported by this control host"))
+        #expect(harness.store.session(withID: session.id) === session)
+        #expect(harness.runner.kills.isEmpty)
+    }
+
     @Test func aSessionWhoseDaemonCannotBeKilledStillCloses() throws {
         let session = try harness.session(newSession())
         harness.runner.killFails = true

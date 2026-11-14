@@ -22,6 +22,12 @@ public enum ZmxOwnerWindowState: String, Codable, Sendable {
 public enum ZmxPaneRole: String, Codable, Sendable {
     case left, right, scratch
 
+    /// pinRefusal is why a kill pinned to `paneID` must not touch the `pane` claim holding `identity`, nil when it may.
+    public static func pinRefusal(_ paneID: String, identity: UUID, pane: ZmxPaneRole) -> String? {
+        UUID(uuidString: paneID) == identity ? nil
+            : "pane \(paneID) is no longer the \(pane.rawValue) pane; nothing was killed"
+    }
+
     /// Accepts the same spellings the rest of the API takes for a pane, so `--pane primary` means here what
     /// it means everywhere else. Read-back stays `left`/`right`; `scratch` is never accepted.
     public init?(controlName: String) {

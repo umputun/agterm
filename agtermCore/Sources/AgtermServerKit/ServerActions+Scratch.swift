@@ -9,6 +9,7 @@ extension ServerActions {
             guard let parsed = ControlToggleMode.parse(mode) else {
                 return ControlResponse(ok: false, error: "invalid scratch mode: \(mode ?? "toggle")")
             }
+            defer { store.publishPaneLayout(session) }
             guard parsed.desiredValue(current: session.scratchDaemon?.shown == true) else {
                 session.scratchDaemon?.shown = false
                 return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))

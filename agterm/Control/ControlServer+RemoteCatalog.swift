@@ -18,7 +18,7 @@ extension ControlServer {
         guard library.onRemoteStoreOpened == nil else { return }
         library.onRemoteStoreOpened = { [weak self] id, store in self?.startRemoteCatalog(window: id, store: store) }
         library.onRemoteStoreClosed = { [weak self] id in self?.stopRemoteCatalog(window: id) }
-        PaneLead.scratchStopped = { [weak self] view in self?.catalogScratchStopped(view) ?? false }
+        PaneLead.scratchStopped = { [weak self] view in self?.remoteScratchStopped(view) ?? false }
         for (id, store) in library.openRemoteStores { startRemoteCatalog(window: id, store: store) }
     }
 

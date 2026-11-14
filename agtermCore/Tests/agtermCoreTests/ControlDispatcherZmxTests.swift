@@ -141,6 +141,40 @@ struct ControlDispatcherZmxTests {
         #expect(actions.calls == [.zmxKill(target: "abc", window: "w1", pane: role)])
     }
 
+    struct PinnedKill: Sendable {
+        let target: String?
+        let pane: String?
+        let force: Bool
+        let paneID: String?
+    }
+
+    @Test(arguments: [
+        (PinnedKill(target: nil, pane: "left", force: true, paneID: "p1"), "zmx.kill.pane requires an explicit --target"),
+        (PinnedKill(target: "abc", pane: nil, force: true, paneID: "p1"), "zmx.kill.pane requires --pane left|right"),
+        (PinnedKill(target: "abc", pane: "left", force: false, paneID: "p1"), "zmx.kill.pane requires --force"),
+        (PinnedKill(target: "abc", pane: "left", force: true, paneID: nil), "zmx.kill.pane requires --pane-id"),
+        (PinnedKill(target: "abc", pane: "left", force: true, paneID: " "), "zmx.kill.pane requires --pane-id"),
+    ])
+    func zmxKillPaneRefusesBeforeTheHostIsCalled(kill: PinnedKill, error: String) async throws {
+        let actions = MockControlActions()
+        let args = ControlArgs(force: kill.force ? true : nil, pane: kill.pane, paneID: kill.paneID)
+
+        let response = try #require(await dispatch(ControlRequest(cmd: .zmxKillPane, target: kill.target, args: args), actions))
+
+        #expect(response == ControlResponse(ok: false, error: error))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func zmxKillPanePassesTheResolvedPaneAndItsTokenToTheHost() async throws {
+        let actions = MockControlActions()
+        let args = ControlArgs(force: true, window: "w1", pane: "split", paneID: "p1")
+
+        let response = try #require(await dispatch(ControlRequest(cmd: .zmxKillPane, target: "abc", args: args), actions))
+
+        #expect(response.ok)
+        #expect(actions.calls == [.zmxKillPane(target: "abc", window: "w1", pane: .right, paneID: "p1")])
+    }
+
     @Test func theKillRequestAndItsAnswerBothSurviveTheWire() throws {
         let request = ControlRequest(cmd: .zmxKill, target: "3f2a",
                                      args: ControlArgs(force: true, window: "w1", pane: "right"))

@@ -74,6 +74,32 @@ struct AppStorePendingCloseTests {
         #expect(store.session(withID: untimed.id)?.info?.source == "kept")
     }
 
+    @Test(arguments: [false, true])
+    func pendingRecentIDNamesTheEntryTheSoftCloseWrote(withCompanion: Bool) throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let workspace = store.addWorkspace(name: "w")
+        let root = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/a"))
+        if withCompanion { _ = try store.addCompanion(to: root.id, options: CompanionOptions(cwd: "/c")).get() }
+        defer { store.finalizeAllPendingCloses() }
+
+        #expect(store.softCloseSession(root.id, grace: 60))
+
+        let entries = recentClosed.load()
+        #expect(entries.count == 1)
+        #expect(store.pendingRecentID(ofClosedSession: root.id) == entries.first?.id)
+        #expect(store.pendingRecentID(ofClosedSession: UUID()) == nil)
+    }
+
+    @Test func pendingRecentIDIsNilWithoutARecentStore() {
+        let store = store()
+        let session = addSession(store, name: "one")
+        defer { store.finalizeAllPendingCloses() }
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+
+        #expect(store.pendingRecentID(ofClosedSession: session.id) == nil)
+    }
+
     private final class DropLog {
         var identities: [UUID] = []
     }

@@ -32,6 +32,9 @@ public protocol ControlActions {
     /// The `session.close --undoable` forms; their defaults refuse an undoable request.
     func closeSession(_ target: String?, window: String?, undoable: Bool) -> ControlResponse
     func closeSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse
+    /// terminateSessions ends sessions where they run: a row attached from another host on its origin, any other
+    /// row as `session.close` does. The default refuses, so a host never detaches what was asked to end.
+    func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
     func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
@@ -259,6 +262,8 @@ public protocol ControlActions {
     /// Destroy ONE pane's daemon. The host resolves the owner against the inventory rather than the open
     /// stores, since this reaches closed and unindexed claims the target resolver cannot see.
     func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse
+    /// killZmxPane is `killZmxDaemon` refused before any kill unless `paneID` is still that pane's token.
+    func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse
     /// Confirm the Live sessions reset without the dialog: the host selects the panes, refuses outside Live
     /// or on an incomplete inventory, answers, and quits only after this reply is written.
     func resetLiveSessions() -> ControlResponse

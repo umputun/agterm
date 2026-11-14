@@ -144,4 +144,6 @@ private final class HudRecorder: RemoteAttaching {
     func closeHud(_: String?, window _: String?) -> ControlResponse { ControlResponse(ok: true) }
 
     func hudGeneration(session _: String) -> Int? { opened.isEmpty ? nil : opened.count }
+    func attachedRoute(_: ControlRequest) -> RemoteRoute? { nil }
+    func runRemoteRoute(_: RemoteRoute) async -> ControlResponse { ControlResponse(ok: false) }
 }

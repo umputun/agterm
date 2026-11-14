@@ -389,9 +389,12 @@ omitted when expanded).
   under the target session that shows the page and runs no shell. `--page` instead of `--companion` opens a
   top-level page session after the target's group, which holds companions of its own. Every local page row is
   saved and comes back after a relaunch. Read back as the node's `content: "page"`; details in reference.md.
-- `session close [--target T ...] [--undoable]` — close one session, or repeat `--target` to close a batch with one
+- `session close [--target T ...] [--undoable] [--terminate]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo. `--undoable` gives a single target that grace too, as ⌘W does, so undo (⌘Z) or, for a local
   session, `recent open` inside it brings the running shell back; `result.undoable` says whether it applied (false when Settings turns undo off).
+  A single close answers `result.recentID`, the Recent Closed entry `recent open` takes. Closing a session attached
+  from another host only detaches it; `--terminate` ends it on that host too. Restart, `zmx kill`, Convert, Duplicate,
+  split, scratch and `session restore` on such a session run on its host and the result attaches here.
 - `session select` · `session rename <name>` · `session reveal` (select the focused pane's cwd in Finder).
 - `session go --to next|prev|first|last|next-attention|prev-attention|N` — move the selection between sessions; `N` is the 1-based place in sidebar order.
 - `session move <workspace>` (relocate) or `session move --to up|down|top|bottom` (reorder within the
@@ -749,8 +752,8 @@ state rather than a leak · `zmx screen NAME [--all|--lines N]` - a daemon's scr
 `zmx list` prints, reaching a pane in a closed window, which `session text` cannot since it resolves only
 open-window sessions; attaches nothing · `zmx prune` - kill the daemons no pane claims and nothing is attached to,
 refusing outright on an incomplete or conflicted inventory, and reporting each daemon separately since a
-stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --force` - destroy one pane's
-daemon and the process in it; all three are required because this kills a backend process that reaches a
+stale-socket cleanup is not a kill · `zmx kill --target ID --pane left|right --force [--pane-id TOKEN]` - destroy
+one pane's daemon and the process in it (`--pane-id` refuses when the role now names another pane); all three are required because this kills a backend process that reaches a
 pane no window is showing and every client attached to it, and none of its outcomes gets the undo grace ·
 `zmx reset --force` - Agterm ▸ Reset Live Sessions… without the dialog: ends every live session this app
 does not supervise, that predates the last Live sessions update, or that runs under the session host of an

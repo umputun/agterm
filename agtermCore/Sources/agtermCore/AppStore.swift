@@ -644,28 +644,30 @@ public final class AppStore {
     }
 
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
-    /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor.
-    public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+    /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor;
+    /// returns the Recent Closed entry written for it, if any.
+    @discardableResult
+    public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) -> UUID? {
         // a parent closes with its companions; one Recent Closed entry carries the whole group
         let companions = companions(of: sessionID)
         // recorded before the companions close, which takes a page companion's page with it
         let recorded = companions.filter(\.isPersistable).map(sessionSnapshot)
         for companion in companions.reversed() {
-            closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
+            _ = closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
-        closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
         // a converted companion can still own a parked companion recorded under it
-        finalizeParkedCompanions(of: [sessionID] + companions.map(\.id))
+        defer { finalizeParkedCompanions(of: [sessionID] + companions.map(\.id)) }
+        return closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
     }
 
     /// closeSessionRow closes one row and none of its companions: a catalog row's companions leave only when
     /// their own catalog sessions do.
     func closeSessionRow(_ sessionID: UUID) {
-        closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
+        _ = closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
     }
 
-    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) {
-        guard let location = location(ofSession: sessionID) else { return }
+    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) -> UUID? {
+        guard let location = location(ofSession: sessionID) else { return nil }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
         let removed = workspace.sessions[location.sessionIndex]
@@ -673,11 +675,8 @@ public final class AppStore {
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
-        if recordsRecent {
-            recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
-                                      workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
-                                      companions: companions)
-        }
+        let recent = recordsRecent ? recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
+                                                               workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex, companions: companions) : nil
         finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
@@ -698,6 +697,7 @@ public final class AppStore {
         }
         dropFromFlaggedOrder([sessionID])
         save()
+        return recent
     }
 
     /// Whether a workspace may be removed: one is always kept, so only when more than one exists.

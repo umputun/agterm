@@ -98,9 +98,13 @@ struct ServerActionsReceiptsTests {
         #expect(second.result?.receipt == first.result?.receipt)
     }
 
-    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill])
+    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane])
     func aPaneLifecycleCommandTakesAnOperationId(_ command: Command) {
         #expect(ServerActions.receiptCommands.contains(command))
+    }
+
+    @Test func aTerminateTakesAnOperationIdAsACloseDoes() {
+        #expect(ServerActions.receiptCommands.contains(.sessionTerminate))
     }
 
     @Test func aRefusalIsRecordedSoTheIdStaysRefused() async throws {

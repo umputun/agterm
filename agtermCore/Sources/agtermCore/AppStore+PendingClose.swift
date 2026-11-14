@@ -80,6 +80,15 @@ extension AppStore {
         }
     }
 
+    /// pendingRecentID is the Recent Closed entry an undoable close wrote for `sessionID`, nil when it wrote none.
+    public func pendingRecentID(ofClosedSession sessionID: UUID) -> UUID? {
+        for case .sessions(let record) in pendingCloseRecords.values {
+            guard let close = record.sessions.first(where: { $0.session.id == sessionID }) else { continue }
+            return recentClosedStore != nil && close.session.isPersistable ? close.recentID : nil
+        }
+        return nil
+    }
+
     /// The live object of a session hidden by an undoable close, nil for a visible or finalized one.
     public func pendingCloseSession(withID sessionID: UUID) -> Session? {
         pendingCloseMembers().first { $0.session.id == sessionID }?.session

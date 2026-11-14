@@ -150,8 +150,8 @@ extension WorkspaceSidebar.Coordinator {
                                              keyEquivalent: "")
                     convert.target = self
                     convert.representedObject = node
-                    // a server window's row is converted by its server; a row attached from another Mac is not
-                    convert.isEnabled = store.isRemoteWindow ? !serverBlocked : session.remoteHost == nil
+                    // a server window's row is converted by its server, a row attached from another host by its origin
+                    convert.isEnabled = !store.isRemoteWindow || !serverBlocked
                     menu.addItem(convert)
                 }
                 menu.addItem(.separator())

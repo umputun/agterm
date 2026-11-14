@@ -22,16 +22,15 @@ extension agtermApp {
         let command = session.scratchCommand
         session.scratchCommand = nil
         let cwd = session.localWorkingDirectory(reported: session.effectiveCwd, homeDirectory: NSHomeDirectory())
-        // a remote window's scratch is its server's: a stopped attach keeps its screen until it reconnects
-        let catalogScratch = session.catalogScratch
-        // a server scratch's directory is the server's, known only once it reports one
-        if catalogScratch == nil { session.scratchCwd = cwd }
-        let live = catalogScratch == nil
+        // a remote row's scratch can be its server's or origin's, whose directory is known only once it reports one
+        let originScratch = session.originScratch
+        if originScratch == nil { session.scratchCwd = cwd }
+        let live = originScratch == nil
             ? liveScratch(for: session, store: store, env: env, command: command, requested: requested, active: active) : nil
         let view = GhosttySurfaceView(workingDirectory: cwd, fontSize: session.fontSize.map(Float.init),
                                       command: live?.command ?? command, autoFocus: !suppressAutoFocus,
                                       env: live?.environment
-                                          ?? env.merging(catalogScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 },
+                                          ?? env.merging(originScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 },
                                       backedByZmx: live != nil)
         if let live { ZmxLeadBook.shared.begin(live.lead, pane: live.identity) }
         Self.wireScratch(view, session: session, store: store, actions: actions)

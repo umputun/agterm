@@ -117,13 +117,25 @@ struct Session: ParsableCommand {
         @OptionGroup var target: BatchTargetOptions
         @Flag(name: .long, help: "Give a single close ⌘W's undo grace, so undo inside it brings the running shell back; closes at once when Settings turns undo off.")
         var undoable = false
+        @Flag(name: .long, help: "End a session attached from another host on that host, not only here; any other session closes as without it.")
+        var terminate = false
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
             let args = ControlArgs(targets: target.batchTargets, undoable: undoable ? true : nil)
-            return operation.stamp(ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active",
+            return operation.stamp(ControlRequest(cmd: terminate ? .sessionTerminate : .sessionClose,
+                                                  target: target.targets.first ?? "active",
                                                   args: options.withWindow(args == ControlArgs() ? nil : args)))
+        }
+
+        func run() throws {
+            guard terminate else { return try defaultRun() }
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for terminate")
+            let reply = try send(try makeRequest())
+            SocketClient.printResponse(reply, json: options.json)
+            if !reply.response.ok { throw ExitCode.failure }
         }
     }
 

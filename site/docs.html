@@ -928,7 +928,8 @@
                 when a pane's program cannot be copied, nothing is created and a panel over the session names the pane.
                 <strong style="color: #e6e1d7">Convert to Companion</strong> turns a session you started on its own into one: a fresh shell takes
                 its place in its directory, and the session moves under it still running, its own companions with it, and stays
-                selected (<code style="color: #e6e1d7">convert_companion</code>). It is available only for local top-level sessions.
+                selected (<code style="color: #e6e1d7">convert_companion</code>). It is available for any top-level session; one
+                attached from another Mac is converted on that Mac, and its new parent attaches here.
                 On a session attached from another Mac, New Companion and Duplicate as Companion ask that Mac to create the companion under its own session and attach
                 it here; closing it here only detaches it. A page companion opened on such a session is that Mac's page, shown
                 here through its own channel, and it stays there when you close it here. For attaching a session together with its
@@ -3236,12 +3237,21 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               Two existing remote panes follow the origin's split direction, hide/show and swaps. Local panes, divider ratio and
-              keyboard focus stay local. This never opens a pane: a split opened on the origin after attach requires closing and
-              attaching the row again, and a replica closed here stays closed. Older origins leave the layout alone.
+              keyboard focus stay local. A split opened on the origin after attach attaches here into an empty split slot, and a
+              replica closed here stays closed. Older origins leave the layout alone.
               Confirmed origin removal closes its replica without requiring a keypress, even if it already shows a disconnect
               prompt. The last replica waits for its ssh exit and may then close the row; automatic primary removal is skipped
               while a local split is pending. An ordinary connection failure still shows the disconnect line, reconnecting on its own when
               ssh itself failed and otherwise holding for a keypress.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              What changes the session itself runs on the Mac or server it came from, and the result attaches here: Duplicate
+              Session, a new split and Close Split, the scratch, Convert to Companion, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session restart</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx kill</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session restore</span> (refused for an agterm-server session, which keeps every pane
+              running). The scratch is refused while the row is not connected, or when the origin's agterm is too old to show
+              its scratch. Closing the row here still ends only this side's connection;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close --terminate</span> ends the session on its origin as well. When the origin gives no answer, the
+              request is reported as unknown and never sent again or done here instead.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
               When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect, which is retried after

@@ -388,6 +388,20 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertNil(remoteStore.session(withID: entry.id)?.parentID)
     }
 
+    func testTerminateOfACatalogRowClosesItOnTheServerAndRestoreIsRefused() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restore = try await send(.sessionRestore, target: id, args: ControlArgs(mode: "set", command: "make"))
+        let terminate = try await send(.sessionTerminate, target: id)
+
+        XCTAssertEqual(restore.error, "agterm-server keeps every pane running")
+        XCTAssertTrue(terminate.ok, terminate.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations.first?.contains("session close --target \(id)") == true, runner.operations.first ?? "")
+    }
+
     func testSessionDetachOfALocalSessionIsRefused() async throws {
         let localStore = try XCTUnwrap(library.store(for: library.newWindow().id))
         let session = try XCTUnwrap(localStore.activeSession)

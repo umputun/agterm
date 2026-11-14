@@ -293,11 +293,11 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
     }
 
-    @Test func convertToCompanionNeedsALocalTopLevelSession() {
+    @Test func convertToCompanionNeedsATopLevelSession() {
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext()))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsCompanion: true)))
-        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
         #expect(PaletteCommand.convertCompanion.isVisible(in: PaletteContext()), "stays listed, inert")
         #expect(PaletteCommand.convertCompanion.builtinAction == .convertCompanion)
@@ -324,10 +324,10 @@ struct PaletteCatalogTests {
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsCompanion: true),
                          newCompanion: true, duplicate: false, convert: false),
         CompanionRowKind(name: "remote terminal", context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: true, convert: false),
+                         newCompanion: true, duplicate: true, convert: true),
         CompanionRowKind(name: "remote page",
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: false, convert: false),
+                         newCompanion: true, duplicate: false, convert: true),
         CompanionRowKind(name: "server window terminal",
                          context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true, remoteWindow: true, remoteConnected: true),
                          newCompanion: true, duplicate: true, convert: true),

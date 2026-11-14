@@ -68,6 +68,22 @@ enum CompanionGroupFailure: Error {
     case setup
 }
 
+@MainActor
+final class RecordingAttachLines: RemoteAttachLines {
+    var panes: [(daemon: String, local: UUID)] = []
+    var scratches: [String] = []
+
+    func paneAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
+        panes.append((daemon, local))
+        return "attach-pane \(daemon)"
+    }
+
+    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local _: UUID) -> String {
+        scratches.append(daemon)
+        return "attach-scratch \(daemon)"
+    }
+}
+
 final class SpySurface: PaneRoleMutableSurface {
     var teardownCount = 0
     var promotedCount = 0

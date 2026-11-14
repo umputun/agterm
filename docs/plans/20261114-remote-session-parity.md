@@ -159,8 +159,9 @@
   is the same as `session.close` (both already end the session); the server serves it the same way. On an attached
   row the viewer runs the origin's `session close --target <remoteSessionID>`, passing `--undoable` through; a lost
   reply is `unknown`, never a local close, never resent.
-- **Recent id in the close reply**: `session.close` gains `recentID` in its result, the id of the Recent Closed entry
-  the close wrote or, for an undoable close, will write when its grace ends (the id is allocated at close time).
+- **Recent id in the close reply**: a single-target `session.close` gains `recentID` in its result, the id of the
+  Recent Closed entry the close wrote, an undoable close's included, since that entry is written at close time; a
+  batch and a row Recent Closed does not keep carry none.
 - **Remote Recent Closed entries**: `RecentClosedState` gains an optional `remoteItems` array, which an older build's
   decoder ignores instead of dropping the list. An entry is `{id, closedAt, host, originSessionID, originRecentID?,
   name, placement}`, deduped by `(host, originSessionID)`. A detached attached row records one without
@@ -313,21 +314,21 @@
   `agtermctlKitTests` session command suites, `AgtermServerTests/ServerCommandPolicyTests.swift`,
   `agtermTests/ControlServerRemoteCompanionsTests.swift`, `ControlServerRestartTests.swift`, `RemoteLayoutCloseTests.swift`
 
-- [ ] `session close --terminate` as `session.terminate`: on an attached row the origin's own close on the original
+- [x] `session close --terminate` as `session.terminate`: on an attached row the origin's own close on the original
       session id with `--undoable` passed through, whole companion group, unknown outcome never falls back or
       resends; on a local or server window row the same as `session.close`; served on the server
-- [ ] `session.close` reports `recentID`
-- [ ] restart, Convert to Companion and `zmx.kill` on an attached row run on the origin; Convert becomes enabled
+- [x] `session.close` reports `recentID`
+- [x] restart, Convert to Companion and `zmx.kill` on an attached row run on the origin; Convert becomes enabled
       there through `PaletteCommand.isEnabled(in:)`
-- [ ] ordinary Duplicate, a new split and the scratch of an attached row start on the origin and attach here
-- [ ] panes the origin creates after the attach (a new or replacement split, the scratch) attach dynamically;
+- [x] ordinary Duplicate, a new split and the scratch of an attached row start on the origin and attach here
+- [x] panes the origin creates after the attach (a new or replacement split, the scratch) attach dynamically;
       `applyRemoteLayout` handles additions, not only rearrangement and removal
-- [ ] `session.restore` forwarded to a Mac origin, refused on a server row with "agterm-server keeps every pane
+- [x] `session.restore` forwarded to a Mac origin, refused on a server row with "agterm-server keeps every pane
       running"
-- [ ] the same paths work for a Linux session attached alone (`zmx attach` outside a server window)
+- [x] the same paths work for a Linux session attached alone (`zmx attach` outside a server window)
 - [ ] policy test classifies `session.terminate`; tests: request shapes sent to the origin, unknown-outcome
       handling, `recentID` read-back, layout additions, scratch attach, hide, show, replace, exit and reconnect
-      against a real origin daemon, refusal texts
+      against a real origin daemon, refusal texts (real-origin hide/show/replace/exit/reconnect is the second-Mac Post-Completion check)
 
 ### Task 7: Attached rows survive relaunch
 

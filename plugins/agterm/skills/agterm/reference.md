@@ -569,8 +569,8 @@ buys nothing. A caller with no tree uses `version`.
 - `session convert --companion [--target] [--window W]` - Convert to Companion: open a fresh login shell in the
   target's slot and focused directory and move the target under it as a companion, still running, with its own
   companions after it; the target keeps its id, name, flag, status and panes, and ends selected. `--companion` is
-  required. Refused `already a companion` for a companion and `convert it on the Mac it runs on` for a session
-  attached from another Mac. Wire command `session.companion.convert`; returns `result.id` (the converted
+  required. Refused `already a companion` for a companion. On a session attached from another host, that host
+  converts it and its new parent attaches here at the row's place, with the row under it. Wire command `session.companion.convert`; returns `result.id` (the converted
   session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
   nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
   and the keyless `convert_companion` action.
@@ -592,8 +592,9 @@ buys nothing. A caller with no tree uses `version`.
   primary the source node's `tree.cwd` reports the primary pane while the duplicate carries the focused
   pane's directory, and for a remote source it is that cwd after the local rule, so it can read as home.
   It is the control half of the sidebar row's **Duplicate Session** context-menu item
-  (single-selection only).
-- `session close [--target T ...] [--undoable] [--window W]` — close one session, or repeat `--target` to close
+  (single-selection only). On a session attached from another host, that host creates the session after its own
+  and it attaches here after the row.
+- `session close [--target T ...] [--undoable] [--terminate] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
   A single target closes at once unless `--undoable` asks for the same grace, which keeps its shell running until
@@ -604,7 +605,13 @@ buys nothing. A caller with no tree uses `version`.
   without `undoable` means the shell is already gone. The human output appends `(undoable)` or `(not undoable)` to `ok`
   or the session count. Every ok reply carries `result.closed`, the ids it closed. Closing a parent closes its
   companions too and sets `result.affected` to the group size, so a parent with two companions prints
-  `3 sessions`; a plain single close prints as before.
+  `3 sessions`; a plain single close prints as before. A single-target close of a session Recent Closed keeps also
+  carries `result.recentID`, the entry `recent open` takes back.
+  `--terminate` (wire command `session.terminate`) ends a session attached from another host on that host too: the
+  host closes its own session and group, `--undoable` passed through, and every row here showing a session it
+  closed closes; a companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no
+  answer, the error names it and what did close, and an unanswered host is never asked again. An app too old for
+  it refuses with `the running app is too old for terminate`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
@@ -720,6 +727,8 @@ error keeps those names for compatibility.
   `vertical` means left/right and `horizontal` means top/bottom. Omitting `--axis` preserves the current
   axis and keeps the legacy left/right default for a new split. `off` hides but keeps the shell alive;
   tearing it down takes `session split close` or the shell's own exit. Unknown modes and axes error.
+  On a session attached from another host, `split` and `split close` run on that host, and a split it opens
+  attaches here.
 - `session split close [--target] [--window W]` — tear the split pane down: the surface dies, whatever it
   runs dies with it, and `hasSplit`/`splitRatio`/`splitFocused` drop out of `tree`. Reaches a HIDDEN pane
   too, which is what `session type --pane right $'exit\n'` cannot do once the pane is past a prompt
@@ -737,7 +746,9 @@ error keeps those names for compatibility.
   starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
   shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;
   read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode, a local pane or a row of
-  an agterm-server window (its server restarts it; an Ended row there takes `--command` on the left pane), no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
+  an agterm-server window (its server restarts it; an Ended row there takes `--command` on the left pane), or a
+  session attached from another host (that host restarts it, and this pane follows the new shell; an agterm there too
+  old for it refuses), no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
   4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
   background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
   daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the
@@ -763,7 +774,9 @@ error keeps those names for compatibility.
   `PATH`, so the same exit-127 caveat as `session new --command`: wrap in `"zsh -lc '…'"` or use an
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
   shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not
-  persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility.
+  persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility. On a session attached from another
+  host the scratch is that host's: `session scratch` runs there, and it shows and hides here as it does there. It
+  is refused while the session is not connected, or when that host's agterm is too old to show its scratch.
 - `session focus [primary|split|left|right|top|bottom|other] [--target] [--window W]` - move keyboard focus between the two
   split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
   split is shown in either orientation or hidden (maximized). When hidden, focusing a pane swaps which one shows.
@@ -939,7 +952,8 @@ error keeps those names for compatibility.
   (it names its command deliberately, so the denylist is never the reason it does not fire). It is typed
   verbatim as a shell line, so `cd x && claude --resume y` works as written.
   A split hidden at quit keeps its identity and pin; showing it after restart creates the pane and applies
-  the saved rerun policy.
+  the saved rerun policy. On a session attached from another Mac the pin is set on that Mac's pane; on one from
+  agterm-server, or in its window, it is refused with `agterm-server keeps every pane running`.
   It exists for NON-IDEMPOTENT commands — `claude --resume <id> --fork-session` mints a NEW session on every
   restart, so restoring it verbatim never reattaches the session the user was in. A Claude Code
   `SessionStart` hook that rewrites the override to the live session id on every start makes the next
@@ -2159,7 +2173,6 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
   keeps the reported path either way.
 - `{AGT_SESSION_HOST}` / `$AGT_SESSION_HOST` — the SSH destination of a session opened by `zmx attach`,
   verbatim as given (`user@alias` included); empty for a local session, an `ssh` typed into one included,
-  and from the scratch of an attached session, whose shell runs on this Mac,
   so branch on it: `if [ -n "$AGT_SESSION_HOST" ]; then ssh "$AGT_SESSION_HOST" uptime; fi` (a bare
   `&&` chain exits 1 on a local session and the runner reports that as a failure).
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
@@ -2391,6 +2404,10 @@ there is none; a pane whose window is closed simply comes back as a fresh shell.
 three-second undo. It refuses a daemon already gone, one zmx could not read (forcing that can unlink a
 live daemon's socket and leave it running unreachable), and a session inside its undo window. Killing the
 daemon of the pane you are typing in can kill the calling `agtermctl` before it reads the reply.
+`--pane-id TOKEN` pins the kill to that pane (wire command `zmx.kill.pane`): it is refused, killing nothing, when
+the role now names another pane, and an app too old for it refuses with
+`the running app is too old for a pinned pane kill`. On a session attached from another host the kill runs on that
+host, pinned to its pane.
 
 `agtermctl zmx reset --force` — Agterm ▸ Reset Live Sessions… without the dialog. A live session created
 before the session host existed keeps its own macOS permission identity, so every new version of a tool in
@@ -2489,8 +2506,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   Mac remains until cleared or its own expiry.
 
 - Two existing remote panes follow the origin's split axis, hide/show and swaps. Local panes, divider
-  ratio and focus stay local. A layout never opens a pane: an origin split opened later requires closing
-  and attaching the row again, and a replica closed here stays closed. Older origins leave layout alone.
+  ratio and focus stay local. A split the origin opens later attaches into an empty split slot, and a
+  replica closed here stays closed. Older origins leave layout alone.
 - Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
   left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
   split prevents automatic primary removal; an ordinary disconnect still shows the disconnect line, held

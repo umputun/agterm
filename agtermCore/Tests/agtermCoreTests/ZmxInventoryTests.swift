@@ -188,4 +188,15 @@ struct ZmxInventoryTests {
         let result = ZmxInventory.join(observed: [], claims: [Self.claim(Self.paneA)], inventoryComplete: true)
         #expect(ZmxPrunePolicy.namesToPrune(result) == [])
     }
+
+    @Test func aPinMatchingThePaneIdentityAllowsTheKill() {
+        #expect(ZmxPaneRole.pinRefusal(Self.paneA.uuidString, identity: Self.paneA, pane: .left) == nil)
+        #expect(ZmxPaneRole.pinRefusal(Self.paneA.uuidString.lowercased(), identity: Self.paneA, pane: .left) == nil)
+    }
+
+    @Test(arguments: ["00000000-0000-0000-0000-0000000000BB", "junk", ""])
+    func aPinNamingAnotherPaneRefusesTheKill(paneID: String) {
+        #expect(ZmxPaneRole.pinRefusal(paneID, identity: Self.paneA, pane: .right)
+            == "pane \(paneID) is no longer the right pane; nothing was killed")
+    }
 }

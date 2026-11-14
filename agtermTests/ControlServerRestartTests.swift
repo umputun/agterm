@@ -307,6 +307,46 @@ final class ControlServerRestartTests: XCTestCase {
         try await assertReplayRefused(foreground: program.processIdentifier, RestartReplay.Refusal.tooLong)
     }
 
+    func testARestartThatStartsANewShellPublishesTheRespawnForItsDaemon() async throws {
+        let (session, view) = try livePane()
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        var killed = false
+        let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") { invocation in
+            guard invocation.arguments.first == "list" else {
+                killed = true
+                return "killed session \(invocation.arguments[1])\n"
+            }
+            return "name=\(daemon)\tpid=\(killed ? 4343 : 4242)\tclients=1\tcreated=1"
+        }
+        let server = makeServer(client: client, leader: 4242, daemon: daemon)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        var fresh: GhosttySurfaceView?
+        let replace = PaneLead.replace
+        PaneLead.replace = { _, _, _ in
+            let made = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "cat")
+            made.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+            window.contentView?.addSubview(made)
+            made.createSurface()
+            fresh = made
+            return made
+        }
+        defer {
+            PaneLead.replace = replace
+            fresh?.destroySurface()
+        }
+
+        let response = await server.restartSessionPane(
+            session.id.uuidString, window: nil,
+            options: ControlSessionRestartOptions(command: "echo restarted", pane: nil, paneID: view.paneToken))
+
+        XCTAssertNil(response.error)
+        XCTAssertEqual(response.result?.restart?.newPid, 4343)
+        XCTAssertEqual(server.respawnGenerations[session.id]?[daemon], 1)
+    }
+
     private func assertReplayRefused(foreground: pid_t?, leader: pid_t = 4242, _ refusal: RestartReplay.Refusal,
                                      file: StaticString = #filePath, line: UInt = #line) async throws {
         let (session, view) = try livePane()
@@ -364,9 +404,6 @@ final class ControlServerRestartTests: XCTestCase {
 
     private func makeServer(daemon: String, sweeper: ProcessSweeper? = nil, foreground: pid_t? = nil,
                             leader: pid_t = 4242, onKill: @escaping (String) -> Void) -> ControlServer {
-        let resolver = ZmxForegroundResolver(
-            leaderProvider: { _ in [daemon: leader] },
-            leaderProbe: { _ in foreground.map { .foreground($0) } ?? .noForeground })
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir", sweeper: sweeper) { invocation in
             guard invocation.arguments.first == "list" else {
                 onKill(invocation.arguments[1])
@@ -374,6 +411,13 @@ final class ControlServerRestartTests: XCTestCase {
             }
             return "name=\(daemon)\tpid=\(leader)\tclients=1\tcreated=1"
         }
+        return makeServer(client: client, leader: leader, daemon: daemon, foreground: foreground)
+    }
+
+    private func makeServer(client: ZmxClient, leader: pid_t, daemon: String, foreground: pid_t? = nil) -> ControlServer {
+        let resolver = ZmxForegroundResolver(
+            leaderProvider: { _ in [daemon: leader] },
+            leaderProbe: { _ in foreground.map { .foreground($0) } ?? .noForeground })
         return ControlServer(
             library: library, actions: AppActions(library: library), settingsModel: settingsModel,
             identity: AppIdentity(version: "9.9.9", commit: "testsha"), zmxForegroundResolver: resolver, zmxClient: client,

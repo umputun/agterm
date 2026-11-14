@@ -79,4 +79,13 @@ struct SessionCompanionsCommandsTests {
     @Test func overlayOpenWithCompanionNeedsAPage() {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "open", "top", "--companion"]) }
     }
+
+    @Test func anAttachedConvertParsesOnItsOrigin() throws {
+        let forward = AttachedForward.convert(session: "s1")
+
+        let parsed = try request(forward.originArgv)
+
+        #expect(parsed == ControlRequest(cmd: .sessionCompanionConvert, target: "s1"))
+        #expect(parsed.cmd == forward.command)
+    }
 }

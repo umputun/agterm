@@ -6,8 +6,8 @@ import agtermCore
 public enum ServerCommandPolicy {
     static let served: Set<Command> = [
         .tree, .version, .windowList, .eventsRead,
-        .sessionNew, .sessionRename, .sessionClose, .sessionMove, .sessionSplit, .sessionSplitClose, .sessionSwap,
-        .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
+        .sessionNew, .sessionRename, .sessionClose, .sessionTerminate, .sessionMove, .sessionSplit, .sessionSplitClose,
+        .sessionSwap, .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
         .sessionScratch,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
@@ -19,7 +19,7 @@ public enum ServerCommandPolicy {
         .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
         .msgSend, .msgRead, .msgAck, .surfaceCursor, .zmxList, .zmxScreen, .sessionSeen,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint, .sessionDuplicate,
-        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxPrune,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane, .zmxPrune,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

@@ -108,7 +108,9 @@ public enum RemoteTreeMerger {
                                   endpoint: ControlZmxEndpoint, headless: Bool = false) -> ControlRemoteTree {
         // this command promises every row it returns is attachable, so a name `zmx attach` would
         // deterministically refuse must not reach the caller
-        let daemons = running.mapValues { $0.filter { ZmxSupport.isDaemonName($0.value) } }
+        let daemons = running.mapValues {
+            $0.filter { ZmxSupport.isDaemonName($0.value) || ($0.key == "scratch" && ZmxSupport.isScratchDaemonName($0.value)) }
+        }
 
         let terminals = windows.flatMap { window in
             window.tree.workspaces.flatMap { workspace in

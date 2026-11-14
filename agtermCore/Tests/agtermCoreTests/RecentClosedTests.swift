@@ -30,6 +30,47 @@ final class RecentClosedTests {
     }
 
     @MainActor
+    @Test func aHardCloseReturnsTheEntryItRecorded() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+
+        let recent = store.closeSession(session.id)
+
+        #expect(recent != nil)
+        #expect(recent == recentClosed.load().first?.id)
+    }
+
+    @MainActor
+    @Test func closingAParentReturnsTheGroupsOneEntry() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/c")).get()
+
+        let recent = store.closeSession(parent.id)
+
+        let entries = recentClosed.load()
+        #expect(entries.count == 1)
+        #expect(recent == entries.first?.id)
+        #expect(entries.first?.session?.snapshot.id == parent.id)
+        #expect(entries.first?.session?.companions?.map(\.id) == [companion.id])
+    }
+
+    @MainActor
+    @Test func aCloseThatRecordsNothingReturnsNoEntry() throws {
+        let (store, _, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let remote = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", remoteHost: "buildbox"))
+        let plain = makeStore()
+        let local = try #require(plain.addSession(toWorkspace: plain.addWorkspace(name: "w").id, cwd: "/a"))
+
+        #expect(store.closeSession(remote.id) == nil)
+        #expect(store.closeSession(UUID()) == nil)
+        #expect(plain.closeSession(local.id) == nil)
+    }
+
+    @MainActor
     @Test func closingAWorkspaceRecordsOnlyItsLocalSessionsAndCountsThem() {
         let (store, recentClosed, _) = makeStoreWithRecentClosed()
         store.addWorkspace(name: "keep")

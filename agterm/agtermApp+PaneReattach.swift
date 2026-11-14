@@ -5,12 +5,13 @@ extension agtermApp {
     /// An attach that stopped, on its exit prompt (a failed take-over included) or waiting to reconnect:
     /// no client is left to report a role, and a cover would hide the line saying what happened.
     @MainActor
-    static func remotePaneStopped(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary) {
+    static func remotePaneStopped(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary,
+                                  attach: RemoteAttachLines?) {
         if let pane = UUID(uuidString: view.paneToken) {
             ZmxLeadBook.shared.forget(pane: pane)
             store.leadRoleChanged()
         }
-        Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: library)
+        Self.handleRemotePaneHeld(view, store: store, sessionID: sessionID, library: library, attach: attach)
     }
 
     /// Replaces `old` with a fresh attach of the same pane in the same slot. None of the pane's close paths
@@ -32,14 +33,15 @@ extension agtermApp {
     @MainActor
     private static func reattachScratch(_ old: GhosttySurfaceView, session: Session, lead: ZmxLeadAttachment, cover: Bool,
                                         services: SurfaceServices) -> Bool {
-        guard let identity = session.localScratchIdentity, old.paneToken == identity.uuidString,
+        guard let identity = session.localScratchIdentity ?? session.originScratch, old.paneToken == identity.uuidString,
               let store = services.library.store(forSession: session.id),
-              let launch = PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
+              let launch = old.backedByZmx ? PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
+                  : PaneReattach.originScratch(replacing: old, session: session, identity: identity, lead: lead)
         else { return false }
         let fontSize = old.currentFontSize() ?? session.fontSize
         let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),
                                       command: launch.command, waitAfterCommand: launch.wait,
-                                      env: launch.environment, backedByZmx: true)
+                                      env: launch.environment, backedByZmx: old.backedByZmx)
         wireScratch(view, session: session, store: store, actions: services.actions)
         ZmxLeadBook.shared.begin(lead, pane: identity, reattaching: cover)
         // the old client's exit must not close the scratch the new one now owns

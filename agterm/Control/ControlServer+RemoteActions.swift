@@ -5,6 +5,8 @@ import agtermCore
 enum RemoteRoute: Sendable {
     case send(RemoteCatalogActions, PreparedRemoteOperation, select: Bool)
     case pageResult(host: String, page: UUID)
+    /// attached sends a request on rows attached from another host to their origin.
+    case attached(AttachedPlan)
     case refused(ControlResponse)
 }
 
@@ -15,7 +17,11 @@ extension ControlServer {
     /// remoteRoute reads `request` once, on the main actor, before it is dispatched: nil runs it here as usual; a
     /// route sends it to the server off the accept thread, with what it was decided on captured now.
     func remoteRoute(_ request: ControlRequest) -> RemoteRoute? {
-        if request.cmd == .sessionClose, let target = request.args?.targets?.first ?? request.target, target.lowercased() != "active" {
+        if let route = attachedRoute(request) { return route }
+        if request.cmd == .sessionRestore, routedStore(request)?.remoteActions != nil {
+            return .refused(ControlResponse(ok: false, error: "agterm-server keeps every pane running"))
+        }
+        if request.cmd == .sessionClose || request.cmd == .sessionTerminate, let target = request.args?.targets?.first ?? request.target, target.lowercased() != "active" {
             return closeRoute(request, target: target)
         }
         if request.cmd == .sessionOverlayClose, request.args?.pane == nil, let route = pageRowCloseRoute(request) { return route }
@@ -84,6 +90,8 @@ extension ControlServer {
             return reply
         case .pageResult(let host, let page):
             return await serverPageResult(page, host: host)
+        case .attached(let plan):
+            return await runAttached(plan)
         }
     }
 

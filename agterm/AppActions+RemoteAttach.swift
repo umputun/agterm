@@ -14,6 +14,9 @@ protocol RemoteAttaching: AnyObject {
     func hudGeneration(session: String) -> Int?
     func createRemoteCompanion(_ request: RemoteCompanionRequest, of rowID: UUID, in store: AppStore, select: Bool,
                                progress: (String) -> Void) async -> ControlResponse
+    /// attachedRoute is how `request` runs on its row's origin when the row is attached from another host; nil otherwise.
+    func attachedRoute(_ request: ControlRequest) -> RemoteRoute?
+    func runRemoteRoute(_ route: RemoteRoute) async -> ControlResponse
 }
 
 extension ControlServer: RemoteAttaching {
@@ -23,6 +26,30 @@ extension ControlServer: RemoteAttaching {
 }
 
 extension AppActions {
+    /// forwardAttached sends a GUI action on a row attached from another host to its origin, showing the ssh wait and a
+    /// failure in a HUD over the row; false when `id` is not such a row, which then runs here as before.
+    func forwardAttached(_ request: ControlRequest, row id: UUID, in store: AppStore, action: String) -> Bool {
+        guard let remoteAttacher, let row = store.session(withID: id), let origin = AttachedOrigin(row),
+              let route = remoteAttacher.attachedRoute(request) else { return false }
+        guard let windowID = library.windowID(for: store) else { return true }
+        let hud = RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString, action: action)
+        if case .refused(let refusal) = route {
+            hud.fail(refusal.error ?? "\(action) is not available here")
+            return true
+        }
+        hud.progress("asking \(origin.host)…")
+        Task {
+            let reply = await remoteAttacher.runRemoteRoute(route)
+            if reply.ok {
+                hud.close()
+                store.noteUserActivity()
+            } else {
+                hud.fail(reply.error ?? "\(action) did not reach \(origin.host)")
+            }
+        }
+        return true
+    }
+
     static let remoteAttachErrorSeconds: Double = 5
     /// remoteAttachProgressSeconds makes a progress panel timed, so a soft-closed session drops it.
     static let remoteAttachProgressSeconds: Double = 30

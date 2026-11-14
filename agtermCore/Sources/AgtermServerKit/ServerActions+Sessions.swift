@@ -78,6 +78,14 @@ extension ServerActions {
         return ControlResponse(ok: true, result: ControlResult(affected: closed.count, closed: closed.map(\.uuidString)))
     }
 
+    /// terminateSessions is `session.close` here: every row on this host is its own session, so closing it ends it.
+    public func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
+        guard !undoable else {
+            return ControlResponse(ok: false, error: "session.close --undoable is not supported by this control host")
+        }
+        return targets.count == 1 ? closeSession(targets[0], window: window) : closeSessions(targets, window: window)
+    }
+
     public func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         splitSession(target, window: window, mode: mode, axis: nil)
     }

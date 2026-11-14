@@ -669,7 +669,7 @@ final class ControlServer {
             return response
         }
         switch request.cmd {
-        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionRename,
                 .sessionReveal, .sessionMove,
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
@@ -696,7 +696,7 @@ final class ControlServer {
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize, .windowRemoteOpen, .windowRemoteDismiss,
                 .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
-                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
+                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree,
                 .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
                 .recentList, .recentOpen, .recentClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")

@@ -101,7 +101,7 @@ extension ControlServer {
             sound: { [weak self] sound in self?.playRemoteSound(sound, forSession: id) },
             layout: { [weak self] layout in
                 guard let self, let store = library.store(forSession: id) else { return }
-                agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library)
+                agtermApp.applyRemoteLayout(layout, store: store, sessionID: id, library: library, attach: self)
             },
             pageRequest: { [weak self] page in
                 guard let self else { return "no such session" }

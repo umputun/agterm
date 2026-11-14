@@ -170,8 +170,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession
         case .convertCompanion:
-            // a server window's row is converted by its server; a row attached from another Mac is not
-            return context.hasActiveSession && !context.activeSessionIsCompanion && (context.remoteWindow || !context.activeSessionIsRemote)
+            // a remote row is converted where it runs: by its server or by the host it was attached from
+            return context.hasActiveSession && !context.activeSessionIsCompanion
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:

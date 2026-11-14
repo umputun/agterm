@@ -637,7 +637,7 @@ final class RemoteCatalogMirrorTests {
         let row = try #require(store.session(withID: entry.id))
         let layout = PresentationLayout(panes: [right.identity], primary: right.identity, axis: nil, shown: false)
 
-        let closable = store.applyRemoteLayout(layout, forSession: entry.id)
+        let closable = store.applyRemoteLayout(layout, forSession: entry.id, attach: RecordingAttachLines())
 
         #expect(closable.isEmpty)
         #expect(row.paneIdentity == left.identity)

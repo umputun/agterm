@@ -58,13 +58,15 @@ extension AppActions {
         return true
     }
 
-    /// setScratchShown shows or hides `session`'s scratch: in a remote window the server's, which the window shows
-    /// once the catalog says so, otherwise this Mac's.
+    /// setScratchShown shows or hides `session`'s scratch: in a remote window the server's and on an attached row its
+    /// origin's, each shown here once the origin says so, otherwise this Mac's.
     func setScratchShown(_ shown: Bool, of session: Session, in store: AppStore) {
         if store.isRemoteWindow {
             performRemote(.setScratch(session.id, shown: shown), in: store)
             return
         }
+        let scratch = ControlRequest(cmd: .sessionScratch, target: session.id.uuidString, args: ControlArgs(mode: shown ? "on" : "off"))
+        if forwardAttached(scratch, row: session.id, in: store, action: "Scratch") { return }
         if session.scratchActive != shown { store.toggleScratch(session.id) }
     }
 

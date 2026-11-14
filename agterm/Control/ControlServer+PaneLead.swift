@@ -49,8 +49,8 @@ extension ControlServer {
             if pane == .right, session?.splitSurface == nil {
                 return ControlResponse(ok: false, error: "session has no split pane")
             }
-            // only a Live scratch runs in a daemon another Mac can lead
-            if pane == .scratch, (session?.scratchSurface as? GhosttySurfaceView)?.backedByZmx != true {
+            // only a Live scratch, here or on the origin, runs in a daemon another Mac can lead
+            if pane == .scratch, (session?.scratchSurface as? GhosttySurfaceView)?.backedByZmx != true, session?.originScratch == nil {
                 return ControlResponse(ok: false, error: "the scratch terminal has no lead")
             }
             let slot = switch pane {

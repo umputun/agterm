@@ -12,6 +12,11 @@ final class RemoteLayoutCloseTests: XCTestCase {
         func promoteToPrimaryPane() {}
         func setPaneRole(_ role: SwappablePaneRole) {}
     }
+    private final class NoAttachLines: RemoteAttachLines {
+        func paneAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String { "attach \(daemon)" }
+        func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String { "" }
+    }
+    private let lines = NoAttachLines()
     private var directory: URL!
     private var library: WindowLibrary!
     private var store: AppStore!
@@ -29,13 +34,15 @@ final class RemoteLayoutCloseTests: XCTestCase {
         try? FileManager.default.removeItem(at: directory)
     }
 
-    private func replica(withPaneToken: Bool = false) throws -> (Session, GhosttySurfaceView) {
+    private func replica(withPaneToken: Bool = false, reachable: Bool = false) throws -> (Session, GhosttySurfaceView) {
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp",
                                                      command: "ssh origin", wait: true, remoteHost: "origin"))
+        let endpoint = ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z")
         store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
             session.paneIdentity: ZmxSupport.daemonName(for: origin),
-        ], presentationVersion: 1), forSession: session.id)
+        ], presentationVersion: 1, origin: reachable ? RemoteBinding.Origin(host: "origin", endpoint: endpoint, sessionName: "c") : nil),
+                         forSession: session.id)
         let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library),
                                                  zmxForegroundResolver: nil, spawnRegistry: nil,
                                                  launchContext: agtermApp.LaunchSpawnContext())
@@ -48,7 +55,7 @@ final class RemoteLayoutCloseTests: XCTestCase {
     private func removeOriginPane(from session: Session) {
         let replacement = UUID()
         agtermApp.applyRemoteLayout(PresentationLayout(panes: [replacement], primary: replacement, shown: false),
-                                   store: store, sessionID: session.id, library: library)
+                                   store: store, sessionID: session.id, library: library, attach: lines)
     }
 
     func testHeldReplicaForgetsItsLeadAndClosesOnlyAfterConfirmedRemoval() async throws {
@@ -75,7 +82,7 @@ final class RemoteLayoutCloseTests: XCTestCase {
                 removeOriginPane(from: session)
             } else {
                 agtermApp.applyRemoteLayout(PresentationLayout(panes: [origin], primary: origin, shown: false),
-                                           store: store, sessionID: session.id, library: library)
+                                           store: store, sessionID: session.id, library: library, attach: lines)
             }
             XCTAssertTrue(store.session(withID: session.id) === session)
             let leadChanged = expectation(description: "held exit reports its lead change")
@@ -188,6 +195,43 @@ final class RemoteLayoutCloseTests: XCTestCase {
         XCTAssertTrue(view.isDestroyed)
         XCTAssertEqual(survivor.teardownCount, 0)
         XCTAssertNotNil(store.session(withID: session.id))
+    }
+
+    func testAReplacementSplitInOneFrameAttachesOnceTheReplacedOneClosesHere() throws {
+        let (session, _) = try replica(reachable: true)
+        store.toggleSplit(session.id)
+        let replaced = UUID()
+        let added = UUID()
+        let binding = try XCTUnwrap(session.remotePresentation?.binding)
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+            session.paneIdentity: ZmxSupport.daemonName(for: origin), try XCTUnwrap(session.splitPaneIdentity): ZmxSupport.daemonName(for: replaced),
+        ], presentationVersion: 1, origin: binding.origin), forSession: session.id)
+
+        agtermApp.applyRemoteLayout(PresentationLayout(panes: [origin, added], primary: origin, axis: "vertical", shown: true),
+                                   store: store, sessionID: session.id, library: library, attach: lines)
+
+        XCTAssertTrue(session.hasSplit)
+        XCTAssertEqual(session.splitInitialCommand, "attach \(ZmxSupport.daemonName(for: added))")
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        XCTAssertEqual(session.remotePresentation?.binding.daemon(forLocalPane: split), ZmxSupport.daemonName(for: added))
+    }
+
+    func testAnOriginThatReplacedItsOnlyPaneKeepsTheRowThroughTheOldPanesExit() throws {
+        let (session, view) = try replica(reachable: true)
+        let added = UUID()
+
+        agtermApp.applyRemoteLayout(PresentationLayout(panes: [added], primary: added, shown: false),
+                                   store: store, sessionID: session.id, library: library, attach: lines)
+
+        XCTAssertTrue(session.hasSplit)
+        XCTAssertNil(session.splitSurface)
+        XCTAssertTrue(session.surface === view)
+        try XCTUnwrap(view.onExitHeld)()
+
+        XCTAssertTrue(store.session(withID: session.id) === session)
+        XCTAssertFalse(session.hasSplit)
+        XCTAssertEqual(session.initialCommand, "attach \(ZmxSupport.daemonName(for: added))")
+        XCTAssertTrue(view.isDestroyed)
     }
 
     func testAQueuedHeldCallbackCannotCloseALocalReplacement() throws {

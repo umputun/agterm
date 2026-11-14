@@ -101,6 +101,27 @@ extension AppStore {
         return .success(parent)
     }
 
+    /// nest moves `id` and its companions under `parentID`, as Convert to Companion regroups a row under its new parent.
+    public func nest(_ id: UUID, under parentID: UUID) {
+        let group = Set([id] + companions(of: id).map(\.id))
+        for session in workspaces.flatMap(\.sessions) where group.contains(session.id) { session.parentID = parentID }
+        scheduleTreeChanged()
+        save()
+    }
+
+    /// closeExactly closes the rows `ids` names and answers the ids it closed. A companion `ids` leaves out stays open at
+    /// the top level, where its closed parent was.
+    public func closeExactly(_ ids: Set<UUID>) -> [UUID] {
+        var closed: [UUID] = []
+        for session in workspaces.flatMap(\.sessions) where ids.contains(session.id) && self.session(withID: session.id) != nil {
+            let group = [session.id] + companions(of: session.id).map(\.id)
+            for survivor in companions(of: session.id) where !ids.contains(survivor.id) { survivor.parentID = nil }
+            closeSession(session.id)
+            closed += group.filter { ids.contains($0) && self.session(withID: $0) == nil }
+        }
+        return closed
+    }
+
     /// revertConversion regroups what `convertToCompanion` nested under `parentID` back under `targetID` and restores
     /// the selection, so the fresh parent, now holding nobody, can be closed alone.
     public func revertConversion(_ parentID: UUID, target targetID: UUID, selected: UUID?) {

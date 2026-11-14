@@ -29,13 +29,20 @@ extension AppStore {
     func presentationLayout(of session: Session) -> PresentationLayout? {
         guard session.remoteHost == nil, session.content != .page else { return nil }
         let panes = [session.paneIdentity] + (session.hasSplit ? [session.splitPaneIdentity].compactMap { $0 } : [])
+        let scratch = session.localScratchIdentity
         return PresentationLayout(panes: panes, primary: session.paneIdentity,
                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil, shown: session.isSplit,
-                                  scratch: headless ? nil : session.localScratchIdentity)
+                                  scratch: scratch,
+                                  scratchShown: scratch != nil && (headless ? session.scratchDaemon?.shown == true : session.scratchActive))
     }
 
     func savePaneLayout(_ session: Session) {
         save()
+        publishPaneLayout(session)
+    }
+
+    /// publishPaneLayout tells the session's viewers its pane arrangement and scratch, which change without a save.
+    public func publishPaneLayout(_ session: Session) {
         if let layout = presentationLayout(of: session) {
             presentationHub?.publishLayout(layout, session: session.id)
         }

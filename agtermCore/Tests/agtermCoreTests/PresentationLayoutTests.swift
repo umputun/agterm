@@ -18,7 +18,7 @@ struct PresentationLayoutTests {
     @Test func aLayoutCarriesTheOriginsLiveScratch() throws {
         let primary = UUID()
         let scratch = UUID()
-        let layout = PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch)
+        let layout = PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true)
 
         let decoded = try JSONDecoder().decode(PresentationLayout.self, from: JSONEncoder().encode(layout))
 

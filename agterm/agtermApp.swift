@@ -324,7 +324,7 @@ struct agtermApp: App {
                         }
                         PaneLead.waitToReconnect = { [weak server = controlServer, library] view, cover in
                             guard let session = view.session, let store = library.store(holdingSession: session.id) else { return }
-                            Self.remotePaneStopped(view, store: store, sessionID: session.id, library: library)
+                            Self.remotePaneStopped(view, store: store, sessionID: session.id, library: library, attach: server)
                             server?.waitToReconnect(view, cover: cover)
                         }
                         // drive the Dock badge (via UNUserNotifications) from the app-wide unseen total — the
@@ -575,7 +575,8 @@ struct agtermApp: App {
                view.session?.surface === view || view.session?.splitSurface === view {
                 RemoteReconnectBook.shared.cancel(pane: pane)
             }
-            Self.remotePaneStopped(view, store: store, sessionID: sessionID, library: services.library)
+            Self.remotePaneStopped(view, store: store, sessionID: sessionID, library: services.library,
+                                   attach: services.actions.remoteAttacher as? RemoteAttachLines)
             PaneLead.heldExit?(view)
         }
     }

@@ -117,6 +117,33 @@ struct ServerActionsZmxTests {
             == "zmx.kill needs a session id; 'active' is not accepted")
     }
 
+    @Test func aPinnedKillOfAStalePaneRefusesBeforeAnyKill() throws {
+        let session = try newSession()
+        running(session.paneIdentity, pid: 100)
+        let stale = UUID().uuidString
+
+        let reply = harness.actions.killZmxPane(target: session.id.uuidString, window: nil, pane: .left, paneID: stale)
+
+        #expect(reply == ControlResponse(ok: false, error: "pane \(stale) is no longer the left pane; nothing was killed"))
+        #expect(harness.runner.confirmedKills.isEmpty)
+        #expect(harness.runner.kills.isEmpty)
+        #expect(harness.processes.signals.isEmpty)
+        #expect(harness.store.session(withID: session.id) === session)
+    }
+
+    @Test func aPinnedKillOfTheCurrentPaneKillsIt() throws {
+        let session = try newSession()
+        running(session.paneIdentity, pid: 100)
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+
+        let reply = harness.actions.killZmxPane(target: session.id.uuidString, window: nil, pane: .left,
+                                                paneID: session.paneIdentity.uuidString)
+
+        #expect(reply.result?.text == "killed \(daemon)")
+        #expect(harness.runner.confirmedKills.map(\.name) == [daemon])
+        #expect(harness.store.session(withID: session.id) == nil)
+    }
+
     @Test func pruneKillsOnlyDetachedUnclaimedDaemonsWithoutForce() throws {
         let session = try newSession()
         running(session.paneIdentity, pid: 100, clients: 0)

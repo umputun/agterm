@@ -217,4 +217,30 @@ struct ServerActionsRestartTests {
         #expect(argv.prefix(3) == ["/bin/bash", "--posix", "-lic"])
         #expect(argv.last?.hasSuffix("builtin trap __agterm_rearm EXIT; " + CommandRestore.shellQuotedLine(["top"])) == true)
     }
+
+    private func viewer(of session: Session) async throws -> ServerStreamsTests.Viewer {
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        harness.actions.streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
+        let viewer = ServerStreamsTests.Viewer(fd: fds[1])
+        try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds, mode: .mirror)))
+        let snapshot = await offPool { viewer.first { if case .snapshot = $0 { true } else { false } } }
+        #expect(snapshot != nil)
+        return viewer
+    }
+
+    @Test func aConfirmedRestartPublishesTheRespawnToTheSessionsViewers() async throws {
+        let session = try newSession()
+        running(session.paneIdentity)
+        let viewer = try await viewer(of: session)
+        defer { viewer.disconnect() }
+
+        let reply = await restart(session, command: "make test")
+
+        #expect(reply.ok, "\(reply.error ?? "")")
+        let frame = await offPool { viewer.first { if case .respawn = $0 { true } else { false } } }
+        guard case .respawn(let respawns)? = frame else { Issue.record("no respawn frame"); return }
+        #expect(respawns.epoch == harness.actions.streams.originEpoch)
+        #expect(respawns.generations == [ZmxSupport.daemonName(for: session.paneIdentity): 1])
+    }
 }

@@ -174,6 +174,23 @@ struct ZmxCommandsTests {
         }
     }
 
+    @Test func killWithAPaneIDSendsThePinnedKill() throws {
+        let pinned = try Zmx.Kill.parse(["--target", "abc", "--pane", "right", "--pane-id", "tok", "--force"]).makeRequest()
+
+        #expect(pinned == ControlRequest(cmd: .zmxKillPane, target: "abc", args: ControlArgs(force: true, pane: "right", paneID: "tok")))
+        #expect(try Zmx.Kill.parse(["--target", "abc", "--pane", "right", "--force"]).makeRequest().cmd == .zmxKill)
+    }
+
+    @Test(arguments: [ZmxPaneRole.left, .right])
+    func anAttachedPinnedKillParsesOnItsOrigin(pane: ZmxPaneRole) throws {
+        let forward = AttachedForward.killPane(session: "s1", pane: pane, paneID: "tok")
+
+        let parsed = try #require(try Agtermctl.parseAsRoot(forward.originArgv) as? any RequestCommand).makeRequest()
+
+        #expect(parsed == ControlRequest(cmd: .zmxKillPane, target: "s1", args: ControlArgs(force: true, pane: pane.rawValue, paneID: "tok")))
+        #expect(parsed.cmd == forward.command)
+    }
+
     @Test func restoreModeReadsWithNoArgumentAndSetsWithOne() throws {
         #expect(try Restore.Mode.parse([]).makeRequest().args?.mode == nil)
         #expect(try Restore.Mode.parse(["live"]).makeRequest().args?.mode == "live")

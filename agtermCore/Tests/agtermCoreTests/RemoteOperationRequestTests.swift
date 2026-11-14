@@ -121,6 +121,16 @@ struct RemoteOperationRequestTests {
         #expect(parse(.sessionClose) { $0.targets = [target] } == .operation(.closeSession(first.id), select: false))
     }
 
+    @Test func aTerminateOnAServerRowIsAClose() {
+        let target = first.id.uuidString
+
+        #expect(RemoteOperation.structuralCommands.contains(.sessionTerminate))
+        #expect(parse(.sessionTerminate, target: target) == .operation(.closeSession(first.id), select: false))
+        #expect(parse(.sessionTerminate) { $0.targets = [target, second.id.uuidString] } == .operation(.closeSessions([first.id, second.id]), select: false))
+        #expect(RemoteOperation.closeSession(first.id).words == ["session", "close", "--target", target])
+        #expect(refusal(parse(.sessionTerminate, target: target) { $0.undoable = true }) == "--undoable is not available in a remote window")
+    }
+
     @Test func aMoveTakesExactlyOnePlacement() {
         let target = first.id.uuidString
         #expect(parse(.sessionMove, target: target) { $0.to = "down" } == .operation(.moveSession(first.id, to: .step("down")), select: false))
@@ -190,6 +200,13 @@ struct RemoteOperationRequestTests {
         #expect(refusal(parse(.zmxKill, target: "active") { $0.pane = "left"; $0.force = true }) == "zmx.kill needs a session id; 'active' is not accepted")
         #expect(refusal(parse(.zmxKill, target: target) { $0.force = true }) == "zmx.kill requires --pane left|right")
         #expect(refusal(parse(.zmxKill, target: target) { $0.pane = "left" }) == "zmx.kill requires --force")
+        #expect(RemoteOperation.structuralCommands.contains(.zmxKillPane))
+        #expect(parse(.zmxKillPane, target: target) { $0.pane = "left"; $0.force = true; $0.paneID = "tok" }
+            == .operation(.killDaemon(first.id, pane: .left, paneID: "tok"), select: false))
+        #expect(refusal(parse(.zmxKillPane, target: target) { $0.pane = "left"; $0.force = true }) == "zmx.kill.pane requires --pane-id")
+        #expect(refusal(parse(.zmxKillPane, target: target) { $0.pane = "left" }) == "zmx.kill.pane requires --force")
+        #expect(parse(.zmxKill, target: target) { $0.pane = "left"; $0.force = true; $0.paneID = "tok" }
+            == .operation(.killDaemon(first.id, pane: .left), select: false))
     }
 
     @Test func creationOptionsGoToTheServer() {
@@ -304,6 +321,8 @@ struct RemoteOperationRequestTests {
         #expect(RemoteOperation.duplicateCompanion(id).words == ["session", "duplicate", "--companion", "--target", id.uuidString])
         #expect(RemoteOperation.convertCompanion(id).words == ["session", "convert", "--companion", "--target", id.uuidString])
         #expect(RemoteOperation.killDaemon(id, pane: .left).words == ["zmx", "kill", "--target", id.uuidString, "--pane", "left", "--force"])
+        #expect(RemoteOperation.killDaemon(id, pane: .right, paneID: "tok").words
+            == ["zmx", "kill", "--target", id.uuidString, "--pane", "right", "--pane-id", "tok", "--force"])
     }
 
     @Test func aFlaggedOrderMoveStaysOnThisMac() {

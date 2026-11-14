@@ -652,7 +652,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// terminals, whose own directory the app does not track, so a relative link there stays ignored.
     var linkClickCwd: String? {
         if let session { return isSplitPane ? session.cwd(for: .right) : session.effectiveCwd }
-        guard let owner = scratchOwner, owner.catalogScratch == nil else { return nil }
+        guard let owner = scratchOwner, owner.originScratch == nil else { return nil }
         return owner.cwd(for: .scratch)
     }
 

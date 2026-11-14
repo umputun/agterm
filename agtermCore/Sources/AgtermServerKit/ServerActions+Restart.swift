@@ -70,6 +70,7 @@ extension ServerActions {
         guard let newPid = await leader(of: daemon, otherThan: oldPid, within: restartWaits.shell) else {
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
         }
+        streams.noteRespawn(session: session.id, daemon: daemon)
         return Self.restarted(session, pane: pane, oldPid: oldPid, newPid: newPid, replayed: replay?.argv)
     }
 
@@ -89,6 +90,7 @@ extension ServerActions {
                                         within: restartWaits.shell) else {
             return Self.restartFailure("no shell was observed for the restarted pane")
         }
+        streams.noteRespawn(session: session.id, daemon: ZmxSupport.daemonName(for: pane.identity))
         return Self.restarted(session, pane: pane, oldPid: nil, newPid: newPid, replayed: nil)
     }
 

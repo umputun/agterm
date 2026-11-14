@@ -118,6 +118,18 @@ struct PaneReattach {
         else { return nil }
         return PaneReattach(command: command, wait: true, environment: old.env, workingDirectory: old.workingDirectory)
     }
+
+    /// originScratch is a fresh attach of the scratch an attached row shows from its origin.
+    @MainActor
+    static func originScratch(replacing old: GhosttySurfaceView, session: Session, identity: UUID,
+                              lead: ZmxLeadAttachment) -> PaneReattach? {
+        guard let binding = session.remotePresentation?.binding, let origin = binding.origin,
+              let command = try? RemoteSession.attachPaneCommand(host: origin.host, endpoint: origin.endpoint,
+                                                                 daemon: binding.scratchDaemon(for: identity), session: "scratch",
+                                                                 pane: .left, lead: lead)
+        else { return nil }
+        return PaneReattach(command: command, wait: true, environment: old.env, workingDirectory: old.workingDirectory)
+    }
 }
 
 extension GhosttySurfaceView {

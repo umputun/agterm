@@ -1129,7 +1129,8 @@
                 <em>not</em> inherit the source's custom name,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span>, split, scratch, status, flag, font
                 size, or background. It is the control half of the sidebar row's <strong style="color: #bfbab0">Duplicate Session</strong>
-                context-menu item (single-selection only). Read back from
+                context-menu item (single-selection only). On a session attached from another host, that host creates the
+                session after its own and it attaches here after the row. Read back from
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>: no new field — the new session node
                 appears directly after its source, carrying the source's focused-pane
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span> (equal to the source node's
@@ -1184,8 +1185,8 @@
                 session); the human output prints the fresh session's id.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                A companion target is refused <span style="font-family: &quot;JetBrains Mono&quot;, monospace">already a companion</span>, a session attached from another Mac
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">convert it on the Mac it runs on</span>. The GUI twin is <strong style="color: #bfbab0">Convert to
+                A companion target is refused <span style="font-family: &quot;JetBrains Mono&quot;, monospace">already a companion</span>. On a session attached from another host, that host
+                converts it and its new parent attaches here at the row's place, with the row under it. The GUI twin is <strong style="color: #bfbab0">Convert to
                 Companion</strong> in the session row's context menu and the Session menu, an action-palette row, and the keyless
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">convert_companion</span> keymap action. Read back via both nodes'
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent</span>.
@@ -1271,9 +1272,9 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session close [--target T ...] [--undoable] [--window W]
+                agtermctl session close [--target T ...] [--undoable] [--terminate] [--window W]
               </div>
-              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.close</div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.close · session.terminate</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Close the target session. Repeat <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>
                 to close a batch as one grouped undo when close grace is enabled, or immediately when it is disabled. Batch output
@@ -1286,7 +1287,14 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Every ok reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.closed</span>, the ids it closed. Closing a parent
                 closes its companions too and sets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.affected</span> to the group size, so a parent with
-                two companions prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">3 sessions</span>; a plain single close prints as before.
+                two companions prints <span style="font-family: &quot;JetBrains Mono&quot;, monospace">3 sessions</span>; a plain single close prints as before. A single-target close of a
+                session Recent Closed keeps also carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.recentID</span>, the entry <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent open</span> takes back.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--terminate</span> also ends a session attached from another host on that host: the host closes its own
+                session and group, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--undoable</span> passed through, and every row here showing a session it closed closes; a
+                companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no answer, the error names
+                it and what did close, and an unanswered host is never asked again.
               </p>
             </div>
 
@@ -1549,7 +1557,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hasSplit</span> (exists at all); a hidden split reads
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split: false</span> with the pane still alive, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl tree</span> tags it
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(split hidden)</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(split hidden)</span>. On a session attached from another host, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">split close</span> run on that host, and a split it opens attaches here.
               </p>
             </div>
 
@@ -1633,7 +1642,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span>. Requires Live sessions
                 mode and a local pane, or a row of an agterm-server window, which its server restarts; there an Ended row takes
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> on the left pane. A row attached from another Mac and the scratch terminal are refused. A pane id that does not resolve is an error even beside
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> on the left pane. A row attached from another host is restarted there and this pane follows
+                the new shell; an agterm there too old for it refuses. The scratch terminal is refused. A pane id that does not resolve is an error even beside
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">LINE</span> is one shell line of at most 4096
                 bytes. The pane's status and any ask, HUD or pane overlay anchored to it are cleared; its restore pin is kept.
@@ -1679,7 +1689,9 @@
                 instead of a login shell — run the same way, with the same GUI-<span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>
                 exit-127 caveat as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span>, and
                 run-once. A scratch is expendable, so passing
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> while one is open respawns it.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> while one is open respawns it. On a session attached from another host the scratch is that
+                host's: the command runs there, and it shows and hides here as it does there. It is refused while the session
+                is not connected, or when that host's agterm is too old to show its scratch.
               </p>
             </div>
 
@@ -2028,7 +2040,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> to drop the override and go back to
                 auto-capture. Read back as the session node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> (main pane) or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (split pane).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (split pane). On a session attached from another Mac the pin is set on that
+                Mac's pane; on one from agterm-server, or in its window, it is refused with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agterm-server keeps every pane running</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The override is written now and consumed on the <em>next</em> launch — it never touches the running session — and it is
@@ -4382,9 +4396,9 @@
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl zmx kill --target ID --pane left|right --force [--window ID]
+                agtermctl zmx kill --target ID --pane left|right --force [--pane-id TOKEN] [--window ID]
               </div>
-              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.kill</div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">zmx.kill · zmx.kill.pane</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Destroy one pane's daemon and the process running in it. Target, pane and force are all required.
               </p>
@@ -4393,6 +4407,10 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> scopes the search to one window's claims, for a session prefix claimed in more than one. Omit it to search every window, closed and unindexed ones included. Neither it nor <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> accepts <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> pins the kill to that pane: it is refused, killing nothing, when the role now names another
+                pane. On a session attached from another host the kill runs on that host, pinned to its pane.
               </p>
             </div>
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -4470,7 +4488,7 @@
                 If ssh itself failed (exit 255), the pane keeps the last screen under a reconnecting bar and attaches again by itself once the host answers; any other exit leaves one line naming the host, the session, the pane and the exit status, and holds on Ghostty's own press-any-key prompt. agterm adds an ssh keepalive by default; the guide says when. Confirmed origin removal requires no acknowledgement, even if the replica already shows that prompt. Automatic primary removal is skipped while a local split is pending; the last replica waits for its ssh exit and may then close the row. Closing the session here ends only this side's connection: the far-side processes keep running, and nothing this command does can kill them. A remote session is never written to disk, so it does not come back after a relaunch.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                Every terminal attach also opens a presentation stream (a page row uses its page channel instead and mirrors nothing), so the row mirrors the origin session's status, its context, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> notifications, its HUD and the layout of panes already attached; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> on the tree node reports it. Layout updates never open a pane: close and reattach the row to include a split opened later on the origin. The mirrored status, context and HUD clear while the stream is down and return on reconnect, a notification raised meanwhile is not shown, and a terminal notification (OSC 9/777) is not mirrored because it already arrives in the pane's bytes.
+                Every terminal attach also opens a presentation stream (a page row uses its page channel instead and mirrors nothing), so the row mirrors the origin session's status, its context, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> notifications, its HUD and the layout of panes already attached; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> on the tree node reports it. A split the origin opens later attaches into an empty split slot, and a replica closed here stays closed. The mirrored status, context and HUD clear while the stream is down and return on reconnect, a notification raised meanwhile is not shown, and a terminal notification (OSC 9/777) is not mirrored because it already arrives in the pane's bytes.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 One attached row per session holds the <em>presenter</em> role (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">mode</span> reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presenter</span>): the first whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect. An <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ask open</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay open</span> newly aimed at it on the origin goes to that Mac only when the target pane reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace">follower</span> there, or every existing pane does for session-wide placement. Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes. A question with a text field, a list, an <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--other</span> line or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cancel</span> goes there only when that Mac's agterm supports them and the question fits one stream frame; otherwise it stays on the origin, and one handed back from that Mac starts again from its initial text or selection. The caller on the origin gets the answer or the exit status as usual. An ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on screen), or whose stream drops, goes back to the origin and waits there like a local one; if the origin cannot place it, it ends <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span> with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">reason</span> <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation-lost</span>. An overlay's program runs once, on the origin, under an ssh terminal the presenting Mac opens; the origin's session stays uncovered with its slot reserved, and an overlay the presenting Mac cannot show ends <span style="font-family: &quot;JetBrains Mono&quot;, monospace">launch-failed</span> instead of opening on the origin. The presenting Mac's own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session overlay result</span> for it reports its local ssh status, so ask the origin.

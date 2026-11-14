@@ -193,6 +193,7 @@ extension AppStore {
         guard let session = session(withID: sessionID), let scratch = session.scratchDaemon else { return }
         releaseScratchOwnedState(of: session, token: scratch.identity.uuidString)
         session.scratchDaemon = nil
+        publishPaneLayout(session)
     }
 
     /// releaseScratchOwnedState drops what a departing scratch owned: a `.scratch`-tagged block (a main/split tag
@@ -390,7 +391,12 @@ extension AppStore {
     /// hasLiveSplit is whether a split pane is still running to take the primary slot: its surface on the Mac, its
     /// daemon on a headless store, where a split identity is minted before any daemon is provisioned for it.
     private func hasLiveSplit(_ session: Session, survivor: (any TerminalSurface)?) -> Bool {
-        guard headless else { return survivor != nil }
+        // a hidden split the origin added has no surface until shown, and still runs there
+        guard headless else {
+            guard survivor == nil, let split = session.splitPaneIdentity, let state = session.remotePresentation,
+                  !state.binding.catalogOwned else { return survivor != nil }
+            return state.binding.remotePane(forLocal: split) != nil
+        }
         return session.splitPaneIdentity.map(session.daemonBackedPanes.contains) ?? false
     }
 
@@ -666,6 +672,7 @@ extension AppStore {
         guard let session = session(withID: sessionID) else { return }
         session.scratchActive.toggle()
         if emitVisibility { emitPaneVisibility(.paneScratch, session: session, shown: session.scratchActive) }
+        publishPaneLayout(session)
     }
 
     /// closeScratch hides the scratch and tears down its surface, ending the Live daemon its shell ran in, so the next
@@ -684,7 +691,11 @@ extension AppStore {
         session.scratchSurface = nil
         session.scratchGeneration += 1
         // a requested-Live fallback runs a plain shell beside the daemon it keeps for the next Live launch
-        if let daemon, scratch.paneToken == daemon.uuidString { endLiveScratch(daemon, of: session) }
+        if let daemon, scratch.paneToken == daemon.uuidString {
+            endLiveScratch(daemon, of: session)
+        } else if wasShown {
+            publishPaneLayout(session)
+        }
         return true
     }
 

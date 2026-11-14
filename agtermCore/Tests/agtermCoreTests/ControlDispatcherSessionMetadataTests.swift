@@ -742,4 +742,19 @@ struct ControlDispatcherSessionMetadataTests {
         #expect(tinted == ControlResponse(ok: false, error: "workspace.new --tint is not supported on this platform"))
         #expect(actions.calls == [.workspaceNew(window: nil, "w", collapsed: false)])
     }
+
+    @Test(arguments: [
+        (ControlRequest(cmd: .zmxKill, target: "s", args: ControlArgs(pane: "left")), true),
+        (ControlRequest(cmd: .zmxKill, target: "s", args: ControlArgs(force: true, pane: "left")), false),
+        (ControlRequest(cmd: .zmxKillPane, target: "s", args: ControlArgs(force: true, pane: "left")), true),
+        (ControlRequest(cmd: .zmxKillPane, target: "s", args: ControlArgs(force: true, pane: "left", paneID: "p")), false),
+        (ControlRequest(cmd: .sessionRestart, target: "s", args: ControlArgs()), true),
+        (ControlRequest(cmd: .sessionRestart, target: "s", args: ControlArgs(pane: "left")), false),
+        (ControlRequest(cmd: .sessionRestore, target: "s", args: ControlArgs(mode: "set")), true),
+        (ControlRequest(cmd: .sessionRestore, target: "s", args: ControlArgs(mode: "set", command: "")), false),
+        (ControlRequest(cmd: .sessionScratch, target: "s", args: ControlArgs(mode: "bogus")), false),
+    ])
+    func refusesArgumentsAnswersTheChecksTheCommandMakesBeforeItsHost(request: ControlRequest, refused: Bool) {
+        #expect(ControlDispatcher.refusesArguments(request) == refused)
+    }
 }

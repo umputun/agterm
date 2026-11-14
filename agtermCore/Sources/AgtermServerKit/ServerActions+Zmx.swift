@@ -63,6 +63,14 @@ extension ServerActions {
     /// killZmxDaemon kills one pane's daemon and, once zmx confirms it, runs the transition the pane's own exit
     /// would: the session closes, a parent respawns, or the live split takes over.
     public func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole) -> ControlResponse {
+        killZmxDaemon(target: target, window: window, pane: pane, pinned: nil)
+    }
+
+    public func killZmxPane(target: String, window: String?, pane: ZmxPaneRole, paneID: String) -> ControlResponse {
+        killZmxDaemon(target: target, window: window, pane: pane, pinned: paneID)
+    }
+
+    private func killZmxDaemon(target: String, window: String?, pane: ZmxPaneRole, pinned: String?) -> ControlResponse {
         if let refusal = windowRefusal(window) { return refusal }
         guard target != "active" else {
             return ControlResponse(ok: false, error: "zmx.kill needs a session id; 'active' is not accepted")
@@ -72,6 +80,9 @@ extension ServerActions {
               let claim = owned.first(where: { $0.sessionID == sessionID }),
               let session = store.session(withID: sessionID) else {
             return ControlResponse(ok: false, error: "no \(pane.rawValue) pane daemon for session \(target)")
+        }
+        if let pinned, let refusal = ZmxPaneRole.pinRefusal(pinned, identity: claim.paneIdentity, pane: pane) {
+            return ControlResponse(ok: false, error: refusal)
         }
         let daemon = ZmxSupport.daemonName(for: claim.paneIdentity)
         guard let listed = try? panes.runner.list() else {
