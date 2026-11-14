@@ -9,7 +9,7 @@ description: >
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
-  pane, tree and launch events; wait on agent status.
+  pane, tree and launch events; wait on agent status, on this Mac or an agterm-server host.
   Covers window/workspace/session addressing, session links, AGTERM_* variables,
   attaching another Mac's sessions, agterm-server windows, cookbook recipes, version and upgrades, diagnosing
   problems, filing a bug or feature request.
@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -1000,8 +1000,9 @@ To show a docs page or a web app you are running, open it by URL instead; a scri
 agtermctl session overlay open --url http://localhost:5173/ --js --target "$AGTERM_SESSION_ID" --follow
 ```
 
-- The server must already be running and reachable from the Mac running agterm; `localhost` means that
-  Mac, not a remote shell's. Plain http works for local addresses; use https for public hosts.
+- The server must already be running and reachable from the agterm the command reaches; `localhost` means this
+  Mac from a local session, and the host from a session agterm-server or another Mac runs, whose page the Mac
+  showing it reaches through an ssh forward. Plain http works for local addresses; use https for public hosts.
 - Pass `--js` for web apps that require client-side JavaScript; without it the page renders only its static
   markup. `tree` reports `javascript` for each page.
 - Links to the same origin load in place. A clicked link to another origin, or one whose redirect leaves
@@ -1084,7 +1085,8 @@ choice=$(agtermctl session overlay open --html /tmp/branches.html --block --targ
 agterm-server runs sessions on a Linux host; `agtermctl window remote open HOST` opens a Mac window
 mirroring them over ssh, and every shell keeps running on the host across disconnects. Inside such a
 session, `agtermctl` on the host talks to agterm-server, which serves the session, workspace, overlay,
-HUD, ask and pick commands and refuses the ones that change a Mac window (`window list` still answers). reference.md "remote server" lists the commands,
+HUD, ask and pick commands and refuses the ones that change a Mac window (`window list` still answers).
+`agtermctl events` and `session wait` work there too, on the server's own event history. reference.md "remote server" lists the commands,
 the read-back and what the server refuses. `session overlay open --page|--companion` there makes a page row
 from a file on the host or a URL, which a Mac's remote window shows as a page row.
 `agtermctl server install HOST`, run on the Mac, installs or upgrades the server release matching that app's own

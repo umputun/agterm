@@ -16,30 +16,34 @@ struct ServerCommandPolicyTests {
         #expect(ServerCommandPolicy.refusal(.windowNew) == HeadlessCommandPolicy.physicalWindowRefusal(.windowNew))
     }
 
-    @Test(arguments: [Command.zmxReset, .restoreCapture, .hooksList])
-    func anyOtherCommandIsRefusedByName(_ command: Command) {
-        #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
-    }
-
-    private static let undecided: Set<Command> = [
-        .debugAppearance, .hooksList, .hooksReload,
-        .restoreCapture, .restoreClear, .restoreMode,
-        .sessionBackground, .sessionCollapse, .sessionCopy, .sessionDetach,
-        .sessionExpand, .sessionFocus, .sessionGo, .sessionLead,
-        .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize,
-        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSelect, .sessionSelectAll,
-        .windowRemoteDismiss,
-        .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFocus, .workspaceGo,
-        .workspaceReattach, .workspaceSelect,
-        .zmxAttach, .zmxAttachGroup, .zmxReset,
+    private static let refusedByDesign: [String: Set<Command>] = [
+        "Mac view state of a server window": [
+            .sessionBackground, .sessionCollapse, .sessionExpand, .workspaceFocus, .workspaceFilter,
+            .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .workspaceCollapse, .workspaceExpand,
+            .windowRemoteDismiss,
+        ],
+        "Mac selection and clipboard": [.sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayCopy, .sessionOverlayText],
+        "moves what a Mac shows": [.sessionFocus, .sessionSelect, .sessionGo, .sessionLead, .sessionResize, .workspaceSelect, .workspaceGo],
+        "Finder on the Mac": [.sessionReveal],
+        "Mac app relaunch": [.restoreMode, .restoreCapture, .restoreClear, .zmxReset, .sessionRestore],
+        "makes a Mac viewer": [.zmxAttach, .zmxAttachGroup],
+        "UI-test seam": [.debugAppearance],
+        "deferred to docs/backlog/server-user-event-hooks.md": [.hooksList, .hooksReload],
     ]
 
-    @Test func everyCommandIsServedWindowOnlyOrUndecided() {
+    @Test func everyCommandIsServedWindowOnlyOrRefusedByDesign() {
         let misclassified = Command.allCases.filter { command in
-            [ServerCommandPolicy.served.contains(command), HeadlessCommandPolicy.physicalWindowRefusal(command) != nil,
-             Self.undecided.contains(command)].count { $0 } != 1
+            let places = [ServerCommandPolicy.served.contains(command), HeadlessCommandPolicy.physicalWindowRefusal(command) != nil]
+                + Self.refusedByDesign.values.map { $0.contains(command) }
+            return places.count { $0 } != 1
         }
 
         #expect(misclassified.map(\.rawValue) == [])
+    }
+
+    @Test func aCommandRefusedByDesignIsRefusedByName() {
+        for command in Self.refusedByDesign.values.flatMap({ $0 }) {
+            #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
+        }
     }
 }

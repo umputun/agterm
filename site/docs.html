@@ -1516,6 +1516,9 @@
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               The host runs every shell, the scratch, overlay programs and the catalog itself. The Mac draws them and keeps the window, settings, theme, keymap, the quick terminal and custom command bodies. Whatever a session shows the user (an ask, a pick, a page, a HUD or an overlay) is drawn by the Mac presenting that session; with no Mac connected it is held on the host until one shows the session. Each host gets a pool of shared ssh connections with at most eight channels each, which keeps under the stock sshd limit of ten sessions per connection without changing the server.
             </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A program on the host reads what the server keeps: <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session wait</span> follow the server's own event history, a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session info</span> line expires there, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">surface cursor</span> reads the pane's screen, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx list</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx screen</span> cover the server's daemons. Flag and tint on the server's rows are kept by the server, so every Mac shows them. Clearing the server's status or a badge on the Mac (typing, selecting the row, Clear Status) clears it on the server under the Mac's default rules; a status set on the Mac's row is cleared there only.
+            </p>
             <h3
               id="remote-server-disconnects"
               style="
@@ -3229,7 +3232,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every terminal attach also opens a
               presentation stream back to it (a page session uses its page channel instead and mirrors none of this): this Mac mirrors the layout of panes already attached, the session's status, its session context, its sidebar info line, its
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> notifications and its HUD. A context set on this Mac's
-              row wins over the mirrored one, and clearing it here shows the other Mac's again. A far side running an agterm
+              row wins over the mirrored one, and clearing it here shows the other Mac's again. Clearing the row's status or
+              badge here (typing, selecting it, Clear Status) clears it on the other Mac too, under that Mac's own reset settings,
+              when the status is the one mirrored from there; a status set on this Mac's row is cleared here only. A far side running an agterm
               from before context mirroring still connects and mirrors the rest, with no context. It needs nothing beyond
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> on the far side's ssh PATH. The session's tree node reports it as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">presentation</span>, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">connected</span> means
@@ -3280,7 +3285,7 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               An HTML page follows the same rule: it opens on the presenting Mac, where you are. A page opened from a file reads
               its files from the other Mac as it needs them, and the buttons and scripts in it act on the other Mac's session, so
               a page that answers its caller answers the program over there. A web page loads directly on the presenting Mac;
-              with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--persistent</span>, it uses that Mac's saved browser storage. A page for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">localhost</span> stays refused, because it names a server on the other Mac. Closing the
+              with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--persistent</span>, it uses that Mac's saved browser storage. A page for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">localhost</span> names a server on the other Mac, so it loads through an ssh forward from this Mac; an agterm here too old to forward it refuses it. Closing the
               page from a script on the other Mac takes it down here, and reloading asks this Mac to do it; Finder and the browser are refused for a
               file page, whose file is not on this Mac.
             </p>
@@ -3600,7 +3605,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               earlier click opened is replaced instead, as with a web link. In a session
               attached from another Mac or in a remote window, a path names a file on that Mac or Linux host, so the click goes
               there: it opens the picture, markdown, text, log or HTML page and it shows here, a relative path looked up in that
-              pane's directory there. A click it cannot open, a ⌘⌥-click, and a click while that Mac runs an older agterm show a
+              pane's directory there. A scratch running there works the same way. A web link to localhost, 127.0.0.1 or ::1
+              in such a session names that host, so it opens through an ssh forward from this Mac once the forward answers. A click it cannot open, a ⌘⌥-click, and a click while that Mac runs an older agterm show a
               short panel saying why, or
               beep when the panel cannot be shown. A terminal renders untrusted
               program output, so a link could point at a
@@ -4024,8 +4030,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
             </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               A tint on a local session or workspace survives quit and relaunch, and a duplicated session starts
-              without one. It stays on this Mac: a session attached from another Mac does not show the origin's tint,
-              and a tint set on that row goes away with it.
+              without one. On a session attached from another Mac it stays on this Mac: the row does not show the origin's
+              tint, and a tint set on it is saved with the row. A remote window's row shows the server's tint, which every Mac shares.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace new --tint</span> create a
               row already tinted. The tint reads back on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tintOn</span>. On an older agterm, an emoji and a

@@ -246,8 +246,17 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertNotNil(fix.presenter.token)
     }
 
-    func testALoopbackUrlForThePresenterIsRefused() throws {
+    func testALoopbackUrlGoesToAPresenterThatForwardsIt() throws {
         let fix = try fixture()
+
+        _ = try openContent(fix, .url(try XCTUnwrap(URL(string: "http://localhost:8080/app?x=1"))))
+
+        let request = try XCTUnwrap(fix.presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.last)
+        XCTAssertEqual(request.source, .forwarded("http://localhost:8080/app?x=1"))
+    }
+
+    func testALoopbackUrlForAPresenterThatCannotForwardIsRefused() throws {
+        let fix = try fixture(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageForwardKind })
         let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
                                                        page: .url(try XCTUnwrap(URL(string: "http://localhost:8080/"))))
         let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)

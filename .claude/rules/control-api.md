@@ -1450,7 +1450,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   refuses a color or parts. `ControlDispatcher+SessionMetadata` parses both and the creation `tint`/`tintOn` on
   `session.new`/`workspace.new` before any action runs, so a bad value creates nothing. A set without parts keeps
   the row's own, else icon; `SidebarTint.recolor`/`place` own that rule for the CLI, the row menu and the palette.
-  A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac.
+  A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac except on a
+  remote window's row, where the server keeps it as a catalog field, as it does the flag; a server predating those
+  fields leaves both on the Mac.
   `ControlActions` keeps the tintless `createSession` and `createWorkspace`; each tint overload's default refuses a tint.
   Hex is control-only: the row menu shows it as a checked Custom entry and has no picker. The agterm-linux fork
   calls the `TintColor` forms of `SidebarTint.init`, `recolor`, `AppStore.setTintColor` and `ControlTintUpdate.set`,

@@ -405,16 +405,16 @@
   `.claude/rules/sidebar.md`, `.claude/rules/menu-actions.md`, `site/docs.html`, `site/commands.html`,
   `site/llms.txt` if affected, `plugins/agterm/skills/agterm/`
 
-- [ ] `undecided` is gone: each command is served or in an explicit refused-by-design set carrying its reason, per
+- [x] `undecided` is gone: each command is served or in an explicit refused-by-design set carrying its reason, per
       the table below
-- [ ] docs: remote server and remote sessions sections (status clear, terminate, undo/reopen, restored attached rows,
+- [x] docs: remote server and remote sessions sections (status clear, terminate, undo/reopen, restored attached rows,
       scratch daemon and its restart survival, loopback clicks), command reference rows and read-back fields
       (`recentID`, catalog flag/tint, `--window` on `recent.*`), rule files that describe the old behavior (remote
       Convert disabled, scratch override never persisting, remote clear staying local), skill reference and
       SKILL.md triggers for events and wait on the host
-- [ ] verify every gap in the table is closed for A, B and C; gates: `cd agtermCore && swift test`,
+- [x] verify every gap in the table is closed for A, B and C; gates: `cd agtermCore && swift test`,
       `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 Disposition of every command that was undecided on the server, plus the new one (A = host agent, B = server window
 row, C = attached row):
@@ -453,7 +453,9 @@ Finder reveal and `keymap.run`; Mac app lifecycle commands.
   flag/tint set by a host agent shown on two Macs, a clicked dev-server URL opening the host's server,
   `show-image.sh` from a host pane rendering in its overlay
 - a second Mac: attach, relaunch the viewing Mac (rows return), terminate from the viewer then reopen, a new split
-  and scratch run on the origin, a cleared status stays cleared after a reconnect
+  and scratch run on the origin, a cleared status stays cleared after a reconnect, the attached row's scratch attached,
+  hidden, shown, replaced, exited and reconnected against the real origin daemon (Task 6's open test box), and a
+  `localhost` link and a relative path clicked in the origin's scratch opening on the origin (Task 9)
 - host reboot behavior of exit records (unsettled in the audit) checked against the restart and Ended paths
 - TCC for a Live scratch (Task 5): in an isolated Debug instance a pane and a scratch, each in its own daemon, read the
   same passive statuses (microphone not determined, screen capture false, Accessibility false). Equal statuses do not

@@ -932,8 +932,9 @@ error keeps those names for compatibility.
   the names only. `--on` is `icon`, `name` or `icon,name`; omitted, a recolor keeps
   the row's placement and an untinted row starts on the icon. `clear` removes the tint and refuses `--on`; the
   socket form (`mode` `set|clear`, `tint`, `tintOn` array) refuses a clear carrying either. Returns the session
-  id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac: an attached row does
-  not mirror the origin's tint, and its own tint is saved with the row.
+  id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac on a row attached from
+  another Mac: it does not mirror the origin's tint, and its own tint is saved with the row. On a remote window's
+  row the server keeps the tint and every Mac shows it (see [remote server](#remote-server)).
   Read back from the node's `tint`/`tintOn`. GUI twins: the row menu's Tint submenu
   (a color applies to every selected row, keeping each row's placement; Show On needs every selected row
   tinted) and the palette's "Tint Session: <Color>" / "Tint Session: None" for the active session.
@@ -1140,7 +1141,9 @@ error keeps those names for compatibility.
   (`http://localhost:5173/`) or a docs page. Everything above for `--html` applies, except that URL must be
   an absolute http or https URL (`--url must be an absolute http or https URL`), `--cwd` and `--block` are
   refused, and the page gets no bridge to agterm. The
-  server must be reachable from the Mac running agterm; `localhost` means that Mac. Plain http works for
+  server must be reachable from the agterm the command reaches, where `localhost` points: this Mac from a local
+  session, the host from a session agterm-server or another Mac runs, whose page the Mac showing it reaches through
+  an ssh forward (a page session or page companion on a loopback URL is still refused there). Plain http works for
   local addresses (localhost, `.local`, IP literals); use https for public hosts. Pass `--js` for web
   apps that require client-side JavaScript; without it only the static markup renders. The page is pinned to
   its origin: same-origin navigations and redirects load in place; a clicked link elsewhere, or a clicked
@@ -1579,6 +1582,13 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   scratch may still run),
   `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon), and every server
   scratch row, here and on the server, has `scratchPaneID` and `scratchPendingMessages` (see [msg](#msg)).
+- Flag, `session tint` and `workspace tint` on a remote window's rows run on the server, which keeps them so every
+  Mac shows them; a server predating that keeps them on this Mac. Clearing the server's status here (typing in the
+  pane, selecting the row, Clear Status), or the row's badge, goes to the server, which applies the Mac's default
+  reset rules; a status set on this Mac's row is cleared here only. A path clicked in the server's scratch resolves in the scratch's directory on the host, and a
+  loopback http(s) link clicked in a server pane or scratch opens through an ssh forward to the host.
+- On the host itself `agtermctl events` and `session wait` read the server's own event ring, `session info`
+  expires there, `surface cursor` reads the daemon's screen, and `zmx list` and `zmx screen` cover its daemons.
 - `window remote dismiss [ID]`: drop the marks for actions whose outcome was lost; it neither undoes nor
   resends them. The window settles a mark through `catalog op` by itself when the server still knows it.
 - `session detach [--target T ...]` / `workspace detach [--target T]`: hide a remote window's rows on this
@@ -1598,7 +1608,7 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
   dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges
-  `zmx present`, `run-job`, `page-serve` and `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
+  `zmx present`, `run-job`, `page-serve` and `page-attach` are served); `ask open --style gui` needs `--target`; a pick needs a
   session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held until a Mac
   presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an ask or pick ends
   unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap`, `changes` and `files`
@@ -2023,8 +2033,7 @@ keeps it. Mail lives for the server's run. The server tree reports `pendingMessa
 and a scratch's address and count on the session as `scratchPaneID` and `scratchPendingMessages`; a Mac showing
 the server window reports the same counts on the row. Any Mac viewing a session hosted elsewhere, a server's or
 another Mac's, gets the `message` event for mail queued for that session's panes, carrying the host's pane id;
-a row attached alone with `zmx attach` or from another Mac reports no counts yet. `events.read` is not served on
-the server itself. A local pane and
+a row attached alone with `zmx attach` or from another Mac reports no counts yet. A local pane and
 a server pane cannot message each other yet: a Mac send to a server row is rejected `unknown pane` with detail
 `remote session`, a server send to a Mac session `unknown pane`, and a server row as `--as` is refused.
 
@@ -2534,6 +2543,12 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
   repeat of the same value included. A reconnect does not end it, even when the origin's status changed
   while the stream was down. Clearing it here gives the row back to the origin's status.
+- Clearing the status mirrored from the origin here (typing in the pane, selecting the row, Clear Status), or the
+  row's badge (viewing it, typing), goes to the origin, which applies its own reset settings, so the cleared status
+  does not come back with the next snapshot. A status set on this Mac's row is cleared here only.
+- A link clicked in the row resolves where the program runs: a path in a pane or in a scratch running on the origin
+  opens from the origin's directory, and a loopback http(s) link opens through an ssh forward to the origin once
+  it answers; a forward that fails shows `the port forward to HOST failed`.
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
   whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect.
   An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
@@ -2556,8 +2571,9 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   keeps its own `--persistent` storage. A file page's files and its `data-agterm`/`agterm.request` commands
   go back to the origin over a channel the presenting Mac opens (`agtermctl session overlay page-serve`,
   plumbing not meant to be typed), so commands act on the origin's session and `overlay submit` answers the
-  caller there; `result --page` and `--html --block` work unchanged on the origin. A loopback `--url` is
-  refused (it names a server on the origin), as is any page for a presenting Mac too old for pages
+  caller there; `result --page` and `--html --block` work unchanged on the origin. A loopback `--url` opens
+  through an ssh forward from the presenting Mac to the origin; it is refused for a presenting Mac too old to
+  forward it (it names a server on the origin), as is any page for a presenting Mac too old for pages
   and an open request too large for a presentation frame (`page too large to show on another Mac`).
   On the origin `close` ends the page there and frees the slot at once; `resize`, `reload`,
   `navigate back|forward` and `hide|show|toggle` are requests sent to the presenting Mac; `navigate browser` reaches it for a URL page, while `finder` and `browser` on a file
