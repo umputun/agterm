@@ -28,7 +28,10 @@ extension ControlServer {
     func messageQueued(_ messageID: UUID, from: String?, to recipients: [MessageRecipient]) {
         let stores = openStores()
         for recipient in recipients {
-            for store in stores where store.emitMessageQueued(messageID, from: from, to: recipient) { break }
+            for store in stores where store.emitMessageQueued(messageID, from: from, to: recipient) {
+                store.publishMessageQueued(messageID, from: from, to: recipient)
+                break
+            }
         }
     }
 

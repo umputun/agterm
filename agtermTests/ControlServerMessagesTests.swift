@@ -14,6 +14,15 @@ final class ControlServerMessagesTests: XCTestCase {
         func promoteToPrimaryPane() {}
     }
 
+    private final class FrameSink: PresentationSink {
+        var messages: [PresentationMessage] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if case .message(let message) = frame.body { messages.append(message) }
+            return true
+        }
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
     private var stateDir: URL!
     private var library: WindowLibrary!
     private var server: ControlServer!
@@ -182,6 +191,29 @@ final class ControlServerMessagesTests: XCTestCase {
 
             XCTAssertEqual(MessageBus.shared.pending(for: session.paneIdentity), 0, delete ? "delete" : "close")
         }
+    }
+
+    func testAQueuedMessageEmitsHereAndReachesEveryViewerOfTheRecipientsSession() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let target = try liveSession(in: store)
+        let other = try liveSession(in: store)
+        server.attachPresentationHub()
+        let (viewer, bystander) = (FrameSink(), FrameSink())
+        let hello = PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds, mode: .mirror)
+        _ = try server.presentationHub.subscribe(session: target.id, hello: hello, sink: viewer) { self.server.presentationSnapshot(forSession: target.id) }
+        _ = try server.presentationHub.subscribe(session: other.id, hello: hello, sink: bystander) { self.server.presentationSnapshot(forSession: other.id) }
+        let dispatcher = ControlDispatcher(actions: server)
+        let anchor = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead))
+        let batch = try XCTUnwrap(anchor?.result?.events)
+
+        let sent = await send(ControlArgs(body: "hi", recipients: [address(target)], identity: address(other)))
+        let read = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead, args: ControlArgs(
+            after: String(batch.next), run: batch.run.uuidString, kinds: ["message"])))
+
+        let id = try XCTUnwrap(sent?.result?.messageID.flatMap(UUID.init(uuidString:)))
+        XCTAssertEqual(viewer.messages, [PresentationMessage(pane: target.paneIdentity, from: address(other), messageID: id)])
+        XCTAssertTrue(bystander.messages.isEmpty)
+        XCTAssertEqual(read?.result?.events?.items.map(\.session), [target.id.uuidString])
     }
 
     func testTheMessageEventCarriesWindowAndWorkspace() async throws {

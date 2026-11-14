@@ -1483,7 +1483,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   rebuilt from each catalog entry and never part of the binding, so a count change attaches nothing; a server
   scratch reads back on the session (`scratchPaneID`, `scratchPendingMessages`), since the `surfaces[]` entry
   is a zoom address the server's scratch lacks. Each delivered pane is a `message` presentation frame to every
-  viewer of its session, presenter or not, and the Mac emits the event on the row (`emitRemoteMessage`).
+  viewer of its session, presenter or not, from a server or a Mac origin (`publishMessageQueued`), and the viewer
+  emits the event on the row (`emitRemoteMessage`). Counts on a row attached alone or from another Mac are
+  `docs/backlog/pending-counts-on-attached-rows.md`, an exception Eugene approved.
 
 ## Keymap, config, theme, and sidebar
 

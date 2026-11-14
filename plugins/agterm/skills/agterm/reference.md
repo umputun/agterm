@@ -1990,8 +1990,10 @@ On agterm-server the same commands work between the panes of that server: main, 
 hidden ones included, and the main and split panes of an ended row drop their mail while its running scratch
 keeps it. Mail lives for the server's run. The server tree reports `pendingMessages` on main and split surfaces
 and a scratch's address and count on the session as `scratchPaneID` and `scratchPendingMessages`; a Mac showing
-the server window reports the same counts on the row, and its `message` event fires for mail queued for that
-row's panes, carrying the server's pane id. `events.read` is not served on the server itself. A local pane and
+the server window reports the same counts on the row. Any Mac viewing a session hosted elsewhere, a server's or
+another Mac's, gets the `message` event for mail queued for that session's panes, carrying the host's pane id;
+a row attached alone with `zmx attach` or from another Mac reports no counts yet. `events.read` is not served on
+the server itself. A local pane and
 a server pane cannot message each other yet: a Mac send to a server row is rejected `unknown pane` with detail
 `remote session`, a server send to a Mac session `unknown pane`, and a server row as `--as` is refused.
 
