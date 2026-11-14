@@ -1226,6 +1226,14 @@ error keeps those names for compatibility.
   `htmlOverlays[].text.changes`: `{count, current}`, current 0 before any step, omitted on any other page and until
   the page reports. The page's own buttons and the
   `]`/`[` keys step the same way.
+- `session overlay files --go N|PATH [--pane left|right] [--target] [--window W]`
+  - show one file of the `.diff` or `.patch` page in the addressed slot, named by its number from 1 or by its path as
+  the page's file list shows it; the file's header goes under the bar and its first change becomes current. Returns
+  `result.text` as `N of M: path`. Refused `no file X` for a number or path the page does not list, plus the
+  `changes` refusals; a presenting agterm without file jumps answers `remote page: step it on the Mac that shows it`.
+  Wire `to`. Read back `htmlOverlays[].text.files`: `{count, current, path}`, the file in view, which follows
+  scrolling and change steps; omitted on any other page and until the page reports. The bar's file button and `f`
+  open the same list.
 - `session overlay wrap on|off|toggle [--pane left|right] [--target] [--window W]`
   - wrap the long lines of the text, log or diff page in the addressed slot, unwrap them, or toggle; returns
   `result.text` `wrapped` or `unwrapped`. A page opens unwrapped and keeps its choice until it closes. Refused

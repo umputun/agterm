@@ -70,6 +70,11 @@ extension ControlServer {
         await textPageAction(target, window: window, pane: pane, .changes(forward: forward))
     }
 
+    /// goSessionOverlayFiles moves the loaded diff page to one of its files and answers `N of M: path`.
+    func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .files(to))
+    }
+
     /// textPageAction runs `action` on the text page in the addressed slot: on the presenting Mac when it shows the
     /// page there, here otherwise. Both answer with the same local command, so replies and refusals match.
     private func textPageAction(_ target: String?, window: String?, pane: OverlayPane?,
@@ -101,6 +106,7 @@ extension ControlServer {
             }
         case .search(let request): return await searchTextPage(request, in: store, sessionID: id, pane: pane)
         case .changes(let forward): return await stepTextChanges(forward: forward, in: store, sessionID: id, pane: pane)
+        case .files(let target): return await goTextFile(target, in: store, sessionID: id, pane: pane)
         }
     }
 
@@ -145,6 +151,22 @@ extension ControlServer {
         switch await bridge.stepChange(forward: forward) {
         case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
         case .success(let found): return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: "\(found.current) of \(found.count)"))
+        }
+    }
+
+    private func goTextFile(_ target: String, in store: AppStore, sessionID id: UUID, pane: OverlayPane?) async -> ControlResponse {
+        let page: HtmlOverlay
+        switch store.textChangesPage(id, pane: pane) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found): page = found
+        }
+        guard let bridge = HtmlOverlayRegistry.shared.existing(page.id)?.textPage else {
+            return ControlResponse(ok: false, error: TextChangesFailure.notLoaded.message)
+        }
+        switch await bridge.goFile(target) {
+        case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+        case .success(let found):
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: "\(found.current) of \(found.count): \(found.path)"))
         }
     }
 }

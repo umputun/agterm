@@ -28,9 +28,15 @@ public enum TextPageAction: Equatable, Sendable {
     case wrap(ControlToggleMode)
     case search(TextSearchRequest)
     case changes(forward: Bool)
+    case files(String)
 
     /// init reads the action a page command carries; nil for one that is not a whole text action.
     public init?(_ command: PresentationPageCommand) {
+        if command.action == .files {
+            guard let file = command.file, !file.isEmpty else { return nil }
+            self = .files(file)
+            return
+        }
         switch (command.action, command.toggle, command.query, command.step) {
         case (.follow, let mode?, nil, nil): self = .follow(mode)
         case (.wrap, let mode?, nil, nil): self = .wrap(mode)
@@ -56,6 +62,7 @@ public enum TextPageAction: Equatable, Sendable {
         case .search(.previous): PresentationPageCommand(page: page, seq: seq, action: .search, step: .prev)
         case .search(.close): PresentationPageCommand(page: page, seq: seq, action: .search, step: .close)
         case .changes(let forward): PresentationPageCommand(page: page, seq: seq, action: .changes, step: forward ? .next : .prev)
+        case .files(let file): PresentationPageCommand(page: page, seq: seq, action: .files, file: String(file.prefix(TextFiles.maxPath)))
         }
     }
 }
@@ -69,8 +76,8 @@ struct RemoteTextWait: Hashable {
 
 extension AppStore {
     /// remoteTextAction runs `action` on the page the presenting Mac shows in `pane`'s slot and waits for its result,
-    /// at most `remoteTextDeadline`. A presenter that does not list `page.text` is never sent one: it cannot decode
-    /// the action and would end the whole presentation.
+    /// at most `remoteTextDeadline`. A presenter that does not list `page.text`, or `page.files` for a file jump, is
+    /// never sent one: it cannot decode the action and would end the whole presentation.
     public func remoteTextAction(_ sessionID: UUID, pane: OverlayPane?, _ action: TextPageAction) async -> RemoteTextOutcome {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil
         else { return .local }
@@ -79,6 +86,7 @@ extension AppStore {
             return .failed(OverlayResultError.viewerGone)
         }
         guard hub.presenterSupports(PresentationHub.pageTextKind, session: sessionID) else { return .local }
+        if case .files = action, !hub.presenterSupports(PresentationHub.pageFilesKind, session: sessionID) { return .local }
         var seq = 0
         session.remoteOverlays.updatePage(slot.job) { seq = $0.nextSeq() }
         let wait = RemoteTextWait(job: slot.job, seq: seq)

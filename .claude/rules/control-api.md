@@ -178,7 +178,8 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.wrap`, `.hud.open`, `.hud.update`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.files`, `.overlay.wrap`,
+  `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -905,6 +906,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Under the cap `data-files` carries `TextPage.diffLanguages`, and the page highlights each hunk's two sides whole in
   its file's language, with the marker column kept in the text at zero width; added and removed runs get bands at
   any size. A patch with no unified hunk keeps the `diff` grammar. `text.language` stays `diff`.
+- A diff page jumps between its files (`session.overlay.files --go N|PATH`, the bar's file button, `f`).
+  `TextPage.diffSections` owns the file index and `data-sections` carries it at any size, so the page never parses
+  headers itself; a CR ends a line, as the HTML parser makes it one before the gutter counts lines.
+  The page resolves a jump's target from that index, so no Swift catalog can disagree with the document loaded. A pick makes the file's first change current,
+  and that change stays the step's origin while the view is where the pick left it; a step reports the file it reached.
+  A rebuild from the same text keeps that origin and a pinned file only while the view is still where they were left
+  (`agtermTextNavigation`, then `data-entered` and `data-file`); a fresh read keeps neither.
+  The page posts `{count, current, path}` on ready and whenever the file in view changes, from the scroll handler
+  itself (an animation frame never runs off screen), into `HtmlOverlay.textFiles` (`setTextFilesReport`, never
+  emitted). The remote action needs `page.files` beside `page.text`; an older presenter is never sent it.
+  No command lists the files: a long list outgrows the 1024-character reply. Read back `htmlOverlays[].text.files`.
 - A text page wraps long lines (`session.overlay.wrap on|off|toggle`, the bar's Wrap button, `w`).
   `HtmlOverlay.textWrap` lives per page, starts off and is never persisted; a rebuild carries it as `data-wrap`.
   The bridge records the page's toggle in the model, and `TextPageBridge.apply` pushes every model change back, so a control

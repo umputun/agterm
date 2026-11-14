@@ -135,9 +135,11 @@ final class ControlServerTextPageTests: XCTestCase {
 
         let search = await server.searchSessionOverlay(session.id.uuidString, window: nil, pane: nil, request: .query("a"))
         let step = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: true)
+        let file = await server.goSessionOverlayFiles(session.id.uuidString, window: nil, pane: nil, to: "1")
 
         XCTAssertEqual(search.error, TextSearchFailure.remote.message)
         XCTAssertEqual(step.error, TextChangesFailure.remote.message)
+        XCTAssertEqual(file.error, TextChangesFailure.remote.message)
         XCTAssertTrue(sink.commands.isEmpty)
     }
 
@@ -301,6 +303,23 @@ final class ControlServerTextPageTests: XCTestCase {
         try Data("@@ -1 +1 @@\n-a\n+b\n".utf8).write(to: patch)
         XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(patch.path, log: nil)).ok)
         let notLoaded = await server.stepSessionOverlayChanges(session.id.uuidString, window: nil, pane: nil, forward: false)
+        XCTAssertEqual(notLoaded.error, TextChangesFailure.notLoaded.message)
+    }
+
+    func testAFileJumpNeedsALoadedDiffPage() async throws {
+        let (_, session) = try addSession()
+        let empty = await server.goSessionOverlayFiles(session.id.uuidString, window: nil, pane: nil, to: "1")
+        XCTAssertEqual(empty.error, OverlayHtmlError.noOverlay)
+
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+        let plain = await server.goSessionOverlayFiles(session.id.uuidString, window: nil, pane: nil, to: "1")
+        XCTAssertEqual(plain.error, TextChangesFailure.notDiff.message)
+        XCTAssertTrue(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+
+        let patch = stateDir.appendingPathComponent("a.diff")
+        try Data("--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n".utf8).write(to: patch)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(patch.path, log: nil)).ok)
+        let notLoaded = await server.goSessionOverlayFiles(session.id.uuidString, window: nil, pane: nil, to: "1")
         XCTAssertEqual(notLoaded.error, TextChangesFailure.notLoaded.message)
     }
 }

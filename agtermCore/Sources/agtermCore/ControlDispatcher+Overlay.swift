@@ -357,4 +357,16 @@ extension ControlDispatcher {
                                                            forward: forward)
         }
     }
+
+    /// dispatchSessionOverlayFiles takes a required `to`, a file's number from 1 or its path as the page shows it.
+    func dispatchSessionOverlayFiles(_ request: ControlRequest) async -> ControlResponse {
+        guard let to = request.args?.to, !to.isEmpty else {
+            return ControlResponse(ok: false, error: "session.overlay.files requires to, a file number or path")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.goSessionOverlayFiles(request.target, window: request.args?.window, pane: pane, to: to)
+        }
+    }
 }

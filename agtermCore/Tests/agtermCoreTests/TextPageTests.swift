@@ -100,6 +100,131 @@ struct TextPageTests {
         #expect(!TextPage.html(text: "-a\n+b\n", language: "diff", line: nil, style: "").contains("data-files"))
     }
 
+    @Test func aGitDiffListsEveryFileSectionInPatchOrder() {
+        let text = """
+            diff --git a/main.go b/main.go
+            index 1..2 100644
+            --- a/main.go
+            +++ b/main.go
+            @@ -1 +1 @@
+            -a
+            +b
+            diff --git a/new.py b/new.py
+            new file mode 100644
+            --- /dev/null
+            +++ b/new.py
+            @@ -0,0 +1 @@
+            +x
+            diff --git a/gone.sql b/gone.sql
+            deleted file mode 100644
+            --- a/gone.sql
+            +++ /dev/null
+            @@ -1 +0,0 @@
+            -y
+            diff --git a/old.txt b/moved.txt
+            similarity index 100%
+            rename from old.txt
+            rename to moved.txt
+            diff --git a/run.sh b/run.sh
+            old mode 100644
+            new mode 100755
+            diff --git a/logo.png b/logo.png
+            Binary files a/logo.png and b/logo.png differ
+            """
+
+        #expect(TextPage.diffSections(in: text) == [
+            DiffSection(path: "main.go", line: 0), DiffSection(path: "new.py", line: 7),
+            DiffSection(path: "gone.sql", line: 13), DiffSection(path: "moved.txt", line: 19),
+            DiffSection(path: "run.sh", line: 23), DiffSection(path: "logo.png", line: 26),
+        ])
+    }
+
+    @Test func aChangedRowThatReadsLikeAHeaderIsNoSection() {
+        let text = """
+            --- a/x.md
+            +++ b/x.md
+            @@ -1,2 +1,2 @@
+             keep
+            --- old rule
+            +++ new rule
+            diff --git a/y b/y
+            --- a/y
+            +++ b/y
+            @@ -1 +1 @@
+            -1
+            +2
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x.md", line: 0), DiffSection(path: "y", line: 6)])
+    }
+
+    @Test func aPlainUnifiedDiffKeepsItsPathsAndDropsTheTimestamps() {
+        let text = """
+            --- old/a.c\t2026-11-06 10:00:00
+            +++ new/a.c\t2026-11-06 10:05:00
+            @@ -1 +1 @@
+            -a
+            +b
+            --- old/b.c\t2026-11-06 10:00:00
+            +++ new/b.c\t2026-11-06 10:05:00
+            @@ -1 +1 @@
+            -c
+            +d
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "new/a.c", line: 0), DiffSection(path: "new/b.c", line: 5)])
+    }
+
+    @Test func aDashedRowWithNoPlusRowAfterItOpensNoSection() {
+        #expect(TextPage.diffSections(in: "subject\n--- \nnot a header\n").isEmpty)
+    }
+
+    @Test func aQuotedPathIsUnquoted() {
+        let text = """
+            diff --git "a/odd name.py" "b/odd name.py"
+            --- "a/odd name.py"
+            +++ "b/odd name.py"
+            diff --git "a/caf\\303\\251.txt" "b/caf\\303\\251.txt"
+            --- "a/caf\\303\\251.txt"
+            +++ "b/caf\\303\\251.txt"
+            """
+
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "odd name.py", line: 0), DiffSection(path: "café.txt", line: 3)])
+    }
+
+    @Test func aNoPrefixGitDiffKeepsItsPaths() {
+        let text = "diff --git b/x.go b/x.go\n--- b/x.go\n+++ b/x.go\ndiff --git y.go y.go\nold mode 100644\nnew mode 100755\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x.go", line: 0), DiffSection(path: "y.go", line: 3)])
+    }
+
+    @Test func aCRLFOrColoredDiffListsItsSections() {
+        #expect(TextPage.diffSections(in: "diff --git a/x.go b/x.go\r\n--- a/x.go\r\n+++ b/x.go\r\n") == [DiffSection(path: "x.go", line: 0)])
+        let colored = "\u{1B}[1mdiff --git a/x.go b/x.go\u{1B}[m\n\u{1B}[1m--- a/x.go\u{1B}[m\n\u{1B}[1m+++ b/x.go\u{1B}[m\n"
+        #expect(TextPage.diffSections(in: colored) == [DiffSection(path: "x.go", line: 0)])
+    }
+
+    // the page numbers lines after HTML turned every CR into a line break, so a lone CR shifted every later header
+    @Test func aLoneCarriageReturnStartsALineAsTheParsedPageDoes() {
+        let text = "--- a/x\n+++ b/x\n@@ -1,2 +1 @@\n-a\rb\n+c\ndiff --git a/y b/y\nold mode 100644\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x", line: 0), DiffSection(path: "y", line: 6)])
+    }
+
+    @Test func aRenameWithOnlyItsDestinationQuotedIsUnquoted() {
+        let text = "diff --git a/old.txt \"b/caf\\303\\251.txt\"\nsimilarity index 100%\nrename from old.txt\nrename to \"caf\\303\\251.txt\"\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "café.txt", line: 0)])
+    }
+
+    @Test func aDiffCarriesItsSectionsPastTheHighlightCap() {
+        let text = "--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n"
+        let overCap = text + String(repeating: " x\n", count: TextPage.maxHighlightBytes / 3 + 1)
+        let sections = #"data-sections="[{&quot;line&quot;:0,&quot;path&quot;:&quot;b\/x.go&quot;}]""#
+
+        #expect(TextPage.html(text: text, language: "diff", line: nil, style: "").contains(sections))
+        #expect(TextPage.html(text: overCap, language: "diff", line: nil, style: "").contains(sections))
+        #expect(!TextPage.html(text: text, language: "go", line: nil, style: "").contains("data-sections"))
+        #expect(!TextPage.html(text: "-a\n+b\n", language: "diff", line: nil, style: "").contains("data-sections"))
+    }
+
     @Test func onlyAPlainDiffPageIsMarked() {
         let log = TextPage.html(text: "x", language: "diff", line: nil, style: "", log: TextLogState(following: true), change: 2)
 

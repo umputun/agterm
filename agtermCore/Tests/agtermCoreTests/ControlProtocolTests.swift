@@ -36,6 +36,9 @@ struct ControlProtocolTests {
         let changes = ControlRequest(cmd: .sessionOverlayChanges, args: ControlArgs(pane: "right", to: "prev"))
         #expect(try roundTrip(changes) == changes)
         #expect(Command.sessionOverlayChanges.rawValue == "session.overlay.changes")
+        let files = ControlRequest(cmd: .sessionOverlayFiles, args: ControlArgs(pane: "right", to: "src/b.go"))
+        #expect(try roundTrip(files) == files)
+        #expect(Command.sessionOverlayFiles.rawValue == "session.overlay.files")
 
         let plain = String(data: try JSONEncoder().encode(ControlArgs(textFile: "/tmp/a.txt")), encoding: .utf8) ?? ""
         #expect(!plain.contains("tail"))

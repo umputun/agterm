@@ -82,13 +82,14 @@ public enum TextSearchFailure: Error, Equatable, Sendable {
     }
 }
 
-/// TextChangesFailure is why a `session.overlay.changes` step was refused.
+/// TextChangesFailure is why a `session.overlay.changes` step or a `session.overlay.files` jump was refused.
 public enum TextChangesFailure: Error, Equatable, Sendable {
     case page(HtmlOverlayCommandFailure)
     case notDiff
     case remote
     case notLoaded
     case noChanges
+    case noFile(String)
 
     /// message is the control error for this refusal.
     public var message: String {
@@ -98,6 +99,7 @@ public enum TextChangesFailure: Error, Equatable, Sendable {
         case .remote: return "remote page: step it on the Mac that shows it"
         case .notLoaded: return "page not loaded"
         case .noChanges: return "no changes"
+        case .noFile(let target): return "no file \(target)"
         }
     }
 }
@@ -335,6 +337,15 @@ extension AppStore {
         }
     }
 
+    /// setTextFilesReport records a diff page's file count and the file in view, nil clearing it while a fresh read
+    /// is under way. Never emitted, since scrolling moves it.
+    public func setTextFilesReport(_ id: UUID, files: TextFiles?) {
+        updateHtmlOverlay(id) {
+            guard $0.source.kind == .text, $0.textFiles != files else { return }
+            $0.textFiles = files
+        }
+    }
+
     /// setTextWrap applies `mode` to the text page in the slot `pane` addresses, with the slot refusals of
     /// `textSearchPage`, and returns whether it now wraps.
     public func setTextWrap(_ sessionID: UUID, pane: OverlayPane?, mode: ControlToggleMode) -> Result<Bool, TextWrapFailure> {
@@ -415,6 +426,7 @@ extension AppStore {
                                               ControlTextSearchNode(query: $0.query, matches: $0.matches, current: $0.current)
                                           },
                                           changes: page.textChanges.map { ControlTextChangesNode(count: $0.count, current: $0.current) },
+                                          files: page.textFiles.map { ControlTextFilesNode(count: $0.count, current: $0.current, path: $0.path) },
                                           wrap: page.textWrap ? true : nil)
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, document: document, text: text,

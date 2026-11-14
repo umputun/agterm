@@ -86,11 +86,14 @@ final class TextPageBridge {
         let load = documentLoad, path = path, readText = readText
         Task { [weak self] in
             // a shown page reopens where it was, so a theme change or a reload never moves the view
-            let top = self?.text == nil ? nil : await self?.scrollTop()
+            let place = self?.text == nil ? nil : await self?.navigation()
             if fresh || self?.text == nil {
                 // the file may now hold other changes; the old page can still step during the read, so the change
                 // the new one opens on resets only after it
-                if let self { store?.setTextChangesReport(pageID, changes: nil) }
+                if let self {
+                    store?.setTextChangesReport(pageID, changes: nil)
+                    store?.setTextFilesReport(pageID, files: nil)
+                }
                 let read = await readText()
                 guard let self, load == documentLoad else { return }
                 switch read {
@@ -100,16 +103,21 @@ final class TextPageBridge {
                 change = 0
             }
             guard let self, load == documentLoad, let text else { return }
+            // a pick or step on other text means nothing to the new one
+            let kept = fresh ? nil : place
             let html = TextPage.html(text: text, language: TextPage.language(forFile: path), line: line,
-                                     style: MarkdownAssets.shared.textStyle, anchor: top, search: search, change: change,
-                                     wrap: wrap)
+                                     style: MarkdownAssets.shared.textStyle, anchor: place?.top, search: search, change: change,
+                                     entered: kept?.entered ?? false, file: kept?.file, wrap: wrap)
             webView?.loadHTMLString(html, baseURL: nil)
         }
     }
 
-    private func scrollTop() async -> Double? {
-        let value = try? await webView?.evaluateJavaScript("document.scrollingElement.scrollTop", in: nil, contentWorld: world)
-        return (value as? NSNumber)?.doubleValue
+    /// navigation reads the page's scroll top with whether a picked change is still the step's origin there and the
+    /// file a pick or step keeps shown, from 1 and 0 for none.
+    private func navigation() async -> (top: Double, entered: Bool, file: Int)? {
+        let value = try? await webView?.evaluateJavaScript("agtermTextNavigation()", in: nil, contentWorld: world)
+        guard let body = value as? [String: Any], let top = (body["top"] as? NSNumber)?.doubleValue else { return nil }
+        return (top, body["entered"] as? Bool ?? false, (body["file"] as? NSNumber)?.intValue ?? 0)
     }
 
     /// apply takes the model's latest value: following for a log page, the wrap, and a search whose revision moved.
@@ -152,6 +160,18 @@ final class TextPageBridge {
         return .success(changes)
     }
 
+    /// goFile shows a diff page's file, `target` being its number from 1 or its path as the page lists it, and answers
+    /// the file it reached, which the model takes before the answer.
+    func goFile(_ target: String) async -> Result<TextFiles, TextChangesFailure> {
+        guard !documentPending, let webView else { return .failure(.notLoaded) }
+        let value = try? await webView.callAsyncJavaScript("return agtermTextFileGo(target)", arguments: ["target": target],
+                                                           in: nil, contentWorld: world)
+        guard let body = value as? [String: Any] else { return .failure(.notLoaded) }
+        guard let files = Self.files(body) else { return .failure(.noFile(target)) }
+        store?.setTextFilesReport(pageID, files: files)
+        return .success(files)
+    }
+
     /// stop ends the follower and drops every build in flight.
     func stop() {
         documentLoad += 1
@@ -183,6 +203,18 @@ final class TextPageBridge {
         guard let count = (body["count"] as? NSNumber)?.intValue, let current = (body["current"] as? NSNumber)?.intValue
         else { return nil }
         return TextChanges(count: count, current: current)
+    }
+
+    // the page being replaced can still report its scroll; a page with no files never reports to clear it
+    private func filesReport(_ body: [String: Any]) {
+        guard !documentPending, let files = Self.files(body) else { return }
+        store?.setTextFilesReport(pageID, files: files)
+    }
+
+    private static func files(_ body: [String: Any]) -> TextFiles? {
+        guard let count = (body["count"] as? NSNumber)?.intValue, count > 0,
+              let current = (body["current"] as? NSNumber)?.intValue, let path = body["path"] as? String else { return nil }
+        return TextFiles(count: count, current: current, path: path)
     }
 
     private func typed(_ query: String) {
@@ -234,6 +266,10 @@ final class TextPageBridge {
             }
             if let changes = body["changes"] as? [String: Any] {
                 bridge.changesReport(changes)
+                return
+            }
+            if let files = body["files"] as? [String: Any] {
+                bridge.filesReport(files)
                 return
             }
             if let wrap = body["wrap"] as? Bool {

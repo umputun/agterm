@@ -1060,7 +1060,7 @@ extension TextPageRenderingTests {
               const box = document.querySelector('.agterm-search').getBoundingClientRect();
               const controls = [...document.querySelectorAll('.agterm-search button')].map(e => e.getBoundingClientRect().right);
               const wrap = document.querySelector('.agterm-wrap');
-              return [follow.right <= wrap.getBoundingClientRect().left, wrap.scrollWidth <= wrap.clientWidth,
+              return [wrap.getBoundingClientRect().right <= follow.left, wrap.scrollWidth <= wrap.clientWidth,
                       box.right <= width, Math.max(...controls) <= width].join('|');
             })()
             """
@@ -1481,6 +1481,279 @@ extension TextPageRenderingTests {
         try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: on" }
         let wrapped = try await page.webView.evaluateJavaScript("document.body.classList.contains('agterm-wrapped')")
         XCTAssertEqual(wrapped as? Bool, true)
+    }
+
+    private static func section(_ name: String, lines: Int, changes: [Int]) -> [String] {
+        var rows = ["diff --git a/\(name) b/\(name)", "--- a/\(name)", "+++ b/\(name)", "@@ -1,\(lines) +1,\(lines) @@"]
+        for i in 0..<lines { rows += changes.contains(i) ? ["-old \(i)", "+new \(i)"] : [" line \(i)"] }
+        return rows
+    }
+
+    private static let fourFiles = (section("a.go", lines: 30, changes: [2]) + section("b.go", lines: 30, changes: [20, 25])
+        + ["diff --git a/c.sh b/c.sh", "old mode 100644", "new mode 100755"] + section("d.go", lines: 30, changes: [3]))
+        .joined(separator: "\n") + "\n"
+    private static let fileButton = """
+        (document.querySelector('.agterm-file-path')?.textContent ?? '').replace(/\\u200e/g, '') + ' '
+          + (document.querySelector('.agterm-file-place')?.textContent ?? '')
+        """
+    private static let fileMenu = """
+        (() => {
+          const menu = document.querySelector('.agterm-files-menu');
+          if (menu.hidden) return 'closed';
+          const rows = [...menu.querySelectorAll('.agterm-files-row')];
+          return rows.map((row) => (row.getAttribute('aria-selected') === 'true' ? '>' : '') + row.lastChild.textContent).join(',')
+            + '|' + (document.activeElement === menu.querySelector('input'));
+        })()
+        """
+
+    private static func headerGap(_ line: Int) -> String {
+        """
+        (() => {
+          const pre = document.querySelector('#agterm-page pre');
+          const style = getComputedStyle(pre);
+          const top = document.getElementById('agterm-page').offsetTop + pre.offsetTop + parseFloat(style.paddingTop)
+            + \(line) * parseFloat(style.lineHeight);
+          return Math.round(top - document.scrollingElement.scrollTop - document.querySelector('.agterm-bar').offsetHeight);
+        })()
+        """
+    }
+
+    private func fileKey(_ key: String, ctrl: Bool = false, _ view: WKWebView) async throws {
+        _ = try await inRenderer("""
+            document.querySelector('.agterm-files-menu input')
+              .dispatchEvent(new KeyboardEvent('keydown', { key: \(try json(key)), ctrlKey: \(ctrl), bubbles: true })); true
+            """, view)
+    }
+
+    private func filterFiles(_ value: String, _ view: WKWebView) async throws {
+        _ = try await inRenderer("""
+            (() => {
+              const field = document.querySelector('.agterm-files-menu input');
+              field.value = \(try json(value));
+              field.dispatchEvent(new Event('input'));
+              return true;
+            })()
+            """, view)
+    }
+
+    private func shownFourFiles() async throws -> (HtmlOverlayPage, NSWindow) {
+        let (page, window) = try shown(try openText("a.diff", Self.fourFiles))
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/4" }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "4 changes" }
+        return (page, window)
+    }
+
+    func testAPickedFileShowsItsHeaderAndMakesItsFirstChangeCurrent() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        let first = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-bar').firstElementChild.className")
+        XCTAssertEqual(first as? String, "agterm-wrap")
+
+        try await press("f", page.webView)
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == ">a.go,b.go,c.sh,d.go|true" }
+        try await fileKey("ArrowDown", page.webView)
+        try await fileKey("n", ctrl: true, page.webView)
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == "a.go,b.go,>c.sh,d.go|true" }
+        try await fileKey("ArrowUp", page.webView)
+        try await fileKey("Enter", page.webView)
+
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == "closed" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "b.go 2/4" }
+        try await waitForScript(Self.headerGap(35), in: page.webView) { $0 == "0" }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+        try await waitFor("the pick's change report") { self.current?.textChanges == TextChanges(count: 4, current: 2) }
+    }
+
+    // a picked change below the view was stepped from the view's top, which reached it again
+    func testStepsGoOnFromAPickedChangeBelowTheView() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        try await press("f", page.webView)
+        try await filterFiles("b.go", page.webView)
+        try await fileKey("Enter", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+
+        try await press("]", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 3 of 4" }
+        try await press("]", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 4 of 4" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+
+        try await press("f", page.webView)
+        try await filterFiles("b.go", page.webView)
+        try await fileKey("Enter", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+        try await press("[", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 1 of 4" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/4" }
+    }
+
+    func testAFileWithNoChangeClearsTheChangeAndAnEmptyFilterPicksNothing() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        try await press("f", page.webView)
+        try await filterFiles("SH", page.webView)
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == ">c.sh|true" }
+        try await fileKey("Enter", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "c.sh 3/4" }
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "4 changes" }
+
+        try await press("f", page.webView)
+        try await filterFiles("zz", page.webView)
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == "|true" }
+        try await fileKey("Enter", page.webView)
+        try await fileKey("Escape", page.webView)
+
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == "closed" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "c.sh 3/4" }
+    }
+
+    func testAFileJumpTakesANumberOrAPathAndReportsTheFileInView() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        try await waitFor("the first files report") { self.current?.textFiles == TextFiles(count: 4, current: 1, path: "a.go") }
+        let bridge = try XCTUnwrap(page.textPage)
+
+        let byPath = await bridge.goFile("d.go")
+        XCTAssertEqual(byPath, .success(TextFiles(count: 4, current: 4, path: "d.go")))
+        XCTAssertEqual(current?.textFiles, TextFiles(count: 4, current: 4, path: "d.go"))
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+        let byNumber = await bridge.goFile("2")
+        XCTAssertEqual(byNumber, .success(TextFiles(count: 4, current: 2, path: "b.go")))
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+
+        let missing = await bridge.goFile("zz.go")
+        let past = await bridge.goFile("5")
+        XCTAssertEqual(missing, .failure(.noFile("zz.go")))
+        XCTAssertEqual(past, .failure(.noFile("5")))
+
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 0; true", page.webView)
+        try await waitFor("the scroll's files report") { self.current?.textFiles == TextFiles(count: 4, current: 1, path: "a.go") }
+    }
+
+    func testTheOpenFileListKeepsPageKeysAndTheFileFollowsTheScroll() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        try await press("f", page.webView)
+        try await fileKey("w", page.webView)
+        try await fileKey("Escape", page.webView)
+        try await waitForScript(Self.fileMenu, in: page.webView) { $0 == "closed" }
+        try await waitForScript(Self.wrapButton, in: page.webView) { $0 == "Wrap: off" }
+
+        _ = try await inRenderer("document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight; true", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 0; true", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/4" }
+    }
+
+    private static func scrollToHeader(_ line: Int) -> String {
+        """
+        (() => {
+          const pre = document.querySelector('#agterm-page pre');
+          const style = getComputedStyle(pre);
+          document.scrollingElement.scrollTop = document.getElementById('agterm-page').offsetTop + pre.offsetTop
+            + parseFloat(style.paddingTop) + \(line) * parseFloat(style.lineHeight) - document.querySelector('.agterm-bar').offsetHeight;
+          return true;
+        })()
+        """
+    }
+
+    private func rebuild(_ page: HtmlOverlayPage, foreground: String) async throws {
+        page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: foreground, dark: true))
+        try await waitForVariable("--agterm-foreground", foreground, in: page.webView)
+    }
+
+    func testARebuildKeepsAPickedChangeAsTheStepsOrigin() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        _ = try await XCTUnwrap(page.textPage).goFile("b.go")
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+
+        try await rebuild(page, foreground: "#e0e0e0")
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "b.go 2/4" }
+        try await press("]", page.webView)
+
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 3 of 4" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "b.go 2/4" }
+    }
+
+    func testARebuildAfterScrollingAwayStepsFromTheView() async throws {
+        let (page, window) = try await shownFourFiles()
+        defer { window.orderOut(nil) }
+        _ = try await XCTUnwrap(page.textPage).goFile("b.go")
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 2 of 4" }
+        _ = try await inRenderer(Self.scrollToHeader(74), page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+
+        try await rebuild(page, foreground: "#e0e0e0")
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+        try await press("]", page.webView)
+
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 4 of 4" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+    }
+
+    func testARebuildKeepsAPickedShortLastFileUntilTheViewMoves() async throws {
+        let text = (Self.section("a.go", lines: 30, changes: [2]) + ["diff --git a/c.sh b/c.sh", "old mode 100644", "new mode 100755"])
+            .joined(separator: "\n") + "\n"
+        let (page, window) = try shown(try openText("a.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/2" }
+        _ = try await XCTUnwrap(page.textPage).goFile("c.sh")
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "c.sh 2/2" }
+        let gap = try await page.webView.evaluateJavaScript(Self.headerGap(34)) as? Int
+        XCTAssertGreaterThan(gap ?? 0, 0)
+
+        try await rebuild(page, foreground: "#e0e0e0")
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "c.sh 2/2" }
+        _ = try await inRenderer("document.scrollingElement.scrollTop = 0; true", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/2" }
+        _ = try await inRenderer("document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight; true", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/2" }
+
+        try await rebuild(page, foreground: "#d0d0d0")
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "a.go 1/2" }
+    }
+
+    func testAReloadDropsTheReplacedPagesFileReports() async throws {
+        let url = pages.appendingPathComponent("a.diff")
+        try Self.fourFiles.write(to: url, atomically: true, encoding: .utf8)
+        let gate = TailGate(), disk = replicaLink()
+        let link = HtmlReplicaLink(fetch: { path, revision in
+            gate.asked += 1
+            while gate.hang { try await Task.sleep(for: .milliseconds(20)) }
+            return try await disk.fetch(path, revision)
+        }, bridge: disk.bridge, logTail: disk.logTail)
+        let page = registry.page(for: openReplica(url.path, .text(line: nil)), store: store, replica: link)
+        let window = try host(page.webView)
+        defer { window.orderOut(nil) }
+        try await waitFor("the first files report") { self.current?.textFiles == TextFiles(count: 4, current: 1, path: "a.go") }
+
+        try "no changes here\n".write(to: url, atomically: true, encoding: .utf8)
+        gate.hang = true
+        let asked = gate.asked
+        XCTAssertNil(registry.reload(page.id, target: .original, store: store))
+        try await waitFor("a read is in flight") { gate.asked > asked && self.current?.textFiles == nil }
+        _ = try await inRenderer("document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight; true", page.webView)
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "d.go 4/4" }
+        _ = try await page.webView.evaluateJavaScript("true")
+        gate.hang = false
+
+        try await waitForScript(Self.code, in: page.webView) { $0 == "no changes here\n" }
+        XCTAssertNil(current?.textFiles)
+    }
+
+    // the page numbers lines after HTML turned every CR into a line break, so a lone CR shifted every later header
+    func testALoneCarriageReturnKeepsAFileJumpOnItsHeader() async throws {
+        let text = "--- a/x\n+++ b/x\n@@ -1,2 +1 @@\n-a\rb\n+c\n" + Self.section("y", lines: 30, changes: [3]).joined(separator: "\n") + "\n"
+        let (page, window) = try shown(try openText("a.diff", text))
+        defer { window.orderOut(nil) }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "b/x 1/2" }
+
+        let jumped = try await XCTUnwrap(page.textPage).goFile("y")
+
+        XCTAssertEqual(jumped, .success(TextFiles(count: 2, current: 2, path: "y")))
+        try await waitForScript(Self.headerGap(6), in: page.webView) { $0 == "0" }
     }
 
     func testADiffBandCoversEveryRowOfAWrappedLine() async throws {

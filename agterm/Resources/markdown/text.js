@@ -99,6 +99,7 @@
     if (Number.isFinite(anchor)) scrollTo(anchor);
   }
   const changes = rows ? startChanges(rows) : null;
+  const files = rows ? startFiles() : null;
   const wrapper = startWrap();
   finder.start();
   window.addEventListener('keydown', keys);
@@ -257,7 +258,8 @@
     toggle.type = 'button';
     toggle.className = 'agterm-wrap';
     toggle.title = 'Wrap long lines (w)';
-    bar.insertBefore(toggle, bar.querySelector('.agterm-search'));
+    // first, since the controls after it change width as their labels change
+    bar.prepend(toggle);
     const draw = () => {
       toggle.textContent = wrapped ? 'Wrap: on' : 'Wrap: off';
       toggle.setAttribute('aria-pressed', String(wrapped));
@@ -733,6 +735,8 @@
     const previous = control('M3.5 10.5 8 6l4.5 4.5', 'Previous change ([)');
     const next = control('M3.5 5.5 8 10l4.5-4.5', 'Next change (])');
     const label = document.createElement('span');
+    // as wide as its longest text, so stepping never moves the controls after it
+    label.style.minWidth = `${`change ${blocks.length} of ${blocks.length}`.length}ch`;
     group.append(previous, next, label);
     bar.prepend(group);
     const band = document.createElement('div');
@@ -770,9 +774,13 @@
     };
     // a step goes on from the current change while it is on screen, and from the view's top once the user scrolled
     // it away, so Next never jumps back to a change above what is shown
+    // the view a file pick left, where its change stays the step's origin even when the header jump left it below
+    let entered = source.hasAttribute('data-entered') && current >= 0 ? scroller.scrollTop : null;
     const step = (forward) => {
       const count = blocks.length;
-      if (current >= 0 && visible(blocks[current])) {
+      const origin = current >= 0 && (visible(blocks[current]) || entered === scroller.scrollTop);
+      entered = null;
+      if (origin) {
         current = (current + (forward ? 1 : count - 1)) % count;
       } else {
         const { top } = view();
@@ -787,13 +795,206 @@
       draw();
       reveal();
       report();
+      if (api.follow) api.follow(blocks[current][0]);
       return { count, current: current + 1 };
     };
     previous.addEventListener('click', () => step(false));
     next.addEventListener('click', () => step(true));
     draw();
     report();
-    return { step };
+    const api = {
+      step,
+      follow: null,
+      enter(first, end) {
+        current = blocks.findIndex((block) => block[0] >= first && block[0] < end);
+        entered = scroller.scrollTop;
+        draw();
+        report();
+      },
+      picked: () => entered === scroller.scrollTop,
+    };
+    return api;
+  }
+
+  function startFiles() {
+    let sections = [];
+    try { sections = JSON.parse(source.dataset.sections || '[]'); } catch (_) {}
+    if (!Array.isArray(sections) || !sections.length) return null;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'agterm-files';
+    button.title = 'Files (f)';
+    button.setAttribute('aria-haspopup', 'listbox');
+    const name = document.createElement('span');
+    name.className = 'agterm-file-path';
+    const place = document.createElement('span');
+    place.className = 'agterm-file-place';
+    button.append(name, place, glyph('M3.5 5.5 8 10l4.5-4.5'));
+    bar.insertBefore(button, bar.querySelector('.agterm-search'));
+
+    // outside the bar, whose overflow would clip it
+    const menu = document.createElement('div');
+    menu.className = 'agterm-files-menu';
+    menu.hidden = true;
+    const field = document.createElement('input');
+    field.type = 'text';
+    field.placeholder = 'Filter files';
+    field.spellcheck = false;
+    field.autocomplete = 'off';
+    const list = document.createElement('div');
+    list.className = 'agterm-files-list';
+    list.setAttribute('role', 'listbox');
+    menu.append(field, list);
+    document.body.append(menu);
+
+    const style = getComputedStyle(pre);
+    const topOf = (section) => page.offsetTop + pre.offsetTop + parseFloat(style.paddingTop)
+      + rowStart(section.line) * parseFloat(style.lineHeight);
+    // a picked file stays current while the view stays where the pick left it, since a short last file cannot
+    // scroll its header up to the bar
+    let pin = null;
+    let current = 0;
+    const draw = () => {
+      // the marks keep a leading or trailing slash or dot on its side in the right-to-left box that cuts the left end
+      name.textContent = `‎${sections[current].path}‎`;
+      place.textContent = `${current + 1}/${sections.length}`;
+      button.setAttribute('aria-label', `File ${current + 1} of ${sections.length}: ${sections[current].path}`);
+      publish({ files: report() });
+    };
+    const report = () => ({ count: sections.length, current: current + 1, path: sections[current].path });
+    const track = () => {
+      if (pin && pin.top === scroller.scrollTop) return;
+      pin = null;
+      const view = scroller.scrollTop + bar.offsetHeight + 1;
+      let low = 0, high = sections.length - 1;
+      while (low < high) {
+        const mid = (low + high + 1) >> 1;
+        if (topOf(sections[mid]) <= view) low = mid; else high = mid - 1;
+      }
+      if (low === current) return;
+      current = low;
+      draw();
+    };
+    // never deferred to an animation frame, which a page off screen does not get
+    window.addEventListener('scroll', track, { passive: true });
+    placers.push(track);
+
+    const show = (index) => {
+      pin = { top: scroller.scrollTop };
+      if (index === current) return;
+      current = index;
+      draw();
+    };
+    const go = (index) => {
+      scrollTo(topOf(sections[index]) - bar.offsetHeight);
+      scroller.scrollLeft = 0;
+      show(index);
+      if (changes) changes.enter(sections[index].line, index + 1 < sections.length ? sections[index + 1].line : Infinity);
+    };
+    // a step shows the file holding the change it reached, whether or not it scrolled
+    if (changes) {
+      changes.follow = (row) => {
+        let at = 0;
+        while (at + 1 < sections.length && sections[at + 1].line <= row) at += 1;
+        show(at);
+      };
+    }
+
+    let shown = [];
+    let selected = 0;
+    const select = (index) => {
+      selected = index;
+      list.querySelectorAll('[aria-selected]').forEach((row, i) => row.setAttribute('aria-selected', String(i === index)));
+      list.children[index]?.scrollIntoView({ block: 'nearest' });
+    };
+    const fill = () => {
+      const query = field.value.toLowerCase();
+      shown = sections.map((section, index) => index).filter((index) => sections[index].path.toLowerCase().includes(query));
+      list.replaceChildren(...shown.map((index) => {
+        const row = document.createElement('div');
+        row.className = 'agterm-files-row';
+        row.setAttribute('role', 'option');
+        row.setAttribute('aria-selected', 'false');
+        const number = document.createElement('span');
+        number.className = 'agterm-files-number';
+        number.textContent = String(index + 1);
+        row.append(number, sections[index].path);
+        row.addEventListener('mousedown', (event) => event.preventDefault());
+        row.addEventListener('click', () => pick(index));
+        return row;
+      }));
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.className = 'agterm-files-empty';
+        empty.textContent = 'no matching files';
+        list.append(empty);
+        return;
+      }
+      const at = shown.indexOf(current);
+      select(query || at < 0 ? 0 : at);
+    };
+    const close = () => {
+      if (menu.hidden) return;
+      menu.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
+      field.blur();
+    };
+    const pick = (index) => {
+      close();
+      go(index);
+    };
+    const open = () => {
+      if (!menu.hidden) return;
+      const rect = button.getBoundingClientRect();
+      menu.style.left = `${Math.max(6, Math.min(rect.left, window.innerWidth - 6 - Math.min(560, window.innerWidth - 12)))}px`;
+      menu.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+      field.value = '';
+      fill();
+      field.focus();
+    };
+
+    field.addEventListener('input', fill);
+    field.addEventListener('keydown', (event) => {
+      event.stopPropagation();
+      const down = event.key === 'ArrowDown' || (event.ctrlKey && event.key === 'n');
+      const up = event.key === 'ArrowUp' || (event.ctrlKey && event.key === 'p');
+      if (down || up) {
+        event.preventDefault();
+        if (shown.length) select((selected + (down ? 1 : shown.length - 1)) % shown.length);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (shown.length) pick(shown[selected]);
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        close();
+      }
+    });
+    field.addEventListener('blur', close);
+    button.addEventListener('mousedown', (event) => { if (!menu.hidden) event.preventDefault(); });
+    button.addEventListener('click', () => (menu.hidden ? open() : close()));
+    window.addEventListener('resize', close);
+
+    const kept = Number(source.dataset.file);
+    if (Number.isInteger(kept) && kept >= 1 && kept <= sections.length) {
+      current = kept - 1;
+      pin = { top: scroller.scrollTop };
+    }
+    draw();
+    track();
+    return {
+      open,
+      pinned: () => (pin && pin.top === scroller.scrollTop ? current + 1 : 0),
+      // a whole number is a file's place from 1, anything else a path as the list shows it
+      goTo(target) {
+        const index = /^[0-9]+$/.test(target) ? Number(target) - 1 : sections.findIndex((section) => section.path === target);
+        if (index < 0 || index >= sections.length) return null;
+        close();
+        go(index);
+        return report();
+      },
+    };
   }
 
   function startLog() {
@@ -916,6 +1117,7 @@
       if (event.key === 'N' && finder.hasQuery()) { finder.jump(false); return true; }
       if (event.key === ']' && changes) { changes.step(true); return true; }
       if (event.key === '[' && changes) { changes.step(false); return true; }
+      if (event.key === 'f' && files) { files.open(); return true; }
       if (event.key === 'w') { wrapper.toggle(); return true; }
       if (!logControls) return false;
       if (event.key === 'F') { logControls.toggle(); return true; }
@@ -930,6 +1132,9 @@
   window.agtermTextSearchStep = (forward, query, revision) => finder.step(forward, query, revision);
   window.agtermTextSetWrap = (value) => wrapper.set(value === true);
   window.agtermTextChangeStep = (forward) => (changes ? changes.step(forward) : { count: 0, current: 0 });
+  window.agtermTextFileGo = (target) => (files && files.goTo(String(target))) || { count: 0, current: 0 };
+  window.agtermTextNavigation = () => ({ top: scroller.scrollTop, entered: changes ? changes.picked() : false,
+                                         file: files ? files.pinned() : 0 });
   window.agtermTextFocusSearch = () => {
     finder.field.focus();
     finder.field.select();

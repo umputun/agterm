@@ -892,8 +892,10 @@ opens it as a read-only text page:
 git diff --no-color HEAD~3 HEAD -- src/app.go > /tmp/src_app.go.diff
 ```
 
-Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file, since a multi-file patch shows as one stream
-with no file list. Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
+Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file. A whole multi-file patch also works as one
+link: its bar lists the files (`f` opens the list), and `agtermctl session overlay files --go N|PATH` jumps to one by
+number or by the path the list shows, printing `N of M: path`; read back `text.files` (`{count, current, path}`).
+Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
 The page steps between changes with `]`/`[` or `agtermctl session overlay changes --next|--prev`, which prints
 `N of M`; read back `text.changes` (`{count, current}`).
 

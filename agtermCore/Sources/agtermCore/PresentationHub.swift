@@ -68,7 +68,7 @@ public final class PresentationHub {
     public static let supportedKinds = ["status", "hud", "notify", "message", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
-                                        pageTextKind]
+                                        pageTextKind, pageFilesKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -100,6 +100,8 @@ public final class PresentationHub {
     /// pageTextKind advertises live text pages: log pages, the text page actions, their `pageResult` answers and the
     /// text state in `pageState`.
     public static let pageTextKind = "page.text"
+    /// pageFilesKind advertises the diff page file jump, a page action an older `page.text` presenter cannot decode.
+    public static let pageFilesKind = "page.files"
     /// statusShapesKind advertises the expanded status-shape set.
     public static let statusShapesKind = "status.shapes"
     /// statusCheckmarkKind advertises `StatusShape.checkmark`, added after `status.shapes` shipped.
