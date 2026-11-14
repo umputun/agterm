@@ -25,7 +25,7 @@ body { padding-top: 35px; }
 .agterm-logbar > span { flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agterm-logbar > span:empty { display: none; }
 /* the full paused label, Wrap and the search box's floor need about 460px */
-@media (max-width: 480px) { .agterm-prefix { display: none; } }
+@media (max-width: 480px) { .agterm-prefix, .agterm-changes span { display: none; } }
 .agterm-bar button { flex: none; }
 .agterm-logbar button, .agterm-wrap {
   font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
@@ -80,3 +80,31 @@ body { padding-top: 35px; }
 }
 .agterm-changes svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .agterm-changes span { margin-left: 4px; }
+/* shrinks faster than the search box, cutting its path at the left so the file name stays; place and chevron always show */
+.agterm-bar .agterm-files {
+  flex: 0 2 auto; display: grid; grid-template-columns: minmax(0, max-content) auto auto; gap: 6px; align-items: center;
+  font: inherit; color: var(--fg);
+  background: var(--tint); border: 1px solid var(--rule); border-radius: 4px; padding: 0 6px 0 8px; cursor: pointer;
+}
+.agterm-file-path { overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.agterm-file-place { color: var(--muted); }
+.agterm-files svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.agterm-files-menu {
+  position: fixed; top: 38px; z-index: 2; width: min(560px, calc(100vw - 12px)); max-height: 60vh; display: flex;
+  flex-direction: column; box-sizing: border-box; padding: 6px; border-radius: 8px;
+  background: var(--agterm-background, Canvas); border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 28%);
+}
+.agterm-files-menu[hidden] { display: none; }
+.agterm-files-menu input {
+  flex: none; margin-bottom: 6px; padding: 4px 8px; border-radius: 6px; outline: none; color: var(--fg);
+  background: none; border: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  font: 13px/18px -apple-system, system-ui, sans-serif;
+}
+.agterm-files-menu input::placeholder { color: color-mix(in srgb, var(--fg) 45%, transparent); }
+.agterm-files-list { overflow-y: auto; font: 12px/22px var(--mono); }
+.agterm-files-row { display: flex; gap: 10px; padding: 0 8px; border-radius: 4px; color: var(--fg); white-space: nowrap; cursor: pointer; }
+.agterm-files-row:hover { background: color-mix(in srgb, var(--fg) 8%, transparent); }
+.agterm-files-row[aria-selected="true"] { background: color-mix(in srgb, var(--agterm-color-12, #6ca0dc) 28%, transparent); }
+.agterm-files-number { flex: none; min-width: 2.5em; text-align: right; color: var(--muted); }
+.agterm-files-empty { padding: 0 8px; color: var(--muted); }

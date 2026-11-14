@@ -36,7 +36,8 @@ public struct ControlDispatcher {
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayReload, .sessionOverlayNavigate,
                 .sessionOverlayResult, .sessionOverlaySubmit, .sessionOverlayCopy, .sessionOverlayText,
                 .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle, .sessionOverlayFollow,
-                .sessionOverlaySearch, .sessionOverlayChanges, .sessionOverlayWrap, .sessionBackground, .sessionText:
+                .sessionOverlaySearch, .sessionOverlayChanges, .sessionOverlayFiles, .sessionOverlayWrap, .sessionBackground,
+                .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .sessionOverlayJobRun, .sessionOverlayPageServe:
             return dispatchSessionOverlayCommand(request)
@@ -444,6 +445,8 @@ public struct ControlDispatcher {
             return await dispatchSessionOverlaySearch(request)
         case .sessionOverlayChanges:
             return await dispatchSessionOverlayChanges(request)
+        case .sessionOverlayFiles:
+            return await dispatchSessionOverlayFiles(request)
         case .sessionOverlayFollow:
             return await dispatchSessionOverlayFollow(request)
         case .sessionOverlayWrap:

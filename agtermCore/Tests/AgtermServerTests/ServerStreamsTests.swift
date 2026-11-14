@@ -1250,6 +1250,13 @@ struct ServerStreamsTests {
         #expect(TextPageAction(command) == .changes(forward: true))
         try viewer.send(.pageResult(PresentationPageResult(page: page, seq: command.seq, ok: false, error: "no diff page")))
         #expect(await changes.value == ControlResponse(ok: false, error: "no diff page"))
+
+        let files = Task { await harness.actions.goSessionOverlayFiles(target, window: nil, pane: nil, to: "b.go") }
+        try await answer(viewer, page: page, .files("b.go"), text: "2 of 3: b.go",
+                         PresentationTextState(following: false, query: "x", revision: 1, matches: 2, current: 1, wrap: true,
+                                               files: TextFiles(count: 3, current: 2, path: "b.go")))
+        #expect(await files.value.result?.text == "2 of 3: b.go")
+        #expect(textNode(session)?.files == ControlTextFilesNode(count: 3, current: 2, path: "b.go"))
     }
 
     private static let olderKinds = PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageTextKind }

@@ -189,7 +189,7 @@ extension AppStore {
         return PresentationTextState(following: page.logState?.following, log: page.logState?.report,
                                      query: page.textSearch?.query, revision: page.searchRevision,
                                      matches: page.textSearch?.matches, current: page.textSearch?.current,
-                                     wrap: page.textWrap, changes: page.textChanges)
+                                     wrap: page.textWrap, changes: page.textChanges, files: page.textFiles)
     }
 
     /// closeReplicaPages takes down every page `session` shows for its origin: with the stream gone the origin

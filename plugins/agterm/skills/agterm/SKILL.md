@@ -861,8 +861,8 @@ agtermctl session overlay follow off --target "$AGTERM_SESSION_ID"   # pause; on
 ⌘-click on a `.log` or `.out` path opens the same following page; `app.log:120` still opens the plain page at that
 line. The user pauses by scrolling up and resumes at the bottom or with Resume. Read back `text.tail`, `following`,
 `lines`, `clipped`, `waiting` (file missing) and `unreadable`. On a session another Mac presents, the log page and
-`follow`, `search`, `wrap` and `changes` work on that Mac when its agterm shows live text pages; an older one refuses
-them.
+`follow`, `search`, `wrap`, `changes` and `files` work on that Mac when its agterm shows live text pages, `files` only when
+it also navigates files (`page.files`); an older one refuses them.
 
 Search a text or log page, not the terminal under it:
 
@@ -892,8 +892,10 @@ opens it as a read-only text page:
 git diff --no-color HEAD~3 HEAD -- src/app.go > /tmp/src_app.go.diff
 ```
 
-Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file, since a multi-file patch shows as one stream
-with no file list. Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
+Then print `[src/app.go diff](/tmp/src_app.go.diff)`, one link per file. A whole multi-file patch also works as one
+link: its bar lists the files (`f` opens the list), and `agtermctl session overlay files --go N|PATH` jumps to one by
+number or by the path the list shows, printing `N of M: path`; read back `text.files` (`{count, current, path}`).
+Use absolute, space-free output paths so the printed paths are clickable without OSC 8.
 The page steps between changes with `]`/`[` or `agtermctl session overlay changes --next|--prev`, which prints
 `N of M`; read back `text.changes` (`{count, current}`).
 

@@ -68,6 +68,119 @@ public enum TextPage {
         return found
     }
 
+    /// diffSections lists a patch's files in patch order, each at the line its header starts on. A section opens at a
+    /// `diff ` row, or at a `--- ` row directly followed by `+++ ` outside a `diff ` header, so rename, mode and binary
+    /// sections count. Rows inside a hunk are never headers. A CR ends a line too, as the HTML parser makes it one.
+    static func diffSections(in text: String) -> [DiffSection] {
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
+        let rows = lines.components(separatedBy: "\n").map(TerminalText.strippingEscapes)
+        var sections: [DiffSection] = []
+        // the `diff --git` section still waiting for its `---` row, and whether its paths carry `a/` and `b/`
+        var open: (index: Int, prefixed: Bool)?
+        var old = 0, added = 0
+        var index = 0
+        while index < rows.count {
+            let row = rows[index]
+            defer { index += 1 }
+            if old > 0 || added > 0 {
+                if row.hasPrefix("\\") { continue }
+                if !row.hasPrefix("+") { old -= 1 }
+                if !row.hasPrefix("-") { added -= 1 }
+                if old <= 0, added <= 0 { old = 0; added = 0 }
+                continue
+            }
+            if row.hasPrefix("diff --git ") {
+                let (from, to) = gitPaths(String(row.dropFirst(11)))
+                let prefixed = from.hasPrefix("a/") && to.hasPrefix("b/")
+                sections.append(DiffSection(path: prefixed ? String(to.dropFirst(2)) : to, line: index))
+                open = (sections.count - 1, prefixed)
+                continue
+            }
+            if row.hasPrefix("diff ") {
+                open = nil
+                continue
+            }
+            if row.hasPrefix("--- "), index + 1 < rows.count, rows[index + 1].hasPrefix("+++ ") {
+                let from = headerPath(row), to = headerPath(rows[index + 1])
+                var path = to == "/dev/null" ? from : to
+                if let section = open {
+                    if section.prefixed, path.hasPrefix("a/") || path.hasPrefix("b/") { path = String(path.dropFirst(2)) }
+                    sections[section.index] = DiffSection(path: path, line: sections[section.index].line)
+                } else {
+                    sections.append(DiffSection(path: path, line: index))
+                }
+                open = nil
+                index += 1
+                continue
+            }
+            if let counts = hunkCounts(row) { (old, added) = counts }
+        }
+        return sections
+    }
+
+    /// hunkCounts reads a hunk header's old and new line counts, each 1 when the header leaves it out.
+    private static func hunkCounts(_ row: String) -> (Int, Int)? {
+        guard let match = row.firstMatch(of: /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/) else { return nil }
+        return (match.1.flatMap { Int($0) } ?? 1, match.2.flatMap { Int($0) } ?? 1)
+    }
+
+    /// headerPath is a `---` or `+++` row's path, unquoted, without the timestamp a plain `diff -u` adds after a tab.
+    private static func headerPath(_ row: String) -> String {
+        let path = String(row.dropFirst(4).prefix { $0 != "\t" })
+        return path.hasPrefix("\"") ? unquoted(path).value : path
+    }
+
+    /// gitPaths splits a `diff --git` row's two paths, each quoted or not on its own. Unquoted paths may hold spaces, so
+    /// an even split whose halves name the same file, `a/` and `b/` aside, wins, then the last ` b/`, then the first space.
+    private static func gitPaths(_ rest: String) -> (String, String) {
+        if rest.hasPrefix("\"") {
+            let first = unquoted(rest)
+            let tail = rest[first.end...].drop { $0 == " " }
+            return (first.value, tail.hasPrefix("\"") ? unquoted(String(tail)).value : String(tail))
+        }
+        if let quote = rest.range(of: " \"", options: .backwards) {
+            return (String(rest[..<quote.lowerBound]), unquoted(String(rest[rest.index(after: quote.lowerBound)...])).value)
+        }
+        let chars = Array(rest)
+        if chars.count % 2 == 1, chars[chars.count / 2] == " " {
+            let from = String(chars[..<(chars.count / 2)]), to = String(chars[(chars.count / 2 + 1)...])
+            let prefixed = from.hasPrefix("a/") && to.hasPrefix("b/")
+            if from == to || (prefixed && from.dropFirst(2) == to.dropFirst(2)) { return (from, to) }
+        }
+        if rest.hasPrefix("a/"), let split = rest.range(of: " b/", options: .backwards) {
+            return (String(rest[..<split.lowerBound]), String(rest[rest.index(after: split.lowerBound)...]))
+        }
+        guard let space = rest.firstIndex(of: " ") else { return (rest, rest) }
+        return (String(rest[..<space]), String(rest[rest.index(after: space)...]))
+    }
+
+    /// unquoted decodes the C-style quoted path git writes for unusual names, whose octal escapes are UTF-8 bytes,
+    /// and returns where the closing quote ends.
+    private static func unquoted(_ quoted: String) -> (value: String, end: String.Index) {
+        var bytes: [UInt8] = []
+        var index = quoted.index(after: quoted.startIndex)
+        while index < quoted.endIndex {
+            let char = quoted[index]
+            index = quoted.index(after: index)
+            if char == "\"" { return (String(decoding: bytes, as: UTF8.self), index) }
+            guard char == "\\", index < quoted.endIndex else {
+                bytes.append(contentsOf: Array(String(char).utf8))
+                continue
+            }
+            let escaped = quoted[index]
+            index = quoted.index(after: index)
+            let octal = String(escaped) + quoted[index...].prefix(2)
+            if octal.count == 3, octal.allSatisfy({ ("0"..."7").contains($0) }), let byte = UInt8(octal, radix: 8) {
+                bytes.append(byte)
+                index = quoted.index(index, offsetBy: 2)
+                continue
+            }
+            let named: [Character: UInt8] = ["n": 0x0A, "t": 0x09, "r": 0x0D, "a": 0x07, "b": 0x08, "f": 0x0C, "v": 0x0B]
+            bytes.append(contentsOf: named[escaped].map { [$0] } ?? Array(String(escaped).utf8))
+        }
+        return (String(decoding: bytes, as: UTF8.self), quoted.endIndex)
+    }
+
     /// isLog says whether a plain click on `path` opens it as a log page, following its end.
     public static func isLog(file path: String) -> Bool {
         logExtensions.contains(((path as NSString).lastPathComponent as NSString).pathExtension.lowercased())
@@ -100,22 +213,28 @@ public enum TextPage {
     /// A log page (`log` set) carries its follow state instead of a line, and the renderer draws no gutter; `anchor`
     /// is the scroll offset a rebuilt page reopens at, a paused log page's or a plain page's.
     /// A plain page of a diff is marked whatever its size, so change navigation outlives the highlighting limit;
-    /// `change` is the change a rebuilt page reopens on, from 1. Under the limit a diff also carries `diffLanguages`
-    /// as JSON, so each file's lines are highlighted in that file's language. `wrap` opens the page with long lines
-    /// wrapped.
+    /// `change` is the change a rebuilt page reopens on, from 1, still the step's origin when `entered`, and `file` the
+    /// file it keeps shown, from 1. Under the limit a diff also carries `diffLanguages` as JSON, so each file's lines
+    /// are highlighted in that file's language. `wrap` opens the page with long lines wrapped.
     public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
                             anchor: Double? = nil, search: SearchState? = nil, change: Int? = nil,
-                            wrap: Bool = false) -> String {
+                            entered: Bool = false, file: Int? = nil, wrap: Bool = false) -> String {
         var attributes = ""
         let highlighted = text.utf8.count <= maxHighlightBytes
         if log == nil, language == diffLanguage {
             attributes += " data-diff"
             if let change, change > 0 { attributes += " data-change=\"\(change)\"" }
+            if entered { attributes += " data-entered" }
+            if let file, file > 0 { attributes += " data-file=\"\(file)\"" }
             let files = highlighted ? diffLanguages(in: text) : [:]
             let encoder = JSONEncoder()
             encoder.outputFormatting = .sortedKeys
             if !files.isEmpty, let json = try? encoder.encode(files) {
                 attributes += " data-files=\"\(MarkdownPage.escaped(String(decoding: json, as: UTF8.self)))\""
+            }
+            let sections = diffSections(in: text)
+            if !sections.isEmpty, let json = try? encoder.encode(sections) {
+                attributes += " data-sections=\"\(MarkdownPage.escaped(String(decoding: json, as: UTF8.self)))\""
             }
         }
         if let search {
@@ -145,4 +264,10 @@ public enum TextPage {
         <main id="agterm-page"></main></body></html>
         """
     }
+}
+
+/// DiffSection is one file of a patch: the path it shows and the 0-based line its header starts on.
+struct DiffSection: Codable, Equatable, Sendable {
+    let path: String
+    let line: Int
 }

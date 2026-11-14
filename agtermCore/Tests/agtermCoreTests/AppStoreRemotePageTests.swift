@@ -693,12 +693,15 @@ struct AppStoreRemotePageTests {
         #expect(treeChanges { textReport(page, session, matches) } == 0)
         matches.changes = TextChanges(count: 2, current: 1)
         #expect(treeChanges { textReport(page, session, matches) } == 0)
+        matches.files = TextFiles(count: 3, current: 2, path: "b.go")
+        #expect(treeChanges { textReport(page, session, matches) } == 0)
 
         let node = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
         #expect(node.following == false)
         #expect(node.search == ControlTextSearchNode(query: "x", matches: 4, current: 2))
         #expect(node.wrap == true)
         #expect(node.lines == 9)
+        #expect(node.files == ControlTextFilesNode(count: 3, current: 2, path: "b.go"))
     }
 
     @Test func aTextActionAnswersWithItsResultAfterApplyingItsState() async throws {
@@ -724,6 +727,14 @@ struct AppStoreRemotePageTests {
         #expect(open(session, HtmlOverlay(source: .text(path: "/tmp/a.txt", line: nil))) == .opened)
 
         #expect(await store.remoteTextAction(session.id, pane: nil, .search(.query("x"))) == .local)
+        #expect(presenter.commands.isEmpty)
+    }
+
+    @Test func aPresenterWithoutFileNavigationIsSentNoFileAction() async throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageFilesKind })
+        #expect(open(session, HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))) == .opened)
+
+        #expect(await store.remoteTextAction(session.id, pane: nil, .files("2")) == .local)
         #expect(presenter.commands.isEmpty)
     }
 
@@ -769,7 +780,7 @@ struct AppStoreRemotePageTests {
 
     @Test(arguments: [
         TextPageAction.follow(.toggle), .wrap(.off), .search(.query("q")), .search(.next), .search(.previous), .search(.close),
-        .changes(forward: true), .changes(forward: false),
+        .changes(forward: true), .changes(forward: false), .files("3"), .files("src/b.go"),
     ])
     func aTextActionTravelsAsAPageCommand(action: TextPageAction) {
         #expect(TextPageAction(action.command(page: "p", seq: 3)) == action)
@@ -779,6 +790,7 @@ struct AppStoreRemotePageTests {
         #expect(TextPageAction(PresentationPageCommand(page: "p", seq: 1, action: .search)) == nil)
         #expect(TextPageAction(PresentationPageCommand(page: "p", seq: 1, action: .follow)) == nil)
         #expect(TextPageAction(PresentationPageCommand(page: "p", seq: 1, action: .changes, step: .close)) == nil)
+        #expect(TextPageAction(PresentationPageCommand(page: "p", seq: 1, action: .files)) == nil)
         #expect(TextPageAction(PresentationPageCommand(page: "p", seq: 1, action: .hide)) == nil)
         let long = TextPageAction.search(.query(String(repeating: "q", count: TextSearch.maxQuery + 5)))
         #expect(long.command(page: "p", seq: 1).query?.count == TextSearch.maxQuery)

@@ -107,6 +107,7 @@ final class MockControlActions: ControlActions {
         case overlayWrap(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlaySearch(target: String?, window: String?, pane: OverlayPane?, request: TextSearchRequest)
         case overlayChanges(target: String?, window: String?, pane: OverlayPane?, forward: Bool)
+        case overlayFiles(target: String?, window: String?, pane: OverlayPane?, to: String)
         case overlayReload(target: String?, window: String?, pane: OverlayPane?, current: Bool)
         case overlayNavigate(target: String?, window: String?, pane: OverlayPane?, HtmlNavigation)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
@@ -770,6 +771,11 @@ final class MockControlActions: ControlActions {
                                    forward: Bool) async -> ControlResponse {
         calls.append(.overlayChanges(target: target, window: window, pane: pane, forward: forward))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "3 of 7"))
+    }
+
+    func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse {
+        calls.append(.overlayFiles(target: target, window: window, pane: pane, to: to))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "2 of 4: b.go"))
     }
 
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {

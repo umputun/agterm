@@ -159,6 +159,9 @@ public protocol ControlActions {
     /// `N of M`.
     func stepSessionOverlayChanges(_ target: String?, window: String?, pane: OverlayPane?,
                                    forward: Bool) async -> ControlResponse
+    /// goSessionOverlayFiles moves the diff page in the addressed slot to a file, named by its number from 1 or its
+    /// path as the page shows it, and answers `N of M: path`.
+    func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse

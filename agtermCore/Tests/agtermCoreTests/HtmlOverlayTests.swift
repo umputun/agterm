@@ -1219,6 +1219,23 @@ struct HtmlOverlayTests {
         #expect(text.changes == ControlTextChangesNode(count: 11, current: 2))
     }
 
+    @Test func aFilesReportIsReadBackClearedAndEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let opened = events.count
+        #expect(try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text).files == nil)
+
+        store.setTextFilesReport(page.id, files: TextFiles(count: 4, current: 2, path: "b.go"))
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        #expect(text.files == ControlTextFilesNode(count: 4, current: 2, path: "b.go"))
+        store.setTextFilesReport(page.id, files: nil)
+
+        #expect(session.htmlOverlay?.textFiles == nil)
+        #expect(events.count == opened)
+        #expect(TextChangesFailure.noFile("x.go").message == "no file x.go")
+    }
+
     @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
     func wrapModeSetsTheTextPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
         let (store, session, events) = try logStore()

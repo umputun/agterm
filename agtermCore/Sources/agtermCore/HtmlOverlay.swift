@@ -171,6 +171,21 @@ public struct TextChanges: Codable, Equatable, Sendable {
     }
 }
 
+/// TextFiles is a diff page's count of files and the one in view, from 1, with the path the page shows for it.
+public struct TextFiles: Codable, Equatable, Sendable {
+    /// maxPath bounds a path sent between Macs, which a hostile patch could make as long as the file.
+    public static let maxPath = 4096
+    public let count: Int
+    public let current: Int
+    public let path: String
+
+    public init(count: Int, current: Int, path: String) {
+        self.count = count
+        self.current = current
+        self.path = path
+    }
+}
+
 /// TextSearch is a text page's search: the query and the page's last report on it, `current` counted from 1 and 0
 /// with no match.
 public struct TextSearch: Equatable, Sendable {
@@ -248,6 +263,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var searchRevision = 0
     /// textChanges is a diff page's last report on its changes, nil until it reports and on any other page.
     public internal(set) var textChanges: TextChanges?
+    /// textFiles is a diff page's last report on the file in view, nil until it reports and on any other page.
+    public internal(set) var textFiles: TextFiles?
     /// textWrap is whether a text page wraps long lines.
     public internal(set) var textWrap = false
     public var loadState: HtmlLoadState = .loading
@@ -305,6 +322,7 @@ public struct HtmlOverlay: Equatable, Sendable {
         }
         textWrap = text.wrap
         textChanges = text.changes
+        textFiles = text.files
         return before != (logState?.following, textSearch?.query, textWrap)
     }
 

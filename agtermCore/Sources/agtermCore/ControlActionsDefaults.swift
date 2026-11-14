@@ -81,6 +81,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.changes"))
     }
 
+    func goSessionOverlayFiles(_: String?, window _: String?, pane _: OverlayPane?, to _: String) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.files"))
+    }
+
     // outcomes live in agtermCore, so every host answers the read the same way and owes no conformance
     func htmlPageResult(_ pageID: UUID) -> ControlResponse {
         HtmlPageOutcomes.shared.response(for: pageID)

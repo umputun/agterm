@@ -178,7 +178,8 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.wrap`, `.hud.open`, `.hud.update`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.files`, `.overlay.wrap`,
+  `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
   `ask.open`, `ask.result`, `ask.cancel`
@@ -905,6 +906,17 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Under the cap `data-files` carries `TextPage.diffLanguages`, and the page highlights each hunk's two sides whole in
   its file's language, with the marker column kept in the text at zero width; added and removed runs get bands at
   any size. A patch with no unified hunk keeps the `diff` grammar. `text.language` stays `diff`.
+- A diff page jumps between its files (`session.overlay.files --go N|PATH`, the bar's file button, `f`).
+  `TextPage.diffSections` owns the file index and `data-sections` carries it at any size, so the page never parses
+  headers itself; a CR ends a line, as the HTML parser makes it one before the gutter counts lines.
+  The page resolves a jump's target from that index, so no Swift catalog can disagree with the document loaded. A pick makes the file's first change current,
+  and that change stays the step's origin while the view is where the pick left it; a step reports the file it reached.
+  A rebuild from the same text keeps that origin and a pinned file only while the view is still where they were left
+  (`agtermTextNavigation`, then `data-entered` and `data-file`); a fresh read keeps neither.
+  The page posts `{count, current, path}` on ready and whenever the file in view changes, from the scroll handler
+  itself (an animation frame never runs off screen), into `HtmlOverlay.textFiles` (`setTextFilesReport`, never
+  emitted). The remote action needs `page.files` beside `page.text`; an older presenter is never sent it.
+  No command lists the files: a long list outgrows the 1024-character reply. Read back `htmlOverlays[].text.files`.
 - A text page wraps long lines (`session.overlay.wrap on|off|toggle`, the bar's Wrap button, `w`).
   `HtmlOverlay.textWrap` lives per page, starts off and is never persisted; a rebuild carries it as `data-wrap`.
   The bridge records the page's toggle in the model, and `TextPageBridge.apply` pushes every model change back, so a control
@@ -2188,7 +2200,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one ignores `textLog` and shows the log static, and a text action it cannot decode ends the whole stream.
   The open request carries `textLog`, the claim serves the log's end over the page channel, and the presenter's
   `TextPageBridge` follows it there.
-  On the origin `follow`, `search`, `wrap` and `changes` aimed at such a slot go out as `pageCommand`s with a sequence
+  On the origin `follow`, `search`, `wrap`, `changes` and `files` aimed at such a slot go out as `pageCommand`s with a sequence
   number (`AppStore.remoteTextAction`) and wait at most `PresentationPageResult.deadline` for the matching
   `pageResult`, which answers with the presenter's reply and its text state; no result is `presenter did not answer`,
   and a page that ends or is withdrawn meanwhile answers `the viewer showing this overlay is gone`.
@@ -2197,7 +2209,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Every text-state change on a replica, its bar's included, rides `pageState.text` and is mirrored into the origin's
   record; a re-offer seeds the new replica with following, query and wrap (`textSeed`), never a step.
   An older presenter gets `OverlayHtmlError.logRemote` for a log page, the plain page for a clicked log, and the
-  store's `remote page` refusals for search, changes and wrap.
+  store's `remote page` refusals for search, changes and wrap, and for files when it also lacks `page.files`.
   A headless origin answers a text action on a page held for no presenter `the viewer showing this overlay is gone`.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,

@@ -143,6 +143,10 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 60, body: .pageResult(PresentationPageResult(
             page: "p10", seq: 2, ok: true, text: "2 of 7", state: PresentationTextState(query: "timeout", revision: 4, matches: 7, current: 2)))),
         PresentationFrame(gen: 1, rev: 61, body: .pageResult(PresentationPageResult(page: "p10", seq: 3, ok: false, error: "no query"))),
+        PresentationFrame(gen: 1, rev: 62, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 4, action: .files, file: "src/b.go"))),
+        PresentationFrame(gen: 1, rev: 63, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 4, ok: true, text: "2 of 4: src/b.go",
+            state: PresentationTextState(revision: 4, files: TextFiles(count: 4, current: 2, path: "src/b.go"))))),
     ]
 
     @Test(arguments: [

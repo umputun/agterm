@@ -159,6 +159,11 @@ extension ServerActions {
         await textPageAction(target, window: window, pane: pane, .changes(forward: forward))
     }
 
+    /// goSessionOverlayFiles jumps the diff page the presenting Mac shows to one of its files.
+    public func goSessionOverlayFiles(_ target: String?, window: String?, pane: OverlayPane?, to: String) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .files(to))
+    }
+
     // a server shows no page itself, so an action the presenting Mac cannot run gets the store's refusal for the slot
     private func textPageAction(_ target: String?, window: String?, pane: OverlayPane?,
                                 _ action: TextPageAction) async -> ControlResponse {
@@ -174,7 +179,7 @@ extension ServerActions {
         case .follow(let mode): if case .failure(let refused) = store.setTextLogFollowing(session.id, pane: pane, mode: mode) { failure = refused.message }
         case .wrap(let mode): if case .failure(let refused) = store.setTextWrap(session.id, pane: pane, mode: mode) { failure = refused.message }
         case .search: if case .failure(let refused) = store.textSearchPage(session.id, pane: pane) { failure = refused.message }
-        case .changes: if case .failure(let refused) = store.textChangesPage(session.id, pane: pane) { failure = refused.message }
+        case .changes, .files: if case .failure(let refused) = store.textChangesPage(session.id, pane: pane) { failure = refused.message }
         }
         return ControlResponse(ok: false, error: failure)
     }

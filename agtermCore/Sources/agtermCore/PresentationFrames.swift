@@ -406,15 +406,16 @@ public struct PresentationPageChange: Codable, Equatable, Sendable {
 }
 
 /// PresentationPageAction is what the origin asks of a handed-over page. The text actions go only to a presenter
-/// listing `page.text`: an older one cannot decode them and would end the stream.
+/// listing `page.text`, and `files` only to one listing `page.files`: an older one cannot decode them and would end
+/// the stream.
 public enum PresentationPageAction: String, Codable, Sendable {
     case hide, show, reloadOriginal, reloadCurrent, back, forward, browser, resize
-    case follow, search, wrap, changes
+    case follow, search, wrap, changes, files
 
     /// answersWithResult says the presenter answers this action with a `pageResult` rather than only `appliedSeq`.
     public var answersWithResult: Bool {
         switch self {
-        case .follow, .search, .wrap, .changes: return true
+        case .follow, .search, .wrap, .changes, .files: return true
         case .hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize: return false
         }
     }
@@ -442,10 +443,13 @@ public struct PresentationPageCommand: Codable, Equatable, Sendable {
     /// query is a search request's new query; a search carries either it or a step.
     public var query: String?
     public var step: PresentationTextStep?
+    /// file is a diff page file jump's target, a number from 1 or a path as the page shows it.
+    public var file: String?
 
     public init(page: String, seq: Int, action: PresentationPageAction, sizePercent: Int? = nil,
                 points: OverlayPointSize = OverlayPointSize(), merge: Bool? = nil, toggle: ControlToggleMode? = nil,
-                query: String? = nil, step: PresentationTextStep? = nil) {
+                query: String? = nil, step: PresentationTextStep? = nil, file: String? = nil) {
+        self.file = file
         self.page = page
         self.seq = seq
         self.action = action
@@ -513,9 +517,13 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
     public var current: Int?
     public var wrap: Bool
     public var changes: TextChanges?
+    /// files is a diff page's file in view; an origin predating `page.files` ignores the key.
+    public var files: TextFiles?
 
     public init(following: Bool? = nil, log: TextLogReport? = nil, query: String? = nil, revision: Int = 0,
-                matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil) {
+                matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil,
+                files: TextFiles? = nil) {
+        self.files = files.map { TextFiles(count: $0.count, current: $0.current, path: String($0.path.prefix(TextFiles.maxPath))) }
         self.following = following
         self.log = log
         self.query = query.map { String($0.prefix(TextSearch.maxQuery)) }

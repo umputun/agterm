@@ -16,7 +16,7 @@ public enum ServerCommandPolicy {
         .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
         .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,
         .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
-        .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges,
+        .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
         .msgSend, .msgRead, .msgAck,
     ]
 
