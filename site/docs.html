@@ -3093,7 +3093,9 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               acknowledges what it handled. Run inside a pane, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl msg</span> acts as that pane through
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_SESSION_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE_ID</span>. Mail lives in the running app only: closing or
               restarting the pane, or closing its session, workspace or window, drops it, and so does quitting agterm.
-              A full mailbox refuses that recipient alone. Details in the
+              A full mailbox refuses that recipient alone. On agterm-server the panes of that server message each other the same way,
+              and a Mac showing the server window sees their pending counts and gets their <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">message</span>
+              events; a local pane and a server pane cannot message each other yet. Details in the
               <a href="/commands#msg" style="color: #6d82f3">command reference</a>.
             </p>
             <div

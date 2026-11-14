@@ -1546,7 +1546,8 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   `operations` (`{id, action, session?, workspace?, state}` for an action still on its way or whose outcome
   was lost), each omitted when empty. Its session rows add `ended` (the server lost the primary and split panes; a
   scratch may still run),
-  `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon).
+  `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon), and every server
+  scratch row, here and on the server, has `scratchPaneID` and `scratchPendingMessages` (see [msg](#msg)).
 - `window remote dismiss [ID]`: drop the marks for actions whose outcome was lost; it neither undoes nor
   resends them. The window settles a mark through `catalog op` by itself when the server still knows it.
 - `session detach [--target T ...]` / `workspace detach [--target T]`: hide a remote window's rows on this
@@ -1565,8 +1566,8 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   operation id.
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
-  dashboard, zoom and more; `window list` and the presenter bridges `zmx present`, `run-job`, `page-serve` and
-  `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
+  dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges
+  `zmx present`, `run-job`, `page-serve` and `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
   session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held until a Mac
   presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an ask or pick ends
   unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap` and `changes` are
@@ -1956,9 +1957,9 @@ is drawn on screen.
   once. `--all` reaches every live pane in every open window except the sender and remote rows;
   `--workspace` narrows it. A split hidden since launch has no terminal yet and is not a live pane.
   The reply carries `messageID` (shared by every copy), `delivered` (canonical `SESSION:PANE-ID`
-  addresses) and `rejected` (`{address, reason}`, reason `mailbox full` or `unknown pane`). The CLI
-  prints the id, one stderr line per rejection, and exits 1 when anything was rejected; the delivered
-  copies stay queued.
+  addresses) and `rejected` (`{address, reason, detail?}`, reason `mailbox full` or `unknown pane`; `detail`
+  says more, as `remote session` does). The CLI prints the id, one stderr line per rejection (the detail when
+  there is one), and exits 1 when anything was rejected; the delivered copies stay queued.
 - `agtermctl msg read [--ack] [--wait [--timeout N]] [--as SESSION:PANE-ID]` (`msg.read`) returns the
   oldest messages, up to 32, as `messages` (`{id, from?, to, ts, body}`) plus `remaining`, the pending messages not in this
   batch, and removes
@@ -1984,6 +1985,15 @@ window, `session restart` and a respawn of the primary drop it; an undone close 
 mailbox. Hiding a split, a swap and a split promoted after the primary exits keep it. Nothing survives
 quitting the app. Read back `pendingMessages` on the tree surface node and the `message` event; a hook
 on `message` reacts to new mail without polling.
+
+On agterm-server the same commands work between the panes of that server: main, split and scratch panes,
+hidden ones included, and the main and split panes of an ended row drop their mail while its running scratch
+keeps it. Mail lives for the server's run. The server tree reports `pendingMessages` on main and split surfaces
+and a scratch's address and count on the session as `scratchPaneID` and `scratchPendingMessages`; a Mac showing
+the server window reports the same counts on the row, and its `message` event fires for mail queued for that
+row's panes, carrying the server's pane id. `events.read` is not served on the server itself. A local pane and
+a server pane cannot message each other yet: a Mac send to a server row is rejected `unknown pane` with detail
+`remote session`, a server send to a Mac session `unknown pane`, and a server row as `--as` is refused.
 
 ## font
 

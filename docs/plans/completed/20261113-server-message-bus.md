@@ -182,16 +182,16 @@
   `.claude/rules/control-api.md` (message bus, read-back, server policy)
 - Create: `docs/backlog/local-to-server-messaging.md`
 
-- [ ] `Command: CaseIterable`; one test requires exactly one class per case: served, `physicalWindowCommands`, or
+- [x] `Command: CaseIterable`; one test requires exactly one class per case: served, `physicalWindowCommands`, or
       the undecided list as test data; an undecided entry that is served or physical fails
-- [ ] docs: msg between panes of one agterm-server, mail per server run, the `message` event reaching each Mac
+- [x] docs: msg between panes of one agterm-server, mail per server run, the `message` event reaching each Mac
       subscribed to the recipient's session, `events.read` not served on the server, the new tree fields and `detail`, and both unsupported
       directions (a Mac session to a server session: `unknown pane` with `detail: "remote session"`; a server
       pane to a Mac session: `unknown pane`)
-- [ ] backlog item: local-to-server messaging (two-way route over ssh, sender identity, replies, mixed recipients,
+- [x] backlog item: local-to-server messaging (two-way route over ssh, sender identity, replies, mixed recipients,
       `--all` scope) as the open parity gap
-- [ ] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] full gates once: `make build`, `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Manual verification**:

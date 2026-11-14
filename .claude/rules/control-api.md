@@ -1459,7 +1459,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   whole command; only `.unresolved` becomes a per-recipient `unknown pane` rejection.
 - A live pane is a realized surface with a parseable token, the one definition recipients, identities and
   `--all` share; a split hidden since launch has none. `ControlServer+Messages` resolves the session across
-  every open store with `window: nil`, never the frontmost default, then asks `AppStore.messageRecipient`.
+  every open store with `window: nil`, never the frontmost default, then asks `AppStore.messagePane`.
 - An identity is `SESSION:PANE-ID` only and must be a live pane of that session, on send, read and ack alike.
   There is no fallback to a role or the active pane, and a stale or incomplete identity never becomes an
   anonymous send: the CLI sends without one only when neither `AGTERM_*` variable is present.
@@ -1474,6 +1474,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `read --ack` removes its batch in one synchronous mailbox operation and answers `acked`. The CLI refuses to
   print unless `acked` names exactly the returned ids, and `--wait` repeats that same read rather than probing
   first, since a probe leaves a gap in which another reader drains the mailbox.
+- agterm-server hosts its own bus. A headless store's live pane is a daemon-backed main or split identity or
+  the `scratchDaemon`, so an ended row keeps only its scratch, and `markSessionEnded` is one more disposal site.
+  A Mac remote row is refused by name: `MessagePaneError.detail` becomes `MessageRejection.detail`
+  (`remote session`), a field rather than a new `Reason`, since a client decodes the whole reply.
+  Local-to-server messaging is `docs/backlog/local-to-server-messaging.md`.
+- Server mail reaches a Mac two ways. Counts ride `CatalogPane.pendingMessages` into `Session.catalogMail`,
+  rebuilt from each catalog entry and never part of the binding, so a count change attaches nothing; a server
+  scratch reads back on the session (`scratchPaneID`, `scratchPendingMessages`), since the `surfaces[]` entry
+  is a zoom address the server's scratch lacks. Each delivered pane is a `message` presentation frame to every
+  viewer of its session, presenter or not, and the Mac emits the event on the row (`emitRemoteMessage`).
 
 ## Keymap, config, theme, and sidebar
 
