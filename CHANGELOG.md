@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.42.3 - 2026-11-13
+
+### Bug Fixes
+
+- **Switching to or from a left/right split session with the compact toolbar no longer flickers at the top.** Every switch resized both panes by about two rows, so the shells redrew and a stale frame showed under the titlebar; the panes now keep their size. A top/bottom split can still jump its divider for one frame when shown #995 @umputun
+- an unnamed session on an agterm-server host, shown in a remote window, kept its directory name as the sidebar label and window title instead of following the terminal title. It follows the title once both the server and the app are updated #993 @umputun #991
+
 ## v0.42.2 - 2026-11-13
 
 ### Bug Fixes
