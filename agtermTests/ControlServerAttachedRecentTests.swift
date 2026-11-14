@@ -82,6 +82,19 @@ final class ControlServerAttachedRecentTests: XCTestCase {
         XCTAssertTrue(library.remoteRecentClosedItems.isEmpty)
     }
 
+    func testAnUnknownWindowIsRefusedBeforeTheOriginIsAsked() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"], recentID: "r1"))])
+        let (server, store) = try makeServer(runner)
+        try await terminate(try attachedRow(in: store), server)
+        let entry = try XCTUnwrap(library.remoteRecentClosedItems.first)
+
+        let reply = await server.reopenAttached(entry.id, window: "no-such-window")
+
+        XCTAssertFalse(reply.ok)
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertEqual(library.remoteRecentClosedItems.map(\.id), [entry.id])
+    }
+
     func testAGoneSessionWithNoRecordedEntryIsFoundInTheOriginsList() async throws {
         let listed = tree(sessions: session("origin-1"))
         let theirs = ControlRecentItem(id: "r9", kind: "session", title: "c", subtitle: nil, closedAt: 1, workspaceID: "ws1",

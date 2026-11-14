@@ -70,6 +70,23 @@ struct ServerShellTests {
         #expect(bash.argv == ["/bin/bash", "--posix", "-lic", ZmxReplayScript.renderBashHolding(commandLine: "make test")])
     }
 
+    @Test func aReturningCommandRunsThenTheIntegratedLoginShell() {
+        let program = ServerShell.Program.returning("make test")
+        let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: ["ZDOTDIR": "/home/u/.zsh"], program: program)
+        let fish = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], program: program)
+        let bash = ServerShell.bash("/bin/bash").launch(integration: integration, environment: ["HOME": "/home/u", "ENV": "/home/u/.env"],
+                                                        program: program)
+
+        #expect(zsh.argv == ["/bin/zsh", "-lic", ZmxReplayScript.render(commandLine: "make test", integrationDirectory: integration + "/zsh",
+                                                                        inheritedZdotdir: "/home/u/.zsh", shell: "/bin/zsh")])
+        #expect(fish.argv == ["/usr/bin/fish", "-lic", ZmxReplayScript.renderFish(commandLine: "make test", integrationRoot: integration,
+                                                                                   shell: "/usr/bin/fish")])
+        let exports = [("ENV", integration + "/bash/ghostty.bash"), ("GHOSTTY_BASH_INJECT", "1"), ("GHOSTTY_BASH_ENV", "/home/u/.env"),
+                       ("HISTFILE", "/home/u/.bash_history"), ("GHOSTTY_BASH_UNEXPORT_HISTFILE", "1")]
+        #expect(bash.argv == ["/bin/bash", "--posix", "-lic", ZmxReplayScript.renderBash(commandLine: "make test", exports: exports,
+                                                                                          shell: "/bin/bash")])
+    }
+
     @Test func aReplayRunsTheProgramThenTheIntegratedLoginShell() {
         let argv = ["vim", "notes.md"]
         let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: ["ZDOTDIR": "/home/u/.zsh"],

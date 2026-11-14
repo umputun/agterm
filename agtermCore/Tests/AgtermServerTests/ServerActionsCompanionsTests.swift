@@ -47,6 +47,54 @@ struct ServerActionsCompanionsTests {
         #expect(launch.directory == harness.scratch.root)
     }
 
+    private func overlay(on session: Session, pane: OverlayPane? = nil, page: HtmlSource? = nil) -> ControlResponse {
+        harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
+            command: page == nil ? "top" : "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, pane: pane, page: page))
+    }
+
+    private func presenter(for session: Session) async throws -> ServerStreamsTests.Viewer {
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        harness.actions.streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
+        let viewer = ServerStreamsTests.Viewer(fd: fds[1])
+        try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
+                                                 mode: .presenter)))
+        let snapshot = await offPool { viewer.first { if case .snapshot = $0 { true } else { false } } }
+        #expect(snapshot != nil)
+        try viewer.send(.presenterAcquire)
+        let granted = await offPool { viewer.first { $0 == .presenterGranted || $0 == .presenterRefused } }
+        #expect(granted == .presenterGranted)
+        return viewer
+    }
+
+    @Test(arguments: [(nil as OverlayPane?, "a program overlay covers the session; nothing was created"),
+                      (.left, "left pane is covered by a program overlay; nothing was created")])
+    func aProgramOverlayHeldForAViewerRefusesTheDuplicate(pane: OverlayPane?, message: String) async throws {
+        let source = try newSession()
+        listed(source.paneIdentity)
+        observing(["top"], executable: "/usr/bin/top")
+        #expect(overlay(on: source, pane: pane).ok)
+
+        let reply = await harness.actions.duplicateAsCompanion(source.id.uuidString, window: nil, select: false)
+
+        #expect(reply == ControlResponse(ok: false, error: message))
+        #expect(harness.store.companions(of: source.id).isEmpty)
+    }
+
+    @Test func aPageShownOverTheSessionLeavesTheDuplicateToTheShell() async throws {
+        let source = try newSession()
+        listed(source.paneIdentity)
+        observing(["top"], executable: "/usr/bin/top")
+        let viewer = try await presenter(for: source)
+        defer { viewer.disconnect() }
+        #expect(overlay(on: source, page: .url(try #require(URL(string: "https://example.com")))).ok)
+        #expect(source.remoteOverlays.slot(nil)?.page != nil)
+
+        let reply = await harness.actions.duplicateAsCompanion(source.id.uuidString, window: nil, select: false)
+
+        #expect(try harness.session(reply).parentID == source.id)
+    }
+
     @Test func aBareProgramIsCopiedByThePathItWasStartedFrom() async throws {
         let source = try newSession()
         listed(source.paneIdentity)

@@ -560,7 +560,7 @@ buys nothing. A caller with no tree uses `version`.
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
   foreground or working directory, unreplayable arguments or one containing a backslash, a program started by a
   name that its own PATH or directory no longer holds, a pane under a visible
-  program overlay. A page session is refused. On a session attached from another Mac, that Mac duplicates its
+  program overlay (on agterm-server, any program it holds for a Mac, shown or hidden there). A page session is refused. On a session attached from another Mac, that Mac duplicates its
   own session under its own policy, and the copy attaches here as for `session new --parent`.
   `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
   flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
@@ -781,8 +781,9 @@ error keeps those names for compatibility.
   list in `sh -c`, and it inherits the app's GUI
   `PATH`, so the same exit-127 caveat as `session new --command`: wrap in `"zsh -lc '…'"` or use an
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
-  shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not
-  persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility. On a session attached from another
+  shell). A scratch is expendable, so passing `--command` while one is already open respawns it. In Live
+  sessions mode it runs in its own daemon and comes back hidden after a relaunch; otherwise it is not persisted.
+  Unknown mode errors. The tree's `scratch` flag tracks visibility. On a session attached from another
   host the scratch is that host's: `session scratch` runs there, and it shows and hides here as it does there. It
   is refused while the session is not connected, or when that host's agterm is too old to show its scratch.
 - `session focus [primary|split|left|right|top|bottom|other] [--target] [--window W]` - move keyboard focus between the two

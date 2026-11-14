@@ -33,6 +33,11 @@ struct ServerActionsRestartTests {
                                                  options: ControlSessionRestartOptions(command: command, pane: pane))
     }
 
+    private func returning(_ line: String) -> String {
+        ZmxReplayScript.render(commandLine: line, integrationDirectory: harness.panes.configuration.resourcesDirectory
+                                   + "/shell-integration/zsh", inheritedZdotdir: nil, shell: "/bin/zsh")
+    }
+
     @Test func aCommandReplacesTheShellAfterTheOldJobIsHungUp() async throws {
         let session = try newSession()
         running(session.paneIdentity)
@@ -47,7 +52,7 @@ struct ServerActionsRestartTests {
         #expect(harness.processes.signals.first?.pids == [300])
         let launch = try #require(harness.runner.launches.last)
         #expect(launch.name == ZmxSupport.daemonName(for: session.paneIdentity))
-        #expect(launch.argv == ["/bin/zsh", "-lic", ZmxReplayScript.renderEnding(commandLine: "make test")])
+        #expect(launch.argv.last == returning("make test"))
         #expect(session.daemonBackedPanes.contains(session.paneIdentity))
     }
 
@@ -167,6 +172,7 @@ struct ServerActionsRestartTests {
         #expect(!session.ended)
         #expect(session.agentIndicator.status == .idle)
         #expect(harness.runner.confirmedKills.isEmpty)
+        #expect(harness.runner.launches.last?.argv.last == returning("make"))
     }
 
     @Test(arguments: [(nil as String?, StatusPane.left, "an ended session has no program to replay; pass --command"),

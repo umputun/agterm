@@ -51,6 +51,25 @@ final class WindowLibraryRecentClosedTests {
         #expect(library.recentClosedItems.isEmpty)
     }
 
+    @Test func reopeningAFinalizedWorkspaceCloseLeavesItsAttachedRowsInRecentClosed() throws {
+        let library = WindowLibrary(directory: directory)
+        let store = try #require(library.activeStore)
+        _ = store.addWorkspace(name: "other")
+        let workspace = store.addWorkspace(name: "work")
+        let local = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/a"))
+        _ = try addAttachedRow(to: store, workspace: workspace.id, origin: "o1")
+        #expect(store.softRemoveWorkspace(workspace.id, grace: 3600))
+        store.finalizeAllPendingCloses()
+        let recent = try #require(library.recentClosedItems.first { $0.kind == .workspace })
+
+        let outcome = library.reopenRecentClosedOutcome(recent.id)
+
+        #expect(outcome?.complete == true)
+        #expect(store.session(withID: local.id) != nil)
+        #expect(library.recentClosedItems.allSatisfy { $0.id != recent.id })
+        #expect(library.recentClosedStore.loadRemote().map(\.originSessionID) == ["o1"])
+    }
+
     @Test func aReopenReportsTheWindowHoldingTheWorkspaceNotTheRequestedOne() throws {
         let library = WindowLibrary(directory: directory)
         let source = try #require(library.activeStore)

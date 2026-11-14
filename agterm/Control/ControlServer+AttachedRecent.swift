@@ -24,6 +24,7 @@ extension ControlServer {
         guard let item = library.remoteRecentClosedItems.first(where: { $0.id == id }) else {
             return ControlResponse(ok: false, error: "no recent item \(id.uuidString)")
         }
+        if case .failure(let refusal) = resolveOpenWindow(window) { return refusal }
         let current = await remoteTree(host: item.host)
         guard let tree = current.result?.remote else { return current }
         var sessions = [item.originSessionID]

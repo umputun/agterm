@@ -228,8 +228,15 @@ public struct RecentClosedStore: Sendable {
         save(Array(items.prefix(limit)), remote: loadRemote())
     }
 
-    /// remove drops entry `id` from both lists, and every remote entry a workspace close `id` wrote.
+    /// remove drops entry `id` from both lists. A reopened workspace entry keeps the remote entries its close
+    /// wrote, since its snapshot never held the attached rows.
     public func remove(_ id: UUID) {
+        save(load().filter { $0.id != id }, remote: loadRemote().filter { $0.id != id })
+    }
+
+    /// removeClose drops entry `id` and every remote entry the workspace close `id` wrote, for an undo that brings
+    /// those rows back live.
+    public func removeClose(_ id: UUID) {
         save(load().filter { $0.id != id }, remote: loadRemote().filter { $0.id != id && $0.closeID != id })
     }
 

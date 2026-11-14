@@ -50,10 +50,17 @@ public enum ZmxReplayScript {
     /// renderBash replays `argv`, then becomes the integrated login shell: the EXIT trap, which also runs after
     /// Ctrl-C, exports again the variables ghostty.bash consumed when it loaded and execs `shell`.
     public static func renderBash(argv: [String], exports: [(name: String, value: String)], shell: String) -> String {
+        renderBash(statement: CommandRestore.shellQuotedLine(argv), exports: exports, shell: shell)
+    }
+
+    public static func renderBash(commandLine: String, exports: [(name: String, value: String)], shell: String) -> String {
+        renderBash(statement: "builtin eval \(quoted(commandLine))", exports: exports, shell: shell)
+    }
+
+    private static func renderBash(statement: String, exports: [(name: String, value: String)], shell: String) -> String {
         let rearm = exports.map { "builtin export \($0.name)=\(quoted($0.value))" }
             + ["builtin exec -- \(quoted(shell)) --posix -l"]
-        return "__agterm_rearm() { \(rearm.joined(separator: "; ")); }; builtin trap __agterm_rearm EXIT; "
-            + CommandRestore.shellQuotedLine(argv)
+        return "__agterm_rearm() { \(rearm.joined(separator: "; ")); }; builtin trap __agterm_rearm EXIT; " + statement
     }
 
     public static func renderFish(argv: [String], integrationRoot: String, shell: String) -> String {

@@ -1160,7 +1160,7 @@
                 A pane that cannot be copied refuses the whole duplicate and is named, for example
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left pane: vim is on the restore denylist; nothing was created</span>: a program on the restore denylist,
                 an unreadable foreground or working directory, arguments that cannot be replayed or contain a backslash, a pane
-                under a visible program overlay. A page session has no terminal to copy. On a session attached from another
+                under a visible program overlay (on agterm-server, any program it holds for a Mac, shown or hidden there). A page session has no terminal to copy. On a session attached from another
                 Mac, that Mac duplicates its own session under its own policy and the copy attaches here, as for
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --parent</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-select</span> creates it without selecting it. A pipeline or shell job is copied as its foreground process only. Name, status, flag,
                 overlays, scratch and background are not copied. The GUI twin is <strong style="color: #bfbab0">Duplicate as
@@ -1697,8 +1697,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">exit</span> closes it and the next
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> spawns a fresh shell.
                 Showing it on a session that is not on screen starts it there without switching;
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> selects the target. Not persisted; an
-                unknown mode errors.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> selects the target. In Live sessions mode it runs in its own daemon and comes
+                back hidden after a relaunch; otherwise it is not persisted. An unknown mode errors.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> (only when showing) runs a program

@@ -497,6 +497,27 @@ struct ZmxReplayScriptTests {
         #expect(try nullSeparatedValues(at: result) == ["/integration/bash/ghostty.bash", "1", "--posix", "-l"])
     }
 
+    @Test func aBashCommandLineRunsInBashThenExecsTheLoginShell() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let payloadLog = fixture.appending(path: "payload-log")
+        let result = fixture.appending(path: "result")
+        let finalShell = fixture.appending(path: "final-shell")
+        try makeExecutable(finalShell, contents: """
+        #!/bin/sh
+        printf '%s\\0%s\\0%s\\0%s\\0' "$ENV" "$GHOSTTY_BASH_INJECT" "$1" "$2" > "$RESULT_FILE"
+        """)
+        let script = ZmxReplayScript.renderBash(commandLine: "for w in a b; do printf '%s' \"$w\" >> \"$PAYLOAD_LOG\"; done",
+                                                exports: [("ENV", "/integration/bash/ghostty.bash"), ("GHOSTTY_BASH_INJECT", "1")],
+                                                shell: finalShell.path)
+
+        _ = try runInTerminal(["/bin/bash", "-lic", script], fixture: fixture,
+                              environment: ["PAYLOAD_LOG": payloadLog.path, "RESULT_FILE": result.path])
+
+        #expect(try String(contentsOf: payloadLog, encoding: .utf8) == "ab")
+        #expect(try nullSeparatedValues(at: result) == ["/integration/bash/ghostty.bash", "1", "--posix", "-l"])
+    }
+
     private func makeFixture() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "agterm-zmx-replay-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

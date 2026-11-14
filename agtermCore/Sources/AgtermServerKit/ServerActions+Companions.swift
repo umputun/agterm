@@ -13,7 +13,7 @@ extension ServerActions {
             }
             guard !source.ended else { return ControlResponse(ok: false, error: "session has ended") }
             // a visible program over the panes is what the user sees running; copying the covered shell instead is wrong
-            guard !source.programOverlayVisible else {
+            guard !source.programOverlayVisible, !holdsRemoteProgram(source, pane: nil) else {
                 return ControlResponse(ok: false, error: "a program overlay covers the session; nothing was created")
             }
             guard let listed = try? panes.runner.list() else {
@@ -44,7 +44,8 @@ extension ServerActions {
     /// duplicatePlan is what the copy of `source`'s `pane` runs, from the process holding that pane's terminal.
     private func duplicatePlan(of source: Session, pane: CommandContext.Pane,
                                leaders: [String: Int32]) -> Result<DuplicateReplay.Plan, ActionRefusal> {
-        if source.paneOverlay(pane == .left ? .left : .right).map({ $0.html == nil && !$0.hidden }) == true {
+        let overlayPane: OverlayPane = pane == .left ? .left : .right
+        if source.paneOverlay(overlayPane).map({ $0.html == nil && !$0.hidden }) == true || holdsRemoteProgram(source, pane: overlayPane) {
             return .refused(ControlResponse(ok: false, error: "\(pane.rawValue) pane is covered by a program overlay; nothing was created"))
         }
         let identity = pane == .left ? source.paneIdentity : source.splitPaneIdentity
@@ -55,6 +56,13 @@ extension ServerActions {
         return DuplicateReplay.resolve(replayObservation(leader, shell), pane: pane.rawValue, fallbackDirectory: source.cwd(for: pane),
                                        shell: shell, denylist: CommandRestore.defaultDenylist)
             .mapError { ActionRefusal(response: ControlResponse(ok: false, error: $0.message)) }
+    }
+
+    /// holdsRemoteProgram says a program is reserved in `pane`'s slot for the Mac presenting the session. A viewer's
+    /// hide never reaches this server, so a reserved program refuses the duplicate whether it is shown or hidden.
+    private func holdsRemoteProgram(_ session: Session, pane: OverlayPane?) -> Bool {
+        guard let slot = session.remoteOverlays.slot(pane) else { return false }
+        return slot.page == nil
     }
 
     /// startCopy starts a duplicated companion's panes with the commands the store rebound to the copy's ids; a pane

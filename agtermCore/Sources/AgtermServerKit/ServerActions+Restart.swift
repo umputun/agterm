@@ -59,7 +59,7 @@ extension ServerActions {
         MessageBus.shared.dispose(pane: pane.identity)
         let workspace = store.sessionLocation(ofSession: session.id)?.workspace
         let start = ServerPanes.Start(identity: pane.identity, session: session, workspace: workspace, pane: pane.role,
-                                      program: replay.map { .replay($0.argv) } ?? .command(options.command ?? "", wait: false),
+                                      program: replay.map { .replay($0.argv) } ?? .returning(options.command ?? ""),
                                       directory: replay?.workingDirectory ?? session.cwd(for: pane.role == .right ? .right : .left))
         if let refusal = panes.start(start) {
             endKilledPane(session, identity: pane.identity)
@@ -80,7 +80,7 @@ extension ServerActions {
         guard let command else { return Self.restartFailure("an ended session has no program to replay; pass --command") }
         let workspace = store.sessionLocation(ofSession: session.id)?.workspace
         if let refusal = panes.start(.init(identity: pane.identity, session: session, workspace: workspace, pane: .left,
-                                           program: .command(command, wait: false), directory: session.effectiveCwd)) {
+                                           program: .returning(command), directory: session.effectiveCwd)) {
             return Self.restartFailure(refusal)
         }
         // what the ended program left (status, ask, HUD, pane overlay) would otherwise sit over the new one

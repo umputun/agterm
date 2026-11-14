@@ -323,7 +323,7 @@ extension AppStore {
             for session in close.sessions { removeRecentClosedItem(session.recentID) }
         case .workspace(let close):
             restorePendingWorkspace(close)
-            removeRecentClosedItem(closeID)
+            removeRecentClosedClose(closeID)
         }
         appendFlaggedArrivals() // a parked id still in the saved order returns in place; a cleared one appends
         if pendingCloseSummary?.id == closeID { promotePendingCloseSummary() }

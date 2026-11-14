@@ -285,4 +285,10 @@ extension AppStore {
         recentClosedStore.remove(id)
         recentClosedDidChange?()
     }
+
+    func removeRecentClosedClose(_ id: UUID) {
+        guard let recentClosedStore else { return }
+        recentClosedStore.removeClose(id)
+        recentClosedDidChange?()
+    }
 }

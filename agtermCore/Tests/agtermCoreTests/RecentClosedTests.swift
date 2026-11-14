@@ -335,10 +335,21 @@ final class RecentClosedTests {
         store.recordRemote(remoteItem(origin: "o2", closeID: closeID))
         store.recordRemote(kept)
 
-        store.remove(closeID)
+        store.removeClose(closeID)
         store.remove(single.id)
 
         #expect(store.loadRemote() == [kept])
+    }
+
+    @Test func removingAnEntryKeepsTheRemoteEntriesItsCloseWrote() {
+        let store = RecentClosedStore(directory: directory)
+        let closeID = UUID()
+        let tied = remoteItem(origin: "o2", closeID: closeID)
+        store.recordRemote(tied)
+
+        store.remove(closeID)
+
+        #expect(store.loadRemote() == [tied])
     }
 
     @Test func theOriginsOwnEntryIsNotedOnTheMatchingRemoteEntry() {

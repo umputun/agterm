@@ -35,6 +35,9 @@ public enum ServerShell: Equatable, Sendable {
         /// command runs a line once through the login shell and the pane ends with it, as `session.new --command`
         /// does on the Mac; `wait` holds the pane for a key after it, whatever way the line ended.
         case command(String, wait: Bool)
+        /// returning runs a line through the login shell, then the pane becomes the integrated login shell, as
+        /// `session.restart --command` does on the Mac.
+        case returning(String)
         /// replay runs a program again, then the pane becomes the integrated login shell.
         case replay([String])
 
@@ -47,6 +50,10 @@ public enum ServerShell: Equatable, Sendable {
     /// bashExports are the variables ghostty.bash consumes when it loads, which a replay exports again before it
     /// execs the login shell.
     static let bashExports = ["ENV", "GHOSTTY_BASH_INJECT", "GHOSTTY_BASH_ENV", "HISTFILE", "GHOSTTY_BASH_UNEXPORT_HISTFILE"]
+
+    private func rearmExports(_ environment: [String: String]) -> [(name: String, value: String)] {
+        Self.bashExports.compactMap { name in environment[name].map { (name, $0) } }
+    }
 
     /// launch is the argv and environment for a pane. zmx starts the zsh and fish login shell from `SHELL`; bash
     /// needs its flags.
@@ -63,6 +70,9 @@ public enum ServerShell: Equatable, Sendable {
             case .loginShell: nil
             case .command(let line, wait: true): ZmxReplayScript.renderHolding(commandLine: line)
             case .command(let line, wait: false): ZmxReplayScript.renderEnding(commandLine: line)
+            case .returning(let line):
+                ZmxReplayScript.render(commandLine: line, integrationDirectory: directory, inheritedZdotdir: base["ZDOTDIR"],
+                                       shell: path)
             case .replay(let argv):
                 ZmxReplayScript.render(argv: argv, integrationDirectory: directory, inheritedZdotdir: base["ZDOTDIR"],
                                        shell: path)
@@ -76,6 +86,7 @@ public enum ServerShell: Equatable, Sendable {
             case .loginShell: nil
             case .command(let line, wait: true): ZmxReplayScript.renderFishHolding(commandLine: line, shell: path)
             case .command(let line, wait: false): ZmxReplayScript.renderFishEnding(commandLine: line)
+            case .returning(let line): ZmxReplayScript.renderFish(commandLine: line, integrationRoot: integration, shell: path)
             case .replay(let argv): ZmxReplayScript.renderFish(argv: argv, integrationRoot: integration, shell: path)
             }
             return (script.map { [path, "-lic", $0] } ?? [], environment)
@@ -92,10 +103,8 @@ public enum ServerShell: Equatable, Sendable {
             case .loginShell: nil
             case .command(let line, wait: true): ZmxReplayScript.renderBashHolding(commandLine: line)
             case .command(let line, wait: false): ZmxReplayScript.renderEnding(commandLine: line)
-            case .replay(let argv):
-                ZmxReplayScript.renderBash(argv: argv, exports: Self.bashExports.compactMap { name in
-                    environment[name].map { (name, $0) }
-                }, shell: path)
+            case .returning(let line): ZmxReplayScript.renderBash(commandLine: line, exports: rearmExports(environment), shell: path)
+            case .replay(let argv): ZmxReplayScript.renderBash(argv: argv, exports: rearmExports(environment), shell: path)
             }
             return ([path, "--posix"] + (script.map { ["-lic", $0] } ?? ["-l"]), environment)
         }
