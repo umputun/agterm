@@ -184,6 +184,10 @@ extension ControlServer {
             receiveRemotePageFrame(body, in: store, forSession: sessionID)
         case .linkClick(let click):
             receiveForwardedClick(click, forSession: sessionID)
+        case .statusClear(let clear):
+            store.applyPresenterClear(clear, forSession: sessionID, reset: GhosttyApp.shared.statusReset)
+        case .statusSeen(let seen):
+            store.applyPresenterSeen(seen, forSession: sessionID, badgeReset: GhosttyApp.shared.badgeReset)
         default:
             break
         }

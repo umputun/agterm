@@ -103,7 +103,8 @@ extension AppStore {
         return PresentationStatus(status: indicator.status, blink: indicator.blink, color: indicator.color,
                                   shape: indicator.shape,
                                   pane: presentationStatusPane(indicator.statusPane, of: session),
-                                  changedAt: session.statusChangedAt?.timeIntervalSince1970)
+                                  changedAt: session.statusChangedAt?.timeIntervalSince1970,
+                                  autoReset: indicator.autoReset ? true : nil)
     }
 
     /// A status owner as the stable identity a viewer can follow across a swap or promotion on either Mac.

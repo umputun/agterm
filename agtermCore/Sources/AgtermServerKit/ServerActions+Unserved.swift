@@ -13,7 +13,6 @@ extension ServerActions {
     public func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse { unserved("setWorkspaceFilter") }
     public func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse { unserved("setWorkspaceExpansion") }
     public func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse { unserved("setSessionFlag") }
-    public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse { unserved("markSessionSeen") }
     public func setSessionRestore(_ target: String?, window: String?, update: ControlSessionRestoreUpdate) -> ControlResponse { unserved("setSessionRestore") }
     public func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse { unserved("focusSessionPane") }
     public func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse { unserved("resizeSplit") }

@@ -667,7 +667,7 @@ extension ControlServer: ControlActions {
     /// is ephemeral so it triggers no save.
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            store.clearUnseen(id)
+            store.markSeen(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

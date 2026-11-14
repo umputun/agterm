@@ -83,6 +83,54 @@ extension AppStore {
         )
     }
 
+    /// clearStatus ends a session's status by hand or by selection. An attached row also asks its origin, whose
+    /// answer is the same, so the glyph does not come back with the next snapshot.
+    public func clearStatus(_ id: UUID, reason: PresentationClearReason = .manual) {
+        if session(withID: id)?.remotePresentation?.statusBridged == true {
+            _ = sendToOrigin(.statusClear(PresentationStatusClear(reason: reason)), forSession: id)
+        }
+        setAgentIndicator(AgentIndicator(), forSession: id)
+    }
+
+    /// applyPresenterClear is the origin's side of `status.clear`: a keystroke clears what its pane owns under this
+    /// origin's `reset`, a selection clears an auto-reset status, a manual clear always clears. A clear naming no
+    /// pane of the session, or a reason this build does not know, changes nothing.
+    public func applyPresenterClear(_ clear: PresentationStatusClear, forSession id: UUID, reset: StatusReset) {
+        guard let session = session(withID: id), session.agentIndicator.status != .idle, let reason = clear.reason else { return }
+        switch reason {
+        case .manual: break
+        case .select: guard session.agentIndicator.autoReset else { return }
+        case .viewed: return
+        case .key, .submit, .interrupt:
+            guard let keystroke = reason.keystroke, let pane = clear.pane.flatMap({ originPane($0, in: session) }),
+                  session.agentIndicator.clearedBy(pane: pane, keystroke: keystroke, reset: reset) else { return }
+        }
+        setAgentIndicator(AgentIndicator(), forSession: id)
+    }
+
+    /// applyPresenterSeen is the origin's side of `status.seen`: a viewed session loses its badge, and typing does
+    /// when this origin's `badgeReset` says it does.
+    public func applyPresenterSeen(_ seen: PresentationSeen, forSession id: UUID, badgeReset: StatusReset) {
+        guard let reason = seen.reason else { return }
+        switch reason {
+        case .viewed: break
+        case .key, .submit, .interrupt:
+            guard let keystroke = reason.keystroke, badgeReset.clearsBadge(on: keystroke) else { return }
+        case .select, .manual: return
+        }
+        clearUnseen(id)
+    }
+
+    private func originPane(_ pane: PresentationPane, in session: Session) -> StatusPane? {
+        switch pane {
+        case .scratch: return .scratch
+        case .identity(let identity):
+            if identity == session.paneIdentity { return .left }
+            if session.hasSplit, identity == session.splitPaneIdentity { return .right }
+            return identity == session.scratchDaemon?.identity ? .scratch : nil
+        }
+    }
+
     /// Marks each idle session `completed` so it rejoins the attention list until the usual keystroke, Clear
     /// Status or hook write clears it. No `autoReset`, or merely visiting the session would undo the mark; a
     /// non-idle session is skipped so a live `active` or `blocked` is never overwritten.

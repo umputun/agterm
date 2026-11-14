@@ -308,7 +308,7 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuClearStatus(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest else { return }
-        for id in request.sessionIDs { store.setAgentIndicator(AgentIndicator(), forSession: id) }
+        for id in request.sessionIDs { store.clearStatus(id) }
     }
 
     @objc private func menuMarkForAttention(_ sender: NSMenuItem) {

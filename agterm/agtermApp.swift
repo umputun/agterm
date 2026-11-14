@@ -545,18 +545,19 @@ struct agtermApp: App {
             guard let splitFocused = Self.focusedSplitState(focused, surface: view) else { return }
             store.session(withID: sessionID)?.splitFocused = splitFocused
             // focusing a pane means you've seen the session: clear the badge and any delivered banners.
-            store.clearUnseen(sessionID)
+            store.markSeen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         // focus-free half of the clear above: zoom hosting suppresses the focus report though the refocused
         // user is looking right at this surface.
         view.onClearUnseen = {
-            store.clearUnseen(sessionID)
+            store.markSeen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { keystroke in
             store.noteUserActivity()
+            store.forwardSeenKeystroke(keystroke, forSession: sessionID)
             // typing in the session counts as seeing it, but its banners stay: a note that arrived
             // mid-typing would vanish on the next key before it could be read.
             guard (store.session(withID: sessionID)?.unseenCount ?? 0) > 0,
@@ -743,6 +744,7 @@ struct agtermApp: App {
         view.onUserInputClearsStatus = { [weak view] keystroke in
             let pane = fixedPane ?? ((view?.isSplitPane ?? false) ? .right : .left)
             let reset = GhosttyApp.shared.statusReset
+            if store.forwardStatusKeystroke(keystroke, pane: pane, forSession: sessionID) { return }
             // a status mirrored from an origin pane this Mac has no counterpart for is not this pane's to clear
             guard store.session(withID: sessionID)?.remotePresentation?.allowsKeystrokeStatusClear != false else { return }
             if store.session(withID: sessionID)?.agentIndicator

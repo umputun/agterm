@@ -286,6 +286,27 @@ struct ServerActionsSessionsTests {
         #expect(harness.runner.typed.map(\.bytes) == [Array("ls".utf8), [0x0D]])
     }
 
+    @Test func typeIntoTheOwningPaneClearsItsBlockedStatus() async throws {
+        let session = try harness.session(newSession())
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+
+        _ = await harness.actions.typeSession(session.id.uuidString, window: nil,
+                                              options: ControlSessionTypeOptions(text: "y\n", select: false, pane: nil, paneID: nil))
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func typeIntoAnotherPaneKeepsTheBlockedStatus() async throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+
+        _ = await harness.actions.typeSession(session.id.uuidString, window: nil,
+                                              options: ControlSessionTypeOptions(text: "y\n", select: false, pane: .right, paneID: nil))
+
+        #expect(session.agentIndicator.status == .blocked)
+    }
+
     @Test func typeByPaneIDFindsTheSplit() async throws {
         let session = try harness.session(newSession())
         _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")

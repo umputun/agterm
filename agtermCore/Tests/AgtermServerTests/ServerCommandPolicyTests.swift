@@ -25,7 +25,7 @@ struct ServerCommandPolicyTests {
         .sessionBackground, .sessionCollapse, .sessionCompanionConvert, .sessionCompanionDuplicate, .sessionCopy, .sessionDetach,
         .sessionDuplicate, .sessionExpand, .sessionFlag, .sessionFocus, .sessionGo, .sessionLead,
         .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize, .sessionRestart,
-        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSeen, .sessionSelect, .sessionSelectAll, .sessionTint,
+        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSelect, .sessionSelectAll, .sessionTint,
         .windowRemoteDismiss,
         .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFlag, .workspaceFocus, .workspaceGo,
         .workspaceReattach, .workspaceSelect, .workspaceTint,

@@ -57,15 +57,18 @@ public struct PresentationStatus: Codable, Equatable, Sendable {
     public var pane: PresentationPane?
     /// Epoch seconds on the origin's clock.
     public var changedAt: Double?
+    /// autoReset is true for a status that selection ends; absent from an older origin, which never sent it.
+    public var autoReset: Bool?
 
     public init(status: AgentStatus, blink: Bool, color: String?, shape: StatusShape?, pane: PresentationPane?,
-                changedAt: Double?) {
+                changedAt: Double?, autoReset: Bool? = nil) {
         self.status = status
         self.blink = blink
         self.color = color
         self.shape = shape
         self.pane = pane
         self.changedAt = changedAt
+        self.autoReset = autoReset
     }
 }
 
@@ -772,6 +775,9 @@ public struct PresentationFrame: Equatable, Sendable {
         case linkClick(PresentationLinkClick)
         /// linkRefused: the origin did not open a forwarded click.
         case linkRefused(PresentationLinkRefusal)
+        /// statusClear and statusSeen: the presenter saw what may end the origin's status or unseen badge.
+        case statusClear(PresentationStatusClear)
+        case statusSeen(PresentationSeen)
         /// pendingChunk carries a slice of what a headless origin held for a new presenter, applied only at the commit.
         case pendingChunk(PresentationPendingChunk)
         /// pendingCommit applies every chunk since the presenter was granted, in order.
@@ -818,6 +824,8 @@ public struct PresentationFrame: Equatable, Sendable {
             case .pageResult: return "page.result"
             case .respawn: return "pane.respawn"
             case .linkClick: return "link.click"
+            case .statusClear: return "status.clear"
+            case .statusSeen: return "status.seen"
             case .linkRefused: return "link.refused"
             case .pendingChunk: return "pending.chunk"
             case .pendingCommit: return "pending.commit"
@@ -888,6 +896,8 @@ extension PresentationFrame: Codable {
         case "pane.respawn": body = .respawn(try container.decode(PresentationRespawns.self, forKey: .respawn))
         case "link.click": body = .linkClick(try container.decode(PresentationLinkClick.self, forKey: .link))
         case "link.refused": body = .linkRefused(try container.decode(PresentationLinkRefusal.self, forKey: .link))
+        case "status.clear": body = .statusClear(try container.decode(PresentationStatusClear.self, forKey: .status))
+        case "status.seen": body = .statusSeen(try container.decode(PresentationSeen.self, forKey: .status))
         case "pending.chunk": body = .pendingChunk(try container.decode(PresentationPendingChunk.self, forKey: .pending))
         case "pending.commit": body = .pendingCommit
         default: body = .unknown(kind)
@@ -929,6 +939,8 @@ extension PresentationFrame: Codable {
         case .respawn(let respawns): try container.encode(respawns, forKey: .respawn)
         case .linkClick(let click): try container.encode(click, forKey: .link)
         case .linkRefused(let refusal): try container.encode(refusal, forKey: .link)
+        case .statusClear(let clear): try container.encode(clear, forKey: .status)
+        case .statusSeen(let seen): try container.encode(seen, forKey: .status)
         case .pendingChunk(let chunk): try container.encode(chunk, forKey: .pending)
         case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .unknown, .pendingCommit: break
         }

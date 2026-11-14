@@ -122,6 +122,10 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             store.receiveRemotePageFrame(body, forSession: sessionID)
         case .linkClick(let click):
             receiveLinkClick(click, forSession: sessionID)
+        case .statusClear(let clear):
+            store.applyPresenterClear(clear, forSession: sessionID, reset: ServerActions.macDefaults.effectiveStatusReset)
+        case .statusSeen(let seen):
+            store.applyPresenterSeen(seen, forSession: sessionID, badgeReset: ServerActions.macDefaults.effectiveBadgeReset)
         default:
             break
         }

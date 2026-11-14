@@ -13,6 +13,8 @@ public final class ServerActions: ControlActions {
     let events: ServerEvents
     var hudAutoHide: [UUID: HudTimer] = [:]
     var infoAutoHide: [UUID: InfoTimer] = [:]
+    /// macDefaults are the settings the server's status and badge clears follow: it has no settings of its own.
+    static let macDefaults = AppSettings()
     /// foregroundArgv reads the foreground program of the terminal whose shell is the given pid.
     var foregroundArgv: (Int32) -> [String]? = ProcForeground.argv
     /// operationsUnsaved is set while the operation table holds an entry its last write failed to save.

@@ -386,7 +386,7 @@ final class AppActions {
     func clearActiveSessionStatus() {
         guard uiActionsEnabled else { return }
         guard let store, let id = store.selectedSessionID else { return }
-        store.setAgentIndicator(AgentIndicator(), forSession: id)
+        store.clearStatus(id)
     }
 
     /// Re-read `keymap.conf`, re-rendering the menu shortcuts and rebuilding the custom-command runner +

@@ -251,6 +251,11 @@ extension ServerActions {
                     return ControlResponse(ok: false, error: "text typed, but its final Return could not be confirmed; do not retype the text")
                 }
             }
+            // the input a blocked agent waited for has arrived, as `session.type` into a Mac pane clears it
+            if !options.text.isEmpty, session.agentIndicator.clearedBy(pane: resolved.pane, keystroke: InterruptKeystroke.classify(text: options.text),
+                                                                       reset: Self.macDefaults.effectiveStatusReset) {
+                store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+            }
             var result = ControlResult(id: session.id.uuidString)
             result.pane = resolved.pane.rawValue
             return ControlResponse(ok: true, result: result)

@@ -276,6 +276,51 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         return (fix, transport)
     }
 
+    func testAClearOfABridgedStatusReachesOnlyAnOriginThatTakesIt() throws {
+        for (kinds, expected) in [([PresentationHub.statusClearKind], true), (["status"], false)] {
+            let fix = try fixture()
+            let transport = Transport()
+            fix.server.remoteTransport = transport
+            fix.server.startRemotePresentation(for: fix.session)
+            try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)), rev: 0)
+            try transport.feed(.presenterGranted, rev: 1)
+            try transport.feed(.status(PresentationStatus(status: .blocked, blink: false, color: nil, shape: nil, pane: nil,
+                                                          changedAt: nil)), rev: 2)
+
+            fix.store.clearStatus(fix.session.id)
+
+            XCTAssertEqual(fix.session.agentIndicator.status, .idle)
+            let sent = transport.links.last?.sent.contains(.statusClear(PresentationStatusClear(reason: .manual))) == true
+            XCTAssertEqual(sent, expected, "origin kinds \(kinds)")
+        }
+    }
+
+    func testATerminalNotificationLetsTheNextTypingReachTheOriginsBadgeAgain() throws {
+        let fix = try fixture()
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        fix.server.startRemotePresentation(for: fix.session)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: [PresentationHub.statusClearKind], mode: .presenter)),
+                           rev: 0)
+        try transport.feed(.presenterGranted, rev: 1)
+        let manager = NotificationManager.shared
+        let (library, banners) = (manager.library, manager.bannersEnabled)
+        defer { (manager.library, manager.bannersEnabled) = (library, banners) }
+        manager.library = fix.server.library
+        manager.bannersEnabled = false
+        let view = GhosttySurfaceView(workingDirectory: fix.session.initialCwd)
+        view.session = fix.session
+        let seen = { transport.links.last?.sent.filter { $0 == .statusSeen(PresentationSeen(reason: .key)) }.count ?? 0 }
+
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+        XCTAssertEqual(seen(), 1)
+        manager.notify(surface: view, title: "done", body: "build finished")
+        fix.store.forwardSeenKeystroke(.other, forSession: fix.session.id)
+
+        XCTAssertEqual(seen(), 2)
+    }
+
     func testStartingOpensTheBridgeForTheOriginsSession() throws {
         let (fix, transport) = try connected()
 

@@ -222,13 +222,13 @@
   `AgtermServerTests/ServerStreamsTests.swift`, `ServerActionsSessionsTests.swift`, `ServerActionsEffectsTests.swift`,
   `ServerCommandPolicyTests.swift`, `agtermTests/ControlServerRemotePresentationTests.swift`
 
-- [ ] failing tests: a status a viewer cleared returns on reconnect (B and C); server `session type` never clears
+- [x] failing tests: a status a viewer cleared returns on reconnect (B and C); server `session type` never clears
       status; server `unseenCount` never resets
-- [ ] `clear` and `seen` frames with the reason, advertised as a kind; `autoReset` in `PresentationStatus`
-- [ ] the origin applies them under its own rules, only for a session that presenter shows and its panes; a Mac
+- [x] `clear` and `seen` frames with the reason, advertised as a kind; `autoReset` in `PresentationStatus`
+- [x] the origin applies them under its own rules, only for a session that presenter shows and its panes; a Mac
       origin with its settings, the server with the Mac defaults
-- [ ] server `typeSession` applies the local input-driven clear; serve `session.seen`; policy test updated
-- [ ] tests: each reason against each policy, owning pane, selection clear, reconnect, refusal of a frame for a
+- [x] server `typeSession` applies the local input-driven clear; serve `session.seen`; policy test updated
+- [x] tests: each reason against each policy, owning pane, selection clear, reconnect, refusal of a frame for a
       session the viewer does not present and for a pane outside it, older origin (frame withheld)
 
 ### Task 3: Flag, tint and saved view state for server rows; remote-window option parity

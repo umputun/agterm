@@ -423,4 +423,25 @@ struct PresentationHubTests {
 
         #expect(sink.frames.count == 2)
     }
+
+    @Test func onlyThePresentersStatusClearAndSeenReachTheHost() throws {
+        let hub = makeHub()
+        var received: [PresentationFrame.Body] = []
+        hub.onPresenterFrame = { _, body in received.append(body) }
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.statusClearKind], mode: .presenter)
+        let presenterSink = Sink()
+        let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 0, body: .presenterAcquire), from: presenter)
+        let mirrorSink = Sink()
+        let mirror = try hub.subscribe(session: Self.session, hello: hello, sink: mirrorSink) { Self.empty }
+        let clear = PresentationFrame.Body.statusClear(PresentationStatusClear(reason: .manual))
+        let seen = PresentationFrame.Body.statusSeen(PresentationSeen(reason: .viewed))
+
+        hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: clear), from: mirror)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: clear), from: presenter)
+        hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 2, body: seen), from: presenter)
+
+        #expect(received == [clear, seen])
+        #expect(presenterSink.bodies.first == .hello(hello))
+    }
 }

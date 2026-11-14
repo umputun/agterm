@@ -27,8 +27,18 @@ extension ControlServer {
                                               transport: transport ?? remoteTransport, effects: remoteEffects(for: id),
                                               now: hudClock)
         remoteClients[id] = client
+        library.store(forSession: id)?.onOriginFrame = { [weak self] session, body in
+            MainActor.assumeIsolated { self?.sendToOrigin(body, forSession: session) ?? false }
+        }
         client.start()
         startRemoteTick()
+    }
+
+    /// sendToOrigin hands a presenter's `status.clear` or `status.seen` to an origin that agreed the kind.
+    func sendToOrigin(_ body: PresentationFrame.Body, forSession id: UUID) -> Bool {
+        guard let client = remoteClients[id], client.originSupports(PresentationHub.statusClearKind) else { return false }
+        client.answer(body)
+        return true
     }
 
     func stopRemotePresentation(_ id: UUID) {
@@ -63,7 +73,8 @@ extension ControlServer {
             },
             hud: { [weak self] hud in self?.showRemoteHud(hud, forSession: id) },
             notify: { [weak self] notify in
-                guard let session = self?.library.store(forSession: id)?.session(withID: id) else { return }
+                guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return }
+                store.armRemoteSeen(forSession: id)
                 // `.mirrored`, so this Mac's own hub never relays it onward
                 NotificationManager.shared.send(toSession: session, title: notify.title, body: notify.body,
                                                 origin: .mirrored)

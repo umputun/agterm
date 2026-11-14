@@ -174,6 +174,7 @@ struct ServerStreamsTests {
         let answer = await offPool { viewer.first { if case .hello = $0 { true } else { false } } }
         guard case .hello(let hello)? = answer else { Issue.record("no hello"); return }
         #expect(hello.kinds.contains(PresentationHub.linkClickKind))
+        #expect(hello.kinds.contains(PresentationHub.statusClearKind))
     }
 
     @Test func aViewerGetsTheSnapshotThenTheSessionsChanges() async throws {
@@ -1813,5 +1814,18 @@ struct ServerStreamsTests {
             try? await Task.sleep(for: .milliseconds(20))
         }
         return condition()
+    }
+
+    @Test func aPresentersClearAndSeenFollowAMacsDefaultResets() throws {
+        let session = try newSession()
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+        session.unseenCount = 2
+
+        streams.receivePresenterFrame(.statusClear(PresentationStatusClear(reason: .key, pane: .identity(session.paneIdentity))),
+                                      forSession: session.id)
+        streams.receivePresenterFrame(.statusSeen(PresentationSeen(reason: .key)), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(session.unseenCount == 0)
     }
 }
