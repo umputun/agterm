@@ -15,16 +15,40 @@ public struct RemoteShellOptions: Equatable, Sendable {
     public var name: String?
     public var cwd: String?
     public var command: String?
+    public var tint: SidebarTint?
 
-    public init(name: String? = nil, cwd: String? = nil, command: String? = nil) {
+    public init(name: String? = nil, cwd: String? = nil, command: String? = nil, tint: SidebarTint? = nil) {
         self.name = name
         self.cwd = cwd
         self.command = command
+        self.tint = tint
     }
 
     /// words carry each value joined to its flag, so a value starting with `-` is never read as an option.
     var words: [String] {
         [("--name", name), ("--cwd", cwd), ("--command", command)].compactMap { flag, value in value.map { flag + "=" + $0 } }
+            + (tint?.creationWords ?? [])
+    }
+}
+
+extension SidebarTint {
+    /// creationWords are `session new`'s and `workspace new`'s tint flags.
+    var creationWords: [String] { ["--tint=" + color.rawValue, "--tint-on=" + parts.map(\.rawValue).joined(separator: ",")] }
+}
+
+extension ControlTintUpdate {
+    /// init is the update that leaves a row with `tint`, its parts spelled out.
+    public init(_ tint: SidebarTint?) {
+        self = tint.map { .set($0.color, parts: Set($0.parts)) } ?? .clear
+    }
+
+    /// words are `session tint`'s and `workspace tint`'s mode argument and placement.
+    var words: [String] {
+        switch self {
+        case .clear: ["clear"]
+        case .set(let color, let parts):
+            [color.rawValue] + (parts.map { ["--on", TintPart.allCases.filter($0.contains).map(\.rawValue).joined(separator: ",")] } ?? [])
+        }
     }
 }
 
@@ -52,6 +76,18 @@ public struct RemotePageOptions: Equatable, Sendable {
     }
 }
 
+extension RemoteSessionPlacement {
+    /// words are `session move`'s placement flags; a workspace goes as an operand.
+    var words: [String] {
+        switch self {
+        case .workspace: []
+        case .after(let anchor): ["--after", anchor.uuidString]
+        case .before(let anchor): ["--before", anchor.uuidString]
+        case .step(let step): ["--to", step]
+        }
+    }
+}
+
 /// RemoteOperationTarget is the row an operation acts on, which its pending or unknown mark is shown with.
 public enum RemoteOperationTarget: Equatable, Hashable, Sendable {
     case session(UUID)
@@ -62,6 +98,8 @@ public enum RemoteOperationTarget: Equatable, Hashable, Sendable {
 public enum RemoteOperation: Equatable, Sendable {
     /// newSession lands in `workspace`, beside `anchor` when it is `.after` or `.before`.
     case newSession(workspace: UUID, anchor: RemoteSessionPlacement? = nil, shell: RemoteShellOptions = RemoteShellOptions())
+    /// newSessionInNamedWorkspace lands in the server's workspace of that name, made when `create` is set.
+    case newSessionInNamedWorkspace(name: String, create: Bool, shell: RemoteShellOptions = RemoteShellOptions())
     case newCompanion(parent: UUID, shell: RemoteShellOptions = RemoteShellOptions())
     /// newPage is a page row: a page companion of `anchor`, or a top-level page session after its group.
     case newPage(anchor: UUID, companion: Bool, page: RemotePageOptions)
@@ -73,14 +111,24 @@ public enum RemoteOperation: Equatable, Sendable {
     case renameSession(UUID, name: String)
     case moveSession(UUID, to: RemoteSessionPlacement)
     case closeSession(UUID)
-    case newWorkspace(name: String?)
+    /// closeSessions and moveSessions act on several rows as one server command.
+    case closeSessions([UUID])
+    case moveSessions([UUID], to: RemoteSessionPlacement)
+    case setFlag(UUID, on: Bool)
+    /// clearFlags unflags every session on the server, the rows this window detached included.
+    case clearFlags
+    case setTint(UUID, ControlTintUpdate)
+    case setWorkspaceFlag(UUID, on: Bool)
+    case setWorkspaceTint(UUID, ControlTintUpdate)
+    /// newWorkspace starts collapsed on this Mac when `collapsed` is set; folds are each Mac's own.
+    case newWorkspace(name: String?, collapsed: Bool = false, tint: SidebarTint? = nil)
     case renameWorkspace(UUID, name: String)
     case deleteWorkspace(UUID)
     case moveWorkspace(UUID, to: String)
 
     public var label: String {
         switch self {
-        case .newSession: "New Session"
+        case .newSession, .newSessionInNamedWorkspace: "New Session"
         case .newCompanion: "New Companion"
         case .newPage(_, let companion, _): companion ? "New Page Companion" : "New Page Session"
         case .setSplit(_, let shown, _): shown ? "Show Split" : "Hide Split"
@@ -90,6 +138,13 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameSession: "Rename Session"
         case .moveSession: "Move Session"
         case .closeSession: "Close Session"
+        case .closeSessions: "Close Sessions"
+        case .moveSessions: "Move Sessions"
+        case .setFlag(_, let on): on ? "Flag Session" : "Unflag Session"
+        case .clearFlags: "Clear Flagged"
+        case .setTint: "Tint Session"
+        case .setWorkspaceFlag(_, let on): on ? "Flag All Sessions" : "Unflag All Sessions"
+        case .setWorkspaceTint: "Tint Workspace"
         case .newWorkspace: "New Workspace"
         case .renameWorkspace: "Rename Workspace"
         case .deleteWorkspace: "Delete Workspace"
@@ -101,9 +156,12 @@ public enum RemoteOperation: Equatable, Sendable {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
-             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id): .session(id)
-        case .newWorkspace: nil
-        case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _): .workspace(id)
+             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id), .setFlag(let id, _), .setTint(let id, _): .session(id)
+        // a batch is marked on its first row
+        case .closeSessions(let ids), .moveSessions(let ids, _): ids.first.map { .session($0) }
+        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags: nil
+        case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _), .setWorkspaceFlag(let id, _),
+             .setWorkspaceTint(let id, _): .workspace(id)
         }
     }
 
@@ -141,6 +199,8 @@ public enum RemoteOperation: Equatable, Sendable {
                 default: ["--workspace", workspace.uuidString]
                 }
             }() + shell.words
+        case .newSessionInNamedWorkspace(let name, let create, let shell):
+            ["session", "new", "--workspace-name=" + name] + (create ? ["--create-workspace"] : []) + shell.words
         case .newCompanion(let parent, let shell): ["session", "new", "--parent", parent.uuidString] + shell.words
         case .newPage(let anchor, let companion, let page):
             ["session", "overlay", "open", companion ? "--companion" : "--page", "--target", anchor.uuidString] + page.words
@@ -151,17 +211,16 @@ public enum RemoteOperation: Equatable, Sendable {
         case .closeSplit(let id): ["session", "split", "close", "--target", id.uuidString]
         case .swap(let id): ["session", "swap", "--target", id.uuidString]
         case .renameSession(let id, _): ["session", "rename", "--target", id.uuidString]
-        case .moveSession(let id, let placement):
-            ["session", "move", "--target", id.uuidString] + {
-                switch placement {
-                case .workspace: []
-                case .after(let anchor): ["--after", anchor.uuidString]
-                case .before(let anchor): ["--before", anchor.uuidString]
-                case .step(let step): ["--to", step]
-                }
-            }()
+        case .moveSession(let id, let placement): ["session", "move", "--target", id.uuidString] + placement.words
+        case .moveSessions(let ids, let placement): ["session", "move"] + ids.flatMap { ["--target", $0.uuidString] } + placement.words
         case .closeSession(let id): ["session", "close", "--target", id.uuidString]
-        case .newWorkspace: ["workspace", "new"]
+        case .closeSessions(let ids): ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] }
+        case .setFlag(let id, let on): ["session", "flag", on ? "on" : "off", "--target", id.uuidString]
+        case .clearFlags: ["session", "flag", "clear"]
+        case .setTint(let id, let update): ["session", "tint"] + update.words + ["--target", id.uuidString]
+        case .setWorkspaceFlag(let id, let on): ["workspace", "flag", on ? "on" : "off", "--target", id.uuidString]
+        case .setWorkspaceTint(let id, let update): ["workspace", "tint"] + update.words + ["--target", id.uuidString]
+        case .newWorkspace(_, let collapsed, let tint): ["workspace", "new"] + (collapsed ? ["--collapsed"] : []) + (tint?.creationWords ?? [])
         case .renameWorkspace(let id, _): ["workspace", "rename", "--target", id.uuidString]
         case .deleteWorkspace(let id): ["workspace", "delete", "--target", id.uuidString]
         case .moveWorkspace(let id, let step): ["workspace", "move", "--target", id.uuidString, "--to", step]
@@ -171,8 +230,8 @@ public enum RemoteOperation: Equatable, Sendable {
     var operands: [String] {
         switch self {
         case .renameSession(_, let name), .renameWorkspace(_, let name): [name]
-        case .newWorkspace(let name): name.map { [$0] } ?? []
-        case .moveSession(_, .workspace(let workspace)): [workspace.uuidString]
+        case .newWorkspace(let name, _, _): name.map { [$0] } ?? []
+        case .moveSession(_, .workspace(let workspace)), .moveSessions(_, .workspace(let workspace)): [workspace.uuidString]
         default: []
         }
     }
@@ -335,6 +394,9 @@ public final class RemoteCatalogActions {
             settle(opID, reply.result?.receipt)
             if selectingCreated, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.selectWhenShown(id, from: prepared.selection)
+            }
+            if case .newWorkspace(_, true, _) = operation, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
+                mirror.collapseWhenShown(id)
             }
             return reply
         case .reply, .lost:

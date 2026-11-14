@@ -75,7 +75,12 @@ extension WorkspaceSidebar.Coordinator {
         }
         if let workspaceID = request.workspaceID {
             let current = store.workspaces.first { $0.id == workspaceID }?.tint
-            store.setTint(request.choice.applied(to: current, startingOn: Self.tintPlacement), forWorkspace: workspaceID)
+            let tint = request.choice.applied(to: current, startingOn: Self.tintPlacement)
+            if actions.sendWorkspaceTint(tint, to: workspaceID, in: store) { return }
+            store.setTint(tint, forWorkspace: workspaceID)
+            return
+        }
+        if actions.sendTint(forSessions: request.sessionIDs, in: store, { request.choice.applied(to: $0, startingOn: Self.tintPlacement) }) {
             return
         }
         switch request.choice {

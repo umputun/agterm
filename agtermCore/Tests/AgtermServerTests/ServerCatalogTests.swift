@@ -222,6 +222,30 @@ struct ServerCatalogTests {
         #expect(revisions == Array(1...revisions.count))
     }
 
+    @Test func flagAndTintAreCatalogFieldsWithAnExplicitNone() async throws {
+        let session = try await newSession()
+        let workspace = harness.store.workspaces[0].id
+        let fields = { self.hub.snapshot().workspaces.flatMap(\.sessions).first { $0.id == session.id }?.fields }
+        let tint = { self.hub.snapshot().workspaces.first { $0.id == workspace }.map { [$0.tint, $0.tintOn?.joined(separator: ",")] } }
+        #expect(fields()?.flagged == false)
+        #expect(fields()?.tint == "")
+        #expect(tint() == ["", nil])
+        let sink = try subscribe()
+
+        _ = await serve(.sessionFlag, target: session.id.uuidString, args: ControlArgs(mode: "on"))
+        _ = await serve(.sessionTint, target: session.id.uuidString, args: ControlArgs(mode: "set", tint: "#ff8800", tintOn: ["icon", "name"]))
+        _ = await serve(.workspaceTint, target: workspace.uuidString, args: ControlArgs(mode: "set", tint: "green"))
+
+        #expect(fields()?.flagged == true)
+        #expect(fields()?.tint == "#ff8800")
+        #expect(fields()?.tintOn == ["icon", "name"])
+        #expect(tint() == ["green", "icon"])
+        #expect(sink.changes.map(\.kind) == ["session.changed", "session.changed", "workspace.changed"])
+        _ = await serve(.sessionTint, target: session.id.uuidString, args: ControlArgs(mode: "clear"))
+        #expect(fields()?.tint == "")
+        #expect(fields()?.tintOn == nil)
+    }
+
     @Test func aRefusedCommandPublishesNothing() async throws {
         let sink = try subscribe()
 

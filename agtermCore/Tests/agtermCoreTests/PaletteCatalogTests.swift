@@ -517,6 +517,17 @@ struct PaletteCatalogTests {
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
     }
 
+    @Test func flagCommandsAreDisabledWhileTheServerKeepingThemCannotBeAsked() {
+        let blocked = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true,
+                                     marksBlocked: true)
+        let open = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true)
+
+        #expect(!PaletteCommand.toggleFlag.isEnabled(in: blocked))
+        #expect(!PaletteCommand.clearFlagged.isEnabled(in: blocked))
+        #expect(PaletteCommand.toggleFlag.isEnabled(in: open))
+        #expect(PaletteCommand.clearFlagged.isEnabled(in: open))
+    }
+
     @Test(arguments: [PaletteCommand.closeSession, .deleteWorkspace])
     func closingStaysEnabledInADisconnectedRemoteWindow(_ command: PaletteCommand) {
         let context = PaletteContext(canRemoveWorkspace: true, activeSessionHasSplit: true, hasActiveSession: true, hasSessions: true,

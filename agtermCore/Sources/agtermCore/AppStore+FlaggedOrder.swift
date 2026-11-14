@@ -59,11 +59,18 @@ extension AppStore {
     }
 
     // a snapshot written before the order existed carries none and restores in tree order
-    func restoreFlaggedOrder(_ saved: [UUID]?) {
+    func restoreFlaggedOrder(_ saved: [UUID]?, parked: Set<UUID> = []) {
         let flagged = Set(flaggedSessions.map(\.id))
         var seen = Set<UUID>()
-        flaggedOrder = (saved ?? []).filter { flagged.contains($0) && seen.insert($0).inserted }
+        flaggedOrder = (saved ?? []).filter { (flagged.contains($0) || parked.contains($0)) && seen.insert($0).inserted }
         appendFlaggedArrivals()
+    }
+
+    /// keepFlaggedSlots writes `previous` back without the ids that are neither a row nor `parked`, the flagged rows a
+    /// remote window's detach hides, so a reattached row returns to its slot.
+    func keepFlaggedSlots(of parked: Set<UUID>, from previous: [UUID]) {
+        let kept = previous.filter { parked.contains($0) || session(withID: $0) != nil }
+        if kept != flaggedOrder { flaggedOrder = kept }
     }
 
     // parked ids keep their slots so a pending-close undo returns them in place

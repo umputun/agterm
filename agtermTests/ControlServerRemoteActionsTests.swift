@@ -135,11 +135,11 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                               panes: panes)
     }
 
-    private func open(_ sessions: [CatalogSession]) throws {
+    private func open(_ sessions: [CatalogSession], tint: String? = nil) throws {
         try feed(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
-                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", sessions: sessions),
-                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", sessions: [])])))
+                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", tint: tint, sessions: sessions),
+                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", tint: tint, sessions: [])])))
         XCTAssertEqual(remoteStore.remoteActions?.mirror.state, .connected)
     }
 
@@ -202,6 +202,38 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertFalse(row.hasSplit)
         XCTAssertEqual(row.displayName, "build")
         XCTAssertEqual(remoteStore.sessionLocation(ofSession: entry.id)?.workspace, workspaceID)
+    }
+
+    func testFlagAndTintOfACatalogRowGoToAServerThatKeepsThemAndChangeNothingHere() async throws {
+        let entry = catalogSession()
+        try open([entry], tint: "")
+        let id = entry.id.uuidString
+        var tint = ControlArgs(mode: "set")
+        tint.tint = "red"
+
+        let flag = try await send(.sessionFlag, target: id, args: ControlArgs(mode: "on"))
+        let colored = try await send(.sessionTint, target: id, args: tint)
+        let workspace = try await send(.workspaceFlag, target: workspaceID.uuidString, args: ControlArgs(mode: "toggle"))
+
+        for reply in [flag, colored, workspace] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 3)
+        XCTAssertTrue(runner.operations[0].contains("session flag on --target \(id)"))
+        XCTAssertTrue(runner.operations[1].contains("session tint red --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("workspace flag on --target \(workspaceID.uuidString)"))
+        let row = try XCTUnwrap(remoteStore.session(withID: entry.id))
+        XCTAssertFalse(row.flagged)
+        XCTAssertNil(row.tint)
+    }
+
+    func testFlagAndTintOfACatalogRowStayHereWithAServerThatDoesNotKeepThem() async throws {
+        let entry = catalogSession()
+        try open([entry])
+
+        let flag = try await send(.sessionFlag, target: entry.id.uuidString, args: ControlArgs(mode: "on"))
+
+        XCTAssertTrue(flag.ok, flag.error ?? "")
+        XCTAssertTrue(runner.operations.isEmpty)
+        XCTAssertEqual(remoteStore.session(withID: entry.id)?.flagged, true)
     }
 
     func testControlSplitOffOfAShownCatalogSplitAsksTheServerAndKeepsItShownHere() async throws {

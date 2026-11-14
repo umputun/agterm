@@ -535,6 +535,7 @@ final class AppActions {
     func toggleFlag(_ sessionID: UUID) {
         guard uiActionsEnabled else { return }
         guard let store, let session = store.session(withID: sessionID) else { return }
+        if sendFlag(!session.flagged, forSessions: [sessionID], in: store) { return }
         store.setFlag(!session.flagged, forSession: sessionID)
     }
 
@@ -556,8 +557,12 @@ final class AppActions {
     /// change) and doing nothing when none is. Skips the confirm under an XCUITest launch — a modal hangs it.
     func clearFlags() {
         guard uiActionsEnabled else { return }
-        guard let store, !store.flaggedSessions.isEmpty else { return }
-        if !ContentView.isUITestLaunch, !confirmClearFlags(count: store.flaggedSessions.count) { return }
+        guard let store, store.clearableFlagCount > 0 else { return }
+        if !ContentView.isUITestLaunch, !confirmClearFlags(count: store.clearableFlagCount) { return }
+        if store.marksOnServer {
+            performRemote(.clearFlags, in: store)
+            return
+        }
         store.clearFlags()
     }
 

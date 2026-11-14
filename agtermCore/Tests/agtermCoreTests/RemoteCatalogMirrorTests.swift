@@ -40,6 +40,7 @@ final class RemoteCatalogMirrorTests {
         var ended: [UUID] = []
         var needsAttach: [UUID] = []
         var states: [RemoteCatalogMirror.State] = []
+        var collapsedWorkspaces: [UUID] = []
         var bindOK = true
 
         func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
@@ -49,6 +50,7 @@ final class RemoteCatalogMirrorTests {
         func catalogPaneNeedsAttach(_ identity: UUID, session _: UUID) { needsAttach.append(identity) }
         func catalogBound(_: UUID) -> Bool { bindOK }
         func catalogStateChanged(_ state: RemoteCatalogMirror.State) { states.append(state) }
+        func catalogWorkspaceCollapsed(_ id: UUID) { collapsedWorkspaces.append(id) }
     }
 
     private final class Surface: TerminalSurface {
@@ -657,6 +659,120 @@ final class RemoteCatalogMirrorTests {
         #expect(row.splitRatio == 0.3)
         #expect(!row.splitFocused)
         #expect(store.selectedSessionID == entry.id)
+    }
+
+    @Test func aRowsViewSurvivesReopenWithEachPaneBackground() throws {
+        let split = session(panes: [pane(), pane()]), plain = session(panes: [pane()]), unsplit = session(panes: [pane()])
+        _ = open([split, plain, unsplit])
+        let row = try #require(store.session(withID: split.id))
+        let mark = BackgroundWatermark(kind: .text, text: "PROD")
+        let left = BackgroundWatermark(kind: .text, text: "L"), right = BackgroundWatermark(kind: .text, text: "R")
+        row.backgroundWatermark = mark
+        row.paneBackgrounds = PaneBackgrounds(left: left, right: right, scratch: BackgroundWatermark(kind: .text, text: "S"))
+        row.isExpanded = false
+        row.context = "deploy"
+        try #require(store.session(withID: unsplit.id)).paneBackgrounds = PaneBackgrounds(right: right)
+        let saved = try JSONDecoder().decode(RemoteWindowViewState.self,
+                                             from: JSONEncoder().encode(RemoteWindowViewState.capture(from: store)))
+        let reopened = AppStore(persistence: PersistenceStore(directory: directory.appendingPathComponent("reopened")), paneFinalizer: nil)
+        let next = RemoteCatalogMirror(host: "box", store: reopened, effects: effects, viewState: saved)
+
+        _ = next.receive(.snapshot(snapshot([split, plain, unsplit])))
+
+        let back = try #require(reopened.session(withID: split.id))
+        #expect(back.backgroundWatermark == mark)
+        #expect(back.paneBackgrounds == PaneBackgrounds(left: left, right: right))
+        #expect(!back.isExpanded)
+        #expect(back.context == "deploy")
+        #expect(saved.sessions[plain.id] == nil)
+        #expect(reopened.session(withID: plain.id)?.isExpanded == true)
+        #expect(reopened.session(withID: unsplit.id)?.paneBackgrounds == PaneBackgrounds())
+    }
+
+    @Test func theWindowsFocusFilterAndFlaggedOrderComeBackOnceOnReopen() {
+        var first = session(panes: [pane()]), second = session(panes: [pane()])
+        first.fields.flagged = true
+        second.fields.flagged = true
+        let view = RemoteWindowViewState(focusedWorkspaces: [workspaceID, UUID()], workspaceFilter: true, flaggedOrder: [second.fields.id, first.fields.id])
+        let viewed = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: view)
+
+        _ = viewed.receive(.snapshot(snapshot([first, second])))
+        let restored = (store.focusedWorkspaceIDs, store.focusEnabled, store.flaggedOrder)
+        store.restoreFocus(ids: [], enabled: false)
+        _ = viewed.receive(.snapshot(snapshot([first, second], rev: 1)))
+
+        #expect(restored.0 == [workspaceID])
+        #expect(restored.1)
+        #expect(restored.2 == [second.fields.id, first.fields.id])
+        #expect(!store.focusEnabled)
+    }
+
+    @Test func flagAndTintFollowTheCatalogAndAnOlderServerLeavesThemToThisMac() throws {
+        var marked = session(panes: [pane()])
+        let older = session(panes: [pane()])
+        marked.fields.flagged = true
+        marked.fields.tint = "red"
+        marked.fields.tintOn = ["name"]
+        _ = open([marked, older])
+        store.setFlag(true, forSession: older.id)
+        let row = try #require(store.session(withID: marked.id))
+        let arrived = (row.flagged, row.tint)
+
+        marked.fields.flagged = false
+        marked.fields.tint = ""
+        marked.fields.tintOn = nil
+        delta(1, .sessionChanged(marked.fields))
+        delta(2, .sessionChanged(older.fields))
+        delta(3, .workspaceChanged(id: workspaceID, name: "w", tint: "#ff8800", tintOn: ["icon"]))
+        let workspaceTint = store.workspaces.first?.tint
+        delta(4, .workspaceChanged(id: workspaceID, name: "renamed"))
+
+        #expect(arrived.0)
+        #expect(arrived.1 == SidebarTint(color: .red, parts: [.name]))
+        #expect(!row.flagged)
+        #expect(row.tint == nil)
+        #expect(store.session(withID: older.id)?.flagged == true)
+        #expect(workspaceTint == SidebarTint(color: .hex("#ff8800"), parts: [.icon]))
+        #expect(store.workspaces.first?.tint == workspaceTint)
+    }
+
+    @Test func theServerKeepsFlagsOnlyWhenItsCatalogNamesAWorkspaceTint() {
+        var flagged = session(panes: [pane()])
+        flagged.fields.flagged = true
+        _ = open([flagged, session(panes: [pane()])])
+        let older = mirror.ownsFlags
+
+        delta(1, .workspaceChanged(id: workspaceID, name: "w", tint: ""))
+
+        #expect(!older)
+        #expect(mirror.ownsFlags)
+        #expect(mirror.flaggedCount == 1)
+        #expect(!mirror.allFlagged(inWorkspace: workspaceID))
+        #expect(!mirror.allFlagged(inWorkspace: UUID()))
+    }
+
+    @Test func aWorkspaceCreatedCollapsedFoldsWhenItsRowArrivesAfterOtherChanges() {
+        let existing = session(panes: [pane()])
+        _ = open([existing])
+        let created = UUID()
+
+        mirror.collapseWhenShown(created)
+        delta(1, .sessionChanged(existing.fields))
+        delta(2, .workspaceAdded(CatalogWorkspace(id: created, name: "new", sessions: []), index: 1))
+        delta(3, .workspaceChanged(id: created, name: "renamed"))
+
+        #expect(store.workspaces.first { $0.id == created }?.isExpanded == false)
+        #expect(effects.collapsedWorkspaces.isEmpty)
+    }
+
+    @Test func aWorkspaceCreatedCollapsedThatArrivedFirstIsFoldedThroughTheSidebar() {
+        _ = open([session(panes: [pane()])])
+        let created = UUID()
+        delta(1, .workspaceAdded(CatalogWorkspace(id: created, name: "new", sessions: []), index: 1))
+
+        mirror.collapseWhenShown(created)
+
+        #expect(effects.collapsedWorkspaces == [created])
     }
 
     @Test func aCreatedRowIsSelectedWhenTheCatalogBringsIt() {

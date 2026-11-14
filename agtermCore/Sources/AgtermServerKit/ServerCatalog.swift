@@ -140,7 +140,8 @@ extension ServerActions {
             return count > 0 ? count : nil
         }
         return store.workspaces.map { workspace in
-            CatalogWorkspace(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
+            CatalogWorkspace(id: workspace.id, name: workspace.name, tint: workspace.tint?.color.rawValue ?? "",
+                             tintOn: workspace.tint?.parts.map(\.rawValue), sessions: workspace.sessions.map { session in
                 var identities = [session.paneIdentity]
                 if session.hasSplit, let split = session.splitPaneIdentity { identities.append(split) }
                 let panes = session.ended || session.content == .page ? [] : identities.map {
@@ -159,7 +160,8 @@ extension ServerActions {
                                                   axis: session.hasSplit ? session.splitAxis.rawValue : nil,
                                                   shown: session.hasSplit && session.isSplit,
                                                   lifecycle: session.ended ? .ended : .live, scratch: scratch, page: page,
-                                                  customName: session.customName ?? "")
+                                                  customName: session.customName ?? "", flagged: session.flagged,
+                                                  tint: session.tint?.color.rawValue ?? "", tintOn: session.tint?.parts.map(\.rawValue))
                 return CatalogSession(fields: fields, panes: panes)
             })
         }

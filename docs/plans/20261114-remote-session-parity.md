@@ -244,17 +244,17 @@
   `AgtermServerTests/ServerCatalogTests.swift`, `ServerActionsSessionsTests.swift`, `ServerActionsWorkspacesTests.swift`,
   `ServerActionsMovesTests.swift`, `ServerCommandPolicyTests.swift`, `agtermTests/ControlServerRemoteActionsTests.swift`
 
-- [ ] flag and session/workspace tint as catalog fields (`false`/`""` for none, nil only from an older server);
+- [x] flag and session/workspace tint as catalog fields (`false`/`""` for none, nil only from an older server);
       server serves `session.flag`, `session.tint`, `workspace.flag`, `workspace.tint`; its `session new --tint`
       shows on every viewer
-- [ ] a server window routes flag/tint on its rows to the server, reads them back from the catalog, and disables
+- [x] a server window routes flag/tint on its rows to the server, reads them back from the catalog, and disables
       them while disconnected through `PaletteContext`
-- [ ] `RemoteWindowViewState` saves watermark, companion fold, context override, workspace focus/filter and flagged
+- [x] `RemoteWindowViewState` saves watermark, companion fold, context override, workspace focus/filter and flagged
       order, restored on window reopen and on detach/reattach; the info line is not saved
-- [ ] remote operations carry `session new --workspace-name/--create-workspace/--tint`, `session new --parent
+- [x] remote operations carry `session new --workspace-name/--create-workspace/--tint`, `session new --parent
       --tint`, `workspace new --collapsed/--tint`, and multi-target `session close`/`session move`
-- [ ] serve `session.duplicate` on the server (fresh shell after the row, as locally); policy test updated
-- [ ] tests: catalog encode/decode with new fields, explicit none and an older server, a cleared tint, mirror apply,
+- [x] serve `session.duplicate` on the server (fresh shell after the row, as locally); policy test updated
+- [x] tests: catalog encode/decode with new fields, explicit none and an older server, a cleared tint, mirror apply,
       view-state round trip (info absent), each routed option, batch receipts, palette enablement
 
 ### Task 4: Pane lifecycle on agterm-server

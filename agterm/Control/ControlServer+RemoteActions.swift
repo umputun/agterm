@@ -31,6 +31,7 @@ extension ControlServer {
         guard structural else {
             return .refused(ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available in a remote window"))
         }
+        if RemoteOperation.runsLocally(request, in: store) { return nil }
         return route(request, in: store, actions: actions)
     }
 
@@ -108,7 +109,10 @@ extension ControlServer {
         switch request.cmd {
         case .sessionNew, .workspaceNew, .zmxAttach, .zmxAttachGroup, .recentOpen:
             return resolver.placementStore(window)
-        case .workspaceRename, .workspaceDelete, .workspaceMove:
+        // a clear reaches every row of the server, so it needs no shown one
+        case .sessionFlag where request.args?.mode == "clear":
+            return resolver.placementStore(window)
+        case .workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFlag, .workspaceTint:
             return resolver.workspaceStore(request.target, window: window)
         default:
             let target = request.args?.targets?.first ?? request.target

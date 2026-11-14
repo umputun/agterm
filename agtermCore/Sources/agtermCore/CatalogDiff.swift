@@ -8,8 +8,11 @@ extension CatalogSnapshot {
         case .workspaceAdded(let workspace, let index):
             workspaces.removeAll { $0.id == workspace.id }
             workspaces.insert(workspace, at: min(max(index, 0), workspaces.count))
-        case .workspaceChanged(let id, let name):
-            if let index = workspaces.firstIndex(where: { $0.id == id }) { workspaces[index].name = name }
+        case .workspaceChanged(let id, let name, let tint, let tintOn):
+            guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
+            workspaces[index].name = name
+            workspaces[index].tint = tint
+            workspaces[index].tintOn = tintOn
         case .workspaceRemoved(let id):
             workspaces.removeAll { $0.id == id }
         case .workspaceOrder(let ids):
@@ -63,10 +66,13 @@ extension CatalogSnapshot {
         // move that keeps its row on the viewer, never a removal and an addition
         for (index, workspace) in next.workspaces.enumerated() {
             guard let current = state.workspaces.first(where: { $0.id == workspace.id }) else {
-                emit(.workspaceAdded(CatalogWorkspace(id: workspace.id, name: workspace.name, sessions: []), index: index))
+                emit(.workspaceAdded(CatalogWorkspace(id: workspace.id, name: workspace.name, tint: workspace.tint,
+                                                      tintOn: workspace.tintOn, sessions: []), index: index))
                 continue
             }
-            if current.name != workspace.name { emit(.workspaceChanged(id: workspace.id, name: workspace.name)) }
+            if current.name != workspace.name || current.tint != workspace.tint || current.tintOn != workspace.tintOn {
+                emit(.workspaceChanged(id: workspace.id, name: workspace.name, tint: workspace.tint, tintOn: workspace.tintOn))
+            }
         }
         // every session reaches its workspace before any workspace is reordered, so no order lists a row that is
         // about to leave

@@ -3,7 +3,6 @@ import agtermCore
 /// The requirements agterm-server does not serve. `ServerCommandPolicy` refuses their commands before dispatch,
 /// so these answer only a caller that reaches the actions directly.
 extension ServerActions {
-    public func duplicateSession(_ target: String?, window: String?) -> ControlResponse { unserved("duplicateSession") }
     public func selectSession(_ target: String?, window: String?) -> ControlResponse { unserved("selectSession") }
     public func goSession(window: String?, direction: SessionNavigation) -> ControlResponse { unserved("goSession") }
     public func revealSession(_ target: String?, window: String?) -> ControlResponse { unserved("revealSession") }
@@ -12,7 +11,6 @@ extension ServerActions {
     public func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse { unserved("focusWorkspace") }
     public func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse { unserved("setWorkspaceFilter") }
     public func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse { unserved("setWorkspaceExpansion") }
-    public func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse { unserved("setSessionFlag") }
     public func setSessionRestore(_ target: String?, window: String?, update: ControlSessionRestoreUpdate) -> ControlResponse { unserved("setSessionRestore") }
     public func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse { unserved("focusSessionPane") }
     public func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse { unserved("resizeSplit") }

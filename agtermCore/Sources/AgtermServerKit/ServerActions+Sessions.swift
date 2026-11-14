@@ -30,6 +30,16 @@ extension ServerActions {
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
     }
 
+    /// duplicateSession starts a plain shell right after the target in its workspace, in its focused directory,
+    /// copying nothing else.
+    public func duplicateSession(_ target: String?, window: String?) -> ControlResponse {
+        withSession(target, window: window) { session in
+            createSession(ControlSessionCreateOptions(window: nil, cwd: session.focusedCwd, workspace: nil, workspaceName: nil,
+                                                      createWorkspace: nil, command: nil, wait: nil, name: nil,
+                                                      after: session.id.uuidString, before: nil, noSelect: true))
+        }
+    }
+
     public func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
         withSession(target, window: window) { session in
             store.renameSession(session.id, to: name)

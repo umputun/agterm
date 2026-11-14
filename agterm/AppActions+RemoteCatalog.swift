@@ -21,6 +21,43 @@ extension AppActions {
         return true
     }
 
+    /// sendFlag flags or unflags `ids` on the server of a window whose flags are the server's, one operation per row it
+    /// would change. Answers false for any other window, whose store the caller sets as usual.
+    @discardableResult
+    func sendFlag(_ on: Bool, forSessions ids: [UUID], in store: AppStore) -> Bool {
+        guard store.marksOnServer else { return false }
+        for id in ids where store.session(withID: id)?.flagged == !on { performRemote(.setFlag(id, on: on), in: store) }
+        return true
+    }
+
+    /// sendWorkspaceFlag sets every session of workspace `id` on the server, as `sendFlag` does for rows.
+    @discardableResult
+    func sendWorkspaceFlag(_ on: Bool, to id: UUID, in store: AppStore) -> Bool {
+        guard store.marksOnServer else { return false }
+        performRemote(.setWorkspaceFlag(id, on: on), in: store)
+        return true
+    }
+
+    /// sendTint gives each of `ids` the tint `next` makes of its current one, on the server of a window whose tints
+    /// are the server's, skipping a row it would not change. Answers false for any other window.
+    @discardableResult
+    func sendTint(forSessions ids: [UUID], in store: AppStore, _ next: (SidebarTint?) -> SidebarTint?) -> Bool {
+        guard store.marksOnServer else { return false }
+        for session in ids.compactMap(store.session(withID:)) {
+            let tint = next(session.tint)
+            if tint != session.tint { performRemote(.setTint(session.id, ControlTintUpdate(tint)), in: store) }
+        }
+        return true
+    }
+
+    /// sendWorkspaceTint gives workspace `id` its tint on the server, as `sendTint` does for rows.
+    @discardableResult
+    func sendWorkspaceTint(_ tint: SidebarTint?, to id: UUID, in store: AppStore) -> Bool {
+        guard store.marksOnServer else { return false }
+        if store.workspaces.first(where: { $0.id == id })?.tint != tint { performRemote(.setWorkspaceTint(id, ControlTintUpdate(tint)), in: store) }
+        return true
+    }
+
     /// setScratchShown shows or hides `session`'s scratch: in a remote window the server's, which the window shows
     /// once the catalog says so, otherwise this Mac's.
     func setScratchShown(_ shown: Bool, of session: Session, in store: AppStore) {

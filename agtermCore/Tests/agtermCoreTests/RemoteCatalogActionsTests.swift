@@ -133,6 +133,51 @@ final class RemoteCatalogActionsTests {
         }
     }
 
+    @Test func aWorkspaceAskedForCollapsedArrivesFolded() async {
+        install(snapshot())
+        let created = UUID()
+        queue(reply(.applied, rev: 1, id: created.uuidString))
+
+        let response = await send(.newWorkspace(name: "x", collapsed: true, tint: nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .workspaceAdded(CatalogWorkspace(id: created, name: "x", sessions: []), index: 1)))
+
+        #expect(response.ok)
+        #expect(store.workspaces.first { $0.id == created }?.isExpanded == false)
+    }
+
+    @Test func flagAndTintRunHereUntilTheServerKeepsThem() {
+        install(snapshot())
+        store.remoteActions = actions
+        let flag = ControlRequest(cmd: .sessionFlag, target: sessionID.uuidString, args: ControlArgs(mode: "on"))
+        let tint = ControlRequest(cmd: .workspaceTint, target: workspaceID.uuidString, args: ControlArgs(mode: "clear"))
+        let rename = ControlRequest(cmd: .sessionRename, target: sessionID.uuidString, args: ControlArgs(name: "x"))
+        let older = (RemoteOperation.runsLocally(flag, in: store), RemoteOperation.runsLocally(tint, in: store))
+
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .workspaceChanged(id: workspaceID, name: "w", tint: "")))
+
+        #expect(older == (true, true))
+        #expect(!RemoteOperation.runsLocally(flag, in: store))
+        #expect(!RemoteOperation.runsLocally(tint, in: store))
+        #expect(!RemoteOperation.runsLocally(rename, in: store))
+    }
+
+    @Test func aBatchCloseIsOneCommandMarkedOnItsFirstRowUntilItsRevision() async {
+        let other = UUID()
+        install(snapshot(sessions: [session(sessionID, panes: panes), session(other, panes: [UUID()])]))
+        queue(reply(.applied, rev: 1))
+
+        let response = await send(.closeSessions([sessionID, other]))
+        let pending = (actions.pendingState(of: sessionID), actions.pendingState(of: other))
+        advance(to: 1)
+
+        #expect(response.ok)
+        #expect(script.commandCalls.count == 1)
+        #expect(script.commandCalls[0].contains("session close --target \(sessionID.uuidString) --target \(other.uuidString)"))
+        #expect(pending.0 != nil)
+        #expect(pending.1 == nil)
+        #expect(actions.marks.isEmpty)
+    }
+
     @Test func anAppliedOperationStaysPendingUntilTheMirrorReachesItsRevision() async {
         install(snapshot())
         queue(reply(.applied, rev: 2))

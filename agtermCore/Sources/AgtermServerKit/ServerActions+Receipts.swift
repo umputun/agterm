@@ -6,6 +6,7 @@ extension ServerActions {
     static let receiptCommands: Set<Command> = [
         .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionMove,
         .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
+        .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
     ]
 
     public var takesOperationReceipts: Bool { true }

@@ -174,6 +174,11 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
         server?.catalogPaneNeedsAttach(identity, session: session)
     }
 
+    func catalogWorkspaceCollapsed(_ id: UUID) {
+        guard let server, let store = server.library.store(for: window) else { return }
+        server.actions.setWorkspaceExpanded(id, expanded: false, in: store)
+    }
+
     func catalogBound(_ catalogID: UUID) -> Bool {
         guard let server else { return false }
         guard case .duplicate(let existing) = server.library.bindCatalog(catalogID, toWindow: window) else { return true }

@@ -18,6 +18,7 @@ public enum ServerCommandPolicy {
         .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
         .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
         .msgSend, .msgRead, .msgAck, .surfaceCursor, .zmxList, .zmxScreen, .sessionSeen,
+        .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint, .sessionDuplicate,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

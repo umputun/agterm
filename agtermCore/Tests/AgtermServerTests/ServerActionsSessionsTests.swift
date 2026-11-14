@@ -416,4 +416,19 @@ struct ServerActionsSessionsTests {
         #expect(restored.htmlOverlay?.source == row.htmlOverlay?.source)
         #expect(restored.htmlOverlay?.javascript == true)
     }
+
+    @Test func aDuplicateIsAPlainShellRightAfterTheSourceInItsDirectory() throws {
+        let source = try harness.session(newSession(command: "top", cwd: harness.scratch.root))
+        let next = try harness.session(newSession())
+        harness.store.renameSession(source.id, to: "build")
+        harness.store.setFlag(true, forSession: source.id)
+
+        let copy = try harness.session(harness.actions.duplicateSession(source.id.uuidString, window: nil))
+
+        #expect(harness.store.workspaces[0].sessions.map(\.id).suffix(3) == [source.id, copy.id, next.id])
+        #expect(harness.runner.launches.last?.directory == harness.scratch.root)
+        #expect(harness.runner.launches.last?.argv.isEmpty == true)
+        #expect(copy.customName == nil)
+        #expect(!copy.flagged)
+    }
 }

@@ -5,7 +5,8 @@ import agtermCore
 struct ServerCommandPolicyTests {
     @Test(arguments: [Command.tree, .version, .windowList, .eventsRead, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
                       .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
-                      .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen])
+                      .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen, .sessionFlag, .sessionTint,
+                      .workspaceFlag, .workspaceTint, .sessionDuplicate])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }
@@ -23,12 +24,12 @@ struct ServerCommandPolicyTests {
         .debugAppearance, .hooksList, .hooksReload, .recentClear, .recentList, .recentOpen,
         .restoreCapture, .restoreClear, .restoreMode,
         .sessionBackground, .sessionCollapse, .sessionCompanionConvert, .sessionCompanionDuplicate, .sessionCopy, .sessionDetach,
-        .sessionDuplicate, .sessionExpand, .sessionFlag, .sessionFocus, .sessionGo, .sessionLead,
+        .sessionExpand, .sessionFocus, .sessionGo, .sessionLead,
         .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize, .sessionRestart,
-        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSelect, .sessionSelectAll, .sessionTint,
+        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSelect, .sessionSelectAll,
         .windowRemoteDismiss,
-        .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFlag, .workspaceFocus, .workspaceGo,
-        .workspaceReattach, .workspaceSelect, .workspaceTint,
+        .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFocus, .workspaceGo,
+        .workspaceReattach, .workspaceSelect,
         .zmxAttach, .zmxAttachGroup, .zmxKill, .zmxPrune, .zmxReset,
     ]
 

@@ -138,6 +138,11 @@ extension RemoteCatalogMirror {
         }
         let workspaceRecords = Set(catalog.workspaces.map(\.id))
         store.catalogHiddenCollapsed = store.catalogHiddenCollapsed.filter { workspaceRecords.contains($0.key) }
+        for id in workspaces where store.focusedWorkspaceIDs.contains(id) {
+            store.catalogHiddenFocus.insert(id)
+            store.dropFocusMember(id)
+        }
+        store.catalogHiddenFocus.formIntersection(workspaceRecords)
         return shown
     }
 
