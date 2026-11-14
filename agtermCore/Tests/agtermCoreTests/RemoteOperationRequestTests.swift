@@ -141,13 +141,55 @@ struct RemoteOperationRequestTests {
         #expect(parse(.workspaceMove, target: target) { $0.to = "top" } == .operation(.moveWorkspace(workspace.id, to: "top"), select: false))
     }
 
-    @Test(arguments: [(Command.sessionNew, "--wait"), (.sessionCompanionNew, "--wait"), (.sessionClose, "--undoable")])
-    func aFieldTheServerCannotBeAskedForIsRefusedByName(_ cmd: Command, _ field: String) {
-        let parsed = parse(cmd, target: first.id.uuidString) { args in
-            if field == "--wait" { args.wait = true } else { args.undoable = true }
-        }
+    @Test func anUndoableCloseIsRefusedByName() {
+        #expect(refusal(parse(.sessionClose, target: first.id.uuidString) { $0.undoable = true }) == "--undoable is not available in a remote window")
+    }
 
-        #expect(refusal(parsed) == "\(field) is not available in a remote window")
+    @Test func aWaitingCommandIsHeldOnTheServer() {
+        let shell = RemoteShellOptions(command: "make", wait: true)
+
+        #expect(parse(.sessionNew) { $0.command = "make"; $0.wait = true } == .operation(.newSession(workspace: workspace.id, shell: shell), select: true))
+        #expect(parse(.sessionCompanionNew, target: first.id.uuidString) { $0.command = "make"; $0.wait = true }
+            == .operation(.newCompanion(parent: first.id, shell: shell), select: true))
+    }
+
+    @Test func aRestartNamesThePaneByTheRoleThisWindowShows() {
+        first.daemonBackedPanes = [first.paneIdentity]
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionRestart, target: target) { $0.pane = "split"; $0.command = "top" }
+            == .operation(.restart(first.id, pane: .right, command: "top"), select: false))
+        #expect(parse(.sessionRestart, target: target) { $0.paneID = first.paneIdentity.uuidString; $0.pane = "right" }
+            == .operation(.restart(first.id, pane: .left, command: nil), select: false))
+    }
+
+    @Test(arguments: [
+        (ControlArgs(pane: "left", paneID: "gone"), "unknown pane id: gone"),
+        (ControlArgs(pane: "scratch"), "session.restart does not address the scratch pane"),
+        (ControlArgs(command: "top"), "session.restart requires --pane-id or --pane"),
+        (ControlArgs(command: " ", pane: "left"), "session.restart takes a non-empty command, or none to replay"),
+    ])
+    func aRestartRefusesWhatALocalOneRefuses(args: ControlArgs, error: String) {
+        let request = ControlRequest(cmd: .sessionRestart, target: first.id.uuidString, args: args)
+
+        #expect(refusal(RemoteOperation.parse(request, in: store)) == error)
+    }
+
+    @Test func companionDuplicateAndConvertGoToTheServer() {
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionCompanionDuplicate, target: target) == .operation(.duplicateCompanion(first.id), select: true))
+        #expect(parse(.sessionCompanionDuplicate, target: target) { $0.noSelect = true } == .operation(.duplicateCompanion(first.id), select: false))
+        #expect(parse(.sessionCompanionConvert, target: target) == .operation(.convertCompanion(first.id), select: false))
+    }
+
+    @Test func aKillNamesOnePaneAndKeepsTheLocalRefusals() {
+        let target = first.id.uuidString
+
+        #expect(parse(.zmxKill, target: target) { $0.pane = "split"; $0.force = true } == .operation(.killDaemon(first.id, pane: .right), select: false))
+        #expect(refusal(parse(.zmxKill, target: "active") { $0.pane = "left"; $0.force = true }) == "zmx.kill needs a session id; 'active' is not accepted")
+        #expect(refusal(parse(.zmxKill, target: target) { $0.force = true }) == "zmx.kill requires --pane left|right")
+        #expect(refusal(parse(.zmxKill, target: target) { $0.pane = "left" }) == "zmx.kill requires --force")
     }
 
     @Test func creationOptionsGoToTheServer() {
@@ -254,6 +296,14 @@ struct RemoteOperationRequestTests {
         #expect(RemoteOperation.setTint(id, .set(.named(.red), parts: nil)).words == ["session", "tint", "red", "--target", id.uuidString])
         #expect(RemoteOperation.setWorkspaceTint(id, .clear).words == ["workspace", "tint", "clear", "--target", id.uuidString])
         #expect(RemoteOperation.setWorkspaceFlag(id, on: true).words == ["workspace", "flag", "on", "--target", id.uuidString])
+        #expect(RemoteOperation.newCompanion(parent: id, shell: RemoteShellOptions(command: "make", wait: true)).words
+            == ["session", "new", "--parent", id.uuidString, "--command=make", "--wait"])
+        #expect(RemoteOperation.restart(id, pane: .right, command: "-x").words
+            == ["session", "restart", "--target", id.uuidString, "--pane", "right", "--command=-x"])
+        #expect(RemoteOperation.restart(id, pane: .left, command: nil).words == ["session", "restart", "--target", id.uuidString, "--pane", "left"])
+        #expect(RemoteOperation.duplicateCompanion(id).words == ["session", "duplicate", "--companion", "--target", id.uuidString])
+        #expect(RemoteOperation.convertCompanion(id).words == ["session", "convert", "--companion", "--target", id.uuidString])
+        #expect(RemoteOperation.killDaemon(id, pane: .left).words == ["zmx", "kill", "--target", id.uuidString, "--pane", "left", "--force"])
     }
 
     @Test func aFlaggedOrderMoveStaysOnThisMac() {

@@ -316,7 +316,7 @@ extension ControlServer {
 
     /// Reports per daemon rather than a bare count: a stale-socket cleanup is not a kill, and a caller that
     /// cannot tell the two apart would believe a live unresponsive daemon had gone.
-    private func pruneReport(_ outcomes: [String: ZmxClient.KillOutcome]) -> String {
+    private func pruneReport(_ outcomes: [String: ZmxKillOutcome]) -> String {
         outcomes.keys.sorted().map { name in
             switch outcomes[name] {
             case .killed: return "killed \(name)"

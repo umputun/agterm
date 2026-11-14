@@ -93,10 +93,12 @@ struct Session: ParsableCommand {
         var noSelect = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
             if noSelect, !companion { throw ValidationError("--no-select needs --companion") }
+            if operation.opID != nil, !companion { throw ValidationError("--op-id needs --companion") }
         }
 
         func run() throws {
@@ -105,8 +107,8 @@ struct Session: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
-                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil))
+            operation.stamp(ControlRequest(cmd: companion ? .sessionCompanionDuplicate : .sessionDuplicate, target: target.target,
+                                           args: options.withWindow(noSelect ? ControlArgs(noSelect: true) : nil)))
         }
     }
 

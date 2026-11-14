@@ -64,7 +64,7 @@ final class PaneObserver {
                     session.daemonBackedPanes.insert(identity)
                     leaders[identity] = record.leaderPID
                     updateCwd(of: session, role: role, leader: record.leaderPID)
-                } else if !panes.started(identity, since: listedAt) {
+                } else if !panes.started(identity, since: listedAt), !panes.restarting.contains(identity) {
                     gone.append(identity)
                 }
             }
@@ -122,6 +122,15 @@ final class PaneObserver {
         } else if let split = session.splitPaneIdentity, gone.contains(split) {
             store.closeSplitPane(session.id, alreadyFinalized: split)
         }
+    }
+
+    /// settleExited runs the exit transition of a pane whose daemon a confirmed kill ended. zmx writes no exit record
+    /// for a killed daemon, so one is written here and the pane settles as if its shell had exited.
+    func settleExited(_ session: Session, identity: UUID) {
+        FileManager.default.createFile(atPath: panes.exitRecord(identity), contents: nil)
+        session.daemonBackedPanes.remove(identity)
+        settle(session, gone: [identity])
+        onApplied?()
     }
 
     /// consumeExitRecord reports whether `identity`'s shell exited, removing the record it read.

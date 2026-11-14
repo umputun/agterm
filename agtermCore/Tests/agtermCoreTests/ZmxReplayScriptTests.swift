@@ -417,6 +417,86 @@ struct ZmxReplayScriptTests {
         #expect(try nullSeparatedValues(at: result) == ["/integration root:/user/share", "/integration root"])
     }
 
+    enum HoldShell: String, CaseIterable, Sendable {
+        case zsh, bash, fish
+    }
+
+    enum HoldPayload: String, CaseIterable, Sendable {
+        case finishes = "printf 'ran\\n'"
+        case exits = "printf 'ran\\n'; exit 7"
+        case execs = "exec /bin/sh -c 'printf ran\\\\n'"
+        case interrupted = "printf 'ran\\n'; kill -INT 0; sleep 5"
+    }
+
+    @Test(arguments: HoldShell.allCases, HoldPayload.allCases)
+    func aHeldCommandShowsTheHoldLineHoweverItEnds(shell: HoldShell, payload: HoldPayload) throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let argv: [String]
+        switch shell {
+        case .zsh: argv = ["/bin/zsh", "-lic", ZmxReplayScript.renderHolding(commandLine: payload.rawValue)]
+        case .bash: argv = ["/bin/bash", "-lic", ZmxReplayScript.renderBashHolding(commandLine: payload.rawValue)]
+        case .fish:
+            guard fishPath != nil || fishRequired else { return }
+            let fish = try resolvedFish()
+            argv = [fish, "-lic", ZmxReplayScript.renderFishHolding(commandLine: payload.rawValue, shell: fish)]
+        }
+
+        let held = try runHeld(argv, fixture: fixture)
+
+        let ran = try #require(held.output.range(of: "ran"))
+        let line = try #require(held.output.range(of: ZmxReplayScript.holdLine))
+        #expect(ran.upperBound <= line.lowerBound)
+        #expect(held.heldOpen)
+        #expect(held.endedOnKey)
+    }
+
+    @Test func aFishHeldCommandKeepsTheInteractiveConfig() throws {
+        guard fishPath != nil || fishRequired else { return }
+        let fish = try resolvedFish()
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let config = fixture.appending(path: "config/fish")
+        try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+        try "if status is-interactive\n  function greet; printf 'greeted\\n'; end\nend\n"
+            .write(to: config.appending(path: "config.fish"), atomically: true, encoding: .utf8)
+
+        let held = try runHeld([fish, "-lic", ZmxReplayScript.renderFishHolding(commandLine: "greet", shell: fish)], fixture: fixture)
+
+        #expect(held.output.contains("greeted"))
+        #expect(held.heldOpen)
+        #expect(held.endedOnKey)
+    }
+
+    // regression: a Ctrl-C'd replay ends the interactive -c list, so the rearm runs from the EXIT trap.
+    @Test(arguments: [false, true])
+    func aBashReplayExportsTheIntegrationAgainAndExecsTheLoginShell(interrupted: Bool) throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture) }
+        let payloadLog = fixture.appending(path: "payload-log")
+        let result = fixture.appending(path: "result")
+        let payload = fixture.appending(path: "payload")
+        try makeExecutable(payload, contents: """
+        #!/bin/sh
+        printf 'ran\\n' >> "$PAYLOAD_LOG"
+        \(interrupted ? "kill -INT 0" : "exit 0")
+        """)
+        let finalShell = fixture.appending(path: "final-shell")
+        try makeExecutable(finalShell, contents: """
+        #!/bin/sh
+        printf '%s\\0%s\\0%s\\0%s\\0' "$ENV" "$GHOSTTY_BASH_INJECT" "$1" "$2" > "$RESULT_FILE"
+        """)
+        let script = ZmxReplayScript.renderBash(argv: [payload.path],
+                                                exports: [("ENV", "/integration/bash/ghostty.bash"), ("GHOSTTY_BASH_INJECT", "1")],
+                                                shell: finalShell.path)
+
+        _ = try runInTerminal(["/bin/bash", "-lic", script], fixture: fixture,
+                              environment: ["PAYLOAD_LOG": payloadLog.path, "RESULT_FILE": result.path])
+
+        #expect(try String(contentsOf: payloadLog, encoding: .utf8) == "ran\n")
+        #expect(try nullSeparatedValues(at: result) == ["/integration/bash/ghostty.bash", "1", "--posix", "-l"])
+    }
+
     private func makeFixture() throws -> URL {
         let root = FileManager.default.temporaryDirectory.appending(path: "agterm-zmx-replay-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -526,6 +606,70 @@ struct ZmxReplayScriptTests {
         #else
         ["-q", "-e", "-c", CommandRestore.shellQuotedLine(argv), "/dev/null"]
         #endif
+    }
+
+    private func runInTerminal(_ argv: [String], fixture: URL, environment overrides: [String: String] = [:]) throws -> String {
+        let (process, output) = try startInTerminal(argv, fixture: fixture, input: FileHandle.nullDevice, environment: overrides)
+        if !waitUntil(seconds: 20, { !process.isRunning }) {
+            process.terminate()
+            process.waitUntilExit()
+            Issue.record("\(argv[0]) under script(1) did not exit within 20 s")
+        }
+        return (try? String(contentsOf: output, encoding: .utf8)) ?? ""
+    }
+
+    private struct Held {
+        let output: String
+        let heldOpen: Bool
+        let endedOnKey: Bool
+    }
+
+    private func runHeld(_ argv: [String], fixture: URL) throws -> Held {
+        let input = Pipe()
+        let (process, output) = try startInTerminal(argv, fixture: fixture, input: input.fileHandleForReading, environment: [:])
+        let shown = waitUntil(seconds: 20) { ((try? String(contentsOf: output, encoding: .utf8)) ?? "").contains(ZmxReplayScript.holdLine) }
+        Thread.sleep(forTimeInterval: 0.5)
+        let heldOpen = shown && process.isRunning
+        input.fileHandleForWriting.write(Data("x".utf8))
+        let endedOnKey = waitUntil(seconds: 10) { !process.isRunning }
+        if process.isRunning {
+            process.terminate()
+            process.waitUntilExit()
+        }
+        try? input.fileHandleForWriting.close()
+        return Held(output: (try? String(contentsOf: output, encoding: .utf8)) ?? "", heldOpen: heldOpen, endedOnKey: endedOnKey)
+    }
+
+    private func waitUntil(seconds: TimeInterval, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !condition() {
+            guard Date() < deadline else { return false }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        return true
+    }
+
+    private func startInTerminal(_ argv: [String], fixture: URL, input: FileHandle,
+                                 environment overrides: [String: String]) throws -> (Process, URL) {
+        let home = fixture.appending(path: "home")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        try "".write(to: home.appending(path: ".zshrc"), atomically: true, encoding: .utf8)
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/script")
+        process.arguments = Self.scriptArguments(argv)
+        var environment = ProcessInfo.processInfo.environment
+        environment.removeValue(forKey: "XDG_DATA_DIRS")
+        process.environment = environment.merging([
+            "HOME": home.path, "ZDOTDIR": home.path, "XDG_CONFIG_HOME": fixture.appending(path: "config").path,
+            "XDG_DATA_HOME": fixture.appending(path: "data").path, "ENV": "", "BASH_ENV": "",
+        ].merging(overrides) { _, new in new }) { _, new in new }
+        process.standardInput = input
+        let output = fixture.appending(path: "terminal-output")
+        FileManager.default.createFile(atPath: output.path, contents: nil)
+        process.standardOutput = try FileHandle(forWritingTo: output)
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        return (process, output)
     }
 
     /// Runs `zsh -lic` under `script(1)` so zsh has a terminal and job control, as in a pane.

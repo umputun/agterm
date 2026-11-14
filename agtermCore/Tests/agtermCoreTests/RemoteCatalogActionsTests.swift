@@ -475,6 +475,30 @@ final class RemoteCatalogActionsTests {
         #expect(script.calls.isEmpty)
     }
 
+    @Test func aKillAndARestartPinThePanesTheWindowSaw() async {
+        install(snapshot())
+        queue(reply(.noop))
+        queue(reply(.noop))
+
+        _ = await send(.killDaemon(sessionID, pane: .right))
+        _ = await send(.restart(sessionID, pane: .left, command: nil))
+
+        let pin = "--expect-panes \(panes[0].uuidString),\(panes[1].uuidString) --op-id"
+        #expect(script.commandCalls.count == 2)
+        #expect(script.commandCalls.allSatisfy { $0.contains(pin) })
+    }
+
+    @Test func anEndedRowIsRestartedWithNoPanesToPin() async {
+        install(snapshot(sessions: [session(sessionID, panes: [])]))
+        queue(reply(.noop))
+
+        _ = await send(.restart(sessionID, pane: .left, command: "make"))
+
+        let line = script.commandCalls.first ?? ""
+        #expect(line.contains("session restart --target \(sessionID.uuidString) --pane left --command=make --op-id"))
+        #expect(!line.contains("--expect-panes"))
+    }
+
     @Test func aCreatedRowIsNotSelectedWhenTheUserMovedDuringTheSend() async throws {
         let other = UUID()
         install(snapshot(sessions: [session(sessionID, panes: panes), session(other, panes: [UUID()])]))

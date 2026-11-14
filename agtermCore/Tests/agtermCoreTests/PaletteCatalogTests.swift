@@ -328,6 +328,9 @@ struct PaletteCatalogTests {
         CompanionRowKind(name: "remote page",
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsRemote: true),
                          newCompanion: true, duplicate: false, convert: false),
+        CompanionRowKind(name: "server window terminal",
+                         context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true, remoteWindow: true, remoteConnected: true),
+                         newCompanion: true, duplicate: true, convert: true),
     ]
 
     @Test(arguments: companionRowKinds)
@@ -504,14 +507,14 @@ struct PaletteCatalogTests {
     }
 
     @Test(arguments: [PaletteCommand.newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes])
+                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .duplicateCompanion, .convertCompanion])
     func aServerActionIsDisabledWhileItsRemoteWindowIsNotConnected(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: false)))
         #expect(command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
     }
 
-    @Test(arguments: [PaletteCommand.openDirectory, .duplicateCompanion, .attachRemote])
+    @Test(arguments: [PaletteCommand.openDirectory, .attachRemote])
     func aLocalOnlyActionIsDisabledInARemoteWindow(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))

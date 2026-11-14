@@ -170,7 +170,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession
         case .convertCompanion:
-            return context.hasActiveSession && !context.activeSessionIsCompanion && !context.activeSessionIsRemote
+            // a server window's row is converted by its server; a row attached from another Mac is not
+            return context.hasActiveSession && !context.activeSessionIsCompanion && (context.remoteWindow || !context.activeSessionIsRemote)
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
@@ -199,11 +200,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     /// sentToServer are the actions a remote window asks its server for; close stays, since detaching needs no server.
     private static let sentToServer: Set<PaletteCommand> = [
         .newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch,
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .duplicateCompanion, .convertCompanion,
     ]
 
     /// localOnly make a shell or a row on this Mac, which a remote window shows only from its server.
-    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .duplicateCompanion, .convertCompanion, .attachRemote, .reopenRecent]
+    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .attachRemote, .reopenRecent]
 
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [

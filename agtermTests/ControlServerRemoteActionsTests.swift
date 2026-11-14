@@ -358,14 +358,34 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     }
 
     func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
-        let entry = catalogSession()
-        try open([entry])
+        try open([catalogSession()])
 
-        let reply = try await send(.sessionCompanionConvert, target: entry.id.uuidString)
+        let reply = try await send(.recentOpen, target: UUID().uuidString, args: ControlArgs(window: remoteWindow.uuidString))
 
         XCTAssertFalse(reply.ok)
-        XCTAssertEqual(reply.error, "session.companion.convert is not available in a remote window")
+        XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
         XCTAssertTrue(runner.operations.isEmpty)
+    }
+
+    func testPaneLifecycleCommandsOfACatalogRowGoToTheServer() async throws {
+        let entry = catalogSession(split: true)
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restart = try await send(.sessionRestart, target: id, args: ControlArgs(command: "make", pane: "split"))
+        let duplicate = try await send(.sessionCompanionDuplicate, target: id)
+        let convert = try await send(.sessionCompanionConvert, target: id)
+        let kill = try await send(.zmxKill, target: id, args: ControlArgs(force: true, pane: "left"))
+        let wait = try await send(.sessionCompanionNew, target: id, args: ControlArgs(command: "make", wait: true))
+
+        for reply in [restart, duplicate, convert, kill, wait] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 5)
+        XCTAssertTrue(runner.operations[0].contains("session restart --target \(id) --pane right --command=make"))
+        XCTAssertTrue(runner.operations[1].contains("session duplicate --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("session convert --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[3].contains("zmx kill --target \(id) --pane left --force"))
+        XCTAssertTrue(runner.operations[4].contains("session new --parent \(id) --command=make --wait"))
+        XCTAssertNil(remoteStore.session(withID: entry.id)?.parentID)
     }
 
     func testSessionDetachOfALocalSessionIsRefused() async throws {

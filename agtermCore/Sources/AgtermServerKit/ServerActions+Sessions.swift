@@ -11,7 +11,6 @@ extension ServerActions {
 
     public func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
         if let refusal = windowRefusal(options.window) { return refusal }
-        guard options.wait != true else { return ControlResponse(ok: false, error: "session.new --wait is not available on agterm-server") }
         let destination: (workspace: UUID, index: Int?)
         switch sessionDestination(options) {
         case .success(let resolved): destination = resolved
@@ -19,11 +18,13 @@ extension ServerActions {
         }
         let cwd = options.cwd ?? panes.baseEnvironment["HOME"] ?? "/"
         guard let session = store.addSession(toWorkspace: destination.workspace, cwd: cwd, command: options.command,
-                                             name: options.name, at: destination.index, select: false, tint: tint) else {
+                                             name: options.name, wait: options.wait == true, at: destination.index, select: false,
+                                             tint: tint) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if let refusal = panes.start(.init(identity: session.paneIdentity, session: session, workspace: destination.workspace,
-                                           pane: .left, command: options.command, directory: cwd)) {
+                                           pane: .left, program: .creation(options.command, wait: options.wait),
+                                           directory: cwd)) {
             store.closeSession(session.id, alreadyFinalized: session.paneIdentity)
             return ControlResponse(ok: false, error: refusal)
         }
@@ -127,9 +128,6 @@ extension ServerActions {
     public func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse {
         withSession(target, window: window) { parent in
             guard !parent.ended else { return ControlResponse(ok: false, error: "session has ended") }
-            guard options.wait != true else {
-                return ControlResponse(ok: false, error: "session.companion.new --wait is not available on agterm-server")
-            }
             var options = options
             options.select = false
             guard case .success(let companion) = store.addCompanion(to: parent.id, options: options) else {
@@ -137,7 +135,8 @@ extension ServerActions {
             }
             let workspace = store.sessionLocation(ofSession: companion.id)?.workspace
             if let refusal = panes.start(.init(identity: companion.paneIdentity, session: companion, workspace: workspace,
-                                               pane: .left, command: options.command, directory: companion.effectiveCwd)) {
+                                               pane: .left, program: .creation(options.command, wait: options.wait),
+                                               directory: companion.effectiveCwd)) {
                 store.closeSession(companion.id, alreadyFinalized: companion.paneIdentity)
                 return ControlResponse(ok: false, error: refusal)
             }

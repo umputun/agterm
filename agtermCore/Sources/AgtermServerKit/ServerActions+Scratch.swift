@@ -21,7 +21,8 @@ extension ServerActions {
                 let identity = UUID()
                 let workspace = store.sessionLocation(ofSession: session.id)?.workspace
                 var start = ServerPanes.Start(identity: identity, session: session, workspace: workspace, pane: .scratch,
-                                              command: command?.isEmpty == false ? command : nil, directory: session.effectiveCwd)
+                                              program: .creation(command?.isEmpty == false ? command : nil, wait: nil),
+                                              directory: session.effectiveCwd)
                 start.scratch = true
                 if let refusal = panes.start(start) { return ControlResponse(ok: false, error: refusal) }
                 session.scratchDaemon = Session.ScratchDaemon(identity: identity, shown: true)

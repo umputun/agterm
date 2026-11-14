@@ -268,15 +268,15 @@
   `PaneObserverTests.swift`, `ServerCommandPolicyTests.swift`, `agtermCoreTests/RemoteOperationRequestTests.swift`,
   `PaletteCatalogTests.swift`, `agtermTests/ControlServerRemoteActionsTests.swift`
 
-- [ ] `session.restart` on the server: `--command` and foreground replay (task 1's reader), pane identity and
+- [x] `session.restart` on the server: `--command` and foreground replay (task 1's reader), pane identity and
       placement kept, Ended rows restartable; a server window routes it
-- [ ] `session.companion.duplicate` and `session.companion.convert` on the server with operation receipts; a server
+- [x] `session.companion.duplicate` and `session.companion.convert` on the server with operation receipts; a server
       window routes them and `PaletteCommand.isEnabled(in:)` enables them there (the context menu follows it)
-- [ ] `zmx.kill` (one pane; a live split promoted by `PaneObserver.settle`) and `zmx.prune` on `ZmxInventory`/
+- [x] `zmx.kill` (one pane; a live split promoted by `PaneObserver.settle`) and `zmx.prune` on `ZmxInventory`/
       `ZmxPrunePolicy` with catalog panes and scratches as claims; `zmx.kill` on a server window row routes there
-- [ ] `--wait` output hold for `session new` and `companion new` on the server, routed from a server window and
+- [x] `--wait` output hold for `session new` and `companion new` on the server, routed from a server window and
       presented after reconnect
-- [ ] policy test updated; tests for each operation, receipt replay and refusal paths
+- [x] policy test updated; tests for each operation, receipt replay and refusal paths
 
 ### Task 5: Daemon-backed Mac scratch
 

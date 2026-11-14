@@ -736,8 +736,8 @@ error keeps those names for compatibility.
   is an error, never a replay. The pane keeps its place, stable id and `AGTERM_*` environment and
   starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
   shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;
-  read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode and a local pane only,
-  no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
+  read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode, a local pane or a row of
+  an agterm-server window (its server restarts it; an Ended row there takes `--command` on the left pane), no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
   4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
   background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
   daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the

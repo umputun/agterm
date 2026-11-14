@@ -17,6 +17,8 @@ final class ServerPanes {
     let baseEnvironment: [String: String]
     /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
     var leaders: [UUID: Int32] = [:]
+    /// restarting are panes a restart has killed and not yet started again, which no listing may settle meanwhile.
+    var restarting: Set<UUID> = []
     private var startedAt: [UUID: Date] = [:]
     /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
     private var scratches: Set<UUID> = []
@@ -40,13 +42,13 @@ final class ServerPanes {
             .appendingPathComponent(identity.uuidString)
     }
 
-    /// Start is one pane for `start` to create; a `command` runs once in place of the login shell.
+    /// Start is one pane for `start` to create, running `program`.
     struct Start {
         let identity: UUID
         let session: Session
         let workspace: UUID?
         let pane: StatusPane
-        var command: String?
+        var program: ServerShell.Program = .loginShell
         let directory: String
         /// scratch starts the pane under `scratchDaemonName` and leaves `daemonBackedPanes` to the session's panes.
         var scratch = false
@@ -76,7 +78,7 @@ final class ServerPanes {
         environment["ZMX_NO_DETACH_KEY"] = "1"
         environment["ZMX_EXIT_FILE"] = record
         let integration = (configuration.resourcesDirectory as NSString).appendingPathComponent("shell-integration")
-        let launch = shell.launch(integration: integration, environment: environment, command: start.command)
+        let launch = shell.launch(integration: integration, environment: environment, program: start.program)
         let home = baseEnvironment["HOME"] ?? "/"
         let directory = FileManager.default.fileExists(atPath: start.directory) ? start.directory : home
         startedAt[identity] = Date()

@@ -45,33 +45,42 @@ extension ControlDispatcher {
     /// replay the pane's foreground program. A pane must be named, by token or by role, because a default
     /// would restart a shell the caller never addressed.
     func dispatchSessionRestart(_ request: ControlRequest) async -> ControlResponse {
-        let args = request.args
+        switch Self.restartOptions(request.args) {
+        case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+        case .success(let options): return await actions.restartSessionPane(request.target, window: request.args?.window, options: options)
+        }
+    }
+
+    /// restartOptions validates `session.restart`'s arguments, here and in a remote window forwarding it to its server.
+    static func restartOptions(_ args: ControlArgs?) -> Result<ControlSessionRestartOptions, RestartRejection> {
         let command = args?.command
         if let command {
             guard !command.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return ControlResponse(ok: false, error: "session.restart takes a non-empty command, or none to replay")
+                return .failure(RestartRejection(message: "session.restart takes a non-empty command, or none to replay"))
             }
             guard !CommandRestore.hasControlCharacter(command) else {
-                return ControlResponse(ok: false, error: "command must not contain control characters")
+                return .failure(RestartRejection(message: "command must not contain control characters"))
             }
             guard command.utf8.count <= ControlSessionRestartOptions.maxCommandBytes else {
-                return ControlResponse(ok: false, error: "command too long (max "
-                    + "\(ControlSessionRestartOptions.maxCommandBytes) bytes)")
+                return .failure(RestartRejection(message: "command too long (max \(ControlSessionRestartOptions.maxCommandBytes) bytes)"))
             }
         }
-        let pane: StatusPane?
-        switch parsePane(args?.pane) {
-        case .pane(let parsed): pane = parsed
-        case .rejected(let rejection): return rejection
+        var pane: StatusPane?
+        if let raw = args?.pane {
+            guard let parsed = StatusPane(controlName: raw) else { return .failure(RestartRejection(message: "--pane must be left, right, or scratch")) }
+            pane = parsed
         }
         guard pane != .scratch else {
-            return ControlResponse(ok: false, error: "session.restart does not address the scratch pane")
+            return .failure(RestartRejection(message: "session.restart does not address the scratch pane"))
         }
         let paneID = args?.paneID.flatMap { $0.isEmpty ? nil : $0 }
         guard pane != nil || paneID != nil else {
-            return ControlResponse(ok: false, error: "session.restart requires --pane-id or --pane")
+            return .failure(RestartRejection(message: "session.restart requires --pane-id or --pane"))
         }
-        return await actions.restartSessionPane(request.target, window: args?.window, options: .init(
-            command: command, pane: pane, paneID: paneID))
+        return .success(ControlSessionRestartOptions(command: command, pane: pane, paneID: paneID))
     }
+}
+
+struct RestartRejection: Error {
+    let message: String
 }

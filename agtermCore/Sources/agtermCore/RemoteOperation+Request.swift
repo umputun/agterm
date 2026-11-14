@@ -13,6 +13,7 @@ extension RemoteOperation {
         .sessionNew, .sessionDuplicate, .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose,
         .sessionMove, .sessionScratch, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill,
     ]
 
     /// markCommands set flag and tint, which only a server carrying them in its catalog keeps.
@@ -36,7 +37,7 @@ extension RemoteOperation {
         if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("operation receipts are served only by agterm-server") }
         if let field = unsupportedField(request.cmd, args) { return refuse("\(field) is not available in a remote window") }
         let select = args.noSelect != true
-        var shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command)
+        var shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command, wait: args.wait == true)
         switch request.cmd {
         case .sessionNew, .sessionCompanionNew, .workspaceNew:
             switch ControlDispatcher.creationTint(args) {
@@ -125,6 +126,15 @@ extension RemoteOperation {
             return sessions(targets, in: store) { ids in move(ids, args, in: store) }
         case .sessionFlag:
             return flag(request, in: store)
+        case .sessionRestart:
+            return restart(request, in: store)
+        case .sessionCompanionDuplicate:
+            return session(request.target, in: store) { .operation(.duplicateCompanion($0), select: select) }
+        case .sessionCompanionConvert:
+            // the converted row keeps its id and the selection, as a local convert leaves them
+            return session(request.target, in: store) { .operation(.convertCompanion($0), select: false) }
+        case .zmxKill:
+            return kill(request, in: store)
         case .sessionTint, .workspaceTint:
             switch ControlDispatcher.tintUpdate(args, command: request.cmd.rawValue) {
             case .failure(let rejection): return refuse(rejection.message)
@@ -214,9 +224,39 @@ extension RemoteOperation {
         }
     }
 
+    /// restart names the pane by role, resolving a token against the row this window shows, since the server
+    /// knows only its own panes' tokens.
+    @MainActor
+    private static func restart(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        switch ControlDispatcher.restartOptions(request.args) {
+        case .failure(let rejection):
+            return refuse(rejection.message)
+        case .success(let options):
+            return session(request.target, in: store) { id in
+                guard let row = store.session(withID: id) else { return refuse("no such session") }
+                if let token = options.paneID, row.paneRole(forToken: token) == nil { return refuse("unknown pane id: \(token)") }
+                let role = options.paneID.flatMap(row.paneRole(forToken:)) ?? options.pane
+                guard let pane = role.flatMap({ ZmxPaneRole(controlName: $0.rawValue) }) else {
+                    return refuse("session.restart does not address the scratch pane")
+                }
+                return .operation(.restart(id, pane: pane, command: options.command), select: false)
+            }
+        }
+    }
+
+    /// kill keeps the local refusals: nothing about destroying a daemon falls back to what is in front of the user.
+    @MainActor
+    private static func kill(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
+        guard let target = request.target, !target.isEmpty else { return refuse("zmx.kill requires an explicit --target") }
+        guard target != "active" else { return refuse("zmx.kill needs a session id; 'active' is not accepted") }
+        guard request.args?.window != "active" else { return refuse("zmx.kill needs a window id; 'active' is not accepted") }
+        guard let raw = request.args?.pane, let pane = ZmxPaneRole(controlName: raw) else { return refuse("zmx.kill requires --pane left|right") }
+        guard request.args?.force == true else { return refuse("zmx.kill requires --force") }
+        return session(target, in: store) { .operation(.killDaemon($0, pane: pane), select: false) }
+    }
+
     private static func unsupportedField(_ cmd: Command, _ args: ControlArgs) -> String? {
         let fields: [(Bool, String)] = switch cmd {
-        case .sessionNew, .sessionCompanionNew: [(args.wait == true, "--wait")]
         case .sessionClose: [(args.undoable == true, "--undoable")]
         default: []
         }

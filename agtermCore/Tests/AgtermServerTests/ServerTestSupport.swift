@@ -82,6 +82,10 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     private var storedCursorColumns: [String: Int] = [:]
     private var storedRecords: [ZmxSessionRecord]? = []
     private var storedKillFails = false
+    private var storedConfirmedKills: [(name: String, force: Bool)] = []
+    private var storedKillOutcome = ZmxKillOutcome.killed
+    private var storedOnCreate: (@Sendable (PaneLaunch) -> Void)?
+    private var storedOnKill: (@Sendable (String) -> Void)?
 
     var launches: [PaneLaunch] { lock.withLock { storedLaunches } }
     var kills: [String] { lock.withLock { storedKills } }
@@ -110,10 +114,34 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
         get { lock.withLock { storedRecords } }
         set { lock.withLock { storedRecords = newValue } }
     }
+    var confirmedKills: [(name: String, force: Bool)] { lock.withLock { storedConfirmedKills } }
+    var killOutcome: ZmxKillOutcome {
+        get { lock.withLock { storedKillOutcome } }
+        set { lock.withLock { storedKillOutcome = newValue } }
+    }
+    var onCreate: (@Sendable (PaneLaunch) -> Void)? {
+        get { lock.withLock { storedOnCreate } }
+        set { lock.withLock { storedOnCreate = newValue } }
+    }
+    var onKill: (@Sendable (String) -> Void)? {
+        get { lock.withLock { storedOnKill } }
+        set { lock.withLock { storedOnKill = newValue } }
+    }
 
     func create(_ launch: PaneLaunch) throws {
         if let failure { throw ZmxRunnerError.failed(failure) }
         lock.withLock { storedLaunches.append(launch) }
+        onCreate?(launch)
+    }
+
+    func killConfirmed(_ name: String, force: Bool) -> ZmxKillOutcome {
+        let outcome = lock.withLock {
+            storedConfirmedKills.append((name, force))
+            if storedKillOutcome == .killed { storedRecords = storedRecords?.filter { $0.name != name } }
+            return storedKillOutcome
+        }
+        if outcome == .killed { onKill?(name) }
+        return outcome
     }
 
     func kill(_ name: String) -> Bool {
@@ -142,6 +170,38 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     }
 }
 
+final class FakeProcessTable: ProcessTable, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedTable: [ProcessRecord]? = []
+    private var storedSignals: [(signal: Int32, pids: [Int32])] = []
+    private var storedEnds: Set<Int32> = [SIGHUP, SIGKILL]
+
+    var table: [ProcessRecord]? {
+        get { lock.withLock { storedTable } }
+        set { lock.withLock { storedTable = newValue } }
+    }
+    var signals: [(signal: Int32, pids: [Int32])] { lock.withLock { storedSignals } }
+    var ends: Set<Int32> {
+        get { lock.withLock { storedEnds } }
+        set { lock.withLock { storedEnds = newValue } }
+    }
+
+    func shell(_ shell: Int32, job: Int32? = nil) {
+        var records = [ProcessRecord(pid: shell, started: 1, group: shell, foreground: job ?? shell)]
+        if let job { records.append(ProcessRecord(pid: job, started: 2, group: job, foreground: job)) }
+        table = (table ?? []) + records
+    }
+
+    func snapshot() -> [ProcessRecord]? { table }
+
+    func signal(_ signal: Int32, pids: [Int32]) {
+        lock.withLock {
+            storedSignals.append((signal, pids))
+            if storedEnds.contains(signal) { storedTable = storedTable?.filter { !pids.contains($0.pid) } }
+        }
+    }
+}
+
 @MainActor
 final class ServerHarness {
     let scratch: ServerScratch
@@ -152,6 +212,8 @@ final class ServerHarness {
     let actions: ServerActions
     let events: ServerEvents
     let jobClock: Date
+    let processes = FakeProcessTable()
+    let observer: PaneObserver
 
     init(shell: String = "/bin/zsh") throws {
         scratch = try ServerScratch()
@@ -173,6 +235,11 @@ final class ServerHarness {
         actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes,
                                 events: events, overlayJobs: OverlayJobs(now: { jobClock }))
         actions.streams.presentationHelloDeadline = 60
+        actions.processes = processes
+        actions.restartWaits = (program: .milliseconds(200), shell: .seconds(5), poll: .milliseconds(10))
+        let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })
+        self.observer = observer
+        actions.paneExited = { session, identity in observer.settleExited(session, identity: identity) }
     }
 
     deinit {

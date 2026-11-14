@@ -6,7 +6,8 @@ struct ServerCommandPolicyTests {
     @Test(arguments: [Command.tree, .version, .windowList, .eventsRead, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
                       .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
                       .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen, .sessionFlag, .sessionTint,
-                      .workspaceFlag, .workspaceTint, .sessionDuplicate])
+                      .workspaceFlag, .workspaceTint, .sessionDuplicate, .sessionRestart,
+                      .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxPrune])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }
@@ -15,7 +16,7 @@ struct ServerCommandPolicyTests {
         #expect(ServerCommandPolicy.refusal(.windowNew) == HeadlessCommandPolicy.physicalWindowRefusal(.windowNew))
     }
 
-    @Test(arguments: [Command.zmxPrune, .zmxReset, .restoreCapture, .hooksList])
+    @Test(arguments: [Command.zmxReset, .restoreCapture, .hooksList])
     func anyOtherCommandIsRefusedByName(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
     }
@@ -23,14 +24,14 @@ struct ServerCommandPolicyTests {
     private static let undecided: Set<Command> = [
         .debugAppearance, .hooksList, .hooksReload, .recentClear, .recentList, .recentOpen,
         .restoreCapture, .restoreClear, .restoreMode,
-        .sessionBackground, .sessionCollapse, .sessionCompanionConvert, .sessionCompanionDuplicate, .sessionCopy, .sessionDetach,
+        .sessionBackground, .sessionCollapse, .sessionCopy, .sessionDetach,
         .sessionExpand, .sessionFocus, .sessionGo, .sessionLead,
-        .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize, .sessionRestart,
+        .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize,
         .sessionRestore, .sessionReveal, .sessionSearch, .sessionSelect, .sessionSelectAll,
         .windowRemoteDismiss,
         .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFocus, .workspaceGo,
         .workspaceReattach, .workspaceSelect,
-        .zmxAttach, .zmxAttachGroup, .zmxKill, .zmxPrune, .zmxReset,
+        .zmxAttach, .zmxAttachGroup, .zmxReset,
     ]
 
     @Test func everyCommandIsServedWindowOnlyOrUndecided() {

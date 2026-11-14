@@ -7,6 +7,7 @@ extension ServerActions {
         .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionMove,
         .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill,
     ]
 
     public var takesOperationReceipts: Bool { true }

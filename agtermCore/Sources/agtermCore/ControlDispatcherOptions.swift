@@ -157,13 +157,14 @@ public struct ControlSessionRestartOptions: Equatable, Sendable {
 /// The pids are the daemon leaders, the pane's root shells, not the program the caller's line starts.
 public struct ControlRestartReceipt: Codable, Equatable, Sendable {
     public let paneID: String
-    public let oldPid: Int32
+    /// oldPid is nil when the pane had no shell to replace: an ended agterm-server row started again.
+    public let oldPid: Int32?
     public let newPid: Int32
     /// replayedArgv is the foreground program a restart without a command asked the new shell to run;
     /// nil when the caller supplied the line. It is what was requested, not proof the program started.
     public let replayedArgv: [String]?
 
-    public init(paneID: String, oldPid: Int32, newPid: Int32, replayedArgv: [String]? = nil) {
+    public init(paneID: String, oldPid: Int32?, newPid: Int32, replayedArgv: [String]? = nil) {
         self.paneID = paneID
         self.oldPid = oldPid
         self.newPid = newPid

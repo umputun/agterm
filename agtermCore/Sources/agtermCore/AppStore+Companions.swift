@@ -101,6 +101,17 @@ extension AppStore {
         return .success(parent)
     }
 
+    /// revertConversion regroups what `convertToCompanion` nested under `parentID` back under `targetID` and restores
+    /// the selection, so the fresh parent, now holding nobody, can be closed alone.
+    public func revertConversion(_ parentID: UUID, target targetID: UUID, selected: UUID?) {
+        for session in workspaces.flatMap(\.sessions) where session.parentID == parentID {
+            session.parentID = session.id == targetID ? nil : targetID
+        }
+        if selectedSessionID != selected { selectSession(selected) }
+        scheduleTreeChanged()
+        save()
+    }
+
     /// addPageCompanion creates a page companion showing `overlay` full size, with no shell under it; a page the
     /// slot refuses removes the row again.
     @discardableResult

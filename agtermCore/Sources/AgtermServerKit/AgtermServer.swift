@@ -37,6 +37,7 @@ public final class AgtermServer {
         observer = PaneObserver(store: store, panes: panes)
         observer.onRespawn = { [weak actions] session, daemon in actions?.streams.noteRespawn(session: session, daemon: daemon) }
         observer.onApplied = { [weak actions] in actions?.streams.catalogHub.refresh() }
+        actions.paneExited = { [weak observer] session, identity in observer?.settleExited(session, identity: identity) }
     }
 
     /// start takes the state directory, loads the catalog and the saved store and serves the control socket. A

@@ -137,11 +137,12 @@ extension WorkspaceSidebar.Coordinator {
                 companion.representedObject = node
                 companion.isEnabled = !serverBlocked
                 menu.addItem(companion)
-                if store.session(withID: node.id)?.content == .terminal, !store.isRemoteWindow {
+                if store.session(withID: node.id)?.content == .terminal {
                     let copy = NSMenuItem(title: "Duplicate as Companion", action: #selector(menuDuplicateCompanion(_:)),
                                           keyEquivalent: "")
                     copy.target = self
                     copy.representedObject = node
+                    copy.isEnabled = !serverBlocked
                     menu.addItem(copy)
                 }
                 if let session = store.session(withID: node.id), session.parentID == nil {
@@ -149,7 +150,8 @@ extension WorkspaceSidebar.Coordinator {
                                              keyEquivalent: "")
                     convert.target = self
                     convert.representedObject = node
-                    convert.isEnabled = session.remoteHost == nil
+                    // a server window's row is converted by its server; a row attached from another Mac is not
+                    convert.isEnabled = store.isRemoteWindow ? !serverBlocked : session.remoteHost == nil
                     menu.addItem(convert)
                 }
                 menu.addItem(.separator())

@@ -325,8 +325,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `initialCommand` or a restore pin: after `restart --command B` the creation line still says A. The
   receipt's `replayedArgv` is the read-back, present only on a replay; a blank `command` is an error so an
   unset shell variable cannot turn into one. Addressing is `--pane-id` or `--pane left|right`, one required; an unresolved
-  token is refused even beside `--pane`, unlike `session.restore`. Non-live, remote and scratch panes are
-  refused. It clears the pane's status, ask, HUD and pane overlay through `AppStore.clearPaneOwnedState`
+  token is refused even beside `--pane`, unlike `session.restore`. Non-live, scratch and attached-from-another-Mac panes are
+  refused; a server window's row goes to its server as `RemoteOperation.restart`. It clears the pane's status, ask, HUD and pane overlay through `AppStore.clearPaneOwnedState`
   and leaves `initialCommand` and restore pins alone. Control-native, with no menu item. It leaves the
   accept thread like `zmx.tree`, because the shell it starts calls this socket while the reply is pending.
 - Every daemon kill in `ZmxClient` hangs up the shell's FOREGROUND JOB, and nothing else. `zmx kill`
@@ -468,7 +468,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.companion.convert` is its own wire command for the same older-app reason, with a CLI too-old text of its
   own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
   slot, then the target and its companions re-pointed at it, keeping every `Session` object. `ConvertRefusal.message`
-  is the refusal text both surfaces show, and a remote row is refused, never forwarded to its origin.
+  is the refusal text both surfaces show. A row attached from another Mac is refused, never forwarded to its origin;
+  a server window's row is converted by its server (`RemoteOperation.convertCompanion`), as Duplicate as Companion is.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the

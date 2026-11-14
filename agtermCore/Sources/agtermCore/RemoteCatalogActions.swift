@@ -16,18 +16,21 @@ public struct RemoteShellOptions: Equatable, Sendable {
     public var cwd: String?
     public var command: String?
     public var tint: SidebarTint?
+    /// wait holds the pane open after its command ends, as `--wait` does.
+    public var wait: Bool
 
-    public init(name: String? = nil, cwd: String? = nil, command: String? = nil, tint: SidebarTint? = nil) {
+    public init(name: String? = nil, cwd: String? = nil, command: String? = nil, tint: SidebarTint? = nil, wait: Bool = false) {
         self.name = name
         self.cwd = cwd
         self.command = command
         self.tint = tint
+        self.wait = wait
     }
 
     /// words carry each value joined to its flag, so a value starting with `-` is never read as an option.
     var words: [String] {
         [("--name", name), ("--cwd", cwd), ("--command", command)].compactMap { flag, value in value.map { flag + "=" + $0 } }
-            + (tint?.creationWords ?? [])
+            + (tint?.creationWords ?? []) + (wait ? ["--wait"] : [])
     }
 }
 
@@ -125,6 +128,12 @@ public enum RemoteOperation: Equatable, Sendable {
     case renameWorkspace(UUID, name: String)
     case deleteWorkspace(UUID)
     case moveWorkspace(UUID, to: String)
+    /// restart replaces one pane's shell on the server with one running `command`, or the pane's program again.
+    case restart(UUID, pane: ZmxPaneRole, command: String?)
+    case duplicateCompanion(UUID)
+    case convertCompanion(UUID)
+    /// killDaemon ends one pane's daemon on the server.
+    case killDaemon(UUID, pane: ZmxPaneRole)
 
     public var label: String {
         switch self {
@@ -149,6 +158,10 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameWorkspace: "Rename Workspace"
         case .deleteWorkspace: "Delete Workspace"
         case .moveWorkspace: "Move Workspace"
+        case .restart: "Restart Pane"
+        case .duplicateCompanion: "Duplicate as Companion"
+        case .convertCompanion: "Convert to Companion"
+        case .killDaemon: "Kill Daemon"
         }
     }
 
@@ -156,7 +169,8 @@ public enum RemoteOperation: Equatable, Sendable {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
-             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id), .setFlag(let id, _), .setTint(let id, _): .session(id)
+             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
+             .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _): .session(id)
         // a batch is marked on its first row
         case .closeSessions(let ids), .moveSessions(let ids, _): ids.first.map { .session($0) }
         case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags: nil
@@ -174,7 +188,7 @@ public enum RemoteOperation: Equatable, Sendable {
     /// pinsPanes is whether the server must find the session's panes as the window saw them.
     var pinsPanes: Bool {
         switch self {
-        case .setSplit, .closeSplit, .swap: true
+        case .setSplit, .closeSplit, .swap, .restart, .killDaemon: true
         default: false
         }
     }
@@ -224,6 +238,11 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameWorkspace(let id, _): ["workspace", "rename", "--target", id.uuidString]
         case .deleteWorkspace(let id): ["workspace", "delete", "--target", id.uuidString]
         case .moveWorkspace(let id, let step): ["workspace", "move", "--target", id.uuidString, "--to", step]
+        case .restart(let id, let pane, let command):
+            ["session", "restart", "--target", id.uuidString, "--pane", pane.rawValue] + (command.map { ["--command=" + $0] } ?? [])
+        case .duplicateCompanion(let id): ["session", "duplicate", "--companion", "--target", id.uuidString]
+        case .convertCompanion(let id): ["session", "convert", "--companion", "--target", id.uuidString]
+        case .killDaemon(let id, let pane): ["zmx", "kill", "--target", id.uuidString, "--pane", pane.rawValue, "--force"]
         }
     }
 
@@ -356,10 +375,12 @@ public final class RemoteCatalogActions {
         var panes: [UUID]?
         if operation.pinsPanes, case .session(let id)? = operation.target {
             guard let session = catalog.session(id) else { return .refused(ControlResponse(ok: false, error: "no such session on \(host)")) }
-            guard !session.panes.isEmpty else {
-                return .refused(ControlResponse(ok: false, error: "the session has ended on \(host)"))
+            switch (session.panes.isEmpty, operation) {
+            // an ended row has no pane to pin, and restart is what brings its shell back
+            case (true, .restart): break
+            case (true, _): return .refused(ControlResponse(ok: false, error: "the session has ended on \(host)"))
+            case (false, _): panes = session.panes.map(\.identity)
             }
-            panes = session.panes.map(\.identity)
         }
         var scratch: String?
         if operation.replacesScratch, case .session(let id)? = operation.target {

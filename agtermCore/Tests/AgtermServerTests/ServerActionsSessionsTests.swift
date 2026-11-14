@@ -66,14 +66,25 @@ struct ServerActionsSessionsTests {
         #expect(harness.runner.launches.isEmpty)
     }
 
-    @Test func waitIsRefused() {
+    @Test func waitHoldsThePaneAfterItsCommand() throws {
         let reply = harness.actions.createSession(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil,
                                                                               workspaceName: nil, createWorkspace: nil,
                                                                               command: "make", wait: true, name: nil, after: nil,
                                                                               before: nil, noSelect: false))
 
-        #expect(!reply.ok)
-        #expect(harness.runner.launches.isEmpty)
+        let session = try harness.session(reply)
+        #expect(session.commandWait)
+        #expect(harness.runner.launches.last?.argv == ["/bin/zsh", "-lic", ZmxReplayScript.renderHolding(commandLine: "make")])
+    }
+
+    @Test func aCompanionWithWaitHoldsItsPaneToo() async throws {
+        let parent = try harness.session(newSession())
+
+        let reply = await harness.actions.createCompanion(parent.id.uuidString, options: CompanionOptions(command: "top", wait: true),
+                                                          window: nil)
+
+        #expect(reply.ok)
+        #expect(harness.runner.launches.last?.argv.last == ZmxReplayScript.renderHolding(commandLine: "top"))
     }
 
     @Test func aStaleExitRecordIsRemovedBeforeThePaneStarts() throws {

@@ -289,4 +289,49 @@ struct PaneObserverTests {
         #expect(ProcForeground.parseCmdline(Data("sh\u{0}\u{0}x\u{0}".utf8)) == ["sh", "", "x"])
         #expect(ProcForeground.parseCmdline(Data()) == nil)
     }
+
+    @Test func aKilledStandalonePaneClosesItsSession() throws {
+        let session = try session()
+
+        observer.settleExited(session, identity: session.paneIdentity)
+
+        #expect(harness.store.session(withID: session.id) == nil)
+        #expect(!FileManager.default.fileExists(atPath: harness.panes.exitRecord(session.paneIdentity)))
+    }
+
+    @Test func aKilledParentWithACompanionRespawns() async throws {
+        let parent = try session()
+        let reply = await harness.actions.createCompanion(parent.id.uuidString, options: CompanionOptions(), window: nil)
+        let companion = try harness.session(reply)
+        let launches = harness.runner.launches.count
+
+        observer.settleExited(parent, identity: parent.paneIdentity)
+
+        #expect(harness.store.session(withID: parent.id) === parent)
+        #expect(!parent.ended)
+        #expect(harness.runner.launches.count == launches + 1)
+        #expect(harness.runner.launches.last?.name == ZmxSupport.daemonName(for: parent.paneIdentity))
+        #expect(harness.store.session(withID: companion.id)?.parentID == parent.id)
+    }
+
+    @Test func aKilledCompanionCloses() async throws {
+        let parent = try session()
+        let companion = try harness.session(await harness.actions.createCompanion(parent.id.uuidString, options: CompanionOptions(),
+                                                                                  window: nil))
+
+        observer.settleExited(companion, identity: companion.paneIdentity)
+
+        #expect(harness.store.session(withID: companion.id) == nil)
+        #expect(harness.store.session(withID: parent.id) === parent)
+    }
+
+    @Test func aPaneBeingRestartedIsNotSettledByAListingWithoutIt() throws {
+        let session = try session()
+        harness.panes.restarting.insert(session.paneIdentity)
+
+        observer.apply([], listedAt: later)
+
+        #expect(!session.ended)
+        #expect(session.daemonBackedPanes.contains(session.paneIdentity))
+    }
 }

@@ -18,7 +18,7 @@ struct ServerShellTests {
 
     @Test func zshLoadsTheIntegrationAndKeepsTheUsersDirectory() {
         let launch = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: ["ZDOTDIR": "/home/u/.zsh"],
-                                                        command: nil)
+                                                        program: .loginShell)
 
         #expect(launch.argv.isEmpty)
         #expect(launch.environment["ZDOTDIR"] == integration + "/zsh")
@@ -27,7 +27,7 @@ struct ServerShellTests {
     }
 
     @Test func fishFindsTheIntegrationAheadOfTheDataDirectories() {
-        let launch = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], command: nil)
+        let launch = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], program: .loginShell)
 
         #expect(launch.argv.isEmpty)
         #expect(launch.environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] == integration)
@@ -36,7 +36,7 @@ struct ServerShellTests {
 
     @Test func bashStartsInPosixModeWithTheIntegrationAsItsEnv() {
         let launch = ServerShell.bash("/bin/bash").launch(integration: integration,
-                                                          environment: ["HOME": "/home/u", "ENV": "/home/u/.env"], command: nil)
+                                                          environment: ["HOME": "/home/u", "ENV": "/home/u/.env"], program: .loginShell)
 
         #expect(launch.argv == ["/bin/bash", "--posix", "-l"])
         #expect(launch.environment["ENV"] == integration + "/bash/ghostty.bash")
@@ -47,14 +47,43 @@ struct ServerShellTests {
     }
 
     @Test func aCommandRunsOnceThroughTheLoginShell() {
-        let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: [:], command: "make test")
-        let fish = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], command: "make test")
-        let bash = ServerShell.bash("/bin/bash").launch(integration: integration, environment: [:], command: "make test")
+        let program = ServerShell.Program.command("make test", wait: false)
+        let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: [:], program: program)
+        let fish = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], program: program)
+        let bash = ServerShell.bash("/bin/bash").launch(integration: integration, environment: [:], program: program)
 
         #expect(zsh.argv == ["/bin/zsh", "-lic", ZmxReplayScript.renderEnding(commandLine: "make test")])
         #expect(fish.argv == ["/usr/bin/fish", "-lic", ZmxReplayScript.renderFishEnding(commandLine: "make test")])
         #expect(bash.argv == ["/bin/bash", "--posix", "-lic", ZmxReplayScript.renderEnding(commandLine: "make test")])
         #expect(bash.environment["ENV"] == integration + "/bash/ghostty.bash")
         #expect(bash.environment["GHOSTTY_BASH_INJECT"] == "1")
+    }
+
+    @Test func aWaitedCommandHoldsThePaneInEachShell() {
+        let program = ServerShell.Program.command("make test", wait: true)
+        let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: [:], program: program)
+        let fish = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], program: program)
+        let bash = ServerShell.bash("/bin/bash").launch(integration: integration, environment: [:], program: program)
+
+        #expect(zsh.argv == ["/bin/zsh", "-lic", ZmxReplayScript.renderHolding(commandLine: "make test")])
+        #expect(fish.argv == ["/usr/bin/fish", "-lic", ZmxReplayScript.renderFishHolding(commandLine: "make test", shell: "/usr/bin/fish")])
+        #expect(bash.argv == ["/bin/bash", "--posix", "-lic", ZmxReplayScript.renderBashHolding(commandLine: "make test")])
+    }
+
+    @Test func aReplayRunsTheProgramThenTheIntegratedLoginShell() {
+        let argv = ["vim", "notes.md"]
+        let zsh = ServerShell.zsh("/bin/zsh").launch(integration: integration, environment: ["ZDOTDIR": "/home/u/.zsh"],
+                                                     program: .replay(argv))
+        let fish = ServerShell.fish("/usr/bin/fish").launch(integration: integration, environment: [:], program: .replay(argv))
+        let bash = ServerShell.bash("/bin/bash").launch(integration: integration, environment: ["HOME": "/home/u", "ENV": "/home/u/.env"],
+                                                        program: .replay(argv))
+
+        #expect(zsh.argv == ["/bin/zsh", "-lic", ZmxReplayScript.render(argv: argv, integrationDirectory: integration + "/zsh",
+                                                                        inheritedZdotdir: "/home/u/.zsh", shell: "/bin/zsh")])
+        #expect(fish.argv == ["/usr/bin/fish", "-lic", ZmxReplayScript.renderFish(argv: argv, integrationRoot: integration,
+                                                                                   shell: "/usr/bin/fish")])
+        let exports = [("ENV", integration + "/bash/ghostty.bash"), ("GHOSTTY_BASH_INJECT", "1"), ("GHOSTTY_BASH_ENV", "/home/u/.env"),
+                       ("HISTFILE", "/home/u/.bash_history"), ("GHOSTTY_BASH_UNEXPORT_HISTFILE", "1")]
+        #expect(bash.argv == ["/bin/bash", "--posix", "-lic", ZmxReplayScript.renderBash(argv: argv, exports: exports, shell: "/bin/bash")])
     }
 }

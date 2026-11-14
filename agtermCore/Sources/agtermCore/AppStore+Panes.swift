@@ -407,6 +407,14 @@ extension AppStore {
         save()
     }
 
+    /// resumeEndedSession returns an ended headless session to the live rows once its primary pane runs again.
+    public func resumeEndedSession(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID), session.ended else { return }
+        session.ended = false
+        scheduleTreeChanged()
+        save()
+    }
+
     /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane
     /// split is live, BOTH `surface` and `splitSurface` set. Otherwise this was the session's last pane —
     /// promoted into the primary slot (`splitSurface == nil`) while keeping the split pane's `onExit`, so its

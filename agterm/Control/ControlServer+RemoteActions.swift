@@ -10,9 +10,7 @@ enum RemoteRoute: Sendable {
 
 extension ControlServer {
     /// localOnlyCommands make shells or rows on this Mac, which a remote window shows only from its server.
-    static let localOnlyCommands: Set<Command> = [
-        .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxAttach, .zmxAttachGroup, .recentOpen,
-    ]
+    static let localOnlyCommands: Set<Command> = [.zmxAttach, .zmxAttachGroup, .recentOpen]
 
     /// remoteRoute reads `request` once, on the main actor, before it is dispatched: nil runs it here as usual; a
     /// route sends it to the server off the accept thread, with what it was decided on captured now.

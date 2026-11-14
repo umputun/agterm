@@ -272,6 +272,7 @@ struct Zmx: ParsableCommand {
         var window: String?
 
         @OptionGroup var options: BasicOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard ZmxPaneRole(controlName: pane) != nil else {
@@ -287,8 +288,8 @@ struct Zmx: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .zmxKill, target: target,
-                           args: ControlArgs(force: true, window: window, pane: pane))
+            operation.stamp(ControlRequest(cmd: .zmxKill, target: target,
+                                           args: ControlArgs(force: true, window: window, pane: pane)))
         }
     }
 }

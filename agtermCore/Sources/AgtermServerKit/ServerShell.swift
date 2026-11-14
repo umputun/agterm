@@ -28,23 +28,57 @@ public enum ServerShell: Equatable, Sendable {
         }
     }
 
-    /// launch is the program and environment for a pane. With no `command` the pane is the login shell, which
-    /// zmx starts from `SHELL` for zsh and fish; bash needs its flags. A `command` runs through the login shell
-    /// once and the pane ends with it, as `session.new --command` does on the Mac.
+    /// Program is what a pane runs.
+    public enum Program: Equatable, Sendable {
+        /// loginShell is the integrated login shell.
+        case loginShell
+        /// command runs a line once through the login shell and the pane ends with it, as `session.new --command`
+        /// does on the Mac; `wait` holds the pane for a key after it, whatever way the line ended.
+        case command(String, wait: Bool)
+        /// replay runs a program again, then the pane becomes the integrated login shell.
+        case replay([String])
+
+        /// creation is what a creation request's optional command and wait flag run.
+        static func creation(_ command: String?, wait: Bool?) -> Program {
+            command.map { .command($0, wait: wait == true) } ?? .loginShell
+        }
+    }
+
+    /// bashExports are the variables ghostty.bash consumes when it loads, which a replay exports again before it
+    /// execs the login shell.
+    static let bashExports = ["ENV", "GHOSTTY_BASH_INJECT", "GHOSTTY_BASH_ENV", "HISTFILE", "GHOSTTY_BASH_UNEXPORT_HISTFILE"]
+
+    /// launch is the argv and environment for a pane. zmx starts the zsh and fish login shell from `SHELL`; bash
+    /// needs its flags.
     public func launch(integration: String, environment base: [String: String],
-                       command: String?) -> (argv: [String], environment: [String: String]) {
+                       program: Program) -> (argv: [String], environment: [String: String]) {
         var environment = base
         environment["SHELL"] = path
         switch self {
         case .zsh:
             if let user = base["ZDOTDIR"] { environment["GHOSTTY_ZSH_ZDOTDIR"] = user }
-            environment["ZDOTDIR"] = (integration as NSString).appendingPathComponent("zsh")
-            return (command.map { [path, "-lic", ZmxReplayScript.renderEnding(commandLine: $0)] } ?? [], environment)
+            let directory = (integration as NSString).appendingPathComponent("zsh")
+            environment["ZDOTDIR"] = directory
+            let script: String? = switch program {
+            case .loginShell: nil
+            case .command(let line, wait: true): ZmxReplayScript.renderHolding(commandLine: line)
+            case .command(let line, wait: false): ZmxReplayScript.renderEnding(commandLine: line)
+            case .replay(let argv):
+                ZmxReplayScript.render(argv: argv, integrationDirectory: directory, inheritedZdotdir: base["ZDOTDIR"],
+                                       shell: path)
+            }
+            return (script.map { [path, "-lic", $0] } ?? [], environment)
         case .fish:
             environment["GHOSTTY_SHELL_INTEGRATION_XDG_DIR"] = integration
             let inherited = base["XDG_DATA_DIRS"].flatMap { $0.isEmpty ? nil : $0 } ?? "/usr/local/share:/usr/share"
             environment["XDG_DATA_DIRS"] = integration + ":" + inherited
-            return (command.map { [path, "-lic", ZmxReplayScript.renderFishEnding(commandLine: $0)] } ?? [], environment)
+            let script: String? = switch program {
+            case .loginShell: nil
+            case .command(let line, wait: true): ZmxReplayScript.renderFishHolding(commandLine: line, shell: path)
+            case .command(let line, wait: false): ZmxReplayScript.renderFishEnding(commandLine: line)
+            case .replay(let argv): ZmxReplayScript.renderFish(argv: argv, integrationRoot: integration, shell: path)
+            }
+            return (script.map { [path, "-lic", $0] } ?? [], environment)
         case .bash:
             // ghostty.bash leaves POSIX mode, restores the user's ENV and sources the login files itself
             if let user = base["ENV"] { environment["GHOSTTY_BASH_ENV"] = user }
@@ -54,8 +88,16 @@ public enum ServerShell: Equatable, Sendable {
                 environment["HISTFILE"] = (home as NSString).appendingPathComponent(".bash_history")
                 environment["GHOSTTY_BASH_UNEXPORT_HISTFILE"] = "1"
             }
-            let script = command.map { ["-lic", ZmxReplayScript.renderEnding(commandLine: $0)] } ?? ["-l"]
-            return ([path, "--posix"] + script, environment)
+            let script: String? = switch program {
+            case .loginShell: nil
+            case .command(let line, wait: true): ZmxReplayScript.renderBashHolding(commandLine: line)
+            case .command(let line, wait: false): ZmxReplayScript.renderEnding(commandLine: line)
+            case .replay(let argv):
+                ZmxReplayScript.renderBash(argv: argv, exports: Self.bashExports.compactMap { name in
+                    environment[name].map { (name, $0) }
+                }, shell: path)
+            }
+            return ([path, "--posix"] + (script.map { ["-lic", $0] } ?? ["-l"]), environment)
         }
     }
 }
