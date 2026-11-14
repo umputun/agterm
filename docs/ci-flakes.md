@@ -123,6 +123,15 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   also waiting for the main actor, cleared the line.
 - **Fix.** The test awaits the armed expiry task itself (`infoAutoHide[id]?.task.value`) instead of the clock.
 
+### `RemoteCatalogActionsTests.anUndoIDLeavesByItselfWhenItsGraceEnds`
+
+- **Symptom.** `(actions.undoIDs → ["u1"]).isEmpty → false` at line 180 after 60 s, macOS only.
+- **Runs.** Job 132573096708, PR #999.
+- **Cause, inferred from CI timing, not reproduced locally.** The same main-actor saturation as the entry above
+  outran a 30 s wall-clock poll before the 0.05 s grace task in `noteUndo` removed the id.
+- **Fix.** The poll is bounded by 3000 attempts of 10 ms instead of a deadline, so a long stall spends wall time
+  but not attempts; `noteUndo` keeps no task handle to await.
+
 ### `SshConnectionPoolTests` cases waiting in `held()` on Linux
 
 - **Symptom.** `Expectation failed: await held()` in `callersArrivingDuringAStartShareIt`,

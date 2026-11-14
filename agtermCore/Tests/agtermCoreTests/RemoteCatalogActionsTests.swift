@@ -175,8 +175,11 @@ final class RemoteCatalogActionsTests {
         _ = await send(.closeSession(sessionID, undoable: true))
         #expect(actions.undoIDs == ["u1"])
 
-        let deadline = Date().addingTimeInterval(30)
-        while !actions.undoIDs.isEmpty, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        var turns = 0
+        while !actions.undoIDs.isEmpty, turns < 3000 {
+            turns += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(actions.undoIDs.isEmpty)
         #expect(actions.takeUndo() == nil)
     }
