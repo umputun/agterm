@@ -182,6 +182,14 @@ paths:
   Do not use SwiftUI mask/clipping because it reflows and loses the terminal's top row; do not use an
   opaque cover because it breaks translucency. Key each `HSplitView`/`VSplitView` identity by session and
   keep the terminal surface identities stable when changing axis.
+- That full-height compact split's pane hosts consume the native top inset, which a hidden deck entry
+  reads as 1pt against 32pt shown: its opacity-0 wrapper sits at the deck top. Every switch therefore
+  resized both panes by about 2 rows and showed a stale frame under the titlebar. `DeckPaneInset` lays
+  every pane out from `terminalDeckTop` instead, and the probe's top/bottom inset uses the same value.
+  A zero deck top (hidden toolbar) has no offset wrapper, so both keep the native inset there.
+  SwiftUI still moves a hidden top/bottom divider when the native inset flips, so that change stays a
+  re-arm trigger and leaves a one-frame divider jump on show. Moving the content below the band
+  removed every resize but made the compact toolbar look taller, which was rejected.
 - Sidebar icon follows `hasSplit` and `splitAxis`. The titlebar has seven accessibility states: `none`,
   `both`, `left`, and `right` for the left/right symbols, plus `both-horizontal`, `top`, and `bottom` for
   the top/bottom symbols. A shown split fills both halves; a hidden split fills the visible primary or

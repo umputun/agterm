@@ -249,32 +249,34 @@ extension WindowContentView {
         // nothing (`SessionTests.lazy creation must not force a second mount`). The split slot has no such
         // revision, so its id needs the token to change when the occupants exchange.
         let hostPrefix = pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split"
-        ZStack {
-            // a page companion has no terminal: its full page panel paints over this empty slot
-            if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
-                TerminalView(session: session, surfaceKeyPath: slot,
-                             makeSurface: pane == .left ? makeSurface : makeSplitSurface,
-                             isActive: gates.focusable && focused && !gates.overlaid && !covered,
-                             deckVisible: gates.visible && !covered,
-                             onScreen: gates.onScreen && !covered)
-                    .overlay { paneDim(!focused, session: session,
-                                       color: washColor(hex: session.washColorHex(for: pane == .left ? .left : .right))) }
-                    .modifier(PaneOverlayCover(covered: covered))
-                    .id(pane == .left ? hostPrefix
-                        : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
-            } else {
-                Color.clear
-                    .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
+        DeckPaneInset {
+            ZStack {
+                // a page companion has no terminal: its full page panel paints over this empty slot
+                if session.content == .terminal, deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
+                    TerminalView(session: session, surfaceKeyPath: slot,
+                                 makeSurface: pane == .left ? makeSurface : makeSplitSurface,
+                                 isActive: gates.focusable && focused && !gates.overlaid && !covered,
+                                 deckVisible: gates.visible && !covered,
+                                 onScreen: gates.onScreen && !covered)
+                        .overlay { paneDim(!focused, session: session,
+                                           color: washColor(hex: session.washColorHex(for: pane == .left ? .left : .right))) }
+                        .modifier(PaneOverlayCover(covered: covered))
+                        .id(pane == .left ? hostPrefix
+                            : "\(hostPrefix)-\(PaneHostIdentity.token(for: pane.paneZoomSurface, in: session))")
+                } else {
+                    Color.clear
+                        .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
+                }
+                PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText,
+                              hidden: covered)
+                paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
             }
-            PaneLeadCover(session: session, pane: pane, background: terminalColor, foreground: chromeText,
-                          hidden: covered)
-            paneOverlayPanel(session: session, pane: pane, focused: focused, gates: gates)
-        }
-        .hudPaneAnchor(pane)
-        .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in
-            publishesAskAnchor
-                ? AskAnchorPreferences(sessionID: session.id, panes: [pane: anchor])
-                : AskAnchorPreferences()
+            .hudPaneAnchor(pane)
+            .anchorPreference(key: AskAnchorPreferenceKey.self, value: .bounds) { anchor in
+                publishesAskAnchor
+                    ? AskAnchorPreferences(sessionID: session.id, panes: [pane: anchor])
+                    : AskAnchorPreferences()
+            }
         }
     }
 

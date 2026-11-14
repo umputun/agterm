@@ -52,6 +52,64 @@ final class TerminalDeckTests: XCTestCase {
         XCTAssertEqual(placeholder?.convert(placeholder?.bounds ?? .zero, to: host),
                        CGRect(x: 250, y: 185, width: 100, height: 30))
     }
+
+    func testPublishesItsTopEdgeToTheDeck() {
+        let recorder = DeckTopRecorder()
+        let host = NSHostingView(rootView: VStack(spacing: 0) {
+            Color.clear.frame(height: 50)
+            TerminalDeck { DeckTopReader(recorder: recorder) }
+        })
+        host.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
+        host.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(recorder.deckTop, 50)
+    }
+
+    func testAPaneAboveTheDeckTopIsLaidOutBelowIt() {
+        let recorder = DeckRecorder()
+        let host = NSHostingView(rootView: DeckPaneInset { DeckProbe(index: 0, recorder: recorder) }
+            .environment(\.terminalDeckTop, 50))
+        host.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
+        host.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(topEdge(of: recorder.views[0], in: host), 50)
+        XCTAssertEqual(recorder.views[0]?.frame.height, 350)
+    }
+
+    func testAPaneAlreadyBelowTheDeckTopKeepsItsFrame() {
+        let recorder = DeckRecorder()
+        let host = NSHostingView(rootView: VStack(spacing: 0) {
+            Color.clear.frame(height: 50)
+            DeckPaneInset { DeckProbe(index: 0, recorder: recorder) }
+        }
+        .environment(\.terminalDeckTop, 20))
+        host.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
+        host.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(topEdge(of: recorder.views[0], in: host), 50)
+        XCTAssertEqual(recorder.views[0]?.frame.height, 350)
+    }
+
+    private func topEdge(of view: NSView?, in host: NSView) -> CGFloat? {
+        guard let view else { return nil }
+        let rect = view.convert(view.bounds, to: host)
+        return host.isFlipped ? rect.minY : host.bounds.height - rect.maxY
+    }
+}
+
+@MainActor
+private final class DeckTopRecorder {
+    var deckTop: CGFloat?
+}
+
+private struct DeckTopReader: NSViewRepresentable {
+    let recorder: DeckTopRecorder
+
+    func makeNSView(context _: Context) -> NSView { NSView() }
+
+    func updateNSView(_: NSView, context: Context) {
+        recorder.deckTop = context.environment.terminalDeckTop
+    }
 }
 
 @MainActor
