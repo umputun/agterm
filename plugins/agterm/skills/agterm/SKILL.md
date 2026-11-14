@@ -9,9 +9,9 @@ description: >
   into or restart a pane by id, copy its selection, set the clipboard, search its scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
-  pane, tree and launch events; wait on agent status, on this Mac or an agterm-server host.
+  pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, session links, AGTERM_* variables,
-  attaching another Mac's sessions, agterm-server windows, cookbook recipes, version and upgrades, diagnosing
+  attaching another Mac's sessions, agterm-server hosts, cookbook recipes, version and upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
