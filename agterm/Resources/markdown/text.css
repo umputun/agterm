@@ -25,7 +25,7 @@ body { padding-top: 35px; }
 .agterm-logbar > span { flex: 0 2 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .agterm-logbar > span:empty { display: none; }
 /* the full paused label, Wrap and the search box's floor need about 460px */
-@media (max-width: 480px) { .agterm-prefix { display: none; } }
+@media (max-width: 480px) { .agterm-prefix, .agterm-changes span { display: none; } }
 .agterm-bar button { flex: none; }
 .agterm-logbar button, .agterm-wrap {
   font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
@@ -80,14 +80,15 @@ body { padding-top: 35px; }
 }
 .agterm-changes svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .agterm-changes span { margin-left: 4px; }
-/* the one bar control that shrinks: its path gives way first, cut at the left so the file name stays */
+/* shrinks faster than the search box, cutting its path at the left so the file name stays; place and chevron always show */
 .agterm-bar .agterm-files {
-  flex: 0 1 auto; min-width: 7em; display: flex; gap: 6px; align-items: center; font: inherit; color: var(--fg);
+  flex: 0 2 auto; display: grid; grid-template-columns: minmax(0, max-content) auto auto; gap: 6px; align-items: center;
+  font: inherit; color: var(--fg);
   background: var(--tint); border: 1px solid var(--rule); border-radius: 4px; padding: 0 6px 0 8px; cursor: pointer;
 }
-.agterm-file-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
-.agterm-file-place { flex: none; color: var(--muted); }
-.agterm-files svg { flex: none; width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.agterm-file-path { overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.agterm-file-place { color: var(--muted); }
+.agterm-files svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .agterm-files-menu {
   position: fixed; top: 38px; z-index: 2; width: min(560px, calc(100vw - 12px)); max-height: 60vh; display: flex;
   flex-direction: column; box-sizing: border-box; padding: 6px; border-radius: 8px;

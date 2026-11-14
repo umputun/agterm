@@ -1756,6 +1756,45 @@ extension TextPageRenderingTests {
         try await waitForScript(Self.headerGap(6), in: page.webView) { $0 == "0" }
     }
 
+    func testTheFileButtonLeavesTheSearchControlsOnANarrowPage() async throws {
+        let long = "agtermCore/Sources/agtermCore/ControlProjection+Text.swift"
+        let text = (Self.section(long, lines: 30, changes: [2]) + Self.section("site/commands.html", lines: 30, changes: [4]))
+            .joined(separator: "\n") + "\n"
+        let (page, window) = try shown(try openText("a.diff", text))
+        defer { window.orderOut(nil) }
+        window.setContentSize(NSSize(width: 440, height: 300))
+        page.webView.frame = try XCTUnwrap(window.contentView).bounds
+        try await waitForScript("document.documentElement.clientWidth", in: page.webView) { $0 == "440" }
+        try await waitForScript(Self.fileButton, in: page.webView) { $0 == "\(long) 1/2" }
+        let fits = """
+            (() => {
+              const width = document.documentElement.clientWidth;
+              const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+              const button = box('.agterm-files'), place = box('.agterm-file-place'), chevron = box('.agterm-files svg');
+              const controls = [...document.querySelectorAll('.agterm-search input, .agterm-search button')].map(e => e.getBoundingClientRect().right);
+              return [place.width > 0, place.right <= button.right, chevron.right <= button.right,
+                      button.right <= box('.agterm-search').left, Math.max(...controls) <= width].join('|');
+            })()
+            """
+
+        let opened = try await page.webView.evaluateJavaScript(fits) as? String
+        try await press("]", page.webView)
+        try await waitForScript(Self.changesLabel, in: page.webView) { $0 == "change 1 of 2" }
+        let stepped = try await page.webView.evaluateJavaScript(fits) as? String
+        window.setContentSize(NSSize(width: 1200, height: 300))
+        page.webView.frame = try XCTUnwrap(window.contentView).bounds
+        try await waitForScript("document.documentElement.clientWidth", in: page.webView) { $0 == "1200" }
+        let wide = try await page.webView.evaluateJavaScript("""
+            (() => {
+              const path = document.querySelector('.agterm-file-path'), label = document.querySelector('.agterm-changes span');
+              return [path.clientWidth > 0 && path.clientWidth >= path.scrollWidth, label.offsetWidth > 0].join('|');
+            })()
+            """) as? String
+
+        XCTAssertEqual([opened, stepped], Array(repeating: "true|true|true|true|true", count: 2))
+        XCTAssertEqual(wide, "true|true")
+    }
+
     func testADiffBandCoversEveryRowOfAWrappedLine() async throws {
         let diff = "--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,2 @@\n context\n-old\n+\(Self.longLine)\n"
         let (page, window) = try shown(try openText("a.diff", diff))

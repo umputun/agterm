@@ -209,6 +209,12 @@ struct TextPageTests {
         #expect(TextPage.diffSections(in: text) == [DiffSection(path: "b/x", line: 0), DiffSection(path: "y", line: 6)])
     }
 
+    @Test func anUnrenamedPathHoldingASpacedBPrefixKeepsItsWholeName() {
+        let text = "diff --git a/docs b/run.sh b/docs b/run.sh\nold mode 100644\nnew mode 100755\n"
+            + "diff --git a/x b/y.bin b/x b/y.bin\nBinary files a/x b/y.bin and b/x b/y.bin differ\n"
+        #expect(TextPage.diffSections(in: text) == [DiffSection(path: "docs b/run.sh", line: 0), DiffSection(path: "x b/y.bin", line: 3)])
+    }
+
     @Test func aRenameWithOnlyItsDestinationQuotedIsUnquoted() {
         let text = "diff --git a/old.txt \"b/caf\\303\\251.txt\"\nsimilarity index 100%\nrename from old.txt\nrename to \"caf\\303\\251.txt\"\n"
         #expect(TextPage.diffSections(in: text) == [DiffSection(path: "café.txt", line: 0)])

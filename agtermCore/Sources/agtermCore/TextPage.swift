@@ -131,7 +131,7 @@ public enum TextPage {
     }
 
     /// gitPaths splits a `diff --git` row's two paths, each quoted or not on its own. Unquoted paths may hold spaces, so
-    /// an even split of two equal halves wins, then the last ` b/`, then the first space.
+    /// an even split whose halves name the same file, `a/` and `b/` aside, wins, then the last ` b/`, then the first space.
     private static func gitPaths(_ rest: String) -> (String, String) {
         if rest.hasPrefix("\"") {
             let first = unquoted(rest)
@@ -142,10 +142,10 @@ public enum TextPage {
             return (String(rest[..<quote.lowerBound]), unquoted(String(rest[rest.index(after: quote.lowerBound)...])).value)
         }
         let chars = Array(rest)
-        if chars.count % 2 == 1, chars[chars.count / 2] == " ",
-           chars[..<(chars.count / 2)] == chars[(chars.count / 2 + 1)...] {
-            let half = String(chars[..<(chars.count / 2)])
-            return (half, half)
+        if chars.count % 2 == 1, chars[chars.count / 2] == " " {
+            let from = String(chars[..<(chars.count / 2)]), to = String(chars[(chars.count / 2 + 1)...])
+            let prefixed = from.hasPrefix("a/") && to.hasPrefix("b/")
+            if from == to || (prefixed && from.dropFirst(2) == to.dropFirst(2)) { return (from, to) }
         }
         if rest.hasPrefix("a/"), let split = rest.range(of: " b/", options: .backwards) {
             return (String(rest[..<split.lowerBound]), String(rest[rest.index(after: split.lowerBound)...]))

@@ -861,8 +861,8 @@ agtermctl session overlay follow off --target "$AGTERM_SESSION_ID"   # pause; on
 ⌘-click on a `.log` or `.out` path opens the same following page; `app.log:120` still opens the plain page at that
 line. The user pauses by scrolling up and resumes at the bottom or with Resume. Read back `text.tail`, `following`,
 `lines`, `clipped`, `waiting` (file missing) and `unreadable`. On a session another Mac presents, the log page and
-`follow`, `search`, `wrap` and `changes` work on that Mac when its agterm shows live text pages; an older one refuses
-them.
+`follow`, `search`, `wrap`, `changes` and `files` work on that Mac when its agterm shows live text pages, `files` only when
+it also navigates files (`page.files`); an older one refuses them.
 
 Search a text or log page, not the terminal under it:
 

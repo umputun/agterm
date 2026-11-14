@@ -1578,8 +1578,8 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   `zmx present`, `run-job`, `page-serve` and `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
   session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held until a Mac
   presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an ask or pick ends
-  unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap` and `changes` are
-  served; a text action on a page held for no Mac answers `the viewer showing this overlay is gone`. `version` adds
+  unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap`, `changes` and `files`
+  are served; a text action on a page held for no Mac answers `the viewer showing this overlay is gone`. `version` adds
   `headless: true` and `versions`.
 - Page rows on agterm-server: `session overlay open --page|--companion --html FILE|--url URL` makes a page session
   or page companion there, FILE a path on the host; a loopback `--url` is refused (`a page on agterm-server's
@@ -2547,13 +2547,13 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   is sized for that Mac's screen. Its `htmlOverlays` lists `image`, `markdown`, `document` or `text` with `replica: true`.
   A presenting Mac too old for these pages keeps the refusal (`a viewer presents this session`).
 - A presenting Mac whose agterm shows live text pages (its hello lists `page.text`) also shows log pages
-  (`--tail`, `--follow-file`, a clicked `.log` or `.out`). On the origin, `session overlay follow`, `search`, `wrap`
-  and `changes` aimed at such a page run on that Mac and answer with its result, the replies a local page gives, or
-  `presenter did not answer` after 5 seconds. The page's own bar works there, the same commands run there against
-  its copy, and its following, search, wrap and changes read back in the origin's `htmlOverlays[].text`. An older
+  (`--tail`, `--follow-file`, a clicked `.log` or `.out`). On the origin, `session overlay follow`, `search`, `wrap`,
+  `changes` and `files` (the last only on a Mac that also lists `page.files`) aimed at such a page run on that Mac
+  and answer with its result, the replies a local page gives, or `presenter did not answer` after 5 seconds. The page's own bar works there, the same commands run there against
+  its copy, and its following, search, wrap, changes and file read back in the origin's `htmlOverlays[].text`. An older
   presenting Mac refuses a log page (`session.overlay.open: the Mac presenting this session cannot show a log
   page`), opens a clicked log as the plain text page, and `search`, `changes` and `wrap` answer `remote page:
-  ... on the Mac that shows it`.
+  ... on the Mac that shows it`, as `files` does from any Mac without `page.files`.
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
   and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
 - While the stream is not up the row's indicator says so and names the host. It retries on its own, at

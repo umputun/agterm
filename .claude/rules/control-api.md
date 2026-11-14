@@ -2200,7 +2200,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one ignores `textLog` and shows the log static, and a text action it cannot decode ends the whole stream.
   The open request carries `textLog`, the claim serves the log's end over the page channel, and the presenter's
   `TextPageBridge` follows it there.
-  On the origin `follow`, `search`, `wrap` and `changes` aimed at such a slot go out as `pageCommand`s with a sequence
+  On the origin `follow`, `search`, `wrap`, `changes` and `files` aimed at such a slot go out as `pageCommand`s with a sequence
   number (`AppStore.remoteTextAction`) and wait at most `PresentationPageResult.deadline` for the matching
   `pageResult`, which answers with the presenter's reply and its text state; no result is `presenter did not answer`,
   and a page that ends or is withdrawn meanwhile answers `the viewer showing this overlay is gone`.
@@ -2209,7 +2209,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Every text-state change on a replica, its bar's included, rides `pageState.text` and is mirrored into the origin's
   record; a re-offer seeds the new replica with following, query and wrap (`textSeed`), never a step.
   An older presenter gets `OverlayHtmlError.logRemote` for a log page, the plain page for a clicked log, and the
-  store's `remote page` refusals for search, changes and wrap.
+  store's `remote page` refusals for search, changes and wrap, and for files when it also lacks `page.files`.
   A headless origin answers a text action on a page held for no presenter `the viewer showing this overlay is gone`.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,
