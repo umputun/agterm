@@ -46,6 +46,8 @@ extension CatalogSnapshot {
             }
         case .paneRemoved(let identity, let session):
             updateSession(session) { $0.panes.removeAll { $0.identity == identity } }
+        case .recentChanged(let items):
+            recent = items
         }
     }
 
@@ -103,6 +105,7 @@ extension CatalogSnapshot {
             emit(.workspaceRemoved(workspace.id))
         }
         if state.workspaces.map(\.id) != next.workspaces.map(\.id) { emit(.workspaceOrder(next.workspaces.map(\.id))) }
+        if let recent = next.recent, recent != state.recent { emit(.recentChanged(recent)) }
         return list
     }
 

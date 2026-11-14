@@ -45,6 +45,10 @@ public final class WindowLibrary {
     /// unless another one still holds the session, live or pending its close, in which case it restores
     /// there. Independent of window reopen semantics.
     public private(set) var recentClosedItems: [RecentClosedItem]
+    /// remoteRecentClosedItems are the closed rows attached here from another host, newest first.
+    public private(set) var remoteRecentClosedItems: [RemoteRecentClosedItem]
+    /// attachedUndos are each window's undoable terminates of attached rows, oldest first, while their grace lasts.
+    public internal(set) var attachedUndos: [UUID: [AttachedUndo]] = [:]
 
     /// The id of the frontmost on-screen window, mirrored into the index on change. Outlives the window
     /// only when it was the last one closed, so the index records which window the user exited from.
@@ -138,6 +142,7 @@ public final class WindowLibrary {
         self.stores = [:]
         self.windows = []
         self.recentClosedItems = recentClosedStore.load()
+        self.remoteRecentClosedItems = recentClosedStore.loadRemote()
         self.frontmostWindowID = nil
         bootstrap()
         if let launchInventorySink { launchInventorySink(prepareLaunchPaneInventory()) }
@@ -975,6 +980,7 @@ public final class WindowLibrary {
 
     func refreshRecentClosedItems() {
         recentClosedItems = recentClosedStore.load()
+        remoteRecentClosedItems = recentClosedStore.loadRemote()
     }
 
     func log(_ message: @autoclosure () -> String) {

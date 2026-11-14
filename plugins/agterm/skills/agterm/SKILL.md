@@ -392,6 +392,7 @@ omitted when expanded).
 - `session close [--target T ...] [--undoable] [--terminate]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo. `--undoable` gives a single target that grace too, as ⌘W does, so undo (⌘Z) or, for a local
   session, `recent open` inside it brings the running shell back; `result.undoable` says whether it applied (false when Settings turns undo off).
+  An undoable close answers `result.undoID`; `session undo --target UNDO_ID` brings it back while the grace lasts.
   A single close answers `result.recentID`, the Recent Closed entry `recent open` takes. Closing a session attached
   from another host only detaches it; `--terminate` ends it on that host too. Restart, `zmx kill`, Convert, Duplicate,
   split, scratch and `session restore` on such a session run on its host and the result attaches here.
@@ -744,7 +745,9 @@ at the moment it is created.
 title and the session ids it restores; the last 20 only · `recent open [ID] [--window W]` - reopen an
 entry by id or prefix, the newest with no id; the session keeps its id, goes to the window that already
 holds its session or workspace when one does, and the window is not raised; `complete` false means the
-entry stayed in the list · `recent clear` - empty the list. `list` and `clear` refuse a target or `--window`.
+entry stayed in the list · `recent clear` - empty the list. `list` and `clear` refuse a target. A row attached
+from another host and closed here is a `remote` entry naming its `host`; opening it attaches the session again or
+has the host reopen it first. `--window` naming a server window runs `list`, `open` and `clear` on that server.
 
 **zmx** - `zmx list` - every daemon behind a live session joined against the pane that claims it, under the
 restore status as a header; a CLOSED window's panes are claimed with zero clients, which is a resting

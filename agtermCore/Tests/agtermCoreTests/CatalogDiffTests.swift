@@ -45,6 +45,24 @@ struct CatalogDiffTests {
         #expect(applied.workspaces == next.workspaces)
     }
 
+    @Test func aChangedRecentListIsOneChangeAndAServerWithoutOneSendsNone() {
+        let item = ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil, closedAt: 1, workspaceID: "w", sessionIDs: ["s"])
+        var current = CatalogFixture.snapshot([])
+        current.recent = []
+        var next = current
+        next.recent = [item]
+        var older = current
+        older.recent = nil
+        var applied = current
+
+        let changes = current.changes(to: next)
+        for change in changes { applied.apply(change) }
+
+        #expect(changes == [.recentChanged([item])])
+        #expect(applied.recent == [item])
+        #expect(current.changes(to: older).isEmpty)
+    }
+
     @Test func anUnchangedCatalogHasNoChanges() {
         let current = CatalogFixture.snapshot([CatalogWorkspace(id: UUID(), name: "w", sessions: [CatalogFixture.session()])])
 

@@ -30,6 +30,9 @@ struct TerminatePlan: Sendable {
     let groups: [Group]
     let local: [UUID]
     let undoable: Bool
+    /// window is where the terminate was asked for, whose ⌘Z undoes it; initiated orders it against local closes.
+    let window: UUID?
+    let initiated: Date
 }
 
 extension ControlServer {
@@ -186,7 +189,8 @@ extension ControlServer {
             }
         }
         guard !groups.isEmpty else { return nil }
-        return .attached(.terminate(TerminatePlan(groups: groups, local: local, undoable: request.args?.undoable == true)))
+        return .attached(.terminate(TerminatePlan(groups: groups, local: local, undoable: request.args?.undoable == true,
+                                                  window: library.windowID(for: store), initiated: Date())))
     }
 
     /// runAttached sends the plan to its origins and applies what they did here.
@@ -272,6 +276,10 @@ extension ControlServer {
             closed += closeAttachedRows(ended: Set(reply.result?.closed ?? group.sessions), origin: group.origin)
             if group.sessions.count == 1, let recentID = reply.result?.recentID {
                 library.noteOriginRecentID(recentID, host: group.origin.host, sessionID: group.sessions[0])
+            }
+            if reply.result?.undoable == true, let undoID = reply.result?.undoID, let window = plan.window {
+                library.noteAttachedUndo(AttachedUndo(host: group.origin.host, undoID: undoID, sessions: reply.result?.closed ?? group.sessions,
+                                                      initiated: plan.initiated), window: window)
             }
             if plan.undoable { undoable = (undoable ?? true) && reply.result?.undoable == true }
         }

@@ -365,13 +365,13 @@
   `ControlDispatcherRecentTests.swift`, `PaletteCatalogTests.swift`, `agtermTests/ControlServerRecentTests.swift`,
   `ControlServerRemoteActionsTests.swift`
 
-- [ ] server undo grace for `session.close --undoable`; pending closes saved and counted as claims; a clean stop
+- [x] server undo grace for `session.close --undoable`; pending closes saved and counted as claims; a clean stop
       finalizes them, a start finalizes any a crash left; the server window's Terminate offers undo like a local close
-- [ ] server Reopen Closed: `recent.list/open/clear` served; `--window` routes them from a server window, with
+- [x] server Reopen Closed: `recent.list/open/clear` served; `--window` routes them from a server window, with
       receipts for `recent.open` and `session.close --undoable`; the menu and palette read the server's list there
-- [ ] remote entries on the viewer: undo inside the origin's grace, reopen by re-attach or by the origin's own
+- [x] remote entries on the viewer: undo inside the origin's grace, reopen by re-attach or by the origin's own
       reopen, refusal when neither exists, for Mac and Linux origins
-- [ ] policy test updated; tests: terminate → row gone → undo inside and after the grace; reopen with origin
+- [x] policy test updated; tests: terminate → row gone → undo inside and after the grace; reopen with origin
       session alive, gone but recorded, and gone; a stop and a crash inside the grace kill the daemons and write
       the entry; prune inside the grace keeps them
 

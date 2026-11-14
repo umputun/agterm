@@ -35,7 +35,6 @@ extension RemoteOperation {
         let args = request.args ?? ControlArgs()
         // the caller's own id and epoch would be replaced by this window's, running what its epoch might refuse
         if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("operation receipts are served only by agterm-server") }
-        if let field = unsupportedField(request.cmd, args) { return refuse("\(field) is not available in a remote window") }
         let select = args.noSelect != true
         var shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command, wait: args.wait == true)
         switch request.cmd {
@@ -115,9 +114,11 @@ extension RemoteOperation {
             let catalog = store.remoteActions?.mirror.catalog?.workspaces.flatMap(\.sessions).map(\.id)
             if request.args?.targets?.isEmpty == true { return refuse("\(request.cmd.rawValue) requires at least one --target") }
             guard let targets = request.args?.targets, targets.count > 1 else {
-                return session(singleTarget(request), in: store, candidates: catalog) { .operation(.closeSession($0), select: false) }
+                return session(singleTarget(request), in: store, candidates: catalog) {
+                    .operation(.closeSession($0, undoable: args.undoable == true), select: false)
+                }
             }
-            return sessions(targets, in: store, candidates: catalog) { .operation(.closeSessions($0), select: false) }
+            return sessions(targets, in: store, candidates: catalog) { .operation(.closeSessions($0, undoable: args.undoable == true), select: false) }
         case .sessionMove:
             if request.args?.targets?.isEmpty == true { return refuse("session.move requires at least one --target") }
             guard let targets = request.args?.targets, targets.count > 1 else {
@@ -258,14 +259,6 @@ extension RemoteOperation {
         return session(target, in: store) {
             .operation(.killDaemon($0, pane: pane, paneID: request.cmd == .zmxKillPane ? paneID : nil), select: false)
         }
-    }
-
-    private static func unsupportedField(_ cmd: Command, _ args: ControlArgs) -> String? {
-        let fields: [(Bool, String)] = switch cmd {
-        case .sessionClose, .sessionTerminate: [(args.undoable == true, "--undoable")]
-        default: []
-        }
-        return fields.first { $0.0 }?.1
     }
 
     /// singleTarget is the request's one target, from `target` or a one-element `targets`.

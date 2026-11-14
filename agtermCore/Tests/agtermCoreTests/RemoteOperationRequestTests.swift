@@ -128,7 +128,7 @@ struct RemoteOperationRequestTests {
         #expect(parse(.sessionTerminate, target: target) == .operation(.closeSession(first.id), select: false))
         #expect(parse(.sessionTerminate) { $0.targets = [target, second.id.uuidString] } == .operation(.closeSessions([first.id, second.id]), select: false))
         #expect(RemoteOperation.closeSession(first.id).words == ["session", "close", "--target", target])
-        #expect(refusal(parse(.sessionTerminate, target: target) { $0.undoable = true }) == "--undoable is not available in a remote window")
+        #expect(parse(.sessionTerminate, target: target) { $0.undoable = true } == .operation(.closeSession(first.id, undoable: true), select: false))
     }
 
     @Test func aMoveTakesExactlyOnePlacement() {
@@ -151,8 +151,23 @@ struct RemoteOperationRequestTests {
         #expect(parse(.workspaceMove, target: target) { $0.to = "top" } == .operation(.moveWorkspace(workspace.id, to: "top"), select: false))
     }
 
-    @Test func anUndoableCloseIsRefusedByName() {
-        #expect(refusal(parse(.sessionClose, target: first.id.uuidString) { $0.undoable = true }) == "--undoable is not available in a remote window")
+    @Test func anUndoableCloseAsksTheServerForItsGrace() {
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionClose, target: target) { $0.undoable = true } == .operation(.closeSession(first.id, undoable: true), select: false))
+        #expect(parse(.sessionClose) { $0.targets = [target, second.id.uuidString]; $0.undoable = true }
+            == .operation(.closeSessions([first.id, second.id], undoable: true), select: false))
+        #expect(RemoteOperation.closeSession(first.id, undoable: true).words == ["session", "close", "--target", target, "--undoable"])
+        #expect(RemoteOperation.closeSessions([first.id, second.id], undoable: true).words
+            == ["session", "close", "--target", target, "--target", second.id.uuidString, "--undoable"])
+    }
+
+    @Test func undoAndReopenNameNoRow() {
+        #expect(RemoteOperation.undoClose("u1").words == ["session", "undo", "--target", "u1"])
+        #expect(RemoteOperation.undoClose("u1").target == nil)
+        #expect(RemoteOperation.reopenRecent("r1").words == ["recent", "open"])
+        #expect(RemoteOperation.reopenRecent("r1").operands == ["r1"])
+        #expect(RemoteOperation.reopenRecent(nil).operands == [])
     }
 
     @Test func aWaitingCommandIsHeldOnTheServer() {

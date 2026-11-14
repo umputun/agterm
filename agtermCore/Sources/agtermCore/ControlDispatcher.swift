@@ -70,7 +70,7 @@ public struct ControlDispatcher {
             return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
-        case .recentList, .recentOpen, .recentClear:
+        case .recentList, .recentOpen, .recentClear, .sessionUndo:
             return dispatchRecentCommand(request)
         case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)

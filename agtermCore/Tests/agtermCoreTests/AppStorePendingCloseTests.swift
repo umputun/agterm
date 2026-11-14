@@ -201,6 +201,52 @@ struct AppStorePendingCloseTests {
         #expect(store.workspaces[0].sessions.map(\.id).firstIndex(of: second.id)! < store.workspaces[0].sessions.map(\.id).firstIndex(of: third.id)!)
     }
 
+    @Test func eachPendingSessionNamesTheRecordAnUndoTakes() throws {
+        let store = store()
+        let first = addSession(store, name: "one")
+        let second = addSession(store, name: "two")
+        let third = addSession(store, name: "three")
+        let other = Session(initialCwd: "/tmp", customName: "other")
+        store.workspaces.append(Workspace(name: "workspace 2", sessions: [other]))
+        defer { store.finalizeAllPendingCloses() }
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        let batch = try #require(store.pendingCloseSummary)
+        #expect(store.softRemoveWorkspace(store.workspaces[0].id, grace: 60))
+        let workspace = try #require(store.pendingCloseSummary)
+
+        #expect(store.pendingCloseID(ofSession: first.id) == batch.id)
+        #expect(store.pendingCloseID(ofSession: second.id) == batch.id)
+        #expect(store.pendingCloseID(ofSession: third.id) == workspace.id)
+        #expect(store.pendingCloseID(ofSession: other.id) == nil)
+    }
+
+    @Test func aBatchKeepsItsCloseTimeWhenAMemberFinalizes() throws {
+        let store = store()
+        let first = addSession(store, name: "one")
+        let second = addSession(store, name: "two")
+        let third = addSession(store, name: "three")
+        defer { store.finalizeAllPendingCloses() }
+        #expect(store.softCloseSessions([first.id, second.id, third.id], grace: 60))
+        let closedAt = try #require(store.pendingCloseSummary?.closedAt)
+
+        #expect(store.finalizePendingClose(ofSession: first.id))
+
+        #expect(store.pendingCloseSummary?.closedAt == closedAt)
+    }
+
+    @Test func aDiscardedSessionLeavesNoRecentEntry() {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        store.workspaces = [Workspace(name: "workspace 1", sessions: [])]
+        let discarded = addSession(store, name: "failed")
+        let closed = addSession(store, name: "closed")
+
+        store.discardSession(discarded.id)
+        _ = store.closeSession(closed.id)
+
+        #expect(store.session(withID: discarded.id) == nil)
+        #expect(recentClosed.load().map(\.title) == ["closed"])
+    }
+
     @Test func finalizingTheOnlyPendingSessionDropsItsRecord() {
         let store = store()
         let only = addSession(store, name: "one")

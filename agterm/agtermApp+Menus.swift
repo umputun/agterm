@@ -49,6 +49,71 @@ extension agtermApp {
         return "\(item.title) - \(subtitle)"
     }
 
+    private func recentTitle(_ item: ControlRecentItem) -> String {
+        guard let subtitle = item.subtitle, !subtitle.isEmpty else { return item.title }
+        return "\(item.title) - \(subtitle)"
+    }
+
+    /// localRecentMenu lists this Mac's closed sessions and workspaces, and the closed rows attached from other hosts.
+    @ViewBuilder private var localRecentMenu: some View {
+        let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
+        let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
+        let attached = library.remoteRecentClosedItems
+        if recentSessions.isEmpty && recentWorkspaces.isEmpty && attached.isEmpty {
+            Text("No Recent Items")
+        } else {
+            if !recentSessions.isEmpty {
+                Section("Sessions") {
+                    ForEach(recentSessions) { item in
+                        Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
+                    }
+                }
+            }
+            if !recentWorkspaces.isEmpty {
+                Section("Workspaces") {
+                    ForEach(recentWorkspaces) { item in
+                        Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
+                    }
+                }
+            }
+            if !attached.isEmpty {
+                Section("Remote Sessions") {
+                    ForEach(attached) { item in
+                        Button("\(item.name) - \(item.host)") { actions.openAttachedRecent(item.id) }
+                    }
+                }
+            }
+            Divider()
+            Button("Clear Menu") { actions.clearRecentClosedItems() }
+        }
+    }
+
+    /// serverRecentMenu lists a server window's closed sessions and workspaces, kept by its server.
+    @ViewBuilder private func serverRecentMenu(_ items: [ControlRecentItem]) -> some View {
+        let sessions = items.filter { $0.kind == RecentClosedKind.session.rawValue }
+        let workspaces = items.filter { $0.kind == RecentClosedKind.workspace.rawValue }
+        if items.isEmpty {
+            Text("No Recent Items")
+        } else {
+            if !sessions.isEmpty {
+                Section("Sessions") {
+                    ForEach(sessions, id: \.id) { item in
+                        Button(recentTitle(item)) { actions.openServerRecent(item.id) }
+                    }
+                }
+            }
+            if !workspaces.isEmpty {
+                Section("Workspaces") {
+                    ForEach(workspaces, id: \.id) { item in
+                        Button(recentTitle(item)) { actions.openServerRecent(item.id) }
+                    }
+                }
+            }
+            Divider()
+            Button("Clear Menu") { actions.clearServerRecent() }
+        }
+    }
+
     @CommandsBuilder
     var appCommands: some Commands {
             CommandGroup(replacing: .appInfo) {
@@ -133,30 +198,13 @@ extension agtermApp {
                     .keyboardShortcut(shortcut(for: .detachedSessions))
                     .disabled(!PaletteCommand.detachedSessions.isEnabled(in: context))
                 Menu("Open Recent") {
-                    let recentSessions = library.recentClosedItems.filter { $0.kind == .session }
-                    let recentWorkspaces = library.recentClosedItems.filter { $0.kind == .workspace }
-                    if recentSessions.isEmpty && recentWorkspaces.isEmpty {
-                        Text("No Recent Items")
+                    if let server = actions.serverRecentItems {
+                        serverRecentMenu(server)
                     } else {
-                        if !recentSessions.isEmpty {
-                            Section("Sessions") {
-                                ForEach(recentSessions) { item in
-                                    Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
-                                }
-                            }
-                        }
-                        if !recentWorkspaces.isEmpty {
-                            Section("Workspaces") {
-                                ForEach(recentWorkspaces) { item in
-                                    Button(recentTitle(item)) { actions.openRecentClosed(item.id) }
-                                }
-                            }
-                        }
-                        Divider()
-                        Button("Clear Menu") { actions.clearRecentClosedItems() }
+                        localRecentMenu
                     }
                 }
-                .disabled(library.recentClosedItems.isEmpty || modalActive)
+                .disabled(!context.hasRecentClosed || modalActive)
                 Button("Reopen Last Closed Item") { actions.openLatestRecentClosed() }
                     .keyboardShortcut(shortcut(for: .reopenRecent))
                     .disabled(!PaletteCommand.reopenRecent.isEnabled(in: context))

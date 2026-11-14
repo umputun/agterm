@@ -599,8 +599,11 @@ buys nothing. A caller with no tree uses `version`.
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
   A single target closes at once unless `--undoable` asks for the same grace, which keeps its shell running until
   the grace lapses: undo (Reopen Closed Item) brings it back, and for a local session so do Reopen Last Closed
-  Item and `recent open` (a remote session gets no Recent Closed entry). With `--undoable` the reply carries
-  `result.undoable`: true for an undoable close, false when Settings turned undo off and it closed at once. An
+  Item and `recent open`. With `--undoable` the reply carries
+  `result.undoable`: true for an undoable close, false when Settings turned undo off, or an agterm-server could not record the close, and it closed at once.
+  Every undoable reply, single or batch, also carries `result.undoID`, which `session undo` takes, except a
+  `--terminate` of a row attached from another host: that host's undo id stays with Reopen Closed Item (⌘Z) in the
+  window that asked. An
   app predating the flag ignores it and closes a single target at once, so for a single target an ok reply
   without `undoable` means the shell is already gone. The human output appends `(undoable)` or `(not undoable)` to `ok`
   or the session count. Every ok reply carries `result.closed`, the ids it closed. Closing a parent closes its
@@ -612,6 +615,11 @@ buys nothing. A caller with no tree uses `version`.
   closed closes; a companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no
   answer, the error names it and what did close, and an unanswered host is never asked again. An app too old for
   it refuses with `the running app is too old for terminate`.
+- `session undo --target UNDO_ID [--window W]` — undo a close still inside its grace. `UNDO_ID` is the
+  `result.undoID` an undoable close answered; the whole close comes back with its running shells. Once the grace
+  ended or the close was undone it errors `the close is no longer undoable`, and the sessions stay in Recent Closed
+  for `recent open`. `--window` naming a server window runs it on that server. An app too old for it refuses with
+  `the running app is too old for session undo`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
@@ -2641,6 +2649,8 @@ the oldest dropped silently.
 workspace itself otherwise) and `sessionIDs`, the sessions a reopen brings back. Human output prints one
 row per entry with the full id. This is the read-back for `open` and `clear`. A parent entry's
 `sessionIDs` lists the parent then its companions, and its human row ends with `+N companion(s)`.
+A row attached from another host and closed here is a `remote` entry: `host` names that host and `sessionIDs`
+holds its session id there. A list with no remote entries carries no `host` field.
 
 `agtermctl recent open [ID] [--window W]` — reopen the entry with that id or unique prefix, or the newest
 with no id. The session returns under its original id. It goes to `--window` or the frontmost window,
@@ -2651,10 +2661,14 @@ anything is restored. Errors: `no recently closed items`, `no such recent item: 
 A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace
 holding the parent) first when the parent is not open; when the parent is neither open nor in Recent
 Closed it errors `parent session is not open or in Recent Closed`.
+A `remote` entry attaches its session again while its host still lists it, placed back where the row was;
+otherwise the host reopens its own entry for that session first. It errors `the session on HOST is gone and HOST
+keeps no record of it` when neither works, and an unreachable host keeps the entry for another try.
 
 `agtermctl recent clear` — empty the list; ok only when the list is empty afterwards.
 
-`list` and `clear` are app-global and refuse a target or `--window`.
+`list` and `clear` refuse a target. With `--window` naming a server window, `list`, `open` and `clear` run on
+that server against the list it keeps; any other `--window` reads this Mac's list.
 
 ## clipboard
 

@@ -172,7 +172,7 @@ public final class AppStore {
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
     /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
-    @ObservationIgnored var snapshotUnsaved = false
+    @ObservationIgnored public internal(set) var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
@@ -662,8 +662,8 @@ public final class AppStore {
 
     /// closeSessionRow closes one row and none of its companions: a catalog row's companions leave only when
     /// their own catalog sessions do.
-    func closeSessionRow(_ sessionID: UUID) {
-        _ = closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
+    func closeSessionRow(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+        _ = closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: false)
     }
 
     private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) -> UUID? {

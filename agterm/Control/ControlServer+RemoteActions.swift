@@ -4,9 +4,13 @@ import agtermCore
 /// RemoteRoute is where a control request on a remote window's rows goes: to the window's server, or refused here.
 enum RemoteRoute: Sendable {
     case send(RemoteCatalogActions, PreparedRemoteOperation, select: Bool)
+    /// request asks a server window's server something that changes no row.
+    case request(RemoteCatalogActions, words: [String])
     case pageResult(host: String, page: UUID)
     /// attached sends a request on rows attached from another host to their origin.
     case attached(AttachedPlan)
+    /// reopenAttached reopens a Recent Closed entry of a row attached from another host.
+    case reopenAttached(UUID, window: String?)
     case refused(ControlResponse)
 }
 
@@ -18,6 +22,8 @@ extension ControlServer {
     /// route sends it to the server off the accept thread, with what it was decided on captured now.
     func remoteRoute(_ request: ControlRequest) -> RemoteRoute? {
         if let route = attachedRoute(request) { return route }
+        if let route = historyRoute(request) { return route }
+        if let route = attachedRecentRoute(request) { return route }
         if request.cmd == .sessionRestore, routedStore(request)?.remoteActions != nil {
             return .refused(ControlResponse(ok: false, error: "agterm-server keeps every pane running"))
         }
@@ -37,6 +43,31 @@ extension ControlServer {
         }
         if RemoteOperation.runsLocally(request, in: store) { return nil }
         return route(request, in: store, actions: actions)
+    }
+
+    /// historyRoute sends `recent.*` and `session.undo` naming a server window with `--window` to its server, which
+    /// keeps its own history; without `--window` they stay this Mac's.
+    private func historyRoute(_ request: ControlRequest) -> RemoteRoute? {
+        guard [.recentList, .recentClear, .recentOpen, .sessionUndo].contains(request.cmd), let window = request.args?.window,
+              let store = resolver.placementStore(window), let actions = store.remoteActions else { return nil }
+        switch request.cmd {
+        case .recentList: return .request(actions, words: ["recent", "list"])
+        case .recentClear: return .request(actions, words: ["recent", "clear"])
+        case .sessionUndo:
+            guard let id = request.target?.trimmingCharacters(in: .whitespaces), !id.isEmpty else {
+                return .refused(ControlResponse(ok: false, error: "session.undo requires --target with the undo id a close answered"))
+            }
+            return prepared(.undoClose(id), actions: actions)
+        default:
+            return prepared(.reopenRecent(request.target), actions: actions)
+        }
+    }
+
+    private func prepared(_ operation: RemoteOperation, actions: RemoteCatalogActions) -> RemoteRoute {
+        switch actions.prepare(operation) {
+        case .refused(let response): .refused(response)
+        case .ready(let prepared): .send(actions, prepared, select: false)
+        }
     }
 
     /// closeRoute resolves a close by id once over local rows and remote catalogs, so a detached row is reachable and a
@@ -88,10 +119,15 @@ extension ControlServer {
                 forwardedPages[page] = actions.mirror.host
             }
             return reply
+        case .request(let actions, let words):
+            return await actions.request(words)
         case .pageResult(let host, let page):
             return await serverPageResult(page, host: host)
         case .attached(let plan):
             return await runAttached(plan)
+        case .reopenAttached(let id, let window):
+            defer { refreshWindowCache() }
+            return await reopenAttached(id, window: window)
         }
     }
 

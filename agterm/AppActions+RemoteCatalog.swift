@@ -106,17 +106,64 @@ extension AppActions {
         let scopes = roots.compactMap(remote.mirror.closeScope(session:))
         let connected = store.catalogState == .connected
         if connected, !scopes.contains(where: \.live) {
-            for id in roots { performRemote(.closeSession(id), in: store) }
+            terminateRemote(roots, in: store)
             return true
         }
         let name = roots.count == 1 ? "“\(store.session(withID: roots[0])?.displayName ?? "the session")”" : "\(roots.count) sessions"
         let blocked = connected ? nil : "Terminate needs a connection to \(remote.mirror.host)."
-        switch (choose ?? Self.askDetachOrTerminate)(name, remote.mirror.host, blocked) {
+        let undoable = remote.recentItems != nil && closeGraceUndoEnabled
+        let ask: RemoteCloseChooser = { Self.askDetachOrTerminate($0, host: $1, terminateBlocked: $2, undoable: undoable) }
+        switch (choose ?? ask)(name, remote.mirror.host, blocked) {
         case .detach: remote.mirror.detach(sessions: roots)
-        case .terminate: for id in roots { performRemote(.closeSession(id), in: store) }
+        case .terminate: terminateRemote(roots, in: store)
         case .cancel: break
         }
         return true
+    }
+
+    /// terminateRemote ends `roots` on the server. A server that keeps a Recent Closed list also keeps the close in
+    /// its undo grace when Settings asks for one, as one record, so ⌘Z there brings them all back.
+    private func terminateRemote(_ roots: [UUID], in store: AppStore) {
+        guard let remote = store.remoteActions, remote.recentItems != nil, closeGraceUndoEnabled else {
+            for id in roots { performRemote(.closeSession(id), in: store) }
+            return
+        }
+        let operation: RemoteOperation = roots.count == 1 ? .closeSession(roots[0], undoable: true) : .closeSessions(roots, undoable: true)
+        performRemote(operation, in: store)
+    }
+
+    /// undoRemoteClose undoes the newest close this Mac made in a server window while its grace can still run.
+    /// Answers false when there is none, leaving the server's Recent Closed list for Reopen.
+    @discardableResult
+    func undoRemoteClose(in store: AppStore) -> Bool {
+        guard let undoID = store.remoteActions?.takeUndo() else { return false }
+        return performRemote(.undoClose(undoID), in: store)
+    }
+
+    /// serverRecentItems is the Recent Closed list the frontmost server window shows: its server's, empty while it is
+    /// disconnected and before its first catalog says whether it keeps one; nil for a local window or a server that keeps
+    /// none, which show this Mac's list.
+    var serverRecentItems: [ControlRecentItem]? {
+        guard let store, let remote = store.remoteActions else { return nil }
+        guard remote.mirror.catalog != nil else { return [] }
+        guard let items = remote.recentItems else { return nil }
+        return store.catalogState == .connected ? items : []
+    }
+
+    /// openServerRecent reopens entry `id` of the frontmost server window's server, the newest when nil.
+    func openServerRecent(_ id: String?) {
+        guard uiActionsEnabled, let store else { return }
+        performRemote(.reopenRecent(id), in: store)
+    }
+
+    /// clearServerRecent empties the frontmost server window's server list.
+    func clearServerRecent() {
+        guard let store, let remote = store.remoteActions else { return }
+        Task { @MainActor in
+            let reply = await remote.request(["recent", "clear"])
+            guard !reply.ok else { return }
+            NotificationManager.shared.notifyCommandFailure(name: "Clear Menu", detail: reply.error ?? "not cleared")
+        }
     }
 
     /// closeRemoteWorkspace is Delete Workspace in a remote window: Detach hides the workspace here, Terminate deletes
@@ -133,7 +180,8 @@ extension AppActions {
         } else {
             nil
         }
-        switch (choose ?? Self.askDetachOrTerminate)(name, host, blocked) {
+        let ask: RemoteCloseChooser = { Self.askDetachOrTerminate($0, host: $1, terminateBlocked: $2, undoable: false) }
+        switch (choose ?? ask)(name, host, blocked) {
         case .detach: remote.mirror.detach(workspace: id)
         case .terminate: performRemote(.deleteWorkspace(id), in: store)
         case .cancel: break
@@ -187,13 +235,14 @@ extension AppActions {
     /// RemoteCloseChooser asks about closing `name` on `host`; a non-nil `terminateBlocked` says why Terminate is off.
     typealias RemoteCloseChooser = @MainActor (_ name: String, _ host: String, _ terminateBlocked: String?) -> RemoteCloseChoice
 
-    private static func askDetachOrTerminate(_ name: String, host: String, terminateBlocked: String?) -> RemoteCloseChoice {
+    private static func askDetachOrTerminate(_ name: String, host: String, terminateBlocked: String?, undoable: Bool) -> RemoteCloseChoice {
         guard !ContentView.shouldBypassCloseConfirmation else { return .detach }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close \(name) on \(host)?"
         alert.informativeText = "Detach hides it on this Mac and leaves it running on \(host); File > Detached Sessions brings it back. "
-            + (terminateBlocked ?? "Terminate ends it on \(host) for every Mac showing it, with no undo.")
+            + (terminateBlocked ?? (undoable ? "Terminate ends it on \(host) for every Mac showing it; Reopen Closed Item (⌘Z) brings it back for a few seconds."
+                : "Terminate ends it on \(host) for every Mac showing it, with no undo."))
         alert.addButton(withTitle: "Detach")
         let terminate = alert.addButton(withTitle: "Terminate")
         terminate.hasDestructiveAction = true

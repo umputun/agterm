@@ -25,7 +25,7 @@ extension ServerActions {
         if let refusal = panes.start(.init(identity: session.paneIdentity, session: session, workspace: destination.workspace,
                                            pane: .left, program: .creation(options.command, wait: options.wait),
                                            directory: cwd)) {
-            store.closeSession(session.id, alreadyFinalized: session.paneIdentity)
+            store.discardSession(session.id, alreadyFinalized: session.paneIdentity)
             return ControlResponse(ok: false, error: refusal)
         }
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
@@ -51,11 +51,11 @@ extension ServerActions {
     public func closeSession(_ target: String?, window: String?) -> ControlResponse {
         withSession(target, window: window) { session in
             let closing = [session.id] + store.companions(of: session.id).map(\.id)
-            store.closeSession(session.id)
+            let recent = store.closeSession(session.id)
             let closed = closing.filter { store.session(withID: $0) == nil }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString,
                                                                    affected: closing.count > 1 ? closing.count : nil,
-                                                                   closed: closed.map(\.uuidString)))
+                                                                   closed: closed.map(\.uuidString), recentID: recent?.uuidString))
         }
     }
 
@@ -80,10 +80,8 @@ extension ServerActions {
 
     /// terminateSessions is `session.close` here: every row on this host is its own session, so closing it ends it.
     public func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
-        guard !undoable else {
-            return ControlResponse(ok: false, error: "session.close --undoable is not supported by this control host")
-        }
-        return targets.count == 1 ? closeSession(targets[0], window: window) : closeSessions(targets, window: window)
+        targets.count == 1 ? closeSession(targets[0], window: window, undoable: undoable)
+            : closeSessions(targets, window: window, undoable: undoable)
     }
 
     public func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
@@ -145,7 +143,7 @@ extension ServerActions {
             if let refusal = panes.start(.init(identity: companion.paneIdentity, session: companion, workspace: workspace,
                                                pane: .left, program: .creation(options.command, wait: options.wait),
                                                directory: companion.effectiveCwd)) {
-                store.closeSession(companion.id, alreadyFinalized: companion.paneIdentity)
+                store.discardSession(companion.id, alreadyFinalized: companion.paneIdentity)
                 return ControlResponse(ok: false, error: refusal)
             }
             return ControlResponse(ok: true, result: ControlResult(id: companion.id.uuidString,

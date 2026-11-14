@@ -1281,7 +1281,10 @@
                 reports the number of sessions actually closed. A single target closes at once unless
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--undoable</span> gives it the same grace, so Reopen Closed Item inside it brings the running shell back, as
                 after ⌘W, and so does Reopen Last Closed Item for a local session. With the flag the reply carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.undoable</span>: true for an undoable close, false
-                when close grace is disabled and it closed at once; an app predating the flag omits it. The human output appends
+                when close grace is disabled and it closed at once; an app predating the flag omits it. Every undoable reply, single
+                or batch, also carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.undoID</span>, which <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session undo</span> takes,
+                except a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--terminate</span> of a row attached from another host, whose undo id
+                stays with Reopen Closed Item (⌘Z) in the window that asked. The human output appends
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(undoable)</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">(not undoable)</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
@@ -1295,6 +1298,19 @@
                 session and group, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--undoable</span> passed through, and every row here showing a session it closed closes; a
                 companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no answer, the error names
                 it and what did close, and an unanswered host is never asked again.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session undo --target UNDO_ID [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.undo</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Undo a close still inside its grace: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">UNDO_ID</span> is the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.undoID</span> an undoable close answered, and the whole
+                close comes back with its running shells. Once the grace ended or the close was undone it errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the close is no longer undoable</span>, and the sessions stay in Recent Closed for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent open</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> naming a server window runs it on that server.
               </p>
             </div>
 
@@ -4289,7 +4305,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">closedAt</span> in Unix seconds, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceID</span> (the parent workspace of a session entry, the workspace itself otherwise)
                 and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessionIDs</span>, the sessions a reopen brings back. The list keeps the last 20 entries and drops the oldest
                 without notice. This is the read-back for <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent open</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">recent clear</span>.
-                App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+                A target is refused. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> naming a server window lists the entries that server keeps; any other window reads this Mac's list.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A row attached from another host and closed here is a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span> entry: <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span> names that host and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessionIDs</span> holds its session id there. A list with no remote entries carries no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">host</span> field.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 A parent entry's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessionIDs</span> lists the parent then its companions, and its human
@@ -4321,6 +4341,12 @@
                 the parent) first when the parent is not open. When the parent is neither open nor in Recent Closed it errors
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">parent session is not open or in Recent Closed</span>.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote</span> entry attaches its session again while its host still lists it, placed back where the row was;
+                otherwise the host reopens its own entry for that session first. It errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">the session on HOST is gone and HOST keeps no record of it</span> when neither works, and an unreachable host
+                keeps the entry for another try. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> naming a server window reopens that server's entry there.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -4330,7 +4356,7 @@
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">recent.clear</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Empty the recently closed list. It answers ok only when the list is empty afterwards, so a failed write is an error.
-                App-global; a target or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> is refused.
+                A target is refused. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> naming a server window empties that server's list; any other window empties this Mac's.
               </p>
             </div>
           </section>

@@ -113,9 +113,10 @@ public enum RemoteOperation: Equatable, Sendable {
     case swap(UUID)
     case renameSession(UUID, name: String)
     case moveSession(UUID, to: RemoteSessionPlacement)
-    case closeSession(UUID)
+    /// closeSession and closeSessions with `undoable` keep the close inside the server's grace, answering an undo id.
+    case closeSession(UUID, undoable: Bool = false)
     /// closeSessions and moveSessions act on several rows as one server command.
-    case closeSessions([UUID])
+    case closeSessions([UUID], undoable: Bool = false)
     case moveSessions([UUID], to: RemoteSessionPlacement)
     case setFlag(UUID, on: Bool)
     /// clearFlags unflags every session on the server, the rows this window detached included.
@@ -134,6 +135,10 @@ public enum RemoteOperation: Equatable, Sendable {
     case convertCompanion(UUID)
     /// killDaemon ends one pane's daemon on the server; `paneID` pins it to that pane, as `zmx.kill.pane` does.
     case killDaemon(UUID, pane: ZmxPaneRole, paneID: String? = nil)
+    /// undoClose undoes the server's pending close `undoID` while its grace lasts.
+    case undoClose(String)
+    /// reopenRecent reopens the server's Recent Closed entry, the newest when nil.
+    case reopenRecent(String?)
 
     public var label: String {
         switch self {
@@ -162,6 +167,8 @@ public enum RemoteOperation: Equatable, Sendable {
         case .duplicateCompanion: "Duplicate as Companion"
         case .convertCompanion: "Convert to Companion"
         case .killDaemon: "Kill Daemon"
+        case .undoClose: "Reopen Closed Item"
+        case .reopenRecent: "Reopen Last Closed Item"
         }
     }
 
@@ -169,11 +176,11 @@ public enum RemoteOperation: Equatable, Sendable {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
-             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
+             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id, _), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
              .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _, _): .session(id)
         // a batch is marked on its first row
-        case .closeSessions(let ids), .moveSessions(let ids, _): ids.first.map { .session($0) }
-        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags: nil
+        case .closeSessions(let ids, _), .moveSessions(let ids, _): ids.first.map { .session($0) }
+        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent: nil
         case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _), .setWorkspaceFlag(let id, _),
              .setWorkspaceTint(let id, _): .workspace(id)
         }
@@ -227,8 +234,11 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameSession(let id, _): ["session", "rename", "--target", id.uuidString]
         case .moveSession(let id, let placement): ["session", "move", "--target", id.uuidString] + placement.words
         case .moveSessions(let ids, let placement): ["session", "move"] + ids.flatMap { ["--target", $0.uuidString] } + placement.words
-        case .closeSession(let id): ["session", "close", "--target", id.uuidString]
-        case .closeSessions(let ids): ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] }
+        case .closeSession(let id, let undoable): ["session", "close", "--target", id.uuidString] + (undoable ? ["--undoable"] : [])
+        case .closeSessions(let ids, let undoable):
+            ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] } + (undoable ? ["--undoable"] : [])
+        case .undoClose(let id): ["session", "undo", "--target", id]
+        case .reopenRecent: ["recent", "open"]
         case .setFlag(let id, let on): ["session", "flag", on ? "on" : "off", "--target", id.uuidString]
         case .clearFlags: ["session", "flag", "clear"]
         case .setTint(let id, let update): ["session", "tint"] + update.words + ["--target", id.uuidString]
@@ -252,6 +262,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameSession(_, let name), .renameWorkspace(_, let name): [name]
         case .newWorkspace(let name, _, _): name.map { [$0] } ?? []
         case .moveSession(_, .workspace(let workspace)), .moveSessions(_, .workspace(let workspace)): [workspace.uuidString]
+        case .reopenRecent(let id?): [id]
         default: []
         }
     }
@@ -327,6 +338,12 @@ public final class RemoteCatalogActions {
     private var entries: [String: Entry] = [:] {
         didSet { onChange?() }
     }
+    /// recentItems is the server's Recent Closed list from its catalog, nil from a server that keeps none.
+    public private(set) var recentItems: [ControlRecentItem]?
+    /// undoIDs are the undoable closes this Mac sent whose grace can still be running on the server, oldest first;
+    /// each leaves by itself when its grace ends, so a menu reading the list updates with nothing else happening.
+    public private(set) var undoIDs: [String] = []
+    @ObservationIgnored var undoGrace: TimeInterval = AppStore.pendingCloseGraceInterval
     /// onChange runs after every change to the operations this window tracks, for read-back that caches them.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
     @ObservationIgnored private var nextOrder = 0
@@ -420,12 +437,38 @@ public final class RemoteCatalogActions {
             if case .newWorkspace(_, true, _) = operation, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.collapseWhenShown(id)
             }
+            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID { noteUndo(undoID) }
             return reply
         case .reply, .lost:
             settle(opID, nil)
             return ControlResponse(ok: false, error: "\(host) did not answer \(operation.label); its outcome is unknown until \(host) can be asked")
         }
     }
+
+    /// takeUndo removes and answers the newest undo id whose grace can still be running on the server.
+    public func takeUndo() -> String? {
+        undoIDs.popLast()
+    }
+
+    private func noteUndo(_ undoID: String) {
+        undoIDs = Array((undoIDs + [undoID]).suffix(Self.undoDepth))
+        Task { @MainActor [weak self, grace = undoGrace] in
+            try? await Task.sleep(for: .seconds(grace))
+            self?.undoIDs.removeAll { $0 == undoID }
+        }
+    }
+
+    /// request sends a command that changes no catalog row, a Recent Closed read or clear, and answers the server's
+    /// reply. It carries no operation id: repeating it after a lost reply is harmless.
+    public func request(_ words: [String]) async -> ControlResponse {
+        switch await run(words, operands: []) {
+        case .notSent: return ControlResponse(ok: false, error: "no connection to \(host)")
+        case .lost: return ControlResponse(ok: false, error: "\(host) did not answer")
+        case .reply(let reply): return reply
+        }
+    }
+
+    private static let undoDepth = 20
 
     /// dismissUnknown drops every mark whose outcome this Mac could not learn.
     public func dismissUnknown() {
@@ -476,6 +519,7 @@ public final class RemoteCatalogActions {
     /// Mac lost, and sends a receipt of an epoch the mirror is not in to a lookup.
     func catalogMoved(snapshot: Bool) {
         guard let catalog = mirror.catalog else { return }
+        if recentItems != catalog.recent { recentItems = catalog.recent }
         for (opID, entry) in entries {
             switch entry.state {
             case .awaiting(let target) where target.epoch == catalog.epoch:

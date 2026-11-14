@@ -6,7 +6,7 @@ import agtermCore
 public enum ServerCommandPolicy {
     static let served: Set<Command> = [
         .tree, .version, .windowList, .eventsRead,
-        .sessionNew, .sessionRename, .sessionClose, .sessionTerminate, .sessionMove, .sessionSplit, .sessionSplitClose,
+        .sessionNew, .sessionRename, .sessionClose, .sessionTerminate, .sessionUndo, .sessionMove, .sessionSplit, .sessionSplitClose,
         .sessionSwap, .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
         .sessionScratch,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
@@ -20,6 +20,7 @@ public enum ServerCommandPolicy {
         .msgSend, .msgRead, .msgAck, .surfaceCursor, .zmxList, .zmxScreen, .sessionSeen,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint, .sessionDuplicate,
         .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane, .zmxPrune,
+        .recentList, .recentOpen, .recentClear,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

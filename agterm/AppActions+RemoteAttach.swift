@@ -17,6 +17,8 @@ protocol RemoteAttaching: AnyObject {
     /// attachedRoute is how `request` runs on its row's origin when the row is attached from another host; nil otherwise.
     func attachedRoute(_ request: ControlRequest) -> RemoteRoute?
     func runRemoteRoute(_ route: RemoteRoute) async -> ControlResponse
+    func reopenAttached(_ id: UUID, window: String?) async -> ControlResponse
+    func undoOriginClose(_ undo: AttachedUndo, window: String) async -> ControlResponse
 }
 
 extension ControlServer: RemoteAttaching {

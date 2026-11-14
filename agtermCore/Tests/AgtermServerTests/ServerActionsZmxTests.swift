@@ -174,6 +174,15 @@ struct ServerActionsZmxTests {
         #expect(harness.processes.signals.isEmpty)
     }
 
+    @Test func pruneLeavesTheDaemonOfACloseStillInsideItsGrace() throws {
+        let session = try newSession()
+        running(session.paneIdentity, pid: 100, clients: 0)
+        _ = harness.actions.closeSession(session.id.uuidString, window: nil, undoable: true)
+
+        #expect(harness.actions.pruneZmxDaemons().result?.text == "no orphan daemons")
+        #expect(harness.runner.confirmedKills.isEmpty)
+    }
+
     @Test func pruneWithNoOrphanSaysSo() throws {
         let session = try newSession()
         running(session.paneIdentity, pid: 100, clients: 0)

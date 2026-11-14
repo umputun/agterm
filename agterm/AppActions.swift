@@ -332,6 +332,11 @@ final class AppActions {
     func undoClose() {
         guard uiActionsEnabled else { return }
         guard let store else { return }
+        if store.remoteActions != nil {
+            undoRemoteClose(in: store)
+            return
+        }
+        if undoOriginCloseIfNewer(than: store) { return }
         let restored = withAnimation(.easeInOut(duration: 0.16)) {
             store.undoPendingClose()
         }
@@ -347,6 +352,8 @@ final class AppActions {
 
     func openLatestRecentClosed() {
         guard uiActionsEnabled else { return }
+        if serverRecentItems != nil { return openServerRecent(nil) }
+        if let attached = newestAttachedRecent { return openAttachedRecent(attached.id) }
         guard let owner = library.reopenLatestRecentClosedReportingWindow() else { return }
         revealRestoredWindow(owner)
     }

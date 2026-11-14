@@ -83,6 +83,22 @@ public struct RecentClosedWorkspace: Codable, Equatable, Sendable {
     }
 }
 
+/// AttachedUndo is an undoable terminate of rows attached from `host`, kept so ⌘Z in their window can undo it there
+/// while the host's grace lasts: the host's undo id, the host sessions it ended (parent first) and when it was asked for.
+public struct AttachedUndo: Equatable, Sendable {
+    public let host: String
+    public let undoID: String
+    public let sessions: [String]
+    public let initiated: Date
+
+    public init(host: String, undoID: String, sessions: [String], initiated: Date) {
+        self.host = host
+        self.undoID = undoID
+        self.sessions = sessions
+        self.initiated = initiated
+    }
+}
+
 /// RemoteRecentClosedItem is a closed row that was attached from another host: the session stays the origin's, so the
 /// entry names it there instead of carrying a snapshot.
 public struct RemoteRecentClosedItem: Codable, Identifiable, Equatable, Sendable {

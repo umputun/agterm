@@ -180,13 +180,17 @@ public struct CatalogSnapshot: Codable, Equatable, Sendable {
     public var catalogID: UUID
     public var versions: CatalogVersions
     public var workspaces: [CatalogWorkspace]
+    /// recent is the server's Recent Closed list, newest first; a server predating it sends none.
+    public var recent: [ControlRecentItem]?
 
-    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace]) {
+    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace],
+                recent: [ControlRecentItem]? = nil) {
         self.epoch = epoch
         self.rev = rev
         self.catalogID = catalogID
         self.versions = versions
         self.workspaces = workspaces
+        self.recent = recent
     }
 }
 
@@ -206,6 +210,8 @@ public enum CatalogChange: Equatable, Sendable {
     case paneAdded(CatalogPane, session: UUID)
     case paneChanged(CatalogPane, session: UUID)
     case paneRemoved(UUID, session: UUID)
+    /// recentChanged replaces the Recent Closed list; an older viewer reads it as an unknown kind and steps past it.
+    case recentChanged([ControlRecentItem])
 
     public var kind: String {
         switch self {
@@ -221,6 +227,7 @@ public enum CatalogChange: Equatable, Sendable {
         case .paneAdded: "pane.added"
         case .paneChanged: "pane.changed"
         case .paneRemoved: "pane.removed"
+        case .recentChanged: "recent.changed"
         }
     }
 }
@@ -263,7 +270,7 @@ extension CatalogFrame {
 extension CatalogFrame: Codable {
     private enum Keys: String, CodingKey {
         case kind, hello, snapshot, index, data, epoch, rev, chunks
-        case workspace, session, id, ids, name, pane, identity, tint, tintOn
+        case workspace, session, id, ids, name, pane, identity, tint, tintOn, recent
     }
 
     public init(from decoder: Decoder) throws {
@@ -292,6 +299,8 @@ extension CatalogFrame: Codable {
 
     private static func change(_ kind: String, _ container: KeyedDecodingContainer<Keys>) throws -> CatalogChange? {
         switch kind {
+        case "recent.changed":
+            return .recentChanged(try container.decode([ControlRecentItem].self, forKey: .recent))
         case "workspace.added":
             return .workspaceAdded(try container.decode(CatalogWorkspace.self, forKey: .workspace),
                                    index: try container.decode(Int.self, forKey: .index))
@@ -384,6 +393,7 @@ extension CatalogFrame: Codable {
         case .paneRemoved(let identity, let session):
             try container.encode(identity, forKey: .identity)
             try container.encode(session, forKey: .session)
+        case .recentChanged(let items): try container.encode(items, forKey: .recent)
         }
     }
 }

@@ -161,6 +161,26 @@ final class RemoteCatalogActionsTests {
         #expect(!RemoteOperation.runsLocally(rename, in: store))
     }
 
+    @Test func anUndoIDLeavesByItselfWhenItsGraceEnds() async throws {
+        install(snapshot())
+        actions.undoGrace = 0.05
+        let undoable = reply(.applied, rev: 1)
+        queue { opID in
+            var response = try? JSONDecoder().decode(ControlResponse.self, from: Data(undoable(opID).utf8))
+            response?.result?.undoable = true
+            response?.result?.undoID = "u1"
+            return String(decoding: (try? JSONEncoder().encode(response)) ?? Data(), as: UTF8.self)
+        }
+
+        _ = await send(.closeSession(sessionID, undoable: true))
+        #expect(actions.undoIDs == ["u1"])
+
+        let deadline = Date().addingTimeInterval(30)
+        while !actions.undoIDs.isEmpty, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+        #expect(actions.undoIDs.isEmpty)
+        #expect(actions.takeUndo() == nil)
+    }
+
     @Test func aBatchCloseIsOneCommandMarkedOnItsFirstRowUntilItsRevision() async {
         let other = UUID()
         install(snapshot(sessions: [session(sessionID, panes: panes), session(other, panes: [UUID()])]))

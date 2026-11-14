@@ -215,7 +215,7 @@ final class ServerHarness {
     let processes = FakeProcessTable()
     let observer: PaneObserver
 
-    init(shell: String = "/bin/zsh") throws {
+    init(shell: String = "/bin/zsh", history: Bool = false) throws {
         scratch = try ServerScratch()
         var configuration = try scratch.configuration()
         configuration.loginShell = shell
@@ -224,7 +224,8 @@ final class ServerHarness {
         self.panes = panes
         let events = ServerEvents(window: catalog.id)
         self.events = events
-        store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: scratch.state)),
+        let recentClosed = history ? RecentClosedStore(directory: URL(fileURLWithPath: scratch.state)) : nil
+        store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: scratch.state)), recentClosedStore: recentClosed,
                          controlEventSink: { events.receive($0) }, paneFinalizer: { ids in
             MainActor.assumeIsolated { panes.end(ids) }
         }, headless: true, askRegistry: AskRegistry())
@@ -235,6 +236,7 @@ final class ServerHarness {
         actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes,
                                 events: events, overlayJobs: OverlayJobs(now: { jobClock }))
         actions.streams.presentationHelloDeadline = 60
+        actions.recentClosed = recentClosed
         actions.processes = processes
         actions.restartWaits = (program: .milliseconds(200), shell: .seconds(5), poll: .milliseconds(10))
         let observer = PaneObserver(store: store, panes: panes, cwd: { _ in nil })

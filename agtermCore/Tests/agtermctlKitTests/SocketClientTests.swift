@@ -408,6 +408,19 @@ struct SocketClientTests {
         #expect(server.received?.cmd == .sessionCompanionNew)
     }
 
+    @Test func anAppTooOldForUndoIsNamed() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.undo"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "undo", "--target", "u1", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for session undo\n")
+        #expect(server.received?.cmd == .sessionUndo)
+    }
+
     @Test func anAppTooOldForConvertIsNamedAndNothingElseIsSent() throws {
         let decodeError = "invalid request: Cannot initialize Command from invalid String value session.companion.convert"
         let server = StubServer(response: ControlResponse(ok: false, error: decodeError))

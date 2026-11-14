@@ -22,7 +22,7 @@ struct ServerCommandPolicyTests {
     }
 
     private static let undecided: Set<Command> = [
-        .debugAppearance, .hooksList, .hooksReload, .recentClear, .recentList, .recentOpen,
+        .debugAppearance, .hooksList, .hooksReload,
         .restoreCapture, .restoreClear, .restoreMode,
         .sessionBackground, .sessionCollapse, .sessionCopy, .sessionDetach,
         .sessionExpand, .sessionFocus, .sessionGo, .sessionLead,

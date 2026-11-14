@@ -35,8 +35,10 @@ extension AppActions {
             canStepWindows: library.canStepWindows,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             activeSplitAxis: activeStore?.activeSession?.splitAxis,
-            hasPendingClose: activeStore?.pendingCloseSummary != nil,
-            hasRecentClosed: !library.recentClosedItems.isEmpty,
+            hasPendingClose: activeStore?.pendingCloseSummary != nil || activeStore?.remoteActions?.undoIDs.isEmpty == false
+                || activeStore.flatMap(library.windowID(for:)).map { library.attachedUndos[$0] != nil } == true,
+            hasRecentClosed: !(serverRecentItems.map(\.isEmpty)
+                ?? (library.recentClosedItems.isEmpty && library.remoteRecentClosedItems.isEmpty)),
             hasActiveSession: activeStore?.activeSession != nil,
             attentionNavigationAcrossWindows: activeStore?.attentionNavigationAcrossWindows == true,
             hasSessions: activeStore?.workspaces.contains { !$0.sessions.isEmpty } == true,

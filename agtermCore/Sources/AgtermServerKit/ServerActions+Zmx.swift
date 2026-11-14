@@ -108,20 +108,21 @@ extension ServerActions {
                                                                pane: pane.rawValue))
     }
 
-    /// paneClaims is every daemon-backed main and split pane of the catalog. A scratch daemon's name is never a pane
-    /// daemon's, so the inventory lists it as foreign rather than as an orphan.
+    /// paneClaims is every daemon-backed main and split pane of the catalog, a session inside a close's grace
+    /// included. A scratch daemon's name is never a pane daemon's, so the inventory lists it as foreign rather than
+    /// as an orphan.
     func paneClaims() -> [ZmxPaneClaim] {
+        let shown = store.workspaces.flatMap { workspace in workspace.sessions.map { ($0, workspace.id, workspace.name, false) } }
+        let pending = store.pendingCloseMembers().map { ($0.session, $0.workspaceID, $0.workspaceName, true) }
         var claims: [ZmxPaneClaim] = []
-        for workspace in store.workspaces {
-            for session in workspace.sessions {
-                var roles: [(UUID, ZmxPaneRole)] = [(session.paneIdentity, .left)]
-                if session.hasSplit, let split = session.splitPaneIdentity { roles.append((split, .right)) }
-                for (identity, role) in roles where session.daemonBackedPanes.contains(identity) {
-                    claims.append(ZmxPaneClaim(paneIdentity: identity, pane: role, pendingClose: false, windowID: catalog.id,
-                                               windowName: catalog.name, windowState: .open, workspaceID: workspace.id,
-                                               workspaceName: workspace.name, sessionID: session.id,
-                                               sessionName: session.displayName))
-                }
+        for (session, workspaceID, workspaceName, pendingClose) in shown + pending {
+            var roles: [(UUID, ZmxPaneRole)] = [(session.paneIdentity, .left)]
+            if session.hasSplit, let split = session.splitPaneIdentity { roles.append((split, .right)) }
+            for (identity, role) in roles where session.daemonBackedPanes.contains(identity) {
+                claims.append(ZmxPaneClaim(paneIdentity: identity, pane: role, pendingClose: pendingClose, windowID: catalog.id,
+                                           windowName: catalog.name, windowState: .open, workspaceID: workspaceID,
+                                           workspaceName: workspaceName, sessionID: session.id,
+                                           sessionName: session.displayName))
             }
         }
         return claims

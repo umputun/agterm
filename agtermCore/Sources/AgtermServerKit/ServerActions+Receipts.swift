@@ -9,6 +9,7 @@ extension ServerActions {
         .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
         .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane,
+        .recentOpen, .sessionUndo,
     ]
 
     public var takesOperationReceipts: Bool { true }

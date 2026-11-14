@@ -16,6 +16,25 @@ final class WindowLibraryRecentClosedTests {
         try? FileManager.default.removeItem(at: directory)
     }
 
+    @Test func anAttachedUndoWhoseReplyArrivesLateStillUndoesInTheOrderTheTerminatesWereAskedFor() throws {
+        let library = WindowLibrary(directory: directory)
+        let window = try #require(library.activeWindowID)
+        let asked = Date()
+        let first = AttachedUndo(host: "buildbox", undoID: "a", sessions: ["s1"], initiated: asked)
+        let second = AttachedUndo(host: "buildbox", undoID: "b", sessions: ["s2"], initiated: asked.addingTimeInterval(1))
+        let third = AttachedUndo(host: "buildbox", undoID: "c", sessions: ["s3"], initiated: asked.addingTimeInterval(2))
+
+        library.noteAttachedUndo(second, window: window, grace: 60)
+        library.noteAttachedUndo(third, window: window, grace: 60)
+        library.noteAttachedUndo(first, window: window, grace: 60)
+
+        #expect(library.attachedUndos[window]?.last == third)
+        #expect(library.takeAttachedUndo(window: window) == third)
+        #expect(library.takeAttachedUndo(window: window) == second)
+        #expect(library.takeAttachedUndo(window: window) == first)
+        #expect(library.attachedUndos[window] == nil)
+    }
+
     @Test func aReopenReportsItsWindowAndConsumesTheEntry() throws {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.activeStore)

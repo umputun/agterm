@@ -28,7 +28,10 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         var created: UUID?
         var createdPage: UUID?
 
+        private var plainRequests: [String] = []
+
         var operations: [String] { lock.withLock { recorded } }
+        var requests: [String] { lock.withLock { plainRequests } }
         var reads: [String] { lock.withLock { resultReads } }
 
         func answerResults(_ outcomes: [ControlHtmlPageOutcome]) {
@@ -50,6 +53,12 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                 return lock.withLock {
                     resultReads.append(line)
                     return RemoteCommandResult(status: 0, stdout: results.isEmpty ? "" : results.removeFirst(), stderr: "")
+                }
+            }
+            if line.contains("recent list") || line.contains("recent clear") {
+                return lock.withLock {
+                    plainRequests.append(line)
+                    return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: ControlResult(recent: []))), stderr: "")
                 }
             }
             guard let opRange = line.range(of: "--op-id ") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
@@ -359,8 +368,9 @@ final class ControlServerRemoteActionsTests: XCTestCase {
 
     func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
         try open([catalogSession()])
+        library.frontmostWindowID = remoteWindow
 
-        let reply = try await send(.recentOpen, target: UUID().uuidString, args: ControlArgs(window: remoteWindow.uuidString))
+        let reply = try await send(.recentOpen, target: UUID().uuidString)
 
         XCTAssertFalse(reply.ok)
         XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
@@ -400,6 +410,30 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertTrue(terminate.ok, terminate.error ?? "")
         XCTAssertEqual(runner.operations.count, 1)
         XCTAssertTrue(runner.operations.first?.contains("session close --target \(id)") == true, runner.operations.first ?? "")
+    }
+
+    func testHistoryCommandsNamingAServerWindowGoToItsServerAndTheBareFormsStayHere() async throws {
+        try open([catalogSession()])
+        let window = remoteWindow.uuidString
+
+        let list = try await send(.recentList, args: ControlArgs(window: window))
+        let clear = try await send(.recentClear, args: ControlArgs(window: window))
+        let undo = try await send(.sessionUndo, target: "u1", args: ControlArgs(window: window))
+        let reopen = try await send(.recentOpen, target: "r1", args: ControlArgs(window: window))
+        let local = try await send(.recentList)
+
+        XCTAssertEqual(list.result?.recent, [])
+        XCTAssertTrue(clear.ok, clear.error ?? "")
+        XCTAssertTrue(undo.ok, undo.error ?? "")
+        XCTAssertTrue(reopen.ok, reopen.error ?? "")
+        XCTAssertTrue(local.ok, local.error ?? "")
+        XCTAssertEqual(runner.requests.count, 2)
+        XCTAssertTrue(runner.requests[0].contains("recent list"), runner.requests[0])
+        XCTAssertTrue(runner.requests[1].contains("recent clear"), runner.requests[1])
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session undo --target u1"), runner.operations[0])
+        XCTAssertTrue(runner.operations[1].contains("recent open"), runner.operations[1])
+        XCTAssertTrue(runner.operations[1].contains("r1"), runner.operations[1])
     }
 
     func testSessionDetachOfALocalSessionIsRefused() async throws {

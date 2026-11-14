@@ -9,12 +9,14 @@ public final class AgtermServer {
         case stateDirectoryHeld(String)
         case stateDirectoryUnavailable(String)
         case unreadableCatalog(String)
+        case unrecoveredPendingCloses(String)
 
         public var description: String {
             switch self {
             case .stateDirectoryHeld(let path): "another agterm-server owns \(path)"
             case .stateDirectoryUnavailable(let reason): reason
             case .unreadableCatalog(let reason): "the saved catalog cannot be read, left untouched: \(reason)"
+            case .unrecoveredPendingCloses(let reason): "the closes a previous run left pending cannot be finished: \(reason)"
             }
         }
     }
@@ -61,7 +63,11 @@ public final class AgtermServer {
                                 catalogID: catalog.id, programVersion: identity.version, environment: environment)
         let persistence = PersistenceStore(directory: directory)
         let events = ServerEvents(window: catalog.id)
-        let store = AppStore(persistence: persistence, controlEventSink: { events.receive($0) }, paneFinalizer: { identities in
+        let recentClosed = RecentClosedStore(directory: directory)
+        // a pane exit closes its row with no served command, so the list cache is dropped where history changes
+        var historyChanged: (() -> Void)?
+        let store = AppStore(persistence: persistence, recentClosedStore: recentClosed, recentClosedDidChange: { historyChanged?() },
+                             controlEventSink: { events.receive($0) }, paneFinalizer: { identities in
             MainActor.assumeIsolated { panes.end(identities) }
         }, headless: true)
         if FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspaces.json").path) {
@@ -71,11 +77,20 @@ public final class AgtermServer {
                 throw Failure.unreadableCatalog("\(error)")
             }
         }
+        let pendingCloses = PendingCloseJournal(directory: directory)
+        do {
+            try pendingCloses.recover(into: store, panes: panes)
+        } catch {
+            throw Failure.unrecoveredPendingCloses("\(error)")
+        }
         CatalogRoot.seedWorkspace(in: store)
         store.save()
 
         let server = AgtermServer(configuration: configuration, store: store, catalog: catalog, identity: identity,
                                   panes: panes, events: events, lock: lock)
+        server.actions.recentClosed = recentClosed
+        historyChanged = { [weak server] in MainActor.assumeIsolated { server?.actions.recentItems = nil } }
+        server.actions.pendingCloses = pendingCloses
         // an operation that committed in an earlier run is answered at a revision this run's viewers can reach
         store.catalogOperations?.adopt(epoch: server.actions.streams.catalogHub.epoch, rev: server.actions.streams.catalogHub.rev)
         let socket = ServerControlSocket(path: configuration.socketPath, handler: { [weak server] request in
@@ -110,14 +125,17 @@ public final class AgtermServer {
 
     func handle(_ request: ControlRequest) async -> ControlResponse { await actions.serve(request) }
 
-    /// stop closes the socket, saves the store and gives up the state directory.
+    /// stop closes the socket, makes every close still inside its grace final, saves the store and gives up the
+    /// state directory.
     public func stop() {
         guard lock != nil else { return }
         observer.stop()
         socket?.stop()
         actions.streams.shutdown()
         socket = nil
+        store.finalizeAllPendingCloses()
         store.save()
+        actions.pendingCloses?.record(store)
         lock = nil
     }
 }

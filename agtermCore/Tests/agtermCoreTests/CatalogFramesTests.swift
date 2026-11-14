@@ -69,6 +69,8 @@ struct CatalogFramesTests {
         .hello(CatalogHello(version: 1, pageRows: true)),
         .delta(epoch: "e1", rev: 12, change: .sessionAdded(CatalogFixture.pageRow(), workspace: UUID(), index: 0)),
         .unknown(kind: CatalogFrame.skipKind, epoch: "e1", rev: 13),
+        .delta(epoch: "e1", rev: 14, change: .recentChanged([ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil,
+                                                                              closedAt: 1, workspaceID: "w", sessionIDs: ["s"])])),
     ])
     func everyFrameRoundTrips(_ frame: CatalogFrame) throws {
         let line = try CatalogCodec.encode(frame)
@@ -144,6 +146,16 @@ struct CatalogFramesTests {
         #expect(decoded.customName == "")
         #expect(!String(decoding: encodedLegacy, as: UTF8.self).contains("customName"))
         #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encodedLegacy).customName == nil)
+    }
+
+    @Test func aSnapshotCarriesTheRecentListAndAnOlderServersSnapshotHasNone() throws {
+        let item = ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil, closedAt: 1, workspaceID: "w", sessionIDs: ["s"])
+        var snapshot = CatalogFixture.snapshot([])
+        let older = try JSONDecoder().decode(CatalogSnapshot.self, from: JSONEncoder().encode(snapshot))
+        snapshot.recent = [item]
+
+        #expect(older.recent == nil)
+        #expect(try JSONDecoder().decode(CatalogSnapshot.self, from: JSONEncoder().encode(snapshot)).recent == [item])
     }
 
     @Test func versionsTravelWithTheProtocolKeyword() throws {

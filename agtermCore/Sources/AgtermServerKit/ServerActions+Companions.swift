@@ -63,14 +63,14 @@ extension ServerActions {
         let workspace = store.sessionLocation(ofSession: copy.id)?.workspace
         if let refusal = panes.start(.init(identity: copy.paneIdentity, session: copy, workspace: workspace, pane: .left,
                                            program: .creation(copy.initialCommand, wait: nil), directory: copy.effectiveCwd)) {
-            store.closeSession(copy.id, alreadyFinalized: copy.paneIdentity)
+            store.discardSession(copy.id, alreadyFinalized: copy.paneIdentity)
             return refusal
         }
         guard copy.hasSplit, let split = copy.splitPaneIdentity else { return nil }
         if let refusal = panes.start(.init(identity: split, session: copy, workspace: workspace, pane: .right,
                                            program: .creation(copy.splitInitialCommand, wait: nil),
                                            directory: copy.cwd(for: .right))) {
-            store.closeSession(copy.id, alreadyFinalized: split)
+            store.discardSession(copy.id, alreadyFinalized: split)
             return refusal
         }
         return nil
@@ -89,7 +89,7 @@ extension ServerActions {
                 if let refusal = panes.start(.init(identity: parent.paneIdentity, session: parent, workspace: workspace,
                                                    pane: .left, directory: parent.effectiveCwd)) {
                     store.revertConversion(parent.id, target: session.id, selected: selected)
-                    store.closeSession(parent.id, alreadyFinalized: parent.paneIdentity)
+                    store.discardSession(parent.id, alreadyFinalized: parent.paneIdentity)
                     return ControlResponse(ok: false, error: refusal)
                 }
                 return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, parent: parent.id.uuidString))

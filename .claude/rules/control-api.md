@@ -194,7 +194,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
-- `recent.list`, `recent.open`, `recent.clear`
+- `recent.list`, `recent.open`, `recent.clear`, `session.undo`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.kill.pane`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
 - `catalog.subscribe`, `catalog.op`: served only by agterm-server; a Mac app refuses them and any `opID`
 
@@ -249,6 +249,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlActions` keeps the two-argument forms,
   and the defaults of the `undoable:` overloads refuse an undoable request
   rather than quietly hard-closing it.
+  Every undoable reply carries `result.undoID`, the pending-close record `session.undo` takes, except a forwarded
+  `session.terminate` of an attached row: the origin's id stays in `WindowLibrary.attachedUndos` for ⌘Z in the
+  window that asked, and adding it to the aggregate reply would be a new wire contract. Past the grace it
+  answers `AppStore.closeNoLongerUndoable` and never reopens, which stays `recent.open`'s job.
+  `recent.*` and `session.undo` go to a server window's server only when `--window` names it; the bare forms stay this
+  Mac's, so a script never reaches a server it did not name.
 - `session.move` accepts exactly one placement intent:
   - `--to up|down|top|bottom` reorders one session in its workspace.
   - workspace relocates and appends.

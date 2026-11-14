@@ -162,13 +162,15 @@ struct ServerActionsSessionsTests {
         #expect(Set(harness.runner.kills) == Set([one, two, three].map { ZmxSupport.daemonName(for: $0.paneIdentity) }))
     }
 
-    @Test func terminateRefusesAnUndoableClose() throws {
+    @Test func anUndoableTerminateKeepsTheDaemonForTheGrace() throws {
         let session = try harness.session(newSession())
 
         let reply = harness.actions.terminateSessions([session.id.uuidString], window: nil, undoable: true)
 
-        #expect(reply == ControlResponse(ok: false, error: "session.close --undoable is not supported by this control host"))
-        #expect(harness.store.session(withID: session.id) === session)
+        #expect(reply.ok)
+        #expect(reply.result?.undoable == true)
+        #expect(reply.result?.undoID != nil)
+        #expect(harness.store.session(withID: session.id) == nil)
         #expect(harness.runner.kills.isEmpty)
     }
 
