@@ -28,7 +28,10 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         var created: UUID?
         var createdPage: UUID?
 
+        private var plainRequests: [String] = []
+
         var operations: [String] { lock.withLock { recorded } }
+        var requests: [String] { lock.withLock { plainRequests } }
         var reads: [String] { lock.withLock { resultReads } }
 
         func answerResults(_ outcomes: [ControlHtmlPageOutcome]) {
@@ -50,6 +53,12 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                 return lock.withLock {
                     resultReads.append(line)
                     return RemoteCommandResult(status: 0, stdout: results.isEmpty ? "" : results.removeFirst(), stderr: "")
+                }
+            }
+            if line.contains("recent list") || line.contains("recent clear") {
+                return lock.withLock {
+                    plainRequests.append(line)
+                    return RemoteCommandResult(status: 0, stdout: Self.json(ControlResponse(ok: true, result: ControlResult(recent: []))), stderr: "")
                 }
             }
             guard let opRange = line.range(of: "--op-id ") else { return RemoteCommandResult(status: 0, stdout: "", stderr: "") }
@@ -135,11 +144,11 @@ final class ControlServerRemoteActionsTests: XCTestCase {
                               panes: panes)
     }
 
-    private func open(_ sessions: [CatalogSession]) throws {
+    private func open(_ sessions: [CatalogSession], tint: String? = nil) throws {
         try feed(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                            versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
-                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", sessions: sessions),
-                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", sessions: [])])))
+                                           workspaces: [CatalogWorkspace(id: workspaceID, name: "main", tint: tint, sessions: sessions),
+                                                        CatalogWorkspace(id: otherWorkspaceID, name: "spare", tint: tint, sessions: [])])))
         XCTAssertEqual(remoteStore.remoteActions?.mirror.state, .connected)
     }
 
@@ -202,6 +211,38 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertFalse(row.hasSplit)
         XCTAssertEqual(row.displayName, "build")
         XCTAssertEqual(remoteStore.sessionLocation(ofSession: entry.id)?.workspace, workspaceID)
+    }
+
+    func testFlagAndTintOfACatalogRowGoToAServerThatKeepsThemAndChangeNothingHere() async throws {
+        let entry = catalogSession()
+        try open([entry], tint: "")
+        let id = entry.id.uuidString
+        var tint = ControlArgs(mode: "set")
+        tint.tint = "red"
+
+        let flag = try await send(.sessionFlag, target: id, args: ControlArgs(mode: "on"))
+        let colored = try await send(.sessionTint, target: id, args: tint)
+        let workspace = try await send(.workspaceFlag, target: workspaceID.uuidString, args: ControlArgs(mode: "toggle"))
+
+        for reply in [flag, colored, workspace] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 3)
+        XCTAssertTrue(runner.operations[0].contains("session flag on --target \(id)"))
+        XCTAssertTrue(runner.operations[1].contains("session tint red --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("workspace flag on --target \(workspaceID.uuidString)"))
+        let row = try XCTUnwrap(remoteStore.session(withID: entry.id))
+        XCTAssertFalse(row.flagged)
+        XCTAssertNil(row.tint)
+    }
+
+    func testFlagAndTintOfACatalogRowStayHereWithAServerThatDoesNotKeepThem() async throws {
+        let entry = catalogSession()
+        try open([entry])
+
+        let flag = try await send(.sessionFlag, target: entry.id.uuidString, args: ControlArgs(mode: "on"))
+
+        XCTAssertTrue(flag.ok, flag.error ?? "")
+        XCTAssertTrue(runner.operations.isEmpty)
+        XCTAssertEqual(remoteStore.session(withID: entry.id)?.flagged, true)
     }
 
     func testControlSplitOffOfAShownCatalogSplitAsksTheServerAndKeepsItShownHere() async throws {
@@ -326,14 +367,73 @@ final class ControlServerRemoteActionsTests: XCTestCase {
     }
 
     func testACommandThatMakesALocalRowIsRefusedInARemoteWindow() async throws {
-        let entry = catalogSession()
-        try open([entry])
+        try open([catalogSession()])
+        library.frontmostWindowID = remoteWindow
 
-        let reply = try await send(.sessionCompanionConvert, target: entry.id.uuidString)
+        let reply = try await send(.recentOpen, target: UUID().uuidString)
 
         XCTAssertFalse(reply.ok)
-        XCTAssertEqual(reply.error, "session.companion.convert is not available in a remote window")
+        XCTAssertEqual(reply.error, "recent.open is not available in a remote window")
         XCTAssertTrue(runner.operations.isEmpty)
+    }
+
+    func testPaneLifecycleCommandsOfACatalogRowGoToTheServer() async throws {
+        let entry = catalogSession(split: true)
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restart = try await send(.sessionRestart, target: id, args: ControlArgs(command: "make", pane: "split"))
+        let duplicate = try await send(.sessionCompanionDuplicate, target: id)
+        let convert = try await send(.sessionCompanionConvert, target: id)
+        let kill = try await send(.zmxKill, target: id, args: ControlArgs(force: true, pane: "left"))
+        let wait = try await send(.sessionCompanionNew, target: id, args: ControlArgs(command: "make", wait: true))
+
+        for reply in [restart, duplicate, convert, kill, wait] { XCTAssertTrue(reply.ok, reply.error ?? "") }
+        XCTAssertEqual(runner.operations.count, 5)
+        XCTAssertTrue(runner.operations[0].contains("session restart --target \(id) --pane right --command=make"))
+        XCTAssertTrue(runner.operations[1].contains("session duplicate --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[2].contains("session convert --companion --target \(id)"))
+        XCTAssertTrue(runner.operations[3].contains("zmx kill --target \(id) --pane left --force"))
+        XCTAssertTrue(runner.operations[4].contains("session new --parent \(id) --command=make --wait"))
+        XCTAssertNil(remoteStore.session(withID: entry.id)?.parentID)
+    }
+
+    func testTerminateOfACatalogRowClosesItOnTheServerAndRestoreIsRefused() async throws {
+        let entry = catalogSession()
+        try open([entry])
+        let id = entry.id.uuidString
+
+        let restore = try await send(.sessionRestore, target: id, args: ControlArgs(mode: "set", command: "make"))
+        let terminate = try await send(.sessionTerminate, target: id)
+
+        XCTAssertEqual(restore.error, "agterm-server keeps every pane running")
+        XCTAssertTrue(terminate.ok, terminate.error ?? "")
+        XCTAssertEqual(runner.operations.count, 1)
+        XCTAssertTrue(runner.operations.first?.contains("session close --target \(id)") == true, runner.operations.first ?? "")
+    }
+
+    func testHistoryCommandsNamingAServerWindowGoToItsServerAndTheBareFormsStayHere() async throws {
+        try open([catalogSession()])
+        let window = remoteWindow.uuidString
+
+        let list = try await send(.recentList, args: ControlArgs(window: window))
+        let clear = try await send(.recentClear, args: ControlArgs(window: window))
+        let undo = try await send(.sessionUndo, target: "u1", args: ControlArgs(window: window))
+        let reopen = try await send(.recentOpen, target: "r1", args: ControlArgs(window: window))
+        let local = try await send(.recentList)
+
+        XCTAssertEqual(list.result?.recent, [])
+        XCTAssertTrue(clear.ok, clear.error ?? "")
+        XCTAssertTrue(undo.ok, undo.error ?? "")
+        XCTAssertTrue(reopen.ok, reopen.error ?? "")
+        XCTAssertTrue(local.ok, local.error ?? "")
+        XCTAssertEqual(runner.requests.count, 2)
+        XCTAssertTrue(runner.requests[0].contains("recent list"), runner.requests[0])
+        XCTAssertTrue(runner.requests[1].contains("recent clear"), runner.requests[1])
+        XCTAssertEqual(runner.operations.count, 2)
+        XCTAssertTrue(runner.operations[0].contains("session undo --target u1"), runner.operations[0])
+        XCTAssertTrue(runner.operations[1].contains("recent open"), runner.operations[1])
+        XCTAssertTrue(runner.operations[1].contains("r1"), runner.operations[1])
     }
 
     func testSessionDetachOfALocalSessionIsRefused() async throws {

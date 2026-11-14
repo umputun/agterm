@@ -45,6 +45,10 @@ public final class WindowLibrary {
     /// unless another one still holds the session, live or pending its close, in which case it restores
     /// there. Independent of window reopen semantics.
     public private(set) var recentClosedItems: [RecentClosedItem]
+    /// remoteRecentClosedItems are the closed rows attached here from another host, newest first.
+    public private(set) var remoteRecentClosedItems: [RemoteRecentClosedItem]
+    /// attachedUndos are each window's undoable terminates of attached rows, oldest first, while their grace lasts.
+    public internal(set) var attachedUndos: [UUID: [AttachedUndo]] = [:]
 
     /// The id of the frontmost on-screen window, mirrored into the index on change. Outlives the window
     /// only when it was the last one closed, so the index records which window the user exited from.
@@ -138,6 +142,7 @@ public final class WindowLibrary {
         self.stores = [:]
         self.windows = []
         self.recentClosedItems = recentClosedStore.load()
+        self.remoteRecentClosedItems = recentClosedStore.loadRemote()
         self.frontmostWindowID = nil
         bootstrap()
         if let launchInventorySink { launchInventorySink(prepareLaunchPaneInventory()) }
@@ -208,12 +213,7 @@ public final class WindowLibrary {
 
     /// Reads the app-wide ring and maps both pages and cursor failures onto the stable control response.
     public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
-        switch controlEventRing.read(cursor: options.cursor, kinds: options.kinds, limit: options.limit) {
-        case .batch(let batch):
-            return ControlResponse(ok: true, result: ControlResult(events: batch))
-        case .failure(let error, let anchor):
-            return ControlResponse(ok: false, result: ControlResult(events: anchor), error: error.rawValue)
-        }
+        controlEventRing.readResponse(options)
     }
 
     /// Appends `app.launched` on the first call of a run, and only when `ready`. The caller picks the
@@ -913,15 +913,13 @@ public final class WindowLibrary {
             // through the ownership projection, so this stays one predicate: an empty list is a session
             // whose daemons are not ours to claim, and inventing rows for it would name daemons that do
             // not exist here
-            var owned = session.locallyManagedPaneIdentities.makeIterator()
-            guard let primary = owned.next() else { continue }
-            claims.append(site.claim(.left, identity: primary))
-            guard session.hasSplit else { continue }
-            guard let split = owned.next() else {
-                complete = false
-                continue
+            let owned = session.locallyManagedPaneIdentities
+            guard !owned.isEmpty else { continue }
+            claims.append(site.claim(.left, identity: session.paneIdentity))
+            if session.hasSplit {
+                if let split = session.splitPaneIdentity { claims.append(site.claim(.right, identity: split)) } else { complete = false }
             }
-            claims.append(site.claim(.right, identity: split))
+            if let scratch = session.localScratchIdentity { claims.append(site.claim(.scratch, identity: scratch)) }
         }
         return ZmxClaimWalk(claims: claims, complete: complete)
     }
@@ -945,12 +943,10 @@ public final class WindowLibrary {
                 } else {
                     complete = false
                 }
-                guard (session.hasSplit ?? false) || (session.isSplit ?? false) else { continue }
-                guard let split = session.splitPaneIdentity else {
-                    complete = false
-                    continue
+                if (session.hasSplit ?? false) || (session.isSplit ?? false) {
+                    if let split = session.splitPaneIdentity { claims.append(site.claim(.right, identity: split)) } else { complete = false }
                 }
-                claims.append(site.claim(.right, identity: split))
+                if let scratch = session.scratchPaneIdentity { claims.append(site.claim(.scratch, identity: scratch)) }
             }
         }
         return ZmxClaimWalk(claims: claims, complete: complete)
@@ -984,6 +980,7 @@ public final class WindowLibrary {
 
     func refreshRecentClosedItems() {
         recentClosedItems = recentClosedStore.load()
+        remoteRecentClosedItems = recentClosedStore.loadRemote()
     }
 
     func log(_ message: @autoclosure () -> String) {

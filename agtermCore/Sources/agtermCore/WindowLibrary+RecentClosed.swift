@@ -1,6 +1,47 @@
 import Foundation
 
 extension WindowLibrary {
+    /// noteOriginRecentID records that `host` keeps its session `sessionID`, closed here, as its entry `recentID`.
+    public func noteOriginRecentID(_ recentID: String, host: String, sessionID: String) {
+        recentClosedStore.setOriginRecentID(recentID, host: host, sessionID: sessionID)
+        refreshRecentClosedItems()
+    }
+
+    /// noteAttachedUndo keeps `undo` for ⌘Z in window `window` until its host's grace ends, when it leaves by itself.
+    /// Replies can arrive out of order, so the list is kept ordered by when each terminate was asked for.
+    public func noteAttachedUndo(_ undo: AttachedUndo, window: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) {
+        var undos = attachedUndos[window] ?? []
+        undos.insert(undo, at: undos.lastIndex { $0.initiated <= undo.initiated }.map { $0 + 1 } ?? 0)
+        attachedUndos[window] = undos
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(grace))
+            self?.dropAttachedUndo(undo, window: window)
+        }
+    }
+
+    /// takeAttachedUndo removes and answers window `window`'s most recently asked-for attached undo.
+    public func takeAttachedUndo(window: UUID) -> AttachedUndo? {
+        guard let undo = attachedUndos[window]?.last else { return nil }
+        dropAttachedUndo(undo, window: window)
+        return undo
+    }
+
+    private func dropAttachedUndo(_ undo: AttachedUndo, window: UUID) {
+        attachedUndos[window]?.removeAll { $0 == undo }
+        if attachedUndos[window]?.isEmpty == true { attachedUndos[window] = nil }
+    }
+
+    /// removeRemoteRecentClosed drops an attached row's entry once its session is shown here again.
+    public func removeRemoteRecentClosed(_ id: UUID) {
+        recentClosedStore.remove(id)
+        refreshRecentClosedItems()
+    }
+
+    /// undoPendingClose undoes the pending close `id` in the open store holding it; false when none does.
+    public func undoPendingClose(_ id: UUID) -> Bool {
+        openStores().contains { $0.undoPendingClose(id) }
+    }
+
     @discardableResult
     public func reopenRecentClosed(_ itemID: UUID, into targetStore: AppStore? = nil) -> Bool {
         reopenRecentClosedReportingWindow(itemID, into: targetStore) != nil
@@ -124,9 +165,10 @@ extension WindowLibrary {
     }
 }
 
-private extension RecentClosedItem {
-    // a recorded parent may sit inside an entry as a companion: Convert to Companion nests it after the record
-    func restoresSession(_ id: UUID) -> Bool {
+extension RecentClosedItem {
+    /// restoresSession says the entry rebuilds session `id`: a recorded parent may sit inside an entry as a companion,
+    /// since Convert to Companion nests it after the record.
+    public func restoresSession(_ id: UUID) -> Bool {
         switch kind {
         case .session: session?.snapshot.id == id || session?.companions?.contains { $0.id == id } == true
         case .workspace: workspace?.snapshot.sessions.contains { $0.id == id } == true

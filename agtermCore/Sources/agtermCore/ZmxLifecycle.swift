@@ -147,6 +147,7 @@ public enum PaneIdentityInventory {
                     }
                     if let splitPaneIdentity = session.splitPaneIdentity { identities.insert(splitPaneIdentity) }
                 }
+                if let scratch = session.scratchPaneIdentity { identities.insert(scratch) }
                 snapshot.workspaces[workspaceIndex].sessions[sessionIndex] = session
             }
         }

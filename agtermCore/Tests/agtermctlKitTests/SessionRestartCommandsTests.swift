@@ -37,4 +37,14 @@ struct SessionRestartCommandsTests {
     func requiresAValidPaneSelector(argv: [String]) {
         #expect(throws: (any Error).self) { try request(argv) }
     }
+
+    @Test(arguments: ["-x" as String?, nil])
+    func anAttachedRestartParsesOnItsOrigin(command: String?) throws {
+        let forward = AttachedForward.restart(session: "s1", paneID: "tok", command: command)
+
+        let parsed = try request(forward.originArgv)
+
+        #expect(parsed == ControlRequest(cmd: .sessionRestart, target: "s1", args: ControlArgs(command: command, paneID: "tok")))
+        #expect(parsed.cmd == forward.command)
+    }
 }

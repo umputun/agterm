@@ -55,6 +55,8 @@ struct CatalogFramesTests {
         .snapshot(CatalogSnapshot(epoch: "e1", rev: 3, catalogID: CatalogFixture.catalog, versions: CatalogFixture.versions, workspaces: [])),
         .delta(epoch: "e1", rev: 1, change: .workspaceAdded(CatalogWorkspace(id: UUID(), name: "w", sessions: [CatalogFixture.session()]), index: 0)),
         .delta(epoch: "e1", rev: 2, change: .workspaceChanged(id: UUID(), name: "dev")),
+        .delta(epoch: "e1", rev: 2, change: .workspaceChanged(id: UUID(), name: "dev", tint: "red", tintOn: ["name"])),
+        .delta(epoch: "e1", rev: 2, change: .workspaceChanged(id: UUID(), name: "dev", tint: "")),
         .delta(epoch: "e1", rev: 3, change: .workspaceRemoved(UUID())),
         .delta(epoch: "e1", rev: 4, change: .workspaceOrder([UUID(), UUID()])),
         .delta(epoch: "e1", rev: 5, change: .sessionAdded(CatalogFixture.session(panes: [CatalogFixture.pane(), CatalogFixture.pane()]), workspace: UUID(), index: 1)),
@@ -67,12 +69,43 @@ struct CatalogFramesTests {
         .hello(CatalogHello(version: 1, pageRows: true)),
         .delta(epoch: "e1", rev: 12, change: .sessionAdded(CatalogFixture.pageRow(), workspace: UUID(), index: 0)),
         .unknown(kind: CatalogFrame.skipKind, epoch: "e1", rev: 13),
+        .delta(epoch: "e1", rev: 14, change: .recentChanged([ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil,
+                                                                              closedAt: 1, workspaceID: "w", sessionIDs: ["s"])])),
     ])
     func everyFrameRoundTrips(_ frame: CatalogFrame) throws {
         let line = try CatalogCodec.encode(frame)
 
         #expect(line.last == UInt8(ascii: "\n"))
         #expect(try CatalogCodec.decode(line.dropLast()) == frame)
+    }
+
+    @Test func flagAndTintRoundTripWithAnExplicitNoneAndAnOlderServerSendsNone() throws {
+        var fields = CatalogFixture.session().fields
+        fields.flagged = false
+        fields.tint = ""
+        let none = try JSONDecoder().decode(CatalogSessionFields.self, from: JSONEncoder().encode(fields))
+        fields.flagged = true
+        fields.tint = "#ff8800"
+        fields.tintOn = ["icon", "name"]
+        let tinted = try JSONDecoder().decode(CatalogSessionFields.self, from: JSONEncoder().encode(fields))
+        let older = try JSONDecoder().decode(CatalogSessionFields.self, from: JSONEncoder().encode(CatalogFixture.session().fields))
+        let workspace = Data(#"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"w","sessions":[]}"#.utf8)
+        let olderWorkspace = try JSONDecoder().decode(CatalogWorkspace.self, from: workspace)
+
+        #expect(none.flagged == false && none.tint == "")
+        #expect(tinted == fields)
+        #expect(older.flagged == nil && older.tint == nil && older.tintOn == nil)
+        #expect(olderWorkspace.tint == nil)
+    }
+
+    @Test func aCatalogTintReadsBackAsARowsTint() throws {
+        let hex = try #require(TintValue(rawValue: "#ff8800"))
+
+        #expect(CatalogTint.sidebarTint("#FF8800", on: ["name", "bogus"]) == SidebarTint(color: hex, parts: [.name]))
+        #expect(CatalogTint.sidebarTint("red", on: nil) == SidebarTint(color: .red))
+        #expect(CatalogTint.sidebarTint("", on: nil) == nil)
+        #expect(CatalogTint.sidebarTint("mauve-ish", on: ["icon"]) == nil)
+        #expect(CatalogTint.sidebarTint(nil, on: nil) == nil)
     }
 
     @Test func anUnknownKindDecodesAsUnknown() throws {
@@ -113,6 +146,16 @@ struct CatalogFramesTests {
         #expect(decoded.customName == "")
         #expect(!String(decoding: encodedLegacy, as: UTF8.self).contains("customName"))
         #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encodedLegacy).customName == nil)
+    }
+
+    @Test func aSnapshotCarriesTheRecentListAndAnOlderServersSnapshotHasNone() throws {
+        let item = ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil, closedAt: 1, workspaceID: "w", sessionIDs: ["s"])
+        var snapshot = CatalogFixture.snapshot([])
+        let older = try JSONDecoder().decode(CatalogSnapshot.self, from: JSONEncoder().encode(snapshot))
+        snapshot.recent = [item]
+
+        #expect(older.recent == nil)
+        #expect(try JSONDecoder().decode(CatalogSnapshot.self, from: JSONEncoder().encode(snapshot)).recent == [item])
     }
 
     @Test func versionsTravelWithTheProtocolKeyword() throws {

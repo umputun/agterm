@@ -142,12 +142,15 @@ public struct ControlRemoteSession: Codable, Sendable, Equatable {
     /// group attach can keep that order and name a member it could not bring. `[]` means none; nil means
     /// unknown, which is what a companion row and an older origin carry.
     public let companions: [ControlRemoteMember]?
+    /// scratch is the session's Live scratch daemon, pane `scratch`; omitted when none runs or the origin predates it.
+    public let scratch: ControlRemotePane?
 
     public init(id: String, name: String, windowID: String, windowName: String, workspaceID: String,
                 workspaceName: String, context: String? = nil, cwd: String, splitAxis: String?,
                 panes: [ControlRemotePane], status: String? = nil, statusColor: String? = nil,
                 statusShape: String? = nil, parent: String? = nil, content: String? = nil,
-                companions: [ControlRemoteMember]? = nil) {
+                companions: [ControlRemoteMember]? = nil, scratch: ControlRemotePane? = nil) {
+        self.scratch = scratch
         self.parent = parent
         self.content = content
         self.companions = companions

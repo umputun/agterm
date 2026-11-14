@@ -20,13 +20,19 @@ extension ControlServer {
         Task { @MainActor [weak self] in
             guard let self, let pid = await shell(daemon: daemon, otherThan: prior, client: client, within: Self.respawnLeaderWait),
                   kill(pid, 0) == 0 else { return }
-            var counts = respawnGenerations[session] ?? [:]
-            let generation = (counts[daemon] ?? 0) + 1
-            counts[daemon] = generation
-            respawnGenerations[session] = counts
-            presentationHub.publish(.respawn(PresentationRespawns(epoch: originEpoch, generations: [daemon: generation])),
-                                    session: session)
+            publishRespawn(session: session, daemon: daemon)
         }
+    }
+
+    /// publishRespawn counts a fresh shell under `daemon` and tells the session's viewers, whose held attaches then
+    /// attach again: a parent's respawn and a confirmed `session.restart` both end in it.
+    func publishRespawn(session: UUID, daemon: String) {
+        var counts = respawnGenerations[session] ?? [:]
+        let generation = (counts[daemon] ?? 0) + 1
+        counts[daemon] = generation
+        respawnGenerations[session] = counts
+        presentationHub.publish(.respawn(PresentationRespawns(epoch: originEpoch, generations: [daemon: generation])),
+                                session: session)
     }
 
     /// applyRemoteRespawns feeds what the origin reported into the book, for each local pane of the row; a frame

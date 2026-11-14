@@ -121,6 +121,16 @@ struct RemoteOperationRequestTests {
         #expect(parse(.sessionClose) { $0.targets = [target] } == .operation(.closeSession(first.id), select: false))
     }
 
+    @Test func aTerminateOnAServerRowIsAClose() {
+        let target = first.id.uuidString
+
+        #expect(RemoteOperation.structuralCommands.contains(.sessionTerminate))
+        #expect(parse(.sessionTerminate, target: target) == .operation(.closeSession(first.id), select: false))
+        #expect(parse(.sessionTerminate) { $0.targets = [target, second.id.uuidString] } == .operation(.closeSessions([first.id, second.id]), select: false))
+        #expect(RemoteOperation.closeSession(first.id).words == ["session", "close", "--target", target])
+        #expect(parse(.sessionTerminate, target: target) { $0.undoable = true } == .operation(.closeSession(first.id, undoable: true), select: false))
+    }
+
     @Test func aMoveTakesExactlyOnePlacement() {
         let target = first.id.uuidString
         #expect(parse(.sessionMove, target: target) { $0.to = "down" } == .operation(.moveSession(first.id, to: .step("down")), select: false))
@@ -141,24 +151,108 @@ struct RemoteOperationRequestTests {
         #expect(parse(.workspaceMove, target: target) { $0.to = "top" } == .operation(.moveWorkspace(workspace.id, to: "top"), select: false))
     }
 
+    @Test func anUndoableCloseAsksTheServerForItsGrace() {
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionClose, target: target) { $0.undoable = true } == .operation(.closeSession(first.id, undoable: true), select: false))
+        #expect(parse(.sessionClose) { $0.targets = [target, second.id.uuidString]; $0.undoable = true }
+            == .operation(.closeSessions([first.id, second.id], undoable: true), select: false))
+        #expect(RemoteOperation.closeSession(first.id, undoable: true).words == ["session", "close", "--target", target, "--undoable"])
+        #expect(RemoteOperation.closeSessions([first.id, second.id], undoable: true).words
+            == ["session", "close", "--target", target, "--target", second.id.uuidString, "--undoable"])
+    }
+
+    @Test func undoAndReopenNameNoRow() {
+        #expect(RemoteOperation.undoClose("u1").words == ["session", "undo", "--target", "u1"])
+        #expect(RemoteOperation.undoClose("u1").target == nil)
+        #expect(RemoteOperation.reopenRecent("r1").words == ["recent", "open"])
+        #expect(RemoteOperation.reopenRecent("r1").operands == ["r1"])
+        #expect(RemoteOperation.reopenRecent(nil).operands == [])
+    }
+
+    @Test func aWaitingCommandIsHeldOnTheServer() {
+        let shell = RemoteShellOptions(command: "make", wait: true)
+
+        #expect(parse(.sessionNew) { $0.command = "make"; $0.wait = true } == .operation(.newSession(workspace: workspace.id, shell: shell), select: true))
+        #expect(parse(.sessionCompanionNew, target: first.id.uuidString) { $0.command = "make"; $0.wait = true }
+            == .operation(.newCompanion(parent: first.id, shell: shell), select: true))
+    }
+
+    @Test func aRestartNamesThePaneByTheRoleThisWindowShows() {
+        first.daemonBackedPanes = [first.paneIdentity]
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionRestart, target: target) { $0.pane = "split"; $0.command = "top" }
+            == .operation(.restart(first.id, pane: .right, command: "top"), select: false))
+        #expect(parse(.sessionRestart, target: target) { $0.paneID = first.paneIdentity.uuidString; $0.pane = "right" }
+            == .operation(.restart(first.id, pane: .left, command: nil), select: false))
+    }
+
     @Test(arguments: [
-        (Command.sessionNew, "--workspace-name"), (.sessionNew, "--create-workspace"), (.sessionNew, "--wait"), (.sessionNew, "--tint"),
-        (.sessionCompanionNew, "--wait"), (.sessionCompanionNew, "--tint"), (.sessionClose, "--undoable"), (.workspaceNew, "--collapsed"),
-        (.workspaceNew, "--tint"),
+        (ControlArgs(pane: "left", paneID: "gone"), "unknown pane id: gone"),
+        (ControlArgs(pane: "scratch"), "session.restart does not address the scratch pane"),
+        (ControlArgs(command: "top"), "session.restart requires --pane-id or --pane"),
+        (ControlArgs(command: " ", pane: "left"), "session.restart takes a non-empty command, or none to replay"),
     ])
-    func aFieldTheServerCannotBeAskedForIsRefusedByName(_ cmd: Command, _ field: String) {
-        let parsed = parse(cmd, target: first.id.uuidString) { args in
-            switch field {
-            case "--workspace-name": args.workspaceName = "w"
-            case "--create-workspace": args.createWorkspace = true
-            case "--wait": args.wait = true
-            case "--tint": args.tint = "red"
-            case "--undoable": args.undoable = true
-            default: args.collapsed = true
+    func aRestartRefusesWhatALocalOneRefuses(args: ControlArgs, error: String) {
+        let request = ControlRequest(cmd: .sessionRestart, target: first.id.uuidString, args: args)
+
+        #expect(refusal(RemoteOperation.parse(request, in: store)) == error)
+    }
+
+    @Test func companionDuplicateAndConvertGoToTheServer() {
+        let target = first.id.uuidString
+
+        #expect(parse(.sessionCompanionDuplicate, target: target) == .operation(.duplicateCompanion(first.id), select: true))
+        #expect(parse(.sessionCompanionDuplicate, target: target) { $0.noSelect = true } == .operation(.duplicateCompanion(first.id), select: false))
+        #expect(parse(.sessionCompanionConvert, target: target) == .operation(.convertCompanion(first.id), select: false))
+    }
+
+    @Test func aKillNamesOnePaneAndKeepsTheLocalRefusals() {
+        let target = first.id.uuidString
+
+        #expect(parse(.zmxKill, target: target) { $0.pane = "split"; $0.force = true } == .operation(.killDaemon(first.id, pane: .right), select: false))
+        #expect(refusal(parse(.zmxKill, target: "active") { $0.pane = "left"; $0.force = true }) == "zmx.kill needs a session id; 'active' is not accepted")
+        #expect(refusal(parse(.zmxKill, target: target) { $0.force = true }) == "zmx.kill requires --pane left|right")
+        #expect(refusal(parse(.zmxKill, target: target) { $0.pane = "left" }) == "zmx.kill requires --force")
+        #expect(RemoteOperation.structuralCommands.contains(.zmxKillPane))
+        #expect(parse(.zmxKillPane, target: target) { $0.pane = "left"; $0.force = true; $0.paneID = "tok" }
+            == .operation(.killDaemon(first.id, pane: .left, paneID: "tok"), select: false))
+        #expect(refusal(parse(.zmxKillPane, target: target) { $0.pane = "left"; $0.force = true }) == "zmx.kill.pane requires --pane-id")
+        #expect(refusal(parse(.zmxKillPane, target: target) { $0.pane = "left" }) == "zmx.kill.pane requires --force")
+        #expect(parse(.zmxKill, target: target) { $0.pane = "left"; $0.force = true; $0.paneID = "tok" }
+            == .operation(.killDaemon(first.id, pane: .left), select: false))
+    }
+
+    @Test func creationOptionsGoToTheServer() {
+        let tint = SidebarTint(color: .red, parts: [.name])
+
+        let named = parse(.sessionNew) { $0.workspaceName = "ops"; $0.createWorkspace = true; $0.tint = "red"; $0.tintOn = ["name"] }
+        let companion = parse(.sessionCompanionNew, target: first.id.uuidString) { $0.tint = "red"; $0.tintOn = ["name"] }
+        let workspace = parse(.workspaceNew) { $0.name = "x"; $0.collapsed = true; $0.tint = "red"; $0.tintOn = ["name"] }
+
+        #expect(named == .operation(.newSessionInNamedWorkspace(name: "ops", create: true, shell: RemoteShellOptions(tint: tint)), select: true))
+        #expect(companion == .operation(.newCompanion(parent: first.id, shell: RemoteShellOptions(tint: tint)), select: true))
+        #expect(workspace == .operation(.newWorkspace(name: "x", collapsed: true, tint: tint), select: false))
+    }
+
+    @Test(arguments: [
+        ("both", "use either --workspace or --workspace-name, not both"),
+        ("create", "--create-workspace requires --workspace-name"),
+        ("anchor", "session.new takes --after/--before or a workspace, not both"),
+        ("tint", "invalid tint: mauve (\(TintValue.validValuesList))"),
+    ])
+    func aContradictoryNewSessionIsRefusedAsLocally(_ shape: String, _ error: String) {
+        let parsed = parse(.sessionNew) { args in
+            switch shape {
+            case "both": args.workspace = workspace.id.uuidString; args.workspaceName = "w"
+            case "create": args.createWorkspace = true
+            case "anchor": args.after = first.id.uuidString; args.workspaceName = "w"
+            default: args.tint = "mauve"
             }
         }
 
-        #expect(refusal(parsed) == "\(field) is not available in a remote window")
+        #expect(refusal(parsed) == error)
     }
 
     @Test(arguments: [0, 1, 2])
@@ -175,10 +269,81 @@ struct RemoteOperationRequestTests {
         #expect(refusal(parsed) == "operation receipts are served only by agterm-server")
     }
 
-    @Test func aBatchIsRefused() {
-        let targets = [first.id.uuidString, second.id.uuidString]
-        #expect(refusal(parse(.sessionClose) { $0.targets = targets }) == "a remote window closes one session at a time")
-        #expect(refusal(parse(.sessionMove) { $0.targets = targets; $0.to = "up" }) == "a remote window moves one session at a time")
+    @Test func aBatchIsOneServerCommand() {
+        let targets = [first.id.uuidString, second.id.uuidString, first.id.uuidString]
+        let other = store.addWorkspace(name: "o")
+
+        #expect(parse(.sessionClose) { $0.targets = targets } == .operation(.closeSessions([first.id, second.id]), select: false))
+        #expect(parse(.sessionMove) { $0.targets = targets; $0.workspace = other.id.uuidString }
+            == .operation(.moveSessions([first.id, second.id], to: .workspace(other.id)), select: false))
+        #expect(refusal(parse(.sessionMove) { $0.targets = targets; $0.to = "up" }) == "session.move --to takes one session")
+        #expect(parse(.sessionClose) { $0.targets = [second.id.uuidString] } == .operation(.closeSession(second.id), select: false))
+    }
+
+    @Test func anEmptyBatchIsRefusedRatherThanReadAsTheActiveSession() {
+        store.selectSession(first.id)
+
+        #expect(refusal(parse(.sessionClose) { $0.targets = [] }) == "session.close requires at least one --target")
+        #expect(refusal(parse(.sessionMove) { $0.targets = []; $0.workspace = workspace.id.uuidString })
+            == "session.move requires at least one --target")
+    }
+
+    @Test func aFlagIsSentAsTheValueTheRowShouldHaveAndAClearAsOne() {
+        let target = first.id.uuidString
+        store.setFlag(true, forSession: second.id)
+
+        #expect(parse(.sessionFlag, target: target) == .operation(.setFlag(first.id, on: true), select: false))
+        #expect(parse(.sessionFlag, target: second.id.uuidString) == .operation(.setFlag(second.id, on: false), select: false))
+        #expect(parse(.sessionFlag, target: target) { $0.mode = "off" } == .operation(.setFlag(first.id, on: false), select: false))
+        #expect(parse(.sessionFlag) { $0.mode = "clear" } == .operation(.clearFlags, select: false))
+        #expect(refusal(parse(.sessionFlag, target: target) { $0.mode = "sideways" }) == "invalid flag mode: sideways")
+        #expect(refusal(parse(.sessionFlag) { $0.mode = "clear"; $0.before = target }) == "--before and --after apply only to session.flag move")
+        #expect(parse(.workspaceFlag, target: workspace.id.uuidString) == .operation(.setWorkspaceFlag(workspace.id, on: true), select: false))
+    }
+
+    @Test func aTintIsSentAsParsedLocally() {
+        #expect(parse(.sessionTint, target: first.id.uuidString) { $0.mode = "set"; $0.tint = "Red"; $0.tintOn = ["name"] }
+            == .operation(.setTint(first.id, .set(.named(.red), parts: [.name])), select: false))
+        #expect(parse(.workspaceTint, target: workspace.id.uuidString) { $0.mode = "clear" }
+            == .operation(.setWorkspaceTint(workspace.id, .clear), select: false))
+        #expect(refusal(parse(.sessionTint, target: first.id.uuidString) { $0.mode = "clear"; $0.tint = "red" })
+            == "session.tint clear takes no color or placement")
+    }
+
+    @Test func eachOperationSpellsItsOptionsAsTheCLIDoes() {
+        let id = first.id, other = second.id
+        let tint = SidebarTint(color: .hex("#ff8800"), parts: [.icon, .name])
+
+        #expect(RemoteOperation.newSessionInNamedWorkspace(name: "-ops", create: true, shell: RemoteShellOptions(tint: tint)).words
+            == ["session", "new", "--workspace-name=-ops", "--create-workspace", "--tint=#ff8800", "--tint-on=icon,name"])
+        #expect(RemoteOperation.newWorkspace(name: "x", collapsed: true, tint: SidebarTint(color: .red)).words
+            == ["workspace", "new", "--collapsed", "--tint=red", "--tint-on=icon"])
+        #expect(RemoteOperation.closeSessions([id, other]).words == ["session", "close", "--target", id.uuidString, "--target", other.uuidString])
+        #expect(RemoteOperation.moveSessions([id, other], to: .after(other)).words
+            == ["session", "move", "--target", id.uuidString, "--target", other.uuidString, "--after", other.uuidString])
+        #expect(RemoteOperation.setFlag(id, on: false).words == ["session", "flag", "off", "--target", id.uuidString])
+        #expect(RemoteOperation.clearFlags.words == ["session", "flag", "clear"])
+        #expect(RemoteOperation.setTint(id, .set(.named(.red), parts: [.name, .icon])).words
+            == ["session", "tint", "red", "--on", "icon,name", "--target", id.uuidString])
+        #expect(RemoteOperation.setTint(id, .set(.named(.red), parts: nil)).words == ["session", "tint", "red", "--target", id.uuidString])
+        #expect(RemoteOperation.setWorkspaceTint(id, .clear).words == ["workspace", "tint", "clear", "--target", id.uuidString])
+        #expect(RemoteOperation.setWorkspaceFlag(id, on: true).words == ["workspace", "flag", "on", "--target", id.uuidString])
+        #expect(RemoteOperation.newCompanion(parent: id, shell: RemoteShellOptions(command: "make", wait: true)).words
+            == ["session", "new", "--parent", id.uuidString, "--command=make", "--wait"])
+        #expect(RemoteOperation.restart(id, pane: .right, command: "-x").words
+            == ["session", "restart", "--target", id.uuidString, "--pane", "right", "--command=-x"])
+        #expect(RemoteOperation.restart(id, pane: .left, command: nil).words == ["session", "restart", "--target", id.uuidString, "--pane", "left"])
+        #expect(RemoteOperation.duplicateCompanion(id).words == ["session", "duplicate", "--companion", "--target", id.uuidString])
+        #expect(RemoteOperation.convertCompanion(id).words == ["session", "convert", "--companion", "--target", id.uuidString])
+        #expect(RemoteOperation.killDaemon(id, pane: .left).words == ["zmx", "kill", "--target", id.uuidString, "--pane", "left", "--force"])
+        #expect(RemoteOperation.killDaemon(id, pane: .right, paneID: "tok").words
+            == ["zmx", "kill", "--target", id.uuidString, "--pane", "right", "--pane-id", "tok", "--force"])
+    }
+
+    @Test func aFlaggedOrderMoveStaysOnThisMac() {
+        let move = ControlRequest(cmd: .sessionFlag, target: first.id.uuidString, args: ControlArgs(mode: "move"))
+
+        #expect(RemoteOperation.runsLocally(move, in: store))
     }
 
     @Test func anUnknownTargetIsRefusedWithTheResolversError() {

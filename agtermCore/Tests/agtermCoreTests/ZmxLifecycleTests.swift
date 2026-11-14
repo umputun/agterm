@@ -413,6 +413,19 @@ struct ZmxLifecycleTests {
         #expect(inventories == [nil])
     }
 
+    @Test func theIdentityUpgradeCountsASavedScratch() {
+        let pane = UUID()
+        let scratch = UUID()
+        var snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+            SessionSnapshot(id: UUID(), paneIdentity: pane, customName: nil, cwd: "/repo", scratchPaneIdentity: scratch),
+        ])])
+
+        let upgrade = PaneIdentityInventory.upgrade(&snapshot)
+
+        #expect(!upgrade.changed)
+        #expect(upgrade.identities == [pane, scratch])
+    }
+
     @Test func theIdentityUpgradeLeavesAPageRowWithoutAnIdentity() {
         let pane = UUID()
         var snapshot = Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [

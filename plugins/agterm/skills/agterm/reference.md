@@ -169,8 +169,8 @@ split; these describe attribution, not permission grants),
 `liveHostStale` and `splitLiveHostStale` (true for a `supervisor` pane whose host is from an earlier agterm
 build or login, which `zmx reset` moves to the current one; omitted otherwise),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
-local session; a remote row is never written to disk, so a per-session attach is gone after a relaunch, while a
-remote window rebuilds its rows from the server's catalog),
+local session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows
+from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
 the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
@@ -288,7 +288,7 @@ default/left target (the main pane, or the promoted split survivor once the prim
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
 of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
-Primary/split surfaces report `backedByZmx`; scratch and overlays omit it. `paneID` is the surface's
+Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
 overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
 pane's [msg](#msg) mailbox and is omitted at zero. `lead` is `leader`, `follower`
@@ -560,7 +560,7 @@ buys nothing. A caller with no tree uses `version`.
   (`left pane: vim is on the restore denylist; nothing was created`): a denylisted program, an unreadable
   foreground or working directory, unreplayable arguments or one containing a backslash, a program started by a
   name that its own PATH or directory no longer holds, a pane under a visible
-  program overlay. A page session is refused. On a session attached from another Mac, that Mac duplicates its
+  program overlay (on agterm-server, any program it holds for a Mac, shown or hidden there). A page session is refused. On a session attached from another Mac, that Mac duplicates its
   own session under its own policy, and the copy attaches here as for `session new --parent`.
   `--no-select` (with `--companion`) creates it without selecting it. A pipeline or shell job is copied as its foreground process only; name, status,
   flag, overlays, scratch and background are not copied. Wire command `session.companion.duplicate`; returns
@@ -569,8 +569,8 @@ buys nothing. A caller with no tree uses `version`.
 - `session convert --companion [--target] [--window W]` - Convert to Companion: open a fresh login shell in the
   target's slot and focused directory and move the target under it as a companion, still running, with its own
   companions after it; the target keeps its id, name, flag, status and panes, and ends selected. `--companion` is
-  required. Refused `already a companion` for a companion and `convert it on the Mac it runs on` for a session
-  attached from another Mac. Wire command `session.companion.convert`; returns `result.id` (the converted
+  required. Refused `already a companion` for a companion. On a session attached from another host, that host
+  converts it and its new parent attaches here at the row's place, with the row under it. Wire command `session.companion.convert`; returns `result.id` (the converted
   session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
   nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
   and the keyless `convert_companion` action.
@@ -592,19 +592,34 @@ buys nothing. A caller with no tree uses `version`.
   primary the source node's `tree.cwd` reports the primary pane while the duplicate carries the focused
   pane's directory, and for a remote source it is that cwd after the local rule, so it can read as home.
   It is the control half of the sidebar row's **Duplicate Session** context-menu item
-  (single-selection only).
-- `session close [--target T ...] [--undoable] [--window W]` — close one session, or repeat `--target` to close
+  (single-selection only). On a session attached from another host, that host creates the session after its own
+  and it attaches here after the row.
+- `session close [--target T ...] [--undoable] [--terminate] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
   A single target closes at once unless `--undoable` asks for the same grace, which keeps its shell running until
   the grace lapses: undo (Reopen Closed Item) brings it back, and for a local session so do Reopen Last Closed
-  Item and `recent open` (a remote session gets no Recent Closed entry). With `--undoable` the reply carries
-  `result.undoable`: true for an undoable close, false when Settings turned undo off and it closed at once. An
+  Item and `recent open`. With `--undoable` the reply carries
+  `result.undoable`: true for an undoable close, false when Settings turned undo off, or an agterm-server could not record the close, and it closed at once.
+  Every undoable reply, single or batch, also carries `result.undoID`, which `session undo` takes, except a
+  `--terminate` of a row attached from another host: that host's undo id stays with Reopen Closed Item (⌘Z) in the
+  window that asked. An
   app predating the flag ignores it and closes a single target at once, so for a single target an ok reply
   without `undoable` means the shell is already gone. The human output appends `(undoable)` or `(not undoable)` to `ok`
   or the session count. Every ok reply carries `result.closed`, the ids it closed. Closing a parent closes its
   companions too and sets `result.affected` to the group size, so a parent with two companions prints
-  `3 sessions`; a plain single close prints as before.
+  `3 sessions`; a plain single close prints as before. A single-target close of a session Recent Closed keeps also
+  carries `result.recentID`, the entry `recent open` takes back.
+  `--terminate` (wire command `session.terminate`) ends a session attached from another host on that host too: the
+  host closes its own session and group, `--undoable` passed through, and every row here showing a session it
+  closed closes; a companion it did not end stays here at top level. Any other session closes as without it. Several targets send one close per host; when a host fails or gives no
+  answer, the error names it and what did close, and an unanswered host is never asked again. An app too old for
+  it refuses with `the running app is too old for terminate`.
+- `session undo --target UNDO_ID [--window W]` — undo a close still inside its grace. `UNDO_ID` is the
+  `result.undoID` an undoable close answered; the whole close comes back with its running shells. Once the grace
+  ended or the close was undone it errors `the close is no longer undoable`, and the sessions stay in Recent Closed
+  for `recent open`. `--window` naming a server window runs it on that server. An app too old for it refuses with
+  `the running app is too old for session undo`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session reveal [--target] [--window W]` — select the target session's focused-pane working
@@ -720,6 +735,8 @@ error keeps those names for compatibility.
   `vertical` means left/right and `horizontal` means top/bottom. Omitting `--axis` preserves the current
   axis and keeps the legacy left/right default for a new split. `off` hides but keeps the shell alive;
   tearing it down takes `session split close` or the shell's own exit. Unknown modes and axes error.
+  On a session attached from another host, `split` and `split close` run on that host, and a split it opens
+  attaches here.
 - `session split close [--target] [--window W]` — tear the split pane down: the surface dies, whatever it
   runs dies with it, and `hasSplit`/`splitRatio`/`splitFocused` drop out of `tree`. Reaches a HIDDEN pane
   too, which is what `session type --pane right $'exit\n'` cannot do once the pane is past a prompt
@@ -736,8 +753,10 @@ error keeps those names for compatibility.
   is an error, never a replay. The pane keeps its place, stable id and `AGTERM_*` environment and
   starts blank; nothing is typed. Works on a hidden split and in a background window. Reply after the new
   shell exists: `restart.oldPid`, `restart.newPid`, `restart.paneID`, `pane`. Those are the pane's shells;
-  read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode and a local pane only,
-  no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
+  read the program from `tree`'s `foreground`/`splitForeground`. Live sessions mode, a local pane or a row of
+  an agterm-server window (its server restarts it; an Ended row there takes `--command` on the left pane), or a
+  session attached from another host (that host restarts it, and this pane follows the new shell; an agterm there too
+  old for it refuses), no scratch. An unresolved `--pane-id` is an error even beside `--pane`. LINE is one shell line, at most
   4096 bytes. Clears that pane's status, ask, HUD and pane overlay; keeps its restore pin. A
   background or disowned job of the old shell is not ended. An error naming the old shell's pid means its
   daemon kill was confirmed. If the old foreground job survives SIGKILL or the pane cannot be rebuilt, the
@@ -748,9 +767,10 @@ error keeps those names for compatibility.
   Works when the split is shown or hidden and under zoom/dashboard. Errors when there is no split or a
   surface is not ready. The new primary supplies `tree`'s `cwd`/`title`/`foreground`/`restoreCommand`/
   `commandWait`; the other side supplies `splitCwd`/`splitForeground`/`splitRestoreCommand`/`splitCommandWait`.
-- `session lead [--pane left|right] [--target] [--window W]`: take the lead of a pane for this Mac, as a
+- `session lead [--pane left|right|scratch] [--target] [--window W]`: take the lead of a pane for this Mac, as a
   key press on its cover does; the pane is then covered on the other Mac. Ok when it already leads,
-  `pane has no lead to take` when its terminal reports none. Read back `surfaces[].lead`.
+  `pane has no lead to take` when its terminal reports none, `the scratch terminal has no lead` for a scratch
+  outside Live sessions. Read back `surfaces[].lead`.
 - `session scratch [on|off|toggle] [--command CMD] [--follow] [--target] [--window W]` — a third, full-coverage
   shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
   `exit` in it closes it and the next `on` spawns a fresh shell. Showing it on a session that is not
@@ -761,8 +781,11 @@ error keeps those names for compatibility.
   list in `sh -c`, and it inherits the app's GUI
   `PATH`, so the same exit-127 caveat as `session new --command`: wrap in `"zsh -lc '…'"` or use an
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
-  shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not
-  persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility.
+  shell). A scratch is expendable, so passing `--command` while one is already open respawns it. In Live
+  sessions mode it runs in its own daemon and comes back hidden after a relaunch; otherwise it is not persisted.
+  Unknown mode errors. The tree's `scratch` flag tracks visibility. On a session attached from another
+  host the scratch is that host's: `session scratch` runs there, and it shows and hides here as it does there. It
+  is refused while the session is not connected, or when that host's agterm is too old to show its scratch.
 - `session focus [primary|split|left|right|top|bottom|other] [--target] [--window W]` - move keyboard focus between the two
   split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
   split is shown in either orientation or hidden (maximized). When hidden, focusing a pane swaps which one shows.
@@ -910,8 +933,9 @@ error keeps those names for compatibility.
   the names only. `--on` is `icon`, `name` or `icon,name`; omitted, a recolor keeps
   the row's placement and an untinted row starts on the icon. `clear` removes the tint and refuses `--on`; the
   socket form (`mode` `set|clear`, `tint`, `tintOn` array) refuses a clear carrying either. Returns the session
-  id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac: an attached row does
-  not mirror the origin's tint, and its own tint is not persisted, like the row.
+  id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac on a row attached from
+  another Mac: it does not mirror the origin's tint, and its own tint is saved with the row. On a remote window's
+  row the server keeps the tint and every Mac shows it (see [remote server](#remote-server)).
   Read back from the node's `tint`/`tintOn`. GUI twins: the row menu's Tint submenu
   (a color applies to every selected row, keeping each row's placement; Show On needs every selected row
   tinted) and the palette's "Tint Session: <Color>" / "Tint Session: None" for the active session.
@@ -938,7 +962,8 @@ error keeps those names for compatibility.
   (it names its command deliberately, so the denylist is never the reason it does not fire). It is typed
   verbatim as a shell line, so `cd x && claude --resume y` works as written.
   A split hidden at quit keeps its identity and pin; showing it after restart creates the pane and applies
-  the saved rerun policy.
+  the saved rerun policy. On a session attached from another Mac the pin is set on that Mac's pane; on one from
+  agterm-server, or in its window, it is refused with `agterm-server keeps every pane running`.
   It exists for NON-IDEMPOTENT commands — `claude --resume <id> --fork-session` mints a NEW session on every
   restart, so restoring it verbatim never reattaches the session the user was in. A Claude Code
   `SessionStart` hook that rewrites the override to the live session id on every start makes the next
@@ -1117,7 +1142,9 @@ error keeps those names for compatibility.
   (`http://localhost:5173/`) or a docs page. Everything above for `--html` applies, except that URL must be
   an absolute http or https URL (`--url must be an absolute http or https URL`), `--cwd` and `--block` are
   refused, and the page gets no bridge to agterm. The
-  server must be reachable from the Mac running agterm; `localhost` means that Mac. Plain http works for
+  server must be reachable from the agterm the command reaches, where `localhost` points: this Mac from a local
+  session, the host from a session agterm-server or another Mac runs, whose page the Mac showing it reaches through
+  an ssh forward (a page session or page companion on a loopback URL is still refused there). Plain http works for
   local addresses (localhost, `.local`, IP literals); use https for public hosts. Pass `--js` for web
   apps that require client-side JavaScript; without it only the static markup renders. The page is pinned to
   its origin: same-origin navigations and redirects load in place; a clicked link elsewhere, or a clicked
@@ -1556,6 +1583,13 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   scratch may still run),
   `pending` (`pending` or `unknown`) and `scratchBacked` (the scratch is the server's daemon), and every server
   scratch row, here and on the server, has `scratchPaneID` and `scratchPendingMessages` (see [msg](#msg)).
+- Flag, `session tint` and `workspace tint` on a remote window's rows run on the server, which keeps them so every
+  Mac shows them; a server predating that keeps them on this Mac. Clearing the server's status here (typing in the
+  pane, selecting the row, Clear Status), or the row's badge, goes to the server, which applies the Mac's default
+  reset rules; a status set on this Mac's row is cleared here only. A path clicked in the server's scratch resolves in the scratch's directory on the host, and a
+  loopback http(s) link clicked in a server pane or scratch opens through an ssh forward to the host.
+- On the host itself `agtermctl events` and `session wait` read the server's own event ring, `session info`
+  expires there, `surface cursor` reads the daemon's screen, and `zmx list` and `zmx screen` cover its daemons.
 - `window remote dismiss [ID]`: drop the marks for actions whose outcome was lost; it neither undoes nor
   resends them. The window settles a mark through `catalog op` by itself when the server still knows it.
 - `session detach [--target T ...]` / `workspace detach [--target T]`: hide a remote window's rows on this
@@ -1575,7 +1609,7 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
   dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges
-  `zmx present`, `run-job`, `page-serve` and `page-attach` are served); no `--wait` on `session new`; `ask open --style gui` needs `--target`; a pick needs a
+  `zmx present`, `run-job`, `page-serve` and `page-attach` are served); `ask open --style gui` needs `--target`; a pick needs a
   session, from `--session` or the calling pane's own. Asks, picks, pages and overlay jobs are held until a Mac
   presents the session, listed in its `interactions` (`{kind, id, state, deadline?}`); only an ask or pick ends
   unanswered, at its `--timeout`. Log pages and `session overlay follow`, `search`, `wrap`, `changes` and `files`
@@ -2000,8 +2034,7 @@ keeps it. Mail lives for the server's run. The server tree reports `pendingMessa
 and a scratch's address and count on the session as `scratchPaneID` and `scratchPendingMessages`; a Mac showing
 the server window reports the same counts on the row. Any Mac viewing a session hosted elsewhere, a server's or
 another Mac's, gets the `message` event for mail queued for that session's panes, carrying the host's pane id;
-a row attached alone with `zmx attach` or from another Mac reports no counts yet. `events.read` is not served on
-the server itself. A local pane and
+a row attached alone with `zmx attach` or from another Mac reports no counts yet. A local pane and
 a server pane cannot message each other yet: a Mac send to a server row is rejected `unknown pane` with detail
 `remote session`, a server send to a Mac session `unknown pane`, and a server row as `--as` is refused.
 
@@ -2158,7 +2191,6 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
   keeps the reported path either way.
 - `{AGT_SESSION_HOST}` / `$AGT_SESSION_HOST` — the SSH destination of a session opened by `zmx attach`,
   verbatim as given (`user@alias` included); empty for a local session, an `ssh` typed into one included,
-  and from the scratch of an attached session, whose shell runs on this Mac,
   so branch on it: `if [ -n "$AGT_SESSION_HOST" ]; then ssh "$AGT_SESSION_HOST" uptime; fi` (a bare
   `&&` chain exits 1 on a local session and the runner reports that as a failure).
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
@@ -2362,7 +2394,7 @@ header. `state` is `claimed`, `orphan`, `unknown`, `conflicted`, `pendingClose` 
 `observation` is `running`, `unreadable` or `absent`, separate from the client count because a daemon that
 is gone and one zmx could not read are different answers. A CLOSED window's panes are `claimed` with zero
 clients. That is the resting state after you close a window, not a leak, which is why the owner's window
-state is its own column. `unknown` means the pane inventory was incomplete, so no row can be called an orphan.
+state is its own column. A claim's `pane` is `left`, `right`, or `scratch` for a Live scratch's daemon. `unknown` means the pane inventory was incomplete, so no row can be called an orphan.
 The header also carries `endpoint.executable` and `endpoint.socketDirectory`, which is what another machine
 needs to reach these daemons; a server older than remote sessions omits the key. A row whose daemon was
 created before the recorded first launch with this zmx build carries `outdated: true` (omitted otherwise).
@@ -2390,6 +2422,10 @@ there is none; a pane whose window is closed simply comes back as a fresh shell.
 three-second undo. It refuses a daemon already gone, one zmx could not read (forcing that can unlink a
 live daemon's socket and leave it running unreachable), and a session inside its undo window. Killing the
 daemon of the pane you are typing in can kill the calling `agtermctl` before it reads the reply.
+`--pane-id TOKEN` pins the kill to that pane (wire command `zmx.kill.pane`): it is refused, killing nothing, when
+the role now names another pane, and an app too old for it refuses with
+`the running app is too old for a pinned pane kill`. On a session attached from another host the kill runs on that
+host, pinned to its pane.
 
 `agtermctl zmx reset --force` — Agterm ▸ Reset Live Sessions… without the dialog. A live session created
 before the session host existed keeps its own macOS permission identity, so every new version of a tool in
@@ -2488,8 +2524,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   Mac remains until cleared or its own expiry.
 
 - Two existing remote panes follow the origin's split axis, hide/show and swaps. Local panes, divider
-  ratio and focus stay local. A layout never opens a pane: an origin split opened later requires closing
-  and attaching the row again, and a replica closed here stays closed. Older origins leave layout alone.
+  ratio and focus stay local. A split the origin opens later attaches into an empty split slot, and a
+  replica closed here stays closed. Older origins leave layout alone.
 - Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
   left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
   split prevents automatic primary removal; an ordinary disconnect still shows the disconnect line, held
@@ -2508,6 +2544,12 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
   repeat of the same value included. A reconnect does not end it, even when the origin's status changed
   while the stream was down. Clearing it here gives the row back to the origin's status.
+- Clearing the status mirrored from the origin here (typing in the pane, selecting the row, Clear Status), or the
+  row's badge (viewing it, typing), goes to the origin, which applies its own reset settings, so the cleared status
+  does not come back with the next snapshot. A status set on this Mac's row is cleared here only.
+- A link clicked in the row resolves where the program runs: a path in a pane or in a scratch running on the origin
+  opens from the origin's directory, and a loopback http(s) link opens through an ssh forward to the origin once
+  it answers; a forward that fails shows `the port forward to HOST failed`.
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
   whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect.
   An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
@@ -2530,8 +2572,9 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   keeps its own `--persistent` storage. A file page's files and its `data-agterm`/`agterm.request` commands
   go back to the origin over a channel the presenting Mac opens (`agtermctl session overlay page-serve`,
   plumbing not meant to be typed), so commands act on the origin's session and `overlay submit` answers the
-  caller there; `result --page` and `--html --block` work unchanged on the origin. A loopback `--url` is
-  refused (it names a server on the origin), as is any page for a presenting Mac too old for pages
+  caller there; `result --page` and `--html --block` work unchanged on the origin. A loopback `--url` opens
+  through an ssh forward from the presenting Mac to the origin; it is refused for a presenting Mac too old to
+  forward it (it names a server on the origin), as is any page for a presenting Mac too old for pages
   and an open request too large for a presentation frame (`page too large to show on another Mac`).
   On the origin `close` ends the page there and frees the slot at once; `resize`, `reload`,
   `navigate back|forward` and `hide|show|toggle` are requests sent to the presenting Mac; `navigate browser` reaches it for a URL page, while `finder` and `browser` on a file
@@ -2564,8 +2607,10 @@ bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the or
 be typed.
 
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
-nothing agterm does from this end can kill them. It is never written to disk, so it does not come back
-after a relaunch whatever the restore mode is.
+nothing agterm does from this end can kill them. An open attached row is saved and attached again at the next
+launch whatever the restore mode is, without taking the lead from a Mac that took it meanwhile. A row whose
+session the origin no longer has shows `Ended on HOST` instead; an attached page waits for the origin to hand it
+over and retries while the host does not answer.
 
 The pane reports the far side's working directory, and the local launches that would inherit it pick
 their start directory by one rule: the reported path when it exists here as a directory, else local
@@ -2621,6 +2666,8 @@ the oldest dropped silently.
 workspace itself otherwise) and `sessionIDs`, the sessions a reopen brings back. Human output prints one
 row per entry with the full id. This is the read-back for `open` and `clear`. A parent entry's
 `sessionIDs` lists the parent then its companions, and its human row ends with `+N companion(s)`.
+A row attached from another host and closed here is a `remote` entry: `host` names that host and `sessionIDs`
+holds its session id there. A list with no remote entries carries no `host` field.
 
 `agtermctl recent open [ID] [--window W]` — reopen the entry with that id or unique prefix, or the newest
 with no id. The session returns under its original id. It goes to `--window` or the frontmost window,
@@ -2631,10 +2678,14 @@ anything is restored. Errors: `no recently closed items`, `no such recent item: 
 A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace
 holding the parent) first when the parent is not open; when the parent is neither open nor in Recent
 Closed it errors `parent session is not open or in Recent Closed`.
+A `remote` entry attaches its session again while its host still lists it, placed back where the row was;
+otherwise the host reopens its own entry for that session first. It errors `the session on HOST is gone and HOST
+keeps no record of it` when neither works, and an unreachable host keeps the entry for another try.
 
 `agtermctl recent clear` — empty the list; ok only when the list is empty afterwards.
 
-`list` and `clear` are app-global and refuse a target or `--window`.
+`list` and `clear` refuse a target. With `--window` naming a server window, `list`, `open` and `clear` run on
+that server against the list it keeps; any other `--window` reads this Mac's list.
 
 ## clipboard
 
@@ -2648,7 +2699,7 @@ text on the Mac showing it, and on the Mac it runs on as well.
   included. Text that starts with `-` is read as an option, and `-h` or `--help` prints help and exits 0
   with nothing copied: pipe such text on stdin, or write `agtermctl clipboard set -- "-text"`. Refused when empty, and above about 6 MB (libghostty drops a longer clipboard write whole).
 - Needs no terminal, so an agent's shell tool can run it. It does need the pane's own environment:
-  `ZMX_SESSION` and `ZMX_DIR`, which a main or split pane started under Live sessions carries. A scratch,
+  `ZMX_SESSION` and `ZMX_DIR`, which a main, split or scratch pane started under Live sessions carries. A
   quick or overlay terminal, and a pane started in another restore mode, is refused with `this pane has
   no zmx daemon; run it in a main or split pane started under Live sessions`. `pbcopy` is a fallback
   there only when the clipboard wanted is this Mac's own: an overlay shown on another Mac still runs here.

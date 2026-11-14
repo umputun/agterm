@@ -64,4 +64,14 @@ struct AppStoreHeadlessPaneTests {
 
         #expect(store.session(withID: session.id) == nil)
     }
+
+    @Test func resumingAnEndedSessionLeavesTheEndedState() {
+        let (store, session) = makeHeadlessSession(split: false)
+        store.markSessionEnded(session.id)
+
+        store.resumeEndedSession(session.id)
+
+        #expect(!session.ended)
+        #expect(store.session(withID: session.id) === session)
+    }
 }

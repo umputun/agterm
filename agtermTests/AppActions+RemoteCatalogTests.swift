@@ -34,14 +34,21 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
     private final class Recorder {
         var lines: [String] = []
         var expectation: XCTestExpectation?
+        var undoID: String?
+        var losesReplies = false
 
         func run(_ argv: [String]) -> (Int32, String) {
             let line = (argv.last ?? "").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\\", with: "")
             lines.append(line)
             expectation?.fulfill()
+            if losesReplies { return (255, "") }
             let opID = line.range(of: "--op-id ").map { String(line[$0.upperBound...].prefix(36)) } ?? ""
             var result = ControlResult()
             result.receipt = CatalogReceipt(opID: opID, epoch: "e1", outcome: .applied, rev: 1)
+            if let undoID, line.contains("--undoable") {
+                result.undoable = true
+                result.undoID = undoID
+            }
             let reply = (try? JSONEncoder().encode(ControlResponse(ok: true, result: result))) ?? Data()
             return (0, String(decoding: reply, as: UTF8.self))
         }
@@ -84,12 +91,13 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
                               panes: ended ? [] : [pane])
     }
 
-    private func open(_ sessions: [CatalogSession], withEmptyWorkspace: Bool = false, spare: [CatalogSession] = []) {
+    private func open(_ sessions: [CatalogSession], withEmptyWorkspace: Bool = false, spare: [CatalogSession] = [],
+                      recent: [ControlRecentItem]? = nil) {
         var workspaces = [CatalogWorkspace(id: workspaceID, name: "main", sessions: sessions)]
         if withEmptyWorkspace || !spare.isEmpty { workspaces.append(CatalogWorkspace(id: emptyWorkspaceID, name: "spare", sessions: spare)) }
         _ = mirror.receive(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(),
                                                      versions: CatalogVersions(server: "1", protocolVersion: 1, catalog: 1),
-                                                     workspaces: workspaces)))
+                                                     workspaces: workspaces, recent: recent)))
     }
 
     private func serverApplies(_ changes: CatalogChange...) {
@@ -163,6 +171,55 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         serverApplies(.sessionRemoved(entry.id))
         XCTAssertFalse(shownIDs().contains(entry.id))
         assertClosedNothingLocally()
+    }
+
+    func testTerminatingSessionsOnAServerKeepingRecentIsOneUndoableClose() throws {
+        let first = catalogSession(), second = catalogSession()
+        open([first, second], recent: [])
+        runner.undoID = "u1"
+
+        _ = close([first.id, second.id], answering: .terminate)
+        try sent(1)
+        settle()
+
+        XCTAssertEqual(runner.lines.count, 1)
+        XCTAssertTrue(runner.lines[0].contains("session close --target \(first.id.uuidString) --target \(second.id.uuidString) --undoable"),
+                      runner.lines[0])
+        XCTAssertEqual(remote.undoIDs, ["u1"])
+        assertClosedNothingLocally()
+    }
+
+    func testUndoAsksTheServerOnceAndALostReplyIsNotSentAgain() throws {
+        let entry = catalogSession()
+        open([entry], recent: [])
+        runner.undoID = "u1"
+        _ = close([entry.id], answering: .terminate)
+        try sent(1)
+        settle()
+        runner.losesReplies = true
+
+        XCTAssertTrue(actions.undoRemoteClose(in: store))
+        try sent(2)
+        settle()
+
+        XCTAssertTrue(runner.lines[1].contains("session undo --target u1"), runner.lines[1])
+        XCTAssertFalse(actions.undoRemoteClose(in: store))
+        settle()
+        XCTAssertEqual(runner.lines.filter { $0.contains("session undo") }.count, 1)
+    }
+
+    func testTheRecentListIsTheServersWhileConnectedAndEmptyWhileNot() {
+        library.frontmostWindowID = library.windowID(for: store)
+        let item = ControlRecentItem(id: "r1", kind: "session", title: "a", subtitle: nil, closedAt: 1, workspaceID: "w",
+                                     sessionIDs: ["s"])
+        open([catalogSession()])
+        XCTAssertNil(actions.serverRecentItems)
+
+        open([catalogSession()], recent: [item])
+        XCTAssertEqual(actions.serverRecentItems, [item])
+
+        mirror.connectionLost("gone")
+        XCTAssertEqual(actions.serverRecentItems, [])
     }
 
     func testCancellingASessionCloseChangesNothing() {

@@ -13,10 +13,29 @@ extension Session {
         }
     }
 
+    /// scratchFollowsOrigin is whether a row attached from another host shows its origin's scratch, which only an
+    /// origin publishing `scratchShown` offers.
+    public var scratchFollowsOrigin: Bool {
+        guard let state = remotePresentation, !state.binding.catalogOwned else { return false }
+        return state.layout?.scratchShown != nil
+    }
+
+    /// originScratch is the scratch daemon a remote row attaches, its server's or its origin's; nil for a scratch
+    /// that runs on this Mac.
+    public var originScratch: UUID? {
+        catalogScratch ?? (scratchFollowsOrigin ? scratchDaemon?.identity : nil)
+    }
+
+    /// scratchClientIdentity keys the scratch surface on this Mac (its token, lead and reconnect entry): the daemon's
+    /// identity for a local or server scratch, this row's own key for an origin's scratch.
+    public var scratchClientIdentity: UUID? {
+        localScratchIdentity ?? catalogScratch ?? (scratchFollowsOrigin ? originScratchClient : nil)
+    }
+
     /// The host a pane's shell runs on: `remoteHost`, except for a scratch that runs on this Mac, which an
-    /// attached session's is. A remote window's scratch attaches the server's shell, so it keeps the host.
+    /// attached session's is unless it shows its origin's. A remote window's scratch attaches the server's shell.
     public func remoteHost(for pane: CommandContext.Pane) -> String? {
-        pane == .scratch && catalogScratch == nil ? nil : remoteHost
+        pane == .scratch && originScratch == nil ? nil : remoteHost
     }
 
     /// Where a LOCAL process for this session starts, given the pane path it would inherit: that path on a

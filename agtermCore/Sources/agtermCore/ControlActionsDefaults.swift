@@ -160,6 +160,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.screen"))
     }
 
+    func killZmxPane(target _: String, window _: String?, pane _: ZmxPaneRole, paneID _: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "zmx.kill.pane is not supported by this control host")
+    }
+
     func killZmxDaemon(target _: String, window _: String?, pane _: ZmxPaneRole) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("zmx.kill"))
     }
@@ -282,6 +286,14 @@ public extension ControlActions {
         return closeSessions(targets, window: window)
     }
 
+    func terminateSessions(_: [String], window _: String?, undoable _: Bool) -> ControlResponse {
+        ControlResponse(ok: false, error: "session.terminate is not supported by this control host")
+    }
+
+    func undoClose(_: String) -> ControlResponse {
+        ControlResponse(ok: false, error: "session.undo is not supported by this control host")
+    }
+
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?,
                               points: OverlayPointSize) -> ControlResponse {
         guard points.isEmpty else {
@@ -345,6 +357,16 @@ public extension ControlActions {
 
     func clearRecentClosed() -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("recent.clear"))
+    }
+
+    func listRecentClosed(window: String?) -> ControlResponse {
+        guard window == nil else { return ControlResponse(ok: false, error: "recent.list takes no --window on this control host") }
+        return listRecentClosed()
+    }
+
+    func clearRecentClosed(window: String?) -> ControlResponse {
+        guard window == nil else { return ControlResponse(ok: false, error: "recent.clear takes no --window on this control host") }
+        return clearRecentClosed()
     }
 
     func openRecentClosed(_: String?, window _: String?) -> ControlResponse {

@@ -23,7 +23,7 @@ extension AppActions {
         let activeStore = store
         return PaletteContext(
             canRemoveWorkspace: activeStore?.canCloseWorkspace == true,
-            hasFlaggedSessions: activeStore?.flaggedSessions.isEmpty == false,
+            hasFlaggedSessions: (activeStore?.clearableFlagCount ?? 0) > 0,
             sidebarShowsWorkspaceTree: activeStore?.sidebarMode == .tree,
             sidebarShowsWorkspaceRows: activeStore?.rendersWorkspaceRows(flaggedLayout: GhosttyApp.shared.flaggedViewLayout) == true,
             sidebarShowsFlaggedOnly: activeStore?.sidebarMode == .flagged,
@@ -35,8 +35,10 @@ extension AppActions {
             canStepWindows: library.canStepWindows,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             activeSplitAxis: activeStore?.activeSession?.splitAxis,
-            hasPendingClose: activeStore?.pendingCloseSummary != nil,
-            hasRecentClosed: !library.recentClosedItems.isEmpty,
+            hasPendingClose: activeStore?.pendingCloseSummary != nil || activeStore?.remoteActions?.undoIDs.isEmpty == false
+                || activeStore.flatMap(library.windowID(for:)).map { library.attachedUndos[$0] != nil } == true,
+            hasRecentClosed: !(serverRecentItems.map(\.isEmpty)
+                ?? (library.recentClosedItems.isEmpty && library.remoteRecentClosedItems.isEmpty)),
             hasActiveSession: activeStore?.activeSession != nil,
             attentionNavigationAcrossWindows: activeStore?.attentionNavigationAcrossWindows == true,
             hasSessions: activeStore?.workspaces.contains { !$0.sessions.isEmpty } == true,
@@ -51,7 +53,8 @@ extension AppActions {
             activeSessionIsRemote: activeStore?.activeSession?.remoteHost != nil,
             remoteWindow: activeStore?.catalogState != nil,
             remoteConnected: activeStore?.catalogState == .connected,
-            remoteHasDetached: activeStore?.remoteActions?.mirror.detachedItems.isEmpty == false
+            remoteHasDetached: activeStore?.remoteActions?.mirror.detachedItems.isEmpty == false,
+            marksBlocked: activeStore?.marksBlocked == true
         )
     }
 
@@ -243,10 +246,11 @@ extension AppActions {
             PaletteItem(id: "tint-\(color?.rawValue ?? "none")",
                         title: "Tint Session: \(color?.rawValue.capitalized ?? "None")",
                         isEnabled: { [weak self, weak store] in
-                            (self?.uiActionsEnabled ?? false) && store?.selectedSessionID != nil
+                            (self?.uiActionsEnabled ?? false) && store?.selectedSessionID != nil && store?.marksBlocked != true
                         },
                         run: { [weak self, weak store] in
-                            guard self?.uiActionsEnabled == true, let store, let id = store.selectedSessionID else { return }
+                            guard let self, self.uiActionsEnabled, let store, let id = store.selectedSessionID else { return }
+                            if self.sendTint(forSessions: [id], in: store, { SidebarTint.recolor($0, to: color) }) { return }
                             store.setTintColor(color, forSessions: [id])
                         })
         }
@@ -383,11 +387,12 @@ extension AppActions {
                 return PaletteItem(id: id.uuidString, title: store.listLabel(for: session), subtitle: workspace.name,
                                    indicator: { [weak session] in session?.agentIndicator ?? AgentIndicator() },
                                    isEnabled: { [weak self, weak store] in
-                                       self?.uiActionsEnabled == true && store?.session(withID: id) != nil
+                                       self?.uiActionsEnabled == true && store?.session(withID: id) != nil && store?.marksBlocked != true
                                    },
                                    mark: { [weak store] in .flag(store?.session(withID: id)?.flagged == true) },
-                                   run: { [weak store] in
+                                   run: { [weak self, weak store] in
                                        guard let store, let live = store.session(withID: id) else { return }
+                                       if self?.sendFlag(!live.flagged, forSessions: [id], in: store) == true { return }
                                        store.setFlag(!live.flagged, forSession: id)
                                    })
             }

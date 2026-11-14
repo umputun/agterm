@@ -58,10 +58,23 @@ public struct RemoteBinding: Equatable, Sendable {
                       originHeadless: originHeadless)
     }
 
+    /// adding is this binding with one more local pane attached to `daemon`, for a pane the origin added after the
+    /// attach. A mapping is never removed, so a pane closed here is never attached again.
+    func adding(local: UUID, daemon: String) -> RemoteBinding {
+        RemoteBinding(remoteSessionID: remoteSessionID, daemonsByLocalPane: daemonsByLocalPane.merging([local: daemon]) { $1 },
+                      presentationVersion: presentationVersion, origin: origin, catalogOwned: catalogOwned,
+                      originHeadless: originHeadless)
+    }
+
     /// daemonsByPane is the origin daemon each local pane attaches to.
     public var daemonsByPane: [UUID: String] { daemonsByLocalPane }
 
     public func daemon(forLocalPane identity: UUID) -> String? { daemonsByLocalPane[identity] }
+
+    /// scratchDaemon is the name the origin's scratch `identity` runs under there.
+    public func scratchDaemon(for identity: UUID) -> String {
+        originHeadless ? ZmxSupport.scratchDaemonName(for: identity) : ZmxSupport.daemonName(for: identity)
+    }
 
     func remotePane(forLocal identity: UUID) -> UUID? {
         localByRemotePane.first { $0.value == identity }?.key
@@ -94,7 +107,7 @@ public struct RemotePresentationState: Equatable, Sendable {
     public internal(set) var binding: RemoteBinding
     public var connection: RemotePresentationConnection
     public var mode: PresentationMode = .mirror
-    var layout: PresentationLayout?
+    public internal(set) var layout: PresentationLayout?
     var heldPanes: Set<UUID> = []
     /// Whether the glyph on the row is the bridge's. A flag and not a comparison of values: a pane swap
     /// rewrites the indicator without changing who set it, and a local write of the very same value does
@@ -106,6 +119,13 @@ public struct RemotePresentationState: Equatable, Sendable {
     /// Whether the live HUD was opened by the bridge. Cleared whenever the HUD is discarded, so a panel the
     /// viewer's own program opens afterwards is never the bridge's to close.
     public internal(set) var hudBridged = false
+    /// statusKeySent is set once plain typing on the bridged status went to the origin; a submit or an interrupt
+    /// still goes, so an origin clearing only on those hears them.
+    var statusKeySent = false
+    /// seenKeySent and seenSubmitSent bound the typing reported to the origin's unseen badge to the first key and
+    /// the first submit after the stream connects or a notification arrives.
+    var seenKeySent = false
+    var seenSubmitSent = false
 
     /// Whether the glyph on the row stands for a pane this Mac has no counterpart for. Every layer that
     /// turns `statusPane` into a local pane reads this first, since nil otherwise means the primary.

@@ -133,6 +133,74 @@ final class RemoteCatalogActionsTests {
         }
     }
 
+    @Test func aWorkspaceAskedForCollapsedArrivesFolded() async {
+        install(snapshot())
+        let created = UUID()
+        queue(reply(.applied, rev: 1, id: created.uuidString))
+
+        let response = await send(.newWorkspace(name: "x", collapsed: true, tint: nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .workspaceAdded(CatalogWorkspace(id: created, name: "x", sessions: []), index: 1)))
+
+        #expect(response.ok)
+        #expect(store.workspaces.first { $0.id == created }?.isExpanded == false)
+    }
+
+    @Test func flagAndTintRunHereUntilTheServerKeepsThem() {
+        install(snapshot())
+        store.remoteActions = actions
+        let flag = ControlRequest(cmd: .sessionFlag, target: sessionID.uuidString, args: ControlArgs(mode: "on"))
+        let tint = ControlRequest(cmd: .workspaceTint, target: workspaceID.uuidString, args: ControlArgs(mode: "clear"))
+        let rename = ControlRequest(cmd: .sessionRename, target: sessionID.uuidString, args: ControlArgs(name: "x"))
+        let older = (RemoteOperation.runsLocally(flag, in: store), RemoteOperation.runsLocally(tint, in: store))
+
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .workspaceChanged(id: workspaceID, name: "w", tint: "")))
+
+        #expect(older == (true, true))
+        #expect(!RemoteOperation.runsLocally(flag, in: store))
+        #expect(!RemoteOperation.runsLocally(tint, in: store))
+        #expect(!RemoteOperation.runsLocally(rename, in: store))
+    }
+
+    @Test func anUndoIDLeavesByItselfWhenItsGraceEnds() async throws {
+        install(snapshot())
+        actions.undoGrace = 0.05
+        let undoable = reply(.applied, rev: 1)
+        queue { opID in
+            var response = try? JSONDecoder().decode(ControlResponse.self, from: Data(undoable(opID).utf8))
+            response?.result?.undoable = true
+            response?.result?.undoID = "u1"
+            return String(decoding: (try? JSONEncoder().encode(response)) ?? Data(), as: UTF8.self)
+        }
+
+        _ = await send(.closeSession(sessionID, undoable: true))
+        #expect(actions.undoIDs == ["u1"])
+
+        var turns = 0
+        while !actions.undoIDs.isEmpty, turns < 3000 {
+            turns += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(actions.undoIDs.isEmpty)
+        #expect(actions.takeUndo() == nil)
+    }
+
+    @Test func aBatchCloseIsOneCommandMarkedOnItsFirstRowUntilItsRevision() async {
+        let other = UUID()
+        install(snapshot(sessions: [session(sessionID, panes: panes), session(other, panes: [UUID()])]))
+        queue(reply(.applied, rev: 1))
+
+        let response = await send(.closeSessions([sessionID, other]))
+        let pending = (actions.pendingState(of: sessionID), actions.pendingState(of: other))
+        advance(to: 1)
+
+        #expect(response.ok)
+        #expect(script.commandCalls.count == 1)
+        #expect(script.commandCalls[0].contains("session close --target \(sessionID.uuidString) --target \(other.uuidString)"))
+        #expect(pending.0 != nil)
+        #expect(pending.1 == nil)
+        #expect(actions.marks.isEmpty)
+    }
+
     @Test func anAppliedOperationStaysPendingUntilTheMirrorReachesItsRevision() async {
         install(snapshot())
         queue(reply(.applied, rev: 2))
@@ -428,6 +496,30 @@ final class RemoteCatalogActionsTests {
 
         #expect(response.error == "the session has ended on box")
         #expect(script.calls.isEmpty)
+    }
+
+    @Test func aKillAndARestartPinThePanesTheWindowSaw() async {
+        install(snapshot())
+        queue(reply(.noop))
+        queue(reply(.noop))
+
+        _ = await send(.killDaemon(sessionID, pane: .right))
+        _ = await send(.restart(sessionID, pane: .left, command: nil))
+
+        let pin = "--expect-panes \(panes[0].uuidString),\(panes[1].uuidString) --op-id"
+        #expect(script.commandCalls.count == 2)
+        #expect(script.commandCalls.allSatisfy { $0.contains(pin) })
+    }
+
+    @Test func anEndedRowIsRestartedWithNoPanesToPin() async {
+        install(snapshot(sessions: [session(sessionID, panes: [])]))
+        queue(reply(.noop))
+
+        _ = await send(.restart(sessionID, pane: .left, command: "make"))
+
+        let line = script.commandCalls.first ?? ""
+        #expect(line.contains("session restart --target \(sessionID.uuidString) --pane left --command=make --op-id"))
+        #expect(!line.contains("--expect-panes"))
     }
 
     @Test func aCreatedRowIsNotSelectedWhenTheUserMovedDuringTheSend() async throws {

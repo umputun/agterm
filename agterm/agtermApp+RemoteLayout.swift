@@ -3,14 +3,16 @@ import Foundation
 
 extension agtermApp {
     @MainActor
-    static func applyRemoteLayout(_ layout: PresentationLayout, store: AppStore, sessionID: UUID, library: WindowLibrary) {
-        for local in store.applyRemoteLayout(layout, forSession: sessionID) {
-            closeRemovedRemotePane(local, store: store, sessionID: sessionID, library: library)
+    static func applyRemoteLayout(_ layout: PresentationLayout, store: AppStore, sessionID: UUID, library: WindowLibrary,
+                                  attach: RemoteAttachLines) {
+        for local in store.applyRemoteLayout(layout, forSession: sessionID, attach: attach) {
+            closeRemovedRemotePane(local, store: store, sessionID: sessionID, library: library, attach: attach)
         }
     }
 
     @MainActor
-    static func handleRemotePaneHeld(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary) {
+    static func handleRemotePaneHeld(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, library: WindowLibrary,
+                                     attach: RemoteAttachLines?) {
         guard let session = store.session(withID: sessionID) else { return }
         let local: UUID
         if session.surface === view {
@@ -21,13 +23,16 @@ extension agtermApp {
             return
         }
         store.remotePaneHeld(local, forSession: sessionID)
-        closeRemovedRemotePane(local, store: store, sessionID: sessionID, library: library)
+        closeRemovedRemotePane(local, store: store, sessionID: sessionID, library: library, attach: attach)
     }
 
+    /// closeRemovedRemotePane closes a replica its origin removed, then attaches what the origin added in its place.
     @MainActor
-    private static func closeRemovedRemotePane(_ local: UUID, store: AppStore, sessionID: UUID, library: WindowLibrary) {
+    private static func closeRemovedRemotePane(_ local: UUID, store: AppStore, sessionID: UUID, library: WindowLibrary,
+                                               attach: RemoteAttachLines?) {
         guard store.canCloseRemovedRemotePane(local, forSession: sessionID),
               let session = store.session(withID: sessionID) else { return }
+        defer { attach.map { store.attachOriginAdditions(forSession: sessionID, attach: $0) } }
         let split = session.splitPaneIdentity == local
         let surface = split ? session.splitSurface : session.surface
         if split, surface == nil {

@@ -4,10 +4,11 @@ import Foundation
 
 extension AppStore {
     /// Records what an attach learned about the origin. Set right after the row is created, not at
-    /// construction like `remoteHost`: a remote session is never persisted, so no snapshot can catch it
-    /// half-written.
+    /// construction like `remoteHost`: the row is saved only once it has a binding, so this saves it.
     public func bindRemote(_ binding: RemoteBinding, forSession id: UUID) {
-        session(withID: id)?.remotePresentation = RemotePresentationState(binding: binding)
+        guard let row = session(withID: id) else { return }
+        row.remotePresentation = RemotePresentationState(binding: binding)
+        save()
     }
 
     /// Keeps origin updates even while a local override hides them.
@@ -39,14 +40,15 @@ extension AppStore {
         guard let session = session(withID: id), session.remotePresentation != nil else { return }
         let owner = status.map { localStatusPane($0.pane, in: session) }
         let indicator = status.map {
-            AgentIndicator(status: $0.status, blink: $0.blink, color: $0.color, shape: $0.shape,
-                           statusPane: owner?.pane)
+            AgentIndicator(status: $0.status, blink: $0.blink, autoReset: $0.autoReset ?? false, color: $0.color,
+                           shape: $0.shape, statusPane: owner?.pane)
         } ?? AgentIndicator()
         setAgentIndicator(indicator, forSession: id)
         // the setter stamps this Mac's clock; the origin's is what orders rows after a reconnect
         if let stamp = status?.changedAt { session.statusChangedAt = Date(timeIntervalSince1970: stamp) }
         session.remotePresentation?.statusBridged = indicator.status != .idle
         session.remotePresentation?.statusOwnerResolved = owner?.resolved ?? true
+        session.remotePresentation?.statusKeySent = false
     }
 
     /// Applies the status a snapshot carries, unless the row holds a non-idle one set on this Mac. A snapshot
@@ -64,8 +66,65 @@ extension AppStore {
         guard let session = session(withID: id), let state = session.remotePresentation else { return }
         session.remotePresentation?.connection = connection
         if state.connection != connection { session.remoteConnectionRevision += 1 }
+        if connection == .connected { armRemoteSeen(forSession: id) }
         guard state.connection == .connected, connection != .connected else { return }
         withdrawRemoteReplicas(of: session)
+    }
+
+    /// sendToOrigin hands `body` to the origin of a session this Mac presents; false when it is not the presenter or
+    /// the origin does not take the frame, and the caller then keeps to what this Mac decides alone.
+    func sendToOrigin(_ body: PresentationFrame.Body, forSession id: UUID) -> Bool {
+        guard session(withID: id)?.remotePresentation?.mode == .presenter else { return false }
+        return onOriginFrame?(id, body) ?? false
+    }
+
+    /// markSeen lowers the badge of a session the user is looking at, and asks an attached row's origin to lower its own.
+    public func markSeen(_ id: UUID) {
+        clearUnseen(id)
+        _ = sendToOrigin(.statusSeen(PresentationSeen(reason: .viewed)), forSession: id)
+    }
+
+    /// forwardStatusKeystroke hands typing in `pane` on a bridged status to the origin, whose reset rule decides; its
+    /// answer comes back as a status frame. False when the row decides here: nothing bridged, typing in a pane that
+    /// does not own the status, which no origin rule clears, a pane the origin has no twin of, or an origin that does
+    /// not take the frame. Plain typing goes once per status.
+    public func forwardStatusKeystroke(_ keystroke: StatusKeystroke, pane: StatusPane, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), let state = session.remotePresentation, state.statusBridged,
+              state.statusOwnerResolved, (session.agentIndicator.statusPane ?? .left) == pane,
+              let origin = originPane(of: pane, in: session) else { return false }
+        if keystroke == .other, state.statusKeySent { return true }
+        guard sendToOrigin(.statusClear(PresentationStatusClear(reason: PresentationClearReason(keystroke), pane: origin)),
+                           forSession: id) else { return false }
+        if keystroke == .other { session.remotePresentation?.statusKeySent = true }
+        return true
+    }
+
+    /// forwardSeenKeystroke reports typing to an attached row's origin, whose badge rule decides whatever this Mac's
+    /// own count and rule say. Only the first key and the first submit after the stream connects or a notification
+    /// arrives go.
+    public func forwardSeenKeystroke(_ keystroke: StatusKeystroke, forSession id: UUID) {
+        guard let session = session(withID: id), let state = session.remotePresentation else { return }
+        let first = !state.seenKeySent
+        let submit = keystroke == .submit && !state.seenSubmitSent
+        guard first || submit, sendToOrigin(.statusSeen(PresentationSeen(reason: PresentationClearReason(keystroke))), forSession: id) else {
+            return
+        }
+        session.remotePresentation?.seenKeySent = true
+        if keystroke == .submit { session.remotePresentation?.seenSubmitSent = true }
+    }
+
+    /// armRemoteSeen lets the next typing on an attached row reach its origin's badge again, after a notification.
+    public func armRemoteSeen(forSession id: UUID) {
+        session(withID: id)?.remotePresentation?.seenKeySent = false
+        session(withID: id)?.remotePresentation?.seenSubmitSent = false
+    }
+
+    private func originPane(of pane: StatusPane, in session: Session) -> PresentationPane? {
+        switch pane {
+        case .scratch: return session.scratchDaemon != nil ? .scratch : nil
+        case .left: return session.remotePresentation?.binding.remotePane(forLocal: session.paneIdentity).map { .identity($0) }
+        case .right: return session.splitPaneIdentity.flatMap { session.remotePresentation?.binding.remotePane(forLocal: $0) }.map { .identity($0) }
+        }
     }
 
     /// withdrawRemoteReplicas takes down everything the presentation stream put on `session`, its terminals

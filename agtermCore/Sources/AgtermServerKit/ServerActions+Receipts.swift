@@ -4,8 +4,12 @@ import agtermCore
 extension ServerActions {
     /// receiptCommands are the served structural commands; any other command refuses an `opID`.
     static let receiptCommands: Set<Command> = [
-        .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionMove,
+        .sessionNew, .sessionSplit, .sessionSplitClose, .sessionSwap, .sessionRename, .sessionClose, .sessionTerminate,
+        .sessionMove,
         .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
+        .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane,
+        .recentOpen, .sessionUndo,
     ]
 
     public var takesOperationReceipts: Bool { true }

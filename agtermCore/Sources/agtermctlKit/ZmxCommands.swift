@@ -260,6 +260,9 @@ struct Zmx: ParsableCommand {
         @Flag(name: .long, help: "Required. Confirms destroying the process running in that pane.")
         var force = false
 
+        @Option(name: .customLong("pane-id"), help: "The pane's stable token ($AGTERM_PANE_ID); refuses, killing nothing, when it is no longer that pane.")
+        var paneID: String?
+
         /// Required and never defaulted, unlike every other command's `--target`: the whole contract here
         /// is that nothing about this destruction falls back to whatever is in front of you.
         @Option(name: .long, help: "Session id or unique prefix. Required; 'active' is not accepted.")
@@ -272,6 +275,7 @@ struct Zmx: ParsableCommand {
         var window: String?
 
         @OptionGroup var options: BasicOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard ZmxPaneRole(controlName: pane) != nil else {
@@ -287,8 +291,17 @@ struct Zmx: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .zmxKill, target: target,
-                           args: ControlArgs(force: true, window: window, pane: pane))
+            operation.stamp(ControlRequest(cmd: paneID == nil ? .zmxKill : .zmxKillPane, target: target,
+                                           args: ControlArgs(force: true, window: window, pane: pane, paneID: paneID)))
+        }
+
+        func run() throws {
+            guard paneID != nil else { return try defaultRun() }
+            let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,
+                                     tooOld: "the running app is too old for a pinned pane kill")
+            let reply = try send(try makeRequest())
+            SocketClient.printResponse(reply, json: options.json)
+            if !reply.response.ok { throw ExitCode.failure }
         }
     }
 }

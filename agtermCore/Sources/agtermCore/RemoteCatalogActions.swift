@@ -15,16 +15,43 @@ public struct RemoteShellOptions: Equatable, Sendable {
     public var name: String?
     public var cwd: String?
     public var command: String?
+    public var tint: SidebarTint?
+    /// wait holds the pane open after its command ends, as `--wait` does.
+    public var wait: Bool
 
-    public init(name: String? = nil, cwd: String? = nil, command: String? = nil) {
+    public init(name: String? = nil, cwd: String? = nil, command: String? = nil, tint: SidebarTint? = nil, wait: Bool = false) {
         self.name = name
         self.cwd = cwd
         self.command = command
+        self.tint = tint
+        self.wait = wait
     }
 
     /// words carry each value joined to its flag, so a value starting with `-` is never read as an option.
     var words: [String] {
         [("--name", name), ("--cwd", cwd), ("--command", command)].compactMap { flag, value in value.map { flag + "=" + $0 } }
+            + (tint?.creationWords ?? []) + (wait ? ["--wait"] : [])
+    }
+}
+
+extension SidebarTint {
+    /// creationWords are `session new`'s and `workspace new`'s tint flags.
+    var creationWords: [String] { ["--tint=" + color.rawValue, "--tint-on=" + parts.map(\.rawValue).joined(separator: ",")] }
+}
+
+extension ControlTintUpdate {
+    /// init is the update that leaves a row with `tint`, its parts spelled out.
+    public init(_ tint: SidebarTint?) {
+        self = tint.map { .set($0.color, parts: Set($0.parts)) } ?? .clear
+    }
+
+    /// words are `session tint`'s and `workspace tint`'s mode argument and placement.
+    var words: [String] {
+        switch self {
+        case .clear: ["clear"]
+        case .set(let color, let parts):
+            [color.rawValue] + (parts.map { ["--on", TintPart.allCases.filter($0.contains).map(\.rawValue).joined(separator: ",")] } ?? [])
+        }
     }
 }
 
@@ -52,6 +79,18 @@ public struct RemotePageOptions: Equatable, Sendable {
     }
 }
 
+extension RemoteSessionPlacement {
+    /// words are `session move`'s placement flags; a workspace goes as an operand.
+    var words: [String] {
+        switch self {
+        case .workspace: []
+        case .after(let anchor): ["--after", anchor.uuidString]
+        case .before(let anchor): ["--before", anchor.uuidString]
+        case .step(let step): ["--to", step]
+        }
+    }
+}
+
 /// RemoteOperationTarget is the row an operation acts on, which its pending or unknown mark is shown with.
 public enum RemoteOperationTarget: Equatable, Hashable, Sendable {
     case session(UUID)
@@ -62,6 +101,8 @@ public enum RemoteOperationTarget: Equatable, Hashable, Sendable {
 public enum RemoteOperation: Equatable, Sendable {
     /// newSession lands in `workspace`, beside `anchor` when it is `.after` or `.before`.
     case newSession(workspace: UUID, anchor: RemoteSessionPlacement? = nil, shell: RemoteShellOptions = RemoteShellOptions())
+    /// newSessionInNamedWorkspace lands in the server's workspace of that name, made when `create` is set.
+    case newSessionInNamedWorkspace(name: String, create: Bool, shell: RemoteShellOptions = RemoteShellOptions())
     case newCompanion(parent: UUID, shell: RemoteShellOptions = RemoteShellOptions())
     /// newPage is a page row: a page companion of `anchor`, or a top-level page session after its group.
     case newPage(anchor: UUID, companion: Bool, page: RemotePageOptions)
@@ -72,15 +113,36 @@ public enum RemoteOperation: Equatable, Sendable {
     case swap(UUID)
     case renameSession(UUID, name: String)
     case moveSession(UUID, to: RemoteSessionPlacement)
-    case closeSession(UUID)
-    case newWorkspace(name: String?)
+    /// closeSession and closeSessions with `undoable` keep the close inside the server's grace, answering an undo id.
+    case closeSession(UUID, undoable: Bool = false)
+    /// closeSessions and moveSessions act on several rows as one server command.
+    case closeSessions([UUID], undoable: Bool = false)
+    case moveSessions([UUID], to: RemoteSessionPlacement)
+    case setFlag(UUID, on: Bool)
+    /// clearFlags unflags every session on the server, the rows this window detached included.
+    case clearFlags
+    case setTint(UUID, ControlTintUpdate)
+    case setWorkspaceFlag(UUID, on: Bool)
+    case setWorkspaceTint(UUID, ControlTintUpdate)
+    /// newWorkspace starts collapsed on this Mac when `collapsed` is set; folds are each Mac's own.
+    case newWorkspace(name: String?, collapsed: Bool = false, tint: SidebarTint? = nil)
     case renameWorkspace(UUID, name: String)
     case deleteWorkspace(UUID)
     case moveWorkspace(UUID, to: String)
+    /// restart replaces one pane's shell on the server with one running `command`, or the pane's program again.
+    case restart(UUID, pane: ZmxPaneRole, command: String?)
+    case duplicateCompanion(UUID)
+    case convertCompanion(UUID)
+    /// killDaemon ends one pane's daemon on the server; `paneID` pins it to that pane, as `zmx.kill.pane` does.
+    case killDaemon(UUID, pane: ZmxPaneRole, paneID: String? = nil)
+    /// undoClose undoes the server's pending close `undoID` while its grace lasts.
+    case undoClose(String)
+    /// reopenRecent reopens the server's Recent Closed entry, the newest when nil.
+    case reopenRecent(String?)
 
     public var label: String {
         switch self {
-        case .newSession: "New Session"
+        case .newSession, .newSessionInNamedWorkspace: "New Session"
         case .newCompanion: "New Companion"
         case .newPage(_, let companion, _): companion ? "New Page Companion" : "New Page Session"
         case .setSplit(_, let shown, _): shown ? "Show Split" : "Hide Split"
@@ -90,10 +152,23 @@ public enum RemoteOperation: Equatable, Sendable {
         case .renameSession: "Rename Session"
         case .moveSession: "Move Session"
         case .closeSession: "Close Session"
+        case .closeSessions: "Close Sessions"
+        case .moveSessions: "Move Sessions"
+        case .setFlag(_, let on): on ? "Flag Session" : "Unflag Session"
+        case .clearFlags: "Clear Flagged"
+        case .setTint: "Tint Session"
+        case .setWorkspaceFlag(_, let on): on ? "Flag All Sessions" : "Unflag All Sessions"
+        case .setWorkspaceTint: "Tint Workspace"
         case .newWorkspace: "New Workspace"
         case .renameWorkspace: "Rename Workspace"
         case .deleteWorkspace: "Delete Workspace"
         case .moveWorkspace: "Move Workspace"
+        case .restart: "Restart Pane"
+        case .duplicateCompanion: "Duplicate as Companion"
+        case .convertCompanion: "Convert to Companion"
+        case .killDaemon: "Kill Daemon"
+        case .undoClose: "Reopen Closed Item"
+        case .reopenRecent: "Reopen Last Closed Item"
         }
     }
 
@@ -101,9 +176,13 @@ public enum RemoteOperation: Equatable, Sendable {
         switch self {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
-             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id): .session(id)
-        case .newWorkspace: nil
-        case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _): .workspace(id)
+             .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id, _), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
+             .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _, _): .session(id)
+        // a batch is marked on its first row
+        case .closeSessions(let ids, _), .moveSessions(let ids, _): ids.first.map { .session($0) }
+        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent: nil
+        case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _), .setWorkspaceFlag(let id, _),
+             .setWorkspaceTint(let id, _): .workspace(id)
         }
     }
 
@@ -116,7 +195,7 @@ public enum RemoteOperation: Equatable, Sendable {
     /// pinsPanes is whether the server must find the session's panes as the window saw them.
     var pinsPanes: Bool {
         switch self {
-        case .setSplit, .closeSplit, .swap: true
+        case .setSplit, .closeSplit, .swap, .restart, .killDaemon: true
         default: false
         }
     }
@@ -141,6 +220,8 @@ public enum RemoteOperation: Equatable, Sendable {
                 default: ["--workspace", workspace.uuidString]
                 }
             }() + shell.words
+        case .newSessionInNamedWorkspace(let name, let create, let shell):
+            ["session", "new", "--workspace-name=" + name] + (create ? ["--create-workspace"] : []) + shell.words
         case .newCompanion(let parent, let shell): ["session", "new", "--parent", parent.uuidString] + shell.words
         case .newPage(let anchor, let companion, let page):
             ["session", "overlay", "open", companion ? "--companion" : "--page", "--target", anchor.uuidString] + page.words
@@ -151,28 +232,37 @@ public enum RemoteOperation: Equatable, Sendable {
         case .closeSplit(let id): ["session", "split", "close", "--target", id.uuidString]
         case .swap(let id): ["session", "swap", "--target", id.uuidString]
         case .renameSession(let id, _): ["session", "rename", "--target", id.uuidString]
-        case .moveSession(let id, let placement):
-            ["session", "move", "--target", id.uuidString] + {
-                switch placement {
-                case .workspace: []
-                case .after(let anchor): ["--after", anchor.uuidString]
-                case .before(let anchor): ["--before", anchor.uuidString]
-                case .step(let step): ["--to", step]
-                }
-            }()
-        case .closeSession(let id): ["session", "close", "--target", id.uuidString]
-        case .newWorkspace: ["workspace", "new"]
+        case .moveSession(let id, let placement): ["session", "move", "--target", id.uuidString] + placement.words
+        case .moveSessions(let ids, let placement): ["session", "move"] + ids.flatMap { ["--target", $0.uuidString] } + placement.words
+        case .closeSession(let id, let undoable): ["session", "close", "--target", id.uuidString] + (undoable ? ["--undoable"] : [])
+        case .closeSessions(let ids, let undoable):
+            ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] } + (undoable ? ["--undoable"] : [])
+        case .undoClose(let id): ["session", "undo", "--target", id]
+        case .reopenRecent: ["recent", "open"]
+        case .setFlag(let id, let on): ["session", "flag", on ? "on" : "off", "--target", id.uuidString]
+        case .clearFlags: ["session", "flag", "clear"]
+        case .setTint(let id, let update): ["session", "tint"] + update.words + ["--target", id.uuidString]
+        case .setWorkspaceFlag(let id, let on): ["workspace", "flag", on ? "on" : "off", "--target", id.uuidString]
+        case .setWorkspaceTint(let id, let update): ["workspace", "tint"] + update.words + ["--target", id.uuidString]
+        case .newWorkspace(_, let collapsed, let tint): ["workspace", "new"] + (collapsed ? ["--collapsed"] : []) + (tint?.creationWords ?? [])
         case .renameWorkspace(let id, _): ["workspace", "rename", "--target", id.uuidString]
         case .deleteWorkspace(let id): ["workspace", "delete", "--target", id.uuidString]
         case .moveWorkspace(let id, let step): ["workspace", "move", "--target", id.uuidString, "--to", step]
+        case .restart(let id, let pane, let command):
+            ["session", "restart", "--target", id.uuidString, "--pane", pane.rawValue] + (command.map { ["--command=" + $0] } ?? [])
+        case .duplicateCompanion(let id): ["session", "duplicate", "--companion", "--target", id.uuidString]
+        case .convertCompanion(let id): ["session", "convert", "--companion", "--target", id.uuidString]
+        case .killDaemon(let id, let pane, let paneID):
+            ["zmx", "kill", "--target", id.uuidString, "--pane", pane.rawValue] + (paneID.map { ["--pane-id", $0] } ?? []) + ["--force"]
         }
     }
 
     var operands: [String] {
         switch self {
         case .renameSession(_, let name), .renameWorkspace(_, let name): [name]
-        case .newWorkspace(let name): name.map { [$0] } ?? []
-        case .moveSession(_, .workspace(let workspace)): [workspace.uuidString]
+        case .newWorkspace(let name, _, _): name.map { [$0] } ?? []
+        case .moveSession(_, .workspace(let workspace)), .moveSessions(_, .workspace(let workspace)): [workspace.uuidString]
+        case .reopenRecent(let id?): [id]
         default: []
         }
     }
@@ -248,6 +338,12 @@ public final class RemoteCatalogActions {
     private var entries: [String: Entry] = [:] {
         didSet { onChange?() }
     }
+    /// recentItems is the server's Recent Closed list from its catalog, nil from a server that keeps none.
+    public private(set) var recentItems: [ControlRecentItem]?
+    /// undoIDs are the undoable closes this Mac sent whose grace can still be running on the server, oldest first;
+    /// each leaves by itself when its grace ends, so a menu reading the list updates with nothing else happening.
+    public private(set) var undoIDs: [String] = []
+    @ObservationIgnored var undoGrace: TimeInterval = AppStore.pendingCloseGraceInterval
     /// onChange runs after every change to the operations this window tracks, for read-back that caches them.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
     @ObservationIgnored private var nextOrder = 0
@@ -297,10 +393,12 @@ public final class RemoteCatalogActions {
         var panes: [UUID]?
         if operation.pinsPanes, case .session(let id)? = operation.target {
             guard let session = catalog.session(id) else { return .refused(ControlResponse(ok: false, error: "no such session on \(host)")) }
-            guard !session.panes.isEmpty else {
-                return .refused(ControlResponse(ok: false, error: "the session has ended on \(host)"))
+            switch (session.panes.isEmpty, operation) {
+            // an ended row has no pane to pin, and restart is what brings its shell back
+            case (true, .restart): break
+            case (true, _): return .refused(ControlResponse(ok: false, error: "the session has ended on \(host)"))
+            case (false, _): panes = session.panes.map(\.identity)
             }
-            panes = session.panes.map(\.identity)
         }
         var scratch: String?
         if operation.replacesScratch, case .session(let id)? = operation.target {
@@ -336,12 +434,41 @@ public final class RemoteCatalogActions {
             if selectingCreated, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.selectWhenShown(id, from: prepared.selection)
             }
+            if case .newWorkspace(_, true, _) = operation, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
+                mirror.collapseWhenShown(id)
+            }
+            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID { noteUndo(undoID) }
             return reply
         case .reply, .lost:
             settle(opID, nil)
             return ControlResponse(ok: false, error: "\(host) did not answer \(operation.label); its outcome is unknown until \(host) can be asked")
         }
     }
+
+    /// takeUndo removes and answers the newest undo id whose grace can still be running on the server.
+    public func takeUndo() -> String? {
+        undoIDs.popLast()
+    }
+
+    private func noteUndo(_ undoID: String) {
+        undoIDs = Array((undoIDs + [undoID]).suffix(Self.undoDepth))
+        Task { @MainActor [weak self, grace = undoGrace] in
+            try? await Task.sleep(for: .seconds(grace))
+            self?.undoIDs.removeAll { $0 == undoID }
+        }
+    }
+
+    /// request sends a command that changes no catalog row, a Recent Closed read or clear, and answers the server's
+    /// reply. It carries no operation id: repeating it after a lost reply is harmless.
+    public func request(_ words: [String]) async -> ControlResponse {
+        switch await run(words, operands: []) {
+        case .notSent: return ControlResponse(ok: false, error: "no connection to \(host)")
+        case .lost: return ControlResponse(ok: false, error: "\(host) did not answer")
+        case .reply(let reply): return reply
+        }
+    }
+
+    private static let undoDepth = 20
 
     /// dismissUnknown drops every mark whose outcome this Mac could not learn.
     public func dismissUnknown() {
@@ -392,6 +519,7 @@ public final class RemoteCatalogActions {
     /// Mac lost, and sends a receipt of an epoch the mirror is not in to a lookup.
     func catalogMoved(snapshot: Bool) {
         guard let catalog = mirror.catalog else { return }
+        if recentItems != catalog.recent { recentItems = catalog.recent }
         for (opID, entry) in entries {
             switch entry.state {
             case .awaiting(let target) where target.epoch == catalog.epoch:

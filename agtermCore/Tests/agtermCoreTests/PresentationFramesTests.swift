@@ -458,4 +458,38 @@ struct PresentationFramesTests {
     func aPeerBelowVersionOneCannotBeNegotiated(_ theirs: Int) {
         #expect(PresentationCodec.negotiatedVersion(ours: 1, theirs: theirs) == nil)
     }
+
+    @Test func statusClearAndSeenRoundTrip() throws {
+        let bodies: [PresentationFrame.Body] = [.statusClear(PresentationStatusClear(reason: .submit, pane: .identity(UUID()))),
+                                                .statusClear(PresentationStatusClear(reason: .select)),
+                                                .statusSeen(PresentationSeen(reason: .viewed))]
+        for body in bodies {
+            let frame = PresentationFrame(gen: 1, rev: 2, body: body)
+
+            let line = try PresentationCodec.encode(frame)
+
+            #expect(try PresentationCodec.decode(line.dropLast()) == frame)
+        }
+    }
+
+    @Test func aClearWithAnUnknownReasonOrPaneStillDecodes() throws {
+        let line = #"{"kind":"status.clear","gen":1,"rev":1,"status":{"reason":"wave","pane":"nowhere"}}"#
+
+        guard case .statusClear(let clear) = try PresentationCodec.decode(Data(line.utf8)).body else {
+            Issue.record("not a status clear")
+            return
+        }
+        #expect(clear.reason == nil)
+        #expect(clear.pane == nil)
+    }
+
+    @Test func autoResetTravelsAndAnOlderOriginsStatusLacksIt() throws {
+        let status = PresentationStatus(status: .completed, blink: false, color: nil, shape: nil, pane: nil, changedAt: nil,
+                                        autoReset: true)
+        let decoded = try JSONDecoder().decode(PresentationStatus.self, from: JSONEncoder().encode(status))
+        let older = try JSONDecoder().decode(PresentationStatus.self, from: Data(#"{"status":"completed","blink":false}"#.utf8))
+
+        #expect(decoded.autoReset == true)
+        #expect(older.autoReset == nil)
+    }
 }

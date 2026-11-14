@@ -85,4 +85,13 @@ struct ServerActionsEffectsTests {
 
         #expect(session.unseenCount == 1)
     }
+
+    @Test func seenClearsTheUnseenCountANotificationRaised() throws {
+        let session = try newSession()
+        _ = harness.actions.sendNotification(session.id.uuidString, window: nil, title: "done", body: "build passed")
+
+        #expect(harness.actions.markSessionSeen(session.id.uuidString, window: nil).ok)
+
+        #expect(session.unseenCount == 0)
+    }
 }

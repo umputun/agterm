@@ -44,6 +44,30 @@ struct ControlDispatcherSessionCloseTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func terminateWithAnEmptyBatchIsRefusedBeforeAnyAction() async {
+        let actions = MockControlActions()
+
+        let empty = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .sessionTerminate, args: ControlArgs(targets: [])))
+
+        #expect(empty == ControlResponse(ok: false, error: "session.terminate requires at least one --target"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func terminatePassesTheTargetsWindowAndUndoableToTheHost() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionTerminate))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionTerminate, target: "a", args: ControlArgs(window: "win", undoable: true)))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionTerminate, target: "a", args: ControlArgs(targets: ["a", "b"])))
+
+        #expect(actions.calls == [
+            .sessionTerminate(targets: ["active"], window: nil, undoable: false),
+            .sessionTerminate(targets: ["a"], window: "win", undoable: true),
+            .sessionTerminate(targets: ["a", "b"], window: nil, undoable: false),
+        ])
+    }
+
     @Test func undoableRoundTripsAndIsOmittedWhenNil() throws {
         let request = ControlRequest(cmd: .sessionClose, target: "9f3c", args: ControlArgs(undoable: true))
         let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c", undoable: false))

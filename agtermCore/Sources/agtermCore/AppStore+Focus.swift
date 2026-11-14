@@ -151,9 +151,13 @@ extension AppStore {
     /// partially stale set keeps its survivors and stays enabled. Called from `restore(from:)` AFTER the tree
     /// is rebuilt; writes the fields directly, since the mutators would `save()` what was just read.
     func restoreFocus(from snapshot: Snapshot) {
+        restoreFocus(ids: snapshot.focusedWorkspaceIDs ?? [], enabled: snapshot.focusEnabled ?? false)
+    }
+
+    func restoreFocus(ids: [UUID], enabled: Bool) {
         let present = Set(workspaces.map(\.id))
-        focusedWorkspaceIDs = Set(snapshot.focusedWorkspaceIDs ?? []).intersection(present)
-        focusEnabled = (snapshot.focusEnabled ?? false) && !focusedWorkspaceIDs.isEmpty
+        focusedWorkspaceIDs = Set(ids).intersection(present)
+        focusEnabled = enabled && !focusedWorkspaceIDs.isEmpty
     }
 
     /// The workspaces the sidebar TREE renders: the marked set while the filter is enabled, else all — the

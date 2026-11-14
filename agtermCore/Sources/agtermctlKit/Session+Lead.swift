@@ -10,7 +10,7 @@ extension Session {
                 program sees. A pane that does not lead is covered; this uncovers it, as pressing a key on \
                 the cover does, and covers it on the other Mac. Read each pane's `lead` from `tree`.
                 """)
-        @Option(name: .long, help: "Which pane: primary/left/top or split/right/bottom. Defaults to primary.") var pane: String?
+        @Option(name: .long, help: "Which pane: primary/left/top, split/right/bottom, or a Live scratch. Defaults to primary.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 

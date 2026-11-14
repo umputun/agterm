@@ -408,6 +408,19 @@ struct SocketClientTests {
         #expect(server.received?.cmd == .sessionCompanionNew)
     }
 
+    @Test func anAppTooOldForUndoIsNamed() throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value session.undo"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(["session", "undo", "--target", "u1", "--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for session undo\n")
+        #expect(server.received?.cmd == .sessionUndo)
+    }
+
     @Test func anAppTooOldForConvertIsNamedAndNothingElseIsSent() throws {
         let decodeError = "invalid request: Cannot initialize Command from invalid String value session.companion.convert"
         let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
@@ -420,6 +433,24 @@ struct SocketClientTests {
         #expect(run.out.isEmpty)
         #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for convert\n")
         #expect(server.received?.cmd == .sessionCompanionConvert)
+    }
+
+    @Test(arguments: [
+        (["session", "close", "--terminate", "--target", "s1"], Command.sessionTerminate, "terminate"),
+        (["zmx", "kill", "--target", "s1", "--pane", "left", "--pane-id", "tok", "--force"], .zmxKillPane, "a pinned pane kill"),
+    ])
+    func anAppTooOldForTerminateOrAPinnedKillIsNamed(argv: [String], command: Command, what: String) throws {
+        let decodeError = "invalid request: Cannot initialize Command from invalid String value \(command.rawValue)"
+        let server = StubServer(response: ControlResponse(ok: false, error: decodeError))
+        try server.start()
+        defer { server.stop() }
+
+        let run = try runCLI(argv + ["--socket", server.path])
+
+        #expect(run.status == 1)
+        #expect(run.out.isEmpty)
+        #expect(String(decoding: run.err, as: UTF8.self) == "error: the running app is too old for \(what)\n")
+        #expect(server.received?.cmd == command)
     }
 
     @Test func anAppTooOldForPageSessionsIsNamedAndNothingElseIsSent() throws {

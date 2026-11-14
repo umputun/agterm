@@ -102,4 +102,11 @@ struct AppStorePresentationTests {
         #expect(late.sounds.isEmpty)
         #expect(late.frames.count == 2)
     }
+
+    @Test func anOriginWithNoScratchYetStillOffersOne() throws {
+        let session = try origin(split: false)
+
+        #expect(store.presentationLayout(of: session)?.scratch == nil)
+        #expect(store.presentationLayout(of: session)?.scratchShown == false)
+    }
 }

@@ -62,6 +62,8 @@ public struct PaletteContext: Sendable, Equatable {
     public let remoteConnected: Bool
     /// remoteHasDetached is whether that window has a detached session or workspace to reattach.
     public let remoteHasDetached: Bool
+    /// marksBlocked is whether flag changes are its server's and it cannot be asked now.
+    public let marksBlocked: Bool
     /// Any cover over the deck. Behind it a keystroke or a menu pick must not mutate what it hides, so all
     /// but a handful of commands go dead; `PaletteCommand.isEnabled(in:)` owns which.
     public var modalActive: Bool { terminalZoomActive || dashboardOpen || pickerActive }
@@ -94,13 +96,15 @@ public struct PaletteContext: Sendable, Equatable {
                 activeSessionIsRemote: Bool = false,
                 remoteWindow: Bool = false,
                 remoteConnected: Bool = false,
-                remoteHasDetached: Bool = false) {
+                remoteHasDetached: Bool = false,
+                marksBlocked: Bool = false) {
         self.activeSessionIsPage = activeSessionIsPage
         self.activeSessionIsCompanion = activeSessionIsCompanion
         self.activeSessionIsRemote = activeSessionIsRemote
         self.remoteWindow = remoteWindow
         self.remoteConnected = remoteConnected
         self.remoteHasDetached = remoteHasDetached
+        self.marksBlocked = marksBlocked
         self.canRemoveWorkspace = canRemoveWorkspace
         self.hasFlaggedSessions = hasFlaggedSessions
         self.sidebarShowsWorkspaceTree = sidebarShowsWorkspaceTree
@@ -155,6 +159,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         if context.activeSessionIsPage, Self.terminalOnly.contains(self) { return false }
         if context.remoteWindow, Self.localOnly.contains(self) { return false }
         if context.remoteWindow, !context.remoteConnected, Self.sentToServer.contains(self) { return false }
+        if context.marksBlocked, self == .toggleFlag || self == .clearFlagged { return false }
         switch self {
         case .renameSession, .duplicateSession, .clearStatus, .toggleFlag, .toggleSplit,
              .toggleHorizontalSplit, .toggleScratch,
@@ -165,7 +170,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newCompanion, .duplicateCompanion:
             return context.hasActiveSession
         case .convertCompanion:
-            return context.hasActiveSession && !context.activeSessionIsCompanion && !context.activeSessionIsRemote
+            // a remote row is converted where it runs: by its server or by the host it was attached from
+            return context.hasActiveSession && !context.activeSessionIsCompanion
         case .swapPanes:
             return context.hasActiveSession && context.activeSessionHasSplit
         case .toggleOverlay:
@@ -194,11 +200,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     /// sentToServer are the actions a remote window asks its server for; close stays, since detaching needs no server.
     private static let sentToServer: Set<PaletteCommand> = [
         .newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch,
+        .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .toggleScratch, .duplicateCompanion, .convertCompanion,
     ]
 
     /// localOnly make a shell or a row on this Mac, which a remote window shows only from its server.
-    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .duplicateCompanion, .convertCompanion, .attachRemote, .reopenRecent]
+    private static let localOnly: Set<PaletteCommand> = [.openDirectory, .attachRemote, .reopenRecent]
 
     // terminal zoom stays: it exits a zoom of another session's terminal, and entering one over a page finds none
     private static let terminalOnly: Set<PaletteCommand> = [

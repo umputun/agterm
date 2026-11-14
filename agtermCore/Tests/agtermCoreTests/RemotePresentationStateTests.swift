@@ -908,4 +908,151 @@ struct RemotePresentationStateTests {
 
         #expect(!session.overlayActive)
     }
+
+    private final class OriginFrames {
+        var bodies: [PresentationFrame.Body] = []
+        var accepts = true
+    }
+
+    private func presenting(_ store: AppStore, _ session: Session, accepts: Bool = true) -> OriginFrames {
+        let frames = OriginFrames()
+        frames.accepts = accepts
+        session.remotePresentation?.mode = .presenter
+        store.onOriginFrame = { _, body in
+            guard frames.accepts else { return false }
+            frames.bodies.append(body)
+            return true
+        }
+        return frames
+    }
+
+    @Test func typingOnABridgedStatusGoesToTheOriginAndClearsNothingHere() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .right, forSession: session.id))
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .key, pane: .identity(Self.remoteLeft))),
+                                  .statusClear(PresentationStatusClear(reason: .submit, pane: .identity(Self.remoteLeft)))])
+    }
+
+    // a key in the other pane spent the once-per-status allowance and the owner's first key never reached the origin
+    @Test func typingInTheOtherPaneLeavesTheOwnersFirstKeyToTheOrigin() throws {
+        let (viewer, session) = try attached()
+        let origin = makeStore()
+        let ws = origin.addWorkspace(name: "work")
+        let originSession = try #require(origin.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        origin.toggleSplit(originSession.id)
+        origin.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: originSession.id)
+        session.remotePresentation?.mode = .presenter
+        viewer.onOriginFrame = { _, body in
+            guard case .statusClear(var clear) = body else { return false }
+            if clear.pane == .identity(Self.remoteLeft) { clear.pane = .identity(originSession.paneIdentity) }
+            if clear.pane == .identity(Self.remoteRight) { clear.pane = originSession.splitPaneIdentity.map { .identity($0) } }
+            origin.applyPresenterClear(clear, forSession: originSession.id, reset: .firstKey)
+            return true
+        }
+        viewer.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(!viewer.forwardStatusKeystroke(.other, pane: .right, forSession: session.id))
+        #expect(originSession.agentIndicator.status == .blocked)
+        #expect(viewer.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(originSession.agentIndicator.status == .idle)
+    }
+
+    @Test func typingOnAStatusOfAPaneThisMacDoesNotHaveStaysHere() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(UUID())), forSession: session.id)
+
+        #expect(!store.forwardStatusKeystroke(.other, pane: .left, forSession: session.id))
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func typingStaysWithThisMacWhenTheOriginTakesNoClearOrNothingIsBridged() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session, accepts: false)
+
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func aMirrorSendsNothingToTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        session.remotePresentation?.mode = .mirror
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        #expect(!store.forwardStatusKeystroke(.submit, pane: .left, forSession: session.id))
+        store.markSeen(session.id)
+        #expect(frames.bodies.isEmpty)
+    }
+
+    @Test func selectingAnAutoResetRowClearsItHereAndAtTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        var completed = status(.completed, pane: .identity(Self.remoteLeft))
+        completed.autoReset = true
+        store.applyRemoteStatus(completed, forSession: session.id)
+
+        store.selectSession(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(frames.bodies.contains(.statusClear(PresentationStatusClear(reason: .select))))
+        #expect(frames.bodies.contains(.statusSeen(PresentationSeen(reason: .viewed))))
+    }
+
+    @Test func aManualClearOfABridgedStatusAsksTheOrigin() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+        store.applyRemoteStatus(status(.blocked, pane: .identity(Self.remoteLeft)), forSession: session.id)
+
+        store.clearStatus(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(frames.bodies == [.statusClear(PresentationStatusClear(reason: .manual))])
+    }
+
+    @Test func typingReachesTheOriginsBadgeOnceForTheFirstKeyAndTheFirstSubmitAfterANotification() throws {
+        let (store, session) = try attached()
+        let frames = presenting(store, session)
+
+        for keystroke in [StatusKeystroke.other, .other, .submit, .submit] {
+            store.forwardSeenKeystroke(keystroke, forSession: session.id)
+        }
+        store.armRemoteSeen(forSession: session.id)
+        store.forwardSeenKeystroke(.submit, forSession: session.id)
+        store.forwardSeenKeystroke(.other, forSession: session.id)
+
+        #expect(session.unseenCount == 0)
+        #expect(frames.bodies == [.statusSeen(PresentationSeen(reason: .key)), .statusSeen(PresentationSeen(reason: .submit)),
+                                  .statusSeen(PresentationSeen(reason: .submit))])
+    }
+
+    @Test(arguments: [(StatusReset.firstKey, true), (.never, false)])
+    func theOriginsBadgeRuleDecidesWhateverThisMacsCountIs(_ originReset: StatusReset, _ cleared: Bool) throws {
+        let (viewer, session) = try attached()
+        let origin = makeStore()
+        let ws = origin.addWorkspace(name: "work")
+        let originSession = try #require(origin.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        originSession.unseenCount = 3
+        session.remotePresentation?.mode = .presenter
+        viewer.onOriginFrame = { _, body in
+            guard case .statusSeen(let seen) = body else { return false }
+            origin.applyPresenterSeen(seen, forSession: originSession.id, badgeReset: originReset)
+            return true
+        }
+
+        viewer.forwardSeenKeystroke(.other, forSession: session.id)
+
+        #expect(session.unseenCount == 0)
+        #expect((originSession.unseenCount == 0) == cleared)
+    }
 }

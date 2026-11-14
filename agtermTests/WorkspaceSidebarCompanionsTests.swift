@@ -160,7 +160,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         }
     }
 
-    func testConvertIsOmittedOnACompanionRowAndDisabledOnARemoteRow() throws {
+    func testConvertIsOmittedOnACompanionRowAndEnabledOnARowAttachedFromAnotherHost() throws {
         let group = try seed()
         let remote = try XCTUnwrap(group.store.addSession(toWorkspace: group.work.id, cwd: "/tmp", remoteHost: "far"))
         buildSidebar(for: group.store)
@@ -170,7 +170,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         group.store.setSidebarSelection([remote.id])
         let remoteMenu = try XCTUnwrap(coordinator.menu(forRow: try row(remote.id)))
         let item = try XCTUnwrap(remoteMenu.items.first { $0.title == "Convert to Companion" }, "\(remoteMenu.items.map(\.title))")
-        XCTAssertFalse(item.isEnabled)
+        XCTAssertTrue(item.isEnabled)
     }
 
     // a cached parent node kept its nested rows into the flat flagged list

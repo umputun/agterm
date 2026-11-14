@@ -11,7 +11,6 @@ extension ServerActions {
 
     public func createSession(_ options: ControlSessionCreateOptions, tint: SidebarTint?) -> ControlResponse {
         if let refusal = windowRefusal(options.window) { return refusal }
-        guard options.wait != true else { return ControlResponse(ok: false, error: "session.new --wait is not available on agterm-server") }
         let destination: (workspace: UUID, index: Int?)
         switch sessionDestination(options) {
         case .success(let resolved): destination = resolved
@@ -19,15 +18,27 @@ extension ServerActions {
         }
         let cwd = options.cwd ?? panes.baseEnvironment["HOME"] ?? "/"
         guard let session = store.addSession(toWorkspace: destination.workspace, cwd: cwd, command: options.command,
-                                             name: options.name, at: destination.index, select: false, tint: tint) else {
+                                             name: options.name, wait: options.wait == true, at: destination.index, select: false,
+                                             tint: tint) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if let refusal = panes.start(.init(identity: session.paneIdentity, session: session, workspace: destination.workspace,
-                                           pane: .left, command: options.command, directory: cwd)) {
-            store.closeSession(session.id, alreadyFinalized: session.paneIdentity)
+                                           pane: .left, program: .creation(options.command, wait: options.wait),
+                                           directory: cwd)) {
+            store.discardSession(session.id, alreadyFinalized: session.paneIdentity)
             return ControlResponse(ok: false, error: refusal)
         }
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+    }
+
+    /// duplicateSession starts a plain shell right after the target in its workspace, in its focused directory,
+    /// copying nothing else.
+    public func duplicateSession(_ target: String?, window: String?) -> ControlResponse {
+        withSession(target, window: window) { session in
+            createSession(ControlSessionCreateOptions(window: nil, cwd: session.focusedCwd, workspace: nil, workspaceName: nil,
+                                                      createWorkspace: nil, command: nil, wait: nil, name: nil,
+                                                      after: session.id.uuidString, before: nil, noSelect: true))
+        }
     }
 
     public func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
@@ -40,11 +51,11 @@ extension ServerActions {
     public func closeSession(_ target: String?, window: String?) -> ControlResponse {
         withSession(target, window: window) { session in
             let closing = [session.id] + store.companions(of: session.id).map(\.id)
-            store.closeSession(session.id)
+            let recent = store.closeSession(session.id)
             let closed = closing.filter { store.session(withID: $0) == nil }
             return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString,
                                                                    affected: closing.count > 1 ? closing.count : nil,
-                                                                   closed: closed.map(\.uuidString)))
+                                                                   closed: closed.map(\.uuidString), recentID: recent?.uuidString))
         }
     }
 
@@ -65,6 +76,12 @@ extension ServerActions {
         for id in roots where store.session(withID: id) != nil { store.closeSession(id) }
         let closed = closing.filter { store.session(withID: $0) == nil }
         return ControlResponse(ok: true, result: ControlResult(affected: closed.count, closed: closed.map(\.uuidString)))
+    }
+
+    /// terminateSessions is `session.close` here: every row on this host is its own session, so closing it ends it.
+    public func terminateSessions(_ targets: [String], window: String?, undoable: Bool) -> ControlResponse {
+        targets.count == 1 ? closeSession(targets[0], window: window, undoable: undoable)
+            : closeSessions(targets, window: window, undoable: undoable)
     }
 
     public func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
@@ -117,9 +134,6 @@ extension ServerActions {
     public func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse {
         withSession(target, window: window) { parent in
             guard !parent.ended else { return ControlResponse(ok: false, error: "session has ended") }
-            guard options.wait != true else {
-                return ControlResponse(ok: false, error: "session.companion.new --wait is not available on agterm-server")
-            }
             var options = options
             options.select = false
             guard case .success(let companion) = store.addCompanion(to: parent.id, options: options) else {
@@ -127,8 +141,9 @@ extension ServerActions {
             }
             let workspace = store.sessionLocation(ofSession: companion.id)?.workspace
             if let refusal = panes.start(.init(identity: companion.paneIdentity, session: companion, workspace: workspace,
-                                               pane: .left, command: options.command, directory: companion.effectiveCwd)) {
-                store.closeSession(companion.id, alreadyFinalized: companion.paneIdentity)
+                                               pane: .left, program: .creation(options.command, wait: options.wait),
+                                               directory: companion.effectiveCwd)) {
+                store.discardSession(companion.id, alreadyFinalized: companion.paneIdentity)
                 return ControlResponse(ok: false, error: refusal)
             }
             return ControlResponse(ok: true, result: ControlResult(id: companion.id.uuidString,
@@ -179,12 +194,56 @@ extension ServerActions {
             case .success(let resolved): identity = resolved.identity
             case .failure(let refusal): return refusal.response
             }
-            guard let screen = panes.runner.screen(panes.daemonName(for: identity), all: options.all) else {
+            guard let screen = panes.runner.screen(panes.daemonName(for: identity), all: options.all || options.lines != nil) else {
                 return ControlResponse(ok: false, error: "failed to read surface buffer")
             }
             let text = options.lines.map(screen.lastLines) ?? screen.text
             return ControlResponse(ok: true, result: ControlResult(text: text))
         }
+    }
+
+    public func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse {
+        readSurfaceCursor(target, window: window, paneID: nil)
+    }
+
+    /// readSurfaceCursor answers from the pane daemon's screen. The server has no window, so `active` is the
+    /// selected session's focused pane, and overlay and quick surfaces, which live on a presenting Mac, are refused.
+    public func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {
+        let raw = target ?? "active"
+        if let paneID, !paneID.isEmpty {
+            guard raw != "quick", TerminalSurfaceID(rawValue: raw) == nil else {
+                return ControlResponse(ok: false, error: "surface.cursor: --pane-id takes a session target")
+            }
+            return withSession(raw, window: window) { cursorResponse($0, token: paneID, pane: nil) }
+        }
+        if raw == "active" {
+            return withSession(raw, window: window) { cursorResponse($0, token: nil, pane: $0.focusedPane == .right ? .right : .left) }
+        }
+        guard let surfaceID = TerminalSurfaceID(rawValue: raw) else {
+            return ControlResponse(ok: false, error: raw == "quick" ? "surface not available: quick" : "invalid surface: \(raw)")
+        }
+        let pane: StatusPane
+        switch surfaceID.surface {
+        case .primary: pane = .left
+        case .split: pane = .right
+        case .scratch: pane = .scratch
+        case .overlay, .overlayLeft, .overlayRight: return ControlResponse(ok: false, error: "surface not available: \(raw)")
+        }
+        return withSession(surfaceID.sessionID.uuidString, window: window) { cursorResponse($0, token: nil, pane: pane) }
+    }
+
+    private func cursorResponse(_ session: Session, token: String?, pane: StatusPane?) -> ControlResponse {
+        let resolved: (identity: UUID, pane: StatusPane)
+        switch daemonPane(of: session, token: token, pane: pane) {
+        case .success(let found): resolved = found
+        case .failure(let refusal): return refusal.response
+        }
+        guard let screen = panes.runner.screen(panes.daemonName(for: resolved.identity), all: false),
+              let surface = TerminalZoomSurface(controlName: resolved.pane.rawValue) else {
+            return ControlResponse(ok: false, error: "failed to read surface cursor")
+        }
+        return ControlResponse(ok: true, result: ControlResult(id: TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue,
+                                                               cursor: ControlCursor(column: screen.cursorColumn)))
     }
 
     public func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse {
@@ -206,6 +265,11 @@ extension ServerActions {
                 guard panes.runner.type(name, bytes: [0x0D]) else {
                     return ControlResponse(ok: false, error: "text typed, but its final Return could not be confirmed; do not retype the text")
                 }
+            }
+            // the input a blocked agent waited for has arrived, as `session.type` into a Mac pane clears it
+            if !options.text.isEmpty, session.agentIndicator.clearedBy(pane: resolved.pane, keystroke: InterruptKeystroke.classify(text: options.text),
+                                                                       reset: Self.macDefaults.effectiveStatusReset) {
+                store.setAgentIndicator(AgentIndicator(), forSession: session.id)
             }
             var result = ControlResult(id: session.id.uuidString)
             result.pane = resolved.pane.rawValue

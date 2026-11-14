@@ -56,19 +56,16 @@ extension ControlDispatcher {
             return actions.listZmxDaemons()
         case .zmxPrune:
             return actions.pruneZmxDaemons()
-        case .zmxKill:
-            // no `active` or left-pane default: this destroys a backend process rather than a model object,
-            // reaching claims no window shows and every client attached to the daemon
-            guard let target = request.target, !target.isEmpty else {
-                return ControlResponse(ok: false, error: "zmx.kill requires an explicit --target")
+        case .zmxKill, .zmxKillPane:
+            switch Self.killArguments(request) {
+            case .failure(let rejection):
+                return ControlResponse(ok: false, error: rejection.message)
+            case .success(let kill):
+                guard let paneID = kill.paneID else {
+                    return actions.killZmxDaemon(target: kill.target, window: request.args?.window, pane: kill.pane)
+                }
+                return actions.killZmxPane(target: kill.target, window: request.args?.window, pane: kill.pane, paneID: paneID)
             }
-            guard let rawPane = request.args?.pane, let pane = ZmxPaneRole(controlName: rawPane) else {
-                return ControlResponse(ok: false, error: "zmx.kill requires --pane left|right")
-            }
-            guard request.args?.force == true else {
-                return ControlResponse(ok: false, error: "zmx.kill requires --force")
-            }
-            return actions.killZmxDaemon(target: target, window: request.args?.window, pane: pane)
         case .zmxScreen:
             // a daemon name, as `zmx list` prints it: the session resolver sees only open windows
             guard let name = request.args?.name?.trimmedOrNil, RemoteSession.isPlain(name) else {
@@ -88,5 +85,34 @@ extension ControlDispatcher {
         default:
             preconditionFailure("unexpected zmx command: \(request.cmd.rawValue)")
         }
+    }
+}
+
+/// ZmxKillArguments is a checked `zmx.kill` or `zmx.kill.pane`; `paneID` is set only for the pinned form.
+struct ZmxKillArguments {
+    let target: String
+    let pane: ZmxPaneRole
+    let paneID: String?
+}
+
+extension ControlDispatcher {
+    /// killArguments checks a kill before any host is asked. There is no `active` or left-pane default: this destroys a
+    /// backend process rather than a model object, reaching claims no window shows and every client attached to it.
+    static func killArguments(_ request: ControlRequest) -> Result<ZmxKillArguments, ArgumentRejection> {
+        let cmd = request.cmd.rawValue
+        guard let target = request.target, !target.isEmpty else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires an explicit --target"))
+        }
+        guard let rawPane = request.args?.pane, let pane = ZmxPaneRole(controlName: rawPane) else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires --pane left|right"))
+        }
+        guard request.args?.force == true else {
+            return .failure(ArgumentRejection(message: "\(cmd) requires --force"))
+        }
+        guard request.cmd == .zmxKillPane else { return .success(ZmxKillArguments(target: target, pane: pane, paneID: nil)) }
+        guard let paneID = request.args?.paneID?.trimmedOrNil else {
+            return .failure(ArgumentRejection(message: "zmx.kill.pane requires --pane-id"))
+        }
+        return .success(ZmxKillArguments(target: target, pane: pane, paneID: paneID))
     }
 }

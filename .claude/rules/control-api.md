@@ -172,7 +172,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -194,8 +194,8 @@ renumbering. Do not reintroduce a count anywhere.
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
   `restore.clear`, `restore.mode`, `version`
-- `recent.list`, `recent.open`, `recent.clear`
-- `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
+- `recent.list`, `recent.open`, `recent.clear`, `session.undo`
+- `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.kill.pane`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
 - `catalog.subscribe`, `catalog.op`: served only by agterm-server; a Mac app refuses them and any `opID`
 
 `terminfo install` is a CLI-only command with no protocol counterpart, one of the three exemptions from the
@@ -209,8 +209,8 @@ pipeline; the CLI owns the typed option surface, deliberately narrower than ssh'
 never writes a clipboard: the write arrives in the pane's bytes, so every attached terminal applies its own
 `clipboard-write` policy, and a session attached from another Mac gets the text on the Mac showing it.
 `TerminalClipboard` in `agtermCore` owns the sequence, the size bound and the daemon resolution.
-It takes no target: the daemon is the one zmx named in the pane's environment, so scratch, quick and
-overlay terminals, which have none, are refused, and a name `ZmxSupport.isDaemonName` rejects is too.
+It takes no target: the daemon is the one zmx named in the pane's environment, so quick and overlay
+terminals and a scratch outside Live sessions, which have none, are refused, and a name `ZmxSupport.isDaemonName` rejects is too.
 `zmx print` reads no reply and exits 0 on a dropped connection, so exit 0 confirms neither receipt nor a
 pasteboard write. It also injects between two 4096-byte pty reads, where the program's own escape sequence
 may be unfinished: the OSC 52 still parses whole, and the interrupted sequence is cut short.
@@ -249,6 +249,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `ControlActions` keeps the two-argument forms,
   and the defaults of the `undoable:` overloads refuse an undoable request
   rather than quietly hard-closing it.
+  Every undoable reply carries `result.undoID`, the pending-close record `session.undo` takes, except a forwarded
+  `session.terminate` of an attached row: the origin's id stays in `WindowLibrary.attachedUndos` for ⌘Z in the
+  window that asked, and adding it to the aggregate reply would be a new wire contract. Past the grace it
+  answers `AppStore.closeNoLongerUndoable` and never reopens, which stays `recent.open`'s job.
+  `recent.*` and `session.undo` go to a server window's server only when `--window` names it; the bare forms stay this
+  Mac's, so a script never reaches a server it did not name.
 - `session.move` accepts exactly one placement intent:
   - `--to up|down|top|bottom` reorders one session in its workspace.
   - workspace relocates and appends.
@@ -325,8 +331,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `initialCommand` or a restore pin: after `restart --command B` the creation line still says A. The
   receipt's `replayedArgv` is the read-back, present only on a replay; a blank `command` is an error so an
   unset shell variable cannot turn into one. Addressing is `--pane-id` or `--pane left|right`, one required; an unresolved
-  token is refused even beside `--pane`, unlike `session.restore`. Non-live, remote and scratch panes are
-  refused. It clears the pane's status, ask, HUD and pane overlay through `AppStore.clearPaneOwnedState`
+  token is refused even beside `--pane`, unlike `session.restore`. Non-live and scratch panes are refused; a server
+  window's row goes to its server as `RemoteOperation.restart`, and a row attached from another host to its origin
+  (Remote sessions), which then publishes the respawn as `ownerRespawned` does, through `publishRespawn`. It clears the pane's status, ask, HUD and pane overlay through `AppStore.clearPaneOwnedState`
   and leaves `initialCommand` and restore pins alone. Control-native, with no menu item. It leaves the
   accept thread like `zmx.tree`, because the shell it starts calls this socket while the reply is pending.
 - Every daemon kill in `ZmxClient` hangs up the shell's FOREGROUND JOB, and nothing else. `zmx kill`
@@ -338,7 +345,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   This is what a closed terminal does: `nohup`, `disown`ed and other background jobs are never signalled,
   and a foreground program that ignores hangups survives a close. Do not widen it to the shell's process
   tree. `ProcessSweeper` is nil by default because a test's fake listing names real pids.
-- `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives
+- `session.scratch` is a third login shell with on/off/toggle; in Live sessions mode it is the daemon
+  `Session.ScratchDaemon` names, saved and restored hidden, claimed, reaped and reset like a pane's, and
+  ended by its shell's exit or `--command`; a requested-Live fallback keeps it for the next Live launch. It spawns lazily, survives
   hiding, recreates after exit, and renders as a full translucent cover below overlay. It has no session
   link but a weak watermark one; its PWD reaches only `Session.scratchCwd`, never the row's cwd or title.
   A local scratch seeds that field with its start directory, so `AGT_SESSION_PWD` and
@@ -433,7 +442,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.collapse`/`.expand` persist through `AppActions.setSessionExpanded`, then post
   `.agtermSetSessionExpanded` (see [[sidebar]]). Read back `parent` and `collapsed` on session nodes.
 - `session.close` answers `result.closed` with every id it closed, from the group computed before the close,
-  deduplicated; a parent close also sets `affected`. A companion leaving its group is
+  deduplicated; a parent close also sets `affected`. A single-target close also answers `recentID`, the Recent Closed
+  entry it wrote (the soft close's too, written at close time), which `recent.open` takes; a batch and a row Recent
+  Closed does not keep answer none. A companion leaving its group is
   `ControlServer.companionMoveError`; an ordinary no-op move stays ok.
 - `recent.open` names `parent session is not open or in Recent Closed` only when
   `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
@@ -468,7 +479,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.companion.convert` is its own wire command for the same older-app reason, with a CLI too-old text of its
   own. `AppStore.convertToCompanion` is the one seam the GUI and control share: a fresh `addSession` at the target's
   slot, then the target and its companions re-pointed at it, keeping every `Session` object. `ConvertRefusal.message`
-  is the refusal text both surfaces show, and a remote row is refused, never forwarded to its origin.
+  is the refusal text both surfaces show. A row attached from another host is converted by its origin, which creates
+  the parent there, and the viewer attaches that parent at the row's slot and moves the row under it (`AppStore.nest`);
+  a server window's row is converted by its server (`RemoteOperation.convertCompanion`), as Duplicate as Companion is.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
@@ -768,7 +781,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openDocumentLink` the same way, and one `TextPage.isEligible` accepts routes to `openTextLink` the same
   way; any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare, relative and
   `file://` paths (any host) name files on the far Mac and route to `.forwardRemote`, which reveals nothing here; every
-  other local route from it is `.ignore`. Its scratch stays `.scratch` because that shell is local.
+  other local route from it is `.ignore`. Its scratch is `.scratch` while that shell is local; one running on the
+  row's origin (`Session.originScratch`) is `.remotePane`, and its click names the origin's scratch identity, which
+  `forwardedClickPane` resolves with the scratch's cwd (`PaneObserver` tracks it on agterm-server).
 - A forwarded click (`ControlServer+RemoteLinkClick`, `+ForwardedClick`) travels as `link.click` only while this Mac
   presents the session and the origin agreed the `link.click` kind (`RemotePresentationClient.originSupports`), with the
   ORIGIN's pane identity (`AppStore.linkClickRequest`). The origin resolves it with that pane's cwd and opens only page
@@ -784,14 +799,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
   sent. The click is a
   gesture with no control command: its page reads back as the replica page on the session node.
+- A web link to an exact loopback host, clicked in a program running on another host (a remote pane, a scratch on
+  its origin, an overlay running an origin job: `linkClickRemoteSession`), opens the local end of a forward to that
+  host, never this Mac's loopback. `LinkOpener.loopback` asks `ControlServer.forwardLoopback`, and the browser or
+  overlay opens once the forward answers, with path, query and fragment kept. `LinkForwards` shares one forward per
+  host and port: on a remote window's pool until the window closes, else in its own ssh until the last attached row
+  using it is released. Each waiting click opens its own address, a row that goes away gets nothing, and a failed
+  forward is refused on the row as `RemoteLinkRefusal.forwardFailed`, which never travels. It is no
+  `LinkPolicy.Route` case, since the agterm-linux fork switches over `Route` exhaustively.
 - Session links use `LinkPolicy.sessionLink`: exactly `agterm://session/` (case-insensitive prefix) plus a
   36-character hyphenated UUID (either case), with no suffix, query, fragment, credentials, port or encoding.
   The raw string is checked, not URL components, so even an empty port is refused.
   The `.selectSession` route precedes remote forwarding in every link-open mode, from pane, remote pane and
   scratch only; quick terminal and program overlay clicks are ignored, as for the link-open overlay.
   `WindowLibrary.sessionLinkTarget` takes the namespace from the clicked pane's binding: local shells use local
-  ids, mapped remote panes and catalog-owned scratches use the origin host and endpoint, and local splits use
-  local ids; a scratch on any other row uses local ids.
+  ids, mapped remote panes, catalog-owned scratches and a scratch running on its origin use the origin host and
+  endpoint, and local splits use local ids; a scratch on any other row uses local ids.
   A remote pane click with no binding or no clicked pane, a mapped pane whose binding has no origin endpoint,
   and ambiguous origin matches select nothing.
   `Session.showsOriginSession`, shared with `attachedParentRows`, matches that origin identity.
@@ -1427,7 +1450,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   refuses a color or parts. `ControlDispatcher+SessionMetadata` parses both and the creation `tint`/`tintOn` on
   `session.new`/`workspace.new` before any action runs, so a bad value creates nothing. A set without parts keeps
   the row's own, else icon; `SidebarTint.recolor`/`place` own that rule for the CLI, the row menu and the palette.
-  A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac.
+  A workspace tint never colors its sessions. Persisted, never copied by duplicate, local to this Mac except on a
+  remote window's row, where the server keeps it as a catalog field, as it does the flag; a server predating those
+  fields leaves both on the Mac.
   `ControlActions` keeps the tintless `createSession` and `createWorkspace`; each tint overload's default refuses a tint.
   Hex is control-only: the row menu shows it as a checked Custom entry and has no picker. The agterm-linux fork
   calls the `TintColor` forms of `SidebarTint.init`, `recolor`, `AppStore.setTintColor` and `ControlTintUpdate.set`,
@@ -1633,8 +1658,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
   login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
 - `remoteHost` names the machine a teleported session is attached to and is omitted for a local one. It is
-  live-only: a remote row is never persisted, so a per-session attach is gone after a relaunch, while a remote
-  window rebuilds its rows from the server's catalog with both remote fields set.
+  saved with an attached row and set again at relaunch (Remote sessions owns that), while a remote window rebuilds
+  its rows from the server's catalog with both remote fields set.
   `remoteSessionID`, on the node and on `remote.opened` / `remote.closed`, is the origin's id the row shows.
   A remote window's row carries it too, equal to the row's own id; a re-attach hook skips those rows by their
   window's `remote` node, since the window restores them itself.
@@ -1788,6 +1813,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   INVENTORY rather than `ControlTargetResolver`, which searches open stores only; `--window` scopes the
   claims before the session resolves. `absent`, `unreadable`, `pendingClose`, `unknown`, `conflicted` and
   `foreign` rows are all refused.
+- `zmx.kill.pane` is `zmx.kill` pinned to the pane token in `paneID` (CLI `zmx kill --pane-id`): it refuses
+  `pane <id> is no longer the <role> pane; nothing was killed` when the role resolves to another pane. A wire
+  command of its own, never a field on `zmx.kill`: an older app drops an unknown field and would kill whatever
+  holds the role, while an unknown command fails to decode and kills nothing. The CLI maps that to
+  `the running app is too old for a pinned pane kill`.
 - After a successful kill the app marks the surface's exit handled through the existing
   `didHandleProcessExit`, never a parallel flag, and only AFTER the kill so a failed one leaves the natural
   path working. It then runs `agtermApp.handlePaneExit`, which owns the model transition plus the promoted
@@ -1851,14 +1881,35 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `status`/`statusColor`/`statusShape`, which File ▸ Attach Remote draws on its rows.
 - A remote pane is an ORDINARY command surface whose command is ssh. There is no new surface kind, no new
   lifecycle and no remote daemon ownership, so closing locally tears the surface down, ssh dies, and the
-  far-side daemon survives. No command asks the remote zmx to kill anything. `Session.remoteHost` is model
-  metadata, and persistence, ownership, icon and factory routing all read it.
+  far-side daemon survives. Only the origin's own control API ends something there (next bullet).
+  `Session.remoteHost` is model metadata, and persistence, ownership, icon and factory routing all read it.
+- A request on a row attached from another host whose effect belongs to the origin runs THERE, through
+  `ControlServer.attachedRoute`: `session.terminate` (`session close --terminate`; a local or server window row
+  closes as `session.close` does), `session.restart`, a pinned `zmx.kill` (`zmx.kill.pane` on the origin's pane
+  token), Convert to Companion, Duplicate, `session.split` and `.split.close`, `session.scratch`, and
+  `session.restore` (refused for an agterm-server origin with `agterm-server keeps every pane running`, as on a
+  server window's row). `AttachedForward` owns each origin argv, run once through `RemoteSession.controlCommand`
+  from a worker: never retried, never done locally instead, and an answer that does not decode is reported as
+  unknown. An origin refusing the command or a field is `the agterm on <host> is too old for this`. The GUI
+  paths share the route through `AppActions.forwardAttached`. A request the dispatcher's own argument checks
+  refuse (`ControlDispatcher.refusesArguments`) is never sent and gets the dispatcher's words; a pane token must
+  name a pane of the origin's layout, and a pinned kill sends the role that pane holds on the origin. A batch
+  terminate sends one close per origin and closes here, in every window, only the rows the origin reports in
+  `closed` (`AppStore.closeExactly`), so a companion it did not end stays at top level; a partial result names
+  what failed and what closed. Restart is forwarded only to an origin advertising
+  `PresentationHub.restartRespawnKind`, and its receipt names this Mac's pane.
+- The viewer attaches what its origin adds after the attach (`applyRemoteLayout`, `RemoteAttachLines`): a pane in
+  the layout with no mapping, into an empty split slot, including one a removal frees later
+  (`attachOriginAdditions`), and the scratch the layout names while `scratchShown` says so. A mapping is never
+  removed, so a replica closed here is never attached again. An attached row's scratch is its origin's
+  (`Session.scratchFollowsOrigin`): `session.scratch` is refused while the row has no layout (`not connected`) or
+  its origin predates `scratchShown` (`too old`). A stopped origin scratch parks and attaches again through the
+  reconnect tick (`AppStore.originScratchStopped`), and its lead follows Pane lead below.
 - A remote pane's reported cwd can be remote, so the local launches that inherit it go through
   `Session.localWorkingDirectory`: the reported path when it exists here as a directory, else HOME.
   Those are custom commands (execution cwd only; `AGT_SESSION_PWD` stays the reported path and
-  `AGT_SESSION_HOST` carries the destination), scratch, the overlay default, the quick terminal, a
-  local split (the first on an unsplit remote session, or one created after the attach-time split
-  closes), Duplicate Session and a new session under the current-directory setting. The primary SSH
+  `AGT_SESSION_HOST` carries the destination), the overlay default, the quick terminal
+  and a new session under the current-directory setting. The primary SSH
   surface still starts in HOME without the helper. `keymap.md` owns the token contract.
 - A pane's zmx daemon applies ONE client's grid, its leader's. Which client leads is explicit; see
   Pane lead below.
@@ -2039,9 +2090,24 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `Session.remoteHost` and `remoteSessionID` are immutable and set at construction, because `addSession` saves
   and emits `remote.opened` before `bindRemote` runs: a marker written
   afterwards would let one snapshot reach disk carrying the ssh command. `isPersistable` gates every
-  producer — the launch snapshot, the Recent Closed session record, and a closed workspace's record, whose
-  `sessionCount` and `selectedSessionID` are recomputed after filtering. The in-memory pending-close record
-  keeps remote sessions, so the three-second undo still restores the row.
+  local producer: the launch snapshot's `sessions`, the Recent Closed session record, the quit capture, and a
+  closed workspace's record, whose `sessionCount` and `selectedSessionID` are recomputed after filtering. The
+  in-memory pending-close record keeps remote sessions, so the three-second undo still restores the row.
+- A row attached from another host (`Session.attachedOrigin`; nil for a server window's row and one not yet
+  bound) is saved apart in `WorkspaceSnapshot.attached`: its place, view state and binding, never a command,
+  cwd or page source, so a build predating the key ignores it rather than starting a shell in it. `bindRemote`
+  saves, since `addSession` saved before the binding existed. A relaunch runs the saved attach lines WITHOUT the
+  lead claim (`attachedSession(from:)`), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
+  session the tree lists is alive; one it leaves out ends the row (`endAttachedRow`, `Ended on HOST`) only when
+  the host's complete `zmx list` has no claim for it, since a session in a window closed there is left out but
+  claimed; anything else is inconclusive. A page owns no daemon and the tree omits a page companion whose parent
+  is not attachable, so a page row, waiting as `connecting`, always asks for its page (`requestRemotePage`) and is
+  filled in place (`placeRemotePage` at `.existing`). A refusal shows as `failed` with the host's reason and is
+  not asked again; no answer reads `failed` too and the check retries on `RemoteRetryBackoff`.
+- Closing such a row writes a `RecentClosedState.remoteItems` entry, one per host and origin session, never a
+  local one. Its id is the close's `recentID`, and a workspace close ties its rows' entries to its own entry
+  through `closeID`, so `RecentClosedStore.remove` drops them on undo; a single-target `session.terminate`
+  records the origin's own `recentID` on it.
 - `Session.locallyManagedPaneIdentities` is the single local-ownership predicate, empty for a remote
   session, read by `finalizePaneIdentities`, the direct `closeSplit` finalizer path, `liveClaims` and live
   `finalizeWindowPanes`. Without it `liveClaims` invents an `agterm-<uuid>` claim for a pane whose daemon
@@ -2068,9 +2134,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A `layout` frame and the snapshot's optional `layout` carry model pane identities, primary, axis and
   shown state, including an unrealized origin split. Invalid layouts are ignored without disconnecting.
   An older origin omits the field and leaves the viewer's layout alone.
-- Axis, visibility and swaps follow the origin only for an existing, realized pair of mapped replicas.
-  The viewer never creates a pane from a layout; newly opened origin splits require closing and attaching
-  the row again. A locally closed replica stays closed, and local panes keep their layout. Ratio and
+- Axis and visibility follow the origin only for a realized pair of mapped replicas. A swap also moves a
+  pair whose replica has no surface yet, as a slot (`swapPanes(allowingUnrealized:)`), so a pane the origin
+  added as its primary takes the primary slot in the same frame. Panes the origin adds attach as the bullet on
+  origin additions says. A locally closed replica stays closed, and local panes keep their layout. Ratio and
   keyboard focus stay local; hiding the split maximizes this Mac's focused pane.
 - Confirmed removal closes a mapped replica without requiring acknowledgement, including one already
   held after ssh exited. If it is the last realized replica, it stays until its ssh exits, then the row
@@ -2161,8 +2228,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   is not read back. `overlay.text` and `overlay.copy` refuse with `overlay is shown on another Mac`. Read the
   reservation back as `remoteOverlays` (`pane`, `sizePercent`, `pageID` for a page) on the origin's session node.
 - A new PAGE follows the same placement rule and the same presenter, gated on the page kinds in its hello; an
-  older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for it is refused
-  (`remoteLoopback`), since it names a server on the origin, as is an open request over one presentation frame
+  older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for a presenter not
+  listing `PresentationHub.pageForwardKind` is refused (`remoteLoopback`), since it names a server on the origin, as is an open request over one presentation frame
   (`remoteTooLarge`), before anything is reserved. The origin reserves the slot and registers the page
   id in `HtmlPageOutcomes`, so `result --page` and `--html --block` work unchanged; the presenter shows it under a
   page id of its own (`HtmlOverlay.replicaOf` names the origin's), as `HtmlSource.replica` for a file or an
@@ -2278,8 +2345,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A remote window's terminal row takes `customName` as its own, so an unnamed row follows its terminal title as a
   local one does (#991); a page row takes `name`. An omitted `customName` marks an older server, whose `name` is
   taken instead, so the server sends `""` for an unnamed session, never nil.
-- A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
-  `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
+- A loopback URL page on an origin, agterm-server or a Mac, opens through `PooledForward` on the row's ssh master, or
+  a standalone `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
 - The server keeps page rows: `session.page`, `session.companion.page` and `session.companion.page.attach` are
   served, the page rows take operation receipts, and a loopback URL is refused
   (`OverlayHtmlError.serverLoopbackRow`), since a page row has no forward path.
@@ -2386,7 +2453,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - A covered pane ATTACHED from another Mac refuses all three with `pane is in use on the Mac it runs
   on; take the lead to drive it from here`: its daemon is an ssh away and these reads are synchronous.
 - `session.lead [--pane]` is the control twin of the cover's key. A pane that already leads answers ok;
-  one with no reported role answers `pane has no lead to take`; scratch is refused. Read back `lead`.
+  one with no reported role answers `pane has no lead to take`; a scratch outside Live sessions is refused.
+  Read back `lead`.
   It has no menu item or chord: the cover is its GUI surface.
 - The far side runs the ORIGIN's zmx, so both Macs need the patch. Against an older origin nothing is
   reported, no pane is covered, and the pre-patch behaviour holds: the attach follows until a typed key.

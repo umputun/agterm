@@ -330,6 +330,25 @@ final class ControlServerZmxTests: XCTestCase {
         XCTAssertEqual(library.activeWindowID, front)
     }
 
+    func testAnAttachIntoABackgroundWindowIsOnDiskWhenItReturns() async throws {
+        let front = try XCTUnwrap(library.activeWindowID)
+        let destination = library.newWindow(name: "other").id
+        _ = try XCTUnwrap(library.loadStore(for: destination))
+        library.frontmostWindowID = front
+        let runner = FakeRemoteRunner(result: RemoteCommandResult(status: 0, stdout: Self.splitProjection, stderr: ""))
+        let server = makeServer(list: "", remoteRunner: runner)
+
+        let dispatched = await ControlDispatcher(actions: server).dispatch(ControlRequest(cmd: .zmxAttach, target: "s1",
+            args: ControlArgs(host: "buildbox", window: destination.uuidString)))
+
+        let id = try XCTUnwrap(dispatched?.result?.id)
+        let saved = PersistenceStore(directory: stateDir.appendingPathComponent("windows"), fileName: "\(destination.uuidString).json").load()
+        let attached = try XCTUnwrap(saved.workspaces.flatMap { $0.attached ?? [] }.first)
+        XCTAssertEqual(attached.session.id.uuidString, id)
+        XCTAssertEqual(attached.origin.host, "buildbox")
+        XCTAssertEqual(attached.origin.panes.count, 2)
+    }
+
     func testAttachRefusesAClosedOrUnknownDestination() async throws {
         let front = try XCTUnwrap(library.activeWindowID)
         let destination = library.newWindow(name: "closed").id

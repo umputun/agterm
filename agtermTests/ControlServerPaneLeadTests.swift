@@ -348,4 +348,138 @@ final class ControlServerPaneLeadTests: XCTestCase {
         XCTAssertEqual(server.takeSessionLead(session.id.uuidString, window: nil, pane: .scratch),
                        ControlResponse(ok: false, error: "the scratch terminal has no lead"))
     }
+
+    func testSessionLeadTakesACoveredLiveScratch() throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let (view, identity) = try pane(role: .follower)
+        store.recordLiveScratch(session.id, identity: identity)
+        session.scratchSurface = view
+        var reattached: [(GhosttySurfaceView, Bool)] = []
+        PaneLead.reattach = { reattached.append(($0, $1)) }
+
+        XCTAssertEqual(server.takeSessionLead(session.id.uuidString, window: nil, pane: .scratch).result?.id, session.id.uuidString)
+
+        XCTAssertEqual(reattached.count, 1)
+        XCTAssertTrue(reattached.first?.0 === view)
+        XCTAssertEqual(reattached.first?.1, true)
+    }
+
+    func testSessionLeadTakesTheCoveredScratchAnAttachedRowShowsFromItsOrigin() throws {
+        let server = makeServer()
+        let store = try XCTUnwrap(library.activeStore)
+        let (session, identity) = try originScratchRow(in: store, server: server)
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": identity.uuidString],
+                                      backedByZmx: false)
+        view.watermarkSession = session
+        session.scratchSurface = view
+        let nonce = try XCTUnwrap(ZmxLeadBook.shared.states[identity]?.attachment.nonce)
+        XCTAssertEqual(ZmxLeadBook.shared.states[identity]?.attachment.claim, false)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(nonce):follower:1")), pane: identity)
+        var reattached: [(GhosttySurfaceView, Bool)] = []
+        PaneLead.reattach = { reattached.append(($0, $1)) }
+
+        XCTAssertTrue(view.leadCovered)
+        XCTAssertEqual(server.takeSessionLead(session.id.uuidString, window: nil, pane: .scratch).result?.id, session.id.uuidString)
+
+        XCTAssertEqual(reattached.count, 1)
+        XCTAssertTrue(reattached.first?.0 === view)
+        XCTAssertEqual(reattached.first?.1, true)
+    }
+
+    func testACoveredOriginScratchIsReattachedFromItsOriginInItsOwnSlot() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let (session, identity) = try originScratchRow(in: store, server: makeServer())
+        let old = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": identity.uuidString],
+                                     backedByZmx: false)
+        old.watermarkSession = session
+        session.scratchSurface = old
+        let generation = session.scratchGeneration
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(old, claim: true, services: services))
+
+        let fresh = try XCTUnwrap(session.scratchSurface as? GhosttySurfaceView)
+        defer { fresh.destroySurface() }
+        XCTAssertFalse(fresh === old)
+        XCTAssertFalse(fresh.backedByZmx)
+        XCTAssertEqual(fresh.paneToken, identity.uuidString)
+        XCTAssertEqual(session.scratchGeneration, generation + 1)
+        XCTAssertEqual(ZmxLeadBook.shared.states[identity]?.attachment.claim, true)
+        XCTAssertTrue(ZmxLeadBook.shared.reattaching(pane: identity))
+    }
+
+    private func originScratchRow(in store: AppStore, server: ControlServer) throws -> (Session, UUID) {
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory(),
+                                                     remoteHost: "buildbox"))
+        let primary = UUID()
+        let scratch = UUID()
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                       presentationVersion: 1,
+                                       origin: RemoteBinding.Origin(host: "buildbox", endpoint: ControlZmxEndpoint(executable: "/a/zmx",
+                                                                                                                   socketDirectory: "/tmp/z"),
+                                                                    sessionName: "c")),
+                         forSession: session.id)
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true),
+                                forSession: session.id, attach: server)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        panes.append(client)
+        return (session, client)
+    }
+
+    func testAnUnownedLiveScratchAttachesAgainWithoutAClaimAndFollowsAClaimant() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let (old, identity) = try pane(role: .leader)
+        store.recordLiveScratch(session.id, identity: identity)
+        old.watermarkSession = session
+        session.scratchSurface = old
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+        PaneLead.reattach = { agtermApp.reattachPane($0, claim: $1, services: services) }
+
+        PaneLead.report(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:unowned:2")), from: old)
+
+        let fresh = try XCTUnwrap(session.scratchSurface as? GhosttySurfaceView)
+        defer { fresh.destroySurface() }
+        XCTAssertFalse(fresh === old)
+        XCTAssertNil(fresh.env[ZmxLeadAttachment.claimVariable])
+        let nonce = try XCTUnwrap(ZmxLeadBook.shared.states[identity]?.attachment.nonce)
+        XCTAssertEqual(ZmxLeadBook.shared.states[identity]?.attachment.claim, false)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(nonce):follower:1")), pane: identity)
+        XCTAssertTrue(fresh.leadCovered, "another client's claim keeps the lead")
+        XCTAssertTrue(session.scratchSurface === fresh)
+    }
+
+    func testACoveredLiveScratchIsReattachedInItsOwnSlot() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let (old, identity) = try pane(role: .follower)
+        store.recordLiveScratch(session.id, identity: identity)
+        old.watermarkSession = session
+        session.scratchSurface = old
+        session.scratchActive = true
+        let generation = session.scratchGeneration
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(old, claim: true, services: services))
+
+        let fresh = try XCTUnwrap(session.scratchSurface as? GhosttySurfaceView)
+        XCTAssertFalse(fresh === old)
+        XCTAssertTrue(fresh.backedByZmx)
+        XCTAssertEqual(fresh.paneToken, identity.uuidString)
+        XCTAssertTrue(fresh.scratchOwner === session)
+        XCTAssertEqual(session.scratchGeneration, generation + 1)
+        XCTAssertTrue(session.scratchActive)
+        XCTAssertEqual(session.scratchDaemon?.identity, identity)
+        XCTAssertTrue(ZmxLeadBook.shared.reattaching(pane: identity))
+        XCTAssertFalse(old.claimProcessExit(), "the old client's exit must not close the scratch")
+        fresh.destroySurface()
+    }
 }

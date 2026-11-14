@@ -22,10 +22,13 @@ public protocol RemoteCatalogEffects: AnyObject {
     func catalogStateChanged(_ state: RemoteCatalogMirror.State)
     /// catalogViewStateChanged asks for the window's view state to be saved now: a detach must outlive the app.
     func catalogViewStateChanged()
+    /// catalogWorkspaceCollapsed folds a shown workspace row, as a user's collapse does.
+    func catalogWorkspaceCollapsed(_ id: UUID)
 }
 
 extension RemoteCatalogEffects {
     public func catalogViewStateChanged() {}
+    public func catalogWorkspaceCollapsed(_: UUID) {}
     public func scratchAttachCommand(host: String, pane: CatalogPane) -> String { attachCommand(host: host, pane: pane) }
 }
 
@@ -71,6 +74,8 @@ public final class RemoteCatalogMirror {
     private var helloEpoch: String?
     private let pool: SshConnectionPool?
     private var pendingSelection: (id: UUID, from: UUID?)?
+    private var pendingCollapse: Set<UUID> = []
+    private var windowViewApplied = false
 
     public init(host: String, store: AppStore, effects: any RemoteCatalogEffects, viewState: RemoteWindowViewState,
                 pool: SshConnectionPool? = nil) {
@@ -109,6 +114,44 @@ public final class RemoteCatalogMirror {
 
     /// selectedSessionID is the window's selection, the baseline a created row is selected against.
     var selectedSessionID: UUID? { store?.selectedSessionID }
+
+    /// ownsFlags is whether the server keeps flag and tint. One predating them sends no workspace tint, and its
+    /// window keeps both on this Mac; a server always keeps a workspace, so its catalog tells which.
+    public var ownsFlags: Bool { catalog?.workspaces.contains { $0.tint != nil } == true }
+
+    /// allFlagged is whether every session of the server's workspace `id` is flagged, rows this window detached
+    /// included; false for an empty or unknown one.
+    public func allFlagged(inWorkspace id: UUID) -> Bool {
+        guard let sessions = catalog?.workspaces.first(where: { $0.id == id })?.sessions, !sessions.isEmpty else { return false }
+        return sessions.allSatisfy { $0.fields.flagged == true }
+    }
+
+    /// hasSessions is whether the server's workspace `id` has any session, rows this window detached included.
+    public func hasSessions(inWorkspace id: UUID) -> Bool {
+        catalog?.workspaces.first { $0.id == id }?.sessions.isEmpty == false
+    }
+
+    /// parkedFlags are the server's flagged sessions with no row here: those this window detached, and those not
+    /// shown yet.
+    var parkedFlags: Set<UUID> {
+        guard let catalog, let store else { return [] }
+        let flagged = catalog.workspaces.flatMap(\.sessions).filter { $0.fields.flagged == true }.map(\.fields.id)
+        return Set(flagged.filter { store.session(withID: $0) == nil })
+    }
+
+    /// flaggedCount is how many sessions on the server are flagged, rows this window detached included.
+    public var flaggedCount: Int { catalog?.workspaces.flatMap(\.sessions).count { $0.fields.flagged == true } ?? 0 }
+
+    /// collapseWhenShown folds workspace `id`, created for this window with `--collapsed`, whether its row is already
+    /// shown or arrives later.
+    func collapseWhenShown(_ id: UUID) {
+        guard let store else { return }
+        guard store.workspaces.contains(where: { $0.id == id }) else {
+            pendingCollapse.insert(id)
+            return
+        }
+        effects?.catalogWorkspaceCollapsed(id)
+    }
 
     /// selectWhenShown selects row `id` once the catalog brings it, unless the selection has moved from `baseline`,
     /// the one it had when the row was asked for.
@@ -196,6 +239,10 @@ public final class RemoteCatalogMirror {
         needsSnapshot = false
         store?.catalogMirrored = true
         reconcile()
+        if !windowViewApplied, let store {
+            windowViewApplied = true
+            viewState.applyWindow(to: store, parked: parkedFlags)
+        }
         setState(.connected)
         onCatalogMoved?(true)
     }
@@ -224,10 +271,17 @@ public final class RemoteCatalogMirror {
         for (id, isCollapsed) in store.catalogHiddenCollapsed {
             if isCollapsed { collapsed.insert(id) } else { collapsed.remove(id) }
         }
+        collapsed.formUnion(pendingCollapse)
+        pendingCollapse.subtract(shown.map(\.id))
+        let flaggedOrder = store.flaggedOrder
         store.prepareCatalogWorkspaces(shown, collapsed: collapsed) { removed in
             effects.catalogRowRemoved(removed)
         }
-        for workspace in shown { store.catalogHiddenCollapsed[workspace.id] = nil }
+        store.keepFlaggedSlots(of: parkedFlags, from: flaggedOrder)
+        for workspace in shown {
+            store.catalogHiddenCollapsed[workspace.id] = nil
+            if store.catalogHiddenFocus.remove(workspace.id) != nil { store.markFocusMember(workspace.id) }
+        }
         defer { store.finishCatalogWorkspaces(shown) }
         let context = CatalogRowContext(host: host, protocolVersion: catalog.versions.protocolVersion, effects: effects)
         for workspace in shown {

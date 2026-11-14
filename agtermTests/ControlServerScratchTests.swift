@@ -71,6 +71,25 @@ final class ControlServerScratchTests: XCTestCase {
         XCTAssertEqual(store.selectedSessionID, background.id)
     }
 
+    func testACommandReplacesARestoredLiveScratchsDaemon() throws {
+        let (store, background, _) = try twoSessions()
+        let saved = UUID()
+        store.recordLiveScratch(background.id, identity: saved)
+
+        let shown = server.scratchSession(background.id.uuidString, window: nil, mode: "on", command: "htop", follow: false)
+        XCTAssertTrue(shown.ok, "\(shown)")
+
+        XCTAssertNil(background.scratchDaemon)
+        XCTAssertTrue(background.scratchActive)
+        let view = agtermApp.makeScratchSurface(for: background, store: store, env: [:], suppressAutoFocus: true,
+                                                actions: AppActions(library: library), requested: .live, active: .live)
+        let fresh = try XCTUnwrap(background.scratchDaemon?.identity)
+        defer { ZmxLeadBook.shared.forget(pane: fresh) }
+        XCTAssertNotEqual(fresh, saved)
+        XCTAssertEqual(view.paneToken, fresh.uuidString)
+        XCTAssertNil(background.scratchCommand, "the factory spent the command on the new daemon")
+    }
+
     func testTheFourArgumentEntryPointShowsWithoutSelecting() throws {
         let (store, background, selected) = try twoSessions()
 

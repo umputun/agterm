@@ -608,6 +608,43 @@ struct AppStoreCompanionsTests {
         #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
     }
 
+    @Test func nestMovesTheRowAndItsCompanionsUnderTheNewParent() throws {
+        let g = try CompanionGroup()
+        let fresh = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/fresh", at: 0))
+
+        g.store.nest(g.parent.id, under: fresh.id)
+
+        #expect(g.order == [fresh.id, g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect([g.parent, g.first, g.second].allSatisfy { $0.parentID == fresh.id })
+        #expect(g.after.parentID == nil)
+        #expect(g.store.companions(of: fresh.id).map(\.id) == [g.parent.id, g.first.id, g.second.id])
+    }
+
+    @Test func revertConversionRegroupsUnderTheTargetAndRestoresTheSelection() throws {
+        let g = try CompanionGroup()
+        g.store.selectSession(g.after.id)
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        g.store.revertConversion(fresh.id, target: g.parent.id, selected: g.after.id)
+        g.store.closeSession(fresh.id)
+
+        #expect(g.order == [g.parent.id, g.first.id, g.second.id, g.after.id])
+        #expect(g.parent.parentID == nil)
+        #expect([g.first, g.second].allSatisfy { $0.parentID == g.parent.id })
+        #expect(g.store.selectedSessionID == g.after.id)
+    }
+
+    // regression: a server catalog starts with nothing selected, and a failed convert left its target selected.
+    @Test func revertConversionRestoresNoSelection() throws {
+        let g = try CompanionGroup()
+        g.store.selectSession(nil)
+        let fresh = try g.store.convertToCompanion(g.parent.id).get()
+
+        g.store.revertConversion(fresh.id, target: g.parent.id, selected: nil)
+
+        #expect(g.store.selectedSessionID == nil)
+    }
+
     @Test func convertRefusesACompanionARemoteRowAndAnUnknownSession() throws {
         let g = try CompanionGroup()
         let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "buildbox"))
@@ -878,6 +915,19 @@ struct AppStoreCompanionsTests {
         #expect(terminal.parentID == page.id)
         #expect(nested.parentID == page.id)
         #expect(page.htmlOverlay?.id == overlay.id)
+    }
+
+    @Test func closeExactlyLiftsACompanionItWasNotGivenToTheTopLevel() throws {
+        let g = try CompanionGroup()
+
+        let closed = g.store.closeExactly([g.parent.id, g.first.id])
+
+        #expect(Set(closed) == [g.parent.id, g.first.id])
+        #expect(g.store.session(withID: g.parent.id) == nil)
+        #expect(g.store.session(withID: g.first.id) == nil)
+        #expect(g.store.session(withID: g.second.id) === g.second)
+        #expect(g.second.parentID == nil)
+        #expect(g.store.session(withID: g.after.id) === g.after)
     }
 }
 

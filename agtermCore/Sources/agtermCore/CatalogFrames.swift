@@ -60,10 +60,15 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
     /// customName is the session's manual name, empty when it has none, while `name` is its resolved label. A
     /// server predating it omits it, and its `name` then stands in as the manual name.
     public var customName: String?
+    /// flagged and tint are the server's: `false` and `""` for none, nil only from a server predating them, whose
+    /// viewer keeps its own. `tintOn` lists the parts a tint colors.
+    public var flagged: Bool?
+    public var tint: String?
+    public var tintOn: [String]?
 
     public init(id: UUID, name: String, parent: UUID?, cwd: String, primary: UUID, axis: String?, shown: Bool,
                 lifecycle: CatalogLifecycle, scratch: CatalogScratch? = nil, page: CatalogPage? = nil,
-                customName: String? = nil) {
+                customName: String? = nil, flagged: Bool? = nil, tint: String? = nil, tintOn: [String]? = nil) {
         self.id = id
         self.name = name
         self.parent = parent
@@ -75,6 +80,9 @@ public struct CatalogSessionFields: Codable, Equatable, Sendable {
         self.scratch = scratch
         self.page = page
         self.customName = customName
+        self.flagged = flagged
+        self.tint = tint
+        self.tintOn = tintOn
     }
 }
 
@@ -142,12 +150,25 @@ public struct CatalogSession: Codable, Equatable, Sendable {
 public struct CatalogWorkspace: Codable, Equatable, Sendable {
     public var id: UUID
     public var name: String
+    /// tint is the server's, as on a session: `""` for none, nil only from a server predating it.
+    public var tint: String?
+    public var tintOn: [String]?
     public var sessions: [CatalogSession]
 
-    public init(id: UUID, name: String, sessions: [CatalogSession]) {
+    public init(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil, sessions: [CatalogSession]) {
         self.id = id
         self.name = name
+        self.tint = tint
+        self.tintOn = tintOn
         self.sessions = sessions
+    }
+}
+
+/// CatalogTint reads a catalog tint back as a row's: nil when the server sent none or a color this Mac cannot read.
+public enum CatalogTint {
+    public static func sidebarTint(_ tint: String?, on parts: [String]?) -> SidebarTint? {
+        guard let color = tint.flatMap(TintValue.init(rawValue:)) else { return nil }
+        return SidebarTint(color: color, parts: Set((parts ?? []).compactMap(TintPart.init(rawValue:))))
     }
 }
 
@@ -159,20 +180,25 @@ public struct CatalogSnapshot: Codable, Equatable, Sendable {
     public var catalogID: UUID
     public var versions: CatalogVersions
     public var workspaces: [CatalogWorkspace]
+    /// recent is the server's Recent Closed list, newest first; a server predating it sends none.
+    public var recent: [ControlRecentItem]?
 
-    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace]) {
+    public init(epoch: String, rev: Int, catalogID: UUID, versions: CatalogVersions, workspaces: [CatalogWorkspace],
+                recent: [ControlRecentItem]? = nil) {
         self.epoch = epoch
         self.rev = rev
         self.catalogID = catalogID
         self.versions = versions
         self.workspaces = workspaces
+        self.recent = recent
     }
 }
 
 /// CatalogChange is one structural change, applied in order by `CatalogSnapshot.apply`.
 public enum CatalogChange: Equatable, Sendable {
     case workspaceAdded(CatalogWorkspace, index: Int)
-    case workspaceChanged(id: UUID, name: String)
+    /// workspaceChanged carries the workspace's name and tint; a server predating the tint sends none.
+    case workspaceChanged(id: UUID, name: String, tint: String? = nil, tintOn: [String]? = nil)
     case workspaceRemoved(UUID)
     case workspaceOrder([UUID])
     case sessionAdded(CatalogSession, workspace: UUID, index: Int)
@@ -184,6 +210,8 @@ public enum CatalogChange: Equatable, Sendable {
     case paneAdded(CatalogPane, session: UUID)
     case paneChanged(CatalogPane, session: UUID)
     case paneRemoved(UUID, session: UUID)
+    /// recentChanged replaces the Recent Closed list; an older viewer reads it as an unknown kind and steps past it.
+    case recentChanged([ControlRecentItem])
 
     public var kind: String {
         switch self {
@@ -199,6 +227,7 @@ public enum CatalogChange: Equatable, Sendable {
         case .paneAdded: "pane.added"
         case .paneChanged: "pane.changed"
         case .paneRemoved: "pane.removed"
+        case .recentChanged: "recent.changed"
         }
     }
 }
@@ -241,7 +270,7 @@ extension CatalogFrame {
 extension CatalogFrame: Codable {
     private enum Keys: String, CodingKey {
         case kind, hello, snapshot, index, data, epoch, rev, chunks
-        case workspace, session, id, ids, name, pane, identity
+        case workspace, session, id, ids, name, pane, identity, tint, tintOn, recent
     }
 
     public init(from decoder: Decoder) throws {
@@ -270,11 +299,15 @@ extension CatalogFrame: Codable {
 
     private static func change(_ kind: String, _ container: KeyedDecodingContainer<Keys>) throws -> CatalogChange? {
         switch kind {
+        case "recent.changed":
+            return .recentChanged(try container.decode([ControlRecentItem].self, forKey: .recent))
         case "workspace.added":
             return .workspaceAdded(try container.decode(CatalogWorkspace.self, forKey: .workspace),
                                    index: try container.decode(Int.self, forKey: .index))
         case "workspace.changed":
-            return .workspaceChanged(id: try container.decode(UUID.self, forKey: .id), name: try container.decode(String.self, forKey: .name))
+            return .workspaceChanged(id: try container.decode(UUID.self, forKey: .id), name: try container.decode(String.self, forKey: .name),
+                                     tint: try container.decodeIfPresent(String.self, forKey: .tint),
+                                     tintOn: try container.decodeIfPresent([String].self, forKey: .tintOn))
         case "workspace.removed": return .workspaceRemoved(try container.decode(UUID.self, forKey: .id))
         case "workspace.order": return .workspaceOrder(try container.decode([UUID].self, forKey: .ids))
         case "session.added":
@@ -335,9 +368,11 @@ extension CatalogFrame: Codable {
         case .workspaceAdded(let workspace, let index):
             try container.encode(workspace, forKey: .workspace)
             try container.encode(index, forKey: .index)
-        case .workspaceChanged(let id, let name):
+        case .workspaceChanged(let id, let name, let tint, let tintOn):
             try container.encode(id, forKey: .id)
             try container.encode(name, forKey: .name)
+            try container.encodeIfPresent(tint, forKey: .tint)
+            try container.encodeIfPresent(tintOn, forKey: .tintOn)
         case .workspaceRemoved(let id), .sessionRemoved(let id): try container.encode(id, forKey: .id)
         case .workspaceOrder(let ids): try container.encode(ids, forKey: .ids)
         case .sessionAdded(let session, let workspace, let index):
@@ -358,6 +393,7 @@ extension CatalogFrame: Codable {
         case .paneRemoved(let identity, let session):
             try container.encode(identity, forKey: .identity)
             try container.encode(session, forKey: .session)
+        case .recentChanged(let items): try container.encode(items, forKey: .recent)
         }
     }
 }

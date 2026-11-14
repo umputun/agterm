@@ -166,12 +166,13 @@ public final class AppStore {
     public internal(set) var catalogDetachedWorkspaces: Set<UUID> = []
     /// catalogHiddenViews keeps the view of each row a detach hides, so it comes back on reattach and is saved meanwhile.
     @ObservationIgnored var catalogHiddenViews: [UUID: RemoteWindowViewState.SessionView] = [:]
-    /// catalogHiddenCollapsed keeps whether each workspace a detach hides was collapsed.
+    /// catalogHiddenCollapsed and catalogHiddenFocus keep whether each workspace a detach hides was collapsed or focused.
     @ObservationIgnored var catalogHiddenCollapsed: [UUID: Bool] = [:]
+    @ObservationIgnored var catalogHiddenFocus: Set<UUID> = []
     /// snapshotDidSave runs after each snapshot write that landed.
     @ObservationIgnored let snapshotDidSave: (() -> Void)?
     /// snapshotUnsaved is true from a failed snapshot write until the next one that lands.
-    @ObservationIgnored var snapshotUnsaved = false
+    @ObservationIgnored public internal(set) var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
@@ -185,6 +186,8 @@ public final class AppStore {
     @ObservationIgnored public var overlayJobs: OverlayJobs?
     /// Told when an attached session's row is shown or leaves, undo and restoration included.
     @ObservationIgnored public var onRemoteRowVisibility: ((Session, Bool) -> Void)?
+    /// onOriginFrame sends a frame to an attached session's origin; false when the origin does not take it.
+    @ObservationIgnored public var onOriginFrame: ((UUID, PresentationFrame.Body) -> Bool)?
     /// onReplicaPageChanged is told the local id of a page shown for an origin whose reported state changed.
     @ObservationIgnored public var onReplicaPageChanged: ((UUID) -> Void)?
     @ObservationIgnored var remoteTextWaits: [RemoteTextWait: CheckedContinuation<RemoteTextOutcome, Never>] = [:]
@@ -612,7 +615,7 @@ public final class AppStore {
             replaceSidebarSelection(with: sessionID)
         }
         disableFocusIfSelectionOutsideSet(sessionID)
-        if let sessionID { clearUnseen(sessionID) }
+        if let sessionID { markSeen(sessionID) }
         clearAutoResetIndicator(sessionID)
         clearAutoResetIndicator(previous)
         recordRecency()
@@ -623,7 +626,7 @@ public final class AppStore {
     /// Reset a session's indicator to idle when marked `autoReset`; no-op for nil, unknown, or non-autoReset.
     private func clearAutoResetIndicator(_ id: UUID?) {
         guard let id, let session = session(withID: id), session.agentIndicator.autoReset else { return }
-        setAgentIndicator(AgentIndicator(), forSession: id)
+        clearStatus(id, reason: .select)
     }
 
     /// Clears a session's unseen-notification badge; no-op for an unknown id, and never saves (ephemeral).
@@ -641,28 +644,30 @@ public final class AppStore {
     }
 
     /// Removes a session, tears down its surface, and — if it was active — reselects the most-recently-active
-    /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor.
-    public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+    /// surviving session in scope (`closeReselectionTarget(after:removing:)`), falling back to the positional neighbor;
+    /// returns the Recent Closed entry written for it, if any.
+    @discardableResult
+    public func closeSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) -> UUID? {
         // a parent closes with its companions; one Recent Closed entry carries the whole group
         let companions = companions(of: sessionID)
         // recorded before the companions close, which takes a page companion's page with it
         let recorded = companions.filter(\.isPersistable).map(sessionSnapshot)
         for companion in companions.reversed() {
-            closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
+            _ = closeSession(companion.id, alreadyFinalized: alreadyFinalized, recordsRecent: false)
         }
-        closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
         // a converted companion can still own a parked companion recorded under it
-        finalizeParkedCompanions(of: [sessionID] + companions.map(\.id))
+        defer { finalizeParkedCompanions(of: [sessionID] + companions.map(\.id)) }
+        return closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: true, companions: recorded)
     }
 
     /// closeSessionRow closes one row and none of its companions: a catalog row's companions leave only when
     /// their own catalog sessions do.
-    func closeSessionRow(_ sessionID: UUID) {
-        closeSession(sessionID, alreadyFinalized: nil, recordsRecent: false)
+    func closeSessionRow(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+        _ = closeSession(sessionID, alreadyFinalized: alreadyFinalized, recordsRecent: false)
     }
 
-    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) {
-        guard let location = location(ofSession: sessionID) else { return }
+    private func closeSession(_ sessionID: UUID, alreadyFinalized: UUID?, recordsRecent: Bool, companions: [SessionSnapshot] = []) -> UUID? {
+        guard let location = location(ofSession: sessionID) else { return nil }
         let wasActive = selectedSessionID == sessionID
         let workspace = workspaces[location.workspaceIndex]
         let removed = workspace.sessions[location.sessionIndex]
@@ -670,11 +675,7 @@ public final class AppStore {
         workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         emitSessionClosed(removed, workspace: workspace.id)
         dropLaunchPanes([removed])
-        if recordsRecent {
-            recordRecentClosedSession(removed, workspaceID: workspace.id, workspaceName: workspace.name,
-                                      workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
-                                      companions: companions)
-        }
+        let recent = recordClosedSession(removed, workspace: workspace, at: location, local: recordsRecent, companions: companions)
         finalizePaneIdentities([removed], alreadyFinalized: alreadyFinalized)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
@@ -695,6 +696,7 @@ public final class AppStore {
         }
         dropFromFlaggedOrder([sessionID])
         save()
+        return recent
     }
 
     /// Whether a workspace may be removed: one is always kept, so only when more than one exists.
@@ -710,7 +712,7 @@ public final class AppStore {
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         // record the membership BEFORE `dropFocusMember` below prunes it, so Reopen Closed Item can re-mark it
         recordRecentClosedWorkspace(workspace, selectedSessionID: removingActive ? selectedSessionID : nil,
-                                    focusMember: focusedWorkspaceIDs.contains(workspaceID))
+                                    focusMember: focusedWorkspaceIDs.contains(workspaceID), workspaceIndex: index)
         for session in workspace.sessions {
             releaseLeavingSession(session)
             emitSessionClosed(session, workspace: workspace.id)

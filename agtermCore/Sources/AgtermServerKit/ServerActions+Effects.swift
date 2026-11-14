@@ -36,6 +36,14 @@ extension ServerActions {
         }
     }
 
+    /// markSessionSeen lowers the badge `notify` raised; the server has no selection or focus to lower it otherwise.
+    public func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
+        withSession(target, window: window) { session in
+            store.clearUnseen(session.id)
+            return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+        }
+    }
+
     /// sendNotification reaches the session's viewers live; one sent while none is connected is not kept for later.
     public func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse {
         withSession(target, window: window) { session in

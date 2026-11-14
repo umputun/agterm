@@ -18,7 +18,7 @@ extension ControlServer {
         guard library.onRemoteStoreOpened == nil else { return }
         library.onRemoteStoreOpened = { [weak self] id, store in self?.startRemoteCatalog(window: id, store: store) }
         library.onRemoteStoreClosed = { [weak self] id in self?.stopRemoteCatalog(window: id) }
-        PaneLead.scratchStopped = { [weak self] view in self?.catalogScratchStopped(view) ?? false }
+        PaneLead.scratchStopped = { [weak self] view in self?.remoteScratchStopped(view) ?? false }
         for (id, store) in library.openRemoteStores { startRemoteCatalog(window: id, store: store) }
     }
 
@@ -67,6 +67,7 @@ extension ControlServer {
         link.client.stop()
         link.actions.stop()
         for session in library.store(for: id)?.workspaces.flatMap(\.sessions) ?? [] { stopRemotePresentation(session.id) }
+        linkForwards.stop(window: id)
         let runner = remoteRunner
         for command in link.pool.close() {
             Task { _ = await runner.run(command, deadline: 5) }
@@ -172,6 +173,11 @@ final class RemoteCatalogWindow: RemoteCatalogEffects {
 
     func catalogPaneNeedsAttach(_ identity: UUID, session: UUID) {
         server?.catalogPaneNeedsAttach(identity, session: session)
+    }
+
+    func catalogWorkspaceCollapsed(_ id: UUID) {
+        guard let server, let store = server.library.store(for: window) else { return }
+        server.actions.setWorkspaceExpanded(id, expanded: false, in: store)
     }
 
     func catalogBound(_ catalogID: UUID) -> Bool {

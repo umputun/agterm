@@ -10,8 +10,7 @@ public enum RemotePageOpen: Equatable, Sendable {
     case paneMissing
     /// unsupported: the presenter cannot show pages, so the page is refused.
     case unsupported
-    /// loopback: a URL on the origin's loopback names a server the presenter cannot reach: a Mac origin's always,
-    /// and a headless origin's when its connected presenter cannot forward it.
+    /// loopback: a URL on the origin's loopback names a server the connected presenter cannot forward to.
     case loopback
     /// tooLarge: the request would not fit one presentation frame.
     case tooLarge
@@ -65,14 +64,13 @@ extension AppStore {
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
         guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .local }
-        // a headless origin's loopback URL is reached through the presenter's own forward; a Mac's stays refused
-        if headless, case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
+        // a loopback URL is reached through the presenter's own forward to this host
+        if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
             source = .forwarded(url.absoluteString)
         }
         let shows = presenterShows(source, log: overlay.textLog != nil, session: sessionID)
-        if !shows, !headless { return .unsupported }
-        if case .url(let url) = source, HtmlSource.isLoopback(url) { return .loopback }
         if case .forwarded = source, hub.hasPresenter(session: sessionID), !shows { return .loopback }
+        if !shows, !headless { return .unsupported }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
         let points = size == nil ? OverlayPointSize() : options.points

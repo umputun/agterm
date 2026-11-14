@@ -370,4 +370,96 @@ struct AppStoreStatusTests {
 
         #expect(store.presentationSnapshot(forSession: session.id).status == nil)
     }
+
+    private func blockedSession(split: Bool = false, autoReset: Bool = false) throws -> (AppStore, Session) {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        if split { store.toggleSplit(session.id) }
+        store.setAgentIndicator(AgentIndicator(status: .blocked, autoReset: autoReset, statusPane: .left), forSession: session.id)
+        return (store, session)
+    }
+
+    @Test(arguments: [(PresentationClearReason.key, StatusReset.firstKey, true), (.key, .enter, false), (.submit, .enter, true),
+                      (.interrupt, .enter, true), (.submit, .never, false)])
+    func aPresenterKeystrokeClearsUnderTheOriginsReset(_ reason: PresentationClearReason, _ reset: StatusReset, _ cleared: Bool) throws {
+        let (store, session) = try blockedSession()
+
+        store.applyPresenterClear(PresentationStatusClear(reason: reason, pane: .identity(session.paneIdentity)),
+                                  forSession: session.id, reset: reset)
+
+        #expect((session.agentIndicator.status == .idle) == cleared)
+    }
+
+    @Test func aPresenterKeystrokeInAnotherPaneOrNoPaneOfTheSessionChangesNothing() throws {
+        let (store, session) = try blockedSession(split: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        for pane in [PresentationPane.identity(split), .identity(UUID()), .scratch] {
+            store.applyPresenterClear(PresentationStatusClear(reason: .submit, pane: pane), forSession: session.id, reset: .firstKey)
+        }
+        store.applyPresenterClear(PresentationStatusClear(reason: .submit), forSession: session.id, reset: .firstKey)
+
+        #expect(session.agentIndicator.status == .blocked)
+    }
+
+    @Test func aPresenterSelectionClearsOnlyAnAutoResetStatusAndAManualClearAlways() throws {
+        let (store, session) = try blockedSession()
+        let (autoStore, autoSession) = try blockedSession(autoReset: true)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .select), forSession: session.id, reset: .firstKey)
+        autoStore.applyPresenterClear(PresentationStatusClear(reason: .select), forSession: autoSession.id, reset: .firstKey)
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(autoSession.agentIndicator.status == .idle)
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .manual), forSession: session.id, reset: .never)
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test(arguments: [(PresentationClearReason.viewed, StatusReset.never, true), (.key, .firstKey, true), (.key, .enter, false),
+                      (.submit, .enter, true), (.key, .never, false), (.manual, .firstKey, false)])
+    func aPresenterSeenLowersTheBadgeUnderTheOriginsBadgeReset(_ reason: PresentationClearReason, _ reset: StatusReset,
+                                                               _ cleared: Bool) throws {
+        let (store, session) = try blockedSession()
+        session.unseenCount = 2
+
+        store.applyPresenterSeen(PresentationSeen(reason: reason), forSession: session.id, badgeReset: reset)
+
+        #expect((session.unseenCount == 0) == cleared)
+    }
+
+    @Test func aClearOrSeenWithAnUnknownReasonChangesNothing() throws {
+        let (store, session) = try blockedSession()
+        session.unseenCount = 1
+        let clear = try JSONDecoder().decode(PresentationStatusClear.self, from: Data(#"{"reason":"wave"}"#.utf8))
+        let seen = try JSONDecoder().decode(PresentationSeen.self, from: Data(#"{"reason":"wave"}"#.utf8))
+
+        store.applyPresenterClear(clear, forSession: session.id, reset: .firstKey)
+        store.applyPresenterSeen(seen, forSession: session.id, badgeReset: .firstKey)
+
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.unseenCount == 1)
+    }
+
+    @Test func aClearedOriginStatusIsGoneFromTheNextSnapshot() throws {
+        let (store, session) = try blockedSession()
+
+        store.applyPresenterClear(PresentationStatusClear(reason: .manual), forSession: session.id, reset: .firstKey)
+
+        #expect(store.presentationSnapshot(forSession: session.id, now: Date()).status == nil)
+    }
+
+    @Test func clearStatusOnALocalRowSendsNothing() throws {
+        let (store, session) = try blockedSession()
+        var sent: [PresentationFrame.Body] = []
+        store.onOriginFrame = { _, body in
+            sent.append(body)
+            return true
+        }
+
+        store.clearStatus(session.id)
+
+        #expect(session.agentIndicator.status == .idle)
+        #expect(sent.isEmpty)
+    }
 }

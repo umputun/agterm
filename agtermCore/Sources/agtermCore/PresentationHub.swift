@@ -68,13 +68,18 @@ public final class PresentationHub {
     public static let supportedKinds = ["status", "hud", "notify", "message", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
-                                        pageTextKind, pageFilesKind]
+                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
     /// pickKinds are the presentation kinds a presenter must speak to be handed a session-bound pick.
     public static let pickKinds = ["pick.request", "pick.resolve", "pick.rejected", "pick.dismiss"]
+    /// restartRespawnKind is an origin's capability of publishing a restarted pane's respawn, which carries every viewer's
+    /// attach across the restart.
+    public static let restartRespawnKind = "restart.respawn"
+    /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
+    public static let statusClearKind = "status.clear"
     /// pendingSnapshotKind is a presenter's capability of taking a headless origin's pending interactions.
     public static let pendingSnapshotKind = "pending.snapshot"
     /// jobTokenKind is a presenter's capability of passing an overlay job's offer token to its helper.
@@ -94,8 +99,8 @@ public final class PresentationHub {
     /// pageLinksKind advertises a markdown page that follows its links under `PresentationPage.markdownLinks`; an older
     /// presenter would fetch the original spelling and `.md` pictures, so it is handed the page without links.
     public static let pageLinksKind = "page.links"
-    /// pageForwardKind is a presenter's capability of reaching a headless origin's loopback URL page through an ssh
-    /// forward it opens.
+    /// pageForwardKind is a presenter's capability of reaching an origin's loopback URL page through an ssh forward it
+    /// opens.
     public static let pageForwardKind = "page.forward"
     /// pageTextKind advertises live text pages: log pages, the text page actions, their `pageResult` answers and the
     /// text state in `pageState`.
@@ -225,7 +230,7 @@ public final class PresentationHub {
             send(granted ? .presenterGranted : .presenterRefused, to: id)
             if granted { onPresenterGranted?(subscriber.session) }
         case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
-             .pageState, .pageResult, .linkClick:
+             .pageState, .pageResult, .linkClick, .statusClear, .statusSeen:
             guard grant.holder(of: subscriber.session) == id else { return }
             onPresenterFrame?(subscriber.session, frame.body)
         default: break

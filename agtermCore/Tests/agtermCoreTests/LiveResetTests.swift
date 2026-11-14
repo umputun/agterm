@@ -51,6 +51,16 @@ struct LiveResetTests {
         #expect(selection.sessionCount == 2)
     }
 
+    @Test func selectTakesAnUnsupervisedScratchLikeAPane() {
+        let scratch = UUID()
+        let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA), Self.claim(scratch, role: .scratch)], complete: true)
+        let records = [Self.record(Self.paneA, leader: 10), Self.record(scratch, leader: 12)]
+
+        let selection = LiveReset.select(claims: claims, records: records, classify: { _, _ in .app })
+
+        #expect(selection.targets == [Self.target(Self.paneA, leader: 10), Self.target(scratch, leader: 12)])
+    }
+
     @Test(arguments: [SessionHost.Attribution.supervisor, .unknown, .orphaned, .app])
     func selectTakesAPaneCreatedBeforeTheCutoffAsOutdatedWhateverItsAttribution(_ attribution: SessionHost.Attribution) {
         let claims = ZmxClaimWalk(claims: [Self.claim(Self.paneA)], complete: true)

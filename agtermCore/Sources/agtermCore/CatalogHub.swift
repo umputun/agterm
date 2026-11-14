@@ -72,7 +72,7 @@ public final class CatalogHub {
             current = next
             return
         }
-        guard previous.workspaces != next.workspaces else { return }
+        guard previous.workspaces != next.workspaces || previous.recent != next.recent else { return }
         let first = rev + 1
         var state = previous
         var frames: [CatalogFrame] = []

@@ -42,13 +42,14 @@ extension Session {
         var companion = false
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             if !companion { throw ValidationError("session convert needs --companion") }
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow())
+            operation.stamp(ControlRequest(cmd: .sessionCompanionConvert, target: target.target, args: options.withWindow()))
         }
 
         func run() throws {

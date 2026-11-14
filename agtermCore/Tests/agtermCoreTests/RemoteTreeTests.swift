@@ -42,6 +42,20 @@ struct RemoteTreeTests {
         #expect(tree.sessions[0].workspaceName == "work")
     }
 
+    @Test func aSessionCarriesItsRunningLiveScratch() throws {
+        let windows = [window(name: "main", workspace: "work",
+                              sessions: [node(id: "s1", name: "build", cwd: "/repo"), node(id: "s2", name: "logs", cwd: "/repo")])]
+
+        let tree = try RemoteTreeMerger.candidates(windows: windows, inventory: inventory(entries: [
+            entry(session: "s1", pane: "left", daemon: Self.left),
+            entry(session: "s1", pane: "scratch", daemon: Self.other),
+            entry(session: "s2", pane: "left", daemon: Self.right),
+        ]))
+
+        #expect(tree.sessions.map(\.scratch) == [ControlRemotePane(pane: "scratch", daemon: Self.other), nil])
+        #expect(tree.sessions[0].panes == [ControlRemotePane(pane: "left", daemon: Self.left)])
+    }
+
     @Test func aPageCompanionIsListedWithNoPanesOnlyUnderAListedParent() throws {
         let page = ControlSessionNode(id: "pg", name: "report", cwd: "/srv", active: false, split: false, backedByZmx: nil, parent: "s1", content: "page")
         let orphan = ControlSessionNode(id: "pg2", name: "lost", cwd: "/srv", active: false, split: false, backedByZmx: nil, parent: "gone", content: "page")

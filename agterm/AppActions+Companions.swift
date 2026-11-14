@@ -39,7 +39,7 @@ extension AppActions {
     }
 
     func duplicateAsCompanion(_ id: UUID, in store: AppStore) {
-        guard store.remoteActions == nil else { return }
+        if performRemote(.duplicateCompanion(id), in: store, select: true) { return }
         if store.session(withID: id)?.remoteHost != nil {
             return createRemoteCompanion(.duplicate, of: id, in: store, action: "Duplicate as Companion")
         }
@@ -75,6 +75,9 @@ extension AppActions {
 
     /// convertToCompanion shows refusals in a timed HUD, with notification fallback.
     func convertToCompanion(_ id: UUID, in store: AppStore) {
+        if performRemote(.convertCompanion(id), in: store) { return }
+        if forwardAttached(ControlRequest(cmd: .sessionCompanionConvert, target: id.uuidString), row: id, in: store,
+                           action: "Convert to Companion") { return }
         switch store.convertToCompanion(id) {
         case .failure(let refusal):
             guard let remoteAttacher, let windowID = library.windowID(for: store) else {

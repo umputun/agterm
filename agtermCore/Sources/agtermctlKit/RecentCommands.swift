@@ -11,11 +11,12 @@ struct Recent: ParsableCommand {
         static let configuration = CommandConfiguration(
             abstract: "List recently closed sessions and workspaces, newest first.",
             discussion: "One row per entry: its id, kind, title and subtitle. The list keeps the last 20 entries "
-                + "and drops the oldest silently; --json adds the close time and the session ids each entry restores."
+                + "and drops the oldest silently; --json adds the close time and the session ids each entry restores. "
+                + "--window naming an agterm-server window lists that server's entries."
         )
-        @OptionGroup var options: BasicOptions
+        @OptionGroup var options: ClientOptions
 
-        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .recentList) }
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .recentList, args: options.withWindow()) }
     }
 
     struct Open: RequestCommand {
@@ -35,9 +36,12 @@ struct Recent: ParsableCommand {
     }
 
     struct Clear: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Empty the recently closed list.")
-        @OptionGroup var options: BasicOptions
+        static let configuration = CommandConfiguration(
+            abstract: "Empty the recently closed list.",
+            discussion: "--window naming an agterm-server window empties that server's list."
+        )
+        @OptionGroup var options: ClientOptions
 
-        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .recentClear) }
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .recentClear, args: options.withWindow()) }
     }
 }

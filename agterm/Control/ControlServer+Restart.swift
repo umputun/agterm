@@ -102,6 +102,7 @@ extension ControlServer {
                                        within: Self.restartWait) else {
             return Self.restartFailure("the old shell ended (pid \(oldPid)) and no new one was observed")
         }
+        publishRespawn(session: session.id, daemon: resolved.daemon)
         let receipt = ControlRestartReceipt(paneID: resolved.identity.uuidString, oldPid: oldPid, newPid: newPid,
                                             replayedArgv: replay?.argv)
         let replayed = replay.map { "; replay requested: \(CommandRestore.shellQuotedLine($0.argv))" } ?? ""

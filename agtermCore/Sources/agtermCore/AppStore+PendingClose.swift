@@ -12,11 +12,13 @@ public struct PendingCloseSummary: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let kind: PendingCloseKind
     public let title: String
+    public let closedAt: Date
 
-    public init(id: UUID, kind: PendingCloseKind, title: String) {
+    public init(id: UUID, kind: PendingCloseKind, title: String, closedAt: Date = Date()) {
         self.id = id
         self.kind = kind
         self.title = title
+        self.closedAt = closedAt
     }
 }
 
@@ -34,9 +36,18 @@ struct PendingSessionClose {
     let recentID: UUID
 }
 
+@MainActor
+extension PendingSessionClose {
+    var remotePlacement: RemoteRecentClosedItem.Placement {
+        RemoteRecentClosedItem.Placement(workspaceID: workspaceID, workspaceName: workspaceName, workspaceIndex: workspaceIndex,
+                                         sessionIndex: sessionIndex, parentID: session.parentID)
+    }
+}
+
 struct PendingSessionsClose {
     let sessions: [PendingSessionClose]
     let selectedSessionID: UUID?
+    var closedAt = Date()
 }
 
 struct PendingWorkspaceClose {
@@ -47,23 +58,26 @@ struct PendingWorkspaceClose {
     /// the set. The filter FLAG deliberately is not: it is current window state, restored by nothing (see
     /// `AppStore.markFocusMember`).
     let focusMember: Bool
+    var closedAt = Date()
 }
 
 /// One soft-closed session still inside its undo window, paired with the workspace it came from. Its
 /// panes are hidden from `workspaces` but still own their daemons, so a runtime inventory that omitted
 /// them would report a live claim as an orphan.
-struct PendingCloseMember {
-    let session: Session
-    let workspaceID: UUID
-    let workspaceName: String
+public struct PendingCloseMember {
+    public let session: Session
+    public let workspaceID: UUID
+    public let workspaceName: String
 }
 
 extension AppStore {
     public static let pendingCloseGraceInterval: TimeInterval = 3
+    /// closeNoLongerUndoable is `session.undo`'s refusal once the grace ended or the close was undone.
+    public static let closeNoLongerUndoable = "the close is no longer undoable"
 
     /// Every session hidden by an undoable close, oldest first. Reads the existing records rather than
     /// tracking its own list, so it cannot drift from what an undo would restore.
-    func pendingCloseMembers() -> [PendingCloseMember] {
+    public func pendingCloseMembers() -> [PendingCloseMember] {
         pendingCloseOrder.compactMap { pendingCloseRecords[$0] }.flatMap { record -> [PendingCloseMember] in
             switch record {
             case .sessions(let close):
@@ -78,6 +92,32 @@ extension AppStore {
                 }
             }
         }
+    }
+
+    /// pendingRecentID is the Recent Closed entry an undoable close wrote for `sessionID`, nil when it wrote none.
+    public func pendingRecentID(ofClosedSession sessionID: UUID) -> UUID? {
+        for case .sessions(let record) in pendingCloseRecords.values {
+            guard let close = record.sessions.first(where: { $0.session.id == sessionID }) else { continue }
+            return recentClosedStore != nil && close.session.isPersistable ? close.recentID : nil
+        }
+        return nil
+    }
+
+    /// pendingCloseID is the pending-close record hiding `sessionID`, the id `session.undo` takes.
+    public func pendingCloseID(ofSession sessionID: UUID) -> UUID? {
+        pendingCloseOrder.first { id in
+            switch pendingCloseRecords[id] {
+            case .sessions(let close): close.sessions.contains { $0.session.id == sessionID }
+            case .workspace(let close): close.workspace.sessions.contains { $0.id == sessionID }
+            case nil: false
+            }
+        }
+    }
+
+    /// discardSession closes one row and ends its panes without writing a Recent Closed entry: a creation that
+    /// failed to start, or a close a crash interrupted, whose entry written at close time keeps its id and grouping.
+    public func discardSession(_ sessionID: UUID, alreadyFinalized: UUID? = nil) {
+        closeSessionRow(sessionID, alreadyFinalized: alreadyFinalized)
     }
 
     /// The live object of a session hidden by an undoable close, nil for a visible or finalized one.
@@ -122,6 +162,7 @@ extension AppStore {
         recordRecentClosedSession(session, workspaceID: workspace.id, workspaceName: workspace.name,
                                   workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
                                   id: closeID)
+        recordRemoteClosed(session, placement: close.remotePlacement, id: closeID)
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location, removing: sessionID)
             replaceSidebarSelection(with: selectedSessionID)
@@ -178,6 +219,7 @@ extension AppStore {
         dropLaunchPanes(closes.map(\.session))
         let closingIDs = Set(closes.map(\.session.id))
         for close in closes {
+            recordRemoteClosed(close.session, placement: close.remotePlacement, id: close.recentID)
             // a companion closing with its parent rides in the parent's entry rather than its own
             if let parentID = close.session.parentID, closingIDs.contains(parentID) {
                 emitSessionClosed(close.session, workspace: close.workspaceID)
@@ -261,7 +303,7 @@ extension AppStore {
         ))
         pendingCloseOrder.append(closeID)
         recordRecentClosedWorkspace(workspace, selectedSessionID: restoringSelection,
-                                    focusMember: focusMember, id: closeID)
+                                    focusMember: focusMember, workspaceIndex: index, id: closeID)
         showPendingCloseSummary(id: closeID)
         schedulePendingCloseFinalization(id: closeID, grace: grace)
         cancelPendingSave()
@@ -281,7 +323,7 @@ extension AppStore {
             for session in close.sessions { removeRecentClosedItem(session.recentID) }
         case .workspace(let close):
             restorePendingWorkspace(close)
-            removeRecentClosedItem(closeID)
+            removeRecentClosedClose(closeID)
         }
         appendFlaggedArrivals() // a parked id still in the saved order returns in place; a cleared one appends
         if pendingCloseSummary?.id == closeID { promotePendingCloseSummary() }
@@ -335,7 +377,8 @@ extension AppStore {
                     return true
                 }
                 let selected = close.selectedSessionID == sessionID ? nil : close.selectedSessionID
-                pendingCloseRecords[id] = .sessions(PendingSessionsClose(sessions: rest, selectedSessionID: selected))
+                pendingCloseRecords[id] = .sessions(PendingSessionsClose(sessions: rest, selectedSessionID: selected,
+                                                                         closedAt: close.closedAt))
                 hardFinalizePendingSessions([member.session])
             case .workspace(let close):
                 guard let session = close.workspace.sessions.first(where: { $0.id == sessionID }) else { continue }
@@ -348,7 +391,7 @@ extension AppStore {
                 let selected = close.selectedSessionID == sessionID ? nil : close.selectedSessionID
                 pendingCloseRecords[id] = .workspace(PendingWorkspaceClose(
                     workspace: workspace, workspaceIndex: close.workspaceIndex, selectedSessionID: selected,
-                    focusMember: close.focusMember))
+                    focusMember: close.focusMember, closedAt: close.closedAt))
                 hardFinalizePendingSessions([session])
             }
             if pendingCloseSummary?.id == id { showPendingCloseSummary(id: id) }
@@ -375,11 +418,11 @@ extension AppStore {
         switch record {
         case .sessions(let close):
             if let session = close.sessions.first, close.sessions.count == 1 {
-                return PendingCloseSummary(id: id, kind: .session, title: session.session.displayName)
+                return PendingCloseSummary(id: id, kind: .session, title: session.session.displayName, closedAt: close.closedAt)
             }
-            return PendingCloseSummary(id: id, kind: .sessions, title: "\(close.sessions.count) sessions")
+            return PendingCloseSummary(id: id, kind: .sessions, title: "\(close.sessions.count) sessions", closedAt: close.closedAt)
         case .workspace(let close):
-            return PendingCloseSummary(id: id, kind: .workspace, title: close.workspace.name)
+            return PendingCloseSummary(id: id, kind: .workspace, title: close.workspace.name, closedAt: close.closedAt)
         }
     }
 

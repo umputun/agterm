@@ -44,13 +44,21 @@ extension ControlServer {
     /// a caller can ask without reading `lead` first; one whose zmx never reported a role has no lead to
     /// take and says so rather than answering ok for nothing.
     func takeSessionLead(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse {
-        guard pane != .scratch else { return ControlResponse(ok: false, error: "the scratch terminal has no lead") }
         return resolver.resolveSession(target, window: window) { store, id in
             let session = store.session(withID: id)
             if pane == .right, session?.splitSurface == nil {
                 return ControlResponse(ok: false, error: "session has no split pane")
             }
-            guard let surface = (pane == .right ? session?.splitSurface : session?.surface) as? GhosttySurfaceView,
+            // only a Live scratch, here or on the origin, runs in a daemon another Mac can lead
+            if pane == .scratch, (session?.scratchSurface as? GhosttySurfaceView)?.backedByZmx != true, session?.originScratch == nil {
+                return ControlResponse(ok: false, error: "the scratch terminal has no lead")
+            }
+            let slot = switch pane {
+            case .right: session?.splitSurface
+            case .scratch: session?.scratchSurface
+            default: session?.surface
+            }
+            guard let surface = slot as? GhosttySurfaceView,
                   let identity = UUID(uuidString: surface.paneToken) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }

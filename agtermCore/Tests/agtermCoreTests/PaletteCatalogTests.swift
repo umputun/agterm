@@ -293,11 +293,11 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.duplicateCompanion.builtinAction == .duplicateCompanion)
     }
 
-    @Test func convertToCompanionNeedsALocalTopLevelSession() {
+    @Test func convertToCompanionNeedsATopLevelSession() {
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true)))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext()))
         #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsCompanion: true)))
-        #expect(!PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
+        #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true)))
         #expect(PaletteCommand.convertCompanion.isEnabled(in: PaletteContext(hasActiveSession: true, activeSessionIsPage: true)))
         #expect(PaletteCommand.convertCompanion.isVisible(in: PaletteContext()), "stays listed, inert")
         #expect(PaletteCommand.convertCompanion.builtinAction == .convertCompanion)
@@ -324,10 +324,13 @@ struct PaletteCatalogTests {
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsCompanion: true),
                          newCompanion: true, duplicate: false, convert: false),
         CompanionRowKind(name: "remote terminal", context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: true, convert: false),
+                         newCompanion: true, duplicate: true, convert: true),
         CompanionRowKind(name: "remote page",
                          context: PaletteContext(hasActiveSession: true, activeSessionIsPage: true, activeSessionIsRemote: true),
-                         newCompanion: true, duplicate: false, convert: false),
+                         newCompanion: true, duplicate: false, convert: true),
+        CompanionRowKind(name: "server window terminal",
+                         context: PaletteContext(hasActiveSession: true, activeSessionIsRemote: true, remoteWindow: true, remoteConnected: true),
+                         newCompanion: true, duplicate: true, convert: true),
     ]
 
     @Test(arguments: companionRowKinds)
@@ -504,17 +507,28 @@ struct PaletteCatalogTests {
     }
 
     @Test(arguments: [PaletteCommand.newSession, .newWorkspace, .renameSession, .duplicateSession, .newCompanion, .renameWorkspace,
-                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes])
+                      .toggleSplit, .toggleHorizontalSplit, .closeSplit, .swapPanes, .duplicateCompanion, .convertCompanion])
     func aServerActionIsDisabledWhileItsRemoteWindowIsNotConnected(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: false)))
         #expect(command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
     }
 
-    @Test(arguments: [PaletteCommand.openDirectory, .duplicateCompanion, .attachRemote])
+    @Test(arguments: [PaletteCommand.openDirectory, .attachRemote])
     func aLocalOnlyActionIsDisabledInARemoteWindow(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
+    }
+
+    @Test func flagCommandsAreDisabledWhileTheServerKeepingThemCannotBeAsked() {
+        let blocked = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true,
+                                     marksBlocked: true)
+        let open = PaletteContext(hasFlaggedSessions: true, hasActiveSession: true, hasSessions: true, hasCurrentWorkspace: true)
+
+        #expect(!PaletteCommand.toggleFlag.isEnabled(in: blocked))
+        #expect(!PaletteCommand.clearFlagged.isEnabled(in: blocked))
+        #expect(PaletteCommand.toggleFlag.isEnabled(in: open))
+        #expect(PaletteCommand.clearFlagged.isEnabled(in: open))
     }
 
     @Test(arguments: [PaletteCommand.closeSession, .deleteWorkspace])

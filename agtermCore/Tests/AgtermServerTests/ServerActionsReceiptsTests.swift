@@ -86,6 +86,27 @@ struct ServerActionsReceiptsTests {
         #expect(second.ok)
     }
 
+    @Test func aRepeatedConvertNestsTheSessionOnce() async throws {
+        let session = try harness.session(await plain(.sessionNew))
+        let first = await serve(.sessionCompanionConvert, target: session.id.uuidString, op: "convert")
+        let count = sessionCount
+
+        let second = await serve(.sessionCompanionConvert, target: session.id.uuidString, op: "convert")
+
+        #expect(first.result?.receipt?.outcome == .applied)
+        #expect(sessionCount == count)
+        #expect(second.result?.receipt == first.result?.receipt)
+    }
+
+    @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane])
+    func aPaneLifecycleCommandTakesAnOperationId(_ command: Command) {
+        #expect(ServerActions.receiptCommands.contains(command))
+    }
+
+    @Test func aTerminateTakesAnOperationIdAsACloseDoes() {
+        #expect(ServerActions.receiptCommands.contains(.sessionTerminate))
+    }
+
     @Test func aRefusalIsRecordedSoTheIdStaysRefused() async throws {
         _ = await serve(.sessionNew, op: "stale", epoch: "an-old-epoch")
         let count = sessionCount

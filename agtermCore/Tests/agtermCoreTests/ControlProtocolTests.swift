@@ -45,6 +45,17 @@ struct ControlProtocolTests {
         #expect(!plain.contains("followFile"))
     }
 
+    @Test func terminateAndThePinnedKillKeepTheirWireNames() {
+        #expect(Command.sessionTerminate.rawValue == "session.terminate")
+        #expect(Command.zmxKillPane.rawValue == "zmx.kill.pane")
+    }
+
+    @Test func closeRecentIDRoundTripsAndIsOmittedWhenNil() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(id: "s1", closed: ["s1"], recentID: "r1"))
+        #expect(try roundTrip(response) == response)
+        #expect(!String(decoding: try JSONEncoder().encode(ControlResult(id: "s1", closed: ["s1"])), as: UTF8.self).contains("recentID"))
+    }
+
     @Test func treeRequestRoundTrips() throws {
         let request = ControlRequest(cmd: .tree)
         #expect(try roundTrip(request) == request)

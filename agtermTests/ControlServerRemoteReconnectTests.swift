@@ -421,6 +421,48 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertFalse(book.waiting(pane: scratch))
     }
 
+    func testAnAttachedRowsOriginScratchParksAndAttachesAgainOnceItsOriginAnswers() async throws {
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+        let primary = UUID()
+        let scratch = UUID()
+        store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                       presentationVersion: 1,
+                                       origin: RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx",
+                                                                                                               socketDirectory: "/tmp/z"),
+                                                                    sessionName: "c")),
+                         forSession: session.id)
+        let server = server(probe: 0)
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true),
+                                forSession: session.id, attach: server)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        pane = client
+        defer { ZmxLeadBook.shared.forget(pane: client) }
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                      backedByZmx: false)
+        view.watermarkSession = session
+        session.scratchSurface = view
+        session.scratchCommand = nil
+        let generation = session.scratchGeneration
+        let local = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp"))
+        let localView = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), backedByZmx: false)
+        localView.watermarkSession = local
+        local.scratchSurface = localView
+
+        XCTAssertFalse(server.remoteScratchStopped(localView))
+        XCTAssertTrue(server.remoteScratchStopped(view))
+        XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: client))
+        server.tickReconnects()
+        for _ in 0..<200 where session.scratchGeneration == generation {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertEqual(session.scratchGeneration, generation + 1)
+        XCTAssertNil(session.scratchSurface)
+        XCTAssertTrue(session.scratchCommand?.contains(ZmxSupport.daemonName(for: scratch)) == true, session.scratchCommand ?? "")
+        XCTAssertTrue(session.scratchActive)
+    }
+
     func testAPaneAlreadyClosedWhenParkedIsNeverRegistered() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)

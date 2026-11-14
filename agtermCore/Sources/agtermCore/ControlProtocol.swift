@@ -11,6 +11,8 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionNew = "session.new"
     case sessionDuplicate = "session.duplicate"
     case sessionClose = "session.close"
+    case sessionTerminate = "session.terminate"
+    case sessionUndo = "session.undo"
     case sessionSelect = "session.select"
     case sessionGo = "session.go"
     case sessionRename = "session.rename"
@@ -142,6 +144,8 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case zmxList = "zmx.list"
     case zmxPrune = "zmx.prune"
     case zmxKill = "zmx.kill"
+    /// zmxKillPane is `zmx.kill` pinned to a pane token, its own verb so an app predating the pin refuses it unknown.
+    case zmxKillPane = "zmx.kill.pane"
     case zmxReset = "zmx.reset"
     case zmxTree = "zmx.tree"
     case zmxAttach = "zmx.attach"
@@ -764,6 +768,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var parent: String?
     /// Every session id `session.close` closed, a parent's companions included.
     public var closed: [String]?
+    /// recentID is the Recent Closed entry a single-target `session.close` wrote, which `recent.open` takes.
+    public var recentID: String?
+    /// undoID names an undoable close's pending record, which `session.undo` takes while the grace lasts.
+    public var undoID: String?
     /// The page a `session.companion.page.attach` handed out, token included.
     public var companionPage: PresentationPage?
     /// messageID is the id every copy of a `msg.send` shares.
@@ -793,7 +801,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 pageID: String? = nil, pageOutcome: ControlHtmlPageOutcome? = nil,
                 restart: ControlRestartReceipt? = nil, installed: AppIdentity? = nil,
                 recent: [ControlRecentItem]? = nil, recentOpen: ControlRecentOpen? = nil, undoable: Bool? = nil,
-                parent: String? = nil, closed: [String]? = nil, companionPage: PresentationPage? = nil,
+                parent: String? = nil, closed: [String]? = nil, recentID: String? = nil, undoID: String? = nil,
+                companionPage: PresentationPage? = nil,
                 messageID: String? = nil, delivered: [String]? = nil, rejected: [MessageRejection]? = nil,
                 messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil,
                 remoteGroup: ControlRemoteGroup? = nil) {
@@ -807,6 +816,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.remoteGroup = remoteGroup
         self.parent = parent
         self.closed = closed
+        self.recentID = recentID
+        self.undoID = undoID
         self.undoable = undoable
         self.recent = recent
         self.recentOpen = recentOpen

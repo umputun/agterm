@@ -79,6 +79,8 @@ struct CatalogCommandsTests {
         (["workspace", "move", "--to", "up"], .workspaceMove), (["session", "new", "--parent", "s1"], .sessionCompanionNew),
         (["session", "overlay", "open", "--page", "--url", "https://example.com"], .sessionPage),
         (["session", "overlay", "open", "--companion", "--url", "https://example.com"], .sessionCompanionPage),
+        (["session", "restart", "--pane", "left"], .sessionRestart), (["session", "duplicate", "--companion"], .sessionCompanionDuplicate),
+        (["session", "convert", "--companion"], .sessionCompanionConvert), (["zmx", "kill", "--target", "s1", "--pane", "left", "--force"], .zmxKill),
     ])
     func everyStructuralCommandTakesAnOperationId(_ words: [String], _ cmd: Command) throws {
         let parsed = try Agtermctl.parseAsRoot(words + ["--op-id", "op-1", "--epoch", "e1"])
@@ -89,6 +91,10 @@ struct CatalogCommandsTests {
         #expect(request.cmd == cmd)
         #expect(request.args?.opID == "op-1")
         #expect(request.args?.epoch == "e1")
+    }
+
+    @Test func aPlainDuplicateRefusesAnOperationId() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "duplicate", "--op-id", "op-1", "--epoch", "e1"]) }
     }
 
     @Test func aPlainOverlayOpenRefusesAnOperationId() {

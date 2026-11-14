@@ -10,13 +10,34 @@ public final class ServerActions: ControlActions {
     let identity: AppIdentity
     let panes: ServerPanes
     let streams: ServerStreams
+    let events: ServerEvents
     var hudAutoHide: [UUID: HudTimer] = [:]
+    var infoAutoHide: [UUID: InfoTimer] = [:]
+    /// macDefaults are the settings the server's status and badge clears follow: it has no settings of its own.
+    static let macDefaults = AppSettings()
+    /// foregroundArgv reads the foreground program of the terminal whose shell is the given pid.
+    var foregroundArgv: (Int32) -> [String]? = ProcForeground.argv
+    /// replayObservation reads, for a replay, the process holding the terminal of the shell with the given pid.
+    var replayObservation: (_ leader: Int32, _ shell: String?) -> RestartReplay.Observation = ProcReplay.observation
+    /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
+    var processes: any ProcessTable = ProcProcessTable()
+    /// paneExited runs the exit transition of a pane whose daemon a confirmed kill ended.
+    var paneExited: ((Session, UUID) -> Void)?
+    /// restartWaits bounds a restart's waits for the old program to end and the new shell to appear.
+    var restartWaits = (program: Duration.seconds(1), shell: Duration.seconds(10), poll: Duration.milliseconds(100))
     /// operationsUnsaved is set while the operation table holds an entry its last write failed to save.
     var operationsUnsaved = false
+    /// recentClosed is the history the store writes its closes into; nil serves no `recent.*`.
+    var recentClosed: RecentClosedStore?
+    /// pendingCloses is rewritten after each served command, so a crash inside a close's grace is finished at start.
+    var pendingCloses: PendingCloseJournal?
+    /// recentItems caches `recentClosed` for the catalog, which projects it on every refresh; a served command drops it.
+    var recentItems: [ControlRecentItem]?
 
-    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes,
+    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes, events: ServerEvents,
          overlayJobs: OverlayJobs = OverlayJobs()) {
         self.store = store
+        self.events = events
         self.catalog = catalog
         self.identity = identity
         self.panes = panes
@@ -27,18 +48,32 @@ public final class ServerActions: ControlActions {
         wireAskOwners()
         streams.catalogVersions = catalogVersions
         streams.catalogWorkspaces = { [weak self] in self?.catalogWorkspaces() ?? [] }
+        streams.catalogRecent = { [weak self] in self?.catalogRecent() }
     }
 
     /// serve refuses a command the server does not serve, then dispatches the rest: the socket's requests and a
     /// handed-over page's bridge requests alike. The catalog is published after each, whatever it changed.
     func serve(_ request: ControlRequest) async -> ControlResponse {
         if let refusal = ServerCommandPolicy.refusal(request.cmd) { return ControlResponse(ok: false, error: refusal) }
+        defer {
+            pendingCloses?.record(store)
+            recentItems = nil
+            streams.catalogHub.refresh()
+        }
         if let opID = request.args?.opID { return await serveOperation(request, opID: opID) }
         if let refusal = pageRowRefusal(request) { return refusal }
         let response = await ControlDispatcher(actions: self).dispatch(request)
             ?? ControlResponse(ok: false, error: "\(request.cmd.rawValue) is not available on agterm-server")
         streams.catalogHub.refresh()
         return response
+    }
+
+    func catalogRecent() -> [ControlRecentItem]? {
+        guard let recentClosed else { return nil }
+        if let recentItems { return recentItems }
+        let items = recentClosed.load().map(ControlRecentItem.init)
+        recentItems = items
+        return items
     }
 
     /// pageRowRefusal answers a command a page row cannot take; an operation records it as its refused receipt.
@@ -57,7 +92,23 @@ public final class ServerActions: ControlActions {
 
     public func controlTree(window: String?) -> ControlResponse {
         if let refusal = windowRefusal(window) { return refusal }
-        return ControlResponse(ok: true, result: ControlResult(tree: store.controlTree(paneForeground: { _ in nil }, app: identity)))
+        return ControlResponse(ok: true, result: ControlResult(tree: tree()))
+    }
+
+    /// tree is the catalog's tree with each pane's foreground program read through its shell's pid.
+    func tree() -> ControlTree {
+        store.controlTree(paneForeground: { self.foreground(of: $0.paneIdentity) },
+                          splitPaneForeground: { $0.hasSplit ? $0.splitPaneIdentity.flatMap(self.foreground) : nil }, app: identity)
+    }
+
+    private func foreground(of identity: UUID) -> CommandRestore.PaneForeground? {
+        guard let leader = panes.leaders[identity], let argv = foregroundArgv(leader) else { return nil }
+        return CommandRestore.paneForeground(argv: argv, extra: (panes.shellPath as NSString).lastPathComponent)
+    }
+
+    public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
+        events.flushTree()
+        return events.ring.readResponse(options)
     }
 
     public func appIdentity() -> ControlResponse {

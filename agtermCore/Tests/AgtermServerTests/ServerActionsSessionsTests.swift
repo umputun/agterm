@@ -66,14 +66,25 @@ struct ServerActionsSessionsTests {
         #expect(harness.runner.launches.isEmpty)
     }
 
-    @Test func waitIsRefused() {
+    @Test func waitHoldsThePaneAfterItsCommand() throws {
         let reply = harness.actions.createSession(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil,
                                                                               workspaceName: nil, createWorkspace: nil,
                                                                               command: "make", wait: true, name: nil, after: nil,
                                                                               before: nil, noSelect: false))
 
-        #expect(!reply.ok)
-        #expect(harness.runner.launches.isEmpty)
+        let session = try harness.session(reply)
+        #expect(session.commandWait)
+        #expect(harness.runner.launches.last?.argv == ["/bin/zsh", "-lic", ZmxReplayScript.renderHolding(commandLine: "make")])
+    }
+
+    @Test func aCompanionWithWaitHoldsItsPaneToo() async throws {
+        let parent = try harness.session(newSession())
+
+        let reply = await harness.actions.createCompanion(parent.id.uuidString, options: CompanionOptions(command: "top", wait: true),
+                                                          window: nil)
+
+        #expect(reply.ok)
+        #expect(harness.runner.launches.last?.argv.last == ZmxReplayScript.renderHolding(commandLine: "top"))
     }
 
     @Test func aStaleExitRecordIsRemovedBeforeThePaneStarts() throws {
@@ -137,6 +148,32 @@ struct ServerActionsSessionsTests {
         #expect(Set(harness.runner.kills) == names)
     }
 
+    @Test func terminateClosesAsCloseDoes() throws {
+        let one = try harness.session(newSession())
+        let two = try harness.session(newSession())
+        let three = try harness.session(newSession())
+
+        let single = harness.actions.terminateSessions([one.id.uuidString], window: nil, undoable: false)
+        let batch = harness.actions.terminateSessions([two.id.uuidString, three.id.uuidString], window: nil, undoable: false)
+
+        #expect(single.result?.closed == [one.id.uuidString])
+        #expect(batch.result?.affected == 2)
+        #expect([one, two, three].allSatisfy { harness.store.session(withID: $0.id) == nil })
+        #expect(Set(harness.runner.kills) == Set([one, two, three].map { ZmxSupport.daemonName(for: $0.paneIdentity) }))
+    }
+
+    @Test func anUndoableTerminateKeepsTheDaemonForTheGrace() throws {
+        let session = try harness.session(newSession())
+
+        let reply = harness.actions.terminateSessions([session.id.uuidString], window: nil, undoable: true)
+
+        #expect(reply.ok)
+        #expect(reply.result?.undoable == true)
+        #expect(reply.result?.undoID != nil)
+        #expect(harness.store.session(withID: session.id) == nil)
+        #expect(harness.runner.kills.isEmpty)
+    }
+
     @Test func aSessionWhoseDaemonCannotBeKilledStillCloses() throws {
         let session = try harness.session(newSession())
         harness.runner.killFails = true
@@ -190,6 +227,81 @@ struct ServerActionsSessionsTests {
         #expect(last.result?.text == "three")
     }
 
+    @Test func textLinesReachScrollbackAboveTheScreen() throws {
+        let session = try harness.session(newSession())
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        harness.runner.histories[daemon] = "old1\nold2\n"
+        harness.runner.screens[daemon] = "now\n"
+
+        let reply = harness.actions.readSessionText(session.id.uuidString, window: nil,
+                                                    options: ControlSessionTextOptions(pane: nil, paneID: nil, all: false, lines: 3))
+
+        #expect(reply.result?.text == "old1\nold2\nnow")
+    }
+
+    @Test func cursorReadsTheColumnFromThePaneDaemonsScreen() throws {
+        let session = try harness.session(newSession())
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        harness.runner.screens[daemon] = "$ ls"
+        harness.runner.cursorColumns[daemon] = 4
+        let id = TerminalSurfaceID(sessionID: session.id, surface: .primary).rawValue
+
+        let reply = harness.actions.readSurfaceCursor(id, window: nil, paneID: nil)
+
+        #expect(reply == ControlResponse(ok: true, result: ControlResult(id: id, cursor: ControlCursor(column: 4))))
+    }
+
+    @Test func cursorByPaneIDReadsTheSplitAndNamesItsSurface() throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        let split = try #require(session.splitPaneIdentity)
+        harness.runner.screens[ZmxSupport.daemonName(for: split)] = ""
+        harness.runner.cursorColumns[ZmxSupport.daemonName(for: split)] = 9
+
+        let reply = harness.actions.readSurfaceCursor(session.id.uuidString, window: nil, paneID: split.uuidString)
+
+        #expect(reply.result?.cursor == ControlCursor(column: 9))
+        #expect(reply.result?.id == TerminalSurfaceID(sessionID: session.id, surface: .split).rawValue)
+    }
+
+    @Test func activeCursorReadsTheSelectedSessionsFocusedPane() throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        let split = try #require(session.splitPaneIdentity)
+        harness.runner.screens[ZmxSupport.daemonName(for: session.paneIdentity)] = ""
+        harness.runner.screens[ZmxSupport.daemonName(for: split)] = ""
+        harness.runner.cursorColumns[ZmxSupport.daemonName(for: split)] = 2
+        _ = harness.store.selectSession(session.id)
+        session.splitFocused = true
+
+        let reply = harness.actions.readSurfaceCursor(nil, window: nil, paneID: nil)
+
+        #expect(reply.result?.cursor == ControlCursor(column: 2))
+        #expect(reply.result?.id == TerminalSurfaceID(sessionID: session.id, surface: .split).rawValue)
+    }
+
+    @Test(arguments: ["overlay", "overlay-left", "scratch"])
+    func cursorOfASurfaceWithNoDaemonIsRefused(_ kind: String) throws {
+        let session = try harness.session(newSession())
+        let id = "surface:\(session.id.uuidString):\(kind)"
+
+        let reply = harness.actions.readSurfaceCursor(id, window: nil, paneID: nil)
+
+        #expect(!reply.ok)
+        #expect(reply.error == (kind == "scratch" ? "session not realized" : "surface not available: \(id)"))
+    }
+
+    @Test func cursorRefusesQuickASurfaceIDBesideAPaneIDAndAnUnknownToken() throws {
+        let session = try harness.session(newSession())
+        let id = TerminalSurfaceID(sessionID: session.id, surface: .primary).rawValue
+
+        #expect(harness.actions.readSurfaceCursor("quick", window: nil, paneID: nil).error == "surface not available: quick")
+        #expect(harness.actions.readSurfaceCursor(id, window: nil, paneID: "tok").error
+            == "surface.cursor: --pane-id takes a session target")
+        #expect(harness.actions.readSurfaceCursor(session.id.uuidString, window: nil, paneID: "tok").error == "unknown pane id: tok")
+        #expect(harness.actions.readSurfaceCursor("nonsense", window: nil, paneID: nil).error == "invalid surface: nonsense")
+    }
+
     @Test func textOfAPaneWithNoDaemonIsNotRealized() throws {
         let session = try harness.session(newSession())
 
@@ -209,6 +321,27 @@ struct ServerActionsSessionsTests {
         #expect(reply.result?.pane == "left")
         #expect(harness.runner.typed.map(\.name) == [name, name])
         #expect(harness.runner.typed.map(\.bytes) == [Array("ls".utf8), [0x0D]])
+    }
+
+    @Test func typeIntoTheOwningPaneClearsItsBlockedStatus() async throws {
+        let session = try harness.session(newSession())
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+
+        _ = await harness.actions.typeSession(session.id.uuidString, window: nil,
+                                              options: ControlSessionTypeOptions(text: "y\n", select: false, pane: nil, paneID: nil))
+
+        #expect(session.agentIndicator.status == .idle)
+    }
+
+    @Test func typeIntoAnotherPaneKeepsTheBlockedStatus() async throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        harness.store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+
+        _ = await harness.actions.typeSession(session.id.uuidString, window: nil,
+                                              options: ControlSessionTypeOptions(text: "y\n", select: false, pane: .right, paneID: nil))
+
+        #expect(session.agentIndicator.status == .blocked)
     }
 
     @Test func typeByPaneIDFindsTheSplit() async throws {
@@ -319,5 +452,20 @@ struct ServerActionsSessionsTests {
         #expect(restored.content == .page)
         #expect(restored.htmlOverlay?.source == row.htmlOverlay?.source)
         #expect(restored.htmlOverlay?.javascript == true)
+    }
+
+    @Test func aDuplicateIsAPlainShellRightAfterTheSourceInItsDirectory() throws {
+        let source = try harness.session(newSession(command: "top", cwd: harness.scratch.root))
+        let next = try harness.session(newSession())
+        harness.store.renameSession(source.id, to: "build")
+        harness.store.setFlag(true, forSession: source.id)
+
+        let copy = try harness.session(harness.actions.duplicateSession(source.id.uuidString, window: nil))
+
+        #expect(harness.store.workspaces[0].sessions.map(\.id).suffix(3) == [source.id, copy.id, next.id])
+        #expect(harness.runner.launches.last?.directory == harness.scratch.root)
+        #expect(harness.runner.launches.last?.argv.isEmpty == true)
+        #expect(copy.customName == nil)
+        #expect(!copy.flagged)
     }
 }

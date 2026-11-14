@@ -30,6 +30,8 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     var catalogHeartbeat: Task<Void, Never>?
     /// catalogWorkspaces projects the store's workspaces into the catalog.
     var catalogWorkspaces: @MainActor () -> [CatalogWorkspace] = { [] }
+    /// catalogRecent is the server's Recent Closed list as the catalog carries it.
+    var catalogRecent: @MainActor () -> [ControlRecentItem]? = { nil }
     var catalogVersions = CatalogVersions(server: "", protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
     /// pageAttachments are the server's page rows handed to the Macs that attach them.
     lazy var pageAttachments = PageAttachmentBook(clock: { [unowned self] in now() }, servedPage: { [unowned self] id, page in
@@ -38,7 +40,8 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     })
     /// catalogHub numbers the catalog in this run's epoch, the same one respawn counts carry.
     lazy var catalogHub = CatalogHub(epoch: originEpoch, staleTimeout: 30) { [unowned self] in
-        CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces())
+        CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces(),
+                        recent: catalogRecent())
     }
 
     init(store: AppStore, catalogID: UUID, overlayJobs: OverlayJobs) {
@@ -122,6 +125,10 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             store.receiveRemotePageFrame(body, forSession: sessionID)
         case .linkClick(let click):
             receiveLinkClick(click, forSession: sessionID)
+        case .statusClear(let clear):
+            store.applyPresenterClear(clear, forSession: sessionID, reset: ServerActions.macDefaults.effectiveStatusReset)
+        case .statusSeen(let seen):
+            store.applyPresenterSeen(seen, forSession: sessionID, badgeReset: ServerActions.macDefaults.effectiveBadgeReset)
         default:
             break
         }

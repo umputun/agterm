@@ -285,7 +285,7 @@ public final class RemotePresentationClient {
                 default: apply(entry, on: link)
                 }
             }
-        case .ack, .presenterAcquire, .linkClick, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
+        case .ack, .presenterAcquire, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
              .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break

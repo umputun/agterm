@@ -432,6 +432,124 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         XCTAssertTrue(followed.revealed.isEmpty && followed.opened.isEmpty && followed.markdowns.isEmpty)
     }
 
+    private final class Forwards {
+        var asked: [(ForwardedPage, UUID)] = []
+        var pending: [@MainActor (URL?) -> Void] = []
+    }
+
+    private func recordLoopbacks() -> Forwards {
+        let forwards = Forwards()
+        LinkOpener.shared.loopback = { page, row, done in
+            forwards.asked.append((page, row))
+            forwards.pending.append(done)
+        }
+        return forwards
+    }
+
+    private func remoteStore() -> AppStore {
+        AppStore(persistence: PersistenceStore(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-input-tests-\(UUID().uuidString)")))
+    }
+
+    func testAScratchRunningOnItsOriginForwardsItsClicksThereAndALocalOneStaysHere() throws {
+        let store = remoteStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox"))
+        let scratch = bareSurface()
+        scratch.watermarkSession = session
+        session.scratchSurface = scratch
+        XCTAssertEqual(scratch.linkClickOrigin, .scratch(session.id))
+        XCTAssertNil(scratch.linkClickRemoteSession)
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1, catalogOwned: true),
+                         forSession: session.id)
+        let origin = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: origin, shown: true)
+        let forwarded = recordForwards(answer: nil)
+        _ = recordLinks(mode: .overlay, overlayOpens: true)
+
+        scratch.openLink("src/a.py:3", intent: .normal)
+
+        XCTAssertEqual(scratch.linkClickOrigin, .remotePane(session.id))
+        XCTAssertEqual(scratch.linkClickRemoteSession, session.id)
+        XCTAssertEqual(forwarded.clicks, [RemoteLinkClick(raw: "src/a.py:3", session: session.id, pane: origin, mode: .overlay)])
+    }
+
+    func testALoopbackLinkInARemotePaneOpensItsLocalEndOnceTheForwardAnswers() throws {
+        let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        let pane = bareSurface()
+        pane.session = session
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let forwarded = recordForwards(answer: nil)
+        let forwards = recordLoopbacks()
+        let local = try XCTUnwrap(URL(string: "http://localhost:51000/app?x=1#top"))
+
+        pane.openLink("http://localhost:3000/app?x=1#top", intent: .normal)
+
+        XCTAssertEqual(forwards.asked.map(\.0), [try XCTUnwrap(ForwardedPage("http://localhost:3000/app?x=1#top"))])
+        XCTAssertEqual(forwards.asked.map(\.1), [session.id])
+        XCTAssertTrue(followed.overlaid.isEmpty && followed.opened.isEmpty)
+        forwards.pending[0](local)
+        XCTAssertEqual(followed.overlaid.map(\.0), [local])
+        XCTAssertEqual(followed.overlaid.map(\.1), [session.id])
+
+        pane.openLink("http://127.0.0.1:3000/", intent: .browser)
+        forwards.pending[1](local)
+        XCTAssertEqual(followed.opened, [local])
+
+        pane.openLink("http://localhost:3000/", intent: .normal)
+        forwards.pending[2](nil)
+        XCTAssertEqual(forwarded.refusals.map(\.1), [.forwardFailed])
+        XCTAssertEqual(followed.overlaid.count, 1)
+        XCTAssertEqual(followed.opened, [local])
+        XCTAssertTrue(forwarded.clicks.isEmpty)
+    }
+
+    func testALoopbackLinkInALocalPaneOrAnotherHostsAddressOpensAsTyped() throws {
+        let localPane = bareSurface()
+        localPane.session = Session(initialCwd: NSTemporaryDirectory())
+        let remote = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
+        let remotePane = bareSurface()
+        remotePane.session = remote
+        let followed = recordLinks(mode: .browser, overlayOpens: false)
+        let forwards = recordLoopbacks()
+
+        localPane.openLink("http://localhost:3000/", intent: .normal)
+        remotePane.openLink("https://example.com/", intent: .normal)
+
+        XCTAssertTrue(forwards.asked.isEmpty)
+        XCTAssertEqual(followed.opened.map(\.absoluteString), ["http://localhost:3000/", "https://example.com/"])
+    }
+
+    func testAnOverlayRunningAnOriginJobForwardsItsLoopbackLinkAndALocalOverlayDoesNot() throws {
+        let store = remoteStore()
+        let workspace = store.addWorkspace(name: "work")
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [:], presentationVersion: 1), forSession: session.id)
+        XCTAssertTrue(store.openOverlay(session.id, command: "less log"))
+        let overlay = bareSurface()
+        overlay.focusSession = session
+        session.overlaySurface = overlay
+        let followed = recordLinks(mode: .overlay, overlayOpens: true)
+        let forwards = recordLoopbacks()
+
+        overlay.openLink("http://localhost:3000/", intent: .normal)
+
+        XCTAssertTrue(forwards.asked.isEmpty)
+        XCTAssertEqual(followed.opened.map(\.absoluteString), ["http://localhost:3000/"])
+        XCTAssertTrue(store.closeOverlay(session.id))
+        let job = PresentationOverlay(job: "j1", pane: nil, sizePercent: nil, backgroundColor: nil, follow: false, wait: false)
+        XCTAssertTrue(store.presentReplicaOverlay(job, command: "ssh buildbox run-job j1", forSession: session.id) { _ in })
+        session.overlaySurface = overlay
+
+        overlay.openLink("http://localhost:3000/x", intent: .normal)
+
+        XCTAssertEqual(overlay.linkClickOrigin, .programOverlay)
+        XCTAssertEqual(forwards.asked.map(\.1), [session.id])
+        forwards.pending[0](URL(string: "http://localhost:51000/x"))
+        XCTAssertEqual(followed.opened.map(\.absoluteString), ["http://localhost:3000/", "http://localhost:51000/x"])
+        XCTAssertTrue(followed.overlaid.isEmpty)
+    }
+
     func testAClickNamesThePaneItsSurfaceShows() {
         let session = Session(initialCwd: NSTemporaryDirectory(), remoteHost: "buildbox")
         session.splitPaneIdentity = UUID()

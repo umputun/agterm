@@ -3,9 +3,11 @@ import Testing
 import agtermCore
 
 struct ServerCommandPolicyTests {
-    @Test(arguments: [Command.tree, .version, .windowList, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
-                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
-                      .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach])
+    @Test(arguments: [Command.tree, .version, .windowList, .eventsRead, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
+                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
+                      .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen, .sessionFlag, .sessionTint,
+                      .workspaceFlag, .workspaceTint, .sessionDuplicate, .sessionRestart,
+                      .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxPrune, .sessionTerminate, .zmxKillPane])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }
@@ -14,30 +16,34 @@ struct ServerCommandPolicyTests {
         #expect(ServerCommandPolicy.refusal(.windowNew) == HeadlessCommandPolicy.physicalWindowRefusal(.windowNew))
     }
 
-    @Test(arguments: [Command.zmxPrune, .zmxReset, .restoreCapture, .eventsRead])
-    func anyOtherCommandIsRefusedByName(_ command: Command) {
-        #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
-    }
-
-    private static let undecided: Set<Command> = [
-        .debugAppearance, .eventsRead, .hooksList, .hooksReload, .recentClear, .recentList, .recentOpen,
-        .restoreCapture, .restoreClear, .restoreMode,
-        .sessionBackground, .sessionCollapse, .sessionCompanionConvert, .sessionCompanionDuplicate, .sessionCopy, .sessionDetach,
-        .sessionDuplicate, .sessionExpand, .sessionFlag, .sessionFocus, .sessionGo, .sessionInfo, .sessionLead,
-        .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize, .sessionRestart,
-        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSeen, .sessionSelect, .sessionSelectAll, .sessionTint,
-        .windowRemoteDismiss,
-        .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFlag, .workspaceFocus, .workspaceGo,
-        .workspaceReattach, .workspaceSelect, .workspaceTint,
-        .zmxAttach, .zmxAttachGroup, .zmxKill, .zmxList, .zmxPrune, .zmxReset, .zmxScreen,
+    private static let refusedByDesign: [String: Set<Command>] = [
+        "Mac view state of a server window": [
+            .sessionBackground, .sessionCollapse, .sessionExpand, .workspaceFocus, .workspaceFilter,
+            .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .workspaceCollapse, .workspaceExpand,
+            .windowRemoteDismiss,
+        ],
+        "Mac selection and clipboard": [.sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayCopy, .sessionOverlayText],
+        "moves what a Mac shows": [.sessionFocus, .sessionSelect, .sessionGo, .sessionLead, .sessionResize, .workspaceSelect, .workspaceGo],
+        "Finder on the Mac": [.sessionReveal],
+        "Mac app relaunch": [.restoreMode, .restoreCapture, .restoreClear, .zmxReset, .sessionRestore],
+        "makes a Mac viewer": [.zmxAttach, .zmxAttachGroup],
+        "UI-test seam": [.debugAppearance],
+        "deferred to docs/backlog/server-user-event-hooks.md": [.hooksList, .hooksReload],
     ]
 
-    @Test func everyCommandIsServedWindowOnlyOrUndecided() {
+    @Test func everyCommandIsServedWindowOnlyOrRefusedByDesign() {
         let misclassified = Command.allCases.filter { command in
-            [ServerCommandPolicy.served.contains(command), HeadlessCommandPolicy.physicalWindowRefusal(command) != nil,
-             Self.undecided.contains(command)].count { $0 } != 1
+            let places = [ServerCommandPolicy.served.contains(command), HeadlessCommandPolicy.physicalWindowRefusal(command) != nil]
+                + Self.refusedByDesign.values.map { $0.contains(command) }
+            return places.count { $0 } != 1
         }
 
         #expect(misclassified.map(\.rawValue) == [])
+    }
+
+    @Test func aCommandRefusedByDesignIsRefusedByName() {
+        for command in Self.refusedByDesign.values.flatMap({ $0 }) {
+            #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
+        }
     }
 }

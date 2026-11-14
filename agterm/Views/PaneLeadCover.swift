@@ -4,17 +4,17 @@ import SwiftUI
 /// PaneLeadCover covers a pane whose zmx client does not lead, since its terminal is laid out for another
 /// client's grid. It stays mounted so the pane's ZStack keeps one shape (see `sessionDetail`). The cover
 /// takes hits and a click focuses the pane; the reconnect note draws uncovered too and never takes hits.
-/// Every host of a pane's terminal mounts one directly over it, under any pane overlay.
+/// Every host of a pane's terminal, a Live scratch's included, mounts one directly over it, under any pane overlay.
 struct PaneLeadCover: View {
     let session: Session
-    let pane: OverlayPane
+    let pane: StatusPane
     var background = WindowContentView.resolvedTerminalColor()
     var foreground = WindowContentView.resolvedChromeText()
     /// The pane sits under its own pane overlay, which draws on a transparent backing.
     var hidden = false
 
     var body: some View {
-        let identity = session.paneIdentity(for: pane == .left ? StatusPane.left : .right)
+        let identity = session.paneIdentity(for: pane)
         let book = ZmxLeadBook.shared
         let covered = book.covered(pane: identity) && !hidden
         ZStack {
@@ -38,8 +38,9 @@ struct PaneLeadCover: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("pane-lead-cover-\(pane.rawValue)")
             }
-            if !hidden, let reason = RemoteReconnectBook.shared.readback(pane: identity)?.reason {
-                RemoteReconnectNote(reason: reason, pane: pane)
+            if !hidden, let overlayPane = OverlayPane(rawValue: pane.rawValue),
+               let reason = RemoteReconnectBook.shared.readback(pane: identity)?.reason {
+                RemoteReconnectNote(reason: reason, pane: overlayPane)
             }
         }
         .contentShape(Rectangle())
@@ -54,7 +55,11 @@ struct PaneLeadCover: View {
     }
 
     private func focusPane() {
-        let surface = pane == .left ? session.surface : session.splitSurface
+        let surface = switch pane {
+        case .left: session.surface
+        case .right: session.splitSurface
+        case .scratch: session.scratchSurface
+        }
         (surface as? GhosttySurfaceView)?.focusAfterReparent()
     }
 }

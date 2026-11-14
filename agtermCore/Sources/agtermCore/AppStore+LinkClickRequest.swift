@@ -12,7 +12,9 @@ extension AppStore {
               presentation.mode == .presenter else { return .failure(.notPresenter) }
         guard originSupportsClick else { return .failure(.originTooOld) }
         guard !hidden else { return .failure(.hidden) }
-        guard let local = click.pane, let pane = presentation.binding.remotePane(forLocal: local) else {
+        // a scratch running on the origin is named by the origin's own identity on both sides
+        guard let local = click.pane,
+              let pane = local == session(withID: click.session)?.originScratch ? local : presentation.binding.remotePane(forLocal: local) else {
             return .failure(.paneNotAttached)
         }
         return .success(PresentationLinkClick(raw: click.raw, pane: pane, mode: click.mode))

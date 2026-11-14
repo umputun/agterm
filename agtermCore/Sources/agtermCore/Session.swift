@@ -77,10 +77,16 @@ public final class Session: Identifiable {
     /// local daemon that does not exist. Structural `paneIdentity` stays valid either way.
     public var locallyManagedPaneIdentities: [UUID] {
         guard remoteHost == nil, content == .terminal else { return [] }
-        return [paneIdentity] + [splitPaneIdentity].compactMap { $0 }
+        return [paneIdentity] + [splitPaneIdentity, localScratchIdentity].compactMap { $0 }
     }
 
-    /// ScratchDaemon is a scratch behind a zmx daemon on agterm-server rather than a surface here.
+    /// localScratchIdentity is the daemon behind this instance's own scratch: a Live scratch on the Mac, the
+    /// server's scratch on agterm-server. Nil for a remote row, whose scratch belongs to its host.
+    public var localScratchIdentity: UUID? {
+        remoteHost == nil && content == .terminal ? scratchDaemon?.identity : nil
+    }
+
+    /// ScratchDaemon is a scratch behind a zmx daemon: a Live scratch here, or agterm-server's.
     public struct ScratchDaemon: Equatable, Sendable {
         public var identity: UUID
         public var shown: Bool
@@ -91,8 +97,8 @@ public final class Session: Identifiable {
         }
     }
 
-    /// scratchDaemon is the server's scratch: on agterm-server its own state, in a remote window the catalog's, and
-    /// never saved.
+    /// scratchDaemon is the daemon-backed scratch: a Live scratch on a Mac, saved hidden; on agterm-server its own
+    /// state; in a remote window the catalog's. `shown` is read only for a server's scratch.
     public var scratchDaemon: ScratchDaemon?
 
     /// catalogMail is a remote window row's unacked mail per pane identity, as its server's catalog last reported it.
@@ -100,6 +106,9 @@ public final class Session: Identifiable {
 
     /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
     @ObservationIgnored var scratchStoppedGeneration: Int?
+
+    /// originScratchClient keys this row's own attach of its origin's scratch, a daemon other rows may attach too.
+    @ObservationIgnored var originScratchClient: UUID?
 
     /// catalogScratch is the server scratch a remote window's row attaches, nil for every other row.
     public var catalogScratch: UUID? {
@@ -114,8 +123,8 @@ public final class Session: Identifiable {
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
-    /// ended marks a headless origin's session left with no live pane after a daemon was lost, kept in the catalog
-    /// until `session.close` removes it; a Mac never sets it.
+    /// ended marks a session its origin no longer has: a headless origin's session left with no live pane, kept until
+    /// `session.close` removes it, or a row attached here whose origin session is gone.
     public var ended = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
@@ -194,6 +203,7 @@ public final class Session: Identifiable {
         switch surface {
         case .primary: (self.surface ?? splitSurface)?.backedByZmx ?? daemonBackedPanes.contains(paneIdentity)
         case .split: (splitSurface ?? self.surface)?.backedByZmx ?? splitPaneIdentity.map(daemonBackedPanes.contains) ?? false
+        case .scratch: scratchSurface?.backedByZmx == true ? true : nil
         default: nil
         }
     }
@@ -492,6 +502,8 @@ public final class Session: Identifiable {
 
     /// What this Mac keeps about a session attached from another one; nil for a local session.
     @ObservationIgnored public internal(set) var remotePresentation: RemotePresentationState?
+    /// awaitsOriginCheck marks a row restored from the snapshot whose origin this Mac has not asked about yet.
+    @ObservationIgnored public var awaitsOriginCheck = false
     /// remoteConnectionRevision changes with the connection, so an observer of `remoteConnection` is told.
     var remoteConnectionRevision = 0
 
@@ -668,7 +680,7 @@ public final class Session: Identifiable {
         case .right:
             return splitSurface?.paneToken ?? splitPaneIdentity.map(daemonToken) ?? ""
         case .scratch:
-            return scratchSurface?.paneToken ?? scratchDaemon?.identity.uuidString ?? ""
+            return scratchSurface?.paneToken ?? (scratchClientIdentity ?? scratchDaemon?.identity)?.uuidString ?? ""
         }
     }
 
@@ -836,7 +848,7 @@ public final class Session: Identifiable {
         if scratchSurface?.paneToken == token { return .scratch }
         if surface == nil, daemonToken(paneIdentity) == token { return .left }
         if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
-        if scratchSurface == nil, scratchDaemon?.identity.uuidString == token { return .scratch }
+        if scratchSurface == nil, (scratchClientIdentity ?? scratchDaemon?.identity)?.uuidString == token { return .scratch }
         return nil
     }
 

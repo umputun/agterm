@@ -20,8 +20,11 @@ extension ServerActions {
                 let name = ZmxSupport.daemonName(for: identity)
                 if running.contains(name) { daemons[session.id.uuidString, default: [:]][role] = name }
             }
+            if let scratch = session.scratchDaemon, running.contains(ZmxSupport.scratchDaemonName(for: scratch.identity)) {
+                daemons[session.id.uuidString, default: [:]]["scratch"] = ZmxSupport.scratchDaemonName(for: scratch.identity)
+            }
         }
-        let tree = store.controlTree(paneForeground: { _ in nil }, app: identity)
+        let tree = tree()
         let window = RemoteWindowProjection(id: catalog.id.uuidString, name: catalog.name, tree: tree)
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)

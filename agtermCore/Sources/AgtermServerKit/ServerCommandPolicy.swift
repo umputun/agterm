@@ -5,19 +5,22 @@ import agtermCore
 /// reaches the server's store only once someone serves it on purpose.
 public enum ServerCommandPolicy {
     static let served: Set<Command> = [
-        .tree, .version, .windowList,
-        .sessionNew, .sessionRename, .sessionClose, .sessionMove, .sessionSplit, .sessionSplitClose, .sessionSwap,
-        .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
+        .tree, .version, .windowList, .eventsRead,
+        .sessionNew, .sessionRename, .sessionClose, .sessionTerminate, .sessionUndo, .sessionMove, .sessionSplit, .sessionSplitClose,
+        .sessionSwap, .sessionCompanionNew, .sessionPage, .sessionCompanionPage, .sessionCompanionPageAttach, .sessionText, .sessionType,
         .sessionScratch,
         .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove,
         .pickOpen, .pickResult, .pickCancel, .askOpen, .askResult, .askCancel,
         .zmxTree, .zmxPresent, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe,
-        .sessionStatus, .sessionContext, .notify, .sessionHudOpen, .sessionHudUpdate, .sessionHudClose,
+        .sessionStatus, .sessionContext, .sessionInfo, .notify, .sessionHudOpen, .sessionHudUpdate, .sessionHudClose,
         .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult,
         .sessionOverlayReload, .sessionOverlayNavigate, .sessionOverlaySubmit,
         .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
         .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
-        .msgSend, .msgRead, .msgAck,
+        .msgSend, .msgRead, .msgAck, .surfaceCursor, .zmxList, .zmxScreen, .sessionSeen,
+        .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint, .sessionDuplicate,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane, .zmxPrune,
+        .recentList, .recentOpen, .recentClear,
     ]
 
     /// refusal is the error for a command the server does not serve, nil for one it does.

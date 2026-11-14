@@ -33,21 +33,28 @@ struct LinkOpener {
     var forward: (RemoteLinkClick) -> RemoteLinkRefusal? = { _ in .originTooOld }
     /// refuse reports a remote click that was not carried out.
     var refuse: (UUID, RemoteLinkRefusal) -> Void = { _, _ in NSSound.beep() }
+    /// loopback reaches a loopback URL on row `UUID`'s host through a forward from this Mac and reports the local URL
+    /// once the forward answers, nil when it cannot; a row that goes away first gets no report.
+    var loopback: (ForwardedPage, UUID, @escaping @MainActor (URL?) -> Void) -> Void = { _, _, done in done(nil) }
 
     private struct Click {
         let origin: LinkPolicy.ClickOrigin
         let pane: UUID?
         let mode: LinkOpenMode
         let reveals: Bool
+        let remote: UUID?
     }
 
     /// follow carries out a clicked link; `cwd` is the clicking pane's directory, for a relative link, and `pane` its
-    /// identity, which a remote pane's forwarded click names. A link that only the filesystem can resolve is looked up
+    /// identity, which a remote pane's forwarded click names, and `remote` the row whose host runs the clicked program,
+    /// whose loopback a web link then names. A link that only the filesystem can resolve is looked up
     /// off the main actor, the first existing candidate winning, and one with no candidate on disk keeps the route it
     /// has as typed. A reveal intent selects the file a local route names in Finder after that guarded routing, and
     /// leaves a web link to its web route.
-    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent) {
-        let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(), reveals: intent == .reveal)
+    func follow(_ raw: String, from origin: LinkPolicy.ClickOrigin, pane: UUID?, cwd: String?, intent: LinkPolicy.ClickIntent,
+                remote: UUID? = nil) {
+        let click = Click(origin: origin, pane: pane, mode: intent == .browser ? LinkOpenMode.browser : mode(),
+                          reveals: intent == .reveal, remote: remote)
         let candidates = LinkPolicy.locations(for: raw, origin: origin, cwd: cwd)
         guard !candidates.isEmpty else { return carryOut(LinkPolicy.route(for: raw, mode: click.mode, origin: origin), click) }
         let exists = exists
@@ -65,8 +72,10 @@ struct LinkOpener {
         case .selectSession(let id):
             guard !click.reveals else { return }
             selectSession(id, click.origin, click.pane)
-        case .browser(let url): open(url)
-        case .overlay(let url, let session, let percent): if !overlay(url, session, percent) { open(url) }
+        case .browser(let url):
+            forwarding(url, click) { open($0) }
+        case .overlay(let url, let session, let percent):
+            forwarding(url, click) { local in if !overlay(local, session, percent) { open(local) } }
         case .image(let url, let session):
             let reveal = reveal
             image(url, session) { shown in if !shown { reveal(url) } }
@@ -86,6 +95,17 @@ struct LinkOpener {
                 refuse(session, refusal)
             }
         case .ignore: return
+        }
+    }
+
+    /// forwarding hands `url` to `use` as typed, or, for a loopback URL clicked in a program running on another host,
+    /// as the local end of a forward to that host once it answers; a forward that fails is refused on the row.
+    private func forwarding(_ url: URL, _ click: Click, use: @escaping @MainActor (URL) -> Void) {
+        guard let row = click.remote, let page = ForwardedPage(url.absoluteString) else { return use(url) }
+        let refuse = refuse
+        loopback(page, row) { local in
+            guard let local else { return refuse(row, .forwardFailed) }
+            use(local)
         }
     }
 }

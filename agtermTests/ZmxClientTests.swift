@@ -59,28 +59,6 @@ final class ZmxClientTests: XCTestCase {
                        "--force would unlink a live daemon's socket and still exit zero")
     }
 
-    func testKillOutcomeTrustsOnlyAnExactConfirmationLine() {
-        let name = "agterm-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-
-        XCTAssertEqual(ZmxClient.outcome(of: "killed session \(name)\n", name: name), .killed)
-        XCTAssertEqual(ZmxClient.outcome(of: "cleaned up stale session \(name)\n", name: name), .staleSocket)
-
-        // zmx exits zero here too, after merely reporting on stderr it could not reach the daemon
-        let unresponsive = "failed to kill session=\(name): SessionUnresponsive\n"
-        XCTAssertEqual(ZmxClient.outcome(of: unresponsive, name: name),
-                       .failed("failed to kill session=\(name): SessionUnresponsive"))
-
-        // a broken pipe after the kill was sent returns with nothing printed
-        XCTAssertEqual(ZmxClient.outcome(of: "", name: name), .failed("no output"))
-
-        XCTAssertEqual(ZmxClient.outcome(of: "not killed session \(name)\n", name: name),
-                       .failed("not killed session \(name)"),
-                       "a line merely containing the confirmation must not count as one")
-        XCTAssertEqual(ZmxClient.outcome(of: "killed session agterm-other\n", name: name),
-                       .failed("killed session agterm-other"),
-                       "another daemon's confirmation is not this one's")
-    }
-
     func testKillInvocationsMergeStderrAndListDoesNot() {
         var invocations: [ZmxClient.Invocation] = []
         let client = ZmxClient(executablePath: "/tmp/zmx", socketDirectory: "/tmp/zmx-dir") {

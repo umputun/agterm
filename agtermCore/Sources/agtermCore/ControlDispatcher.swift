@@ -22,7 +22,7 @@ public struct ControlDispatcher {
             return actions.controlTree(window: request.args?.window)
         case .eventsRead:
             return dispatchEventsRead(request)
-        case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+        case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionRename,
                 .sessionReveal, .sessionMove, .sessionFlag, .sessionContext, .sessionInfo, .sessionSeen, .sessionStatus,
                 .sessionRestore:
             return await dispatchSessionCommand(request)
@@ -52,7 +52,7 @@ public struct ControlDispatcher {
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarFlaggedLayout,
                 .sidebarDensity, .sidebarExpand, .sidebarCollapse, .sidebarWidth, .restoreClear, .restoreCapture, .version:
             return dispatchAppCommand(request)
-        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
+        case .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree, .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen:
             return await dispatchZmxCommand(request)
         case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
             return dispatchDetachCommand(request)
@@ -70,7 +70,7 @@ public struct ControlDispatcher {
             return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
-        case .recentList, .recentOpen, .recentClear:
+        case .recentList, .recentOpen, .recentClear, .sessionUndo:
             return dispatchRecentCommand(request)
         case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)
@@ -195,6 +195,12 @@ public struct ControlDispatcher {
             }
             return undoable ? actions.closeSession(request.target, window: window, undoable: true)
                 : actions.closeSession(request.target, window: window)
+        case .sessionTerminate:
+            if request.args?.targets?.isEmpty == true {
+                return ControlResponse(ok: false, error: "session.terminate requires at least one --target")
+            }
+            let targets = request.args?.targets ?? [request.target ?? "active"]
+            return actions.terminateSessions(targets, window: request.args?.window, undoable: request.args?.undoable == true)
         case .sessionRename:
             guard let name = request.args?.name else {
                 return ControlResponse(ok: false, error: "session.rename requires a name")

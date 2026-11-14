@@ -14,6 +14,32 @@ extension AppStore {
     /// serverActionsBlocked is whether a remote window's server cannot be asked for an action now.
     public var serverActionsBlocked: Bool { catalogState.map { $0 != .connected } ?? false }
 
+    /// marksOnServer is whether flag and tint in this window are its server's, sent there rather than set here.
+    public var marksOnServer: Bool { remoteActions?.mirror.ownsFlags == true }
+
+    /// marksBlocked is whether flag and tint cannot change now: they are the server's and it cannot be asked.
+    public var marksBlocked: Bool { marksOnServer && serverActionsBlocked }
+
+    /// workspaceAllFlagged is whether every session of workspace `id` is flagged, the server's rows this window
+    /// detached included when the flags are the server's.
+    public func workspaceAllFlagged(_ id: UUID) -> Bool {
+        guard marksOnServer, let mirror = remoteActions?.mirror else { return allSessionsFlagged(inWorkspace: id) }
+        return mirror.allFlagged(inWorkspace: id)
+    }
+
+    /// workspaceHasSessions is whether workspace `id` has a session to flag, the server's rows this window detached
+    /// included when the flags are the server's.
+    public func workspaceHasSessions(_ id: UUID) -> Bool {
+        guard marksOnServer, let mirror = remoteActions?.mirror else {
+            return workspaces.first { $0.id == id }?.sessions.isEmpty == false
+        }
+        return mirror.hasSessions(inWorkspace: id)
+    }
+
+    /// clearableFlagCount is how many sessions Clear Flagged unflags: every flagged one on the server when the flags
+    /// are the server's.
+    public var clearableFlagCount: Int { marksOnServer ? remoteActions?.mirror.flaggedCount ?? 0 : flaggedSessions.count }
+
     /// canCloseWorkspace is whether Delete Workspace can run: a remote window can detach any shown workspace, its last
     /// included; a local window keeps its last workspace.
     public var canCloseWorkspace: Bool { isRemoteWindow ? !workspaces.isEmpty : canRemoveWorkspace }
@@ -30,14 +56,20 @@ extension AppStore {
         var changed = false
         for (index, entry) in catalog.enumerated() {
             let name = TerminalText.sanitized(entry.name)
+            let tint = CatalogTint.sidebarTint(entry.tint, on: entry.tintOn)
             if let existing = workspaces.firstIndex(where: { $0.id == entry.id }) {
                 if workspaces[existing].name != name {
                     workspaces[existing].name = name
                     changed = true
                 }
+                // an older server sends no tint, and the workspace keeps the one set on this Mac
+                if entry.tint != nil, workspaces[existing].tint != tint {
+                    workspaces[existing].tint = tint
+                    changed = true
+                }
                 continue
             }
-            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id)),
+            workspaces.insert(Workspace(id: entry.id, name: name, isExpanded: !collapsed.contains(entry.id), tint: tint),
                               at: min(index, workspaces.count))
             changed = true
         }
@@ -48,6 +80,7 @@ extension AppStore {
     func finishCatalogWorkspaces(_ catalog: [CatalogWorkspace]) {
         let order = catalog.map(\.id)
         let before = workspaces.map(\.id)
+        for id in before where !order.contains(id) { dropFocusMember(id) }
         workspaces.removeAll { !order.contains($0.id) }
         workspaces.sort { (order.firstIndex(of: $0.id) ?? .max) < (order.firstIndex(of: $1.id) ?? .max) }
         if workspaces.map(\.id) != before { scheduleTreeChanged() }
@@ -93,6 +126,7 @@ extension AppStore {
         }
         applyCatalogScratch(session, fields.scratch, context: context)
         applyCatalogMail(session, entry: entry)
+        applyCatalogMarks(session, fields)
         return session
     }
 
@@ -109,6 +143,7 @@ extension AppStore {
         let presented = session.presentsCatalog
         applyCatalogScratch(session, fields.scratch, context: context)
         applyCatalogMail(session, entry: entry)
+        applyCatalogMarks(session, fields)
         if fields.lifecycle == .ended {
             if !session.ended {
                 session.ended = true
@@ -192,6 +227,13 @@ extension AppStore {
     private func catalogCustomName(_ fields: CatalogSessionFields) -> String? {
         let name = fields.page == nil ? fields.customName ?? fields.name : fields.name
         return TerminalText.sanitized(name).trimmedOrNil
+    }
+
+    /// applyCatalogMarks gives a row the server's flag and tint; an older server sends neither, and the row keeps the
+    /// ones set on this Mac.
+    private func applyCatalogMarks(_ session: Session, _ fields: CatalogSessionFields) {
+        if let flagged = fields.flagged { setFlag(flagged, forSession: session.id) }
+        if fields.tint != nil { setTint(CatalogTint.sidebarTint(fields.tint, on: fields.tintOn), forSession: session.id) }
     }
 
     /// applyCatalogScratch keeps a row's scratch on the server's: a shown one attaches its daemon, a hidden one keeps

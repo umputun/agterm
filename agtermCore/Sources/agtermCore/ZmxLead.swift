@@ -186,11 +186,13 @@ extension Session {
         return panes.allSatisfy { ZmxLeadBook.shared.role(pane: $0) == .follower }
     }
 
-    /// The identity of the pane behind a surface slot, nil for the ephemeral ones, which have no daemon.
+    /// The identity of the pane behind a surface slot, a Live scratch's included; nil for the ephemeral ones, which
+    /// have no daemon.
     public func paneIdentity(for surface: TerminalZoomSurface) -> UUID? {
         switch surface {
         case .primary: paneIdentity
         case .split: splitPaneIdentity
+        case .scratch: scratchClientIdentity
         default: nil
         }
     }
@@ -199,7 +201,7 @@ extension Session {
         switch pane {
         case .left: paneIdentity
         case .right: splitPaneIdentity
-        case .scratch: nil
+        case .scratch: scratchClientIdentity
         }
     }
 }

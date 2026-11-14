@@ -92,6 +92,8 @@ final class ControlServer {
     /// This Mac as a VIEWER: one client per attached session. `ControlServer+RemotePresentation` owns the
     /// logic. The transport is injectable so a hosted test needs no ssh.
     var remoteClients: [UUID: RemotePresentationClient] = [:]
+    /// restoredOriginChecks is each host whose restored rows are being checked, with its failures in a row.
+    var restoredOriginChecks: [String: Int] = [:]
     var remoteTransport: RemotePresentationTransport = RemotePresentationProcess()
     var remoteTick: Task<Void, Never>?
     /// remoteCatalogs holds one catalog stream per open remote window; `ControlServer+RemoteCatalog` owns them.
@@ -111,6 +113,7 @@ final class ControlServer {
     /// catalogPagePause is the wait before a remote page row's claim is tried again.
     var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
+    let linkForwards = LinkForwards()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
 
@@ -669,8 +672,8 @@ final class ControlServer {
             return response
         }
         switch request.cmd {
-        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionReveal, .sessionMove,
+        case .tree, .eventsRead, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionTerminate, .sessionUndo,
+                .sessionRename, .sessionReveal, .sessionMove,
                 .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete, .workspaceMove,
                 .workspaceFocus,
                 .workspaceFilter, .workspaceCollapse, .workspaceExpand, .workspaceFlag,
@@ -696,7 +699,7 @@ final class ControlServer {
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .windowMinimize, .windowRemoteOpen, .windowRemoteDismiss,
                 .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
-                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxReset, .zmxTree,
+                .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree,
                 .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
                 .recentList, .recentOpen, .recentClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
