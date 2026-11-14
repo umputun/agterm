@@ -84,7 +84,7 @@ enum ProcReplay {
         let pid = group > 0 ? group : leader
         let argv = FileManager.default.contents(atPath: "/proc/\(pid)/cmdline").flatMap(ProcForeground.parseCmdline)
         let environment = FileManager.default.contents(atPath: "/proc/\(pid)/environ").flatMap(ProcForeground.parseCmdline)
-        return RestartReplay.Observation(foreground: argv.map { CommandRestore.paneForeground(argv: $0, extra: shell) },
+        return RestartReplay.Observation(foreground: argv.flatMap { CommandRestore.paneForeground(argv: $0, extra: shell) },
                                          isDaemonLeader: pid == leader, workingDirectory: directory("/proc/\(pid)/cwd"),
                                          executablePath: link("/proc/\(pid)/exe"),
                                          searchPath: environment.flatMap(searchPath))
