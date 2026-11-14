@@ -190,6 +190,81 @@ struct ServerActionsSessionsTests {
         #expect(last.result?.text == "three")
     }
 
+    @Test func textLinesReachScrollbackAboveTheScreen() throws {
+        let session = try harness.session(newSession())
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        harness.runner.histories[daemon] = "old1\nold2\n"
+        harness.runner.screens[daemon] = "now\n"
+
+        let reply = harness.actions.readSessionText(session.id.uuidString, window: nil,
+                                                    options: ControlSessionTextOptions(pane: nil, paneID: nil, all: false, lines: 3))
+
+        #expect(reply.result?.text == "old1\nold2\nnow")
+    }
+
+    @Test func cursorReadsTheColumnFromThePaneDaemonsScreen() throws {
+        let session = try harness.session(newSession())
+        let daemon = ZmxSupport.daemonName(for: session.paneIdentity)
+        harness.runner.screens[daemon] = "$ ls"
+        harness.runner.cursorColumns[daemon] = 4
+        let id = TerminalSurfaceID(sessionID: session.id, surface: .primary).rawValue
+
+        let reply = harness.actions.readSurfaceCursor(id, window: nil, paneID: nil)
+
+        #expect(reply == ControlResponse(ok: true, result: ControlResult(id: id, cursor: ControlCursor(column: 4))))
+    }
+
+    @Test func cursorByPaneIDReadsTheSplitAndNamesItsSurface() throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        let split = try #require(session.splitPaneIdentity)
+        harness.runner.screens[ZmxSupport.daemonName(for: split)] = ""
+        harness.runner.cursorColumns[ZmxSupport.daemonName(for: split)] = 9
+
+        let reply = harness.actions.readSurfaceCursor(session.id.uuidString, window: nil, paneID: split.uuidString)
+
+        #expect(reply.result?.cursor == ControlCursor(column: 9))
+        #expect(reply.result?.id == TerminalSurfaceID(sessionID: session.id, surface: .split).rawValue)
+    }
+
+    @Test func activeCursorReadsTheSelectedSessionsFocusedPane() throws {
+        let session = try harness.session(newSession())
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        let split = try #require(session.splitPaneIdentity)
+        harness.runner.screens[ZmxSupport.daemonName(for: session.paneIdentity)] = ""
+        harness.runner.screens[ZmxSupport.daemonName(for: split)] = ""
+        harness.runner.cursorColumns[ZmxSupport.daemonName(for: split)] = 2
+        _ = harness.store.selectSession(session.id)
+        session.splitFocused = true
+
+        let reply = harness.actions.readSurfaceCursor(nil, window: nil, paneID: nil)
+
+        #expect(reply.result?.cursor == ControlCursor(column: 2))
+        #expect(reply.result?.id == TerminalSurfaceID(sessionID: session.id, surface: .split).rawValue)
+    }
+
+    @Test(arguments: ["overlay", "overlay-left", "scratch"])
+    func cursorOfASurfaceWithNoDaemonIsRefused(_ kind: String) throws {
+        let session = try harness.session(newSession())
+        let id = "surface:\(session.id.uuidString):\(kind)"
+
+        let reply = harness.actions.readSurfaceCursor(id, window: nil, paneID: nil)
+
+        #expect(!reply.ok)
+        #expect(reply.error == (kind == "scratch" ? "session not realized" : "surface not available: \(id)"))
+    }
+
+    @Test func cursorRefusesQuickASurfaceIDBesideAPaneIDAndAnUnknownToken() throws {
+        let session = try harness.session(newSession())
+        let id = TerminalSurfaceID(sessionID: session.id, surface: .primary).rawValue
+
+        #expect(harness.actions.readSurfaceCursor("quick", window: nil, paneID: nil).error == "surface not available: quick")
+        #expect(harness.actions.readSurfaceCursor(id, window: nil, paneID: "tok").error
+            == "surface.cursor: --pane-id takes a session target")
+        #expect(harness.actions.readSurfaceCursor(session.id.uuidString, window: nil, paneID: "tok").error == "unknown pane id: tok")
+        #expect(harness.actions.readSurfaceCursor("nonsense", window: nil, paneID: nil).error == "invalid surface: nonsense")
+    }
+
     @Test func textOfAPaneWithNoDaemonIsNotRealized() throws {
         let session = try harness.session(newSession())
 

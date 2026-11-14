@@ -36,6 +36,18 @@ struct ServerActionsRemoteTests {
             == ["left": ZmxSupport.daemonName(for: session.paneIdentity), "right": ZmxSupport.daemonName(for: split)])
     }
 
+    @Test func eachListedPaneCarriesItsForegroundProgram() async throws {
+        let session = try newSession()
+        running([session.paneIdentity])
+        harness.panes.leaders = [session.paneIdentity: 100]
+        harness.actions.foregroundArgv = { _ in ["htop"] }
+
+        let tree = try #require(await harness.actions.remoteTree(host: nil).result?.remote)
+
+        let listed = try #require(tree.sessions.first { $0.id == session.id.uuidString })
+        #expect(listed.panes.first?.foreground == ["htop"])
+    }
+
     @Test func aSessionWhoseDaemonIsNotRunningIsNotListed() async throws {
         let session = try newSession()
         running([])

@@ -78,6 +78,8 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     private var storedTyped: [(name: String, bytes: [UInt8])] = []
     private var storedFailure: String?
     private var storedScreens: [String: String] = [:]
+    private var storedHistories: [String: String] = [:]
+    private var storedCursorColumns: [String: Int] = [:]
     private var storedRecords: [ZmxSessionRecord]? = []
     private var storedKillFails = false
 
@@ -91,6 +93,14 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     var screens: [String: String] {
         get { lock.withLock { storedScreens } }
         set { lock.withLock { storedScreens = newValue } }
+    }
+    var histories: [String: String] {
+        get { lock.withLock { storedHistories } }
+        set { lock.withLock { storedHistories = newValue } }
+    }
+    var cursorColumns: [String: Int] {
+        get { lock.withLock { storedCursorColumns } }
+        set { lock.withLock { storedCursorColumns = newValue } }
     }
     var killFails: Bool {
         get { lock.withLock { storedKillFails } }
@@ -121,7 +131,9 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
     }
 
     func screen(_ name: String, all: Bool) -> ZmxScreen? {
-        screens[name].flatMap { ZmxScreen(output: "1 80 24 0 0 0\n" + $0) }
+        screens[name].flatMap {
+            ZmxScreen(output: "1 80 24 \(cursorColumns[name] ?? 0) 0 0\n" + (all ? histories[name] ?? "" : "") + $0)
+        }
     }
 
     func type(_ name: String, bytes: [UInt8]) -> Bool {
@@ -138,6 +150,7 @@ final class ServerHarness {
     let catalog = CatalogRoot(id: UUID(), name: "testbox")
     let panes: ServerPanes
     let actions: ServerActions
+    let events: ServerEvents
     let jobClock: Date
 
     init(shell: String = "/bin/zsh") throws {
@@ -147,7 +160,10 @@ final class ServerHarness {
         let panes = ServerPanes(configuration: configuration, runner: runner, shellPath: shell, catalogID: catalog.id,
                                 programVersion: "1.2.3", environment: ["HOME": scratch.root, "PATH": "/usr/bin:/bin"])
         self.panes = panes
-        store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: scratch.state)), paneFinalizer: { ids in
+        let events = ServerEvents(window: catalog.id)
+        self.events = events
+        store = AppStore(persistence: PersistenceStore(directory: URL(fileURLWithPath: scratch.state)),
+                         controlEventSink: { events.receive($0) }, paneFinalizer: { ids in
             MainActor.assumeIsolated { panes.end(ids) }
         }, headless: true, askRegistry: AskRegistry())
         CatalogRoot.seedWorkspace(in: store)
@@ -155,7 +171,7 @@ final class ServerHarness {
         let jobClock = Date()
         self.jobClock = jobClock
         actions = ServerActions(store: store, catalog: catalog, identity: AppIdentity(version: "1.2.3"), panes: panes,
-                                overlayJobs: OverlayJobs(now: { jobClock }))
+                                events: events, overlayJobs: OverlayJobs(now: { jobClock }))
         actions.streams.presentationHelloDeadline = 60
     }
 

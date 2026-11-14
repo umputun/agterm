@@ -55,12 +55,14 @@ final class PaneObserver {
         let records = panes.endUnownedScratches(records)
         let listed = Dictionary(records.map { ($0.name, $0) }) { first, _ in first }
         var missing: [(session: Session, identities: [UUID])] = []
+        var leaders: [UUID: Int32] = [:]
         // a page row has no daemon, so its absence from a listing never ends it
         for session in store.workspaces.flatMap(\.sessions) where !session.ended && session.content == .terminal {
             var gone: [UUID] = []
             for (identity, role) in panesOf(session) {
                 if let record = listed[ZmxSupport.daemonName(for: identity)] {
                     session.daemonBackedPanes.insert(identity)
+                    leaders[identity] = record.leaderPID
                     updateCwd(of: session, role: role, leader: record.leaderPID)
                 } else if !panes.started(identity, since: listedAt) {
                     gone.append(identity)
@@ -68,6 +70,7 @@ final class PaneObserver {
             }
             if !gone.isEmpty { missing.append((session, gone)) }
         }
+        panes.leaders = leaders
         for (session, gone) in missing { gone.forEach { session.daemonBackedPanes.remove($0) } }
         for (session, gone) in missing { settle(session, gone: gone) }
         settleScratches(listed, listedAt: listedAt)
@@ -170,5 +173,27 @@ enum ProcCwd {
         guard let resolved = realpath(path, nil) else { return nil }
         defer { free(resolved) }
         return String(cString: resolved)
+    }
+}
+
+/// ProcForeground reads the argv of the program in the foreground of a pane's terminal from `/proc`, the shell
+/// itself while it waits at a prompt. Linux only; elsewhere there is none.
+enum ProcForeground {
+    static func argv(leader: Int32) -> [String]? {
+        #if os(Linux)
+        let group = ProcCwd.foregroundGroup(of: leader) ?? leader
+        guard let data = FileManager.default.contents(atPath: "/proc/\(group)/cmdline") else { return nil }
+        return parseCmdline(data)
+        #else
+        return nil
+        #endif
+    }
+
+    /// parseCmdline splits `/proc/<pid>/cmdline`, whose arguments each end in a NUL; nil for an empty one, which a
+    /// kernel thread or a process already gone reports.
+    static func parseCmdline(_ data: Data) -> [String]? {
+        var parts = data.split(separator: 0, omittingEmptySubsequences: false).map { String(decoding: $0, as: UTF8.self) }
+        if parts.last == "" { parts.removeLast() }
+        return parts.isEmpty ? nil : parts
     }
 }

@@ -21,7 +21,7 @@ extension ServerActions {
                 if running.contains(name) { daemons[session.id.uuidString, default: [:]][role] = name }
             }
         }
-        let tree = store.controlTree(paneForeground: { _ in nil }, app: identity)
+        let tree = tree()
         let window = RemoteWindowProjection(id: catalog.id.uuidString, name: catalog.name, tree: tree)
         let endpoint = ControlZmxEndpoint(executable: panes.configuration.zmxPath,
                                           socketDirectory: panes.configuration.zmxSocketDirectory)

@@ -208,12 +208,7 @@ public final class WindowLibrary {
 
     /// Reads the app-wide ring and maps both pages and cursor failures onto the stable control response.
     public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
-        switch controlEventRing.read(cursor: options.cursor, kinds: options.kinds, limit: options.limit) {
-        case .batch(let batch):
-            return ControlResponse(ok: true, result: ControlResult(events: batch))
-        case .failure(let error, let anchor):
-            return ControlResponse(ok: false, result: ControlResult(events: anchor), error: error.rawValue)
-        }
+        controlEventRing.readResponse(options)
     }
 
     /// Appends `app.launched` on the first call of a run, and only when `ready`. The caller picks the

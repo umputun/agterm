@@ -179,12 +179,56 @@ extension ServerActions {
             case .success(let resolved): identity = resolved.identity
             case .failure(let refusal): return refusal.response
             }
-            guard let screen = panes.runner.screen(panes.daemonName(for: identity), all: options.all) else {
+            guard let screen = panes.runner.screen(panes.daemonName(for: identity), all: options.all || options.lines != nil) else {
                 return ControlResponse(ok: false, error: "failed to read surface buffer")
             }
             let text = options.lines.map(screen.lastLines) ?? screen.text
             return ControlResponse(ok: true, result: ControlResult(text: text))
         }
+    }
+
+    public func readSurfaceCursor(_ target: String?, window: String?) -> ControlResponse {
+        readSurfaceCursor(target, window: window, paneID: nil)
+    }
+
+    /// readSurfaceCursor answers from the pane daemon's screen. The server has no window, so `active` is the
+    /// selected session's focused pane, and overlay and quick surfaces, which live on a presenting Mac, are refused.
+    public func readSurfaceCursor(_ target: String?, window: String?, paneID: String?) -> ControlResponse {
+        let raw = target ?? "active"
+        if let paneID, !paneID.isEmpty {
+            guard raw != "quick", TerminalSurfaceID(rawValue: raw) == nil else {
+                return ControlResponse(ok: false, error: "surface.cursor: --pane-id takes a session target")
+            }
+            return withSession(raw, window: window) { cursorResponse($0, token: paneID, pane: nil) }
+        }
+        if raw == "active" {
+            return withSession(raw, window: window) { cursorResponse($0, token: nil, pane: $0.focusedPane == .right ? .right : .left) }
+        }
+        guard let surfaceID = TerminalSurfaceID(rawValue: raw) else {
+            return ControlResponse(ok: false, error: raw == "quick" ? "surface not available: quick" : "invalid surface: \(raw)")
+        }
+        let pane: StatusPane
+        switch surfaceID.surface {
+        case .primary: pane = .left
+        case .split: pane = .right
+        case .scratch: pane = .scratch
+        case .overlay, .overlayLeft, .overlayRight: return ControlResponse(ok: false, error: "surface not available: \(raw)")
+        }
+        return withSession(surfaceID.sessionID.uuidString, window: window) { cursorResponse($0, token: nil, pane: pane) }
+    }
+
+    private func cursorResponse(_ session: Session, token: String?, pane: StatusPane?) -> ControlResponse {
+        let resolved: (identity: UUID, pane: StatusPane)
+        switch daemonPane(of: session, token: token, pane: pane) {
+        case .success(let found): resolved = found
+        case .failure(let refusal): return refusal.response
+        }
+        guard let screen = panes.runner.screen(panes.daemonName(for: resolved.identity), all: false),
+              let surface = TerminalZoomSurface(controlName: resolved.pane.rawValue) else {
+            return ControlResponse(ok: false, error: "failed to read surface cursor")
+        }
+        return ControlResponse(ok: true, result: ControlResult(id: TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue,
+                                                               cursor: ControlCursor(column: screen.cursorColumn)))
     }
 
     public func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse {

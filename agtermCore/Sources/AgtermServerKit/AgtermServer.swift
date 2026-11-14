@@ -28,12 +28,12 @@ public final class AgtermServer {
     private var socket: ServerControlSocket?
 
     private init(configuration: ServerConfiguration, store: AppStore, catalog: CatalogRoot, identity: AppIdentity,
-                 panes: ServerPanes, lock: StateDirectoryLock) {
+                 panes: ServerPanes, events: ServerEvents, lock: StateDirectoryLock) {
         self.configuration = configuration
         self.store = store
         self.catalog = catalog
         self.lock = lock
-        actions = ServerActions(store: store, catalog: catalog, identity: identity, panes: panes)
+        actions = ServerActions(store: store, catalog: catalog, identity: identity, panes: panes, events: events)
         observer = PaneObserver(store: store, panes: panes)
         observer.onRespawn = { [weak actions] session, daemon in actions?.streams.noteRespawn(session: session, daemon: daemon) }
         observer.onApplied = { [weak actions] in actions?.streams.catalogHub.refresh() }
@@ -59,7 +59,8 @@ public final class AgtermServer {
         let panes = ServerPanes(configuration: configuration, runner: runner, shellPath: configuration.loginShell,
                                 catalogID: catalog.id, programVersion: identity.version, environment: environment)
         let persistence = PersistenceStore(directory: directory)
-        let store = AppStore(persistence: persistence, paneFinalizer: { identities in
+        let events = ServerEvents(window: catalog.id)
+        let store = AppStore(persistence: persistence, controlEventSink: { events.receive($0) }, paneFinalizer: { identities in
             MainActor.assumeIsolated { panes.end(identities) }
         }, headless: true)
         if FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspaces.json").path) {
@@ -73,7 +74,7 @@ public final class AgtermServer {
         store.save()
 
         let server = AgtermServer(configuration: configuration, store: store, catalog: catalog, identity: identity,
-                                  panes: panes, lock: lock)
+                                  panes: panes, events: events, lock: lock)
         // an operation that committed in an earlier run is answered at a revision this run's viewers can reach
         store.catalogOperations?.adopt(epoch: server.actions.streams.catalogHub.epoch, rev: server.actions.streams.catalogHub.rev)
         let socket = ServerControlSocket(path: configuration.socketPath, handler: { [weak server] request in

@@ -200,16 +200,16 @@
 - Tests: `AgtermServerTests/ServerActionsSessionsTests.swift`, `ServerActionsTests.swift`, `ServerActionsRemoteTests.swift`,
   `PaneObserverTests.swift`, `AgtermServerTests.swift`, `ServerCommandPolicyTests.swift`, `agtermCoreTests/CatalogRootTests.swift`
 
-- [ ] failing test: server `session text --lines N` returns lines from scrollback beyond the viewport; fix
+- [x] failing test: server `session text --lines N` returns lines from scrollback beyond the viewport; fix
       `readSessionText` to request the full buffer when `lines` is set, as the Mac's `coveredText` does; make the
       server test stub honor `all`
-- [ ] events: event sink and ring on the server store, serve `events.read`; `session wait` works on the host
-- [ ] serve `session.info` with its auto-hide timer on the server
-- [ ] serve `surface.cursor` from `ZmxScreen`'s cursor position
-- [ ] foreground argv and shell name in the server `tree` and in the remote tree a viewer reads
-- [ ] serve `zmx.list` and `zmx.screen` over the server's daemon namespace
-- [ ] policy test: these commands leave `undecided`, pinned refusal arguments updated
-- [ ] tests for each command, success and refusal paths; `swift test --filter AgtermServerTests` passes
+- [x] events: event sink and ring on the server store, serve `events.read`; `session wait` works on the host
+- [x] serve `session.info` with its auto-hide timer on the server
+- [x] serve `surface.cursor` from `ZmxScreen`'s cursor position
+- [x] foreground argv and shell name in the server `tree` and in the remote tree a viewer reads
+- [x] serve `zmx.list` and `zmx.screen` over the server's daemon namespace
+- [x] policy test: these commands leave `undecided`, pinned refusal arguments updated
+- [x] tests for each command, success and refusal paths; `swift test --filter AgtermServerTests` passes
 
 ### Task 2: Status and unseen clear at the origin
 

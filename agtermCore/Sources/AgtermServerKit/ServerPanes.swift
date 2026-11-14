@@ -15,6 +15,8 @@ final class ServerPanes {
     let programVersion: String
     /// The server's own environment, without the variables a pane gets from the server itself.
     let baseEnvironment: [String: String]
+    /// leaders is each listed pane's shell pid from the last applied listing, which the tree's foreground reads start at.
+    var leaders: [UUID: Int32] = [:]
     private var startedAt: [UUID: Date] = [:]
     /// scratches are the identities this run started under a scratch daemon name, which `end` kills by that name.
     private var scratches: Set<UUID> = []

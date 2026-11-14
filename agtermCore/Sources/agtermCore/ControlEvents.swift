@@ -222,4 +222,14 @@ public final class ControlEventRing {
         }
         return .batch(ControlEventBatch(run: runID, next: currentSequence, items: items))
     }
+
+    /// readResponse is `read` as the `events.read` reply: a failure still carries the anchor to resume from.
+    public func readResponse(_ options: ControlEventReadOptions) -> ControlResponse {
+        switch read(cursor: options.cursor, kinds: options.kinds, limit: options.limit) {
+        case .batch(let batch):
+            return ControlResponse(ok: true, result: ControlResult(events: batch))
+        case .failure(let error, let anchor):
+            return ControlResponse(ok: false, result: ControlResult(events: anchor), error: error.rawValue)
+        }
+    }
 }

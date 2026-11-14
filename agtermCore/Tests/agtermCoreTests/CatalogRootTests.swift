@@ -64,7 +64,7 @@ struct CatalogRootTests {
     }
 
     @Test(arguments: [Command.windowList, .tree, .version, .zmxTree, .zmxPresent, .pickResult, .pickCancel,
-                      .sessionNew, .zmxPrune])
+                      .sessionNew, .zmxPrune, .surfaceCursor])
     func logicalReadsAndSessionCommandsAreNotOnTheList(_ command: Command) {
         #expect(HeadlessCommandPolicy.physicalWindowRefusal(command) == nil)
     }

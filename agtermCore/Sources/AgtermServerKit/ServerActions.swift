@@ -10,13 +10,18 @@ public final class ServerActions: ControlActions {
     let identity: AppIdentity
     let panes: ServerPanes
     let streams: ServerStreams
+    let events: ServerEvents
     var hudAutoHide: [UUID: HudTimer] = [:]
+    var infoAutoHide: [UUID: InfoTimer] = [:]
+    /// foregroundArgv reads the foreground program of the terminal whose shell is the given pid.
+    var foregroundArgv: (Int32) -> [String]? = ProcForeground.argv
     /// operationsUnsaved is set while the operation table holds an entry its last write failed to save.
     var operationsUnsaved = false
 
-    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes,
+    init(store: AppStore, catalog: CatalogRoot, identity: AppIdentity, panes: ServerPanes, events: ServerEvents,
          overlayJobs: OverlayJobs = OverlayJobs()) {
         self.store = store
+        self.events = events
         self.catalog = catalog
         self.identity = identity
         self.panes = panes
@@ -57,7 +62,23 @@ public final class ServerActions: ControlActions {
 
     public func controlTree(window: String?) -> ControlResponse {
         if let refusal = windowRefusal(window) { return refusal }
-        return ControlResponse(ok: true, result: ControlResult(tree: store.controlTree(paneForeground: { _ in nil }, app: identity)))
+        return ControlResponse(ok: true, result: ControlResult(tree: tree()))
+    }
+
+    /// tree is the catalog's tree with each pane's foreground program read through its shell's pid.
+    func tree() -> ControlTree {
+        store.controlTree(paneForeground: { self.foreground(of: $0.paneIdentity) },
+                          splitPaneForeground: { $0.hasSplit ? $0.splitPaneIdentity.flatMap(self.foreground) : nil }, app: identity)
+    }
+
+    private func foreground(of identity: UUID) -> CommandRestore.PaneForeground? {
+        guard let leader = panes.leaders[identity], let argv = foregroundArgv(leader) else { return nil }
+        return CommandRestore.paneForeground(argv: argv, extra: (panes.shellPath as NSString).lastPathComponent)
+    }
+
+    public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
+        events.flushTree()
+        return events.ring.readResponse(options)
     }
 
     public func appIdentity() -> ControlResponse {

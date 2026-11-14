@@ -69,7 +69,7 @@ public enum HeadlessCommandPolicy {
         .windowMove, .windowZoom, .windowFullscreen, .windowMinimize, .windowRemoteOpen,
         .sidebar, .sidebarMode, .sidebarFlaggedLayout, .sidebarDensity, .sidebarExpand, .sidebarCollapse,
         .sidebarWidth, .fontInc, .fontDec, .fontReset, .quick, .quickType, .quickText, .dashboard,
-        .surfaceZoom, .surfaceCursor, .themeSet, .themeList, .keymapReload, .keymapList, .keymapRun,
+        .surfaceZoom, .themeSet, .themeList, .keymapReload, .keymapList, .keymapRun,
         .configReload, .browserClear, .browserLinks,
     ]
 

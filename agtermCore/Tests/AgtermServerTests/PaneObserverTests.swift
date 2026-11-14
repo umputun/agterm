@@ -271,4 +271,22 @@ struct PaneObserverTests {
     func theForegroundGroupIsReadPastTheCommandName(stat: String, group: Int32?) {
         #expect(ProcCwd.parseForegroundGroup(stat) == group)
     }
+
+    @Test func aListingRecordsEachListedPanesLeader() throws {
+        let session = try session(split: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        observer.apply([record(session.paneIdentity, pid: 100), record(split, pid: 200)], listedAt: later)
+        #expect(harness.panes.leaders == [session.paneIdentity: 100, split: 200])
+
+        observer.apply([record(session.paneIdentity, pid: 300)], listedAt: Date().addingTimeInterval(-60))
+        #expect(harness.panes.leaders == [session.paneIdentity: 300])
+    }
+
+    @Test func cmdlineSplitsOnNulAndDropsTheTrailingOne() {
+        #expect(ProcForeground.parseCmdline(Data("vim\u{0}notes.md\u{0}".utf8)) == ["vim", "notes.md"])
+        #expect(ProcForeground.parseCmdline(Data("-zsh\u{0}".utf8)) == ["-zsh"])
+        #expect(ProcForeground.parseCmdline(Data("sh\u{0}\u{0}x\u{0}".utf8)) == ["sh", "", "x"])
+        #expect(ProcForeground.parseCmdline(Data()) == nil)
+    }
 }
