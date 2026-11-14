@@ -179,6 +179,27 @@ struct AppStoreMessagesTests {
         #expect(f.store.messageRecipients().map(\.pane) == [f.session.paneIdentity])
     }
 
+    @Test func aRemoteSessionIsRefusedByNameAndAMissingLocalPaneIsNot() throws {
+        let f = try fixture()
+        let remote = try #require(f.store.addSession(toWorkspace: f.work.id, cwd: "/r", remoteHost: "buildbox"))
+        remote.surface = SpySurface(paneToken: remote.paneIdentity.uuidString)
+        let missing = UUID()
+
+        guard case .failure(let refused) = f.store.messagePane(session: remote.id, pane: .role(.left)) else {
+            Issue.record("a remote session resolved")
+            return
+        }
+        guard case .failure(let absent) = f.store.messagePane(session: f.session.id, pane: .id(missing)) else {
+            Issue.record("a missing pane resolved")
+            return
+        }
+
+        #expect(refused == MessagePaneError("session \(remote.id.uuidString) is a remote session: a local pane cannot message it",
+                                            detail: "remote session"))
+        #expect(absent == MessagePaneError("pane \(missing.uuidString) is not a live pane of session \(f.session.id.uuidString)"))
+        #expect(try f.store.messagePane(session: f.session.id, pane: .role(.left)).get().pane == f.session.paneIdentity)
+    }
+
     @Test func broadcastListsEveryLivePaneOrOneWorkspacesPanes() throws {
         let f = try fixture(split: true, scratch: true)
         let elsewhere = try #require(f.store.addSession(toWorkspace: f.store.workspaces[1].id, cwd: "/e"))

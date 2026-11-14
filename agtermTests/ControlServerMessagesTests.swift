@@ -73,6 +73,21 @@ final class ControlServerMessagesTests: XCTestCase {
         XCTAssertEqual(MessageBus.shared.pending(for: sender.paneIdentity), 0)
     }
 
+    func testARemoteRowIsRejectedByNameAndRefusedAsAnIdentity() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let local = try liveSession(in: store)
+        let remote = try liveSession(in: store, remote: "buildbox")
+        let remoteLeft = "\(remote.id.uuidString):left"
+
+        let sent = await send(ControlArgs(body: "hi", recipients: [remoteLeft, address(local)]))
+        let asRemote = await send(ControlArgs(body: "hi", recipients: [address(local)], identity: address(remote)))
+
+        XCTAssertEqual(sent?.result?.delivered, [address(local)])
+        XCTAssertEqual(sent?.result?.rejected, [MessageRejection(address: remoteLeft, reason: .unknownPane, detail: "remote session")])
+        XCTAssertEqual(asRemote?.error, "session \(remote.id.uuidString) is a remote session: a local pane cannot message it")
+        XCTAssertEqual(MessageBus.shared.pending(for: local.paneIdentity), 1)
+    }
+
     func testAnAnonymousBroadcastReachesEveryPane() async throws {
         let store = try XCTUnwrap(library.activeStore)
         let panes = try (0..<2).map { _ in try liveSession(in: store) }

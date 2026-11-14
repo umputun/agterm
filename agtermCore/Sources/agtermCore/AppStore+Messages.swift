@@ -29,6 +29,19 @@ extension AppStore {
         return found.map { MessageRecipient(pane: $0, address: MessageAddress.canonical(session: session.id, pane: $0)) }
     }
 
+    /// messagePane is `messageRecipient` with the reason it fails. A remote row is refused by name: its panes live
+    /// in another host's bus, which no message from this one reaches.
+    public func messagePane(session sessionID: UUID, pane: MessageAddress.Pane) -> Result<MessageRecipient, MessagePaneError> {
+        if session(withID: sessionID)?.remoteHost != nil {
+            return .failure(MessagePaneError("session \(sessionID.uuidString) is a remote session: a local pane cannot message it",
+                                             detail: "remote session"))
+        }
+        guard let recipient = messageRecipient(session: sessionID, pane: pane) else {
+            return .failure(MessagePaneError("pane \(pane.text) is not a live pane of session \(sessionID.uuidString)"))
+        }
+        return .success(recipient)
+    }
+
     /// messageRecipients lists every live pane of this store's local sessions, or of one workspace's.
     public func messageRecipients(workspace: UUID? = nil) -> [MessageRecipient] {
         workspaces.filter { workspace == nil || $0.id == workspace }.flatMap(\.sessions)
@@ -53,8 +66,13 @@ extension AppStore {
         return true
     }
 
-    /// livePanes are the session's panes a message can reach: a realized surface carrying a pane token.
+    /// livePanes are the session's panes a message can reach: a realized surface carrying a pane token, or on a
+    /// headless store, which has no surfaces, a pane whose daemon it owns.
     private func livePanes(of session: Session) -> [(role: StatusPane, pane: UUID)] {
+        if headless {
+            let roles: [(StatusPane, CommandContext.Pane)] = [(.left, .left), (.right, .right), (.scratch, .scratch)]
+            return roles.compactMap { role, pane in UUID(uuidString: session.paneToken(for: pane)).map { (role, $0) } }
+        }
         let slots: [(StatusPane, (any TerminalSurface)?)] = [
             (.left, session.surface), (.right, session.splitSurface), (.scratch, session.scratchSurface),
         ]

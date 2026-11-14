@@ -12,10 +12,13 @@ public struct MessagePaneError: Error, Equatable, Sendable {
 
     public let message: String
     public let kind: Kind
+    /// detail becomes an `.unresolved` recipient's `MessageRejection.detail`.
+    public let detail: String?
 
-    public init(_ message: String, kind: Kind = .unresolved) {
+    public init(_ message: String, kind: Kind = .unresolved, detail: String? = nil) {
         self.message = message
         self.kind = kind
+        self.detail = detail
     }
 }
 
@@ -64,7 +67,7 @@ extension ControlDispatcher {
                 switch actions.resolveMessagePane(address) {
                 case .success(let recipient): targets.append(recipient)
                 case .failure(let error) where error.kind == .unsupported: return failure(error.message)
-                case .failure: rejected.append(MessageRejection(address: text, reason: .unknownPane))
+                case .failure(let error): rejected.append(MessageRejection(address: text, reason: .unknownPane, detail: error.detail))
                 }
             }
         }

@@ -969,8 +969,11 @@ final class MockControlActions: ControlActions {
     /// messagesUnsupported answers what the `ControlActions` default answers, for a host without the bus.
     var messagesUnsupported = false
 
+    var messageFailures: [MessageAddress: MessagePaneError] = [:]
+
     func resolveMessagePane(_ address: MessageAddress) -> Result<MessageRecipient, MessagePaneError> {
         if messagesUnsupported { return .failure(.unsupported) }
+        if let failure = messageFailures[address] { return .failure(failure) }
         guard let recipient = messagePanes[address] else {
             let pane = switch address.pane {
             case .id(let id): id.uuidString

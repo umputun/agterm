@@ -135,4 +135,18 @@ struct MessageBusTests {
         #expect(bus.read(pane: paneA).messages.isEmpty)
         #expect(bus.pending(for: paneB) == 1)
     }
+
+    private struct LegacyRejection: Decodable, Equatable {
+        let address: String
+        let reason: MessageRejection.Reason
+    }
+
+    @Test func aRejectionDetailIsOmittedWhenNilAndIgnoredByAClientThatPredatesIt() throws {
+        let plain = try JSONEncoder().encode(MessageRejection(address: "a:b", reason: .unknownPane))
+        let detailed = try JSONEncoder().encode(MessageRejection(address: "a:b", reason: .unknownPane, detail: "remote session"))
+
+        #expect(String(decoding: plain, as: UTF8.self).contains("detail") == false)
+        #expect(try JSONDecoder().decode(MessageRejection.self, from: detailed).detail == "remote session")
+        #expect(try JSONDecoder().decode(LegacyRejection.self, from: detailed) == LegacyRejection(address: "a:b", reason: .unknownPane))
+    }
 }
