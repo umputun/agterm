@@ -95,6 +95,9 @@ public final class Session: Identifiable {
     /// never saved.
     public var scratchDaemon: ScratchDaemon?
 
+    /// catalogMail is a remote window row's unacked mail per pane identity, as its server's catalog last reported it.
+    @ObservationIgnored var catalogMail: [UUID: Int] = [:]
+
     /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
     @ObservationIgnored var scratchStoppedGeneration: Int?
 

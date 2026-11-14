@@ -397,7 +397,7 @@ public final class AppStore {
                                               lead: ZmxLeadBook.shared.role(pane: pane),
                                               reconnect: RemoteReconnectBook.shared.readback(pane: pane),
                                               paneID: token?.isEmpty == false ? token : nil,
-                                              pendingMessages: pendingMessages(token: token))
+                                              pendingMessages: pendingMessages(session, pane: pane, token: token))
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: (session.content == .page ? parent(of: session) : nil)?.effectiveCwd
@@ -424,6 +424,8 @@ public final class AppStore {
                                           ended: session.ended ? true : nil,
                                           pending: remoteActions?.pendingState(of: session.id),
                                           scratchBacked: isRemoteWindow && session.scratchDaemon != nil ? true : nil,
+                                          scratchPaneID: session.scratchDaemon?.identity.uuidString,
+                                          scratchPendingMessages: scratchPendingMessages(session),
                                           interactions: interactionNodes(session),
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           splitCommandWait: (session.splitInitialCommand != nil && session.splitCommandWait)

@@ -146,31 +146,31 @@
   `ServerCatalogTests.swift`, `RemoteCatalogMirrorTests.swift`, `PresentationFramesTests.swift`,
   `RemotePresentationClientTests.swift`, `ServerActionsMessagesTests.swift`
 
-- [ ] failing lifetime tests: ended session drops main/split mail and keeps a running scratch's; session and
+- [x] failing lifetime tests: ended session drops main/split mail and keeps a running scratch's; session and
       workspace deletion drops a daemon scratch's mail; split close and promotion keep the survivor's mail;
       viewer detach keeps all mail
-- [ ] failing read-back tests: server tree `pendingMessages` on main and split and `scratchPaneID`/
+- [x] failing read-back tests: server tree `pendingMessages` on main and split and `scratchPaneID`/
       `scratchPendingMessages` on the session; the count omitted at zero in the tree and the encoded
       `CatalogPane`; an old frame without it decodes; the Mac tree shows a remote row's main, split and scratch
       counts, before and after a local scratch surface is realized, through hide/show, and drops them at zero; a
       count-only `pane.changed` and a scratch-count-only `session.changed` trigger no re-attach and no scratch
       close; scratch replacement clears the old identity's count; an ended row's surviving scratch still updates
-- [ ] failing event tests: one `message` frame per delivered pane (several panes of one session each get one) with
+- [x] failing event tests: one `message` frame per delivered pane (several panes of one session each get one) with
       pane, from and message id and no body; two subscribers to the recipient session (one presenter, one
       mirror) each emit exactly one event per delivered pane; a subscription to the sender's session alone gets
       none; companion, hidden split and hidden never-materialized scratch recipients emit without a local
       surface; an ended row's scratch emits; a full mailbox emits none; an unknown kind stays ignored; a
       reconnect snapshot emits no message events
-- [ ] dispose at `markSessionEnded` by departing identity; `disposeMailboxes(of:)` also covers `scratchDaemon`
-- [ ] session-level scratch fields on origin and mirror; `pendingMessages` on `CatalogPane` from
+- [x] dispose at `markSessionEnded` by departing identity; `disposeMailboxes(of:)` also covers `scratchDaemon`
+- [x] session-level scratch fields on origin and mirror; `pendingMessages` on `CatalogPane` from
       `catalogWorkspaces`, mirrored on the row's `Session` and read by `controlTree` for `remoteHost` rows
-- [ ] `messageQueued` on `ServerActions` calls `presentationHub.publish(.message(...), session:)` per delivered
+- [x] `messageQueued` on `ServerActions` calls `presentationHub.publish(.message(...), session:)` per delivered
       pane, never `sendToPresenter`; `message` joins `PresentationHub.supportedKinds`
-- [ ] `RemotePresentationClient.apply` handles `.message` outside any presenter check, as `.notify`, through a new
+- [x] `RemotePresentationClient.apply` handles `.message` outside any presenter check, as `.notify`, through a new
       `RemotePresentationEffects` callback with a default for existing callers; the Mac emits the event bound to
       the local row, its window and workspace and the transported pane UUID, without `messageRecipient`/
       `livePanes`, and never republishes it
-- [ ] run the Task 2 suites - must pass
+- [x] run the Task 2 suites - must pass
 
 ### Task 3: Classify every command for the server, then docs and gates
 

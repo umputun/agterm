@@ -228,6 +228,23 @@ struct AppStoreMessagesTests {
                                                                                 from: "S:Q", messageID: id.uuidString))])
     }
 
+    @Test func aServerMessageEmitsItsEventOnTheRowItArrivedFor() throws {
+        let drafts = DraftCollector()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { drafts.items.append($0) })
+        let work = store.addWorkspace(name: "work")
+        let row = try #require(store.addSession(toWorkspace: work.id, cwd: "/r", remoteHost: "buildbox"))
+        let message = PresentationMessage(pane: UUID(), from: "S:Q", messageID: UUID())
+        drafts.items.removeAll()
+
+        store.emitRemoteMessage(message, forSession: row.id)
+        store.emitRemoteMessage(message, forSession: UUID())
+
+        #expect(drafts.items == [ControlEventDraft(kind: .message, workspace: work.id.uuidString, session: row.id.uuidString,
+                                                   payload: ControlEventPayload(name: row.displayName, paneID: message.pane.uuidString,
+                                                                                from: "S:Q", messageID: message.messageID.uuidString))])
+    }
+
     @Test func theTreeReportsAPanesPendingCountAndOmitsZero() throws {
         let f = try fixture(split: true)
         let split = try #require(f.session.splitPaneIdentity)

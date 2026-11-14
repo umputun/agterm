@@ -92,6 +92,7 @@ extension AppStore {
             emitSessionCreated(session, workspace: workspaceID)
         }
         applyCatalogScratch(session, fields.scratch, context: context)
+        applyCatalogMail(session, entry: entry)
         return session
     }
 
@@ -107,6 +108,7 @@ extension AppStore {
         if session.parentID != fields.parent { session.parentID = fields.parent }
         let presented = session.presentsCatalog
         applyCatalogScratch(session, fields.scratch, context: context)
+        applyCatalogMail(session, entry: entry)
         if fields.lifecycle == .ended {
             if !session.ended {
                 session.ended = true

@@ -163,4 +163,168 @@ struct ServerActionsMessagesTests {
         #expect(sent.result?.delivered == [])
         #expect(sent.result?.rejected == [MessageRejection(address: "\(row.id.uuidString):left", reason: .unknownPane)])
     }
+
+    private final class FrameSink: PresentationSink {
+        var messages: [PresentationMessage] = []
+        func offer(_ frame: PresentationFrame) -> Bool {
+            if case .message(let message) = frame.body { messages.append(message) }
+            return true
+        }
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    private func subscribe(_ session: Session, mode: PresentationMode = .mirror) throws -> FrameSink {
+        let sink = FrameSink()
+        let hub = try #require(harness.store.presentationHub)
+        _ = try hub.subscribe(session: session.id, hello: PresentationHello(version: PresentationCodec.version,
+                                                                            kinds: PresentationHub.supportedKinds, mode: mode),
+                              sink: sink) { harness.store.presentationSnapshot(forSession: session.id) }
+        return sink
+    }
+
+    private func splitWithScratch() async throws -> (session: Session, right: UUID, scratch: UUID) {
+        let session = try await newSession()
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "on", command: nil)
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "off", command: nil)
+        return (session, try #require(session.splitPaneIdentity), try #require(session.scratchDaemon?.identity))
+    }
+
+    private func deliver(_ count: Int, to pane: UUID) throws {
+        for _ in 0..<count { _ = try MessageBus.shared.send("m", from: nil, to: [MessageRecipient(pane: pane, address: "S:\(pane)")], now: 1) }
+    }
+
+    @Test func anEndedRowDropsItsMainAndSplitMailAndKeepsItsRunningScratchs() async throws {
+        let (session, right, scratch) = try await splitWithScratch()
+        let main = session.paneIdentity
+        try [main, right, scratch].forEach { try deliver(1, to: $0) }
+
+        harness.store.markSessionEnded(session.id)
+
+        #expect([main, right, scratch].map(MessageBus.shared.pending(for:)) == [0, 0, 1])
+        MessageBus.shared.dispose(pane: scratch)
+    }
+
+    @Test(arguments: [false, true])
+    func closingASessionOrItsWorkspaceDropsItsScratchMail(workspace: Bool) async throws {
+        let created = await harness.actions.serve(ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "doomed")))
+        let workspaceID = try #require(created.result?.id)
+        let session = try harness.session(await harness.actions.serve(ControlRequest(cmd: .sessionNew,
+                                                                                     args: ControlArgs(workspace: workspaceID))))
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "on", command: nil)
+        let scratch = try #require(session.scratchDaemon?.identity)
+        try deliver(1, to: scratch)
+
+        let request = workspace ? ControlRequest(cmd: .workspaceDelete, target: workspaceID)
+            : ControlRequest(cmd: .sessionClose, target: session.id.uuidString)
+        #expect(await harness.actions.serve(request).ok)
+
+        #expect(MessageBus.shared.pending(for: scratch) == 0)
+    }
+
+    @Test func closingASplitOrThePrimaryKeepsTheSurvivorsMail() async throws {
+        let first = try await newSession()
+        _ = harness.actions.splitSession(first.id.uuidString, window: nil, mode: "on")
+        let (main, split) = (first.paneIdentity, try #require(first.splitPaneIdentity))
+        try deliver(1, to: main)
+        try deliver(1, to: split)
+
+        _ = await harness.actions.serve(ControlRequest(cmd: .sessionSplitClose, target: first.id.uuidString))
+
+        #expect([main, split].map(MessageBus.shared.pending(for:)) == [1, 0])
+        MessageBus.shared.dispose(pane: main)
+
+        let second = try await newSession()
+        _ = harness.actions.splitSession(second.id.uuidString, window: nil, mode: "on")
+        let (primary, survivor) = (second.paneIdentity, try #require(second.splitPaneIdentity))
+        try deliver(1, to: primary)
+        try deliver(1, to: survivor)
+
+        #expect(harness.store.closePrimaryPane(second.id) == .promoted)
+
+        #expect(second.paneIdentity == survivor)
+        #expect([primary, survivor].map(MessageBus.shared.pending(for:)) == [0, 1])
+        MessageBus.shared.dispose(pane: survivor)
+    }
+
+    @Test func aViewerLeavingKeepsTheMail() async throws {
+        let session = try await newSession()
+        let hub = try #require(harness.store.presentationHub)
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: PresentationCodec.version, kinds: [], mode: .presenter),
+                                   sink: FrameSink()) { harness.store.presentationSnapshot(forSession: session.id) }
+        try deliver(1, to: session.paneIdentity)
+
+        hub.unsubscribe(id)
+
+        #expect(MessageBus.shared.pending(for: session.paneIdentity) == 1)
+        MessageBus.shared.dispose(pane: session.paneIdentity)
+    }
+
+    @Test func theTreeReportsPaneMailOnItsSurfacesAndTheScratchsOnTheSession() async throws {
+        let (session, right, scratch) = try await splitWithScratch()
+        try deliver(2, to: session.paneIdentity)
+        try deliver(1, to: right)
+        try deliver(3, to: scratch)
+        let node = { () throws -> ControlSessionNode in
+            let tree = try #require(self.harness.actions.controlTree(window: nil).result?.tree)
+            return try #require(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+        }
+
+        let loaded = try node()
+        [session.paneIdentity, right, scratch].forEach { MessageBus.shared.dispose(pane: $0) }
+        let empty = try node()
+
+        #expect(loaded.surfaces?.first { $0.kind == "left" }?.pendingMessages == 2)
+        #expect(loaded.surfaces?.first { $0.kind == "right" }?.pendingMessages == 1)
+        #expect(loaded.scratchPaneID == scratch.uuidString)
+        #expect(loaded.scratchPendingMessages == 3)
+        #expect(empty.surfaces?.allSatisfy { $0.pendingMessages == nil } == true)
+        #expect(empty.scratchPaneID == scratch.uuidString)
+        #expect(empty.scratchPendingMessages == nil)
+    }
+
+    @Test func theCatalogCarriesEachPanesCountAndOmitsZero() async throws {
+        let (session, right, scratch) = try await splitWithScratch()
+        try deliver(2, to: right)
+        try deliver(1, to: scratch)
+
+        let entry = try #require(harness.actions.catalogWorkspaces().flatMap(\.sessions).first { $0.id == session.id })
+        [right, scratch].forEach { MessageBus.shared.dispose(pane: $0) }
+
+        #expect(entry.panes.map(\.pendingMessages) == [nil, 2])
+        #expect(entry.fields.scratch?.pane.pendingMessages == 1)
+    }
+
+    @Test func eachDeliveredPaneIsPublishedOnceToEverySubscriberOfItsSession() async throws {
+        let (target, right, scratch) = try await splitWithScratch()
+        let sender = try await newSession()
+        let (presenter, mirror, own) = (try subscribe(target, mode: .presenter), try subscribe(target), try subscribe(sender))
+        let from = address(sender, sender.paneIdentity)
+        let prefix = target.id.uuidString
+
+        let sent = await send("secret", to: ["\(prefix):left", "\(prefix):right", "\(prefix):scratch"], as: from)
+
+        let id = try #require(sent.result?.messageID.flatMap(UUID.init(uuidString:)))
+        let expected = [target.paneIdentity, right, scratch].map { PresentationMessage(pane: $0, from: from, messageID: id) }
+        #expect(presenter.messages == expected)
+        #expect(mirror.messages == expected)
+        #expect(own.messages.isEmpty)
+        [target.paneIdentity, right, scratch].forEach { MessageBus.shared.dispose(pane: $0) }
+    }
+
+    @Test func anEndedRowsScratchIsPublishedAndAFullMailboxIsNot() async throws {
+        let ended = try await newSession()
+        _ = harness.actions.scratchSession(ended.id.uuidString, window: nil, mode: "on", command: nil)
+        let scratch = try #require(ended.scratchDaemon?.identity)
+        harness.store.markSessionEnded(ended.id)
+        let full = try await newSession()
+        try deliver(MessageBus.maxMessages, to: full.paneIdentity)
+        let (endedSink, fullSink) = (try subscribe(ended), try subscribe(full))
+
+        _ = await send("x", to: ["\(ended.id.uuidString):scratch", "\(full.id.uuidString):left"])
+
+        #expect(endedSink.messages.map(\.pane) == [scratch])
+        #expect(fullSink.messages.isEmpty)
+        [scratch, full.paneIdentity].forEach { MessageBus.shared.dispose(pane: $0) }
+    }
 }
