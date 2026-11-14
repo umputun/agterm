@@ -37,6 +37,21 @@ struct AppStoreLinkClickRequestTests {
         #expect(try right.get().pane == Self.remoteRight)
     }
 
+    @Test func aClickInAScratchRunningOnTheOriginTravelsWithTheScratchIdentity() throws {
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", remoteHost: "buildbox"))
+        store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: Self.remoteLeft)],
+                                       presentationVersion: 1, catalogOwned: true), forSession: session.id)
+        store.setRemoteMode(.presenter, forSession: session.id)
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+
+        let request = store.linkClickRequest(click(session, pane: scratch), originSupportsClick: true, hidden: false)
+
+        #expect(try request.get() == PresentationLinkClick(raw: "src/a.py:3", pane: scratch, mode: .overlay75))
+        #expect(store.linkClickRequest(click(session, pane: scratch), originSupportsClick: false, hidden: false) == .failure(.originTooOld))
+    }
+
     @Test func eachReasonAClickCannotTravelIsNamed() throws {
         let mirror = try attached(mode: .mirror)
         #expect(store.linkClickRequest(click(mirror, pane: mirror.paneIdentity), originSupportsClick: true, hidden: false)

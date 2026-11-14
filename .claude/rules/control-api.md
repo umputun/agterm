@@ -781,7 +781,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `openDocumentLink` the same way, and one `TextPage.isEligible` accepts routes to `openTextLink` the same
   way; any other local path is revealed. A pane of a session with `remoteHost` is `.remotePane`: its bare, relative and
   `file://` paths (any host) name files on the far Mac and route to `.forwardRemote`, which reveals nothing here; every
-  other local route from it is `.ignore`. Its scratch stays `.scratch` because that shell is local.
+  other local route from it is `.ignore`. Its scratch is `.scratch` while that shell is local; one running on the
+  row's origin (`Session.originScratch`) is `.remotePane`, and its click names the origin's scratch identity, which
+  `forwardedClickPane` resolves with the scratch's cwd (`PaneObserver` tracks it on agterm-server).
 - A forwarded click (`ControlServer+RemoteLinkClick`, `+ForwardedClick`) travels as `link.click` only while this Mac
   presents the session and the origin agreed the `link.click` kind (`RemotePresentationClient.originSupports`), with the
   ORIGIN's pane identity (`AppStore.linkClickRequest`). The origin resolves it with that pane's cwd and opens only page
@@ -797,14 +799,22 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   one the refusal opened (`remoteLinkRefusalHuds`), since nothing would show it again. ⌘⌥ refuses before anything is
   sent. The click is a
   gesture with no control command: its page reads back as the replica page on the session node.
+- A web link to an exact loopback host, clicked in a program running on another host (a remote pane, a scratch on
+  its origin, an overlay running an origin job: `linkClickRemoteSession`), opens the local end of a forward to that
+  host, never this Mac's loopback. `LinkOpener.loopback` asks `ControlServer.forwardLoopback`, and the browser or
+  overlay opens once the forward answers, with path, query and fragment kept. `LinkForwards` shares one forward per
+  host and port: on a remote window's pool until the window closes, else in its own ssh until the last attached row
+  using it is released. Each waiting click opens its own address, a row that goes away gets nothing, and a failed
+  forward is refused on the row as `RemoteLinkRefusal.forwardFailed`, which never travels. It is no
+  `LinkPolicy.Route` case, since the agterm-linux fork switches over `Route` exhaustively.
 - Session links use `LinkPolicy.sessionLink`: exactly `agterm://session/` (case-insensitive prefix) plus a
   36-character hyphenated UUID (either case), with no suffix, query, fragment, credentials, port or encoding.
   The raw string is checked, not URL components, so even an empty port is refused.
   The `.selectSession` route precedes remote forwarding in every link-open mode, from pane, remote pane and
   scratch only; quick terminal and program overlay clicks are ignored, as for the link-open overlay.
   `WindowLibrary.sessionLinkTarget` takes the namespace from the clicked pane's binding: local shells use local
-  ids, mapped remote panes and catalog-owned scratches use the origin host and endpoint, and local splits use
-  local ids; a scratch on any other row uses local ids.
+  ids, mapped remote panes, catalog-owned scratches and a scratch running on its origin use the origin host and
+  endpoint, and local splits use local ids; a scratch on any other row uses local ids.
   A remote pane click with no binding or no clicked pane, a mapped pane whose binding has no origin endpoint,
   and ambiguous origin matches select nothing.
   `Session.showsOriginSession`, shared with `attachedParentRows`, matches that origin identity.
@@ -2216,8 +2226,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   is not read back. `overlay.text` and `overlay.copy` refuse with `overlay is shown on another Mac`. Read the
   reservation back as `remoteOverlays` (`pane`, `sizePercent`, `pageID` for a page) on the origin's session node.
 - A new PAGE follows the same placement rule and the same presenter, gated on the page kinds in its hello; an
-  older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for it is refused
-  (`remoteLoopback`), since it names a server on the origin, as is an open request over one presentation frame
+  older presenter keeps the refusal `OverlayHtmlError.presenter`, and a loopback `--url` bound for a presenter not
+  listing `PresentationHub.pageForwardKind` is refused (`remoteLoopback`), since it names a server on the origin, as is an open request over one presentation frame
   (`remoteTooLarge`), before anything is reserved. The origin reserves the slot and registers the page
   id in `HtmlPageOutcomes`, so `result --page` and `--html --block` work unchanged; the presenter shows it under a
   page id of its own (`HtmlOverlay.replicaOf` names the origin's), as `HtmlSource.replica` for a file or an
@@ -2333,8 +2343,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A remote window's terminal row takes `customName` as its own, so an unnamed row follows its terminal title as a
   local one does (#991); a page row takes `name`. An omitted `customName` marks an older server, whose `name` is
   taken instead, so the server sends `""` for an unnamed session, never nil.
-- A loopback URL page on the server opens through `PooledForward` on the row's ssh master, or a standalone
-  `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
+- A loopback URL page on an origin, agterm-server or a Mac, opens through `PooledForward` on the row's ssh master, or
+  a standalone `RemotePortForward`, only for a presenter listing `PresentationHub.pageForwardKind`.
 - The server keeps page rows: `session.page`, `session.companion.page` and `session.companion.page.attach` are
   served, the page rows take operation receipts, and a loopback URL is refused
   (`OverlayHtmlError.serverLoopbackRow`), since a page row has no forward path.

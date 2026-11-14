@@ -30,6 +30,8 @@ public enum RemoteLinkRefusal: String, Equatable, Sendable, CaseIterable {
     case notAPage
     /// notOpened: the other Mac could not open the page, for a busy slot or a pane led from there.
     case notOpened
+    /// forwardFailed: the port forward a loopback link clicked here needs to its host did not come up. Never sent.
+    case forwardFailed
 
     /// message is the refusal's text for a session attached from `host`.
     public func message(host: String) -> String {
@@ -42,6 +44,7 @@ public enum RemoteLinkRefusal: String, Equatable, Sendable, CaseIterable {
         case .notFound: return "no such file on \(host)"
         case .notAPage: return "\(host) cannot show this file as a page"
         case .notOpened: return "\(host) could not open the file here"
+        case .forwardFailed: return "the port forward to \(host) failed"
         }
     }
 }

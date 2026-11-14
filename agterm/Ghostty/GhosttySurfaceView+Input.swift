@@ -639,12 +639,24 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// openLink acts on a clicked terminal link (`GHOSTTY_ACTION_OPEN_URL`); what happens to it is the host-free
     /// `LinkPolicy`'s decision.
     func openLink(_ raw: String, intent: LinkPolicy.ClickIntent) {
-        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent)
+        LinkOpener.shared.follow(raw, from: linkClickOrigin, pane: linkClickPane, cwd: linkClickCwd, intent: intent,
+                                 remote: linkClickRemoteSession)
     }
 
-    /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns.
+    /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns. A scratch
+    /// running on its row's origin is named by the origin's identity, which the click carries there.
     var linkClickPane: UUID? {
-        session.flatMap { isSplitPane ? $0.splitPaneIdentity : $0.paneIdentity }
+        if let session { return isSplitPane ? session.splitPaneIdentity : session.paneIdentity }
+        return scratchOwner?.originScratch
+    }
+
+    /// linkClickRemoteSession is the row whose host runs this surface's program, so a loopback address it prints names
+    /// that host: a remote pane, a scratch on its origin, or an overlay showing an origin job. Nil for what runs here.
+    var linkClickRemoteSession: UUID? {
+        if let session { return session.remoteHost == nil ? nil : session.id }
+        if let owner = scratchOwner { return owner.originScratch == nil ? nil : owner.id }
+        guard hudBodyFile == nil, let owner = focusSession, owner.overlayRunsOnOrigin(self) else { return nil }
+        return owner.id
     }
 
     /// The directory a relative link names a file in: this pane's reported cwd, a local scratch's included. Nil
@@ -661,7 +673,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     var linkClickOrigin: LinkPolicy.ClickOrigin {
         if hudBodyFile != nil { return .hud }
         if let session { return session.remoteHost == nil ? .pane(session.id) : .remotePane(session.id) }
-        if let owner = watermarkSession { return .scratch(owner.id) }
+        if let owner = watermarkSession { return owner.originScratch == nil ? .scratch(owner.id) : .remotePane(owner.id) }
         return focusSession == nil ? .quick : .programOverlay
     }
 }

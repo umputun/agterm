@@ -99,8 +99,8 @@ public final class PresentationHub {
     /// pageLinksKind advertises a markdown page that follows its links under `PresentationPage.markdownLinks`; an older
     /// presenter would fetch the original spelling and `.md` pictures, so it is handed the page without links.
     public static let pageLinksKind = "page.links"
-    /// pageForwardKind is a presenter's capability of reaching a headless origin's loopback URL page through an ssh
-    /// forward it opens.
+    /// pageForwardKind is a presenter's capability of reaching an origin's loopback URL page through an ssh forward it
+    /// opens.
     public static let pageForwardKind = "page.forward"
     /// pageTextKind advertises live text pages: log pages, the text page actions, their `pageResult` answers and the
     /// text state in `pageState`.

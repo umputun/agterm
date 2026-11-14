@@ -18,6 +18,16 @@ struct AppStoreForwardedClickTests {
         #expect(store.forwardedClickPane(session.id, pane: split) == ForwardedClickPane(cwd: "/w/lib"))
     }
 
+    @Test func aForwardedClickNamesTheScratchDaemonByItsOwnDirectory() throws {
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/w/app"))
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+        session.scratchCwd = "/w/app/logs"
+
+        #expect(store.forwardedClickPane(session.id, pane: scratch) == ForwardedClickPane(cwd: "/w/app/logs"))
+    }
+
     @Test func anUnknownPaneOrSessionNamesNothing() throws {
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/w/app"))

@@ -201,6 +201,17 @@ struct PaneObserverTests {
         ZmxSessionRecord(name: ZmxSupport.scratchDaemonName(for: identity), clients: 0, leaderPID: 200)
     }
 
+    @Test func aScratchTakesTheDirectoryItsForegroundProcessIsIn() throws {
+        let session = try session()
+        let identity = try scratch(session)
+        directories.value = [100: "/srv/app", 200: "/srv/app/logs"]
+
+        observer.apply([record(session.paneIdentity, pid: 100), scratchRecord(identity)], listedAt: later)
+
+        #expect(session.cwd(for: .scratch) == "/srv/app/logs")
+        #expect(session.currentCwd == "/srv/app")
+    }
+
     @Test func aScratchWhoseDaemonIsGoneIsClearedAndItsPanesStay() throws {
         let session = try session()
         _ = try scratch(session)
@@ -257,6 +268,11 @@ struct PaneObserverTests {
 
         #expect(session.ended)
         #expect(session.scratchDaemon?.identity == identity)
+
+        directories.value = [200: "/srv/app/logs"]
+        observer.apply([scratchRecord(identity)], listedAt: later)
+
+        #expect(harness.store.forwardedClickPane(session.id, pane: identity)?.cwd == "/srv/app/logs")
 
         observer.apply([], listedAt: later)
 

@@ -23,6 +23,13 @@ extension Session {
         return replicas
     }
 
+    /// overlayRunsOnOrigin says whether `surface` is one of this session's overlay surfaces showing a job whose program
+    /// runs on the origin, so a loopback address it prints names the origin's.
+    public func overlayRunsOnOrigin(_ surface: any TerminalSurface) -> Bool {
+        if overlaySurface === surface { return overlayReplica != nil }
+        return paneOverlayRole(of: surface).flatMap { paneOverlay($0)?.replica } != nil
+    }
+
     func setOverlayReplica(_ replica: OverlayReplica, pane: OverlayPane?) {
         guard let pane else {
             overlayReplica = replica

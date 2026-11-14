@@ -77,12 +77,16 @@ final class PaneObserver {
         onApplied?()
     }
 
-    /// settleScratches clears every session's scratch, an ended session's included, whose daemon a listing no longer
-    /// holds: its shell exited or its daemon was lost.
+    /// settleScratches refreshes the directory of every session's listed scratch, an ended session's included, and
+    /// clears one whose daemon a listing no longer holds: its shell exited or its daemon was lost.
     private func settleScratches(_ listed: [String: ZmxSessionRecord], listedAt: Date) {
         for session in store.workspaces.flatMap(\.sessions) {
-            guard let scratch = session.scratchDaemon, listed[ZmxSupport.scratchDaemonName(for: scratch.identity)] == nil,
-                  !panes.started(scratch.identity, since: listedAt) else { continue }
+            guard let scratch = session.scratchDaemon else { continue }
+            if let record = listed[ZmxSupport.scratchDaemonName(for: scratch.identity)] {
+                updateCwd(of: session, role: .scratch, leader: record.leaderPID)
+                continue
+            }
+            guard !panes.started(scratch.identity, since: listedAt) else { continue }
             _ = consumeExitRecord(scratch.identity)
             panes.forgetScratch(scratch.identity)
             store.dropScratchDaemon(session.id)
@@ -146,7 +150,7 @@ final class PaneObserver {
         switch role {
         case .left: if session.currentCwd != directory { session.currentCwd = directory }
         case .right: if session.splitCwd != directory { session.splitCwd = directory }
-        case .scratch: break
+        case .scratch: if session.scratchCwd != directory { session.scratchCwd = directory }
         }
     }
 }

@@ -37,7 +37,7 @@ extension WindowLibrary {
             onOrigin = clicked.remotePresentation?.binding.catalogOwned == true
         } else {
             guard let binding = clicked.remotePresentation?.binding, let pane else { return nil }
-            onOrigin = binding.remotePane(forLocal: pane) != nil
+            onOrigin = binding.remotePane(forLocal: pane) != nil || pane == clicked.originScratch
         }
         guard onOrigin else {
             return windowID(forSession: id).map { SessionLinkTarget(windowID: $0, sessionID: id) }

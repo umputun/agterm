@@ -43,12 +43,14 @@ extension ControlServer {
 
     func stopRemotePresentation(_ id: UUID) {
         remoteClients.removeValue(forKey: id)?.stop()
+        linkForwards.release(row: id)
         catalogPool(forSession: id)?.release("present:\(id)")
     }
 
     func stopRemotePresentations() {
         for client in remoteClients.values { client.stop() }
         remoteClients.removeAll()
+        linkForwards.stopAll()
         remoteTick?.cancel()
         remoteTick = nil
     }

@@ -82,7 +82,7 @@ extension ControlServer {
         return nil
     }
 
-    /// showForwardedPage shows a page on a headless origin's loopback at a free local port, then opens the forward
+    /// showForwardedPage shows a page on its origin's loopback at a free local port, then opens the forward
     /// that port reaches the origin through: a page the store refuses never starts one.
     private func showForwardedPage(_ page: PresentationPage, address: String, in store: AppStore, session: Session) -> String? {
         guard let host = session.remoteHost, let forwarded = ForwardedPage(address) else { return "invalid url" }

@@ -113,6 +113,7 @@ final class ControlServer {
     /// catalogPagePause is the wait before a remote page row's claim is tried again.
     var catalogPagePause: () async -> Void = { try? await Task.sleep(for: .seconds(2)) }
     var forwardLauncher: RemoteForwardLauncher = RemoteForwardProcessLauncher()
+    let linkForwards = LinkForwards()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
 

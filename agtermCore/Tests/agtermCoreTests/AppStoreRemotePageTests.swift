@@ -296,8 +296,15 @@ struct AppStoreRemotePageTests {
         #expect(command.points == OverlayPointSize(width: 900, height: 300))
     }
 
-    @Test func aLoopbackUrlIsRefusedOnlyWhenThePageWouldGoToThePresenter() throws {
+    @Test func aLoopbackUrlGoesToAPresenterThatForwardsIt() throws {
         let (session, _) = try origin()
+        #expect(open(session, try url("http://127.0.0.1:8080/app?x=1")) == .opened)
+        let request = try #require(presenter.bodies.compactMap { if case .pageRequest(let r) = $0 { r } else { nil } }.first)
+        #expect(request.source == .forwarded("http://127.0.0.1:8080/app?x=1"))
+    }
+
+    @Test func aLoopbackUrlStaysOnThisMacForAPresenterThatCannotForwardIt() throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageForwardKind })
         #expect(open(session, try url("http://127.0.0.1:8080/")) == .loopback)
         setLead(.leader, pane: session.paneIdentity)
         #expect(open(session, try url("http://127.0.0.1:8080/")) == .local)

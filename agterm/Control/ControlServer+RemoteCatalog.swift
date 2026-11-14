@@ -67,6 +67,7 @@ extension ControlServer {
         link.client.stop()
         link.actions.stop()
         for session in library.store(for: id)?.workspaces.flatMap(\.sessions) ?? [] { stopRemotePresentation(session.id) }
+        linkForwards.stop(window: id)
         let runner = remoteRunner
         for command in link.pool.close() {
             Task { _ = await runner.run(command, deadline: 5) }

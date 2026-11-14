@@ -387,15 +387,15 @@
   `AgtermServerTests/ServerStreamsTests.swift`, `PaneObserverTests.swift`, `agtermTests/ControlServerRemoteLinkClickTests.swift`,
   `ControlServerLinkOverlayTests.swift`, `RemotePortForwardTests.swift`, `ControlServerLinkForwardTests.swift`
 
-- [ ] failing tests: a path clicked in a server scratch resolves on the Mac; a clicked `http://localhost:PORT` in a
+- [x] failing tests: a path clicked in a server scratch resolves on the Mac; a clicked `http://localhost:PORT` in a
       remote pane opens the Mac's loopback
-- [ ] remote scratch clicks: pane token in the binding, scratch cwd tracked by `PaneObserver`, click resolved on the
+- [x] remote scratch clicks: pane token in the binding, scratch cwd tracked by `PaneObserver`, click resolved on the
       origin (server scratch and task 5's Mac scratch)
-- [ ] loopback http(s) clicks in a remote pane open through `ControlServer+LinkForward`, keeping scheme, path and
+- [x] loopback http(s) clicks in a remote pane open through `ControlServer+LinkForward`, keeping scheme, path and
       query and the browser or overlay choice; the browser opens only once the forward listens; a viewer-local
       pane's localhost stays local
-- [ ] Mac-origin loopback pages forward too (today headless-only)
-- [ ] tests: ready-before-open, forward failure panel, reuse and teardown for a server window row and an attached
+- [x] Mac-origin loopback pages forward too (today headless-only)
+- [x] tests: ready-before-open, forward failure panel, reuse and teardown for a server window row and an attached
       row, both origins, older origin without the web click kind
 
 ### Task 10: Classification, docs and gates
