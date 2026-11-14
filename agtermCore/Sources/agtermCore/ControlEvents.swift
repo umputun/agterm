@@ -150,6 +150,90 @@ public enum ControlEventReadError: String, Sendable, Equatable {
     case cursorAhead = "event cursor is ahead of the current sequence"
 }
 
+public enum ControlEventParseOutcome {
+    case success(ControlEventReadOptions)
+    case failure(String)
+}
+
+public enum ControlEventRequest {
+    /// Parses the args `events.read` and `events.stream` share — the cursor pair, kind filters and
+    /// limit — producing the stable validation errors both commands answer with, so the anchor
+    /// dispatch, the accept thread's fast path and the stream adoption cannot drift apart.
+    public static func parse(_ args: ControlArgs?) -> ControlEventParseOutcome {
+        let cursor: ControlEventCursor?
+        switch (args?.run, args?.after) {
+        case (nil, nil):
+            cursor = nil
+        case (.some, nil), (nil, .some):
+            return .failure(ControlEventRequestError.cursorPair)
+        case let (.some(runText), .some(afterText)):
+            guard let run = UUID(uuidString: runText) else {
+                return .failure(ControlEventRequestError.invalidRun)
+            }
+            guard let after = UInt64(afterText) else {
+                return .failure(ControlEventRequestError.invalidCursor)
+            }
+            cursor = ControlEventCursor(run: run, after: after)
+        }
+
+        let limit = args?.limit ?? 100
+        guard (1...1_000).contains(limit) else {
+            return .failure(ControlEventRequestError.invalidLimit)
+        }
+
+        var parsedKinds = Set<ControlEventKind>()
+        for field in args?.kinds ?? [] {
+            for component in field.split(separator: ",", omittingEmptySubsequences: false) {
+                let rawKind = component.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let kind = ControlEventKind(rawValue: rawKind) else {
+                    return .failure(ControlEventRequestError.invalidKind(rawKind))
+                }
+                parsedKinds.insert(kind)
+            }
+        }
+        let kinds: Set<ControlEventKind>? = parsedKinds.isEmpty ? nil : parsedKinds
+        return .success(ControlEventReadOptions(cursor: cursor, kinds: kinds, limit: limit))
+    }
+}
+
+/// The ring's position, readable off the main actor: everything the events fast path needs to
+/// answer anchor, at-tail and cursor-error reads with no main-actor hop. `append` updates it in
+/// the same main-actor execution as the ring mutation, so a read can lag the ring only within one
+/// append — a lagging tail delays an event by one poll interval, it never loses one.
+public final class ControlEventTail: @unchecked Sendable {
+    public struct Snapshot: Sendable, Equatable {
+        public let run: UUID
+        public let next: UInt64
+        /// The oldest retained entry's sequence, nil while the ring is empty.
+        public let oldest: UInt64?
+
+        public init(run: UUID, next: UInt64, oldest: UInt64?) {
+            self.run = run
+            self.next = next
+            self.oldest = oldest
+        }
+    }
+
+    private let lock = NSLock()
+    private var snapshot: Snapshot
+
+    init(run: UUID) {
+        snapshot = Snapshot(run: run, next: 0, oldest: nil)
+    }
+
+    func update(_ snapshot: Snapshot) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.snapshot = snapshot
+    }
+
+    public func read() -> Snapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return snapshot
+    }
+}
+
 /// Stable dispatcher validation errors shared with CLI and socket tests.
 public enum ControlEventRequestError {
     public static let cursorPair = "events.read requires --run and --after together"
@@ -180,12 +264,16 @@ public final class ControlEventRing {
     private var entries: [ControlEvent] = []
     private var currentSequence: UInt64 = 0
 
+    /// The lock-guarded position the accept thread's fast path reads; kept current by `append`.
+    public let tail: ControlEventTail
+
     public init(capacity: Int = ControlEventRing.defaultCapacity,
                 runID: UUID = UUID(), now: @escaping () -> Date = Date.init) {
         precondition(capacity > 0, "event ring capacity must be positive")
         self.capacity = capacity
         self.runID = runID
         self.now = now
+        tail = ControlEventTail(run: runID)
     }
 
     /// Append one event, assigning the next sequence and current Unix timestamp.
@@ -197,6 +285,7 @@ public final class ControlEventRing {
         if entries.count > capacity {
             entries.removeFirst(entries.count - capacity)
         }
+        tail.update(ControlEventTail.Snapshot(run: runID, next: currentSequence, oldest: entries.first?.seq))
         return event
     }
 

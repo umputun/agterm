@@ -231,6 +231,147 @@ struct EventCommandsTests {
         }
     }
 
+    /// A fake open stream: the anchor reply, then queued frames until a nil sentinel stands for EOF.
+    private final class FakeStream: EventStreamHandle {
+        let reply: ControlResponse
+        private var frames: [ControlEvent?]
+        var closed = false
+
+        init(reply: ControlResponse, frames: [ControlEvent?]) {
+            self.reply = reply
+            self.frames = frames
+        }
+
+        func nextEvent() throws -> ControlEvent? { frames.removeFirst() }
+        func closeStream() { closed = true }
+    }
+
+    @Test func streamCycleWritesAnchorAndFramesAndResumesFromTheLastFrame() throws {
+        let event5 = ControlEvent(seq: 5, ts: 10, kind: .status, payload: ControlEventPayload(name: "api"))
+        let event6 = ControlEvent(seq: 6, ts: 11, kind: .message,
+                                  payload: ControlEventPayload(name: "api", paneID: "tok"))
+        let stream = FakeStream(
+            reply: ControlResponse(ok: true, result: ControlResult(events: ControlEventBatch(run: run, next: 5, items: [event5]))),
+            frames: [event6, nil]
+        )
+        var requests: [ControlRequest] = []
+        var lines: [String] = []
+        let dependencies = EventStreamDependencies(
+            send: { _ in throw EventStreamError("poll must not run") },
+            sleep: { _ in },
+            writeLine: { lines.append($0) },
+            openStream: { request in
+                requests.append(request)
+                return stream
+            }
+        )
+        let command = try Events.parse(["--json"])
+        var state = command.makeState()
+
+        let outcome = try command.streamCycle(state: &state, dependencies: dependencies)
+
+        #expect(outcome == .retry(0.05))
+        #expect(requests.map(\.cmd) == [.eventsStream])
+        #expect(stream.closed)
+        #expect(lines.count == 2)
+        #expect(try JSONDecoder().decode(ControlEvent.self, from: Data(lines[0].utf8)) == event5)
+        #expect(try JSONDecoder().decode(ControlEvent.self, from: Data(lines[1].utf8)) == event6)
+        #expect(state.makeRequest(cmd: .eventsStream) == ControlRequest(
+            cmd: .eventsStream,
+            args: ControlArgs(after: "6", run: run.uuidString)
+        ))
+    }
+
+    @Test func anErrorReplyWithoutAnEventsPayloadFallsBackToPolling() throws {
+        let stream = FakeStream(reply: ControlResponse(ok: false, error: "data couldn't be read"), frames: [])
+        var polls = 0
+        var notices: [String] = []
+        let dependencies = EventStreamDependencies(
+            send: { _ in
+                polls += 1
+                return ControlResponse(ok: true, result: ControlResult(events: ControlEventBatch(run: run, next: 1, items: [])))
+            },
+            sleep: { _ in },
+            writeLine: { _ in },
+            writeNotice: { notices.append($0) },
+            openStream: { _ in stream }
+        )
+        let command = try Events.parse([])
+        var state = command.makeState()
+
+        let outcome = try command.streamCycle(state: &state, dependencies: dependencies)
+
+        #expect(outcome == .fellBack)
+        #expect(stream.closed)
+        #expect(polls == 0)
+        #expect(notices.isEmpty)
+    }
+
+    @Test func aCapacityRefusalFallsBackWithANotice() throws {
+        let stream = FakeStream(reply: ControlResponse(ok: false, error: EventStreamHub.capacityRefusal), frames: [])
+        var notices: [String] = []
+        let dependencies = EventStreamDependencies(
+            send: { _ in throw EventStreamError("poll must not run") },
+            sleep: { _ in },
+            writeLine: { _ in },
+            writeNotice: { notices.append($0) },
+            openStream: { _ in stream }
+        )
+        let command = try Events.parse([])
+        var state = command.makeState()
+
+        let outcome = try command.streamCycle(state: &state, dependencies: dependencies)
+
+        #expect(outcome == .fellBack)
+        #expect(stream.closed)
+        #expect(notices == ["agtermctl: server refused the event stream (\(EventStreamHub.capacityRefusal)); "
+            + "polling events.read instead"])
+    }
+
+    @Test func aCursorFailureReplyExitsLikePollingDoes() throws {
+        let stream = FakeStream(
+            reply: ControlResponse(ok: false, result: ControlResult(events: ControlEventBatch(run: run, next: 0, items: [])),
+                                   error: ControlEventReadError.cursorExpired.rawValue),
+            frames: []
+        )
+        let dependencies = EventStreamDependencies(
+            send: { _ in throw EventStreamError("poll must not run") },
+            sleep: { _ in }, writeLine: { _ in },
+            openStream: { _ in stream }
+        )
+        let command = try Events.parse(["--run", run.uuidString, "--after", "0"])
+        var state = command.makeState()
+
+        #expect(throws: EventStreamError.self) {
+            try command.streamCycle(state: &state, dependencies: dependencies)
+        }
+        #expect(stream.closed)
+    }
+
+    @Test func aRefusedStreamConnectBacksOffThroughTheSameRetryBudget() throws {
+        var opened = 0
+        let dependencies = EventStreamDependencies(
+            send: { _ in throw EventStreamError("poll must not run") },
+            sleep: { _ in }, writeLine: { _ in },
+            openStream: { _ in
+                opened += 1
+                throw refused()
+            }
+        )
+        let command = try Events.parse(["--run", run.uuidString, "--after", "9"])
+        var state = command.makeState()
+
+        let first = try command.streamCycle(state: &state, dependencies: dependencies)
+
+        #expect(first == .retry(0.25))
+        #expect(opened == 1)
+    }
+
+    @Test func pollFlagIsParsed() throws {
+        #expect(try Events.parse(["--poll"]).poll)
+        #expect(try !Events.parse([]).poll)
+    }
+
     @Test func formattersCoverEveryKindAndNDJSONIsOneBareEvent() throws {
         let events = [
             ControlEvent(seq: 1, ts: 0, kind: .status,

@@ -274,8 +274,9 @@
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               agterm listens on a local unix-domain socket. Each connection carries one newline-delimited JSON request and receives
-              one response, then closes. The scope is personal scripting: fire-and-forget commands, plus a polled event feed
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">events.read</span>) for watching status
+              one response, then closes. The scope is personal scripting: fire-and-forget commands, plus an event feed
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">events.read</span> polled, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">events.stream</span> pushed) for watching status
               and lifecycle changes. There is no scrollback or terminal-output streaming.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
@@ -689,14 +690,18 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N]
+                agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N] [--poll]
               </div>
-              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">events.read</div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">events.read / events.stream</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Read the app's control-event ring. The CLI polls it in a loop and prints one event per line, so a script can watch
+                Read the app's control-event ring and print one event per line, so a script can watch
                 agent status, notifications, and session lifecycle instead of re-reading
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>. With no cursor the first read subscribes
-                from the current tail: it returns an empty batch anchored at
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>. The CLI opens one
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">events.stream</span> connection: its reply is the
+                anchor batch, then every later event is pushed to it — no polling. A server without the stream (or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--poll</span>) falls back to polling
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">events.read</span>, the identical contract. With no cursor the
+                open subscribes from the current tail: the anchor batch is empty and anchored at
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">run</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">next</span>
                 and replays no history. The ring keeps the latest 4,096 events of one app process and is non-destructive, so
                 independent readers never consume one another's events.

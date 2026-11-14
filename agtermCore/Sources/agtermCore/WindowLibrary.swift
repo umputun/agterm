@@ -71,8 +71,12 @@ public final class WindowLibrary {
     @ObservationIgnored let recentClosedStore: RecentClosedStore
     /// One bounded run-identified ring shared by every window store for this library/app lifetime.
     @ObservationIgnored private let controlEventRing: ControlEventRing
-    /// Every event after the ring sequences it, debounced `tree.changed` included: what `events.read` will show.
+    /// The ring's lock-guarded position, readable from the accept thread's events fast path.
+    @ObservationIgnored public let controlEventTail: ControlEventTail
+    /// Every event after the ring sequences it: what `events.read` shows. The hooks slot stays
+    /// single-owner; `eventTaps` adds further main-actor observers (the event stream hub).
     @ObservationIgnored public var onControlEvent: ((ControlEvent) -> Void)?
+    @ObservationIgnored public let eventTaps = ControlEventTaps()
     /// onRemoteStoreOpened and onRemoteStoreClosed bracket a remote window's loaded store, so the app can run
     /// its catalog stream exactly while it is open.
     @ObservationIgnored public var onRemoteStoreOpened: ((UUID, AppStore) -> Void)?
@@ -130,7 +134,9 @@ public final class WindowLibrary {
         self.directory = directory
         self.flaggedLayout = flaggedLayout
         self.recentClosedStore = RecentClosedStore(directory: directory)
-        self.controlEventRing = controlEventRing ?? ControlEventRing()
+        let ring = controlEventRing ?? ControlEventRing()
+        self.controlEventRing = ring
+        self.controlEventTail = ring.tail
         self.paneFinalizer = paneFinalizer
         self.launchInventorySink = launchInventorySink
         self.launchPaneDrop = launchPaneDrop
@@ -216,6 +222,13 @@ public final class WindowLibrary {
         }
     }
 
+    /// The one path to a sequenced event: ring append, then hooks and taps, so all consumers agree.
+    private func emitEvent(_ draft: ControlEventDraft) {
+        let event = controlEventRing.append(draft)
+        onControlEvent?(event)
+        eventTaps.notify(event)
+    }
+
     /// Appends `app.launched` on the first call of a run, and only when `ready`. The caller picks the
     /// moment and reports readiness: hooks loaded and the control socket bound, which the library cannot
     /// see. A later call never emits, so a socket that binds on a later window is not a launch.
@@ -223,8 +236,7 @@ public final class WindowLibrary {
         guard !appLaunchSettled else { return }
         appLaunchSettled = true
         guard ready else { return }
-        let event = controlEventRing.append(ControlEventDraft(kind: .appLaunched))
-        onControlEvent?(event)
+        emitEvent(ControlEventDraft(kind: .appLaunched))
     }
 
     /// Test/quit seam: fires every pending structural invalidation synchronously, even one queued for a
@@ -719,11 +731,9 @@ public final class WindowLibrary {
                     self.scheduleTreeChanged(for: windowID)
                     return
                 }
-                // two steps: optional chaining on the observer would skip the append itself when it is nil
-                let event = self.controlEventRing.append(ControlEventDraft(
+                self.emitEvent(ControlEventDraft(
                     kind: draft.kind, window: windowID.uuidString, workspace: draft.workspace,
                     session: draft.session, payload: draft.payload))
-                self.onControlEvent?(event)
             },
             paneFinalizer: paneFinalizer,
             launchPaneDrop: launchPaneDrop
@@ -976,9 +986,7 @@ public final class WindowLibrary {
         let debouncer = treeEventDebouncers[windowID] ?? Debouncer()
         treeEventDebouncers[windowID] = debouncer
         debouncer.schedule(after: 0.1) { [weak self] in
-            guard let self else { return }
-            let event = self.controlEventRing.append(ControlEventDraft(kind: .treeChanged, window: windowID.uuidString))
-            self.onControlEvent?(event)
+            self?.emitEvent(ControlEventDraft(kind: .treeChanged, window: windowID.uuidString))
         }
     }
 
