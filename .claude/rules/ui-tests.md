@@ -144,3 +144,25 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   EPERM. A test needing an HTTP server has the app run it in a background session
   (`session.new` with `/usr/bin/python3 -m http.server PORT --bind 127.0.0.1 --directory DIR`) and polls
   it from the runner as a client; see `ControlHtmlOverlayUITests`.
+
+## Runs from a shell in the live terminal
+
+- **An XCUITest run started from a shell inside a live agterm window can die at runner init** with
+  `Failed to initialize for UI testing ... Timed out while enabling automation mode` after 60s, before any
+  test case runs. The block is at runner initialization, so app code under test cannot reach it; it is not
+  a defect in the diff under test. The timeout is intermittent: one retry passed on the same stale host
+  minutes after a failure (2026-09-26), so retry once before treating it as blocking.
+  [Unverified] cause: TCC attributes the authorization to the responsible process,
+  `/Applications/agterm.app/Contents/MacOS/agterm-session-host` hosting that shell; when a deploy replaced
+  the app after that process launched, the running image stops matching the file and tccd logs
+  `IDENTITY_ATTRIBUTION: Failed to copy signing info for <pid> ... #-67034` (errSecCSStaticCodeChanged) in
+  the same window. The correlation is measured; the causal link to the timeout is not. Diagnose with
+  `log show --predicate 'subsystem == "com.apple.TCC"' --last 6m --style compact` plus
+  `ps -p <pid> -o lstart` against the binary's mtime. If the retry also fails, diagnose the attribution
+  issue before considering a restart; restarting agterm is Eugene's decision, never the agent's.
+  Hosted `agtermTests` can be blocked over the same period (2026-10-02): the host waits in
+  `_prepareTestConfigurationAndIDESession` with zero test cases started, and `xcodebuild` logs
+  `Connection peer refused channel request for "dtxproxy:XCTestManager_IDEInterface:..."` two minutes after
+  connecting. Both runners recovered once Eugene allowed the pending authorization, with the same stale
+  session host and the same `testmanagerd` still running, so neither needs a restart. SIP refuses
+  `launchctl kickstart -k` on `testmanagerd`. [Unverified] which authorization that was.
