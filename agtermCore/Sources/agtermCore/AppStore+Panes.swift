@@ -401,6 +401,7 @@ extension AppStore {
     public func markSessionEnded(_ sessionID: UUID) {
         guard let session = session(withID: sessionID), !session.ended else { return }
         session.ended = true
+        disposeMailboxes([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 })
         session.daemonBackedPanes.removeAll()
         scheduleTreeChanged()
         save()

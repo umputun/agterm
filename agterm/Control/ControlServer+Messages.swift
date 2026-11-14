@@ -11,10 +11,7 @@ extension ControlServer {
         case .failure(let response): return .failure(MessagePaneError(response.error ?? "no such session: \(address.session)"))
         case .success(let resolved): (store, sessionID) = resolved
         }
-        guard let recipient = store.messageRecipient(session: sessionID, pane: address.pane) else {
-            return .failure(MessagePaneError("pane \(address.pane.text) is not a live pane of session \(sessionID.uuidString)"))
-        }
-        return .success(recipient)
+        return store.messagePane(session: sessionID, pane: address.pane)
     }
 
     func messagePanes(workspace: String?, window: String?) -> Result<[MessageRecipient], MessagePaneError> {
@@ -31,7 +28,10 @@ extension ControlServer {
     func messageQueued(_ messageID: UUID, from: String?, to recipients: [MessageRecipient]) {
         let stores = openStores()
         for recipient in recipients {
-            for store in stores where store.emitMessageQueued(messageID, from: from, to: recipient) { break }
+            for store in stores where store.emitMessageQueued(messageID, from: from, to: recipient) {
+                store.publishMessageQueued(messageID, from: from, to: recipient)
+                break
+            }
         }
     }
 

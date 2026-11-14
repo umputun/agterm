@@ -39,10 +39,14 @@ public struct MessageRejection: Codable, Equatable, Sendable {
 
     public let address: String
     public let reason: Reason
+    /// detail names why beyond `reason`, omitted when there is nothing to add. A field rather than a new
+    /// `Reason`, because a client decodes the whole reply and an unknown reason would lose all of it.
+    public let detail: String?
 
-    public init(address: String, reason: Reason) {
+    public init(address: String, reason: Reason, detail: String? = nil) {
         self.address = address
         self.reason = reason
+        self.detail = detail
     }
 }
 

@@ -38,6 +38,7 @@ struct RemotePresentationClientTests {
         var huds: [PresentationHud?] = []
         var contexts: [String?] = []
         var notifies: [PresentationNotify] = []
+        var messages: [PresentationMessage] = []
         var sounds: [PresentationSound] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
@@ -98,6 +99,7 @@ struct RemotePresentationClientTests {
             sound: { recorder.sounds.append($0) },
             respawns: { recorder.respawns.append(($0, $1)) },
             linkRefused: { recorder.linkRefusals.append($0) },
+            message: { recorder.messages.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -476,6 +478,21 @@ struct RemotePresentationClientTests {
         #expect(recorder.statuses == [nil, Self.blocked, nil])
         #expect(recorder.huds == [nil, nil])
         #expect(recorder.notifies == [notify])
+    }
+
+    @Test func aMirrorReportsEveryMessageFrameAndASnapshotReportsNone() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .mirror, kinds: ["message"])
+        let afterSnapshot = recorder.messages
+        let messages = [PresentationMessage(pane: UUID(), from: nil, messageID: UUID()),
+                        PresentationMessage(pane: UUID(), from: "S:P", messageID: UUID())]
+
+        transport.deliver(line(.message(messages[0]), rev: 2))
+        transport.deliver(line(.message(messages[1]), rev: 3))
+
+        #expect(afterSnapshot.isEmpty)
+        #expect(recorder.messages == messages)
     }
 
     @Test func aFrameFromAnotherGenerationOrAnOldRevisionIsIgnored() {

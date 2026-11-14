@@ -100,6 +100,7 @@ extension ControlServer {
             pageCommand: { [weak self] command in self?.applyReplicaPageCommand(command, forSession: id) },
             respawns: { [weak self] respawns, seed in self?.applyRemoteRespawns(respawns, seed: seed, forSession: id) },
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },
+            message: { [weak self] message in self?.library.store(forSession: id)?.emitRemoteMessage(message, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })

@@ -106,6 +106,13 @@ struct MessageCommandsTests {
         #expect(Msg.Send.output(partial, json: true) == MessageOutput(stdout: partial.line + "\n", failed: true))
     }
 
+    @Test func aRejectionWithADetailPrintsTheDetail() throws {
+        let remote = try reply(ControlResult(messageID: first.uuidString, delivered: [], rejected: [
+            MessageRejection(address: "r:left", reason: .unknownPane, detail: "remote session")]))
+        #expect(Msg.Send.output(remote, json: false) == MessageOutput(
+            stdout: first.uuidString + "\n", stderr: "rejected r:left: remote session\n", failed: true))
+    }
+
     @Test func aBroadcastReachingNoPaneSucceeds() throws {
         let empty = try reply(ControlResult(messageID: first.uuidString, delivered: [], rejected: []))
         #expect(Msg.Send.output(empty, json: false).failed == false)

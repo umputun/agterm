@@ -103,6 +103,20 @@ public struct PresentationNotify: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationMessage is mail queued for one of the session's panes on the origin, without its body. A live event,
+/// never part of a snapshot.
+public struct PresentationMessage: Codable, Equatable, Sendable {
+    public var pane: UUID
+    public var from: String?
+    public var messageID: UUID
+
+    public init(pane: UUID, from: String?, messageID: UUID) {
+        self.pane = pane
+        self.from = from
+        self.messageID = messageID
+    }
+}
+
 /// PresentationSound is a status sound the origin hands its presenter to play instead of playing it itself.
 /// A nil `name` is the presenter's own Settings blocked sound, so each Mac's choice applies where it plays.
 public struct PresentationSound: Codable, Equatable, Sendable {
@@ -708,6 +722,7 @@ public struct PresentationFrame: Equatable, Sendable {
         case layout(PresentationLayout)
         case hud(PresentationHud?)
         case notify(PresentationNotify)
+        case message(PresentationMessage)
         case sound(PresentationSound)
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
         case presenterAcquire
@@ -768,6 +783,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .layout: return "layout"
             case .hud: return "hud"
             case .notify: return "notify"
+            case .message: return "message"
             case .sound: return "sound"
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"
@@ -815,7 +831,7 @@ public struct PresentationFrame: Equatable, Sendable {
 
 extension PresentationFrame: Codable {
     private enum CodingKeys: String, CodingKey {
-        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, sound, ask, pick, overlay, page, respawn, link,
+        case kind, gen, rev, hello, snapshot, status, context, info, layout, hud, notify, message, sound, ask, pick, overlay, page, respawn, link,
              pending
     }
 
@@ -835,6 +851,7 @@ extension PresentationFrame: Codable {
         case "layout": body = .layout((try? container.decode(PresentationLayout.self, forKey: .layout)) ?? .invalid)
         case "hud": body = .hud(try container.decodeIfPresent(PresentationHud.self, forKey: .hud))
         case "notify": body = .notify(try container.decode(PresentationNotify.self, forKey: .notify))
+        case "message": body = .message(try container.decode(PresentationMessage.self, forKey: .message))
         case "sound": body = .sound(try container.decode(PresentationSound.self, forKey: .sound))
         case "presenter.acquire": body = .presenterAcquire
         case "presenter.granted": body = .presenterGranted
@@ -883,6 +900,7 @@ extension PresentationFrame: Codable {
         case .layout(let layout): try container.encode(layout, forKey: .layout)
         case .hud(let hud): try container.encodeIfPresent(hud, forKey: .hud)
         case .notify(let notify): try container.encode(notify, forKey: .notify)
+        case .message(let message): try container.encode(message, forKey: .message)
         case .sound(let sound): try container.encode(sound, forKey: .sound)
         case .askRequest(let ask): try container.encode(ask, forKey: .ask)
         case .askResolve(let answer): try container.encode(answer, forKey: .ask)

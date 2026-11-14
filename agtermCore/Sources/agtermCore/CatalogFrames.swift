@@ -29,11 +29,14 @@ public struct CatalogPane: Codable, Equatable, Sendable {
     public var identity: UUID
     public var daemon: String
     public var endpoint: ControlZmxEndpoint
+    /// pendingMessages is the pane's unacked mail on the server, omitted at none and by a server predating it.
+    public var pendingMessages: Int?
 
-    public init(identity: UUID, daemon: String, endpoint: ControlZmxEndpoint) {
+    public init(identity: UUID, daemon: String, endpoint: ControlZmxEndpoint, pendingMessages: Int? = nil) {
         self.identity = identity
         self.daemon = daemon
         self.endpoint = endpoint
+        self.pendingMessages = pendingMessages
     }
 }
 

@@ -18,4 +18,26 @@ struct ServerCommandPolicyTests {
     func anyOtherCommandIsRefusedByName(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == "\(command.rawValue) is not available on agterm-server")
     }
+
+    private static let undecided: Set<Command> = [
+        .debugAppearance, .eventsRead, .hooksList, .hooksReload, .recentClear, .recentList, .recentOpen,
+        .restoreCapture, .restoreClear, .restoreMode,
+        .sessionBackground, .sessionCollapse, .sessionCompanionConvert, .sessionCompanionDuplicate, .sessionCopy, .sessionDetach,
+        .sessionDuplicate, .sessionExpand, .sessionFlag, .sessionFocus, .sessionGo, .sessionInfo, .sessionLead,
+        .sessionOverlayCopy, .sessionOverlayText, .sessionPaste, .sessionReattach, .sessionResize, .sessionRestart,
+        .sessionRestore, .sessionReveal, .sessionSearch, .sessionSeen, .sessionSelect, .sessionSelectAll, .sessionTint,
+        .windowRemoteDismiss,
+        .workspaceCollapse, .workspaceDetach, .workspaceExpand, .workspaceFilter, .workspaceFlag, .workspaceFocus, .workspaceGo,
+        .workspaceReattach, .workspaceSelect, .workspaceTint,
+        .zmxAttach, .zmxAttachGroup, .zmxKill, .zmxList, .zmxPrune, .zmxReset, .zmxScreen,
+    ]
+
+    @Test func everyCommandIsServedWindowOnlyOrUndecided() {
+        let misclassified = Command.allCases.filter { command in
+            [ServerCommandPolicy.served.contains(command), HeadlessCommandPolicy.physicalWindowRefusal(command) != nil,
+             Self.undecided.contains(command)].count { $0 } != 1
+        }
+
+        #expect(misclassified.map(\.rawValue) == [])
+    }
 }

@@ -1,6 +1,6 @@
 /// A control command name, the `cmd` field of a `ControlRequest`. Raw values are the wire strings the CLI
 /// and the socket server share; an unknown one fails to decode into an "unknown command" error, not a crash.
-public enum Command: String, Codable, Sendable {
+public enum Command: String, Codable, Sendable, CaseIterable {
     case tree
     case eventsRead = "events.read"
     case workspaceNew = "workspace.new"

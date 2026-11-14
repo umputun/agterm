@@ -91,6 +91,17 @@ struct CatalogFramesTests {
         #expect(try JSONDecoder().decode(CatalogSessionFields.self, from: encoded).page == nil)
     }
 
+    @Test func aPanesMailCountIsOmittedAtNoneAndAnOlderServersPaneDecodesWithout() throws {
+        let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
+        var counted = CatalogPane(identity: UUID(), daemon: "d", endpoint: endpoint)
+        let plain = try JSONEncoder().encode(counted)
+        counted.pendingMessages = 3
+
+        #expect(!String(decoding: plain, as: UTF8.self).contains("pendingMessages"))
+        #expect(try JSONDecoder().decode(CatalogPane.self, from: plain).pendingMessages == nil)
+        #expect(try JSONDecoder().decode(CatalogPane.self, from: JSONEncoder().encode(counted)).pendingMessages == 3)
+    }
+
     @Test func anEmptyCustomNameTravelsAsEmptyAndAnOlderServerOmitsIt() throws {
         var unnamed = CatalogFixture.session().fields
         unnamed.customName = ""

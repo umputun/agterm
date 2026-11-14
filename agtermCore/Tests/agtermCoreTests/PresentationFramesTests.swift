@@ -342,6 +342,16 @@ struct PresentationFramesTests {
         #expect(try PresentationCodec.decode(line).body == .linkRefused(PresentationLinkRefusal(reason: .notOpened)))
     }
 
+    @Test @MainActor func aMessageFrameCarriesPaneSenderAndIDButNoBody() throws {
+        let message = PresentationMessage(pane: UUID(), from: "S:P", messageID: UUID())
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .message(message)))
+
+        #expect(String(decoding: line, as: UTF8.self).contains(#""kind":"message""#))
+        #expect(!String(decoding: line, as: UTF8.self).contains("body"))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .message(message))
+        #expect(PresentationHub.supportedKinds.contains("message"))
+    }
+
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {
         let line = Data(#"{"kind":"future.kind","gen":3,"rev":12,"job":"abc"}"#.utf8)
 

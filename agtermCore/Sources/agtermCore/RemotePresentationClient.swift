@@ -48,6 +48,8 @@ public struct RemotePresentationEffects {
     public var respawns: @MainActor (PresentationRespawns, Bool) -> Void
     /// linkRefused reports the origin refused a click this Mac forwarded.
     public var linkRefused: @MainActor (RemoteLinkRefusal) -> Void
+    /// message reports mail queued on the origin for one of the session's panes, to every viewer alike.
+    public var message: @MainActor (PresentationMessage) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -72,6 +74,7 @@ public struct RemotePresentationEffects {
                 pageCommand: @escaping @MainActor (PresentationPageCommand) -> Void = { _ in },
                 respawns: @escaping @MainActor (PresentationRespawns, Bool) -> Void = { _, _ in },
                 linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
+                message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -95,6 +98,7 @@ public struct RemotePresentationEffects {
         self.pageCommand = pageCommand
         self.respawns = respawns
         self.linkRefused = linkRefused
+        self.message = message
         self.warn = warn
     }
 }
@@ -245,6 +249,7 @@ public final class RemotePresentationClient {
         case .layout(let layout): applyLayout(layout)
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
+        case .message(let message): effects.message(message)
         case .sound(let sound): effects.sound(sound)
         case .ping: send(.ack, on: link)
         // an origin that predates the role answers mirror, and nothing is asked of it

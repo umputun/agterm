@@ -264,6 +264,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let pending: String?
     /// scratchBacked is true while a remote window row's scratch is the server's daemon; omitted otherwise.
     public let scratchBacked: Bool?
+    /// scratchPaneID and scratchPendingMessages are a server scratch's mail address and unacked count, which its absent
+    /// zoom surface cannot carry; omitted for a local scratch and the count at none.
+    public let scratchPaneID: String?
+    public let scratchPendingMessages: Int?
     /// interactions are the asks, picks, pages and jobs the session holds for a presenter, omitted when there are none.
     public let interactions: [ControlInteraction]?
     /// What the session is FOR: `Session.effectiveContext`, so the local `session.context` value or, on an
@@ -412,7 +416,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 overlayHeight: Double? = nil, paneOverlays: [String]? = nil,
                 hud: ControlHudNode? = nil, ask: ControlSessionAsk? = nil, pick: ControlSessionPick? = nil,
                 scratch: Bool = false, flagged: Bool = false, ended: Bool? = nil, pending: String? = nil, scratchBacked: Bool? = nil,
-                interactions: [ControlInteraction]? = nil,
+                scratchPaneID: String? = nil, scratchPendingMessages: Int? = nil, interactions: [ControlInteraction]? = nil,
                 commandWait: Bool? = nil, splitCommandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
@@ -461,6 +465,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.ended = ended
         self.pending = pending
         self.scratchBacked = scratchBacked
+        self.scratchPaneID = scratchPaneID
+        self.scratchPendingMessages = scratchPendingMessages
         self.interactions = interactions
         self.context = context
         self.commandWait = commandWait

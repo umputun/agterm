@@ -179,6 +179,27 @@ struct AppStoreMessagesTests {
         #expect(f.store.messageRecipients().map(\.pane) == [f.session.paneIdentity])
     }
 
+    @Test func aRemoteSessionIsRefusedByNameAndAMissingLocalPaneIsNot() throws {
+        let f = try fixture()
+        let remote = try #require(f.store.addSession(toWorkspace: f.work.id, cwd: "/r", remoteHost: "buildbox"))
+        remote.surface = SpySurface(paneToken: remote.paneIdentity.uuidString)
+        let missing = UUID()
+
+        guard case .failure(let refused) = f.store.messagePane(session: remote.id, pane: .role(.left)) else {
+            Issue.record("a remote session resolved")
+            return
+        }
+        guard case .failure(let absent) = f.store.messagePane(session: f.session.id, pane: .id(missing)) else {
+            Issue.record("a missing pane resolved")
+            return
+        }
+
+        #expect(refused == MessagePaneError("session \(remote.id.uuidString) is a remote session: a local pane cannot message it",
+                                            detail: "remote session"))
+        #expect(absent == MessagePaneError("pane \(missing.uuidString) is not a live pane of session \(f.session.id.uuidString)"))
+        #expect(try f.store.messagePane(session: f.session.id, pane: .role(.left)).get().pane == f.session.paneIdentity)
+    }
+
     @Test func broadcastListsEveryLivePaneOrOneWorkspacesPanes() throws {
         let f = try fixture(split: true, scratch: true)
         let elsewhere = try #require(f.store.addSession(toWorkspace: f.store.workspaces[1].id, cwd: "/e"))
@@ -205,6 +226,23 @@ struct AppStoreMessagesTests {
         #expect(drafts.items == [ControlEventDraft(kind: .message, workspace: work.id.uuidString, session: session.id.uuidString,
                                                    payload: ControlEventPayload(name: session.displayName, paneID: session.paneIdentity.uuidString,
                                                                                 from: "S:Q", messageID: id.uuidString))])
+    }
+
+    @Test func aServerMessageEmitsItsEventOnTheRowItArrivedFor() throws {
+        let drafts = DraftCollector()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { drafts.items.append($0) })
+        let work = store.addWorkspace(name: "work")
+        let row = try #require(store.addSession(toWorkspace: work.id, cwd: "/r", remoteHost: "buildbox"))
+        let message = PresentationMessage(pane: UUID(), from: "S:Q", messageID: UUID())
+        drafts.items.removeAll()
+
+        store.emitRemoteMessage(message, forSession: row.id)
+        store.emitRemoteMessage(message, forSession: UUID())
+
+        #expect(drafts.items == [ControlEventDraft(kind: .message, workspace: work.id.uuidString, session: row.id.uuidString,
+                                                   payload: ControlEventPayload(name: row.displayName, paneID: message.pane.uuidString,
+                                                                                from: "S:Q", messageID: message.messageID.uuidString))])
     }
 
     @Test func theTreeReportsAPanesPendingCountAndOmitsZero() throws {
