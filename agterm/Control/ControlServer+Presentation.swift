@@ -53,6 +53,7 @@ extension ControlServer: PresentationStreamHost {
             store.onReplicaPageChanged = { [weak self] page in MainActor.assumeIsolated { self?.replicaPageChanged(page) } }
         }
         dropOrphanedPresentationStreams()
+        resumeRestoredAttachedRows()
     }
 
     func presentationSourceExists(_ session: UUID) -> Bool {

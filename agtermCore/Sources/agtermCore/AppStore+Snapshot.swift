@@ -11,11 +11,15 @@ extension AppStore {
     /// Builds a `Snapshot` of the current tree; each session captures its live `currentCwd` (or `initialCwd`
     /// if no PWD report arrived). Runs on `@MainActor`; the result is `Sendable`, safe to hand to a writer.
     public func snapshot() -> Snapshot {
-        let workspaceSnapshots = workspaces.map(workspaceSnapshot)
+        let workspaceSnapshots = workspaces.map { workspace in
+            var saved = workspaceSnapshot(workspace)
+            saved.attached = attachedSnapshots(of: workspace)
+            return saved
+        }
         // TREE order keeps the on-disk list deterministic (not the Set's hash order); an unmarked store omits
         // both focus keys, matching a file written before the set existed. `focusedWorkspaceID` stays unused.
         let focusIDs = workspaces.map(\.id).filter(focusedWorkspaceIDs.contains)
-        let persistable = Set(workspaceSnapshots.flatMap(\.sessions).map(\.id))
+        let persistable = Set(workspaceSnapshots.flatMap { $0.sessions.map(\.id) + ($0.attached ?? []).map(\.session.id) })
         let recency = sessionRecency.items.filter(persistable.contains)
         let flaggedIDs = orderedFlaggedSessions.map(\.id).filter(persistable.contains)
         var snapshot = Snapshot(selectedSessionID: persistedSelection(among: persistable, recency: recency),
@@ -29,7 +33,7 @@ extension AppStore {
         return snapshot
     }
 
-    /// The selection to write. A remote session is not in the snapshot, so naming it would restore an empty
+    /// The selection to write. A server window's row is not in the snapshot, so naming it would restore an empty
     /// window while local rows sit there; fall back to the most recent surviving session, then the first,
     /// matching the MRU repair `reselectIfSelectionHidden` already does for a narrowed tree.
     private func persistedSelection(among persistable: Set<UUID>, recency: [UUID]) -> UUID? {
@@ -72,7 +76,7 @@ extension AppStore {
 
     /// The single workspace-to-disk producer, used by the launch snapshot and by a closed workspace's
     /// Recent Closed record. Only a collapsed workspace writes the flag, so an all-expanded tree matches a
-    /// legacy snapshot.
+    /// legacy snapshot. Rows attached from another host are left out; the launch snapshot adds them as `attached`.
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
         WorkspaceSnapshot(id: workspace.id, name: workspace.name,
                           sessions: workspace.sessions.filter(\.isPersistable).map(sessionSnapshot),
@@ -185,9 +189,10 @@ extension AppStore {
         // repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []
         workspaces = snapshot.workspaces.reduce(into: [Workspace]()) { restored, workspaceSnapshot in
-            let sessions = workspaceSnapshot.sessions
+            let local = workspaceSnapshot.sessions
                 .filter { seenSessionIDs.insert($0.id).inserted }
                 .map { session(from: $0, launchRestore: launchRestore) }
+            let sessions = placingAttached(workspaceSnapshot.attached, among: local, seen: &seenSessionIDs)
             if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id }) {
                 restored[existing].sessions.append(contentsOf: sessions)
                 return

@@ -156,6 +156,8 @@ extension ControlServer {
     enum RemotePageSpot {
         case companion(of: UUID)
         case root(store: AppStore, workspace: UUID)
+        /// existing is a page row a relaunch restored, waiting for its page.
+        case existing(UUID)
     }
 
     /// PagePresentation is what the origin said of its presentation stream: its version and whether it has no screen.
@@ -173,31 +175,65 @@ extension ControlServer {
         }
     }
 
+    /// RemotePageHandover is a host's answer when asked for one of its pages.
+    enum RemotePageHandover {
+        case page(PresentationPage)
+        case refused(String)
+        /// unanswered is no reply at all, which says nothing about the page.
+        case unanswered(String)
+    }
+
+    /// RemotePageOrigin is where a handed-over page comes from: the origin's page session, its host and how that host
+    /// presents it.
+    struct RemotePageOrigin {
+        let session: String
+        let binding: RemoteBinding.Origin
+        let presentation: PagePresentation
+    }
+
     /// attachRemotePage asks `origin.host` for one attachment of its page session `originSession` and shows it at
     /// `spot` here. The page stays that Mac's: closing the row here ends only this attachment's channel.
     func attachRemotePage(_ originSession: String, origin binding: RemoteBinding.Origin, presentation: PagePresentation,
                           at spot: RemotePageSpot, select: Bool) async -> ControlResponse {
-        let host = binding.host
+        switch await requestRemotePage(originSession, host: binding.host) {
+        case .refused(let reason), .unanswered(let reason):
+            return ControlResponse(ok: false, error: reason)
+        case .page(let page):
+            return placeRemotePage(page, from: RemotePageOrigin(session: originSession, binding: binding, presentation: presentation),
+                                   at: spot, select: select)
+        }
+    }
+
+    /// requestRemotePage asks `host` to hand over one attachment of its page session `originSession`.
+    func requestRemotePage(_ originSession: String, host: String) async -> RemotePageHandover {
         let argv: [String]
         do {
             argv = try RemoteSession.controlCommand(host: host, arguments: ["session", "overlay", "page-attach", "--target", originSession])
         } catch {
-            return ControlResponse(ok: false, error: "invalid host")
+            return .refused("invalid host")
         }
         let result = await remoteRunner.run(argv, deadline: Self.remoteCompanionDeadline)
         if result.refusedArguments {
-            return ControlResponse(ok: false, error: "the agterm on \(host) is too old for page companions")
+            return .refused("the agterm on \(host) is too old for page companions")
         }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else {
             let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-            return ControlResponse(ok: false, error: stderr.isEmpty ? "\(host) gave no answer" : stderr)
+            return .unanswered(stderr.isEmpty ? "\(host) gave no answer" : stderr)
         }
         guard result.status == 0, reply.ok, let page = reply.result?.companionPage else {
             if reply.refusesUnknown(.sessionCompanionPageAttach) {
-                return ControlResponse(ok: false, error: "the agterm on \(host) is too old for page companions")
+                return .refused("the agterm on \(host) is too old for page companions")
             }
-            return ControlResponse(ok: false, error: reply.error ?? "\(host) did not hand the page over")
+            return .refused(reply.error ?? "\(host) did not hand the page over")
         }
+        return .page(page)
+    }
+
+    /// placeRemotePage shows `page`, handed over by `source`'s host, at `spot` here.
+    func placeRemotePage(_ page: PresentationPage, from source: RemotePageOrigin, at spot: RemotePageSpot,
+                         select: Bool) -> ControlResponse {
+        let (originSession, binding, presentation) = (source.session, source.binding, source.presentation)
+        let host = binding.host
         if case .url(let text) = page.source, HtmlSource.isLoopback(text) {
             return ControlResponse(ok: false, error: "a page on \(host)'s loopback cannot be shown on this Mac")
         }
@@ -227,6 +263,14 @@ extension ControlServer {
                                              select: select, remoteSessionID: originSession) {
             case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
             case .success(let created): (store, row, parent) = (holder, created, nil)
+            }
+        case .existing(let rowID):
+            guard let holder = library.store(forSession: rowID) else {
+                return ControlResponse(ok: false, error: "the row here was closed")
+            }
+            switch holder.fillReplicaPage(rowID, page: page) {
+            case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
+            case .success(let filled): (store, row, parent) = (holder, filled, filled.parentID)
             }
         }
         // the origin's page session, so New Companion on the row has that Mac make one there; the origin's endpoint

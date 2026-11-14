@@ -4,10 +4,11 @@ import Foundation
 
 extension AppStore {
     /// Records what an attach learned about the origin. Set right after the row is created, not at
-    /// construction like `remoteHost`: a remote session is never persisted, so no snapshot can catch it
-    /// half-written.
+    /// construction like `remoteHost`: the row is saved only once it has a binding, so this saves it.
     public func bindRemote(_ binding: RemoteBinding, forSession id: UUID) {
-        session(withID: id)?.remotePresentation = RemotePresentationState(binding: binding)
+        guard let row = session(withID: id) else { return }
+        row.remotePresentation = RemotePresentationState(binding: binding)
+        save()
     }
 
     /// Keeps origin updates even while a local override hides them.

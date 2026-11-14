@@ -169,8 +169,8 @@ split; these describe attribution, not permission grants),
 `liveHostStale` and `splitLiveHostStale` (true for a `supervisor` pane whose host is from an earlier agterm
 build or login, which `zmx reset` moves to the current one; omitted otherwise),
 `remoteHost` (the machine an attached session came from — the read side of `zmx attach`; omitted for a
-local session; a remote row is never written to disk, so a per-session attach is gone after a relaunch, while a
-remote window rebuilds its rows from the server's catalog),
+local session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows
+from the server's catalog),
 `remoteSessionID` (the origin's id for the session an attached row shows, companions and page rows included,
 the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (on an attached session only: `state` is `connecting`, `connected`, `unsupported` for an
@@ -925,7 +925,7 @@ error keeps those names for compatibility.
   the row's placement and an untinted row starts on the icon. `clear` removes the tint and refuses `--on`; the
   socket form (`mode` `set|clear`, `tint`, `tintOn` array) refuses a clear carrying either. Returns the session
   id. Persisted across a relaunch; a duplicated session starts untinted. Local to this Mac: an attached row does
-  not mirror the origin's tint, and its own tint is not persisted, like the row.
+  not mirror the origin's tint, and its own tint is saved with the row.
   Read back from the node's `tint`/`tintOn`. GUI twins: the row menu's Tint submenu
   (a color applies to every selected row, keeping each row's placement; Show On needs every selected row
   tinted) and the palette's "Tint Session: <Color>" / "Tint Session: None" for the active session.
@@ -2582,8 +2582,10 @@ bridges it to stdio as newline-delimited JSON. agterm runs it over ssh on the or
 be typed.
 
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
-nothing agterm does from this end can kill them. It is never written to disk, so it does not come back
-after a relaunch whatever the restore mode is.
+nothing agterm does from this end can kill them. An open attached row is saved and attached again at the next
+launch whatever the restore mode is, without taking the lead from a Mac that took it meanwhile. A row whose
+session the origin no longer has shows `Ended on HOST` instead; an attached page waits for the origin to hand it
+over and retries while the host does not answer.
 
 The pane reports the far side's working directory, and the local launches that would inherit it pick
 their start directory by one rule: the reported path when it exists here as a directory, else local

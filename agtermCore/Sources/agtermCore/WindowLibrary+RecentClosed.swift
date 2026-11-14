@@ -1,6 +1,11 @@
 import Foundation
 
 extension WindowLibrary {
+    /// noteOriginRecentID records that `host` keeps its session `sessionID`, closed here, as its entry `recentID`.
+    public func noteOriginRecentID(_ recentID: String, host: String, sessionID: String) {
+        recentClosedStore.setOriginRecentID(recentID, host: host, sessionID: sessionID)
+    }
+
     @discardableResult
     public func reopenRecentClosed(_ itemID: UUID, into targetStore: AppStore? = nil) -> Bool {
         reopenRecentClosedReportingWindow(itemID, into: targetStore) != nil

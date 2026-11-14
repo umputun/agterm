@@ -120,8 +120,8 @@ public final class Session: Identifiable {
     /// flagged view, and fills its row icon in the ordinary tree. Persisted, surviving a relaunch and a
     /// workspace move.
     public var flagged: Bool = false
-    /// ended marks a headless origin's session left with no live pane after a daemon was lost, kept in the catalog
-    /// until `session.close` removes it; a Mac never sets it.
+    /// ended marks a session its origin no longer has: a headless origin's session left with no live pane, kept until
+    /// `session.close` removes it, or a row attached here whose origin session is gone.
     public var ended = false
     /// The sidebar row's tint (`session.tint`); persisted, never copied by duplicate, local to this Mac.
     public var tint: SidebarTint?
@@ -499,6 +499,8 @@ public final class Session: Identifiable {
 
     /// What this Mac keeps about a session attached from another one; nil for a local session.
     @ObservationIgnored public internal(set) var remotePresentation: RemotePresentationState?
+    /// awaitsOriginCheck marks a row restored from the snapshot whose origin this Mac has not asked about yet.
+    @ObservationIgnored public var awaitsOriginCheck = false
     /// remoteConnectionRevision changes with the connection, so an observer of `remoteConnection` is told.
     var remoteConnectionRevision = 0
 

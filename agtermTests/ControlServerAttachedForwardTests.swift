@@ -71,6 +71,21 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertEqual(reply.result?.undoable, true)
     }
 
+    func testTheOriginsRecentEntryIsNotedWhileAServerWindowIsFrontmost() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(closed: ["origin-1"], recentID: "r1"))])
+        let (server, store) = try makeServer(runner)
+        let row = try attachedRow(in: store)
+        library.frontmostWindowID = library.newRemoteWindow(host: "box").id
+        XCTAssertFalse(library.activeStore === store)
+
+        let reply = try await run(server, ControlRequest(cmd: .sessionTerminate, target: row.id.uuidString, args: ControlArgs()))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        let entry = try XCTUnwrap(RecentClosedStore(directory: stateDir).loadRemote().first)
+        XCTAssertEqual(entry.originSessionID, "origin-1")
+        XCTAssertEqual(entry.originRecentID, "r1")
+    }
+
     func testATerminateWithNoAnswerIsUnknownClosesNothingAndIsNotSentAgain() async throws {
         let runner = ScriptedRunner([RemoteCommandResult(status: -1, stdout: "", stderr: "the remote did not answer in time")])
         let (server, store) = try makeServer(runner)

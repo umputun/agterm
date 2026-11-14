@@ -34,6 +34,14 @@ struct PendingSessionClose {
     let recentID: UUID
 }
 
+@MainActor
+extension PendingSessionClose {
+    var remotePlacement: RemoteRecentClosedItem.Placement {
+        RemoteRecentClosedItem.Placement(workspaceID: workspaceID, workspaceName: workspaceName, workspaceIndex: workspaceIndex,
+                                         sessionIndex: sessionIndex, parentID: session.parentID)
+    }
+}
+
 struct PendingSessionsClose {
     let sessions: [PendingSessionClose]
     let selectedSessionID: UUID?
@@ -131,6 +139,7 @@ extension AppStore {
         recordRecentClosedSession(session, workspaceID: workspace.id, workspaceName: workspace.name,
                                   workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
                                   id: closeID)
+        recordRemoteClosed(session, placement: close.remotePlacement, id: closeID)
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location, removing: sessionID)
             replaceSidebarSelection(with: selectedSessionID)
@@ -187,6 +196,7 @@ extension AppStore {
         dropLaunchPanes(closes.map(\.session))
         let closingIDs = Set(closes.map(\.session.id))
         for close in closes {
+            recordRemoteClosed(close.session, placement: close.remotePlacement, id: close.recentID)
             // a companion closing with its parent rides in the parent's entry rather than its own
             if let parentID = close.session.parentID, closingIDs.contains(parentID) {
                 emitSessionClosed(close.session, workspace: close.workspaceID)
@@ -270,7 +280,7 @@ extension AppStore {
         ))
         pendingCloseOrder.append(closeID)
         recordRecentClosedWorkspace(workspace, selectedSessionID: restoringSelection,
-                                    focusMember: focusMember, id: closeID)
+                                    focusMember: focusMember, workspaceIndex: index, id: closeID)
         showPendingCloseSummary(id: closeID)
         schedulePendingCloseFinalization(id: closeID, grace: grace)
         cancelPendingSave()

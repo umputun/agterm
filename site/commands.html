@@ -580,7 +580,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteHost</span> (the machine an attached session
                 came from, the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">zmx attach</span>; omitted for a
-                local session; a remote row is not persisted, so a per-session attach is gone after a relaunch, while a remote window rebuilds its rows from the server's catalog),
+                local session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows from the server's catalog),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remoteSessionID</span> (the origin's id for the session an attached row shows, the id
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> takes; on a remote window's row it equals the row's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>; omitted for a local session),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> (on an attached session only:
@@ -1953,7 +1953,7 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 The tint survives quit and relaunch. A duplicated session starts untinted. It is local to this Mac: a session
-                attached from another Mac does not mirror the origin's tint, and its own tint goes with the row at relaunch.
+                attached from another Mac does not mirror the origin's tint, and its own tint is saved with the row.
                 The GUI twins are the
                 sidebar row menu's Tint submenu, which also acts on a multi-row selection, and the command palette's
                 "Tint Session" entries for the active session.
@@ -4485,7 +4485,7 @@
                 The remote is resolved again before anything is created, so a session gone since the listing fails and creates nothing rather than handing back a fresh shell wearing its name. A connection that starts and later drops is an ordinary pane exit.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                If ssh itself failed (exit 255), the pane keeps the last screen under a reconnecting bar and attaches again by itself once the host answers; any other exit leaves one line naming the host, the session, the pane and the exit status, and holds on Ghostty's own press-any-key prompt. agterm adds an ssh keepalive by default; the guide says when. Confirmed origin removal requires no acknowledgement, even if the replica already shows that prompt. Automatic primary removal is skipped while a local split is pending; the last replica waits for its ssh exit and may then close the row. Closing the session here ends only this side's connection: the far-side processes keep running, and nothing this command does can kill them. A remote session is never written to disk, so it does not come back after a relaunch.
+                If ssh itself failed (exit 255), the pane keeps the last screen under a reconnecting bar and attaches again by itself once the host answers; any other exit leaves one line naming the host, the session, the pane and the exit status, and holds on Ghostty's own press-any-key prompt. agterm adds an ssh keepalive by default; the guide says when. Confirmed origin removal requires no acknowledgement, even if the replica already shows that prompt. Automatic primary removal is skipped while a local split is pending; the last replica waits for its ssh exit and may then close the row. Closing the session here ends only this side's connection: the far-side processes keep running, and nothing this command does can kill them. An open attached row is saved and attached again at the next launch; one whose session the origin no longer has shows that it ended there.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Every terminal attach also opens a presentation stream (a page row uses its page channel instead and mirrors nothing), so the row mirrors the origin session's status, its context, its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span> notifications, its HUD and the layout of panes already attached; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">presentation</span> on the tree node reports it. A split the origin opens later attaches into an empty split slot, and a replica closed here stays closed. The mirrored status, context and HUD clear while the stream is down and return on reconnect, a notification raised meanwhile is not shown, and a terminal notification (OSC 9/777) is not mirrored because it already arrives in the pane's bytes.

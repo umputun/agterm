@@ -270,6 +270,9 @@ extension ControlServer {
                 continue
             }
             closed += closeAttachedRows(ended: Set(reply.result?.closed ?? group.sessions), origin: group.origin)
+            if group.sessions.count == 1, let recentID = reply.result?.recentID {
+                library.noteOriginRecentID(recentID, host: group.origin.host, sessionID: group.sessions[0])
+            }
             if plan.undoable { undoable = (undoable ?? true) && reply.result?.undoable == true }
         }
         let result = ControlResult(affected: closed.count, undoable: plan.undoable ? undoable : nil, closed: closed)

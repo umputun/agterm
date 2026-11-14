@@ -339,15 +339,15 @@
 - Tests: `agtermCoreTests/SnapshotRoundTripTests.swift`, `RecentClosedTests.swift`, `RemoteReconnectTests.swift`,
   `agtermTests/ControlServerRemoteReconnectTests.swift`
 
-- [ ] `isSnapshotted` used only by the snapshot filter; attached rows, page roots and page companions included,
+- [x] `isSnapshotted` used only by the snapshot filter; attached rows, page roots and page companions included,
       saved as a remote reference (host, origin session id, content kind) with pane bindings, flag, tint, watermark,
       fold and context override, never the info line or a replica page source
-- [ ] relaunch re-attaches by origin session id, a page row through the page-attachment path; an unreachable origin
+- [x] relaunch re-attaches by origin session id, a page row through the page-attachment path; an unreachable origin
       shows the row disconnected and retrying, as a server window does; an origin session that no longer exists ends
       the row with a stated reason
-- [ ] `RecentClosedState.remoteItems`; close of an attached row stays a detach, leaves the snapshot and records a
+- [x] `RecentClosedState.remoteItems`; close of an attached row stays a detach, leaves the snapshot and records a
       remote entry; no local-shell entry and no quit capture ever for an attached row
-- [ ] tests: snapshot round trip, restore with origin present, absent and unreachable for a terminal row, an
+- [x] tests: snapshot round trip, restore with origin present, absent and unreachable for a terminal row, an
       attached page root and a group with a page companion, an older-format decoder
       keeping the local list next to `remoteItems`, dedupe by `(host, originSessionID)`, quit capture and local
       Recent Closed skipping attached rows

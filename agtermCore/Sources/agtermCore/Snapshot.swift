@@ -119,18 +119,21 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     public var collapsed: Bool?
     /// The workspace row's tint; nil = none, and absent from the file so an untinted tree stays unchanged.
     public var tint: SidebarTint?
+    /// attached holds the workspace's rows attached from another host; nil when it has none.
+    public var attached: [AttachedSessionSnapshot]?
 
     public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil,
-                tint: SidebarTint? = nil) {
+                tint: SidebarTint? = nil, attached: [AttachedSessionSnapshot]? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.collapsed = collapsed
         self.tint = tint
+        self.attached = attached
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, sessions, collapsed, tint
+        case id, name, sessions, collapsed, tint, attached
     }
 
     /// Custom decode so `collapsed` is LOSSY, matching the other two snapshot types: the synthesized
@@ -143,6 +146,7 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
         sessions = try c.decode([SessionSnapshot].self, forKey: .sessions)
         collapsed = (try? c.decodeIfPresent(Bool.self, forKey: .collapsed)) ?? nil
         tint = (try? c.decodeIfPresent(SidebarTint.self, forKey: .tint)) ?? nil
+        attached = (try? c.decodeIfPresent([AttachedSessionSnapshot].self, forKey: .attached)) ?? nil
     }
 }
 

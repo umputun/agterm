@@ -3201,7 +3201,8 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               Only a session whose every pane still has a live daemon is listed, and the remote is resolved again at attach time, so a
               session that has gone in between fails instead of handing back a fresh shell wearing its name. Closing the row here ends
               only this side's connection — the far-side processes keep running, and nothing agterm does from this end can kill them.
-              A remote session is never written to disk, so it does not come back after a relaunch. Its tree node carries
+              An open attached row is saved and attached again at the next launch; one whose session the origin no longer has
+              shows that it ended there. Its tree node carries
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteSessionID</span>.
               The title bar shows a cloud and the remote host, which you can hide with the Remote host toggle in Settings ▸ Interface.
@@ -4422,7 +4423,8 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span> runs its scripts with the full <a href="#page-bridge" style="color: #6d82f3">control
                 bridge</a> at every launch and every reopen, with nothing to click. That is more than a restored
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span> gets, which runs again only in Re-run commands mode. The file and any scripts it
-                loads have full control of agterm. A URL page gets no bridge. A page row attached from another Mac is never saved.
+                loads have full control of agterm. A URL page gets no bridge. A page row attached from another Mac is saved as an attachment, never with its page,
+                which its origin hands over again at the next launch.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

@@ -277,7 +277,7 @@ entries in `surfaces` report their own Boolean, while scratch and overlays omit 
 `liveHostStale` and `splitLiveHostStale` (true for a pane whose session host is from an earlier agterm
 build or login, which `zmx reset` moves to the current one; omitted otherwise),
 `remoteHost` (the machine an attached session came from, the read side of `zmx attach`; omitted for a local
-session; a remote row is not persisted, so a per-session attach is gone after a relaunch, while a remote window rebuilds its rows),
+session; an attached row is saved and attached again at relaunch, while a remote window rebuilds its rows),
 `remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
 `unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
@@ -772,8 +772,8 @@ HOST SESSION [--window W]` - open one of them here, marked remote and carrying i
 chosen open local window's current workspace (default: frontmost after discovery). A background target
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
-handing back a fresh shell wearing its name. Closing it here ends only this side's connection and it is
-never restored after a relaunch. Add `--companions` to attach the group; see
+handing back a fresh shell wearing its name. Closing it here ends only this side's connection. An open row is
+saved and attached again at the next launch; one whose session is gone from the origin shows `Ended on HOST`. Add `--companions` to attach the group; see
 [details](reference.md#restore). An attached page row shows the origin's page over its page channel and mirrors
 nothing; an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself

@@ -1640,8 +1640,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The basename comes from `stripLoginDash(argv)[0]`, in that order: `basename` splits on `/`, so it drops the
   login mark from `-/bin/zsh` but keeps it on the bare `-zsh`.
 - `remoteHost` names the machine a teleported session is attached to and is omitted for a local one. It is
-  live-only: a remote row is never persisted, so a per-session attach is gone after a relaunch, while a remote
-  window rebuilds its rows from the server's catalog with both remote fields set.
+  saved with an attached row and set again at relaunch (Remote sessions owns that), while a remote window rebuilds
+  its rows from the server's catalog with both remote fields set.
   `remoteSessionID`, on the node and on `remote.opened` / `remote.closed`, is the origin's id the row shows.
   A remote window's row carries it too, equal to the row's own id; a re-attach hook skips those rows by their
   window's `remote` node, since the window restores them itself.
@@ -2072,9 +2072,24 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `Session.remoteHost` and `remoteSessionID` are immutable and set at construction, because `addSession` saves
   and emits `remote.opened` before `bindRemote` runs: a marker written
   afterwards would let one snapshot reach disk carrying the ssh command. `isPersistable` gates every
-  producer — the launch snapshot, the Recent Closed session record, and a closed workspace's record, whose
-  `sessionCount` and `selectedSessionID` are recomputed after filtering. The in-memory pending-close record
-  keeps remote sessions, so the three-second undo still restores the row.
+  local producer: the launch snapshot's `sessions`, the Recent Closed session record, the quit capture, and a
+  closed workspace's record, whose `sessionCount` and `selectedSessionID` are recomputed after filtering. The
+  in-memory pending-close record keeps remote sessions, so the three-second undo still restores the row.
+- A row attached from another host (`Session.attachedOrigin`; nil for a server window's row and one not yet
+  bound) is saved apart in `WorkspaceSnapshot.attached`: its place, view state and binding, never a command,
+  cwd or page source, so a build predating the key ignores it rather than starting a shell in it. `bindRemote`
+  saves, since `addSession` saved before the binding existed. A relaunch runs the saved attach lines WITHOUT the
+  lead claim (`attachedSession(from:)`), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
+  session the tree lists is alive; one it leaves out ends the row (`endAttachedRow`, `Ended on HOST`) only when
+  the host's complete `zmx list` has no claim for it, since a session in a window closed there is left out but
+  claimed; anything else is inconclusive. A page owns no daemon and the tree omits a page companion whose parent
+  is not attachable, so a page row, waiting as `connecting`, always asks for its page (`requestRemotePage`) and is
+  filled in place (`placeRemotePage` at `.existing`). A refusal shows as `failed` with the host's reason and is
+  not asked again; no answer reads `failed` too and the check retries on `RemoteRetryBackoff`.
+- Closing such a row writes a `RecentClosedState.remoteItems` entry, one per host and origin session, never a
+  local one. Its id is the close's `recentID`, and a workspace close ties its rows' entries to its own entry
+  through `closeID`, so `RecentClosedStore.remove` drops them on undo; a single-target `session.terminate`
+  records the origin's own `recentID` on it.
 - `Session.locallyManagedPaneIdentities` is the single local-ownership predicate, empty for a remote
   session, read by `finalizePaneIdentities`, the direct `closeSplit` finalizer path, `liveClaims` and live
   `finalizeWindowPanes`. Without it `liveClaims` invents an `agterm-<uuid>` claim for a pane whose daemon
