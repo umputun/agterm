@@ -56,10 +56,10 @@ extension ControlServer {
                                                 now: hudClock()),
                       let view = waitingSurface(pane, in: entry.session) else { return }
                 if let store = library.store(forSession: entry.session), let row = store.session(withID: entry.session),
-                   row.originScratch == pane {
+                   row.scratchClientIdentity == pane, let scratch = row.originScratch {
                     _ = row.catalogScratch != nil
-                        ? store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: pane)
-                        : store.replaceOriginScratchAttachment(entry.session, identity: pane, attach: self)
+                        ? store.remoteActions?.mirror.replaceScratchAttachment(of: entry.session, identity: scratch)
+                        : store.replaceOriginScratchAttachment(entry.session, identity: scratch, attach: self)
                     return
                 }
                 // a row hidden for undo keeps waiting; finalizing its close lets the next due probe drop it. A catalog
@@ -90,7 +90,7 @@ extension ControlServer {
     /// surviving scratch does.
     private func waitingSurface(_ pane: UUID, in sessionID: UUID) -> GhosttySurfaceView? {
         guard let session = heldSession(sessionID) else { return nil }
-        if session.originScratch == pane { return session.scratchSurface as? GhosttySurfaceView }
+        if session.originScratch != nil, session.scratchClientIdentity == pane { return session.scratchSurface as? GhosttySurfaceView }
         guard !session.ended else { return nil }
         let surface = session.paneIdentity == pane ? session.surface
             : session.splitPaneIdentity == pane ? session.splitSurface : nil

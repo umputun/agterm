@@ -27,10 +27,11 @@ extension agtermApp {
         if originScratch == nil { session.scratchCwd = cwd }
         let live = originScratch == nil
             ? liveScratch(for: session, store: store, env: env, command: command, requested: requested, active: active) : nil
+        let originToken = originScratch == nil ? nil : session.scratchClientIdentity
         let view = GhosttySurfaceView(workingDirectory: cwd, fontSize: session.fontSize.map(Float.init),
                                       command: live?.command ?? command, autoFocus: !suppressAutoFocus,
                                       env: live?.environment
-                                          ?? env.merging(originScratch.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 },
+                                          ?? env.merging(originToken.map { ["AGTERM_PANE_ID": $0.uuidString] } ?? [:]) { $1 },
                                       backedByZmx: live != nil)
         if let live { ZmxLeadBook.shared.begin(live.lead, pane: live.identity) }
         Self.wireScratch(view, session: session, store: store, actions: actions)

@@ -250,6 +250,31 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         XCTAssertFalse(row.hasSplit)
     }
 
+    // regression: two rows of one origin session gave their scratch surfaces the origin's scratch UUID as token and lead key
+    func testTwoRowsOfOneOriginSessionGiveTheirScratchSurfacesTheirOwnKeys() throws {
+        let (server, store) = try makeServer(ScriptedRunner([]))
+        let rows = try [attachedRow(in: store), attachedRow(in: store)]
+        let scratch = UUID()
+
+        let views = rows.map { row in
+            store.applyRemoteLayout(PresentationLayout(panes: [originLeft], primary: originLeft, shown: false, scratch: scratch,
+                                                       scratchShown: true), forSession: row.id, attach: server)
+            let view = agtermApp.makeScratchSurface(for: row, store: store, env: [:], suppressAutoFocus: true,
+                                                    actions: AppActions(library: library))
+            row.scratchSurface = view
+            return view
+        }
+        let clients = try rows.map { try XCTUnwrap($0.scratchClientIdentity) }
+        defer { clients.forEach { ZmxLeadBook.shared.forget(pane: $0) } }
+
+        XCTAssertEqual(Set(clients).count, 2)
+        XCTAssertEqual(views.map(\.paneToken), clients.map(\.uuidString))
+        XCTAssertTrue(clients.allSatisfy { ZmxLeadBook.shared.states[$0] != nil })
+        XCTAssertNil(ZmxLeadBook.shared.states[scratch])
+        XCTAssertEqual(views.map(\.linkClickPane), [scratch, scratch])
+        XCTAssertEqual(rows.map(\.originScratch), [scratch, scratch])
+    }
+
     func testTheScratchRunsOnAnOriginThatShowsItsScratchAndIsRefusedWhereItCannot() async throws {
         let runner = ScriptedRunner([ok()])
         let (server, store) = try makeServer(runner)

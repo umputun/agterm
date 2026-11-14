@@ -72,14 +72,16 @@ enum CompanionGroupFailure: Error {
 final class RecordingAttachLines: RemoteAttachLines {
     var panes: [(daemon: String, local: UUID)] = []
     var scratches: [String] = []
+    var scratchLocals: [UUID] = []
 
     func paneAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
         panes.append((daemon, local))
         return "attach-pane \(daemon)"
     }
 
-    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local _: UUID) -> String {
+    func scratchAttach(_ origin: RemoteBinding.Origin, daemon: String, local: UUID) -> String {
         scratches.append(daemon)
+        scratchLocals.append(local)
         return "attach-scratch \(daemon)"
     }
 }

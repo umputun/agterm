@@ -107,6 +107,9 @@ public final class Session: Identifiable {
     /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
     @ObservationIgnored var scratchStoppedGeneration: Int?
 
+    /// originScratchClient keys this row's own attach of its origin's scratch, a daemon other rows may attach too.
+    @ObservationIgnored var originScratchClient: UUID?
+
     /// catalogScratch is the server scratch a remote window's row attaches, nil for every other row.
     public var catalogScratch: UUID? {
         remotePresentation?.binding.catalogOwned == true ? scratchDaemon?.identity : nil
@@ -677,7 +680,7 @@ public final class Session: Identifiable {
         case .right:
             return splitSurface?.paneToken ?? splitPaneIdentity.map(daemonToken) ?? ""
         case .scratch:
-            return scratchSurface?.paneToken ?? scratchDaemon?.identity.uuidString ?? ""
+            return scratchSurface?.paneToken ?? (scratchClientIdentity ?? scratchDaemon?.identity)?.uuidString ?? ""
         }
     }
 
@@ -845,7 +848,7 @@ public final class Session: Identifiable {
         if scratchSurface?.paneToken == token { return .scratch }
         if surface == nil, daemonToken(paneIdentity) == token { return .left }
         if splitSurface == nil, let split = splitPaneIdentity, daemonToken(split) == token { return .right }
-        if scratchSurface == nil, scratchDaemon?.identity.uuidString == token { return .scratch }
+        if scratchSurface == nil, (scratchClientIdentity ?? scratchDaemon?.identity)?.uuidString == token { return .scratch }
         return nil
     }
 

@@ -33,10 +33,10 @@ extension agtermApp {
     @MainActor
     private static func reattachScratch(_ old: GhosttySurfaceView, session: Session, lead: ZmxLeadAttachment, cover: Bool,
                                         services: SurfaceServices) -> Bool {
-        guard let identity = session.localScratchIdentity ?? session.originScratch, old.paneToken == identity.uuidString,
+        guard let identity = session.scratchClientIdentity, old.paneToken == identity.uuidString,
               let store = services.library.store(forSession: session.id),
               let launch = old.backedByZmx ? PaneReattach.launch(replacing: old, session: session, identity: identity, lead: lead)
-                  : PaneReattach.originScratch(replacing: old, session: session, identity: identity, lead: lead)
+                  : session.originScratch.flatMap({ PaneReattach.originScratch(replacing: old, session: session, identity: $0, lead: lead) })
         else { return false }
         let fontSize = old.currentFontSize() ?? session.fontSize
         let view = GhosttySurfaceView(workingDirectory: launch.workingDirectory, fontSize: fontSize.map(Float.init),

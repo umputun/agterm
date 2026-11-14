@@ -426,7 +426,6 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
         let primary = UUID()
         let scratch = UUID()
-        pane = scratch
         store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
                                        presentationVersion: 1,
                                        origin: RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx",
@@ -436,8 +435,10 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         let server = server(probe: 0)
         store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true),
                                 forSession: session.id, attach: server)
-        defer { ZmxLeadBook.shared.forget(pane: scratch) }
-        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": scratch.uuidString],
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        pane = client
+        defer { ZmxLeadBook.shared.forget(pane: client) }
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
                                       backedByZmx: false)
         view.watermarkSession = session
         session.scratchSurface = view
@@ -450,7 +451,7 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
 
         XCTAssertFalse(server.remoteScratchStopped(localView))
         XCTAssertTrue(server.remoteScratchStopped(view))
-        XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: scratch))
+        XCTAssertTrue(RemoteReconnectBook.shared.waiting(pane: client))
         server.tickReconnects()
         for _ in 0..<200 where session.scratchGeneration == generation {
             try await Task.sleep(for: .milliseconds(10))

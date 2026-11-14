@@ -192,7 +192,7 @@ extension Session {
         switch surface {
         case .primary: paneIdentity
         case .split: splitPaneIdentity
-        case .scratch: localScratchIdentity ?? originScratch
+        case .scratch: scratchClientIdentity
         default: nil
         }
     }
@@ -201,7 +201,7 @@ extension Session {
         switch pane {
         case .left: paneIdentity
         case .right: splitPaneIdentity
-        case .scratch: localScratchIdentity ?? originScratch
+        case .scratch: scratchClientIdentity
         }
     }
 }

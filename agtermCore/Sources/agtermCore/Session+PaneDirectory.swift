@@ -26,6 +26,12 @@ extension Session {
         catalogScratch ?? (scratchFollowsOrigin ? scratchDaemon?.identity : nil)
     }
 
+    /// scratchClientIdentity keys the scratch surface on this Mac (its token, lead and reconnect entry): the daemon's
+    /// identity for a local or server scratch, this row's own key for an origin's scratch.
+    public var scratchClientIdentity: UUID? {
+        localScratchIdentity ?? catalogScratch ?? (scratchFollowsOrigin ? originScratchClient : nil)
+    }
+
     /// The host a pane's shell runs on: `remoteHost`, except for a scratch that runs on this Mac, which an
     /// attached session's is unless it shows its origin's. A remote window's scratch attaches the server's shell.
     public func remoteHost(for pane: CommandContext.Pane) -> String? {

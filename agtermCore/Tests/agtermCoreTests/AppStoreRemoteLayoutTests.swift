@@ -232,19 +232,65 @@ struct AppStoreRemoteLayoutTests {
         let (store, session) = try attachedAlone()
         let scratch = UUID()
         _ = store.applyRemoteLayout(scratchLayout(scratch, shown: true), forSession: session.id, attach: lines)
-        session.scratchSurface = SpySurface(paneToken: scratch.uuidString)
+        let client = try #require(session.scratchClientIdentity)
+        session.scratchSurface = SpySurface(paneToken: client.uuidString)
 
-        #expect(session.paneIdentity(for: StatusPane.scratch) == scratch)
-        #expect(store.originScratchStopped(session.id) == scratch)
+        #expect(session.paneIdentity(for: StatusPane.scratch) == client)
+        #expect(store.originScratchStopped(session.id) == client)
         #expect(store.replaceOriginScratchAttachment(session.id, identity: scratch, attach: lines))
         #expect(!store.replaceOriginScratchAttachment(session.id, identity: scratch, attach: lines))
 
         #expect(session.scratchSurface == nil)
         #expect(session.scratchActive)
         #expect(lines.scratches == [ZmxSupport.daemonName(for: scratch), ZmxSupport.daemonName(for: scratch)])
-        session.scratchSurface = SpySurface(paneToken: scratch.uuidString)
+        #expect(lines.scratchLocals == [client, client])
+        session.scratchSurface = SpySurface(paneToken: client.uuidString)
         _ = store.applyRemoteLayout(scratchLayout(UUID(), shown: true), forSession: session.id, attach: lines)
         #expect(store.originScratchStopped(session.id) == nil)
+    }
+
+    // regression: two rows of one origin session shared the origin's scratch UUID as their lead and reconnect key
+    @Test func twoRowsOfOneOriginSessionKeyTheirScratchesApart() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let rows = try (0..<2).map { _ in
+            let row = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp", remoteHost: "origin"))
+            row.surface = SpySurface()
+            store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [
+                row.paneIdentity: ZmxSupport.daemonName(for: originA),
+            ], presentationVersion: 1, origin: origin), forSession: row.id)
+            return row
+        }
+        let scratch = UUID()
+
+        for row in rows { _ = store.applyRemoteLayout(scratchLayout(scratch, shown: true), forSession: row.id, attach: lines) }
+
+        let clients = rows.compactMap(\.scratchClientIdentity)
+        #expect(clients.count == 2)
+        #expect(Set(clients).count == 2)
+        #expect(!clients.contains(scratch))
+        #expect(rows.map(\.originScratch) == [scratch, scratch])
+        #expect(rows.map { $0.paneIdentity(for: StatusPane.scratch) } == clients)
+        #expect(rows.map { $0.paneToken(for: .scratch) } == clients.map(\.uuidString))
+        #expect(zip(rows, clients).allSatisfy { $0.paneRole(forToken: $1.uuidString) == .scratch })
+        #expect(lines.scratchLocals == clients)
+        #expect(lines.scratches == [ZmxSupport.daemonName(for: scratch), ZmxSupport.daemonName(for: scratch)])
+    }
+
+    @Test func aReplacedOriginScratchGetsANewKeyAndARepeatedLayoutKeepsIt() throws {
+        let (store, session) = try attachedAlone()
+        _ = store.applyRemoteLayout(scratchLayout(UUID(), shown: false), forSession: session.id, attach: lines)
+        let first = try #require(session.scratchClientIdentity)
+
+        _ = store.applyRemoteLayout(scratchLayout(session.originScratch, shown: true), forSession: session.id, attach: lines)
+        #expect(session.scratchClientIdentity == first)
+
+        _ = store.applyRemoteLayout(scratchLayout(UUID(), shown: true), forSession: session.id, attach: lines)
+        let second = try #require(session.scratchClientIdentity)
+        #expect(second != first)
+
+        _ = store.applyRemoteLayout(scratchLayout(nil, shown: false), forSession: session.id, attach: lines)
+        #expect(session.scratchClientIdentity == nil)
     }
 
     @Test(arguments: [false, true])

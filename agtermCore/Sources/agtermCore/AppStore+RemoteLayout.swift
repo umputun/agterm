@@ -80,23 +80,27 @@ extension AppStore {
             if let current = session.scratchDaemon { releaseScratchOwnedState(of: session, token: current.identity.uuidString) }
             session.scratchCommand = nil
             session.scratchDaemon = identity.map { Session.ScratchDaemon(identity: $0, shown: shown) }
+            session.originScratchClient = nil
             scheduleTreeChanged()
         }
         guard let identity else { return }
         session.scratchDaemon?.shown = shown
+        let client = session.originScratchClient ?? UUID()
+        session.originScratchClient = client
         if shown, session.scratchSurface == nil, session.scratchCommand == nil {
-            session.scratchCommand = attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: identity)
+            session.scratchCommand = attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client)
         }
         if session.scratchActive != shown { toggleScratch(session.id) }
     }
 
     /// originScratchStopped marks row `id`'s origin scratch attach as ended while the saved layout still lists that
-    /// scratch, answering its identity to reconnect; nil when the layout no longer has it.
+    /// scratch, answering the row's key for it to reconnect; nil when the layout no longer has it.
     public func originScratchStopped(_ id: UUID) -> UUID? {
         guard let row = session(withID: id), row.scratchFollowsOrigin, row.scratchSurface != nil,
-              let identity = row.scratchDaemon?.identity, row.remotePresentation?.layout?.scratch == identity else { return nil }
+              let identity = row.scratchDaemon?.identity, row.remotePresentation?.layout?.scratch == identity,
+              let client = row.scratchClientIdentity else { return nil }
         row.scratchStoppedGeneration = row.scratchGeneration
-        return identity
+        return client
     }
 
     /// replaceOriginScratchAttachment swaps a stopped origin scratch attach for a fresh one, leaving it shown or hidden as
@@ -104,8 +108,9 @@ extension AppStore {
     public func replaceOriginScratchAttachment(_ id: UUID, identity: UUID, attach: RemoteAttachLines) -> Bool {
         guard let row = session(withID: id), row.scratchFollowsOrigin, let binding = row.remotePresentation?.binding,
               let origin = binding.origin, row.remotePresentation?.layout?.scratch == identity,
-              row.scratchDaemon?.identity == identity, row.scratchStoppedGeneration == row.scratchGeneration else { return false }
-        replaceScratchSurface(row, command: attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: identity))
+              row.scratchDaemon?.identity == identity, row.scratchStoppedGeneration == row.scratchGeneration,
+              let client = row.scratchClientIdentity else { return false }
+        replaceScratchSurface(row, command: attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client))
         return true
     }
 

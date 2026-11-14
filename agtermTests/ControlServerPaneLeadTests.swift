@@ -416,17 +416,18 @@ final class ControlServerPaneLeadTests: XCTestCase {
         let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory(),
                                                      remoteHost: "buildbox"))
         let primary = UUID()
-        let identity = UUID()
-        panes.append(identity)
+        let scratch = UUID()
         store.bindRemote(RemoteBinding(remoteSessionID: "origin-1", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
                                        presentationVersion: 1,
                                        origin: RemoteBinding.Origin(host: "buildbox", endpoint: ControlZmxEndpoint(executable: "/a/zmx",
                                                                                                                    socketDirectory: "/tmp/z"),
                                                                     sessionName: "c")),
                          forSession: session.id)
-        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: identity, scratchShown: true),
+        store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: scratch, scratchShown: true),
                                 forSession: session.id, attach: server)
-        return (session, identity)
+        let client = try XCTUnwrap(session.scratchClientIdentity)
+        panes.append(client)
+        return (session, client)
     }
 
     func testAnUnownedLiveScratchAttachesAgainWithoutAClaimAndFollowsAClaimant() throws {
