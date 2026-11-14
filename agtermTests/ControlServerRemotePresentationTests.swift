@@ -296,6 +296,29 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertEqual(fix.session.remotePresentation?.connection, .connected)
     }
 
+    func testAnOriginMessageFrameEmitsTheMessageEventOnTheRow() async throws {
+        let (fix, transport) = try connected()
+        let dispatcher = ControlDispatcher(actions: fix.server)
+        let anchor = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead))
+        let bootstrap = try XCTUnwrap(anchor?.result?.events)
+        let message = PresentationMessage(pane: UUID(), from: "S:P", messageID: UUID())
+
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try transport.feed(.message(message), rev: 2)
+
+        let read = await dispatcher.dispatch(ControlRequest(cmd: .eventsRead, args: ControlArgs(
+            after: String(bootstrap.next), run: bootstrap.run.uuidString, kinds: ["message"])))
+        let events = try XCTUnwrap(read?.result?.events?.items)
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.session, fix.session.id.uuidString)
+        XCTAssertEqual(events.first?.workspace, fix.store.workspace(forSession: fix.session.id)?.id.uuidString)
+        XCTAssertNotNil(events.first?.window)
+        XCTAssertNotEqual(message.pane, fix.session.paneIdentity)
+        XCTAssertEqual(events.first?.payload.paneID, message.pane.uuidString)
+        XCTAssertEqual(events.first?.payload.from, "S:P")
+        XCTAssertEqual(events.first?.payload.messageID, message.messageID.uuidString)
+    }
+
     func testAMirroredInfoLineFollowsTheSnapshotAndItsFrames() throws {
         let (fix, transport) = try connected()
 
