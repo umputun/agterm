@@ -166,12 +166,12 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// Heap buffers backing the surface config's `const char*` fields — notably `initial_input`, which
     /// libghostty writes to the pty asynchronously after the child spawns, so the buffer must outlive
     /// `ghostty_surface_new`. Freed in `destroySurface`.
-    nonisolated(unsafe) private var configCStrings: [UnsafeMutablePointer<CChar>] = []
+    nonisolated(unsafe) private(set) var configCStrings: [UnsafeMutablePointer<CChar>] = []
 
     /// The `ghostty_env_var_s` structs handed to `config.env_vars`; their `key`/`value` point into the
     /// `configCStrings` buffers (same lifetime). The array must itself outlive `ghostty_surface_new`, so it is
     /// stored rather than local, cleared in `destroySurface`/`deinit`. `nonisolated(unsafe)`: main actor only.
-    nonisolated(unsafe) private var envVars: [ghostty_env_var_s] = []
+    nonisolated(unsafe) private(set) var envVars: [ghostty_env_var_s] = []
 
     /// Per-surface ghostty configs for this surface's background watermark (`configWithOverlay`), retained so
     /// they outlive their `ghostty_surface_update_config`. Capped at ONE: each re-apply frees the prior, since
@@ -829,7 +829,10 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
     }
 
-    func destroySurface() {
+    /// Set by `retireSurface`; the callbacks drop libghostty's reports for it.
+    nonisolated let retired = OSAllocatedUnfairLock(initialState: false)
+
+    func detachSurface() -> ghostty_surface_t? {
         // a pane torn down before it spawned must not consume its pending slots; the session keeps them.
         launchSeed = nil
         // leave the launch queue: a key nobody will ever request holds every pane behind it for an interval,
@@ -844,8 +847,11 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         focusObservers.forEach { NotificationCenter.default.removeObserver($0) }
         focusObservers = []
         windowVisibilityObservation = nil
-        if let surface { ghostty_surface_free(surface) }
-        surface = nil
+        defer { surface = nil }
+        return surface
+    }
+
+    func finishDestroy() {
         linkHover?.label = nil
         // release the custom layer libghostty installed and this view still retains. The current pin clears
         // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where

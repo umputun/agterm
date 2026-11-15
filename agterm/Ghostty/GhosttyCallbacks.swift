@@ -414,9 +414,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
 
     func closeSurface(ud: UnsafeMutableRawPointer?) {
         guard let ud else { return }
-        // the Session retains the view until destroySurface() runs (the only place ghostty_surface_free is
-        // called), so takeUnretainedValue() is safe. never close or free synchronously from this callback.
+        // the Session retains the view until destroySurface() runs, and SurfaceRetirement retains a retired one
+        // until it frees the surface, so takeUnretainedValue() is safe. never close or free synchronously here.
         let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        guard !view.retired.withLock({ $0 }) else { return }
         DispatchQueue.main.async { view.handleProcessExit() }
     }
 
@@ -425,7 +426,8 @@ final class GhosttyCallbacks: @unchecked Sendable {
               let surface = target.target.surface,
               let ud = ghostty_surface_userdata(surface)
         else { return nil }
-        return Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
+        return view.retired.withLock { $0 } ? nil : view
     }
 
     private func surface(from ud: UnsafeMutableRawPointer?) -> ghostty_surface_t? {
