@@ -12,5 +12,5 @@ host reacts to a server session's status, notify or lifecycle events while no Ma
 Undecided whether this belongs on the host at all, since hooks are Mac-side user config today. The case for it:
 hooks exist to react unattended, a server with no Mac attached cannot, and `HookScheduler` (agtermCore) already
 runs without a GUI; only `HookProcessRunner` is app-side. If done: server-configured hooks run on server events
-there, Mac-configured hooks on Mac events here, and a Mac's config is never uploaded or run on the host. Depends on
-the server event ring from `docs/plans/20261114-remote-session-parity.md` (task 1).
+there, Mac-configured hooks on Mac events here, and a Mac's config is never uploaded or run on the host. The
+server event ring it would read from exists (`ServerEvents.swift`, #999).

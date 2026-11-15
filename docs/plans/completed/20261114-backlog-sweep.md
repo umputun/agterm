@@ -240,11 +240,11 @@ Viewer side:
 
 ### Task 5: Backlog, verification and gates
 
-- [ ] `git rm` the four fixed items; correct the two stale item texts
-- [ ] verify every Overview item is implemented
-- [ ] `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
-- [ ] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `git rm` the four fixed items; correct the two stale item texts
+- [x] verify every Overview item is implemented
+- [x] `cd agtermCore && swift test`, `make test-app`, `make lint`, each once
+- [x] `lsappinfo list | grep -A4 agterm.debug` after the hosted run
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
