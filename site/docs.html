@@ -3005,270 +3005,199 @@ agtermctl msg read --ack --wait --timeout 60                      # wait for mai
 </section>
 
           <!-- GHOSTTY -->
-          <section id="ghostty" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Ghostty config
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 18px">
-              agterm builds its terminal config from four sources, each overriding the one before it:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #949ba4;
-              "
-            >
-              ghostty defaults → ~/.config/ghostty/config → <span style="color: #e6e1d7">&lt;config dir&gt;/ghostty.conf</span> →
-              agterm Settings<br /><span style="color: #6b727a"
-                >&nbsp;&nbsp;(lowest)&nbsp;&nbsp;&nbsp;&nbsp;(global, OFF by
-                default)&nbsp;&nbsp;&nbsp;&nbsp;(agterm-scoped)&nbsp;&nbsp;&nbsp;&nbsp;(UI wins)</span
-              >
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              agterm is self-contained: <strong style="color: #e6e1d7">by default it does not read your global</strong>
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/ghostty/config</span>, so a
-              config written for the standalone Ghostty.app never silently changes agterm. Turn on
-              <strong style="color: #e6e1d7">Settings ▸ General ▸ Use my global Ghostty config</strong> to fold it in.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >&lt;config dir&gt;/ghostty.conf</span
-              >
-              (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >~/.config/agterm/ghostty.conf</span
-              >) is the place to customize agterm. It sits next to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span> and gets the same
-              treatment: a fully commented starter file is written on first launch, so a fresh one changes nothing. It is always loaded,
-              and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty terminal config key there. Values agterm emits
-              from Settings use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">font-family</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">font-size</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">theme</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">background-opacity</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">background-blur</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse-scroll-multiplier</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">right-click-action</span>. They load last,
-              so they win over matching values in this file. The last two are emitted even when their controls use the defaults. A common use:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">macos-option-as-alt = true</span>. The
-              full key reference is at <a href="https://ghostty.org/docs/config" style="color: #6d82f3">ghostty.org/docs/config</a>.
-              Two values in it do not apply here:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh-env</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh-terminfo</span> for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shell-integration-features</span>.
-              Ghostty implements both by replacing your
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span> with a wrapper that calls
-              the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty</span> command-line tool
-              absent from agterm's bundle, so the wrapper would fail on every connection. agterm forces those two
-              back off and keeps the rest of your flags, leaving
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span> the real
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh</span>; to put the terminfo entry on a
-              remote host once, run
-              <a href="/commands#terminfo" style="color: #6d82f3"><span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl terminfo install &lt;host&gt;</span></a>. The variables agterm
-              injects into the shell,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">TERM_PROGRAM</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">TERM_PROGRAM_VERSION</span> and the
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_*</span> set, are applied after
-              this file, so an <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">env</span> line naming
-              one of them has no effect. Other
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">env</span> keys reach every new shell.
-              Keys for Ghostty.app's own window and split chrome are mostly not read, because agterm draws its own.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">split-divider-color</span> is:
-              it colors the split divider, which otherwise takes a faint line from the theme.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unfocused-split-fill</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unfocused-split-opacity</span> are not;
-              Settings ▸ Appearance sets how much the inactive pane dims.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keybind</span> here follows ghostty's
-              own rules, which differ from
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>: a bare letter or
-              digit binds the <em>character</em> the active layout produces, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >keybind = super+opt+ctrl+g=text:hello</span
-              >
-              stops firing on a non-Latin layout, where that key types
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">п</span>. Prefix the key with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">key_</span> to bind the physical
-              position instead —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >keybind = super+opt+ctrl+key_g=text:hello</span
-              >
-              works on any layout. agterm's bundled defaults already use it for ⌘C, ⌘V, and ⌘A.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global:</span> keybinds and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_visibility</span> are
-              Ghostty.app features agterm does not host, so they parse and never fire; the system-wide chord agterm registers is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> in
-              <a href="#keymap" style="color: #6d82f3">keymap.conf</a>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Programs can read and write the macOS clipboard over OSC 52. agterm prompts before a program
-              <strong style="color: #e6e1d7">reads</strong> your clipboard (a read hands its contents back to the program); a normal
-              ⌘V paste is never prompted. Clipboard <strong style="color: #e6e1d7">writes</strong> go through by default, matching
-              other terminals so a remote <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >tmux</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vim</span> yank still reaches your
-              clipboard. To gate writes, set
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">clipboard-write = ask</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">deny</span>. Each prompt offers
-              <em>Don't ask again this session</em>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Selecting text with the mouse copies it to a private selection clipboard, which a middle-click pastes, and leaves
-              the system clipboard alone; ⌘C puts the selection on the system clipboard. To have every selection land on the
-              system clipboard as well, set
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">copy-on-select = clipboard</span>,
-              or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">false</span> to copy nothing on
-              select.
-            </p>
-            <p id="links" style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Holding ⌘ over a link shows where it goes at the bottom-left of the pane, so a link whose text says one thing
-              and points elsewhere shows its real target; a session link shows the session it selects. Ghostty's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">link-previews</span> setting decides which links get it.
-              A ⌘-click on a web link opens it in your browser. With
-              <strong style="color: #e6e1d7">Settings ▸ General ▸ Open links in</strong> set to a Session overlay choice, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl browser links overlay</span>, an http or https link
-              opens in a web overlay over its session instead, full size or at 95%, 75% or 50%
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay95</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay75</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay50</span>): JavaScript on, navigation buttons, and the saved browser
-              store, so a login made there lasts. That store is agterm's own; nothing is taken from your browser. The page
-              may go on to other sites, and its strip always names the site shown. A ⌘⇧-click sends that one link to the
-              browser instead, except in a program that captures the mouse, where ⌘⇧-click is the ordinary link click and
-              follows this setting. Where the override applies, use Shift-click to extend a selection.
-              The link also opens in the browser when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session
-              already has an overlay, or in the quick terminal. So does a plain http link to anything but a local
-              address (localhost, a .local name, an IP address), which the overlay could not load.
-              A page an earlier click opened and you then hid with ⇧⌘J is the exception: the new link replaces it and
-              shows.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A ⌘-click on a local path — a plain one printed in the output, such as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/tmp/shot.png</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/notes.md</span>, or a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link, the kind
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ls --hyperlink</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">eza</span>, and many compilers emit —
-              shows a png, jpg, gif or webp picture over its session, sized to the picture up to 80% of the session, renders a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.md</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.markdown</span> file as a page in
-              the terminal's theme at the link-open size (95% when links open in the browser), shows a source, config, text or
-              log file the same way, read-only and highlighted when its language is known or in terminal colors when it carries color codes, shows an
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.html</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.htm</span> file as a page with its scripts off and no
-              access to other files, loading nothing from the network and handing a web link to the browser only after
-              asking, and
-              <strong style="color: #e6e1d7">reveals</strong> any other file in Finder instead of opening it. A location such as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">./main.go:42:7</span>, as compilers
-              and test runners print it, opens the file at that line; a relative one is looked up in the pane's own directory.
-              A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.log</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.out</span> file opens as a log page
-              instead: its last 5,000 lines, read from its end so a log of any size opens, following the file as it grows. A
-              bar shows whether it follows; scroll up to pause, and scroll back to the bottom or
-              press Resume to follow again. A rotated or truncated log is picked up, and a missing one shows waiting until it
-              returns. A location such as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">app.log:120</span>
-              still opens the plain page at that line. Every text page has a find box like the terminal's: ⌘F or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/</span> focuses it, Return and
-              Shift-Return or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">n</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">N</span> step through the
-              matches, and Esc clears it. A step pauses a following log, so the match stays in view. On a log page
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">F</span> toggles follow,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">G</span> or End goes to the
-              bottom and follows, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">g</span>
-              or Home goes to the top. ⌘F always searches what is on top: over any page or overlay it never reaches the
-              terminal behind it. Long lines run off the right edge until the bar's Wrap button or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">w</span> wraps them; each
-              wrapped line keeps its number on its first row, and the page keeps its choice until it closes. A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.diff</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.patch</span> page colors each file's code
-              in its language over green and red bands for added and removed lines, counts its changes,
-              each a run of removed and added lines, and steps between them with the bar's arrows or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">]</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[</span>, marking the one it reached;
-              after a scroll it goes on from what is shown. Its file button names the file in view; it or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f</span> opens the patch's file list,
-              which a typed filter narrows and arrows and Return pick from, Escape closing it. A pick shows that file's
-              header and marks its first change.
-              A period, question mark, exclamation mark or semicolon ending a sentence after a path is dropped when only the
-              file without it exists.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌘⌥</span>-click reveals any local
-              path in Finder instead, ⌘⌥⇧ while a program captures the mouse, and ⌘⌥-drag still selects a block. A rendered markdown
-              file shows a leading YAML frontmatter block as code, the pictures kept in its own folder and the alt text of any
-              other, runs none of its own script, and
-              hands a web link to the browser only after asking. A relative link to another
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.md</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.markdown</span> file in its folder or
-              below opens that file in the same page, with Back and Forward returning to where you were; a file directly in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/</span> or your home folder keeps
-              its links as text and shows no Back or Forward. A text page runs nothing, loads nothing and links nowhere: a URL
-              in a log stays text. A picture, markdown, HTML or text file clicked
-              from the HUD or the quick terminal, or while the session's overlay is busy, is revealed too; a hidden page an
-              earlier click opened is replaced instead, as with a web link. In a session
-              attached from another Mac or in a remote window, a path names a file on that Mac or Linux host, so the click goes
-              there: it opens the picture, markdown, text, log or HTML page and it shows here, a relative path looked up in that
-              pane's directory there. A scratch running there works the same way. A web link to localhost, 127.0.0.1 or ::1
-              in such a session names that host, so it opens through an ssh forward from this Mac once the forward answers. A click it cannot open, a ⌘⌥-click, and a click while that Mac runs an older agterm show a
-              short panel saying why, or
-              beep when the panel cannot be shown. A terminal renders untrusted
-              program output, so a link could point at a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.app</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.command</span>; revealing selects the file
-              without running it, which is the security boundary — actually opening it stays a separate, explicit action. Web
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">http</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >https</span
-              >) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mailto</span> links still open as
-              before. A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link that names
-              another host is ignored rather than revealed, so a stray link can't trigger a Finder network mount.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A ⌘-click on an
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://session/&lt;id&gt;</span>
-              link in a pane, split or scratch selects that session and raises its window, with no confirmation.
-              Print one with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"</span>,
-              or use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[label](agterm://session/&lt;id&gt;)</span>
-              in Claude Code markdown, which Claude Code emits as OSC 8. When Claude Code captures the mouse, use ⌘⇧-click. In a session attached from another Mac,
-              the id is that Mac's and selects the one row here showing it; the click never attaches anything or acts there.
-              Nothing happens for an unknown or closed session, when the destination window is zoomed, has the dashboard
-              open or a picker pending, for any other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm://</span>
-              form, on a ⌘⌥-click, or for a link in a HUD, the quick terminal or a program overlay.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Link detection follows the program in the pane. While one has mouse reporting on —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tmux</span> with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse on</span>, or stock
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vim</span> — ⌘-hover stops underlining
-              and ⌘-click opens nothing, because links are detected only while reporting is off. Same in Ghostty.app, and
-              per-program rather than per-kind of app. Hold shift as well (⌘⇧-hover, ⌘⇧-click) to reach the link anyway, unless the
-              program claimed shift for itself. That click follows Open links in. In
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty.conf</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mouse-shift-capture = never</span> makes
-              shift always win, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >mouse-reporting = false</span
-              >
-              turns reporting off for every program.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Open the file with <strong style="color: #e6e1d7">File ▸ Edit ghostty.conf…</strong> (a 95% editor overlay, same as
-              Edit Keymap). Apply edits made elsewhere with <strong style="color: #e6e1d7">File ▸ Reload Config</strong> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl config reload</span>. A
-              malformed line is skipped and the good ones still apply; the returned diagnostic count covers every config source.
-            </p>
-          </section>
+          <section id="ghostty" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Ghostty config</h2>
+<p>agterm builds its terminal config from four sources. Each one overrides the one before it:</p>
+<ol type="1">
+<li>ghostty's defaults.</li>
+<li><code>~/.config/ghostty/config</code>, your global Ghostty config. <strong>Off by default</strong>, so a config written for the standalone Ghostty.app never silently changes agterm. Turn on <strong>Settings ▸ General ▸ Use my global Ghostty config</strong> to fold it in.</li>
+<li><code>&lt;config dir&gt;/ghostty.conf</code> (default <code>~/.config/agterm/ghostty.conf</code>). Always loaded, and read only by agterm.</li>
+<li>agterm's Settings, which win. They set <code>font-family</code>, <code>font-size</code>, <code>theme</code>, <code>background-opacity</code>, <code>background-blur</code>, <code>mouse-scroll-multiplier</code> and <code>right-click-action</code>; the last two are set even when their controls are at the defaults.</li>
+</ol>
+<h3 id="ghostty-conf">ghostty.conf</h3>
+<p>This is the place to customize the terminal. It sits next to <code>keymap.conf</code> and works the same way: a fully commented starter file is written on first launch, so a fresh one changes nothing.</p>
+<ul>
+<li>Any ghostty terminal key goes here; the <a href="https://ghostty.org/docs/config">key reference</a> lists them. A common one: <code>macos-option-as-alt = true</code>.</li>
+<li><strong>File ▸ Edit ghostty.conf…</strong> opens it in a 95% editor overlay, as Edit Keymap does.</li>
+<li><strong>File ▸ Reload Config</strong> or <code>agtermctl config reload</code> applies edits made elsewhere. A malformed line is skipped and the good ones still apply; the returned diagnostic count covers every config source.</li>
+</ul>
+<p><strong>What it cannot change</strong></p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Key</th>
+<th>In agterm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>shell-integration-features</code> <code>ssh-env</code>, <code>ssh-terminfo</code></td>
+<td>forced off, the rest of your flags kept. Ghostty does these by wrapping ssh with the <code>ghostty</code> tool, which agterm does not ship, so every connection would fail. To put the terminfo entry on a host once, run <code>agtermctl terminfo install &lt;host&gt;</code>.</td>
+</tr>
+<tr>
+<td><code>env</code> naming <code>TERM_PROGRAM</code>, <code>TERM_PROGRAM_VERSION</code> or an <code>AGTERM_*</code> variable</td>
+<td>no effect: agterm sets these after reading the file. Other <code>env</code> keys reach every new shell.</td>
+</tr>
+<tr>
+<td>Ghostty.app's window and split chrome</td>
+<td>mostly not read, since agterm draws its own. <code>split-divider-color</code> is read and colors the split divider (otherwise a faint line from the theme). <code>unfocused-split-fill</code> and <code>unfocused-split-opacity</code> are not: <strong>Settings ▸ Appearance</strong> sets how much the inactive pane dims.</td>
+</tr>
+<tr>
+<td><code>global:</code> keybinds, <code>toggle_visibility</code></td>
+<td>parse and never fire; agterm's system-wide chord is <code>global-hotkey</code> in <code>keymap.conf</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Keybinds</strong> follow ghostty's rules, which differ from <code>keymap.conf</code>'s. A bare letter or digit binds the character the active layout types, so <code>keybind = super+opt+ctrl+g=text:hello</code> stops firing on a non-Latin layout, where that key types п. Prefix the key with <code>key_</code> to bind the physical key: <code>keybind = super+opt+ctrl+key_g=text:hello</code> works on any layout. agterm's bundled ⌘C, ⌘V and ⌘A use it.</p>
+<h3 id="ghostty-clipboard">Clipboard</h3>
+<p>Programs can read and write the macOS clipboard over OSC 52.</p>
+<ul>
+<li><strong>Reads</strong> ask first, since a read hands your clipboard to the program. A normal ⌘V paste never asks.</li>
+<li><strong>Writes</strong> go through, as in other terminals, so a remote tmux or vim yank reaches your clipboard. Set <code>clipboard-write = ask</code> or <code>deny</code> to gate them.</li>
+<li>Each prompt offers <strong>Don't ask again this session</strong>.</li>
+</ul>
+<p>Selecting text with the mouse copies it to a private selection clipboard, which a middle-click pastes; the system clipboard is left alone until ⌘C. Set <code>copy-on-select = clipboard</code> to put every selection on the system clipboard as well, or <code>false</code> to copy nothing on select.</p>
+<h3 id="links">Links</h3>
+<p>Hold ⌘ over a link to see where it goes, at the bottom-left of the pane: a link whose text says one thing and points elsewhere shows its real target, and a session link shows the session it selects. Ghostty's <code>link-previews</code> setting decides which links get it.</p>
+<p><strong>Web links.</strong> A ⌘-click opens an http or https link in your browser. With <strong>Settings ▸ General ▸ Open links in</strong> set to a Session overlay choice, or <code>agtermctl browser links overlay</code>, it opens in a web overlay over its session instead:</p>
+<ul>
+<li>full size or at 95%, 75% or 50% (<code>overlay</code>, <code>overlay95</code>, <code>overlay75</code>, <code>overlay50</code>; <code>browser</code> is the default);</li>
+<li>JavaScript on, navigation buttons, and agterm's saved browser store, so a login made there lasts. Nothing is taken from your browser;</li>
+<li>the page may go on to other sites, and its strip always names the site shown.</li>
+</ul>
+<p>With a Session overlay choice selected, outside a program that captures the mouse, ⌘⇧-click sends that one link to the browser; use Shift-click to extend a selection. In a program that captures the mouse, ⌘⇧-click is the ordinary link click and follows the setting.</p>
+<p>The link still opens in the browser when it sits in a HUD, when a HUD is up on the session, when the terminal is zoomed, when the session already has an overlay, or in the quick terminal. So does a plain http link to anything but a local address (localhost, a <code>.local</code> name, an IP address), which the overlay could not load. One exception: a page an earlier click opened and you then hid with ⇧⌘J is replaced by the new link and shown.</p>
+<h4 id="links-files">Local files</h4>
+<p>A ⌘-click on a local path opens it over its session. The path can be plain output, such as <code>/tmp/shot.png</code> or <code>~/notes.md</code>, or a <code>file://</code> link of the kind <code>ls --hyperlink</code>, eza and many compilers print.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Clicked file</th>
+<th>Opens as</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.png</code>, <code>.jpg</code>, <code>.gif</code>, <code>.webp</code></td>
+<td>the picture, sized to it up to 80% of the session</td>
+</tr>
+<tr>
+<td><code>.md</code>, <code>.markdown</code></td>
+<td>a rendered page</td>
+</tr>
+<tr>
+<td>source, config and text files</td>
+<td>a read-only page, highlighted when its language is known, in terminal colors when it carries color codes</td>
+</tr>
+<tr>
+<td><code>.log</code>, <code>.out</code></td>
+<td>a log page that follows the file</td>
+</tr>
+<tr>
+<td><code>.diff</code>, <code>.patch</code></td>
+<td>a diff page that steps through changes</td>
+</tr>
+<tr>
+<td><code>.html</code>, <code>.htm</code></td>
+<td>a page with its scripts off, no access to other files, and nothing loaded from the network; a web link goes to the browser only after asking</td>
+</tr>
+<tr>
+<td>anything else</td>
+<td>revealed in Finder</td>
+</tr>
+</tbody>
+</table>
+<p>Markdown, text, log and diff pages wear the terminal's theme and open at the link-open size, 95% when links open in the browser.</p>
+<ul>
+<li><code>./main.go:42:7</code>, as compilers and test runners print it, opens the file at that line. A relative path is looked up in the pane's own directory.</li>
+<li>A <code>.</code>, <code>?</code>, <code>!</code> or <code>;</code> ending a sentence after a path is dropped when only the file without it exists.</li>
+<li>⌘⌥-click reveals any local path in Finder instead (⌘⌥⇧ while a program captures the mouse); ⌘⌥-drag still selects a block.</li>
+<li>From a HUD or the quick terminal, or while the session's overlay is busy, the file is revealed instead. A hidden page an earlier click opened is replaced, as with a web link.</li>
+<li>Revealing selects the file without running it, so a link in untrusted output pointing at a <code>.app</code> or <code>.command</code> cannot launch it; opening stays a separate, explicit action. A <code>file://</code> link naming another host is ignored, so a stray link cannot trigger a Finder network mount. Web and <code>mailto</code> links open as before.</li>
+</ul>
+<p><strong>Text pages</strong> run nothing, load nothing and link nowhere: a URL in a log stays text. Long lines run off the right edge until you wrap them; a wrapped line keeps its number on its first row, and the page keeps the choice until it closes. ⌘F always searches what is on top, so over a page or overlay it never reaches the terminal behind.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Key</th>
+<th>On a text page</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⌘F or <code>/</code></td>
+<td>focus the find box</td>
+</tr>
+<tr>
+<td>Return, Shift-Return or <code>n</code>, <code>N</code></td>
+<td>next, previous match (a step pauses a following log)</td>
+</tr>
+<tr>
+<td>Esc</td>
+<td>clear the find box</td>
+</tr>
+<tr>
+<td><code>w</code> or the Wrap button</td>
+<td>wrap long lines</td>
+</tr>
+<tr>
+<td><code>F</code></td>
+<td>log: follow on or off</td>
+</tr>
+<tr>
+<td><code>G</code> or End, <code>g</code> or Home</td>
+<td>log: bottom and follow, top</td>
+</tr>
+<tr>
+<td><code>]</code>, <code>[</code> or the bar's arrows</td>
+<td>diff: next, previous change</td>
+</tr>
+<tr>
+<td><code>f</code> or the file button</td>
+<td>diff: the patch's file list</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Log pages</strong> show the last 5,000 lines, read from the end so a log of any size opens, and follow the file as it grows. The bar shows whether it follows. Scroll up to pause; scroll back to the bottom or press Resume to follow again. A rotated or truncated log is picked up, and a missing one shows waiting until it returns. <code>app.log:120</code> opens the plain page at that line instead.</p>
+<figure>
+<img src="/assets/docs-page-diff.webp" alt="A patch shown as a diff page with change and file navigation, green and red bands for added and removed lines" width="760" height="535" loading="lazy">
+<figcaption>
+A clicked <code>.patch</code>: the bar steps between changes and between files.
+</figcaption>
+</figure>
+<p><strong>Diff pages</strong> color each file's code in its language over green and red bands for added and removed lines. A change is a run of removed and added lines; the page counts them, marks the one a step reached, and after a scroll steps on from what is shown. The file button names the file in view; its list narrows as you type, arrows and Return pick, and Escape closes it. A pick shows that file's header and marks its first change.</p>
+<figure>
+<img src="/assets/docs-page-markdown.webp" alt="A markdown file rendered as a page in the terminal theme" width="1112" height="490" loading="lazy">
+<figcaption>
+A clicked <code>.md</code> file, rendered in the terminal's theme.
+</figcaption>
+</figure>
+<p><strong>Markdown pages</strong> show a leading YAML frontmatter block as code, pictures kept in the file's own folder, and the alt text of any other picture. They run none of the file's script and hand a web link to the browser only after asking. A relative link to another <code>.md</code> or <code>.markdown</code> file in the same folder or below opens in the same page, with Back and Forward. A file directly in <code>/</code> or your home folder keeps its links as text and shows no Back or Forward.</p>
+<p><strong>Remote sessions.</strong> In a session attached from another Mac or in a remote window, a path names a file on that Mac or Linux host, so the click goes there; a scratch running there works the same way. The picture, markdown, text, log or HTML page opens and shows here, a relative path looked up in that pane's directory there. A web link to <code>localhost</code>, <code>127.0.0.1</code> or <code>::1</code> names that host, so it opens through an ssh forward from this Mac once the forward answers. A click that cannot open, a ⌘⌥-click, and a click while that Mac runs an older agterm show a short panel saying why, or beep when no panel can be shown.</p>
+<h4 id="links-session">Session links</h4>
+<p>A ⌘-click on an <code>agterm://session/&lt;id&gt;</code> link in a pane, split or scratch selects that session and raises its window, with no confirmation. Print one from a shell:</p>
+<pre class="bash"><code>printf &#39;\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n&#39; &quot;$AGTERM_SESSION_ID&quot; &quot;back to this session&quot;</code></pre>
+<p>In Claude Code markdown, <code>[label](agterm://session/&lt;id&gt;)</code> does the same, since Claude Code prints it as a link (OSC 8); while Claude Code captures the mouse, use ⌘⇧-click. In a session attached from another Mac the id is that Mac's, and the click selects the one row here showing it; it never attaches anything or acts there.</p>
+<p>Nothing happens for an unknown or closed session; when the destination window is zoomed, has the dashboard open or a picker pending; for any other <code>agterm://</code> form; on a ⌘⌥-click; or for a link in a HUD, the quick terminal or a program overlay.</p>
+<h4 id="links-mouse">Links in programs that use the mouse</h4>
+<p>While a program has mouse reporting on, such as tmux with <code>mouse on</code> or stock vim, ⌘-hover underlines nothing and ⌘-click opens nothing: links are detected only while reporting is off. Ghostty.app does the same, per program.</p>
+<ul>
+<li>Hold Shift as well (⌘⇧-hover, ⌘⇧-click) to reach the link anyway, unless the program claimed Shift for itself. That click follows <strong>Open links in</strong>.</li>
+<li>In <code>ghostty.conf</code>, <code>mouse-shift-capture = never</code> makes Shift always win, and <code>mouse-reporting = false</code> turns reporting off for every program.</li>
+</ul>
+</section>
 
           <!-- STATUS -->
           <section id="status" style="scroll-margin-top: 88px; padding-top: 56px">
