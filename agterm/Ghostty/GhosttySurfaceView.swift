@@ -50,7 +50,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     private(set) var awaitingSpawnPermit = false
 
     /// Whether this surface grabs first responder as soon as it is created — the overlay's path: it mounts
-    /// over an already-focused session, and `TerminalView.focusIfNeeded` grabs only when the view is in a
+    /// over an already-focused session, and `TerminalSurfaceHost.focusIfNeeded` grabs only when the view is in a
     /// window at the first `updateNSView`, which the deferred overlay surface is not, with no later update.
     private let autoFocus: Bool
 
@@ -705,7 +705,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // so the watermark path above skips it.
         applyOverlayConfig()
 
-        // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the deferred
+        // the overlay grabs first responder itself (TerminalSurfaceHost's once-on-attach grab misses the deferred
         // overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.
         requestAutoFocus(in: window)
     }
@@ -947,7 +947,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
             updateGhosttyFocus()
         }
         updateMetalLayerSize()
-        // focus is driven by TerminalView.updateNSView when this surface becomes the active session's detail
+        // focus is driven by TerminalSurfaceHost.updateNSView when this surface becomes the active session's detail
         // view; only an auto-focus (overlay) surface grabs here, since that grab misses a deferred surface.
         requestAutoFocus(in: window)
     }

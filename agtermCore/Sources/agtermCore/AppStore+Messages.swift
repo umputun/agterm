@@ -127,7 +127,7 @@ extension AppStore {
 
     /// presentationMail is the unacked mail of `id`'s main, split and scratch panes for its viewers, keyed by the
     /// identities its layout names. Nil for a session this store does not host: a remote row's mail is its host's.
-    public func presentationMail(forSession id: UUID) -> PresentationMail? {
+    func presentationMail(forSession id: UUID) -> PresentationMail? {
         guard let session = session(withID: id), session.remoteHost == nil, session.content == .terminal else { return nil }
         let counts = session.locallyManagedPaneIdentities.compactMap { pane -> (String, Int)? in
             let count = MessageBus.shared.pending(for: pane)

@@ -236,7 +236,7 @@ struct HtmlWebViewHost: NSViewRepresentable {
             if view.holdsFocus { view.window?.makeFirstResponder(nil) }
             return
         }
-        // focus once per activation and never over a text field editor, as `TerminalView.focusIfNeeded` does
+        // focus once per activation and never over a text field editor, as `TerminalSurfaceHost.focusIfNeeded` does
         guard let window = view.window, !context.coordinator.didFocus, !view.holdsFocus,
               !(window.firstResponder is NSText), !view.deferFocusToAsk(in: session) else { return }
         context.coordinator.didFocus = true

@@ -79,7 +79,7 @@ public final class MessageBus {
     public static let maxBatch = 32
 
     /// ObserverToken names one `observe` registration for `removeObserver`.
-    public struct ObserverToken: Hashable, Sendable {
+    struct ObserverToken: Hashable, Sendable {
         let id: UUID
     }
 
@@ -90,13 +90,13 @@ public final class MessageBus {
 
     /// observe calls `changed` after any mutation that alters a pending count: a delivered send, a read with ack
     /// or an ack that removed messages, and disposing a mailbox that held any.
-    public func observe(_ changed: @escaping @MainActor () -> Void) -> ObserverToken {
+    func observe(_ changed: @escaping @MainActor () -> Void) -> ObserverToken {
         let token = ObserverToken(id: UUID())
         observers[token] = changed
         return token
     }
 
-    public func removeObserver(_ token: ObserverToken) { observers[token] = nil }
+    func removeObserver(_ token: ObserverToken) { observers[token] = nil }
 
     private func notify() { observers.values.forEach { $0() } }
 

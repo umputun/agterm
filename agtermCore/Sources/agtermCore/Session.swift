@@ -941,7 +941,7 @@ public final class Session: Identifiable {
     /// scratch, else the focused pane's own overlay, else the active pane. The overlay renders above the
     /// scratch, and a full overlay or the scratch covers the panes (INCLUDING their pane overlays), so
     /// session-focus helpers route through this to keep first responder off a covered surface — except
-    /// `TerminalView.focusIfNeeded`, which targets its own deck slot, already gated by `isActive`. nil while a
+    /// `TerminalSurfaceHost.focusIfNeeded`, which targets its own deck slot, already gated by `isActive`. nil while a
     /// pane overlay's slot is open but its surface has not realized yet; the bounded focus retries re-resolve
     /// a beat later.
     ///

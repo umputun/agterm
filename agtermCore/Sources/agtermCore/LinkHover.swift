@@ -4,7 +4,7 @@ import Foundation
 /// app chrome, and the label exists to show where a link really goes, so format characters that could reorder
 /// or hide part of it are replaced before display.
 public enum LinkHover {
-    public static let maxLength = 120
+    static let maxLength = 120
 
     /// label names the hovered link's target: the session a resolving `agterm://session/` link selects, else the
     /// link itself, on one line and cut in the middle past `maxLength`.
@@ -25,13 +25,10 @@ public enum LinkHover {
         return text.prefix(half) + "…" + text.suffix(maxLength - 1 - half)
     }
 
-    private static let bidiFormats: Set<UInt32> = [0x061C, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
-                                                   0x2066, 0x2067, 0x2068, 0x2069]
-
     private static func isUnsafe(_ scalar: Unicode.Scalar) -> Bool {
         switch scalar.properties.generalCategory {
-        case .control, .lineSeparator, .paragraphSeparator: return true
-        default: return bidiFormats.contains(scalar.value)
+        case .control, .format, .lineSeparator, .paragraphSeparator: true
+        default: false
         }
     }
 }

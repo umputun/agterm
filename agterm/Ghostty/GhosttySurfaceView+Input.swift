@@ -290,6 +290,8 @@ extension GhosttySurfaceView {
     /// and on `ownsPointer` so it stops at the chrome drawn over this pane (issue #324). The position report
     /// stays ungated — libghostty tracks the pointer across the whole surface either way.
     override func mouseMoved(with event: NSEvent) {
+        // libghostty re-reports a link only on a new cell, so entering a HUD mid-cell would leave this label up
+        if underHoveredHud { linkHover?.label = nil }
         reportMousePos(from: event)
         guard deckVisible, ownsPointer(at: event.locationInWindow) else { return }
         Self.nsCursor(for: mouseShape).set()
@@ -648,8 +650,13 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         // the callback hops to main, so one queued before teardown arrives after the label was cleared
         guard !isDestroyed else { return }
         let (origin, pane) = (linkClickOrigin, linkClickPane)
-        linkHover?.label = link.isEmpty ? nil : LinkHover.label(for: link) { LinkOpener.shared.sessionName($0, origin, pane) }
+        linkHover?.label = link.isEmpty || underHoveredHud
+            ? nil : LinkHover.label(for: link) { LinkOpener.shared.sessionName($0, origin, pane) }
     }
+
+    /// underHoveredHud is true while a HUD panel over this pane has the pointer: the panel takes the link chord's click,
+    /// so this pane's links are unreachable and show no target.
+    private var underHoveredHud: Bool { HudLinkClick.hovered.map { $0 !== self } ?? false }
 
     /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns. A scratch
     /// running on its row's origin is named by the origin's identity, which the click carries there.

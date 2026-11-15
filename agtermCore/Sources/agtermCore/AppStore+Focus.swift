@@ -208,7 +208,7 @@ extension AppStore {
     /// that hid it, or a widening that filled an empty set; counterpart of `disableFocusIfSelectionOutsideSet`.
     /// Targets the most recent visible session, else the first (MRU rather than positional keeps a
     /// filter-off-then-on round trip in place). No-op on a nil selection (a restore clears a dangling one
-    /// deliberately) or an empty visible set; `TerminalView.updateNSView` moves first responder on its own.
+    /// deliberately) or an empty visible set; `TerminalSurfaceHost.updateNSView` moves first responder on its own.
     func reselectIfSelectionHidden() {
         guard let selected = selectedSessionID else { return }
         let visible = navigableSessions

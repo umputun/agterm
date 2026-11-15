@@ -840,7 +840,7 @@ struct agtermApp: App {
         //
         // the pane arm's callbacks re-resolve their pane from the slot the surface CURRENTLY occupies, never
         // the captured `pane`: `closePrimaryPane` MOVES a right-pane overlay into the left slot without
-        // rebuilding the view (`TerminalView.makeNSView` reuses a non-nil slot), so a captured `.right` would
+        // rebuilding the view (`TerminalSurfaceHost.makeNSView` reuses a non-nil slot), so a captured `.right` would
         // close nothing, record the status where `session.overlay.result --pane left` can't read it, and leave
         // the promoted pane under a dead overlay forever. The captured value is the pre-realization fallback,
         // for the window between the open and the slot holding this surface.

@@ -289,6 +289,43 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertNil(HudLinkClick.hovered)
     }
 
+    // regression: with command held over a HUD, the pane beneath labelled a link hidden under the panel
+    func testAPaneUnderAHoveredHudPanelShowsNoLinkTarget() throws {
+        let pane = LinkHoverModel()
+        pane.adopt(surface)
+        surface.applyLinkHover("https://example.com/pane")
+        XCTAssertEqual(pane.label, "https://example.com/pane")
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+        let hud = LinkHoverModel()
+        hud.adopt(panel)
+        let hidden = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(hidden)
+        defer { hidden.removeFromSuperview() }
+        let hiddenModel = LinkHoverModel()
+        hiddenModel.adopt(hidden)
+        hidden.applyLinkHover("https://example.com/hidden-deck")
+        content.hitResult = hidden
+
+        let move = try mouse(.mouseMoved, .command)
+        HudLinkClick.hover(move)
+        surface.mouseMoved(with: move)
+        XCTAssertNil(pane.label, "entering the panel within one cell brings no new report from the pane")
+        XCTAssertEqual(hiddenModel.label, "https://example.com/hidden-deck", "a deck surface the pointer never moved over")
+        surface.applyLinkHover("https://example.com/hidden")
+        panel.applyLinkHover("https://example.com/hud")
+        XCTAssertNil(pane.label, "the link under the panel is hidden")
+        XCTAssertEqual(hud.label, "https://example.com/hud")
+
+        HudLinkClick.hover(try mouse(.mouseMoved, .command, at: NSPoint(x: 200, y: 150)))
+        surface.applyLinkHover("https://example.com/pane")
+        XCTAssertEqual(pane.label, "https://example.com/pane", "beside the panel the pane's links are its own again")
+    }
+
     func testRendererVisibilityRequiresAnOnScreenHost() {
         surface.wantsLayer = true
         surface.layer?.contents = NSColor.red.cgColor

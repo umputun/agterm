@@ -17,8 +17,9 @@ struct LinkHoverTests {
     }
 
     @Test(arguments: ["\u{0007}", "\u{001B}", "\n", "\u{0085}", "\u{2028}", "\u{2029}", "\u{061C}", "\u{200E}", "\u{200F}",
-                      "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}", "\u{2066}", "\u{2067}", "\u{2068}", "\u{2069}"])
-    func aControlOrBidiFormatScalarIsReplaced(_ scalar: String) {
+                      "\u{202A}", "\u{202B}", "\u{202C}", "\u{202D}", "\u{202E}", "\u{2066}", "\u{2067}", "\u{2068}", "\u{2069}",
+                      "\u{200B}", "\u{00AD}", "\u{2060}", "\u{FEFF}"])
+    func aControlOrFormatScalarIsReplaced(_ scalar: String) {
         #expect(LinkHover.label(for: "https://a\(scalar)b.com", sessionName: { _ in nil }) == "https://a\u{FFFD}b.com")
     }
 
