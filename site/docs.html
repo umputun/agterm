@@ -871,595 +871,300 @@
             </p>
           </section>
           <!-- WORKSPACES -->
-          <section id="workspaces" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Workspaces &amp; sessions
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              A <strong style="color: #e6e1d7">session</strong> is one running shell with a name, a working directory, and its own
-              scrollback — the unit you work in and the row you see in the sidebar. A
-              <strong style="color: #e6e1d7">workspace</strong> is a named group of sessions for one project or context. Sessions
-              can move between workspaces while still running, keeping their shell and scrollback.
-            </p>
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px">
-              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                >Two-level sidebar tree: workspaces, each containing sessions. Each row carries a leading kind icon — a filled
-                folder for a workspace, an outlined terminal for a session.
-              </li>
-              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                >Default session name is the basename of its working directory. Renaming pins a custom name; clearing it reverts.
-              </li>
-              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                >Add workspaces and sessions, and toggle the workspace filter and the flagged view, from the four-icon bar at the
-                bottom of the sidebar. Rename inline (double-click a row's name); a click on a workspace's icon folds it at once.
-                <strong style="color: #e6e1d7">Copy Name</strong> on a session or workspace row copies its name to the clipboard.
-                <strong style="color: #e6e1d7">Duplicate Session</strong> from a single session's context menu for a fresh shell in the
-                same workspace, right after it, in its current directory — only the directory carries over. Shift-click and ⌘-click
-                select multiple sessions for batch flag, close, move, and drag. Right-clicking inside the selection keeps the whole
-                batch, so <strong style="color: #e6e1d7">Flag</strong>, <strong style="color: #e6e1d7">Tint</strong>, <strong style="color: #e6e1d7">Close</strong>, and
-                <strong style="color: #e6e1d7">Move to</strong> act on all of it; right-clicking a row outside narrows the menu to
-                that row. Dragged sessions keep running, shell and scrollback
-                intact.
-              </li>
-              <li id="companions" style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                ><strong style="color: #e6e1d7">Companions</strong> keep related shells or programs next to a session: a log tail, a
-                watcher, a second shell for the same task. A companion is an ordinary session pinned to its parent, listed right
-                after it and indented under it in the tree; the parent's disclosure triangle folds them away, and a folded parent
-                shows a small marker when a hidden companion is blocked, completed, or has unread notifications.
-                <strong style="color: #e6e1d7">New Companion</strong> in the session row's context menu, the Session menu, or the
-                action palette opens a login shell in the parent's current directory; bind it with the
-                <code style="color: #e6e1d7">new_companion</code> action in <code style="color: #e6e1d7">keymap.conf</code>.
-                <strong style="color: #e6e1d7">Duplicate as Companion</strong> beside it copies the session's split layout into a new
-                companion and starts another copy of each pane's program in its directory (<code style="color: #e6e1d7">duplicate_companion</code>);
-                when a pane's program cannot be copied, nothing is created and a panel over the session names the pane.
-                <strong style="color: #e6e1d7">Convert to Companion</strong> turns a session you started on its own into one: a fresh shell takes
-                its place in its directory, and the session moves under it still running, its own companions with it, and stays
-                selected (<code style="color: #e6e1d7">convert_companion</code>). It is available for any top-level session; one
-                attached from another Mac is converted on that Mac, and its new parent attaches here.
-                On a session attached from another Mac, New Companion and Duplicate as Companion ask that Mac to create the companion under its own session and attach
-                it here; closing it here only detaches it. A page companion opened on such a session is that Mac's page, shown
-                here through its own channel, and it stays there when you close it here. For attaching a session together with its
-                companions, see <a href="#remote-sessions" style="color: #6d82f3">Remote sessions</a>.
-                Companions reorder only among themselves, and moving the parent carries them. Closing a companion closes only it;
-                closing the parent closes the group, and one Reopen Closed Item brings it all back. While a parent has companions,
-                its shell exiting starts a fresh shell in the same directory instead of closing the session (one that exits again
-                within 2 seconds closes the group), and a Mac viewing that
-                session attaches to the new shell. Flat lists such as
-                the ⌃P palette, the Ctrl-Tab switcher, the Dock menu and the Attach Remote picker label a companion <code style="color: #e6e1d7">parent › child</code>; the tree, rename
-                and Copy Name keep the bare name. From a script:
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session new --parent active --command 'tail -f build.log' --name logs</span>,
-                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> to keep the output after it exits.
-                A <strong style="color: #e6e1d7">page companion</strong> shows an HTML page or URL instead of a shell, labelled with the file name
-                or origin:
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">agtermctl session overlay open --html report.html --companion</span>.
-                With <code style="color: #e6e1d7">--page</code> in place of <code style="color: #e6e1d7">--companion</code> the page opens as a
-                <strong style="color: #e6e1d7">top-level page session</strong> of its own, right after the target's group, and holds
-                companions like any session; Convert to Companion works on it too. A page row's own
-                <code style="color: #e6e1d7">window.close()</code> closes it as ⌘W does, with the close confirmation and the undo, and the row
-                comes back after a relaunch (see <a href="#restore" style="color: #6d82f3">Restore &amp; persistence</a>).
-              </li>
-              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                >Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's
-                workspace; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter
-                narrows the tree to exactly one. Collapsed workspaces spring open while
-                hovering and close again on cancel. Reveal a session's focused-pane directory in Finder from its context menu;
-                the item is greyed out when that directory no longer exists. Folder-picking panels (<strong style="color: #e6e1d7">Open
-                Directory…</strong> and the Settings directory choosers) open in the focused pane's directory, or in the directory
-                already configured where there is one, falling back to your home directory.
-              </li>
-              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="
-                    position: absolute;
-                    left: 0;
-                    top: 2px;
-                    color: #6d82f3;
-                    font-family: &quot;JetBrains Mono&quot;, monospace;
-                  "
-                  >›</span
-                >Narrow a crowded sidebar two ways: <strong style="color: #e6e1d7">flag</strong> sessions across workspaces into a
-                working-set view (a flag is durable and survives a move), shown as one flat list or, with
-                <strong style="color: #e6e1d7">Settings ▸ General ▸ Flagged view layout</strong> set to Workspace tree, nested
-                under their workspaces with the ones holding nothing flagged left out. Drag to reorder: the flat
-                list keeps its own order per window, across workspaces, which next/previous session follows; in the
-                workspace tree a drag moves sessions between workspaces as it does in the ordinary tree. A workspace row's
-                <strong style="color: #e6e1d7">Flag All Sessions</strong> flags every session in it at once, and reads
-                <strong style="color: #e6e1d7">Unflag All Sessions</strong> once they all are.
-                <strong style="color: #e6e1d7">View ▸ Edit Flagged Sessions…</strong> lists every session in the window, so Return
-                or a click flags or unflags one without leaving the flagged view; the empty flagged view links to it.
-                Or <strong style="color: #e6e1d7">focus</strong> a
-                set of workspaces to collapse the tree to just their sessions. Focus one workspace to zoom to it, or mark
-                several from their row menus and apply the filter once with the sidebar's grid button — marking never
-                narrows the tree on its own, and suspending the filter keeps the set for one click back.
-                <strong style="color: #e6e1d7">View ▸ Edit Focused Workspaces…</strong> marks and unmarks workspaces the same way
-                as the flagged editor. Creating a workspace
-                while the filter is on adds it to the set, and selecting a session outside the set suspends the filter rather
-                than discarding it. The set is per-window and remembered across restarts. If narrowing
-                the sidebar would hide the session you are working in, agterm moves you to the most recent session still
-                on screen, unless the narrowing leaves nothing visible at all. The two are independent.
-              </li>
-            </ul>
-            <figure
-              style="
-                margin: 28px 0 0;
-                background: #22272b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                overflow: hidden;
-              "
-            >
-              <img
-                src="/assets/screenshot-context-menu.webp"
-                alt="Session context menu"
-                width="554"
-                height="451"
-                loading="lazy"
-                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-              />
-              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
-                A session's right-click context menu.
-              </figcaption>
-            </figure>
-                      <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 20px 0 0">
-              <strong style="color: #e6e1d7">Open a directory without the CLI.</strong> Run
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open -a agterm &lt;path&gt;</span>, or right-click a
-              folder in Finder and choose Open With ▸ agterm: agterm adds a session in that directory to the last-active window.
-              This works while agterm is running (its usual state); otherwise launch it first. To place the session precisely,
-              use <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session new --cwd &lt;path&gt;</span>.
-            </p>
-          </section>
+          <section id="workspaces" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Workspaces &amp; sessions</h2>
+<p>A <strong>session</strong> is one running shell with a name, a working directory and its own scrollback: the unit you work in, and a row in the sidebar. A <strong>workspace</strong> is a named group of sessions for one project or context. A session can move between workspaces while it runs, keeping its shell and scrollback.</p>
+<h3 id="workspaces-sidebar">The sidebar</h3>
+<ul>
+<li>The sidebar is a two-level tree: workspaces, each holding sessions. A workspace row has a filled folder icon, a session row an outlined terminal.</li>
+<li>A session is named after its working directory's last folder. Renaming pins a name of your own; clearing it restores automatic naming. Rename inline by double-clicking a row's name.</li>
+<li>The four icons at the bottom of the sidebar add a workspace, add a session, and toggle the workspace filter and the flagged view.</li>
+<li>A click on a workspace's icon folds it at once.</li>
+<li><strong>Copy Name</strong> on a session or workspace row copies its name.</li>
+<li><strong>Duplicate Session</strong> in a session's context menu opens a fresh shell right after it, in the same workspace and its current directory. Only the directory carries over.</li>
+<li><strong>Reveal in Finder</strong> opens the focused pane's directory, and is greyed out when that directory no longer exists.</li>
+</ul>
+<figure>
+<img src="/assets/docs-context-menu.webp" alt="Session context menu" width="650" height="450" loading="lazy">
+<figcaption>
+A session's right-click context menu.
+</figcaption>
+</figure>
+<p><strong>Several rows at once.</strong> Shift-click and ⌘-click select several sessions. Right-clicking inside the selection keeps it, so <strong>Flag</strong>, <strong>Tint</strong>, <strong>Close</strong> and <strong>Move to</strong> act on all of them; right-clicking a row outside it narrows the menu to that row. Dragging moves the selection, and dragged sessions keep running.</p>
+<h3 id="companions">Companions</h3>
+<p>A companion keeps a related shell or program next to a session: a log tail, a watcher, a second shell for the same task. It is an ordinary session pinned to its parent, listed right after it and indented under it.</p>
+<figure>
+<img src="/assets/docs-companions.webp" alt="Two sessions with companions indented under them, one companion blocked" width="655" height="233" loading="lazy">
+<figcaption>
+Two parents, each with its companions indented under it; the blocked <code>logs</code> companion shows its own status.
+</figcaption>
+</figure>
+<ul>
+<li>The parent's disclosure triangle folds its companions away. A folded parent shows a small marker when a hidden companion is blocked, completed or has unread notifications.</li>
+<li>Companions reorder only among themselves, and moving the parent carries them.</li>
+<li>Closing a companion closes only it. Closing the parent closes the group, and one Reopen Closed Item brings it all back.</li>
+<li>While a parent has companions, its shell exiting starts a fresh shell in the same directory instead of closing the session; one that exits again within 2 seconds closes the group. A Mac viewing that session attaches to the new shell.</li>
+<li>Flat lists (the ⌃P palette, the Ctrl-Tab switcher, the Dock menu and the Attach Remote picker) label a companion <code>parent › child</code>; the tree, rename and Copy Name keep the bare name.</li>
+</ul>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+<th><code>keymap.conf</code> action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>New Companion</strong></td>
+<td>a login shell in the parent's current directory</td>
+<td><code>new_companion</code></td>
+</tr>
+<tr>
+<td><strong>Duplicate as Companion</strong></td>
+<td>copies the session's split layout into a new companion and starts another copy of each pane's program in its directory. If a pane's program cannot be copied, nothing is created and a panel over the session names the pane</td>
+<td><code>duplicate_companion</code></td>
+</tr>
+<tr>
+<td><strong>Convert to Companion</strong></td>
+<td>turns a top-level session into a companion: a fresh shell takes its place in its directory, and the session moves under it still running, with its own companions, and stays selected</td>
+<td><code>convert_companion</code></td>
+</tr>
+</tbody>
+</table>
+<p>All three are in the session row's context menu, the Session menu and the action palette.</p>
+<p>From a script, <code>--wait</code> keeps the output after the command exits:</p>
+<pre class="bash"><code>agtermctl session new --parent active --command &#39;tail -f build.log&#39; --name logs --wait</code></pre>
+<p><strong>Page sessions.</strong> A page companion shows an HTML page or URL instead of a shell, labelled with the file name or origin. With <code>--page</code> in place of <code>--companion</code> the page opens as a top-level session of its own, right after the target's group, and holds companions like any session; Convert to Companion works on it too. A page row's own <code>window.close()</code> closes it as ⌘W does, with the close confirmation and the undo, and the row comes back after a relaunch (<a href="#restore">Restore &amp; persistence</a>).</p>
+<pre class="bash"><code>agtermctl session overlay open --html report.html --companion
+agtermctl session overlay open --html report.html --page</code></pre>
+<p><strong>On a session attached from another Mac</strong> (<a href="#remote-sessions">Remote sessions</a>):</p>
+<ul>
+<li>New Companion and Duplicate as Companion ask that Mac to create the companion under its own session and attach it here. Closing it here only detaches it.</li>
+<li>Convert to Companion runs on that Mac, and its new parent attaches here.</li>
+<li>A page companion opened there is that Mac's page, shown here through its own channel; it stays there when you close it here.</li>
+</ul>
+<h3 id="workspaces-finder">Opening sessions from Finder</h3>
+<ul>
+<li>Drag up to 20 folders from Finder onto the tree to open sessions there. A drop on a row lands in that row's workspace; a drop on empty sidebar space uses the current workspace, or the focused one when the workspace filter narrows the tree to exactly one. Folded workspaces spring open while you hover and close again if you cancel.</li>
+<li><code>open -a agterm &lt;path&gt;</code>, or Open With ▸ agterm on a folder in Finder, adds a session in that directory to the last-active window. This works while agterm is running; otherwise launch it first. To place the session precisely, use <code>agtermctl session new --cwd &lt;path&gt;</code>.</li>
+<li>Folder-picking panels (<strong>Open Directory…</strong> and the Settings directory choosers) open in the focused pane's directory, or in the directory already configured where there is one, else in your home directory.</li>
+</ul>
+<h3 id="workspaces-narrow">Narrowing the sidebar</h3>
+<p>Two independent ways to cut a crowded sidebar down. If narrowing would hide the session you are working in, agterm moves you to the most recent session still on screen, unless nothing is left visible at all.</p>
+<p><strong>Flag</strong> sessions across workspaces into a working set. A flag is durable and survives a move.</p>
+<ul>
+<li>The flagged view is one flat list, or with <strong>Settings ▸ General ▸ Flagged view layout</strong> set to Workspace tree, nested under their workspaces, leaving out the ones with nothing flagged.</li>
+<li>Drag to reorder. The flat list keeps its own order per window, across workspaces, and next/previous session follows it. In the workspace tree a drag moves sessions between workspaces, as in the ordinary tree.</li>
+<li>A workspace row's <strong>Flag All Sessions</strong> flags every session in it, and reads <strong>Unflag All Sessions</strong> once they all are.</li>
+<li><strong>View ▸ Edit Flagged Sessions…</strong> lists every session in the window; Return or a click flags or unflags one without leaving the flagged view. The empty flagged view links to it.</li>
+</ul>
+<p><strong>Focus</strong> a set of workspaces to collapse the tree to just their sessions.</p>
+<ul>
+<li>Focus one workspace to zoom to it, or mark several from their row menus and apply the filter once with the sidebar's grid button. Marking never narrows the tree on its own, and suspending the filter keeps the set for one click back.</li>
+<li><strong>View ▸ Edit Focused Workspaces…</strong> marks and unmarks workspaces the same way.</li>
+<li>Creating a workspace while the filter is on adds it to the set. Selecting a session outside the set suspends the filter rather than discarding it.</li>
+<li>The set is per window and remembered across restarts.</li>
+</ul>
+</section>
 
           <!-- TERMINALS -->
-          <section id="terminals" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Terminals: split, scratch, quick, search, overlay
-            </h2>
-            <div style="display: flex; flex-direction: column; gap: 16px">
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Split panes <span style="color: #6b727a">⌘D / ⌘⇧D</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  A session can split into two shells side by side with ⌘D or top and bottom with ⌘⇧D. Both panes share one
-                  sidebar row: a split is one session with two terminals, not two sessions. Using the other shortcut transposes
-                  a shown split; using its current shortcut hides it without closing the second shell. The divider follows the
-                  current axis and remembers its position; drag it to resize the panes or double-click it to return to an even
-                  split. <strong style="color: #bfbab0">Close Split</strong> in the action palette tears the pane down whatever
-                  it is running. <strong style="color: #bfbab0">Swap Panes</strong> in View or the action palette exchanges the
-                  two live terminals without restarting them. Their primary/split roles move with their physical positions, focus
-                  follows its terminal, and the divider stays put. The same operation is available as
-                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session swap</span>, including while a split
-                  is hidden.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Quick terminal <span style="color: #6b727a">⌃`</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  A single throwaway shell for the whole app, not tied to any session or window. It appears in a floating panel at
-                  90% of whichever screen has focus, on the Space you are currently on, and opens in the active session's
-                  directory, sized to 90% of that screen up to a comfortable maximum. Settings &#9656; Interface sets that
-                  size as a plain share of the screen instead, which is worth doing on a large display where the
-                  built-in maximum is the smaller of the two. Bind a system-wide chord with
-                  <code style="color: #e6e1d7">global-hotkey</code> in <code style="color: #e6e1d7">keymap.conf</code> and it
-                  summons agterm from any application. Press the key again, or click away, to dismiss it; hiding keeps its shell
-                  alive. A panel opened by <code style="color: #e6e1d7">agtermctl quick show</code> stays put instead of closing
-                  on click-away, so a script can drive it. Not restored across launches.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Per-session scratch <span style="color: #6b727a">⌘J</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  An extra shell belonging to one session, for a quick aside next to your main work. It covers the session
-                  full-screen and hides again without killing it. While it is up, ⌘D and the split button hide it rather than
-                  rearrange the panes beneath. Opens in the session's directory; not restored across launches.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  In-terminal search <span style="color: #6b727a">⌘F</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  A search bar at the top of the focused terminal highlights matches in live scrollback with an "N of M" counter.
-                  Enter steps forward, Shift-Enter back, Esc closes.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Overlay <span style="color: #6b727a">control API</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  Runs one program in a temporary terminal over a session and disappears when the program exits, leaving the
-                  session unchanged. Mostly driven from the control API to launch an interactive program (a diff viewer, a process
-                  monitor) — full-size, as a floating panel, or scoped to one split pane while the sibling pane stays live. The
-                  same slot also holds a HUD, a small passive panel carrying a message instead of a program, which leaves the
-                  session focused and typable underneath. ⇧⌘J hides a session's program and page overlays without closing
-                  them, and pressing it again brings them back; a hidden program keeps running. The View menu, the command palette,
-                  an optional title-bar button (Settings ▸ Interface) and
-                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay hide|show|toggle</span>
-                  do the same. With <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--html</span>
-                  the overlay shows a local HTML page instead, such as a report or chart an agent just generated, or with
-                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--url</span> a web page such as a running dev server, under a strip
-                  naming the file or site, then the page's title dimmed, with a close button, a hide button while the title-bar hide-overlays button is enabled, and, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--navigation</span>,
-                  back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL;
-                  ⌘W closes it like any overlay. A file page opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--chromeless</span>
-                  has no strip, so a dashboard fills its session or split pane like a native view; a web page may drop it too when served
-                  from 127.0.0.1, ::1 or localhost, and then loads frames from its own site only. ⌘+, ⌘− and ⌘0 zoom the page, and every later page opens at that zoom. A page runs no JavaScript of its
-                  own unless opened with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--js</span>, and one that does can close its own overlay
-                  with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window.close()</span>. A web page keeps cookies and logins only while it is open, unless opened with
-                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--persistent</span>, which uses one saved store shared by these pages;
-                  <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl browser clear</span> empties it. A login that goes through another site still fails. A link the page opens in your browser
-                  asks you first. Pages can match the terminal
-                  through the theme's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--agterm-*</span> CSS variables, and
-                  drive agterm themselves through the <a href="#page-bridge" style="color: #6d82f3">page bridge</a>. See the
-                  <a href="#agtermctl" style="color: #6d82f3">agtermctl reference</a>.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Terminal zoom <span style="color: #6b727a">⇧⌘↩</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  Fills the whole window with one terminal surface — a pane, the scratch, or an overlay —
-                  hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights, the window title, and an exit button
-                  (⌘W leaves zoom too). A view mode, not a layout change: exiting
-                  restores split ratios, focus, and visibility exactly as they were, and everything else keeps running behind it.
-                  Scripts can zoom any surface by id with <code style="color: #e6e1d7">agtermctl surface zoom</code>, including the
-                  pane under a running overlay, which keeps running and returns when zoom exits. Distinct
-                  from macOS window zoom and full screen, which size the window itself.
-                </p>
-              </div>
-              <div
-                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
-              >
-                <div
-                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
-                >
-                  Dashboard <span style="color: #6b727a">control API</span>
-                </div>
-                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
-                  Watch several agents or builds at once: sessions' live output in one grid overlaid on the window. The cell unit is a
-                  session+pane — a non-split session is one cell, a split session is two (its left and right panes), capped at nine
-                  cells. Each cell's name chip also reflects the session's agent status, filling with the status color and pulsing
-                  while it blinks, unless macOS Reduce Motion is enabled; the status color and text remain visible without the
-                  repeating animation. A pane covered by a full overlay or its own pane overlay shows a label in its cell instead of
-                  the terminal underneath: the page's file or origin with its title when it has one, or the program's command when
-                  available. It is view-only — no cell's terminal
-                  takes input; the arrow keys move a highlight, Enter (or a single mouse click on a cell) jumps into that
-                  session and focuses that exact pane, and Esc closes. Opened over the control channel with
-                  <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or
-                  <code style="color: #e6e1d7">agtermctl dashboard --mru</code> to fill it from the window's most-recently-used
-                  sessions instead of naming ids. An id may carry a <code style="color: #e6e1d7">:left</code>/<code style="color: #e6e1d7">:right</code>
-                  suffix to place one pane instead of the whole session — the same form
-                  <code style="color: #e6e1d7">tree --json</code> reports in <code style="color: #e6e1d7">dashboardMembers</code> — so
-                  <code style="color: #e6e1d7">agtermctl dashboard "$a:left" "$b:right"</code> keeps the panes you did not ask for
-                  out of the nine-cell budget. The most-recently-used grid also has a built-in opener —
-                  <strong>⌘⇧G</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
-                  title-bar grid button) opens it auto-sized. Cell fonts size absolutely
-                  (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid
-                  (<code style="color: #e6e1d7">--auto-size</code>). Mutually exclusive with terminal zoom.
-                </p>
-              </div>
-            </div>
-            <figure
-              style="
-                margin: 28px 0 0;
-                background: #22272b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                overflow: hidden;
-              "
-            >
-              <img
-                src="/assets/screenshot-dashboard.webp"
-                alt="The dashboard grid showing several live sessions at once"
-                width="1187"
-                height="748"
-                loading="lazy"
-                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-              />
-              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
-                The dashboard: several sessions' live output in one view-only grid.
-              </figcaption>
-            </figure>
-          </section>
+          <section id="terminals" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Terminals: split, scratch, quick, search, overlay</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Key</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#terminals-split">Split panes</a></td>
+<td>⌘D, ⌘⇧D</td>
+<td>a second shell in the same session, side by side or top and bottom</td>
+</tr>
+<tr>
+<td><a href="#terminals-quick">Quick terminal</a></td>
+<td>⌃`</td>
+<td>one throwaway shell for the whole app, in a floating panel</td>
+</tr>
+<tr>
+<td><a href="#terminals-scratch">Scratch</a></td>
+<td>⌘J</td>
+<td>an extra shell belonging to one session, over it full-screen</td>
+</tr>
+<tr>
+<td><a href="#terminals-search">Search</a></td>
+<td>⌘F</td>
+<td>find in the focused terminal's scrollback</td>
+</tr>
+<tr>
+<td><a href="#terminals-overlay">Overlay</a></td>
+<td>control API</td>
+<td>a program, page or message shown over a session</td>
+</tr>
+<tr>
+<td><a href="#terminals-zoom">Terminal zoom</a></td>
+<td>⇧⌘↩︎</td>
+<td>one terminal filling the window</td>
+</tr>
+<tr>
+<td><a href="#terminals-dashboard">Dashboard</a></td>
+<td>⌘⇧G</td>
+<td>several sessions' live output in one grid</td>
+</tr>
+</tbody>
+</table>
+<h3 id="terminals-split">Split panes</h3>
+<p>A split is one session with two terminals, sharing one sidebar row.</p>
+<ul>
+<li>⌘D splits side by side, ⌘⇧D top and bottom. The other shortcut turns a shown split to its axis; the current one hides the split without closing the second shell.</li>
+<li>The divider follows the axis and remembers its position. Drag it to resize, double-click it for an even split.</li>
+<li><strong>Close Split</strong> in the action palette ends the second pane, whatever it is running.</li>
+<li><strong>Swap Panes</strong> (View or the action palette) exchanges the two terminals without restarting them. The primary and split roles follow the positions, focus follows its terminal, and the divider stays put. <code>agtermctl session swap</code> does the same, also while the split is hidden.</li>
+</ul>
+<h3 id="terminals-quick">Quick terminal</h3>
+<p>One throwaway shell for the whole app, tied to no session or window.</p>
+<ul>
+<li>It appears in a floating panel on the screen and Space you are on, in the active session's directory, sized to 90% of that screen up to a comfortable maximum. <strong>Settings ▸ Interface</strong> can make the size a plain share of the screen instead, worth doing on a large display where the built-in maximum is the smaller of the two.</li>
+<li>Bind <code>global-hotkey</code> in <code>keymap.conf</code> to summon agterm with it from any app.</li>
+<li>Press the key again or click away to dismiss it; its shell stays alive. A panel opened by <code>agtermctl quick show</code> stays put on click-away, so a script can drive it.</li>
+<li>It is not restored across launches.</li>
+</ul>
+<h3 id="terminals-scratch">Scratch</h3>
+<p>An extra shell belonging to one session, for a quick aside next to your main work.</p>
+<ul>
+<li>It covers the session full-screen, and ⌘J hides it again without ending it.</li>
+<li>While it is up, ⌘D and the split button hide it rather than rearrange the panes beneath.</li>
+<li>It opens in the session's directory. With Live sessions it survives a relaunch and comes back hidden; otherwise it is not restored.</li>
+</ul>
+<h3 id="terminals-search">Search</h3>
+<p>⌘F opens a search bar at the top of the focused terminal. It highlights matches in the live scrollback with an "N of M" counter. Enter steps forward, Shift-Enter back, Esc closes.</p>
+<h3 id="terminals-overlay">Overlay</h3>
+<p>An overlay runs one program in a temporary terminal over a session and disappears when the program exits, leaving the session as it was. Scripts and agents use it to show an interactive program, such as a diff viewer or a process monitor, full size, as a floating panel, or over one split pane while the other stays live. The <a href="#agtermctl-overlays">agtermctl reference</a> has the commands.</p>
+<ul>
+<li>The same slot can hold a <strong>HUD</strong>: a small passive panel with a message instead of a program. The session stays focused and typable under it.</li>
+<li>⇧⌘J hides a session's program and page overlays without closing them, and brings them back; a hidden program keeps running. The View menu, the command palette, an optional title-bar button (<strong>Settings ▸ Interface</strong>) and <code>agtermctl session overlay hide|show|toggle</code> do the same.</li>
+</ul>
+<p><strong>Pages.</strong> With <code>--html</code> the overlay shows a local HTML page, such as a report or chart an agent just made; with <code>--url</code>, a web page such as a running dev server.</p>
+<ul>
+<li>A strip above the page names the file or site, then the page's title dimmed, with a close button, and a hide button while the title-bar hide-overlays button is enabled. ⌘W closes it like any overlay.</li>
+<li><code>--navigation</code> adds back, forward, reload, open in browser, and Show in Finder for a file or Copy Link for a URL.</li>
+<li><code>--chromeless</code> drops the strip from a file page, so a dashboard fills its session or pane like a native view. A web page may drop it too when served from <code>127.0.0.1</code>, <code>::1</code> or <code>localhost</code>, and then loads frames from its own site only.</li>
+<li>⌘+, ⌘− and ⌘0 zoom the page, and every later page opens at that zoom.</li>
+<li>A page runs none of its own JavaScript unless opened with <code>--js</code>; one that does can close its overlay with <code>window.close()</code>.</li>
+<li>A web page keeps cookies and logins only while it is open, unless opened with <code>--persistent</code>, which uses one saved store shared by those pages; <code>agtermctl browser clear</code> empties it. A login that goes through another site still fails.</li>
+<li>A link the page opens in your browser asks you first.</li>
+<li>Pages can match the terminal through the theme's <code>--agterm-*</code> CSS variables, and drive agterm through the <a href="#page-bridge">page bridge</a>.</li>
+</ul>
+<h3 id="terminals-zoom">Terminal zoom</h3>
+<p>⇧⌘↩︎ fills the window with one terminal (a pane, the scratch or an overlay), hiding the sidebar and shrinking the title bar to a slim strip with the traffic lights, the window title and an exit button. ⌘W leaves zoom too.</p>
+<ul>
+<li>It is a view, not a layout change: leaving restores split ratios, focus and visibility exactly, and everything else keeps running behind it.</li>
+<li><code>agtermctl surface zoom</code> zooms any terminal by id, including the pane under a running overlay, which keeps running and returns when zoom ends.</li>
+<li>It differs from macOS window zoom and full screen, which size the window itself.</li>
+</ul>
+<h3 id="terminals-dashboard">Dashboard</h3>
+<p>Watch several agents or builds at once: sessions' live output in one view-only grid over the window.</p>
+<figure>
+<img src="/assets/docs-dashboard.webp" alt="The dashboard with two Claude Code sessions, a codex session and a build" width="1457" height="1126" loading="lazy">
+<figcaption>
+Two Claude Code sessions, codex and a build in one grid. The amber chip is codex waiting on a question.
+</figcaption>
+</figure>
+<ul>
+<li>A cell is one pane: a session without a split is one cell, a split session two. The grid holds at most nine.</li>
+<li>Each cell's name chip shows the session's agent status, filled with the status color and pulsing while it blinks. With macOS Reduce Motion on, the color and text stay and the pulse stops.</li>
+<li>A pane covered by an overlay shows a label instead of the terminal: the page's file or origin with its title, or the program's command when known.</li>
+<li>No cell takes input. Arrow keys move a highlight; Enter or a click jumps into that session and focuses that exact pane; Esc closes.</li>
+<li><strong>⌘⇧G</strong>, <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard or the title-bar grid button opens it with the window's most recently used sessions, the cell font scaled to the grid.</li>
+<li>It cannot be open together with terminal zoom.</li>
+</ul>
+<p>From a script:</p>
+<pre class="bash"><code>agtermctl dashboard &quot;$a&quot; &quot;$b&quot; &quot;$c&quot;          # these sessions
+agtermctl dashboard --mru                   # the window&#39;s most recently used sessions
+agtermctl dashboard &quot;$a:left&quot; &quot;$b:right&quot;    # one pane each, keeping the others out of the nine
+agtermctl dashboard --mru --font-size 11    # a fixed cell font size; --auto-size scales it to the grid</code></pre>
+<p>The <code>:left</code>/<code>:right</code> form is what <code>tree --json</code> reports in <code>dashboardMembers</code>.</p>
+</section>
 
           <!-- NAVIGATION -->
-          <section id="navigation" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Navigation
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              agterm is built to run from the keyboard. Every action has a shortcut and appears in the menus. Three fuzzy palettes
-              (type to filter, arrows or Ctrl-J/Ctrl-K to move, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest; a title-bar clock button
-              opens the recent-session list with the mouse. Right-clicking agterm's Dock icon offers New Session, New Window, Quick Terminal,
-              Dashboard, recent sessions, and sessions needing attention for the last-active window; those lists and actions stay
-              scoped to that window even if another window comes forward while the menu is open, apart from New Window, which
-              belongs to no existing window and stays available whatever the last-active one is doing. That same recently-used history decides where you land when you close
-              the session you are in — agterm returns you to the session you were most recently working in, not to whichever row
-              happens to sit next to the one that closed. The pick stays inside the closing session's workspace, and in the flagged
-              view stays within the flagged set, while in the tree with the workspace filter applied it stays within the marked
-              workspaces. It widens
-              beyond the workspace only when the close leaves nothing there to return to, and beyond what is on screen only when
-              that too is exhausted. If no recent session qualifies at all, it falls back to the adjacent row, kept inside the
-              narrowed view while one is applied, and to the first session of another workspace when the closed session was the
-              last one in its own.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              An action the menus currently disable — Rename Session with no session open, Focus Workspace with no workspace —
-              still appears in the action palette and still matches what you type, but is greyed out and does nothing when chosen,
-              so the palette stays a complete index of what agterm can do rather than changing shape as state moves. Rows that
-              would be meaningless are still omitted entirely (Delete Workspace with one workspace left, Focus Right Pane with no
-              split).
-            </p>
-            <div
-              style="
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                overflow: hidden;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-              "
-            >
-              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0">
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #15191c;
-                    color: #6d82f3;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  ⌃P
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #22272b;
-                    color: #cbc6bc;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  Session switcher — jump by name or working directory
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #15191c;
-                    color: #6d82f3;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  ⌃⇧P
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #22272b;
-                    color: #cbc6bc;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  Action palette — run any command
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #15191c;
-                    color: #6d82f3;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  ⌃⇧O
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #22272b;
-                    color: #cbc6bc;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  Custom-commands palette — your keymap.conf commands
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #15191c;
-                    color: #6d82f3;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  ⌥⌘↑↓
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #22272b;
-                    color: #cbc6bc;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  Previous / Next session
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #15191c;
-                    color: #6d82f3;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  ⌃⌥↑↓
-                </div>
-                <div
-                  style="
-                    padding: 12px 16px;
-                    background: #22272b;
-                    color: #cbc6bc;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-                  "
-                >
-                  Previous / Next attention session
-                </div>
-                <div style="padding: 12px 16px; background: #15191c; color: #6d82f3">Ctrl-Tab</div>
-                <div style="padding: 12px 16px; background: #22272b; color: #cbc6bc">
-                  MRU session switcher: hold Ctrl and tap Tab to walk the most-recently-used list (Shift-Tab reverses, Esc
-                  cancels), release Ctrl to switch; a single tap flips straight back to the session you came from. The order
-                  survives a relaunch.
-                </div>
-              </div>
-            </div>
-            <figure
-              style="
-                margin: 28px 0 0;
-                background: #22272b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                overflow: hidden;
-              "
-            >
-              <img
-                src="/assets/screenshot-action-palette.webp"
-                alt="Action palette"
-                width="1187"
-                height="696"
-                loading="lazy"
-                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-              />
-              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
-                A split session with the action palette open.
-              </figcaption>
-            </figure>
-          </section>
+          <section id="navigation" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Navigation</h2>
+<p>agterm runs from the keyboard: every action has a shortcut and a menu item.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Opens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>⌃P</td>
+<td>session switcher: jump by name or working directory</td>
+</tr>
+<tr>
+<td>⌃⇧P</td>
+<td>action palette: run any command</td>
+</tr>
+<tr>
+<td>⌃⇧O</td>
+<td>custom-commands palette: your <code>keymap.conf</code> commands</td>
+</tr>
+<tr>
+<td>⌥⌘↑↓</td>
+<td>previous, next session</td>
+</tr>
+<tr>
+<td>⌃⌥↑↓</td>
+<td>previous, next session that needs attention</td>
+</tr>
+<tr>
+<td>Ctrl-Tab</td>
+<td>recent-session switcher</td>
+</tr>
+</tbody>
+</table>
+<figure>
+<img src="/assets/docs-palette.webp" alt="The action palette open over a split session, Attach Remote greyed out" width="1457" height="540" loading="lazy">
+<figcaption>
+The action palette over a split session. Attach Remote is greyed out: listed, but unavailable right now.
+</figcaption>
+</figure>
+<p><strong>Palettes.</strong> Type to filter, arrows or Ctrl-J/Ctrl-K to move, Enter to run, Esc to close. The action palette lists every action. One the menus currently disable, such as Rename Session with no session or Focus Workspace with no workspace, still shows and matches what you type, greyed out and doing nothing when chosen, so the palette stays a complete index. Rows that could never apply are left out: Delete Workspace with one workspace left, Focus Right Pane with no split.</p>
+<p><strong>Ctrl-Tab</strong> walks the recently used sessions: hold Ctrl and tap Tab (Shift-Tab goes back, Esc cancels), release Ctrl to switch. A single tap flips straight back to the session you came from. The order survives a relaunch. The title-bar clock button opens the same recent list for the mouse.</p>
+<p><strong>Dock menu.</strong> Right-clicking agterm's Dock icon offers New Session, New Window, Quick Terminal, Dashboard, recent sessions and sessions needing attention, all for the last-active window. They stay with that window even if another one comes forward while the menu is open. New Window belongs to no window and is always available.</p>
+<h3 id="navigation-close">Where you land after a close</h3>
+<p>Closing the session you are in returns you to the session you most recently worked in, not to the row next to it.</p>
+<ul>
+<li>The pick stays inside the closed session's workspace; in the flagged view, inside the flagged set; with the workspace filter applied, inside the marked workspaces.</li>
+<li>It goes beyond the workspace only when nothing is left there, and beyond what is on screen only when that is exhausted too.</li>
+<li>With no recent session to return to, it takes the adjacent row (the next one, or the previous one at the end), kept inside a narrowed view while one is applied, or the first session of another workspace when the closed one was the last in its own.</li>
+</ul>
+</section>
 
           <!-- WINDOWS -->
-          <section id="windows" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Windows
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
-              A window is a top-level bundle of workspaces and sessions in its own on-screen macOS window, with its own sidebar and
-              its own sessions — so "work" and "personal" can run as two separate windows at once, each with its own tree. Keep a
-              library of windows, open one per screen, and create, rename, or delete them from the File menu (New Window ⌥⌘N) or the
-              action palette. The set of windows open at quit reopens on the next launch, frames restored. Windows are also fully
-              scriptable — <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window</span> can
-              create, raise, move, resize, and minimize them, so a few lines of shell can give every window the same frame and park
-              all but the one you are on, turning several windows into what feels like one that switches contents.
-            </p>
-          </section>
+          <section id="windows" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Windows</h2>
+<p>A window is a macOS window with its own sidebar, workspaces and sessions, so "work" and "personal" can run side by side, each with its own tree. agterm keeps a library of windows: open one per screen, and create, rename or delete them from the File menu (New Window ⌥⌘N) or the action palette.</p>
+<ul>
+<li>The windows open at quit reopen at the next launch, with their frames.</li>
+<li><code>agtermctl window</code> creates, raises, moves, resizes and minimizes windows. A few lines of shell can give every window the same frame and park all but the current one, so several windows feel like one that switches contents. See the <a href="#agtermctl-windows">agtermctl reference</a>.</li>
+</ul>
+</section>
 
           <!-- REMOTE SERVER -->
           <section id="remote-sessions" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
@@ -2998,6 +2703,13 @@ agtermctl msg read --ack --wait --timeout 60                      # wait for mai
 <li>A full mailbox refuses that recipient alone.</li>
 <li>On agterm-server the server's panes message each other the same way, and a Mac showing the server window sees their pending counts and message events. A local pane and a server pane cannot message each other yet.</li>
 </ul>
+<p>Two agents in one split can hold a conversation this way, each reading the other's messages as they arrive: see the <a href="https://github.com/umputun/agterm/tree/master/cookbook/two-agent-mailbox-chat">two-agent mailbox chat</a> recipe.</p>
+<figure>
+<img src="/assets/docs-mailbox.webp" alt="Claude Code and codex in one split session, exchanging messages through their pane mailboxes" width="1457" height="1126" loading="lazy">
+<figcaption>
+Claude Code (left) asks codex (right) to check its reading; the reply arrives in Claude's pane as a message, with nothing typed into either prompt.
+</figcaption>
+</figure>
 <p>Details: <a href="/commands#msg">command reference</a>.</p>
 <h3 id="agtermctl-cookbook">Cookbook</h3>
 <p>The <a href="https://github.com/umputun/agterm/tree/master/cookbook">cookbook</a> collects complete workflows, each with a README and its scripts: switching the sidebar to one project, closing a project's workspaces and bringing them back, picking a path with fzf and typing it into the shell, and giving each tab its own Claude Code or Codex conversation across a restart. Copy them into your setup and edit them; <a href="https://github.com/umputun/agterm/blob/master/cookbook/CONTRIBUTING.md"><code>cookbook/CONTRIBUTING.md</code></a> has the rules for adding one.</p>
@@ -3203,6 +2915,12 @@ A clicked <code>.md</code> file, rendered in the terminal's theme.
           <section id="status" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Agent status</h2>
 <p>A coding agent running in a session can put its status on that session's sidebar row, so you can tell at a glance which of many agents needs you. The glyph sits just left of the notification badge on every session that is not idle.</p>
+<figure>
+<img src="/assets/docs-status-agents.webp" alt="Two Claude Code sessions finished with green glyphs and a codex session waiting with an amber one" width="650" height="170" loading="lazy">
+<figcaption>
+Claude Code and codex reporting through the installed hooks: two finished (green), codex waiting on its question (amber).
+</figcaption>
+</figure>
 <figure>
 <img src="/assets/docs-status-rows.webp" alt="Sidebar with an active, a blocked and a completed session, info lines under two rows, a red and a green tinted row, and the session context in the title bar" width="655" height="233" loading="lazy">
 <figcaption>
