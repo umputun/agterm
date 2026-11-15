@@ -372,6 +372,10 @@ C-boundary concurrency before changing the bridge.
   media fallbacks as in `.surfaces-grid`.
 - Demo and screenshot staging shows two or three agent statuses at most, and never notification badges
   next to statuses; they are alternative mechanisms.
+- A screenshot may show the username, the hostname, the agent's plan and usage, and Claude Code or codex working
+  on agterm itself with nothing private in it. A feature that serves agents is shown with real agents on agterm,
+  other sessions with made-up output; never another project's content, private folder or host names.
+  Start codex with `--no-daemon`: a bare `codex` runs its hooks in the background service, which reports no status.
 
 ## Path-scoped rules
 
