@@ -180,17 +180,23 @@ later changes in #661 and #1008.
 - Modify: `agtermCore/Tests/agtermCoreTests/PresentationFramesTests.swift`, `PresentationHubTests.swift`,
   `PresenterGrantTests.swift`
 
-- [ ] check the agterm-linux fork for uses of `PresentationFrame.Body` exhaustive switches and of every public
+- [x] check the agterm-linux fork for uses of `PresentationFrame.Body` exhaustive switches and of every public
       hub symbol this plan changes (GitHub code search with `fork:true`, or a shallow clone under `/tmp`); record
       the result here
-- [ ] write failing tests: codec round trip of `lead.report`; a report without the negotiated kind is ignored;
+      - melonamin/agterm-linux (pushed 2026-11-08), `agterm-linux/` consumes `../agtermCore` by path. Its one
+        `Body` switch has a `default`, so the new case is safe. It calls `onPresenterLost`, the two-argument
+        `onPresenterFrame`, `presenterGeneration(session:)`, `hasPresenter`, and the store's
+        `takeBackRemoteAsk(forSession:)`, `remoteOverlayPresenterLost(forSession:)`,
+        `resolveRemoteAsk(_:forSession:)`, `isPresentingRemotely`, `rejectRemoteOverlay`,
+        `remoteOverlaySurfaceClosed`, `receiveRemotePageFrame`; Task 2 changes most of these
+- [x] write failing tests: codec round trip of `lead.report`; a report without the negotiated kind is ignored;
       `route` returns the pane's claimant, the primary's claimant for session-wide work, and the grant holder
       when nobody claims; an empty report clears claims; a dropped subscriber's claims vanish; the stale-claim
       sequence (B claims P, A claims P, A reports `[]`) leaves P with B
-- [ ] add the `leadReport` body, its codec entries and the kind; add the case to the viewer's exhaustive switch
+- [x] add the `leadReport` body, its codec entries and the kind; add the case to the viewer's exhaustive switch
       as a no-op so the package compiles
-- [ ] store per-subscriber leads with their report order and implement `claimant` and `route`
-- [ ] run `swift test --filter 'PresentationFramesTests|PresentationHubTests|PresenterGrantTests|RemotePresentationClientTests'`
+- [x] store per-subscriber leads with their report order and implement `claimant` and `route`
+- [x] run `swift test --filter 'PresentationFramesTests|PresentationHubTests|PresenterGrantTests|RemotePresentationClientTests'`
 
 ### Task 2: Per-owner booking, follow-ups, answers, loss and the session-wide gate
 

@@ -525,4 +525,118 @@ struct PresentationHubTests {
 
         #expect(hub.subscribedSessions == [Self.session])
     }
+
+    static let leadHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.leadReportKind], mode: .presenter)
+    static let left = UUID()
+    static let right = UUID()
+    static let split = PresentationSnapshot(status: nil, hud: nil,
+                                            layout: PresentationLayout(panes: [left, right], primary: left, axis: "horizontal", shown: true))
+
+    func viewer(_ hub: PresentationHub, hello: PresentationHello = Self.leadHello) throws -> (id: PresentationHub.SubscriberID, gen: Int) {
+        let sink = Sink()
+        let id = try hub.subscribe(session: Self.session, hello: hello, sink: sink) { Self.split }
+        return (id, sink.frames[0].gen)
+    }
+
+    func report(_ hub: PresentationHub, _ viewer: (id: PresentationHub.SubscriberID, gen: Int), _ leaders: [UUID]) {
+        hub.receive(PresentationFrame(gen: viewer.gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leaders))), from: viewer.id)
+    }
+
+    @Test func aPaneRoutesToTheViewerLeadingIt() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, first, [Self.left])
+        report(hub, second, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == first.gen)
+        #expect(hub.route(session: Self.session, pane: Self.right) == second.gen)
+    }
+
+    @Test func sessionWideWorkRoutesToThePrimaryPanesLeader() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, second, [Self.left])
+        report(hub, first, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: nil) == second.gen)
+    }
+
+    @Test func anUnclaimedPaneFallsToTheGrantHolder() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let leader = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+
+        report(hub, leader, [Self.right])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == holder.gen)
+        #expect(hub.route(session: Self.session, pane: nil) == holder.gen)
+        #expect(hub.route(session: Self.session, pane: Self.right) == leader.gen)
+    }
+
+    @Test func nothingRoutesWithoutAClaimOrAGrant() throws {
+        let hub = makeHub()
+        _ = try viewer(hub)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: Self.session, pane: nil) == nil)
+    }
+
+    @Test func aReportFromAViewerThatDidNotNegotiateTheKindIsIgnored() throws {
+        let hub = makeHub()
+        let older = try viewer(hub, hello: Self.hello)
+
+        report(hub, older, [Self.left])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+    }
+
+    @Test func anEmptyReportClearsTheViewersClaims() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        report(hub, first, [Self.left, Self.right])
+
+        report(hub, first, [])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: Self.session, pane: Self.right) == nil)
+    }
+
+    @Test func aDroppedViewersClaimsVanish() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        report(hub, first, [Self.left])
+
+        hub.unsubscribe(first.id)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+    }
+
+    @Test func aWithdrawnClaimLeavesThePaneWithTheOlderClaimant() throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        report(hub, second, [Self.left])
+        report(hub, first, [Self.left])
+        #expect(hub.route(session: Self.session, pane: Self.left) == first.gen)
+        report(hub, first, [])
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == second.gen)
+    }
+
+    @Test func claimsStayWithinTheirSession() throws {
+        let hub = makeHub()
+        let other = UUID()
+        let sink = Sink()
+        let id = try hub.subscribe(session: other, hello: Self.leadHello, sink: sink) { Self.split }
+        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: [Self.left]))), from: id)
+
+        #expect(hub.route(session: Self.session, pane: Self.left) == nil)
+        #expect(hub.route(session: other, pane: Self.left) == sink.frames[0].gen)
+    }
 }

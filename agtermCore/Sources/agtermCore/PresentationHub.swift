@@ -37,6 +37,9 @@ public final class PresentationHub {
         var held: [PresentationFrame.Body]? = []
         /// mail is the counts this viewer last accepted, from its snapshot or a mail frame.
         var mail: PresentationMail?
+        /// leads are the origin panes this viewer last reported leading; leadsAt orders its report among all viewers'.
+        var leads: Set<UUID> = []
+        var leadsAt = 0
 
         init(session: UUID, generation: Int, sink: PresentationSink) {
             self.session = session
@@ -70,7 +73,8 @@ public final class PresentationHub {
     public static let supportedKinds = ["status", "hud", "notify", "message", "mail", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
-                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind]
+                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind,
+                                        leadReportKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -80,6 +84,8 @@ public final class PresentationHub {
     /// restartRespawnKind is an origin's capability of publishing a restarted pane's respawn, which carries every viewer's
     /// attach across the restart.
     public static let restartRespawnKind = "restart.respawn"
+    /// leadReportKind is a viewer's capability of reporting the panes it leads, so new work for them is routed to it.
+    public static let leadReportKind = "lead.report"
     /// presenterVacantKind is a viewer's capability of asking for the role again when the origin reports it vacant.
     public static let presenterVacantKind = "presenter.vacant"
     /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
@@ -130,6 +136,7 @@ public final class PresentationHub {
     private let now: () -> Date
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
+    private var lastLeadReport = 0
     private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
 
@@ -250,6 +257,11 @@ public final class PresentationHub {
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
             if granted, !repeated { onPresenterGranted?(subscriber.session) }
+        case .leadReport(let report):
+            guard subscriber.kinds.contains(Self.leadReportKind) else { return }
+            lastLeadReport += 1
+            subscriber.leads = Set(report.leaders)
+            subscriber.leadsAt = lastLeadReport
         case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
              .pageState, .pageResult, .linkClick, .statusClear, .statusSeen:
             guard grant.holder(of: subscriber.session) == id else { return }
@@ -274,6 +286,20 @@ public final class PresentationHub {
 
     public func subscriberCount(session: UUID) -> Int {
         subscribers.values.count { $0.session == session }
+    }
+
+    /// route is the token of the viewer that takes new work for `pane` of `session`, or for the session as a whole when
+    /// `pane` is nil: the viewer leading that pane (the primary one for session-wide work), else the grant holder.
+    public func route(session: UUID, pane: UUID?) -> Int? {
+        if let target = pane ?? layouts[session]?.primary, let claimant = claimant(session: session, pane: target) {
+            return claimant.generation
+        }
+        return grant.holder(of: session)?.generation
+    }
+
+    // the newest report still naming the pane wins, so withdrawing a claim hands the pane back to an older claimant
+    private func claimant(session: UUID, pane: UUID) -> Subscriber? {
+        subscribers.values.filter { $0.session == session && $0.leads.contains(pane) }.max { $0.leadsAt < $1.leadsAt }
     }
 
     /// Whether a viewer holds `session`'s presenter role.
