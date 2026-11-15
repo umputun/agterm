@@ -348,6 +348,31 @@ struct ServerStreamsTests {
         #expect(settled, "session \(session.id)")
     }
 
+    @Test func aPickWhosePresenterLeavesReachesTheMirrorThatTakesOver() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        let mirror = try await connect(session, mode: .presenter)
+        defer { mirror.disconnect() }
+        try mirror.send(.presenterAcquire)
+        let refused = await offPool { mirror.first { $0 == .presenterGranted || $0 == .presenterRefused } }
+        #expect(refused == .presenterRefused)
+        let pick = PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")])
+        #expect(harness.actions.openPick(pick, session: session.id.uuidString, window: nil, follow: false).ok)
+        let first = await offPool { viewer.first { if case .pickRequest = $0 { true } else { false } } }
+        #expect(first != nil)
+
+        await drop(viewer, from: session)
+        let vacant = await offPool { mirror.first { $0 == .presenterVacant } }
+        #expect(vacant == .presenterVacant)
+        try mirror.send(.presenterAcquire)
+        let granted = await offPool { mirror.first { $0 == .presenterGranted || $0 == .presenterRefused } }
+        #expect(granted == .presenterGranted)
+
+        let offered = await offPool { mirror.first { if case .pickRequest = $0 { true } else { false } } }
+        guard case .pickRequest(let shown)? = offered else { Issue.record("no pick offer: \(mirror.missed ?? "")"); return }
+        #expect(shown.id == pick.id)
+    }
+
     @Test func aPickWhosePresenterLeavesWaitsForTheNextOne() async throws {
         let session = try newSession()
         let viewer = try await presenter(for: session)

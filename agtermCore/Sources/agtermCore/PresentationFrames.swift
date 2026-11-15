@@ -753,8 +753,10 @@ public struct PresentationFrame: Equatable, Sendable {
         /// A viewer asking to be the session's sole presenter. Sent only after the origin's hello offered it.
         case presenterAcquire
         case presenterGranted
-        /// The role is held by another viewer; this one stays a mirror until it reconnects.
+        /// The role is held by another viewer; this one stays a mirror until it reconnects or the role falls vacant.
         case presenterRefused
+        /// The presenter's stream ended, so a mirror may send `presenterAcquire` again; the first to arrive wins.
+        case presenterVacant
         case askRequest(PresentationAsk)
         case askResolve(PresentationAskAnswer)
         /// The presenter cannot show the ask, so the origin takes it back.
@@ -818,6 +820,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .presenterAcquire: return "presenter.acquire"
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
+            case .presenterVacant: return "presenter.vacant"
             case .askRequest: return "ask.request"
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"

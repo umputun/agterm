@@ -240,6 +240,30 @@ struct RemotePresentationClientTests {
         #expect(recorder.connections.last == .connected)
     }
 
+    @Test func aVacancyMakesARefusedMirrorAskAgain() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        transport.deliver(line(.presenterRefused, rev: 2))
+
+        transport.deliver(line(.presenterVacant, rev: 3))
+        transport.deliver(line(.presenterGranted, rev: 4))
+
+        #expect(transport.links[0].sent.map(\.body).filter { $0 == .presenterAcquire }.count == 2)
+        #expect(recorder.modes == [.mirror, .presenter])
+    }
+
+    @Test func aVacancyLeavesThePresenterAlone() {
+        let client = makeClient()
+        client.start()
+        connect(client, mode: .presenter)
+        transport.deliver(line(.presenterGranted, rev: 2))
+
+        transport.deliver(line(.presenterVacant, rev: 3))
+
+        #expect(transport.links[0].sent.map(\.body).filter { $0 == .presenterAcquire }.count == 1)
+    }
+
     // regression: a replacement client after soft close and undo left the row reading presenter when refused
     @Test func aReplacementClientRefusedTheRoleResetsTheRowToMirror() {
         let first = makeClient()

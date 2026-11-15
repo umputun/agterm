@@ -264,6 +264,7 @@ public final class RemotePresentationClient {
             if answer.mode == .presenter { send(.presenterAcquire, on: link) }
         case .presenterGranted: report(.presenter)
         case .presenterRefused: report(.mirror)
+        case .presenterVacant: if mode != .presenter { send(.presenterAcquire, on: link) }
         case .askRequest(let ask):
             if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
         case .askDismiss(let ref): effects.askDismiss(ref)

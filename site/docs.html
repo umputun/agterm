@@ -882,7 +882,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <p>When the other Mac gives no answer, the request is reported as unknown and is never sent again or done here.</p>
 <p>Commands that only inherit the session's directory run here: a custom command, an overlay opened without <code>--cwd</code>, the quick terminal, and New Session set to open in the current directory. They start in the other Mac's reported directory when that path exists here, else in your home. A custom command still sees the reported path in <code>$AGT_SESSION_PWD</code> and the host in <code>$AGT_SESSION_HOST</code> (empty for a local session).</p>
 <h3 id="remote-sessions-present">Questions, overlays and pages from the other Mac</h3>
-<p>The first attached Mac to ask presents the session while nobody else does; its row's <code>presentation</code> reads <code>mode: presenter</code>.</p>
+<p>The first attached Mac to ask presents the session while nobody else does; its row's <code>presentation</code> reads <code>mode: presenter</code>. When that Mac leaves, another attached Mac takes over without reconnecting, if both run a current agterm.</p>
 <ul>
 <li>A question (<code>ask</code>) or program overlay that a program there opens is shown on the presenting Mac, where you are, while the other Mac follows another Mac's lead in that pane, or in every pane for one covering the whole session. Otherwise it stays over there, and one already open stays put when the lead changes.</li>
 <li>The answer or exit status still reaches the program over there. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this Mac opens for it.</li>
