@@ -43,12 +43,13 @@ final class RemoteCatalogActionsTests {
         var calls: [[String]] = []
         var lookupGate: CheckedContinuation<Void, Never>?
         var gateNextLookup = false
+        var commandStatus: Int32 = 0
 
         func answer(_ argv: [String]) async -> (status: Int32, stdout: String) {
             calls.append(argv)
             let line = Self.plain(argv)
             let opID = Self.opID(line)
-            guard line.contains(" catalog op ") else { return (0, commands.isEmpty ? "" : commands.removeFirst()(opID)) }
+            guard line.contains(" catalog op ") else { return (commandStatus, commands.isEmpty ? "" : commands.removeFirst()(opID)) }
             if gateNextLookup {
                 gateNextLookup = false
                 await withCheckedContinuation { lookupGate = $0 }
@@ -236,6 +237,44 @@ final class RemoteCatalogActionsTests {
 
         #expect(response.ok == (outcome == .noop))
         #expect(actions.marks.isEmpty)
+    }
+
+    @Test func aServerTooOldForACompanionMoveIsAFinalAnswer() async {
+        install(snapshot())
+        script.commandStatus = 64
+        queue({ _ in "" })
+
+        let response = await send(.moveCompanion(sessionID, parent: UUID(), index: 0))
+        await settleLookups()
+
+        #expect(response.error == "the agterm-server on box is too old for companion moves")
+        #expect(actions.marks.isEmpty)
+        #expect(script.lookupCalls.isEmpty)
+        #expect(script.commandCalls.first?.contains("session move --target \(sessionID.uuidString) --parent") == true)
+    }
+
+    @Test func aRunningServerThatCannotDecodeACompanionMoveIsAFinalAnswer() async {
+        install(snapshot())
+        let refusal = ControlResponse(ok: false, error: "invalid request: unknown cmd session.companion.move")
+        queue({ _ in String(decoding: (try? JSONEncoder().encode(refusal)) ?? Data(), as: UTF8.self) })
+
+        let response = await send(.moveCompanion(sessionID, parent: UUID(), index: nil))
+        await settleLookups()
+
+        #expect(response.error == "the agterm-server on box is too old for companion moves")
+        #expect(actions.marks.isEmpty)
+        #expect(script.lookupCalls.isEmpty)
+    }
+
+    @Test func anyOtherOperationTheFarCLIRefusesIsStillLookedUp() async {
+        install(snapshot())
+        script.commandStatus = 64
+        queue({ _ in "" })
+
+        let response = await send(rename)
+
+        #expect(!response.ok)
+        #expect(actions.marks.map(\.unknown) == [true])
     }
 
     @Test func theSameActionOnTheSameRowIsHeldWhilePending() async {

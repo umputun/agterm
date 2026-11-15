@@ -84,6 +84,21 @@ extension ServerActions {
         return nil
     }
 
+    /// moveCompanion puts the target companion under another top-level session of the catalog, at `index` in its group.
+    public func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
+        withSession(target, window: window) { session in
+            switch resolveSession(parent) {
+            case .failure(let refusal):
+                return refusal.response
+            case .success(let destination):
+                if case .failure(let refusal) = store.moveCompanion(session.id, under: destination.id, at: index) {
+                    return ControlResponse(ok: false, error: refusal.message)
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, parent: destination.id.uuidString))
+            }
+        }
+    }
+
     /// convertToCompanion nests the target and its companions under a fresh session started in its slot. A fresh
     /// parent that cannot start is undone before it is closed, so the close ends none of the regrouped sessions.
     public func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {

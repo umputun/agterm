@@ -140,6 +140,28 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
         XCTAssertEqual(library.recentClosedItems.count, recentClosedBefore, file: file, line: line)
     }
 
+    func testAMovedCompanionGoesToTheServerAtItsIndexPastDetachedRowsAndMovesHereOnlyWithTheCatalog() throws {
+        let first = catalogSession(), second = catalogSession()
+        let companion = catalogSession(parent: first.id)
+        let detached = catalogSession(parent: second.id), resident = catalogSession(parent: second.id)
+        open([first, companion, second, detached, resident])
+        mirror.detach(sessions: [detached.id])
+        let row = try XCTUnwrap(store.session(withID: companion.id))
+
+        actions.moveCompanion(companion.id, under: second.id, at: 0, in: store)
+        try sent(1)
+        settle()
+
+        XCTAssertTrue(runner.lines[0].contains("session move --target \(companion.id.uuidString) --parent \(second.id.uuidString) --index 1"),
+                      runner.lines[0])
+        XCTAssertEqual(row.parentID, first.id, "nothing moves here before the catalog reports it")
+        var moved = companion.fields
+        moved.parent = second.id
+        serverApplies(.sessionChanged(moved), .sessionOrder([first.id, second.id, detached.id, companion.id, resident.id], workspace: workspaceID))
+        XCTAssertEqual(row.parentID, second.id)
+        XCTAssertEqual(store.companions(of: second.id).map(\.id), [companion.id, resident.id])
+    }
+
     func testDetachingASessionHidesItAndSendsNothing() {
         let entry = catalogSession()
         open([entry])

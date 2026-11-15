@@ -212,17 +212,17 @@
 - Modify: `agterm/AppActions+Companions.swift` (server branch)
 - Modify: `RemoteCatalogActionsTests`, `RemoteOperationRequestTests`, `ServerActionsCompanionsTests`
 
-- [ ] `RemoteOperation.moveCompanion` with its label, target and argv; the server runs the store operation and
+- [x] `RemoteOperation.moveCompanion` with its label, target and argv; the server runs the store operation and
       resolves the parent only in its own catalog
-- [ ] the Mac-side route checks `canMoveCompanion` on the mirror and the arguments through `refusesArguments`
+- [x] the Mac-side route checks `canMoveCompanion` on the mirror and the arguments through `refusesArguments`
       before sending; the GUI maps its visible slot to the server's group at the GUI-to-catalog boundary only
-- [ ] an older server's argument refusal is a final outcome for this operation, clearing the pending entry,
+- [x] an older server's argument refusal is a final outcome for this operation, clearing the pending entry,
       with the too-old text
-- [ ] a drop or menu pick on a server window's row sends to the server; nothing moves locally before the
+- [x] a drop or menu pick on a server window's row sends to the server; nothing moves locally before the
       catalog reports it
-- [ ] tests: argv and request parsing, server success and each refusal, a detached companion in the
+- [x] tests: argv and request parsing, server success and each refusal, a detached companion in the
       destination group, a too-old server, catalog reconciliation of `parent` and order on the Mac store
-- [ ] run the touched tests - must pass before task 4
+- [x] run the touched tests - must pass before task 4
 
 ### Task 4: Rows attached from another Mac
 
