@@ -160,12 +160,12 @@ pinned to 4 CPUs, several runs each.
 - Modify: `agtermCore/Tests/agtermctlKitTests/OverlayRunJobTests.swift`
 - Modify: `docs/ci-flakes.md`
 
-- [ ] record the baseline: the startup stall (first trivial `@MainActor` test durations) in `swift:6.3.2-noble`
+- [x] record the baseline: the startup stall (first trivial `@MainActor` test durations) in `swift:6.3.2-noble`
   with 4 pinned CPUs, several runs
-- [ ] settle the cleanup shape: `defer { await ... }` on both toolchains, else a scoped helper
-- [ ] convert every pool-blocking wait listed above; `FakeOrigin.frames` keeps a 5 s bound
-- [ ] run both suites on macOS and in the container; every test passes
-- [ ] repeat the stall measurement; put both sets of numbers in the commit message and update the
+- [x] settle the cleanup shape: `defer { await ... }` on both toolchains, else a scoped helper
+- [x] convert every pool-blocking wait listed above; `FakeOrigin.frames` keeps a 5 s bound
+- [x] run both suites on macOS and in the container; every test passes
+- [x] repeat the stall measurement; put both sets of numbers in the commit message and update the
   `SshConnectionPoolTests` entry in `docs/ci-flakes.md`
 
 ### Task 3: Mail counts on attached rows
