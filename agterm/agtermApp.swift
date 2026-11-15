@@ -588,7 +588,7 @@ struct agtermApp: App {
     /// replacePane puts a surface built from `launch` in `old`'s slot and retires `old`, running none of
     /// the pane's close paths. `spawnFirst` creates the new surface at the old size BEFORE the free: libghostty
     /// routes a queued child-exit by surface address, and a surface created after it can take the old exit.
-    /// Retiring keeps the old surface allocated until its threads exit, off the main thread.
+    /// Retiring keeps the old surface allocated until its threads have exited, without the main thread waiting on them.
     @MainActor
     static func replacePane(_ old: GhosttySurfaceView, launch: PaneReattach, lead: ZmxLeadAttachment, cover: Bool,
                             spawnFirst: Bool = false, services: SurfaceServices) -> GhosttySurfaceView? {
@@ -608,7 +608,7 @@ struct agtermApp: App {
         // the old client's exit must not close the pane the new one now owns
         _ = old.claimProcessExit()
         let hadFocus = old.window?.firstResponder === old
-        // synchronously: END_SEARCH reports back through a callback `destroySurface` clears first
+        // synchronously: the retired surface's END_SEARCH callback is dropped
         if session.searchSurface === old {
             session.searchActive = false
             session.searchNeedle = ""

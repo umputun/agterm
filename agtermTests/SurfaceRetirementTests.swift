@@ -2,6 +2,7 @@ import AppKit
 import GhosttyKit
 import XCTest
 @testable import agterm
+import agtermCore
 
 @MainActor
 final class SurfaceRetirementTests: XCTestCase {
@@ -9,18 +10,24 @@ final class SurfaceRetirementTests: XCTestCase {
     private var terminal: GhosttySurfaceView!
     private var retirement: SurfaceRetirement!
     private var stoppedGroup: pid_t = 0
+    private var stateDir: URL?
 
     override func setUp() async throws {
         try await super.setUp()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 300), styleMask: [.titled],
                           backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        terminal = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat",
-                                      env: ["AGTERM_RETIREMENT_TEST": "1"])
-        terminal.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
-        window.contentView?.addSubview(terminal)
-        terminal.createSurface()
+        terminal = makeTerminal(env: ["AGTERM_RETIREMENT_TEST": "1"])
         retirement = SurfaceRetirement()
+    }
+
+    private func makeTerminal(env: [String: String], backedByZmx: Bool = false) -> GhosttySurfaceView {
+        let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat", env: env,
+                                      backedByZmx: backedByZmx)
+        view.frame = NSRect(x: 0, y: 0, width: 600, height: 300)
+        window.contentView?.addSubview(view)
+        view.createSurface()
+        return view
     }
 
     override func tearDown() async throws {
@@ -28,6 +35,7 @@ final class SurfaceRetirementTests: XCTestCase {
         await waitUntil { self.retirement.pendingCount == 0 }
         terminal.teardown()
         window.orderOut(nil)
+        if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
         try await super.tearDown()
     }
 
@@ -39,8 +47,9 @@ final class SurfaceRetirementTests: XCTestCase {
         while !Self.group(pid_t(ghostty_surface_foreground_pid(surface)), runs: "cat"), Date() < deadline {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
         }
-        let group = pid_t(ghostty_surface_foreground_pid(surface))
-        XCTAssertTrue(Self.group(group, runs: "cat"), "the child never reached cat")
+        let foreground = pid_t(ghostty_surface_foreground_pid(surface))
+        // fatal: killpg(0, SIGSTOP) would stop the test runner itself
+        let group = try XCTUnwrap(Self.group(foreground, runs: "cat") ? foreground : nil, "the child never reached cat")
         XCTAssertEqual(killpg(group, SIGSTOP), 0)
         stoppedGroup = group
         return surface
@@ -53,7 +62,7 @@ final class SurfaceRetirementTests: XCTestCase {
         return pids.filter { $0 > 0 }.contains { pid in
             var buffer = [CChar](repeating: 0, count: 256)
             proc_name(pid, &buffer, UInt32(buffer.count))
-            return String(cString: buffer) == name
+            return String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self) == name
         }
     }
 
@@ -114,5 +123,41 @@ final class SurfaceRetirementTests: XCTestCase {
         XCTAssertFalse(exited)
         XCTAssertFalse(searchEnded)
         XCTAssertEqual(retirement.pendingCount, 1)
+    }
+
+    func testAReattachedLiveScratchRetiresItsOldSurface() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-retirement-\(UUID().uuidString)")
+        stateDir = dir
+        let library = WindowLibrary(directory: dir)
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID),
+                                                     cwd: NSHomeDirectory()))
+        let identity = UUID()
+        defer { ZmxLeadBook.shared.forget(pane: identity) }
+        terminal.teardown()
+        terminal = makeTerminal(env: ["AGTERM_PANE_ID": identity.uuidString], backedByZmx: true)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: identity)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: identity)
+        store.recordLiveScratch(session.id, identity: identity)
+        terminal.watermarkSession = session
+        session.scratchSurface = terminal
+        _ = try stopChild()
+        let pending = SurfaceRetirement.shared.pendingCount
+        let services = agtermApp.SurfaceServices(library: library, actions: AppActions(library: library), zmxForegroundResolver: nil,
+                                                 spawnRegistry: nil, launchContext: agtermApp.LaunchSpawnContext())
+
+        XCTAssertTrue(agtermApp.reattachPane(terminal, claim: true, services: services))
+
+        let fresh = try XCTUnwrap(session.scratchSurface as? GhosttySurfaceView)
+        XCTAssertFalse(fresh === terminal)
+        XCTAssertNil(terminal.surface)
+        XCTAssertEqual(SurfaceRetirement.shared.pendingCount, pending + 1)
+        XCTAssertFalse(terminal.configCStrings.isEmpty)
+
+        resumeChild()
+        await waitUntil { SurfaceRetirement.shared.pendingCount == pending }
+        XCTAssertEqual(SurfaceRetirement.shared.pendingCount, pending)
+        XCTAssertTrue(terminal.configCStrings.isEmpty)
+        fresh.destroySurface()
     }
 }

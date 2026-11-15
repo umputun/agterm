@@ -165,18 +165,18 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
 
     /// Heap buffers backing the surface config's `const char*` fields — notably `initial_input`, which
     /// libghostty writes to the pty asynchronously after the child spawns, so the buffer must outlive
-    /// `ghostty_surface_new`. Freed in `destroySurface`.
+    /// `ghostty_surface_new`. Freed in `finishDestroy`.
     nonisolated(unsafe) private(set) var configCStrings: [UnsafeMutablePointer<CChar>] = []
 
     /// The `ghostty_env_var_s` structs handed to `config.env_vars`; their `key`/`value` point into the
     /// `configCStrings` buffers (same lifetime). The array must itself outlive `ghostty_surface_new`, so it is
-    /// stored rather than local, cleared in `destroySurface`/`deinit`. `nonisolated(unsafe)`: main actor only.
+    /// stored rather than local, cleared in `finishDestroy`/`deinit`. `nonisolated(unsafe)`: main actor only.
     nonisolated(unsafe) private(set) var envVars: [ghostty_env_var_s] = []
 
     /// Per-surface ghostty configs for this surface's background watermark (`configWithOverlay`), retained so
     /// they outlive their `ghostty_surface_update_config`. Capped at ONE: each re-apply frees the prior, since
     /// after `update_config` the surface no longer references it, so a scripted `config.reload` loop can't
-    /// grow the array. The last is freed in `destroySurface`/`deinit`, safe because the surface — their only
+    /// grow the array. The last is freed in `finishDestroy`/`deinit`, safe because the surface — their only
     /// consumer — is gone (unlike the app-wide config `GhosttyApp` never frees). `nonisolated(unsafe)`: main
     /// actor only; internal for `+Config`.
     nonisolated(unsafe) var ownedConfigs: [ghostty_config_t] = []

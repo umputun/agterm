@@ -48,8 +48,9 @@ Remove the patch when `GHOSTTY_REV` includes PR 13605 or an equivalent upstream 
 frees the surface only when both have returned from their thread functions, else answers false and leaves it
 valid. `ghostty_surface_free` joins those threads, and their exit polls with short sleeps (the io thread's
 `killPid` 10 ms, `0001`'s drain 1 ms) that App Nap stretches to seconds while the app is hidden, so a pane
-replaced then froze the whole app (#1005). `agtermApp.replacePane` retires the old view through
-`SurfaceRetirement`, which keeps calling it from the main thread, so the free itself stays on the app thread.
+replaced then froze the whole app (#1005). `agtermApp.replacePane` and `reattachScratch` retire the old view
+through `SurfaceRetirement`, which keeps calling it from the main thread, so the free itself stays on the app
+thread.
 The patch also lets `TeardownDrain.finish` wake the drain through an event rather than wait out its pause.
 
 Remove the patch when `GHOSTTY_REV` offers a non-blocking surface teardown with the same guarantee: the surface
