@@ -187,31 +187,31 @@ viewer handles it; no temporary ignore case.
 
 Origin side:
 
-- [ ] write the convergence regressions first: (a) publish 1, all subscribers leave, ack, a new subscriber's
+- [x] write the convergence regressions first: (a) publish 1, all subscribers leave, ack, a new subscriber's
   snapshot is empty, a send brings it 1; (b) subscriber A has 1, an ack to empty is pending, B subscribes and
   snapshots empty, the count returns to 1 before the flush, both end at 1; (c) an unchanged map sends nothing
-- [ ] `PresentationMail`, the snapshot field, the `mail` frame kind (encode/decode), `supportedKinds`; codec test
+- [x] `PresentationMail`, the snapshot field, the `mail` frame kind (encode/decode), `supportedKinds`; codec test
   pinning the JSON object shape and an old snapshot decoding with nil mail
-- [ ] `MessageBus` observer token fired by send, read with ack, ack and dispose
-- [ ] hub-owner registration and coalesced flush (`ControlServer` with stop/start, `ServerStreams` with
+- [x] `MessageBus` observer token fired by send, read with ack, ack and dispose
+- [x] hub-owner registration and coalesced flush (`ControlServer` with stop/start, `ServerStreams` with
   init/shutdown); snapshot and flush share `presentationMail(forSession:)`
-- [ ] per-subscriber baseline in `PresentationHub`, advanced after the sink accepts, held frames not deduped
-- [ ] tests: send, read with ack, ack, split close, primary promotion, scratch drop and ended row each converge
+- [x] per-subscriber baseline in `PresentationHub`, advanced after the sink accepts, held frames not deduped
+- [x] tests: send, read with ack, ack, split close, primary promotion, scratch drop and ended row each converge
   to the right map on a server origin; run the regressions; must pass
 
 Viewer side:
 
-- [ ] `effects.mail` callback with a default; snapshot applies its field (absent resets), frame replaces
-- [ ] `Session.presentationMail`, cleared in `withdrawRemoteReplicas`
-- [ ] read rule in `pendingMessages(_:pane:token:)` and `scratchPendingMessages`
-- [ ] tests: counts on a standalone attached row for main, split, an origin split added after attach, the
+- [x] `effects.mail` callback with a default; snapshot applies its field (absent resets), frame replaces
+- [x] `Session.presentationMail`, cleared in `withdrawRemoteReplicas`
+- [x] read rule in `pendingMessages(_:pane:token:)` and `scratchPendingMessages`
+- [x] tests: counts on a standalone attached row for main, split, an origin split added after attach, the
   scratch on the session (`scratchPendingMessages`) and on its `surfaces[]` node; reconnect with a cleared
   mailbox reads nil; an origin without the field reads nil; a catalog-owned row still reads the catalog
-- [ ] hosted: count read-back through the real `remoteEffects` wiring; Mac-origin publication after ack
-- [ ] docs: read-back notes in `reference.md` and `site/commands.html` (counts now on rows attached alone and
+- [x] hosted: count read-back through the real `remoteEffects` wiring; Mac-origin publication after ack
+- [x] docs: read-back notes in `reference.md` and `site/commands.html` (counts now on rows attached alone and
   from another Mac), the source rule in `control-api.md`; in the same `commands.html` paragraph, correct the
   stale claim that `events read` is not served on agterm-server (`ServerEvents.swift` serves it)
-- [ ] run the touched suites; must pass
+- [x] run the touched suites; must pass
 
 ### Task 4: Link target on hover
 

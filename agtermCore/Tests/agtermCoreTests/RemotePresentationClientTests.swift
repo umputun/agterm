@@ -39,6 +39,7 @@ struct RemotePresentationClientTests {
         var contexts: [String?] = []
         var notifies: [PresentationNotify] = []
         var messages: [PresentationMessage] = []
+        var mails: [PresentationMail?] = []
         var sounds: [PresentationSound] = []
         var connections: [RemotePresentationConnection] = []
         var modes: [PresentationMode] = []
@@ -100,6 +101,7 @@ struct RemotePresentationClientTests {
             respawns: { recorder.respawns.append(($0, $1)) },
             linkRefused: { recorder.linkRefusals.append($0) },
             message: { recorder.messages.append($0) },
+            mail: { recorder.mails.append($0) },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -493,6 +495,18 @@ struct RemotePresentationClientTests {
 
         #expect(afterSnapshot.isEmpty)
         #expect(recorder.messages == messages)
+    }
+
+    @Test func aSnapshotReportsItsMailEvenWhenAbsentAndAMailFrameReplacesIt() {
+        let client = makeClient()
+        client.start()
+        let mail = PresentationMail(panes: [UUID().uuidString: 2])
+        connect(client, snapshot: PresentationSnapshot(status: nil, hud: nil, mail: mail), kinds: ["mail"])
+
+        transport.deliver(line(.mail(PresentationMail(panes: [:])), rev: 2))
+        transport.deliver(line(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 3))
+
+        #expect(recorder.mails == [mail, PresentationMail(panes: [:]), nil])
     }
 
     @Test func aFrameFromAnotherGenerationOrAnOldRevisionIsIgnored() {

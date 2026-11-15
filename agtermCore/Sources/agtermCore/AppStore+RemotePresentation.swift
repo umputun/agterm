@@ -34,6 +34,12 @@ extension AppStore {
         if previous != session.effectiveInfo { scheduleTreeChanged() }
     }
 
+    /// applyRemoteMail records the origin's mail counts for the row's tree read-back; nil means it sends none.
+    public func applyRemoteMail(_ mail: PresentationMail?, forSession id: UUID) {
+        guard let session = session(withID: id), session.remotePresentation != nil else { return }
+        session.remotePresentation?.mail = mail
+    }
+
     /// Applies the origin's status, nil for idle. Bypasses `applyControlStatus`: that rule arbitrates
     /// between panes writing locally, and would refuse a clear the origin already accepted.
     public func applyRemoteStatus(_ status: PresentationStatus?, forSession id: UUID) {
@@ -133,6 +139,7 @@ extension AppStore {
         let id = session.id
         applyRemoteContext(nil, forSession: id)
         applyRemoteInfo(nil, forSession: id)
+        session.remotePresentation?.mail = nil
         if session.remotePresentation?.statusBridged == true { setAgentIndicator(AgentIndicator(), forSession: id) }
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it

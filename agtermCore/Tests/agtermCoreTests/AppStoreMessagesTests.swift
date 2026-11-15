@@ -258,4 +258,48 @@ struct AppStoreMessagesTests {
         MessageBus.shared.dispose(pane: f.session.paneIdentity)
         MessageBus.shared.dispose(pane: split)
     }
+
+    @Test func presentationMailCountsEachLocalPaneByIdentityAndOmitsZero() throws {
+        let f = try fixture(split: true)
+        let split = try #require(f.session.splitPaneIdentity)
+        let scratch = UUID()
+        f.session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: false)
+        try deliver(to: [f.session.paneIdentity, f.session.paneIdentity, scratch])
+
+        let mail = f.store.presentationMail(forSession: f.session.id)
+
+        #expect(mail == PresentationMail(panes: [f.session.paneIdentity.uuidString: 2, scratch.uuidString: 1]))
+        #expect(mail?.panes[split.uuidString] == nil)
+        #expect(f.store.presentationSnapshot(forSession: f.session.id).mail == mail)
+        disposeMailboxes([f.session.paneIdentity, scratch])
+    }
+
+    @Test func presentationMailIsEmptyForAQuietSessionAndNilForOneThisStoreDoesNotHost() throws {
+        let f = try fixture()
+        let remote = try #require(f.store.addSession(toWorkspace: f.work.id, cwd: "/r", remoteHost: "buildbox"))
+        try deliver(to: [remote.paneIdentity])
+
+        #expect(f.store.presentationMail(forSession: f.session.id) == PresentationMail(panes: [:]))
+        #expect(f.store.presentationMail(forSession: remote.id) == nil)
+        #expect(f.store.presentationMail(forSession: UUID()) == nil)
+        disposeMailboxes([remote.paneIdentity])
+    }
+
+    @Test func publishPresentationMailReachesTheSessionsViewers() throws {
+        let f = try fixture()
+        let hub = PresentationHub(staleTimeout: 30)
+        f.store.presentationHub = hub
+        let sink = PresentationHubTests.Sink()
+        try hub.subscribe(session: f.session.id, hello: PresentationHubTests.hello, sink: sink) {
+            f.store.presentationSnapshot(forSession: f.session.id)
+        }
+        try deliver(to: [f.session.paneIdentity])
+
+        f.store.publishPresentationMail(forSession: f.session.id)
+
+        #expect(sink.bodies.last == .mail(PresentationMail(panes: [f.session.paneIdentity.uuidString: 1])))
+        disposeMailboxes([f.session.paneIdentity])
+    }
+
+    private func disposeMailboxes(_ panes: [UUID]) { panes.forEach { MessageBus.shared.dispose(pane: $0) } }
 }

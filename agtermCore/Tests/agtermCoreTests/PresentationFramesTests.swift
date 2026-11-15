@@ -356,6 +356,28 @@ struct PresentationFramesTests {
         #expect(PresentationHub.supportedKinds.contains("message"))
     }
 
+    @Test @MainActor func aMailFrameAndSnapshotCarryCountsAsAnObjectKeyedByPane() throws {
+        let pane = UUID()
+        let mail = PresentationMail(panes: [pane.uuidString: 3])
+        let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 2, body: .mail(mail)))
+        let snapshot = PresentationSnapshot(status: nil, hud: nil, mail: PresentationMail(panes: [:]))
+        let snapshotLine = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: .snapshot(snapshot)))
+
+        #expect(String(decoding: line, as: UTF8.self).contains(#""mail":{"panes":{"\#(pane.uuidString)":3}}"#))
+        #expect(try PresentationCodec.decode(line.dropLast()).body == .mail(mail))
+        #expect(try PresentationCodec.decode(snapshotLine.dropLast()).body == .snapshot(snapshot))
+        #expect(PresentationHub.supportedKinds.contains("mail"))
+    }
+
+    @Test func aSnapshotFromAnOriginWithoutMailDecodesWithNone() throws {
+        let line = Data(#"{"kind":"snapshot","gen":1,"rev":1,"snapshot":{"context":"PR #517"}}"#.utf8)
+
+        let frame = try PresentationCodec.decode(line)
+
+        guard case .snapshot(let snapshot) = frame.body else { Issue.record("not a snapshot"); return }
+        #expect(snapshot.mail == nil)
+    }
+
     @Test func anUnknownKindDecodesToUnknownAndKeepsItsOrdering() throws {
         let line = Data(#"{"kind":"future.kind","gen":3,"rev":12,"job":"abc"}"#.utf8)
 

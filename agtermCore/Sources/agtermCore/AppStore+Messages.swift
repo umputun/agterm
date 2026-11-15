@@ -107,17 +107,40 @@ extension AppStore {
         }
     }
 
-    /// pendingMessages is the tree read-back for one of `session`'s panes: a remote row's from its server's catalog,
-    /// a local pane's from this bus; nil at zero.
+    /// pendingMessages is the tree read-back for one of `session`'s panes, nil at zero: a local pane's from this bus,
+    /// a remote window row's from its server's catalog, any other attached row's from its presentation stream,
+    /// mapped to the origin's pane. The two remote sources never share a cache, so neither overwrites the other.
     func pendingMessages(_ session: Session, pane: UUID?, token: String?) -> Int? {
         guard session.remoteHost != nil else { return pendingMessages(token: token) }
-        return pane.flatMap { session.catalogMail[$0] }
+        guard let pane else { return nil }
+        guard let state = session.remotePresentation, !state.binding.catalogOwned else { return session.catalogMail[pane] }
+        let scratch = pane == session.scratchClientIdentity || pane == session.originScratch
+        let origin = scratch ? session.originScratch : state.binding.remotePane(forLocal: pane)
+        return origin.flatMap { state.mail?.panes[$0.uuidString] }
     }
 
     /// scratchPendingMessages is the tree read-back for a server scratch's mail, on the server and on a viewing Mac.
     func scratchPendingMessages(_ session: Session) -> Int? {
         let scratch = session.scratchDaemon?.identity
         return pendingMessages(session, pane: scratch, token: scratch?.uuidString)
+    }
+
+    /// presentationMail is the unacked mail of `id`'s main, split and scratch panes for its viewers, keyed by the
+    /// identities its layout names. Nil for a session this store does not host: a remote row's mail is its host's.
+    public func presentationMail(forSession id: UUID) -> PresentationMail? {
+        guard let session = session(withID: id), session.remoteHost == nil, session.content == .terminal else { return nil }
+        let counts = session.locallyManagedPaneIdentities.compactMap { pane -> (String, Int)? in
+            let count = MessageBus.shared.pending(for: pane)
+            return count > 0 ? (pane.uuidString, count) : nil
+        }
+        return PresentationMail(panes: Dictionary(counts) { $1 })
+    }
+
+    /// publishPresentationMail hands `id`'s current mail counts to the hub, which sends them only to viewers whose
+    /// last counts differ.
+    public func publishPresentationMail(forSession id: UUID) {
+        guard let hub = presentationHub, let mail = presentationMail(forSession: id) else { return }
+        hub.publishMail(mail, session: id)
     }
 
     /// pendingMessages is the unacked count of the pane a token names, nil at zero.

@@ -78,9 +78,27 @@ public final class MessageBus {
     public static let maxMailboxBytes = 1024 * 1024
     public static let maxBatch = 32
 
+    /// ObserverToken names one `observe` registration for `removeObserver`.
+    public struct ObserverToken: Hashable, Sendable {
+        let id: UUID
+    }
+
     private var mailboxes: [UUID: [BusMessage]] = [:]
+    private var observers: [ObserverToken: @MainActor () -> Void] = [:]
 
     public init() {}
+
+    /// observe calls `changed` after any mutation that alters a pending count: a delivered send, a read with ack
+    /// or an ack that removed messages, and disposing a mailbox that held any.
+    public func observe(_ changed: @escaping @MainActor () -> Void) -> ObserverToken {
+        let token = ObserverToken(id: UUID())
+        observers[token] = changed
+        return token
+    }
+
+    public func removeObserver(_ token: ObserverToken) { observers[token] = nil }
+
+    private func notify() { observers.values.forEach { $0() } }
 
     /// send queues one copy of `body` per recipient, refusing only the recipients whose mailbox it would
     /// overfill. A body over the limit refuses the whole send.
@@ -100,6 +118,7 @@ public final class MessageBus {
             mailboxes[recipient.pane, default: []].append(BusMessage(id: id, from: from, to: recipient.address, ts: now, body: body))
             delivered.append(recipient.address)
         }
+        if !delivered.isEmpty { notify() }
         return MessageSendResult(messageID: id, delivered: delivered, rejected: rejected)
     }
 
@@ -113,7 +132,10 @@ public final class MessageBus {
     /// readAndAck returns the oldest messages and removes exactly those, in one step.
     public func readAndAck(pane: UUID, limit: Int = MessageBus.maxBatch) -> MessageBatch {
         let batch = read(pane: pane, limit: limit)
-        if !batch.messages.isEmpty { mailboxes[pane]?.removeFirst(batch.messages.count) }
+        if !batch.messages.isEmpty {
+            mailboxes[pane]?.removeFirst(batch.messages.count)
+            notify()
+        }
         return batch
     }
 
@@ -123,12 +145,16 @@ public final class MessageBus {
         let wanted = Set(ids)
         let removed = box.filter { wanted.contains($0.id) }.map(\.id)
         mailboxes[pane] = box.filter { !wanted.contains($0.id) }
+        if !removed.isEmpty { notify() }
         return removed
     }
 
     public func pending(for pane: UUID) -> Int { mailboxes[pane]?.count ?? 0 }
 
-    public func dispose(pane: UUID) { mailboxes[pane] = nil }
+    public func dispose(pane: UUID) {
+        guard mailboxes.removeValue(forKey: pane)?.isEmpty == false else { return }
+        notify()
+    }
 
     private func bytes(of box: [BusMessage]) -> Int { box.reduce(0) { $0 + $1.body.utf8.count } }
 }

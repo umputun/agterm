@@ -378,6 +378,30 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertNil(fix.session.effectiveInfo)
     }
 
+    func testAnAttachedRowsTreeReadsTheOriginsMailCounts() throws {
+        let fix = try fixture()
+        let origin = UUID()
+        fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [
+            fix.session.paneIdentity: ZmxSupport.daemonName(for: origin),
+        ], presentationVersion: 1), forSession: fix.session.id)
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        fix.server.startRemotePresentation(for: fix.session)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: ["mail"], mode: .mirror)), rev: 0)
+        let count = { () -> Int? in
+            let tree = fix.store.controlTree(paneForeground: { _ in nil })
+            let node = tree.workspaces.flatMap(\.sessions).first { $0.id == fix.session.id.uuidString }
+            return node?.surfaces?.first { $0.kind == "left" }?.pendingMessages
+        }
+
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil,
+                                                          mail: PresentationMail(panes: [origin.uuidString: 2]))), rev: 1)
+        XCTAssertEqual(count(), 2)
+
+        try transport.feed(.mail(PresentationMail(panes: [:])), rev: 2)
+        XCTAssertNil(count())
+    }
+
     func testAMirroredHudFrameIsShownOnTheRow() throws {
         let (fix, transport) = try connected()
         try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)

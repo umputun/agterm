@@ -10,6 +10,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     let presentationHub = PresentationHub(staleTimeout: 30)
     let overlayJobs: OverlayJobs
     var presentationStreams: [PresentationStream] = []
+    lazy var mailRelay = PresentationMailRelay { [unowned self] in
+        presentationHub.subscribedSessions.forEach(store.publishPresentationMail(forSession:))
+    }
     var presentationHeartbeat: Task<Void, Never>?
     var presentationHelloDeadline: TimeInterval = 10
     var overlayJobStreams: [String: OverlayJobStream] = [:]
@@ -62,6 +65,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
             self?.pendingJobCancels.remove(job.id)
             self?.store.finishRemoteOverlay(job)
         }
+        mailRelay.start()
     }
 
     // MARK: presentation
@@ -245,6 +249,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     func shutdown() {
+        mailRelay.stop()
         shutdownPresentationStreams()
         shutdownCatalogStreams()
         for stream in overlayJobStreams.values { stream.shutdown() }

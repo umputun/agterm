@@ -2033,8 +2033,10 @@ hidden ones included, and the main and split panes of an ended row drop their ma
 keeps it. Mail lives for the server's run. The server tree reports `pendingMessages` on main and split surfaces
 and a scratch's address and count on the session as `scratchPaneID` and `scratchPendingMessages`; a Mac showing
 the server window reports the same counts on the row. Any Mac viewing a session hosted elsewhere, a server's or
-another Mac's, gets the `message` event for mail queued for that session's panes, carrying the host's pane id;
-a row attached alone with `zmx attach` or from another Mac reports no counts yet. A local pane and
+another Mac's, gets the `message` event for mail queued for that session's panes, carrying the host's pane id,
+and reports the host's counts on the row: `pendingMessages` on its surfaces and `scratchPendingMessages` for a
+scratch running on the host, for a row attached alone with `zmx attach` or from another Mac too. A host that
+predates these counts reports none on such a row. A local pane and
 a server pane cannot message each other yet: a Mac send to a server row is rejected `unknown pane` with detail
 `remote session`, a server send to a Mac session `unknown pane`, and a server row as `--as` is refused.
 

@@ -3883,8 +3883,9 @@
                 mail lives for the server's run. Its tree reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pendingMessages</span> on the main and split surfaces and the
                 scratch's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratchPaneID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratchPendingMessages</span> on the session; a Mac showing the server
                 window reports the same counts on the row. Any Mac viewing a session hosted elsewhere, a server's or another Mac's, gets the
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> event for mail queued for that session's panes, carrying the host's pane id; a row attached alone with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> or from another Mac reports no counts yet. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">events read</span> is not served on the server itself. A local pane and a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> event for mail queued for that session's panes, carrying the host's pane id, and reports the host's counts on
+                the row, for a row attached alone with <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zmx attach</span> or from another Mac too; a host that predates these counts reports none
+                there. The server's own <span style="font-family: &quot;JetBrains Mono&quot;, monospace">events read</span> carries no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">message</span> events. A local pane and a
                 server pane cannot message each other yet: a Mac send to a server row is rejected <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane</span> with detail
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">remote session</span>, a server send to a Mac session <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pane</span>, and a server row as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--as</span> is refused.
