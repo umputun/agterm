@@ -41,6 +41,33 @@
     <link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="/style.css?v=3" />
+    <style>
+      .doc-v2 h2 { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 28px; letter-spacing: -0.02em;
+        margin: 0 0 16px; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+      .doc-v2 h3 { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 20px; color: #e6e1d7;
+        margin: 40px 0 12px; scroll-margin-top: 88px; }
+      .doc-v2 h4 { font-family: "JetBrains Mono", monospace; font-weight: 600; font-size: 16px; color: #e6e1d7;
+        margin: 28px 0 10px; scroll-margin-top: 88px; }
+      .doc-v2 p, .doc-v2 li { font-size: 16px; line-height: 1.7; color: #cbc6bc; }
+      .doc-v2 p { margin: 0 0 16px; }
+      .doc-v2 ul, .doc-v2 ol { margin: 0 0 16px; padding-left: 22px; }
+      .doc-v2 li { margin: 0 0 6px; }
+      .doc-v2 li::marker { color: #6d82f3; }
+      .doc-v2 strong { color: #e6e1d7; }
+      .doc-v2 a { color: #6d82f3; }
+      .doc-v2 code { font-family: "JetBrains Mono", monospace; font-size: 0.9em; color: #e6e1d7;
+        background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+      .doc-v2 table { width: 100%; border-collapse: collapse; margin: 4px 0 20px; font-size: 15px; line-height: 1.55;
+        display: block; overflow-x: auto; }
+      .doc-v2 th, .doc-v2 td { text-align: left; vertical-align: top; padding: 9px 12px; color: #cbc6bc;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+      .doc-v2 th { color: #e6e1d7; font-weight: 600; background: #22272b; }
+      .doc-v2 td:first-child { white-space: nowrap; color: #e6e1d7; }
+      .doc-v2 figure { width: fit-content; max-width: 100%; margin: 8px 0 24px; background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px; overflow: hidden; }
+      .doc-v2 figure img { display: block; max-width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+      .doc-v2 figcaption { padding: 12px 16px; font-size: 13.5px; color: #949ba4; }
+    </style>
   </head>
   <body>
     <div
@@ -4264,206 +4291,206 @@ command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"
           </section>
 
           <!-- RESTORE -->
-          <section id="restore" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Restore &amp; persistence
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              Sessions come back on the next launch with their directory, font size, and split state restored. General settings
-              offers <strong style="color: #e6e1d7">Fresh shells</strong>, <strong style="color: #e6e1d7">Re-run commands</strong>,
-              or <strong style="color: #e6e1d7">Live sessions</strong>. The choice is frozen for the process, so changing it takes
-              effect after restarting agterm. Live mode requires zsh or fish as the macOS login shell; an unsupported shell or missing zmx
-              resource falls back to fresh shells, with the reason shown in Settings. When the last <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
-              in the config chain agterm loads (ghostty.conf, the global config when inherited, and their
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">config-file</span> includes) is an absolute zsh or fish path with only login or interactive flags, such as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command = /opt/homebrew/bin/fish --login</span>,
-              Live panes start that shell instead, even when the login shell is not zsh or fish. Live ignores any
-              other <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>. It is read at launch,
-              and a pane whose daemon is already running keeps its shell until Agterm ▸ Reset Live Sessions… runs.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: -8px 0 20px">
-              Saving settings with this version removes the legacy
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restoreRunningCommand</span> key. If an
-              older agterm later opens the same state directory, it sees no restore setting and defaults to fresh shells.
-            </p>
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px">
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Upgrading keeps live sessions running.</strong> With Live sessions already
-                active, install the new version (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">brew upgrade --cask agterm</span>, or a release download), quit agterm
-                and open it again: local primary and split panes reattach to the same processes, and no reset is needed.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl version</span> prints the installed version when it differs from the running app.
-                When switching from Fresh shells or Re-run commands to Live sessions, the current shells end at the first
-                clean quit. The first Live launch starts captured foreground commands again where possible; shell state is lost.
-              </li>
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Live mode reattaches the running process.</strong> Every primary and split pane
-                starts through zmx, and so does the scratch, which comes back hidden. Overlay and quick terminals stay temporary. A clean quit ends the attach client while
-                the daemon and its process continue, and captures each open pane's foreground command as a fallback. The next launch
-                attaches to the same name. A surviving daemon ignores the fallback payload; if an orderly machine restart removed the
-                daemon, zmx creates it with the captured command and later launches reattach normally. A pane starts a fresh shell
-                instead when its window was closed before quit, a hard power loss or force quit skipped capture, or the captured
-                command is denylisted or carries a control character. SIGTERM leaves the daemon running but skips capture.
-                Deleting a session, workspace, split, or window kills the corresponding daemon after any undo grace expires.
-                Switching to Fresh shells or Re-run commands and restarting ends every detached live process in this state directory.
-                A launch that still requests Live sessions but cannot use it preserves those processes for a later eligible launch.
-                A live session created before the session host existed keeps its own macOS permission identity, so a tool in it
-                asks for the microphone again after every update. <strong style="color: #e6e1d7">Agterm ▸ Reset Live Sessions…</strong>
-                replaces every such session at once: the dialog says how many it resets, agterm quits and reopens itself with the
-                same sessions and layout, and each captured command starts again where possible. Other work running in those
-                sessions stops, and agent conversations may need to be resumed by hand. The same item also recreates sessions that
-                predate the last Live sessions update, so they pick up its changes, and moves sessions still running under the
-                session host of an earlier agterm build or login to the current one; such a host can block a tool's access to
-                the local network after an update, and agterm asks it to stop at every launch, which it does once no live session runs under it. Other sessions are left alone,
-                and a notification afterwards says how many sessions the reset covered.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx reset --force</span> does the same without the dialog.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx list</span> shows every daemon and the pane that claims it,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx screen</span> prints one daemon's screen even when its window is closed,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx prune</span> clears the ones nothing claims, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx kill</span> destroys a single pane's daemon. A closed window's panes stay
-                claimed with no clients attached, which is their resting state rather than something to clean up. Every one of
-                these needs agterm running: only the app can tell a leaked daemon from a pane that is merely closed.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx prune</span> re-checks immediately before it kills, but the check is not atomic — zmx offers no
-                kill-if-detached — so a client that attaches from outside agterm in that last moment can still be terminated.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx kill</span> requires the session, the pane and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--force</span> because it destroys a backend process rather than a model object: it reaches a pane no
-                window is showing and takes down every client attached to that daemon. Killing a shown split closes that split;
-                killing a primary promotes its split survivor, or closes the session when there is none. None of these gets the
-                undo grace, and Reopen Last Closed Item, or <a href="/commands#recent" style="color: #6d82f3">agtermctl recent open</a>, brings the session back with a fresh shell.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl restore mode</span> reads or sets the restore policy without opening Settings, and
-                the mode it sets applies to the next launch for the same reason the picker does.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree --json</span> reports the actual
-                state as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">surfaces[].backedByZmx</span>
-                and a session-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">backedByZmx</span>,
-                which is true only when every existing primary or split pane is backed. The sidebar adds no separate indicator.
-                Microphone requests from Live panes created through the supervisor stay attributed to agterm across restarts;
-                see <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back"
-                style="color: #6d82f3">permission troubleshooting</a>.
-                Reattach restores usable text, TUI state, and normal colors, but its synthesized screen does not retain inline images,
-                earlier OSC 133 prompt markers, program-changed palette entries, or hyperlink metadata already attached to cells.
-                New output after reattach behaves normally. In live mode,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --command</span> passes the
-                command as a create-only zmx payload, which bypasses the 1,024-byte PTY input cap. A surviving daemon ignores the payload;
-                a new daemon runs it. The pane closes when that command exits, or with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> holds its final output, as in the other modes. A command that ends within a
-                moment of the pane's creation can lose its output, and the pane then shows only <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm: session is gone</span>. After
-                a clean quit, a missing daemon replays the captured running command inside a new persistent shell; the exclusions above
-                start a fresh shell.
-                A Live pane created through the session host may complete its shell's startup terminal negotiation with
-                synthesized replies rather than the rendering terminal's own: the shell can send DA1/DA2 queries before the pane's
-                terminal is attached, and those are answered on the terminal's behalf &mdash; by the session host while its
-                creation attach is connected, by zmx while no terminal client is attached &mdash; with fixed replies, so the shell
-                starts without waiting. Queries only the real terminal can answer, such as the kitty keyboard protocol, XTVERSION
-                terminal identification, and OSC 11 background color, may get no reply at startup, so the capabilities they enable
-                may not be detected until the program queries again. fish 4.9.3 sends the kitty keyboard and XTVERSION queries
-                only at startup: if they go unanswered during supervised creation, fish does not retry them for the rest of that
-                shell's lifetime. zsh does not query at startup.
-              </li>
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Re-run mode starts commands again.</strong> Fresh shells is the default. Re-run
-                commands starts the command each pane had in the foreground at the last clean quit; it does not reattach that process.
-                A launch that replays commands starts its panes at a paced rate rather than all at once, with visible panes first.
-                Only a single-process command restores faithfully; a command whose name or arguments carry a control character
-                starts a plain shell instead, since the restored line is typed and the line editor would read that byte as an
-                editing key rather than text, and so does one carrying bytes that were not valid UTF-8, which are captured
-                lossily and would replay a different argument, and so does one containing
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">!</span> in a csh or tcsh pane,
-                since those shells expand it as history even inside quotes; a force-quit or crash captures nothing unless
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl restore capture</span> ran
-                beforehand, and a capture replays
-                exactly once, since the launch that arms it clears it from the state file; and the multiplexers in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
-                (seeded with tmux/screen/zellij) start fresh. That file is yours to edit: agterm writes a commented starter at
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >&lt;config dir&gt;/restore-denylist.conf</span
-                >
-                (default
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >~/.config/agterm/restore-denylist.conf</span
-                >) when none exists, one command name per line, matched on the command's basename. It sits next to
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ghostty.conf</span>, so changing the
-                directory in <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong> moves all three; with no such setting,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_STATE_DIR</span> puts them in
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&lt;state dir&gt;/config</span>
-                instead. Delete a line to let that
-                program restore, or add one to keep another from re-running; the file is read at launch, so an edit takes
-                effect on the next one. A per-session override,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session restore</span>, pins what a
-                pane restores (or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--none</span> for a plain
-                shell, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--clear</span> to drop it) —
-                consumed on the next launch, sticky across restarts, winning over both the captured command and the session's own
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span>, and reading back on
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>. It runs only in re-run mode
-                but still saves policy in the other modes, and it bypasses the denylist because it names its command deliberately.
-                The pinned value is shell code stored in the
-                window's state file and readable via
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>, so it must not carry
-                secrets. A
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">SessionStart</span> hook can rewrite it so a
-                non-idempotent command like
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">claude --resume … --fork-session</span>
-                reattaches on restart instead of forking.
-              </li>
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Page sessions come back in every mode.</strong> A page session on this Mac,
-                top-level or a companion, is saved with its file or URL and its flags. It returns with its companions after a
-                relaunch, whatever the restore mode, and when Reopen Closed Item brings its group back. If the file is gone or the
-                server does not answer, the row stays with the error and a Reload button. A file page opened with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span> runs its scripts with the full <a href="#page-bridge" style="color: #6d82f3">control
-                bridge</a> at every launch and every reopen, with nothing to click. That is more than a restored
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span> gets, which runs again only in Re-run commands mode. The file and any scripts it
-                loads have full control of agterm. A URL page gets no bridge. A page row attached from another Mac is saved as an attachment, never with its page,
-                which its origin hands over again at the next launch.
-              </li>
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">The saved directory depends on OSC 7.</strong> It relies on Ghostty
-                shell-integration (auto-injected for zsh, bash, fish, and nu). If the working directory is never reported, a
-                session restores to the directory it was created in. The integration does not survive a shell replacing itself,
-                so a startup file that
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">exec</span>s another shell — what
-                the Amazon Q CLI, Kiro CLI and Fig wrappers install — silently leaves it unreported;
-                <a
-                  href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#every-session-restores-to-the-directory-it-was-created-in"
-                  style="color: #6d82f3"
-                  >troubleshooting.md</a
-                >
-                has the fix.
-              </li>
-              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Directory is saved on structural changes, not every cd.</strong> It persists on
-                quit and on each add/close/move/rename/select — not on every prompt redraw, which would thrash the disk. A crash
-                loses only the directory changes made since the last structural change or quit.
-              </li>
-            </ul>
-          </section>
+          <section id="restore" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Restore &amp; persistence</h2>
+<p>When agterm opens again, your workspaces, sessions, splits, directories and font sizes come back. What happens to running programs depends on <strong>Settings ▸ General ▸ Restore sessions</strong>:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Each pane comes back with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fresh shells (default)</td>
+<td>a new shell in the saved directory</td>
+</tr>
+<tr>
+<td>Re-run commands</td>
+<td>the command it was running at the last clean quit, started again</td>
+</tr>
+<tr>
+<td>Live sessions</td>
+<td>the same program, still running</td>
+</tr>
+</tbody>
+</table>
+<p>A new mode applies after agterm restarts. <code>agtermctl restore mode</code> reads or sets it.</p>
+<figure>
+<img src="/assets/docs-restore-mode.webp" alt="Restore sessions picker in Settings, General tab, set to Live sessions" width="470" height="190" loading="lazy">
+<figcaption>
+Settings ▸ General ▸ Restore sessions. The note under it is a reminder that a new mode applies after a restart.
+</figcaption>
+</figure>
+<h3 id="restore-live">Live sessions</h3>
+<p>Quit, update or relaunch agterm while shells, servers and agents keep running. Primary and split panes reconnect; the scratch terminal comes back hidden. Overlays and the quick terminal close with the app.</p>
+<h4 id="restore-requirements">Requirements</h4>
+<ul>
+<li>A zsh or fish shell: your macOS login shell, or the ghostty <code>command</code> when it is an absolute zsh or fish path with only login or interactive flags (<code>command = /opt/homebrew/bin/fish --login</code>).</li>
+<li>The ghostty <code>command</code> wins over the login shell. The last one counts, across <code>ghostty.conf</code>, the inherited global config and their <code>config-file</code> includes. Any other <code>command</code> is ignored in Live mode.</li>
+<li>agterm's bundled session helper (<code>zmx</code>).</li>
+</ul>
+<p>Without a supported shell or the bundled helper, agterm uses fresh shells and Settings says why. The shell is read at launch; running panes keep theirs until <a href="#restore-reset">Reset Live Sessions</a>.</p>
+<h4 id="restore-upgrade-and-switch-modes">Upgrade and switch modes</h4>
+<ul>
+<li><strong>Upgrade:</strong> install the new version (<code>brew upgrade --cask agterm</code>), quit, reopen. Panes reconnect. <code>agtermctl version</code> shows the installed version when it differs from the running one.</li>
+<li><strong>Switch to Live:</strong> current shells end at the next clean quit. The first Live launch restarts their commands where it can; shell state is lost.</li>
+<li><strong>Switch away from Live:</strong> after a restart, every detached live program in this state directory ends. If Live is still selected but cannot run, they are kept for a later launch.</li>
+</ul>
+<h4 id="restore-quit-close-delete">Quit, close, delete</h4>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>You</th>
+<th>The live program</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>quit cleanly</td>
+<td>keeps running; agterm records each pane's command as a fallback</td>
+</tr>
+<tr>
+<td>force quit, crash, <code>SIGTERM</code></td>
+<td>keeps running; nothing recorded</td>
+</tr>
+<tr>
+<td>close a window</td>
+<td>keeps running; File ▸ Open Window reconnects it</td>
+</tr>
+<tr>
+<td>delete a session, split, workspace or window</td>
+<td>ends after the undo time</td>
+</tr>
+</tbody>
+</table>
+<p>A program that is still running always reconnects. If it is gone (say, after a Mac restart), agterm starts the recorded command in a new live shell. The pane gets a fresh shell instead when:</p>
+<ul>
+<li>nothing was recorded (force quit, crash, <code>SIGTERM</code>, power loss);</li>
+<li>its window was closed before the quit;</li>
+<li>the command is on the <a href="#restore-rerun">denylist</a> or has a control character.</li>
+</ul>
+<h4 id="restore-what-a-reconnected-screen-keeps">What a reconnected screen keeps</h4>
+<p>Text, full-screen programs and normal colors come back. Lost from before the reconnect:</p>
+<ul>
+<li>inline images;</li>
+<li>prompt marks (OSC 133), so prompt jumps start at the reconnect;</li>
+<li>palette colors a program changed;</li>
+<li>links on screen.</li>
+</ul>
+<p>New output works normally.</p>
+<h4 id="restore-known-limit-startup-feature-checks">Known limit: startup feature checks</h4>
+<p>A program may ask the terminal about features while it starts. In a new Live pane, these can go unanswered:</p>
+<ul>
+<li>kitty keyboard protocol (richer keys);</li>
+<li>XTVERSION (terminal name);</li>
+<li>OSC 11 (background color, for light or dark themes).</li>
+</ul>
+<p>The program then lacks the feature until it asks again. fish 4.9.3 asks for kitty keyboard and XTVERSION only at startup: if unanswered, never again in that shell. zsh asks nothing at startup.</p>
+<h4 id="restore-reset">Reset Live Sessions</h4>
+<p><strong>Agterm ▸ Reset Live Sessions…</strong> restarts sessions that need it and reopens agterm with the same layout. The item appears only while Live sessions is both selected and running. It covers:</p>
+<ul>
+<li>sessions created before session-host support: tools there ask for the microphone after every update;</li>
+<li>sessions older than the latest Live update, so they pick up its changes;</li>
+<li>sessions under an older build's or another login's session host, which can block local network access after an update. agterm asks such a host to stop at each launch; it stops once no session uses it.</li>
+</ul>
+<p>The dialog shows how many sessions it resets. Their running work stops, and recorded commands restart where possible; agent conversations may need resuming by hand. Others are untouched. With banners on, a notification appears only when something went wrong: some sessions could not be reset (run it again for the rest), or the session list could not be read and nothing was reset. <code>agtermctl zmx reset --force</code> skips the dialog.</p>
+<figure class="narrow">
+<img src="/assets/docs-reset-live-sessions.webp" alt="Reset Live Sessions confirmation dialog saying three live sessions will be reset" width="260" height="362" loading="lazy">
+<figcaption>
+The confirmation names how many sessions it resets and why.
+</figcaption>
+</figure>
+<p>Microphone requests from panes created through the session host stay attributed to agterm across restarts (<a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#agterm-would-like-to-access-data-from-other-apps-keeps-coming-back">troubleshooting</a>).</p>
+<h4 id="restore-from-the-command-line">From the command line</h4>
+<p>These need agterm running: only the app knows a leftover program from a closed window's.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agtermctl zmx list</code></td>
+<td>every live program and its pane; closed windows' panes show nothing attached, which is normal</td>
+</tr>
+<tr>
+<td><code>agtermctl zmx screen</code></td>
+<td>prints one program's screen, even with its window closed</td>
+</tr>
+<tr>
+<td><code>agtermctl zmx prune</code></td>
+<td>ends programs no pane claims; a terminal attached from outside at that moment may end too</td>
+</tr>
+<tr>
+<td><code>agtermctl zmx kill</code></td>
+<td>ends one pane's program, even in no visible window, with everything attached; needs session, pane, <code>--force</code></td>
+</tr>
+<tr>
+<td><code>agtermctl zmx reset --force</code></td>
+<td>Reset Live Sessions without the dialog</td>
+</tr>
+</tbody>
+</table>
+<p>After <code>zmx kill</code> a split closes; a primary hands its place to its split, or the session closes. No undo time; Reopen Last Closed Item or <a href="/commands#recent"><code>agtermctl recent open</code></a> brings it back with a fresh shell.</p>
+<p><code>agtermctl tree --json</code> reports live panes: <code>surfaces[].backedByZmx</code>, and a session-level <code>backedByZmx</code> that is true when every primary and split pane is live. The sidebar has no mark for it. Full options: <a href="/commands#zmx">command reference</a>.</p>
+<h4 id="restore-commands-from-scripts">Commands from scripts</h4>
+<p>In Live mode, <code>agtermctl session new --command</code> takes long commands fine. A surviving program reconnects without running it again; a gone one gets the usual fallback. The pane closes when the command ends, or keeps its output with <code>--wait</code>. A command that ends quickly can lose its output and show only <code>agterm: session is gone</code>.</p>
+<h3 id="restore-rerun">Re-run commands</h3>
+<p>At each clean quit agterm records every pane's foreground command; the next launch starts it again as a new process, visible panes first, the rest gradually.</p>
+<p>A pane gets a plain shell instead for:</p>
+<ul>
+<li>a force quit or crash, unless <code>agtermctl restore capture</code> ran first (a capture is used for one launch only);</li>
+<li>a control character in the command (it would be typed as an editing key);</li>
+<li>bytes that are not valid UTF-8 (they would replay a different argument);</li>
+<li><code>!</code> in a csh or tcsh pane (expanded as history even in quotes);</li>
+<li>a program on the denylist.</li>
+</ul>
+<p>Only a single program restores faithfully; pipelines and command chains may not.</p>
+<h4 id="restore-denylist">Denylist</h4>
+<p><code>restore-denylist.conf</code> lists programs that never re-run: one command name per line, matched on the file name. agterm writes a commented starter (tmux, screen, zellij) only when the file does not exist.</p>
+<ul>
+<li>Location: next to <code>keymap.conf</code> and <code>ghostty.conf</code>, default <code>~/.config/agterm/</code>.</li>
+<li>Settings ▸ Key Mapping moves all three; with no folder set, <code>AGTERM_STATE_DIR</code> puts them in <code>&lt;state dir&gt;/config</code>.</li>
+<li>Read at launch, so edits apply next time.</li>
+</ul>
+<h4 id="restore-pin-a-panes-command">Pin a pane's command</h4>
+<p><code>agtermctl session restore</code> pins the shell code a pane runs at launch. <code>--none</code> pins a plain shell, <code>--clear</code> removes the pin.</p>
+<ul>
+<li>Applies every launch until cleared.</li>
+<li>Wins over the recorded command and the session's <code>--command</code>; ignores the denylist.</li>
+<li>Runs only in Re-run mode, but can be set in any mode.</li>
+<li>Stored in the window's state file and shown by <code>agtermctl tree</code>: no secrets.</li>
+</ul>
+<p>A SessionStart hook can rewrite it, for example so <code>claude --resume … --fork-session</code> resumes instead of forking.</p>
+<h3 id="restore-pages">Page sessions</h3>
+<p>Page sessions on this Mac come back in every mode, with their file or URL, flags and companions, and after Reopen Closed Item. A missing file or silent server leaves the row with the error and a Reload button.</p>
+<ul>
+<li>A file page opened with <code>--js</code> gets full control of agterm (<a href="#page-bridge">page bridge</a>) at every launch and reopen, without asking. Open only pages, and scripts they load, that you trust. A restored <code>--command</code> only reruns in Re-run mode.</li>
+<li>A URL page gets no bridge.</li>
+<li>A page row from another Mac is saved as an attachment, without the page; that Mac sends it again at launch.</li>
+</ul>
+<h3 id="restore-cwd">Working directory</h3>
+<p>Sessions reopen in their last directory if the shell reports it (OSC 7). Ghostty's shell integration does that for zsh, bash, fish and nu; otherwise the session reopens where it was created. Wrappers that replace your shell at startup (Amazon Q, Kiro, Fig) break it: <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#every-session-restores-to-the-directory-it-was-created-in">fix</a>.</p>
+<p>The directory is saved on quit and on each session add, close, move, rename or select, so a crash loses only <code>cd</code>s since then.</p>
+<h3 id="restore-downgrade">Older agterm versions</h3>
+<p>Saving settings in this version removes the old <code>restoreRunningCommand</code> key. An older agterm opening the same state directory then uses fresh shells.</p>
+</section>
 
           <!-- TROUBLESHOOTING -->
           <section id="troubleshooting" style="scroll-margin-top: 88px; padding-top: 56px">
