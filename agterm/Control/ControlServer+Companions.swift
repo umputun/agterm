@@ -118,6 +118,23 @@ extension ControlServer {
         }
     }
 
+    /// moveCompanion resolves the parent in the companion's own window only, as `session.move` resolves its anchor,
+    /// so a short prefix stays unambiguous and a parent in another window reads as `no such session`.
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        return resolver.resolve(parent, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                active: store.selectedSessionID, noun: "session") { parentID in
+            if case .failure(let refusal) = store.moveCompanion(id, under: parentID, at: index) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parentID.uuidString))
+        }
+    }
+
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {

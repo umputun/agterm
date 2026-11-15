@@ -140,6 +140,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// reveal so unrelated updates (cwd/title/badge) to the already-selected session don't re-expand a
         /// collapsed workspace or yank the scroll position back.
         private var lastRevealedSelection: UUID?
+        // a moved companion keeps its id, so only its parent tells the reveal it now sits under another row
+        private var lastRevealedParent: UUID?
         /// Last-seen `TreeShape`; a change is structural and forces a full rebuild.
         private var lastShape: [TreeShape] = []
         /// The sidebar mode and flagged layout the outline was last BUILT for, written by `rebuildAndReload`
@@ -759,10 +761,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 lastRevealedSelection = nil
                 return
             }
-            // the row-selection sync runs every call, but the intrusive reveal — expanding a collapsed owner
-            // and scrolling into view — only fires on a real selection change, so unrelated cwd/title/badge
-            // updates leave a user-collapsed workspace and a user-moved scroll position alone.
-            let selectionChanged = selectedID != lastRevealedSelection
+            // the intrusive reveal (expanding a collapsed owner, scrolling into view) fires only when the selection
+            // or its parent changes, so cwd/title/badge updates leave a user-collapsed workspace and scroll alone.
+            let parentID = store.session(withID: selectedID)?.parentID
+            let selectionChanged = selectedID != lastRevealedSelection || parentID != lastRevealedParent
             // a session selected by keyboard nav may live in a collapsed workspace, whose row is -1 until
             // expanded; expand its owner first so the row resolves. A VIEW action, so suppress the persist:
             // navigating into a deliberately collapsed workspace shows the session without un-collapsing it
@@ -791,6 +793,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 outline.scrollRowToVisible(row)
             }
             lastRevealedSelection = selectedID
+            lastRevealedParent = parentID
         }
 
         /// The workspace node holding `sessionID` and, for a nested companion, its parent's node, outermost

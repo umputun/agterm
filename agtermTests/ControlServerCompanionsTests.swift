@@ -319,6 +319,38 @@ final class ControlServerCompanionsTests: XCTestCase {
         XCTAssertNil(remote.parentID)
     }
 
+    func testMoveCompanionPutsItUnderAFoldedParentAndAnswersWithBoth() async throws {
+        let (store, parent, children) = try group()
+        let (_, destination) = try addSession()
+        let resident = try store.addCompanion(to: destination.id, options: CompanionOptions(select: false)).get()
+        XCTAssertTrue(store.setSessionExpanded(destination.id, expanded: false))
+
+        let reply = await server.moveCompanion(children[1].id.uuidString, parent: String(destination.id.uuidString.prefix(8)),
+                                               index: 0, window: nil)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(reply.result?.id, children[1].id.uuidString)
+        XCTAssertEqual(reply.result?.parent, destination.id.uuidString)
+        let nodes = server.buildTree(in: store).workspaces.flatMap(\.sessions)
+        XCTAssertEqual(nodes.filter { $0.parent == destination.id.uuidString }.map(\.id), [children[1].id.uuidString, resident.id.uuidString])
+        XCTAssertEqual(nodes.filter { $0.parent == parent.id.uuidString }.map(\.id), [children[0].id.uuidString])
+    }
+
+    func testMoveCompanionRefusesWithTheStoreReasonAndAnUnknownParent() async throws {
+        let (store, parent, children) = try group()
+        let (_, top) = try addSession()
+
+        let underCompanion = await server.moveCompanion(children[0].id.uuidString, parent: children[1].id.uuidString, index: nil, window: nil)
+        let topLevel = await server.moveCompanion(top.id.uuidString, parent: parent.id.uuidString, index: nil, window: nil)
+        let unknown = await server.moveCompanion(children[0].id.uuidString, parent: UUID().uuidString, index: nil, window: nil)
+
+        XCTAssertEqual(underCompanion.error, CompanionMoveRefusal.parentIsCompanion.message)
+        XCTAssertEqual(topLevel.error, CompanionMoveRefusal.notCompanion.message)
+        XCTAssertFalse(unknown.ok)
+        XCTAssertEqual(children.map(\.parentID), [parent.id, parent.id])
+        XCTAssertNil(store.session(withID: top.id)?.parentID)
+    }
+
     private func addSession() throws -> (AppStore, Session) {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

@@ -80,15 +80,30 @@ extension AppActions {
                            action: "Convert to Companion") { return }
         switch store.convertToCompanion(id) {
         case .failure(let refusal):
-            guard let remoteAttacher, let windowID = library.windowID(for: store) else {
-                return NotificationManager.shared.notifyCommandFailure(name: "Convert to Companion", detail: refusal.message)
-            }
-            RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString,
-                            action: "Convert to Companion").fail(refusal.message)
+            showCompanionRefusal(refusal.message, action: "Convert to Companion", over: id, in: store)
         case .success:
             store.noteUserActivity()
             focusActiveSession()
         }
+    }
+
+    /// moveCompanion puts a companion under another top-level session for the sidebar drop and the row menu; the
+    /// control command calls the store itself, since this reports only through the HUD.
+    func moveCompanion(_ id: UUID, under parentID: UUID, at index: Int?, in store: AppStore) {
+        switch store.moveCompanion(id, under: parentID, at: index) {
+        case .failure(let refusal):
+            showCompanionRefusal(refusal.message, action: "Move Companion", over: id, in: store)
+        case .success:
+            store.noteUserActivity()
+        }
+    }
+
+    // a refusal shows in a timed HUD over the session, falling back to a notification when there is no window for it
+    private func showCompanionRefusal(_ message: String, action: String, over id: UUID, in store: AppStore) {
+        guard let remoteAttacher, let windowID = library.windowID(for: store) else {
+            return NotificationManager.shared.notifyCommandFailure(name: action, detail: message)
+        }
+        RemoteAttachHud(attacher: remoteAttacher, session: id.uuidString, window: windowID.uuidString, action: action).fail(message)
     }
 
     func convertActiveSessionToCompanion() {

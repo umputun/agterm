@@ -188,20 +188,20 @@
   `agtermTests/ControlServerCompanionsTests.swift`, `agtermTests/WorkspaceSidebarCompanionsTests.swift`,
   `agtermUITests/ControlCompanionsUITests.swift`
 
-- [ ] `AppActions.moveCompanion` as the drop/menu adapter (store path now, remote branches filled by tasks 3
+- [x] `AppActions.moveCompanion` as the drop/menu adapter (store path now, remote branches filled by tasks 3
       and 4); a separate `ControlServer` handler on `AppStore.moveCompanion`, replying `id`/`parent`
-- [ ] `SidebarDrop` resolution carrying the destination parent and group slot for the tree-mode drop cases;
+- [x] `SidebarDrop` resolution carrying the destination parent and group slot for the tree-mode drop cases;
       `validateDrop` asks `canMoveCompanion`, `acceptDrop` calls `AppActions.moveCompanion`, `outlineSlot`
       stops inferring the group from the source; multi-row parent changes refused; flagged layouts unchanged
-- [ ] row menu "Move to" for a single companion: other top-level sessions under per-workspace headers,
+- [x] row menu "Move to" for a single companion: other top-level sessions under per-workspace headers,
       offered only where `canMoveCompanion` succeeds, disabled where a server window blocks marks
-- [ ] selection reveal on an owner-chain change, as in Technical Details
-- [ ] show Eugene the drop indicator, the menu and the reveal in an isolated Debug instance, before the UI tests
-- [ ] tests: `SidebarDropTests` for each tree drop case, the refused gaps, multi-row and flagged layouts;
+- [x] selection reveal on an owner-chain change, as in Technical Details
+- [x] show Eugene the drop indicator, the menu and the reveal in an isolated Debug instance, before the UI tests
+- [x] tests: `SidebarDropTests` for each tree drop case, the refused gaps, multi-row and flagged layouts;
       `AppActionsCompanionsTests` for the seam and its refusal HUD; hosted control and sidebar tests including a
       GUI move and a `session move --parent` move into a folded parent; one UI test driving the command and
       reading `parent` back from `tree`
-- [ ] run the touched tests (`-only-testing:` for hosted and UI) - must pass before task 3
+- [x] run the touched tests (`-only-testing:` for hosted and UI) - must pass before task 3
 
 ### Task 3: Server window rows
 

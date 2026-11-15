@@ -73,6 +73,37 @@ final class AppActionsCompanionsTests: XCTestCase {
         XCTAssertEqual(companion.parentID, session.id)
     }
 
+    func testMoveCompanionPutsItUnderAnotherSessionAtTheSlot() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.activeSession)
+        let companion = try store.addCompanion(to: first.id).get()
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let other = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), select: false))
+        let resident = try store.addCompanion(to: other.id, options: CompanionOptions(select: false)).get()
+
+        actions.moveCompanion(companion.id, under: other.id, at: 0, in: store)
+
+        XCTAssertEqual(companion.parentID, other.id)
+        let group = store.workspaces.first { $0.id == owner }?.sessions.filter { $0.parentID == other.id }.map(\.id)
+        XCTAssertEqual(group, [companion.id, resident.id])
+        XCTAssertTrue(huds.opened.isEmpty)
+    }
+
+    func testARefusedMoveShowsTheReasonInATimedHudOverTheSession() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.activeSession)
+        let companion = try store.addCompanion(to: first.id).get()
+        let sibling = try store.addCompanion(to: first.id).get()
+
+        actions.moveCompanion(companion.id, under: sibling.id, at: nil, in: store)
+
+        let opened = try XCTUnwrap(huds.opened.first)
+        XCTAssertEqual(opened.session, companion.id.uuidString)
+        XCTAssertTrue(opened.spec.message.contains(CompanionMoveRefusal.parentIsCompanion.message), opened.spec.message)
+        XCTAssertEqual(opened.spec.hideAfter, AppActions.remoteAttachErrorSeconds)
+        XCTAssertEqual(companion.parentID, first.id)
+    }
+
     func testConvertToCompanionNestsATopLevelPageUnderAFreshParent() throws {
         let store = try XCTUnwrap(library.activeStore)
         let workspace = try XCTUnwrap(store.currentWorkspaceID)
