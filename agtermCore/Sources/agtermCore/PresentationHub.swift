@@ -70,7 +70,7 @@ public final class PresentationHub {
     public static let supportedKinds = ["status", "hud", "notify", "message", "mail", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
-                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind]
+                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -80,6 +80,8 @@ public final class PresentationHub {
     /// restartRespawnKind is an origin's capability of publishing a restarted pane's respawn, which carries every viewer's
     /// attach across the restart.
     public static let restartRespawnKind = "restart.respawn"
+    /// presenterVacantKind is a viewer's capability of asking for the role again when the origin reports it vacant.
+    public static let presenterVacantKind = "presenter.vacant"
     /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
     public static let statusClearKind = "status.clear"
     /// pendingSnapshotKind is a presenter's capability of taking a headless origin's pending interactions.
@@ -243,9 +245,11 @@ public final class PresentationHub {
         case .ack: subscriber.pingedAt = nil
         case .ping: send(.ack, to: id)
         case .presenterAcquire:
+            // a vacancy can cross a viewer's first acquire, so the holder may ask twice; pending work goes out once
+            let repeated = grant.holder(of: subscriber.session) == id
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-            if granted { onPresenterGranted?(subscriber.session) }
+            if granted, !repeated { onPresenterGranted?(subscriber.session) }
         case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
              .pageState, .pageResult, .linkClick, .statusClear, .statusSeen:
             guard grant.holder(of: subscriber.session) == id else { return }
@@ -309,6 +313,17 @@ public final class PresentationHub {
     }
 
     private func release(_ id: SubscriberID) {
-        for session in grant.release(id) { onPresenterLost?(session) }
+        for session in grant.release(id) {
+            onPresenterLost?(session)
+            announceVacancy(session: session)
+        }
+    }
+
+    // a refused mirror asks only once per stream, so without this the role stays empty until a viewer reconnects.
+    // the mirrors ask through `presenterAcquire` after the drop that freed the role has fully unwound
+    private func announceVacancy(session: UUID) {
+        for (id, subscriber) in subscribers where subscriber.session == session && subscriber.kinds.contains(Self.presenterVacantKind) {
+            send(.presenterVacant, to: id)
+        }
     }
 }

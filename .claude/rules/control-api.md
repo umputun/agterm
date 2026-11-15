@@ -2183,7 +2183,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ping. One warning per failure episode or changed reason. A soft close stops the client and undo starts a
   fresh one.
 - A stream a viewer opens asks for the PRESENTER role. The origin grants it to one stream per session and
-  refuses the rest, which stay mirrors and ask again only on their own reconnect; an origin predating the
+  refuses the rest, which stay mirrors. When the presenter's stream ends, the origin sends `presenter.vacant` to the
+  mirrors that list that kind and each asks again, the first acquire winning; an older mirror asks again only on
+  its own reconnect, and a repeat acquire from the holder offers pending work once. An origin predating the
   role answers mirror. The role goes with its stream. Read back the viewer's `presentation.mode` and the
   origin's `presenters.presenter`. A newly opened session-associated ask or program overlay goes to that
   presenter only when its target pane reports `follower` on the origin, or every existing pane does for

@@ -2553,7 +2553,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   opens from the origin's directory, and a loopback http(s) link opens through an ssh forward to the origin once
   it answers; a forward that fails shows `the port forward to HOST failed`.
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
-  whose stream asks for it while none holds it. The others mirror and ask again only when they reconnect.
+  whose stream asks for it while none holds it. The others mirror and ask again when they reconnect, or when the
+  presenting Mac leaves if both the origin and that row's agterm are current.
   An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
   when the target pane reports `follower` there, or every existing pane does for session-wide placement.
   Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
