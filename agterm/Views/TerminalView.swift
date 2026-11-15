@@ -12,7 +12,32 @@ import SwiftUI
 /// The detail pane keeps every session's `TerminalView` mounted (a deck), toggling visibility + `isActive`
 /// on selection rather than swapping by `.id`, so a switch never dismantles/re-hosts the surface NSView —
 /// a re-host invalidates the Metal drawable and flickers.
-struct TerminalView: NSViewRepresentable {
+///
+/// The hovered-link label is drawn over the surface inside this view, so it never changes the shape of the
+/// split or deck around it.
+struct TerminalView: View {
+    let session: Session
+    let surfaceKeyPath: ReferenceWritableKeyPath<Session, (any TerminalSurface)?>
+    let makeSurface: (Session) -> GhosttySurfaceView
+    var isActive = true
+    var deckVisible = true
+    var reportsFocusChange = true
+    var viewOnly = false
+    var onScreen: Bool?
+    /// labelAbove hands the label to a layer above that draws it from `LinkHoverModelKey`.
+    var labelAbove = false
+    @State private var linkHover = LinkHoverModel()
+
+    var body: some View {
+        TerminalSurfaceHost(session: session, surfaceKeyPath: surfaceKeyPath, makeSurface: makeSurface, isActive: isActive,
+                            deckVisible: deckVisible, reportsFocusChange: reportsFocusChange, viewOnly: viewOnly,
+                            onScreen: onScreen, linkHover: linkHover)
+            .overlay(alignment: .bottomLeading) { if !labelAbove { LinkHoverLabel(model: linkHover) } }
+            .preference(key: LinkHoverModelKey.self, value: labelAbove ? linkHover : nil)
+    }
+}
+
+private struct TerminalSurfaceHost: NSViewRepresentable {
     let session: Session
     /// Which surface slot this view binds to: the primary `\.surface` or the split
     /// `\.splitSurface`. Lets one representable host either pane.
@@ -38,12 +63,14 @@ struct TerminalView: NSViewRepresentable {
     /// and HUDs (visible while non-interactive) and for panes under the quick terminal, whose `holdsKey`
     /// term is focus ownership, not visibility. nil follows `deckVisible` (the zoom host, where they agree).
     var onScreen: Bool?
+    let linkHover: LinkHoverModel
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context _: Context) -> GhosttySurfaceView {
         let view = (session[keyPath: surfaceKeyPath] as? GhosttySurfaceView) ?? makeSurface(session)
         session[keyPath: surfaceKeyPath] = view
+        linkHover.adopt(view)
         view.focusSession = session
         // before the view attaches: gate the overlay/scratch auto-focus to the active slot so a background
         // session's overlay can't grab first responder during its initial createSurface.
@@ -59,6 +86,7 @@ struct TerminalView: NSViewRepresentable {
         // keep the auto-focus gate in sync with selection, set BEFORE createSurface (which fires the overlay
         // auto-focus) so a background slot never starts the focus-grab retry.
         nsView.focusSession = session
+        linkHover.adopt(nsView)
         nsView.deckActive = isActive && !nsView.askBlocksFocus
         nsView.deckVisible = deckVisible
         nsView.deckOnScreen = onScreen ?? deckVisible

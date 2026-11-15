@@ -249,6 +249,60 @@ struct AppStoreRemoteLayoutTests {
         #expect(store.originScratchStopped(session.id) == nil)
     }
 
+    private func node(_ store: AppStore, _ session: Session) throws -> ControlSessionNode {
+        let tree = store.controlTree(paneForeground: { _ in nil })
+        return try #require(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })
+    }
+
+    @Test func anAttachedRowReadsItsOriginsMailOnEveryPaneItShows() throws {
+        let (store, session) = try attachedAlone()
+        let scratch = UUID()
+        let layout = PresentationLayout(panes: [originA, originB], primary: originA, axis: "vertical", shown: true,
+                                        scratch: scratch, scratchShown: true)
+        _ = store.applyRemoteLayout(layout, forSession: session.id, attach: lines)
+        session.splitSurface = SpySurface()
+        session.scratchSurface = SpySurface(paneToken: try #require(session.scratchClientIdentity).uuidString)
+
+        store.applyRemoteMail(PresentationMail(panes: [originA.uuidString: 2, originB.uuidString: 1, scratch.uuidString: 3]),
+                              forSession: session.id)
+
+        let loaded = try node(store, session)
+        #expect(loaded.surfaces?.first { $0.kind == "left" }?.pendingMessages == 2)
+        #expect(loaded.surfaces?.first { $0.kind == "right" }?.pendingMessages == 1)
+        #expect(loaded.surfaces?.first { $0.kind == "scratch" }?.pendingMessages == 3)
+        #expect(loaded.scratchPendingMessages == 3)
+    }
+
+    @Test func anAttachedRowReadsNoMailFromAnEmptyMapAnOriginWithoutCountsOrAWithdrawnStream() throws {
+        let (store, session) = try attachedAlone()
+        let count = { store.pendingMessages(session, pane: session.paneIdentity, token: nil) }
+        #expect(count() == nil)
+
+        store.applyRemoteMail(PresentationMail(panes: [originA.uuidString: 1]), forSession: session.id)
+        #expect(count() == 1)
+        store.applyRemoteMail(PresentationMail(panes: [:]), forSession: session.id)
+        #expect(count() == nil)
+
+        store.applyRemoteMail(PresentationMail(panes: [originA.uuidString: 1]), forSession: session.id)
+        store.applyRemoteMail(nil, forSession: session.id)
+        #expect(count() == nil)
+
+        store.applyRemoteMail(PresentationMail(panes: [originA.uuidString: 1]), forSession: session.id)
+        store.withdrawRemoteReplicas(of: session)
+        #expect(session.remotePresentation?.mail == nil)
+    }
+
+    @Test func aRemoteWindowRowKeepsReadingItsCatalog() throws {
+        let store = makeStore()
+        let row = try addAttachedRow(to: store, workspace: store.addWorkspace(name: "work").id, catalogOwned: true)
+        let origin = try #require(row.remotePresentation?.binding.remotePane(forLocal: row.paneIdentity))
+        row.catalogMail = [row.paneIdentity: 4]
+
+        store.applyRemoteMail(PresentationMail(panes: [origin.uuidString: 9]), forSession: row.id)
+
+        #expect(store.pendingMessages(row, pane: row.paneIdentity, token: nil) == 4)
+    }
+
     // regression: two rows of one origin session shared the origin's scratch UUID as their lead and reconnect key
     @Test func twoRowsOfOneOriginSessionKeyTheirScratchesApart() throws {
         let store = makeStore()

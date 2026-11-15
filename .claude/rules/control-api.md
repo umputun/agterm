@@ -1521,8 +1521,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   scratch reads back on the session (`scratchPaneID`, `scratchPendingMessages`), since the `surfaces[]` entry
   is a zoom address the server's scratch lacks. Each delivered pane is a `message` presentation frame to every
   viewer of its session, presenter or not, from a server or a Mac origin (`publishMessageQueued`), and the viewer
-  emits the event on the row (`emitRemoteMessage`). Counts on a row attached alone or from another Mac are
-  `docs/backlog/pending-counts-on-attached-rows.md`, an exception Eugene approved.
+  emits the event on the row (`emitRemoteMessage`). Every other attached row reads counts from its presentation
+  stream: a `mail` frame and snapshot field (`PresentationMail`, keyed by origin pane) replace
+  `RemotePresentationState.mail`, and the read maps a local pane through the binding, a scratch through `originScratch`.
+  A catalog-owned row keeps the catalog as its only source, so the two streams' orderings never meet in one cache.
+  The origin publishes from `PresentationMailRelay`, one main-queue turn after any count-changing bus mutation,
+  so no disposal site needs its own hook; the hub sends each viewer only a map that differs from its last.
 
 ## Keymap, config, theme, and sidebar
 

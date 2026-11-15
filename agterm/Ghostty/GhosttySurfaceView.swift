@@ -50,7 +50,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     private(set) var awaitingSpawnPermit = false
 
     /// Whether this surface grabs first responder as soon as it is created — the overlay's path: it mounts
-    /// over an already-focused session, and `TerminalView.focusIfNeeded` grabs only when the view is in a
+    /// over an already-focused session, and `TerminalSurfaceHost.focusIfNeeded` grabs only when the view is in a
     /// window at the first `updateNSView`, which the deferred overlay surface is not, with no later update.
     private let autoFocus: Bool
 
@@ -360,6 +360,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     var linkPressDragged = false
     /// Whether any mouse button is down, system-wide; replaceable because a real click elsewhere answers it too.
     var mouseButtonsDown: () -> Bool = { NSEvent.pressedMouseButtons != 0 }
+    /// linkHover is the label model of the host now showing this surface; see `LinkHoverModel.adopt`.
+    var linkHover: LinkHoverModel?
 
     // admitted by the off-main SET_TITLE callback, completed by the main block it queues.
     nonisolated let titleAdmission = OSAllocatedUnfairLock(initialState: TitleAdmission())
@@ -703,7 +705,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         // so the watermark path above skips it.
         applyOverlayConfig()
 
-        // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the deferred
+        // the overlay grabs first responder itself (TerminalSurfaceHost's once-on-attach grab misses the deferred
         // overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.
         requestAutoFocus(in: window)
     }
@@ -827,15 +829,6 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         }
     }
 
-    /// Rechecked inside retries so a newly opened dialog can claim its region's input.
-    static func pickOwnsFocus(in window: NSWindow?, session: Session? = nil, pane: OverlayPane? = nil) -> Bool {
-        guard let window, let windowID = WindowRegistry.shared.windowID(for: window) else { return false }
-        if PickRegistry.shared.controller(for: windowID)?.modalPending == true { return true }
-        guard let session, let catcher = AskKeyCatcher.KeyCatcherView.sessionCatchers.object(forKey: session.id as NSUUID),
-              catcher.window === window else { return false }
-        return catcher.sessionInput?.blocksTerminalFocus(in: window, pane: pane) == true
-    }
-
     func destroySurface() {
         // a pane torn down before it spawned must not consume its pending slots; the session keeps them.
         launchSeed = nil
@@ -853,6 +846,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
         windowVisibilityObservation = nil
         if let surface { ghostty_surface_free(surface) }
         surface = nil
+        linkHover?.label = nil
         // release the custom layer libghostty installed and this view still retains. The current pin clears
         // its display callback in `IOSurfaceLayer.release`, so this defends builds predating that fix, where
         // the callback kept pointing at the freed renderer and the next CoreAnimation display locked a mutex
@@ -953,7 +947,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
             updateGhosttyFocus()
         }
         updateMetalLayerSize()
-        // focus is driven by TerminalView.updateNSView when this surface becomes the active session's detail
+        // focus is driven by TerminalSurfaceHost.updateNSView when this surface becomes the active session's detail
         // view; only an auto-focus (overlay) surface grabs here, since that grab misses a deferred surface.
         requestAutoFocus(in: window)
     }

@@ -245,7 +245,7 @@ paths:
 - Known gaps are intentional: background `addSession(select: false)` and non-active `moveSession` can
   populate an empty visible set without selecting it. Explicit selection of an unflagged session while
   flagged also remains invisible rather than forcing a mode change.
-- Terminal focus needs no app bridge: `TerminalView.updateNSView` resigns inactive surfaces and
+- Terminal focus needs no app bridge: `TerminalSurfaceHost.updateNSView` resigns inactive surfaces and
   `focusIfNeeded` claims the active one. Auto-follow alone posts a pane-specific notification.
 
 ## Reconciliation and expansion

@@ -166,8 +166,14 @@ struct ServerActionsMessagesTests {
 
     private final class FrameSink: PresentationSink {
         var messages: [PresentationMessage] = []
+        var mail: PresentationMail?
         func offer(_ frame: PresentationFrame) -> Bool {
-            if case .message(let message) = frame.body { messages.append(message) }
+            switch frame.body {
+            case .message(let message): messages.append(message)
+            case .snapshot(let snapshot): mail = snapshot.mail
+            case .mail(let mail): self.mail = mail
+            default: break
+            }
             return true
         }
         func close(_: PresentationHub.CloseReason) {}
@@ -326,5 +332,52 @@ struct ServerActionsMessagesTests {
         #expect(endedSink.messages.map(\.pane) == [scratch])
         #expect(fullSink.messages.isEmpty)
         [scratch, full.paneIdentity].forEach { MessageBus.shared.dispose(pane: $0) }
+    }
+
+    private func settledMail(_ sink: FrameSink) async -> [String: Int]? {
+        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        return sink.mail?.panes
+    }
+
+    @Test func aViewersMailMapFollowsSendReadAckAndSplitClose() async throws {
+        let (session, right, scratch) = try await splitWithScratch()
+        let sink = try subscribe(session)
+        let (main, prefix) = (session.paneIdentity, session.id.uuidString)
+        #expect(sink.mail == PresentationMail(panes: [:]))
+
+        _ = await send("a", to: ["\(prefix):left", "\(prefix):right", "\(prefix):scratch"])
+        _ = await send("b", to: ["\(prefix):left"])
+        #expect(await settledMail(sink) == [main.uuidString: 2, right.uuidString: 1, scratch.uuidString: 1])
+
+        _ = await read(as: address(session, main), ack: true)
+        #expect(await settledMail(sink) == [right.uuidString: 1, scratch.uuidString: 1])
+
+        let ids = await read(as: address(session, scratch)).result?.messages?.map(\.id.uuidString) ?? []
+        _ = await ack(ids, as: address(session, scratch))
+        #expect(await settledMail(sink) == [right.uuidString: 1])
+
+        _ = await harness.actions.serve(ControlRequest(cmd: .sessionSplitClose, target: prefix))
+        #expect(await settledMail(sink) == [:])
+    }
+
+    @Test func aViewersMailMapFollowsPromotionScratchDropAndAnEndedRow() async throws {
+        let (session, right, scratch) = try await splitWithScratch()
+        let sink = try subscribe(session)
+        let primary = session.paneIdentity
+        try [primary, right, scratch].forEach { try deliver(1, to: $0) }
+        #expect(await settledMail(sink) == [primary.uuidString: 1, right.uuidString: 1, scratch.uuidString: 1])
+
+        #expect(harness.store.closePrimaryPane(session.id) == .promoted)
+        #expect(await settledMail(sink) == [right.uuidString: 1, scratch.uuidString: 1])
+
+        harness.store.dropScratchDaemon(session.id)
+        #expect(await settledMail(sink) == [right.uuidString: 1])
+
+        _ = harness.actions.scratchSession(session.id.uuidString, window: nil, mode: "on", command: nil)
+        let next = try #require(session.scratchDaemon?.identity)
+        try deliver(2, to: next)
+        harness.store.markSessionEnded(session.id)
+        #expect(await settledMail(sink) == [next.uuidString: 2])
+        MessageBus.shared.dispose(pane: next)
     }
 }

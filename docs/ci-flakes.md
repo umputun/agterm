@@ -153,6 +153,11 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   count nor the number of queued tasks was measured.
 - **Fix.** `held()` gives up after 1000 `Task.yield` retries instead of a deadline, so a stall slows it but cannot
   expire it. The startup stall itself remains.
+- **Pool waits removed.** `HudHelperTests` and `OverlayRunJobTests` now wait with `Task.sleep` instead of parking
+  worker threads. Three full runs each, same container, 4 pinned CPUs: trivial `ControlEventRingTests` cases
+  reported 17.0, 14.5 and 15.6 s before and 13.1, 14.7 and 13.7 s after; the suite took 44.2, 43.8 and 44.3 s
+  before and 41.7, 41.1 and 44.0 s after. About 2 s of the stall, within the noise of three runs; the rest has
+  another cause.
 
 ### `ServerStreamsTests.twoViewsAreServedAtOnceAndBridgeRequestsRunOnTheServer`
 

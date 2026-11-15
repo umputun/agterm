@@ -54,6 +54,14 @@ extension ControlServer: PresentationStreamHost {
         }
         dropOrphanedPresentationStreams()
         resumeRestoredAttachedRows()
+        mailRelay.start()
+    }
+
+    /// publishPresentationMail sends each viewed session's mail counts through the store hosting it.
+    func publishPresentationMail() {
+        for id in presentationHub.subscribedSessions {
+            library.store(forSession: id)?.publishPresentationMail(forSession: id)
+        }
     }
 
     func presentationSourceExists(_ session: UUID) -> Bool {

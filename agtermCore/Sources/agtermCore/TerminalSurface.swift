@@ -18,7 +18,7 @@ public protocol TerminalSurface: AnyObject {
 
     /// Whether the terminal itself EXISTS — the underlying libghostty surface created and its program
     /// spawned — as opposed to this object merely occupying a session's surface slot. The two differ:
-    /// `TerminalView.makeNSView` parks the view in the slot BEFORE `createSurface()` runs, and creation
+    /// `TerminalSurfaceHost.makeNSView` parks the view in the slot BEFORE `createSurface()` runs, and creation
     /// defers until the view gets a nonzero backing size, so an occupied slot proves nothing about a running
     /// program. `dropUnrealizedPaneOverlays` keys on this to tell a stranded pane overlay from a live one. A
     /// hard requirement (no default) like `teardown()`, because either default silently misbehaves: `true`

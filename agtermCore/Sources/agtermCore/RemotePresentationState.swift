@@ -119,6 +119,9 @@ public struct RemotePresentationState: Equatable, Sendable {
     /// Whether the live HUD was opened by the bridge. Cleared whenever the HUD is discarded, so a panel the
     /// viewer's own program opens afterwards is never the bridge's to close.
     public internal(set) var hudBridged = false
+    /// mail is the origin's unacked mail keyed by origin pane, as the stream last reported it; nil while the origin
+    /// sends none. A catalog-owned row reads its catalog instead.
+    var mail: PresentationMail?
     /// statusKeySent is set once plain typing on the bridged status went to the origin; a submit or an interrupt
     /// still goes, so an origin clearing only on those hears them.
     var statusKeySent = false

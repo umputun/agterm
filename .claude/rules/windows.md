@@ -133,7 +133,7 @@ session drag are out of scope.
   split, scratch, and overlay with `deckInteractive && isActive && !quickTerminal.holdsKey`. Read `holdsKey`,
   never `isVisible`: the predicate is app-level, so it inerts EVERY window, and a PINNED panel (a control
   `quick show`) stays on screen after agterm loses key. Gating on visibility there makes
-  `TerminalView.updateNSView` revoke first responder in every window on the next SwiftUI update, so the user
+  `TerminalSurfaceHost.updateNSView` revoke first responder in every window on the next SwiftUI update, so the user
   clicks into a terminal, types, and loses the keyboard again at the next title or status change. The same
   distinction governs `focusActiveSession`, `focusSplitPane`, the scratch's `suppressAutoFocus`,
   `coverHidesActiveSession` and the Command-W rungs. `holdsKey` follows the panel's own

@@ -114,6 +114,7 @@ extension ControlServer {
             respawns: { [weak self] respawns, seed in self?.applyRemoteRespawns(respawns, seed: seed, forSession: id) },
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },
             message: { [weak self] message in self?.library.store(forSession: id)?.emitRemoteMessage(message, forSession: id) },
+            mail: { [weak self] mail in self?.library.store(forSession: id)?.applyRemoteMail(mail, forSession: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })

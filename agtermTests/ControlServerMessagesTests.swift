@@ -16,8 +16,14 @@ final class ControlServerMessagesTests: XCTestCase {
 
     private final class FrameSink: PresentationSink {
         var messages: [PresentationMessage] = []
+        var mail: PresentationMail?
         func offer(_ frame: PresentationFrame) -> Bool {
-            if case .message(let message) = frame.body { messages.append(message) }
+            switch frame.body {
+            case .message(let message): messages.append(message)
+            case .snapshot(let snapshot): mail = snapshot.mail
+            case .mail(let mail): self.mail = mail
+            default: break
+            }
             return true
         }
         func close(_: PresentationHub.CloseReason) {}
@@ -233,5 +239,28 @@ final class ControlServerMessagesTests: XCTestCase {
         XCTAssertEqual(event.workspace, store.workspace(forSession: session.id)?.id.uuidString)
         XCTAssertNotNil(event.window)
         XCTAssertEqual(event.payload.paneID, session.paneIdentity.uuidString)
+    }
+
+    func testAViewerOfAMacOriginGetsTheCountAndItsClearAfterAnAck() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let target = try liveSession(in: store)
+        server.attachPresentationHub()
+        let viewer = FrameSink()
+        let hello = PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds, mode: .mirror)
+        _ = try server.presentationHub.subscribe(session: target.id, hello: hello, sink: viewer) {
+            self.server.presentationSnapshot(forSession: target.id)
+        }
+        let nextMainTurn = { await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } } }
+        XCTAssertEqual(viewer.mail, PresentationMail(panes: [:]))
+
+        _ = await send(ControlArgs(body: "hi", recipients: [address(target)]))
+        await nextMainTurn()
+        XCTAssertEqual(viewer.mail, PresentationMail(panes: [target.paneIdentity.uuidString: 1]))
+
+        let read = await ControlDispatcher(actions: server).dispatch(ControlRequest(cmd: .msgRead, args: ControlArgs(
+            identity: address(target), ack: true)))
+        await nextMainTurn()
+        XCTAssertEqual(read?.result?.messages?.map(\.body), ["hi"])
+        XCTAssertEqual(viewer.mail, PresentationMail(panes: [:]))
     }
 }

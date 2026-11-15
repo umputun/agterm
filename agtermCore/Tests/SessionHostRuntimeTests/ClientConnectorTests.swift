@@ -35,6 +35,20 @@ struct ClientConnectorTests {
         #expect(fixture.starter.spawns == [fixture.disclaimedArgv])
     }
 
+    // regression: a descriptor copy held by a child spawned during startHost kept the spawn lock after its close
+    @Test func spawnLockIsFreeAfterStartWhileACopyOfItsDescriptorIsOpen() throws {
+        let fixture = try Fixture(launchdSupported: false, outcome: .succeeded)
+        defer { fixture.cleanup() }
+        fixture.starter.copyLockAt = fixture.paths.spawnLock
+        #expect(throws: SpawnRefused.self) { try fixture.connector(startupTimeout: 10).ensureRunning() }
+        let copy = try #require(fixture.starter.lockCopy)
+        defer { close(copy) }
+        let probe = open(fixture.paths.spawnLock, O_RDWR)
+        try #require(probe >= 0)
+        defer { close(probe) }
+        #expect(flock(probe, LOCK_EX | LOCK_NB) == 0)
+    }
+
     @Test func connectorWithoutAKeyNeverSubmitsAJob() throws {
         let fixture = try Fixture(launchdSupported: true, outcome: .succeeded)
         defer { fixture.cleanup() }
@@ -71,6 +85,8 @@ struct ClientConnectorTests {
         let outcome: HostJob.Outcome
         var jobs: [(job: HostJob, directory: String, deadline: TimeInterval)] = []
         var spawns: [[String]] = []
+        var copyLockAt: String?
+        var lockCopy: Int32?
 
         init(launchdSupported: Bool, outcome: HostJob.Outcome) {
             self.launchdSupported = launchdSupported
@@ -84,7 +100,19 @@ struct ClientConnectorTests {
 
         func spawnDisclaimed(executable: String, argv: [String], env: [String: String]) throws -> Int32 {
             spawns.append(argv)
+            if let copyLockAt, let fd = descriptor(openOn: copyLockAt) { lockCopy = dup(fd) }
             throw SpawnRefused()
+        }
+
+        private func descriptor(openOn path: String) -> Int32? {
+            guard let resolved = realpath(path, nil) else { return nil }
+            defer { free(resolved) }
+            let target = String(cString: resolved)
+            let entries = (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd")) ?? []
+            return entries.compactMap { Int32($0) }.first { fd in
+                var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+                return fcntl(fd, F_GETPATH, &buffer) == 0 && String(cString: buffer) == target
+            }
         }
     }
 

@@ -76,6 +76,7 @@ final class ControlServer {
     /// here because an extension cannot hold it. Main-actor only.
     let presentationHub = PresentationHub(staleTimeout: 30)
     var presentationStreams: [PresentationStream] = []
+    lazy var mailRelay = PresentationMailRelay { [unowned self] in publishPresentationMail() }
     /// Remote overlay jobs this Mac handed to presenters.
     let overlayJobs = OverlayJobs()
     var overlayJobStreams: [String: OverlayJobStream] = [:]
@@ -372,6 +373,7 @@ final class ControlServer {
         // outside the guard: the lock is taken in `init`, so an instance that never bound (path too long,
         // or a bind that failed) still holds one and would otherwise keep it for the whole process.
         defer { releaseOwnership() }
+        mailRelay.stop()
         shutdownPresentationStreams()
         pageAttachments.shutdown()
         stopRemoteCatalogs()

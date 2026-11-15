@@ -87,7 +87,7 @@ final class ClientConnector {
         try HostEndpoint.privateDirectory(socketDirectory)
         try HostEndpoint.privateDirectory(URL(fileURLWithPath: paths.socket).deletingLastPathComponent().path)
         let spawnLock = try openLock(paths.spawnLock)
-        defer { close(spawnLock) }
+        defer { flock(spawnLock, LOCK_UN); close(spawnLock) }
         while flock(spawnLock, LOCK_EX | LOCK_NB) != 0 {
             if errno != EWOULDBLOCK && errno != EINTR { throw HostFailure.system(errno) }
             if let connection = try open(deadline: deadline) { return connection }

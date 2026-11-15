@@ -35,6 +35,8 @@ public final class PresentationHub {
         var pingedAt: Date?
         /// Deltas published while the snapshot is being taken, held so they land after it.
         var held: [PresentationFrame.Body]? = []
+        /// mail is the counts this viewer last accepted, from its snapshot or a mail frame.
+        var mail: PresentationMail?
 
         init(session: UUID, generation: Int, sink: PresentationSink) {
             self.session = session
@@ -65,7 +67,7 @@ public final class PresentationHub {
     }
 
     /// The frame kinds this origin can produce.
-    public static let supportedKinds = ["status", "hud", "notify", "message", "context", "info", "layout", "sound", askFormKind, askOtherKind,
+    public static let supportedKinds = ["status", "hud", "notify", "message", "mail", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind]
@@ -203,6 +205,21 @@ public final class PresentationHub {
         sendToPresenter(.pendingCommit, session: session)
     }
 
+    /// publishMail sends `session`'s mail counts to each viewer whose last accepted counts differ, so every viewer
+    /// converges on the current map whatever it saw in between.
+    public func publishMail(_ mail: PresentationMail, session: UUID) {
+        for (id, subscriber) in subscribers where subscriber.session == session {
+            if subscriber.held != nil {
+                subscriber.held?.append(.mail(mail))
+                continue
+            }
+            if subscriber.mail != mail { send(.mail(mail), to: id) }
+        }
+    }
+
+    /// subscribedSessions are the sessions at least one viewer follows.
+    public var subscribedSessions: Set<UUID> { Set(subscribers.values.map(\.session)) }
+
     func publishLayout(_ layout: PresentationLayout, session: UUID) {
         guard subscriberCount(session: session) > 0, layouts[session] != layout else { return }
         layouts[session] = layout
@@ -276,6 +293,11 @@ public final class PresentationHub {
             return false
         }
         subscriber.revision += 1
+        switch body {
+        case .snapshot(let snapshot): subscriber.mail = snapshot.mail
+        case .mail(let mail): subscriber.mail = mail
+        default: break
+        }
         return true
     }
 

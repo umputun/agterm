@@ -50,6 +50,8 @@ public struct RemotePresentationEffects {
     public var linkRefused: @MainActor (RemoteLinkRefusal) -> Void
     /// message reports mail queued on the origin for one of the session's panes, to every viewer alike.
     public var message: @MainActor (PresentationMessage) -> Void
+    /// mail replaces the origin's unacked counts per origin pane; nil from a snapshot of an origin that sends none.
+    public var mail: @MainActor (PresentationMail?) -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -75,6 +77,7 @@ public struct RemotePresentationEffects {
                 respawns: @escaping @MainActor (PresentationRespawns, Bool) -> Void = { _, _ in },
                 linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
                 message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
+                mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -99,6 +102,7 @@ public struct RemotePresentationEffects {
         self.respawns = respawns
         self.linkRefused = linkRefused
         self.message = message
+        self.mail = mail
         self.warn = warn
     }
 }
@@ -242,6 +246,7 @@ public final class RemotePresentationClient {
             effects.hud(snapshot.hud)
             effects.context(snapshot.context)
             effects.info(snapshot.info)
+            effects.mail(snapshot.mail)
             if let respawns = snapshot.respawns { effects.respawns(respawns, true) }
         case .status(let status): effects.status(status)
         case .context(let context): effects.context(context)
@@ -250,6 +255,7 @@ public final class RemotePresentationClient {
         case .hud(let hud): effects.hud(hud)
         case .notify(let notify): effects.notify(notify)
         case .message(let message): effects.message(message)
+        case .mail(let mail): effects.mail(mail)
         case .sound(let sound): effects.sound(sound)
         case .ping: send(.ack, on: link)
         // an origin that predates the role answers mirror, and nothing is asked of it

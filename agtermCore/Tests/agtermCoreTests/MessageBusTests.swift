@@ -149,4 +149,27 @@ struct MessageBusTests {
         #expect(try JSONDecoder().decode(MessageRejection.self, from: detailed).detail == "remote session")
         #expect(try JSONDecoder().decode(LegacyRejection.self, from: detailed) == LegacyRejection(address: "a:b", reason: .unknownPane))
     }
+
+    @Test func observersHearOnlyMutationsThatChangeACount() throws {
+        let bus = MessageBus()
+        var calls = 0
+        let token = bus.observe { calls += 1 }
+
+        let sent = try send(bus, "one", to: [paneA])
+        bus.dispose(pane: paneB)
+        _ = bus.ack(pane: paneA, ids: [UUID()])
+        _ = bus.readAndAck(pane: paneB)
+        #expect(calls == 1)
+
+        _ = bus.ack(pane: paneA, ids: [sent.messageID])
+        try send(bus, "two", to: [paneA])
+        _ = bus.readAndAck(pane: paneA)
+        try send(bus, "three", to: [paneA])
+        bus.dispose(pane: paneA)
+        #expect(calls == 6)
+
+        bus.removeObserver(token)
+        try send(bus, "four", to: [paneA])
+        #expect(calls == 6)
+    }
 }
