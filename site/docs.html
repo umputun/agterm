@@ -384,492 +384,96 @@
           </section>
 
           <!-- INSTALL -->
-          <section id="install" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Install
-            </h2>
-            <div
-              style="
-                background: rgba(109, 130, 243, 0.08);
-                border: 1px solid rgba(109, 130, 243, 0.28);
-                border-radius: 10px;
-                padding: 14px 18px;
-                margin: 0 0 22px;
-                font-size: 14px;
-                color: #b9c1f5;
-                line-height: 1.6;
-              "
-            >
-              <strong style="color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">Available now</strong> — Signed,
-              notarized builds are published on the
-              <a href="https://github.com/umputun/agterm/releases" style="color: #6d82f3">releases page</a>. Install via Homebrew
-              or the direct download below; building from source is optional.
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              Releases are signed and notarized for Apple Silicon (arm64) Macs running macOS 14 or later, so they open without any
-              Gatekeeper workaround.
-            </p>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-              "
-            >
-              Homebrew
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 16px 18px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 14px;
-                color: #e6e1d7;
-                overflow-x: auto;
-              "
-            >
-              <span style="color: #6d82f3">$ </span>brew install --cask umputun/apps/agterm
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
-              The cask also installs the
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command-line tool,
-              so cask users shouldn't run the in-app installer as well.
-            </p>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-              "
-            >
-              Direct download
-            </h3>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0">
-              Download the latest
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.dmg</span> from the
-              <a href="https://github.com/umputun/agterm/releases" style="color: #6d82f3">releases page</a>, open it, and drag
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm.app</span> into
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/Applications</span>.
-            </p>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-              "
-            >
-              Optional Help-menu installers
-            </h3>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
-              None are needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later. The
-              first launch on a machine points them out in a welcome dialog, which offers the skill and the status hooks and never
-              appears again.
-            </p>
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px">
-              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Install Command Line Tool…</strong> puts the bundled
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> on your PATH (a
-                symlink in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/usr/local/bin</span>)
-                so you can script the app. When that directory is writable by you it links with no prompt; when it is root-owned,
-                which is the case on a clean Apple Silicon Mac, macOS asks once for an administrator password. The Homebrew cask
-                already installs it.
-              </li>
-              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, Pi, OpenCode, or
-                others) report its state onto its session's row, so you can tell which of several running agents is active,
-                blocked, or finished.
-              </li>
-              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Install Agent Skill…</strong> teaches Claude Code or Codex how to drive agterm
-                through <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>, so an
-                agent inside a session can build its own layout, run overlays, and manage windows without you explaining the API.
-                It also knows the cookbook, so you can ask it to list the available recipes, set one up for you, or read one for
-                reference when a workflow is hard to get right.
-                It drives the app through the CLI, so install that one too. The same skill is also published as a plugin from the
-                repository — <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >claude plugin marketplace add umputun/agterm</span
-                >
-                then
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >claude plugin install agterm@agterm</span
-                >, or the matching
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">codex plugin</span> commands. Use
-                one route or the other, not both: a machine with two copies of the skill leaves it undefined which one the agent
-                picks. Adding the marketplace clones this whole repository, which is an app rather than a skill library; both CLIs
-                take <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sparse</span> on
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">marketplace add</span> to limit the
-                checkout, and it has to cover the marketplace manifest as well as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">plugins/agterm</span>.
-              </li>
-            </ul>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-              "
-            >
-              Build from source
-            </h3>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
-              Requires macOS 14+, Xcode 26 with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">xcodegen</span> on PATH (plus its
-              Metal Toolchain), and Homebrew.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 16px 18px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 14px;
-                color: #e6e1d7;
-                line-height: 1.9;
-                overflow-x: auto;
-              "
-            >
-              <span style="color: #6b727a"># build libghostty + stage resources (idempotent)</span><br /><span
-                style="color: #6d82f3"
-                >$ </span
-              >scripts/setup.sh<br /><span style="color: #6b727a"># generate the Xcode project, build Debug, launch</span
-              ><br /><span style="color: #6d82f3">$ </span>scripts/run.sh<br /><span style="color: #6b727a"
-                ># host-free unit tests, no Xcode needed</span
-              ><br /><span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift test
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0">
-              The app bundles the CLI, but it also lives in the
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermCore</span> Swift package and
-              builds standalone, without Xcode or libghostty:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 16px 18px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 14px;
-                color: #e6e1d7;
-                line-height: 1.9;
-                overflow-x: auto;
-              "
-            >
-              <span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift build -c release<br /><span
-                style="color: #6b727a"
-                ># binary at agtermCore/.build/release/agtermctl</span
-              >
-            </div>
-          </section>
+          <section id="install" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Install</h2>
+<p>Signed, notarized builds for Apple Silicon (arm64) Macs running macOS 14 or later are published on the <a href="https://github.com/umputun/agterm/releases">releases page</a>. They open without any Gatekeeper workaround.</p>
+<p><strong>Homebrew</strong></p>
+<pre class="bash"><code>brew install --cask umputun/apps/agterm</code></pre>
+<p>The cask also installs the <code>agtermctl</code> command-line tool, so cask users do not need the in-app installer for it.</p>
+<p><strong>Direct download.</strong> Download the latest <code>.dmg</code> from the <a href="https://github.com/umputun/agterm/releases">releases page</a>, open it, and drag agterm.app into <code>/Applications</code>.</p>
+<h3 id="install-help">Optional Help-menu installers</h3>
+<p>None is needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later. The first launch on a Mac points them out in a welcome dialog that offers the skill and the status hooks and never appears again.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Help menu item</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Install Command Line Tool…</strong></td>
+<td>puts the bundled <code>agtermctl</code> on your PATH as a link in <code>/usr/local/bin</code>. When it can write there it links without a prompt; otherwise, as on a clean Apple Silicon Mac where that folder is root-owned, macOS asks once for an administrator password. The Homebrew cask already installs it</td>
+</tr>
+<tr>
+<td><strong>Install Agent Status Hooks…</strong></td>
+<td>lets a coding agent (Claude Code, Codex, Pi, OpenCode and others) report its state on its session's row, so you can tell which of several agents is working, blocked or finished (<a href="#status">Agent status</a>)</td>
+</tr>
+<tr>
+<td><strong>Install Agent Skill…</strong></td>
+<td>teaches Claude Code or Codex to drive agterm through <code>agtermctl</code>, so an agent in a session can build its own layout, run overlays and manage windows without you explaining the API. It also knows the <a href="https://github.com/umputun/agterm/tree/master/cookbook">cookbook</a>: ask it to list the recipes, set one up, or read one for reference. It needs the command-line tool</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The skill as a plugin.</strong> The same skill is published as a plugin from the repository: <code>claude plugin marketplace add umputun/agterm</code>, then <code>claude plugin install agterm@agterm</code>, or the matching <code>codex plugin</code> commands.</p>
+<ul>
+<li>Use the plugin or the Help menu installer, not both: with two copies of the skill, which one the agent picks is undefined.</li>
+<li>Adding the marketplace clones this whole repository. Both CLIs take <code>--sparse</code> on <code>marketplace add</code> to limit the checkout; it has to cover the marketplace manifest as well as <code>plugins/agterm</code>.</li>
+</ul>
+<h3 id="install-source">Build from source</h3>
+<p>Requires macOS 14+, Xcode 26 with <code>xcodegen</code> on PATH (plus its Metal Toolchain), and Homebrew.</p>
+<pre class="bash"><code>scripts/setup.sh              # build libghostty and stage resources (safe to rerun)
+scripts/run.sh                # generate the Xcode project, build Debug, launch
+cd agtermCore &amp;&amp; swift test   # unit tests, no Xcode needed</code></pre>
+<p>The app bundles the CLI, but <code>agtermctl</code> also builds on its own from the <code>agtermCore</code> Swift package, without Xcode or libghostty:</p>
+<pre class="bash"><code>cd agtermCore &amp;&amp; swift build -c release   # binary at agtermCore/.build/release/agtermctl</code></pre>
+</section>
 
           <!-- EXTEND -->
-          <section id="extend" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Extend agterm
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              agterm ships a small set of features on purpose. A great many of the tools you might wish it shipped are one line
-              in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">keymap.conf</span>, and the line
-              stays short because three pieces do the work: a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">command</span> turns any shell line
-              into a named action on a key chord, an overlay gives an interactive program its own temporary terminal over the
-              session, and any CLI you already have fills that slot. agterm never needs to know what the program is.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
-              So &ldquo;does agterm have a file browser?&rdquo; has no yes-or-no answer. You bind the file browser you like, in
-              one line. The four steps below each add one building block.
-            </p>
-            <div
-              style="
-                background: rgba(109, 130, 243, 0.08);
-                border: 1px solid rgba(109, 130, 243, 0.25);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 0 0 24px;
-                font-size: 15px;
-                color: #cbc6bc;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #e6e1d7">You are not expected to write these by hand.</strong> Install the agent skill from
-              <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong> and ask the agent in your session
-              for what you want; it knows the syntax, the command catalog, and the traps below.
-              <a href="#extend-agent" style="color: #6d82f3">Step 4</a> shows exactly that. The three steps before it are not the
-              long way round: they are what let you read the line the agent writes, change it later, and tell a working answer
-              from a plausible one.
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
-              To edit the file yourself, open it with
-              <strong style="color: #e6e1d7">File &#9656; Edit Keymap&hellip;</strong> and apply your changes with
-              <strong style="color: #e6e1d7">File &#9656; Reload Keymap</strong>.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              1. Act on the session you are in
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >
-<span style="color: #6b727a"># open the session's working directory in Finder</span>
-<span style="color: #5ea1f2">command</span> "Open in Finder"  ctrl+a&gt;o  open "$AGT_SESSION_PWD"</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Read the line left to right:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> is the directive, the
-              quoted text is the name shown in the
-              <strong style="color: #e6e1d7">Navigate &#9656; Custom Commands</strong> palette,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;o</span> is the chord that
-              fires it &mdash; Ctrl-A, then O &mdash; and everything after that is an ordinary shell line. The chord is
-              optional: leave it out and the action exists in the palette only. Names are unique: a second
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> line with a
-              name already taken is skipped with a diagnostic. For a mouse path, turn on the
-              <strong style="color: #e6e1d7">Custom commands</strong> title-bar button in Settings &#9656; Interface: it
-              lists the same commands with their chords in a popover, in the order of the file. Once there are more than
-              five, the five you run most are grouped on top, still in file order; use changes only which commands
-              sit in that group.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The building block is <strong style="color: #e6e1d7">session context</strong>. Every custom command is handed the
-              session it fired from &mdash; its directory, name, id, and current selection &mdash; as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> environment variables
-              and as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_*}</span> tokens
-              substituted into the line. That is what makes one binding work in every session instead of hard-coding a path.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              2. Run an interactive program over the session
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >
-<span style="color: #6b727a"># the yazi file manager, floating over the session at 95%</span>
-<span style="color: #5ea1f2">command</span> "Yazi"  ctrl+a&gt;y  agtermctl session overlay open 'zsh -lc yazi' --size-percent 95 --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The building block is the <strong style="color: #e6e1d7">overlay</strong>. A custom command on its own runs detached
-              with no terminal, which suits launching a GUI app but kills a TUI at once, since it has nothing to draw on. An
-              overlay is a real terminal, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">yazi</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">lazygit</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">htop</span> and the rest behave
-              normally in it. It opens in the session's own working directory, and it disappears when the program exits, leaving
-              the shell underneath untouched.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Custom commands report failures through notification banners, subject to the notification setting.
-              Add <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-hud</span> before a command's shell body to also show a ten-second panel.
-              It shows the command name, exit status or launch error, and the last usable stderr line when available.
-              The panel defaults to the center of the whole session. A successful command shows nothing,
-              and a program overlay keeps its slot. See <a href="#keymap" style="color: #6d82f3">Key Mapping</a>
-              for placement options.
-            </p>
-            <div
-              style="
-                background: rgba(242, 180, 92, 0.07);
-                border: 1px solid rgba(242, 180, 92, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 20px 0 0;
-                font-size: 14px;
-                color: #e2c79a;
-                line-height: 1.65;
-              "
-            >
-              Note <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc</span> rather than
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -c</span>. The program an overlay runs inherits
-              agterm's own PATH, not your shell's, so a Homebrew binary needs a login shell to be found &mdash; or an absolute
-              path. Skip it and the overlay flashes open and vanishes, because the binary was never found.
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> is how the line asks
-              for that terminal: it is agterm's own command-line tool, and opening an overlay is one thing it can do. Step 3
-              opens up the rest.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target "$AGT_SESSION_ID"</span> is
-              worth understanding rather than copying.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> does not act on
-              agterm directly; it sends a request over a socket, and agterm resolves it on arrival. Without a target the request
-              means &ldquo;whichever session is selected when this lands&rdquo;, which is normally the one you pressed the chord
-              in &mdash; but not if you switched in between. The token pins it to the session that fired, so the overlay always
-              opens where you asked for it.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              3. Reach the rest of the app
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >
-<span style="color: #6b727a"># a second session in this directory, alongside this one, left in the background</span>
-<span style="color: #5ea1f2">command</span> "Session here"  ctrl+a&gt;n  agtermctl session new --cwd "$AGT_SESSION_PWD" --workspace "$AGT_WORKSPACE_ID" --window "$AGT_WINDOW_ID" --no-select --socket "$AGT_SOCKET"</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The building block is the <strong style="color: #e6e1d7">control API</strong>. Overlays are one entry in a much
-              larger catalog: the same
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> creates and renames
-              sessions, splits panes, moves windows, opens the native picker or a question dialog, reads a session's text back, and posts
-              notifications. Every state it sets it also reads back, which is what lets a script build a whole layout rather than
-              fire a single action.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The extra flags are the same idea as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> above, applied to
-              every axis this command can drift on. A bare
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new</span> lands in
-              whichever window is frontmost and whichever workspace is current when the request arrives, and it selects the new
-              session; the ids pin all three to where the chord was pressed, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-select</span> leaves you where
-              you were. Keymap lines never wrap, so this one is long: one directive is always one line.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Past a certain size the line becomes a script, and that is where the
-              <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a> starts: pick a
-              project from anywhere and open it in its own workspace, park a set of workspaces and bring them back later, or have
-              each tab resume its own agent conversation after a restart. Those are not one-liners, and the recipes do not
-              pretend otherwise.
-            </p>
-
-            <h3
-              id="extend-agent"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              4. Have the agent write it
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              This is the normal way to add things, not a shortcut for people who dislike config files. Install the agent skill
-              from <strong style="color: #e6e1d7">Help &#9656; Install Agent Skill&hellip;</strong>, then ask the agent running
-              in one of your sessions:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-              "
-            >
-              add a custom command that opens yazi in a 95% overlay, bound to ctrl+a then y
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The skill carries the keymap syntax, the full command catalog, the context tokens, and the PATH rule, so the agent
-              writes a working line instead of guessing at one. The skill is what makes the difference: an agent without it will
-              still answer, plausibly and wrongly. It is shown last rather than first because the three steps above are what let
-              you tell those two apart, and what let you change the line afterwards without asking again.
-            </p>
-
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 24px 0 0">
-              From here, <a href="#keymap" style="color: #6d82f3">Custom commands &amp; keys</a> has the full keymap syntax and
-              the bindable actions, the <a href="/commands" style="color: #6d82f3">command reference</a> lists every
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command with its
-              arguments, and the <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a>
-              collects worked recipes to copy and edit.
-            </p>
-          </section>
+          <section id="extend" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Extend agterm</h2>
+<p>agterm ships a small set of features on purpose. Many tools you might wish it shipped are one line in <code>keymap.conf</code>, built from three pieces:</p>
+<ul>
+<li>a <strong>command</strong> turns any shell line into a named action on a key chord;</li>
+<li>an <strong>overlay</strong> gives an interactive program its own temporary terminal over the session;</li>
+<li>any <strong>CLI you already have</strong> fills that slot. agterm never needs to know what the program is.</li>
+</ul>
+<p>So "does agterm have a file browser?" has no yes-or-no answer: you bind the file browser you like, in one line. The four steps below each add one building block.</p>
+<p>You are not expected to write these by hand: install the agent skill (Help ▸ Install Agent Skill…) and ask the agent in your session, as step 4 shows. Steps 1-3 are what let you read the line it writes, change it later, and tell a working answer from a plausible one. To edit the file yourself, use File ▸ Edit Keymap… and File ▸ Reload Keymap.</p>
+<h3 id="extend-act-on-the-session-you-are-in">1. Act on the session you are in</h3>
+<pre><code># open the session&#39;s working directory in Finder
+command &quot;Open in Finder&quot; ctrl+a&gt;o open &quot;$AGT_SESSION_PWD&quot;</code></pre>
+<ul>
+<li><code>command</code> is the directive, the quoted text is the name shown in the custom-commands palette (Navigate ▸ Custom Commands), <code>ctrl+a&gt;o</code> is the chord (Ctrl-A, then O), and the rest is an ordinary shell line.</li>
+<li>The chord is optional: without it the command lives in the palette only. Names are unique: a second line with a name already taken is skipped with a diagnostic.</li>
+<li>For the mouse, turn on the <strong>Custom commands</strong> title-bar button in Settings ▸ Interface. It lists the same commands with their chords, in file order. With more than five, the five you run most are grouped on top, still in file order.</li>
+</ul>
+<p><strong>The building block is session context.</strong> Every command gets the session it fired from (its directory, name, id and selection) as <code>$AGT_*</code> environment variables and <code>{AGT_*}</code> tokens. That is what makes one binding work in every session.</p>
+<h3 id="extend-run-an-interactive-program-over-the-session">2. Run an interactive program over the session</h3>
+<pre><code># the yazi file manager, floating over the session at 95%
+command &quot;Yazi&quot; ctrl+a&gt;y agtermctl session overlay open &#39;zsh -lc yazi&#39; --size-percent 95 --target &quot;$AGT_SESSION_ID&quot; --socket &quot;$AGT_SOCKET&quot;</code></pre>
+<p><strong>The building block is the overlay.</strong> A custom command alone runs with no terminal, which suits launching a GUI app but ends a TUI at once. An overlay is a real terminal, so yazi, lazygit, htop and the rest work normally in it. It opens in the session's directory and disappears when the program exits, leaving the shell underneath untouched.</p>
+<ul>
+<li><strong><code>zsh -lc</code>, not <code>zsh -c</code>.</strong> The program an overlay runs gets agterm's own PATH, not your shell's, so a Homebrew binary needs a login shell or an absolute path. Without it the overlay flashes open and closes.</li>
+<li><strong><code>--target "$AGT_SESSION_ID"</code>.</strong> <code>agtermctl</code> sends a request over a socket, and agterm resolves it when it arrives. Without a target it means whichever session is selected at that moment, which may not be the one you pressed the chord in. The token pins it to the session that fired.</li>
+<li><strong>Failures.</strong> Custom commands report failures in notification banners. Add <code>--error-hud</code> before the shell line to also show a ten-second panel with the command name, its exit status or launch error, and the last useful stderr line. A successful command shows nothing, and a running program overlay keeps its place instead of the panel. See <a href="#keymap-commands">Custom commands</a> for its placement.</li>
+</ul>
+<h3 id="extend-reach-the-rest-of-the-app">3. Reach the rest of the app</h3>
+<pre><code># a second session in this directory, next to this one, left in the background
+command &quot;Session here&quot; ctrl+a&gt;n agtermctl session new --cwd &quot;$AGT_SESSION_PWD&quot; --workspace &quot;$AGT_WORKSPACE_ID&quot; --window &quot;$AGT_WINDOW_ID&quot; --no-select --socket &quot;$AGT_SOCKET&quot;</code></pre>
+<p><strong>The building block is the control API.</strong> Overlays are one entry in a large catalog: <code>agtermctl</code> also creates and renames sessions, splits panes, moves windows, opens the picker or a question dialog, reads a session's text and posts notifications. Every state it sets it also reads back, which is what lets a script build a whole layout.</p>
+<p>The extra flags pin every axis the command could drift on. A bare <code>session new</code> lands in whichever window is in front and whichever workspace is current when the request arrives, and selects the new session. The ids pin all three to where you pressed the chord, and <code>--no-select</code> leaves you where you were. Keymap lines never wrap, so this one is long.</p>
+<p>Past a certain size the line becomes a script, and that is where the <a href="https://github.com/umputun/agterm/tree/master/cookbook">cookbook</a> starts: open any project in its own workspace, park a set of workspaces and bring them back later, or have each tab resume its own agent conversation after a restart.</p>
+<h3 id="extend-agent">4. Have the agent write it</h3>
+<p>This is the normal way to add things. Install the agent skill from Help ▸ Install Agent Skill…, then ask the agent in one of your sessions:</p>
+<pre><code>add a custom command that opens yazi in a 95% overlay, bound to ctrl+a then y</code></pre>
+<p>The skill carries the keymap syntax, the full command catalog, the context tokens and the PATH rule, so the agent writes a working line. An agent without it still answers, plausibly and wrongly; steps 1-3 are how you tell the two apart and change the line later without asking again.</p>
+<p>From here, <a href="#keymap">Custom commands &amp; keys</a> has the full keymap syntax and bindable actions, the <a href="/commands">command reference</a> lists every <code>agtermctl</code> command, and the cookbook collects recipes to copy and edit.</p>
+</section>
           <!-- WORKSPACES -->
           <section id="workspaces" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Workspaces &amp; sessions</h2>
@@ -1314,974 +918,586 @@ s=$(agtermctl zmx tree studio.local --json \
 <p><strong>Keepalive.</strong> When your ssh config sets no <code>ServerAliveInterval</code> for the host, or sets 0, agterm adds <code>ServerAliveInterval 5</code> and <code>ServerAliveCountMax 2</code>, so a dead connection is noticed within about 15 seconds. Set a large value to opt out. A connection that joins an existing ControlMaster ignores these; the master's settings decide.</p>
 </section>
 
-          <section id="remote-server" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Remote server
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              agterm-server runs agterm sessions on a Linux host, and a remote window on the Mac shows them over ssh. Every pane is a zmx daemon on the host and the server keeps the workspaces and sessions, so closing the Mac, losing the network or quitting agterm leaves every shell running, and the next connection finds them as they were.
-            </p>
-            <h3
-              id="remote-server-install"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Install
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Install the server from the Mac with the app's own <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>. The host needs systemd with a user manager and logind for lingering, bash and tar whatever the login shell is, and zsh, fish or bash as the login shell; a password or host-key prompt is answered on the terminal you run it from.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-                margin: 0 0 16px;
-              "
-            >
-              agtermctl server install dev.example.com<span style="color: #6b727a">&nbsp;&nbsp;# -p, -i, -J and -F pass to ssh</span>
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              It asks the host for its architecture (aarch64 or x86_64), downloads the agterm-server release matching the app's version from GitHub, and refuses it unless its sha256 matches the one the app was built with. The install then puts the binaries, zmx and their resources in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.local/lib/agterm-server</span> with links in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.local/bin</span>, writes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/systemd/user/agterm-server.service</span> only when it is absent, so later runs keep your edits, and starts or restarts the service. It also needs lingering, without which systemd stops the server and every pane at your last logout: when <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">loginctl enable-linger</span> is refused, the install stops before starting anything and prints the command an administrator runs. An upgrade is the same command. The new files replace the directory by rename and the service restarts, while every pane keeps running.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              The install ends with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm-server install-hooks</span>, which installs the agent status hooks and the agterm skill for the host's user from the server's own files, pointed at the server's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>. The Codex hooks need jq on the host; without it they are skipped and the install reports the hooks incomplete. Codex's hooks and skill go to a nonempty <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span> in the command's environment, a relative one resolved against its working directory, and to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex</span> otherwise; a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span> that does not exist is reported and skipped. OpenCode's plugin is installed only where its config directory exists, for the version <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opencode --version</span> reports or the one <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--opencode v1|v2</span> names. Run it again on the host after installing an agent there.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              On the host, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> reaches the server with no flags. A plain <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh HOST agtermctl tree</span> can miss it, because a non-login shell's PATH often lacks <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.local/bin</span>; the installer says when it does, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.local/bin/agtermctl</span> needs no PATH. A service edited to use another state directory also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_STATE_DIR</span> set to it. agterm's own remote commands put <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.local/bin</span> on PATH themselves.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              To skip the download, pass a tarball already on the Mac with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--from FILE</span>, such as one you fetched from the release page yourself; it must match the same sha256. The command exits 0 when the server is installed, 3 when it is installed but the agent hooks are incomplete, and 1 on failure. A development build has no release to install. From a checkout of this repository, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scripts/setup-zmx-linux.sh</span> stages the Linux artifacts once and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scripts/install-server.sh HOST</span> builds the server from the tree and installs it the same way; it needs Docker, the toolchain of a <a href="#install" style="color: #6d82f3">source build</a>, and key-based ssh.
-            </p>
-            <h3
-              id="remote-window"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Open a remote window
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              File ▸ Open Remote Window… (the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">open_remote_window</span> action, no default chord) offers the hosts in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remotes.conf</span>, the list Attach Remote… also reads, and opens the only one without asking. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window remote open HOST</span> does the same and prints the window id; a window already showing that host is raised rather than opened twice. The sidebar is the server's catalog: creating, renaming, splitting, moving and closing sessions and workspaces happen on the server, while selection, focus, font size, split dividers and the window frame stay on this Mac.
-            </p>
-            <h3
-              id="remote-server-where"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              What runs where
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              The host runs every shell, the scratch, overlay programs and the catalog itself. The Mac draws them and keeps the window, settings, theme, keymap, the quick terminal and custom command bodies. Whatever a session shows the user (an ask, a pick, a page, a HUD or an overlay) is drawn by the Mac presenting that session; with no Mac connected it is held on the host until one shows the session. Each host gets a pool of shared ssh connections with at most eight channels each, which keeps under the stock sshd limit of ten sessions per connection without changing the server.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A program on the host reads what the server keeps: <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session wait</span> follow the server's own event history, a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session info</span> line expires there, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">surface cursor</span> reads the pane's screen, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx list</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx screen</span> cover the server's daemons. Flag and tint on the server's rows are kept by the server, so every Mac shows them. Clearing the server's status or a badge on the Mac (typing, selecting the row, Clear Status) clears it on the server under the Mac's default rules; a status set on the Mac's row is cleared there only.
-            </p>
-            <h3
-              id="remote-server-disconnects"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Disconnects
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              When the connection drops, the window keeps its last sidebar and screens, marked Disconnected, and keeps trying. Selection and scrolling still work; anything that would change the server is disabled, never queued, and no local shell takes a session's place. A reconnect starts from a fresh snapshot of the catalog.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              An action whose reply was lost is marked pending, then unknown. The window asks the server's receipt table what became of it as soon as it can and clears the mark, and never sends it again blindly; one the server no longer remembers stays unknown, listed in the connection strip. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window remote dismiss</span> clears those marks, without undoing or resending anything.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              An ask, a pick, a page or an overlay opened on the host while no Mac shows its session is held there and offered to the next Mac that does. Only an ask or a pick ends unanswered, at its <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--timeout</span> when it has one; a page or an overlay job waits with no limit, the Mac it is offered to has a short time to claim it, and a claimed job never starts a second time. A server restart forgets everything still waiting, and the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> call waiting on it fails. Notifications are shown live and never replayed.
-            </p>
-            <h3
-              id="remote-server-close"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Close, detach and terminate
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Closing the remote window detaches it, and everything keeps running on the host. Closing a session, a group or a workspace in it asks first. Detach, the default, hides it on this Mac and leaves it running; Terminate ends it on the server and needs a live connection; Cancel keeps it. A server that keeps Recent Closed gives Terminate the undo grace a local close has, so Reopen Closed Item (⌘Z) brings it back for a few seconds, and while its window is frontmost File ▸ Open Recent and Reopen Last Closed Item read that server's list, which <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl recent list|open|clear --window W</span> reaches from a script. An older server ends it with no undo. Running overlays close either way. File ▸ Detached Sessions… (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">detached_sessions</span>) brings a detached session or workspace back, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session detach|reattach</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace detach|reattach</span> do the same from a script.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A pane whose shell exits is handled on the host as it would be locally. When the server loses a session's last pane daemon, or cannot start its replacement, the row stays in the sidebar marked Ended on HOST, its scratch still running if it had one. Closing it needs no prompt while connected and with nothing in its group still running; Detached Sessions… lists an ended session only to remove its record. An unreachable host never marks a session Ended; it reads Disconnected.
-            </p>
-            <h3
-              id="remote-server-scratch"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Scratch, custom commands and pages
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A remote session's scratch is a shell on the host. It is kept while hidden and across a closed window, and ends only with its own exit, the session's close, a server restart or a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session scratch --command</span> replacing it. Custom commands run on the Mac, with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_*</span> tokens naming the server's session and host; an <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> call they make goes to agterm on the Mac, which sends the structural actions a remote row supports on to the server. A page at a loopback URL on the host, such as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">http://localhost:3000</span>, opens through an ssh forward on a free local port kept for the page's life, and a failed forward shows as the page's error.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A page session or page companion made on the host (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session overlay open --page --html FILE</span>, a path on the host, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--url</span>) shows in the remote window as a page row, and the same command aimed at one of the window's rows makes one on the server. A page at the host's own loopback is refused there, since no Mac would reach it. Each Mac shows the row through a view of its own. While it has none the row shows why: waiting for the host, the host unreachable, or the page's connection ended, and it keeps retrying until the page shows; a refusal from the server stays shown, and detaching and reattaching the row tries again. Only closing the row on the server removes it, which closing its page from the Mac does. An older agterm on the Mac does not show page rows, and their companions appear there as top-level rows.
-            </p>
-          </section>
+          <section id="remote-server" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Remote server</h2>
+<p>agterm-server runs agterm sessions on a Linux host, and a remote window on the Mac shows them over ssh. The server keeps the workspaces, sessions and shells, so closing the Mac, losing the network or quitting agterm leaves every shell running, and the next connection finds them as they were.</p>
+<h3 id="remote-server-install">Install</h3>
+<p>Install the server from the Mac with the app's own <code>agtermctl</code>:</p>
+<pre class="bash"><code>agtermctl server install dev.example.com      # -p, -i, -J and -F pass to ssh</code></pre>
+<p>The host needs systemd with a user manager, logind for lingering, bash and tar, and zsh, fish or bash as the login shell. A password or host-key prompt is answered in the terminal you run the command from.</p>
+<p>What the install does:</p>
+<ul>
+<li>Downloads the agterm-server release matching the app's version for the host's architecture (aarch64 or x86_64), and refuses it unless its sha256 matches the one the app was built with.</li>
+<li>Puts the server in <code>~/.local/lib/agterm-server</code> with links in <code>~/.local/bin</code>.</li>
+<li>Writes <code>~/.config/systemd/user/agterm-server.service</code> only when it is absent, so later runs keep your edits, and starts or restarts the service.</li>
+<li>Enables lingering, without which systemd stops the server and every shell at your last logout. When <code>loginctl enable-linger</code> is refused, the install stops before starting anything and prints the command an administrator runs.</li>
+<li>Ends with <code>agterm-server install-hooks</code>, which installs the agent status hooks and the agterm skill for the host's user. Run it again on the host after installing an agent there.</li>
+</ul>
+<p>An upgrade is the same command; the service restarts and every shell keeps running.</p>
+<table>
+<thead>
+<tr>
+<th>Exit code</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>installed</td>
+</tr>
+<tr>
+<td>3</td>
+<td>installed, but the agent hooks are incomplete</td>
+</tr>
+<tr>
+<td>1</td>
+<td>failed</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Agent hooks on the host.</strong></p>
+<ul>
+<li>The Codex hooks need jq on the host; without it they are skipped and the install reports the hooks incomplete.</li>
+<li>Codex's hooks and skill go to <code>CODEX_HOME</code> when it is set and not empty (a relative one is resolved against the working directory), otherwise to <code>~/.codex</code>. A <code>CODEX_HOME</code> that does not exist is reported and skipped.</li>
+<li>OpenCode's plugin is installed only where its config directory exists, for the version <code>opencode --version</code> reports or the one <code>--opencode v1|v2</code> names.</li>
+</ul>
+<p><strong>Options and notes.</strong></p>
+<ul>
+<li><code>--from FILE</code> installs a tarball already on the Mac, such as one you fetched from the release page; it must match the same sha256.</li>
+<li>On the host, <code>agtermctl</code> reaches the server with no flags. A plain <code>ssh HOST agtermctl tree</code> can miss it, because a non-login shell's PATH often lacks <code>~/.local/bin</code>; the installer says when that is so, and <code>~/.local/bin/agtermctl</code> needs no PATH. agterm's own remote commands set PATH themselves.</li>
+<li>A service edited to use another state directory also needs <code>AGTERM_STATE_DIR</code> set to it.</li>
+<li>A development build has no release to install. From a checkout of this repository, <code>scripts/setup-zmx-linux.sh</code> stages the Linux artifacts once and <code>scripts/install-server.sh HOST</code> builds the server from the tree and installs it the same way. It needs Docker, the toolchain of a <a href="#install">source build</a>, and key-based ssh.</li>
+</ul>
+<h3 id="remote-window">Open a remote window</h3>
+<p><strong>File ▸ Open Remote Window…</strong> offers the hosts in <code>remotes.conf</code>, the same list Attach Remote… reads, and opens the only one without asking. It is the <code>open_remote_window</code> keymap action, with no default key. <code>agtermctl window remote open HOST</code> does the same and prints the window id. A window already showing that host is raised rather than opened twice.</p>
+<p>The sidebar is the server's: creating, renaming, splitting, moving and closing sessions and workspaces happen on the server. Selection, focus, font size, split dividers and the window frame stay on this Mac.</p>
+<h3 id="remote-server-where">What runs where</h3>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>On the host</th>
+<th>On the Mac</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>every shell, the scratch, overlay programs</td>
+<td>the window, settings, theme and keymap</td>
+</tr>
+<tr>
+<td>the workspaces and sessions</td>
+<td>the quick terminal</td>
+</tr>
+<tr>
+<td>flag and tint of the server's rows, so every Mac shows them</td>
+<td>custom command bodies</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>An ask, a pick, a page, a HUD or an overlay is drawn by the Mac showing that session. With no Mac connected, a HUD is kept on the host and shown when a Mac shows the session.</li>
+<li>The connection works with a stock sshd configuration; nothing on the server's ssh setup needs changing.</li>
+<li>A program on the host reads the server's own state: <code>agtermctl events</code> and <code>session wait</code> follow the server's event history, a session info line expires there, <code>surface cursor</code> reads the pane's screen, and <code>zmx list</code> and <code>zmx screen</code> cover the server's shells.</li>
+<li>Clearing the server's status or a badge on the Mac (typing, selecting the row, Clear Status) clears it on the server under the Mac's default rules. A status set on the Mac's row is cleared there only.</li>
+</ul>
+<h3 id="remote-server-disconnects">Disconnects</h3>
+<p>When the connection drops, the window keeps its last sidebar and screens, marked <strong>Disconnected</strong>, and keeps trying to reconnect.</p>
+<ul>
+<li>Selection and scrolling still work. Anything that would change the server is disabled, never queued, and no local shell takes a session's place.</li>
+<li>A reconnect starts from a fresh copy of the server's state.</li>
+<li>An action whose reply was lost is marked pending, then unknown. The window asks the server what became of it as soon as it can and clears the mark; it never sends the action again. One the server no longer remembers stays unknown, listed in the connection strip, and <code>agtermctl window remote dismiss</code> clears those marks without undoing or resending anything.</li>
+</ul>
+<p><strong>While no Mac shows a session.</strong> An ask, a pick, a page or an overlay opened on the host waits there and is offered to the next Mac that shows the session.</p>
+<ul>
+<li>Only an ask or a pick ends unanswered, at its <code>--timeout</code> when it has one. A page or an overlay job waits with no limit. The Mac it is offered to has a short time to claim it, and a claimed job never starts a second time.</li>
+<li>A server restart forgets everything still waiting, and the <code>agtermctl</code> call waiting on it fails.</li>
+<li>Notifications are shown live and never replayed.</li>
+</ul>
+<h3 id="remote-server-close">Close, detach and terminate</h3>
+<p>Closing the remote window detaches it, and everything keeps running on the host. Closing a session, a group or a workspace in it asks first:</p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Detach</strong> (default)</td>
+<td>hides it on this Mac and leaves it running</td>
+</tr>
+<tr>
+<td><strong>Terminate</strong></td>
+<td>ends it on the server; needs a live connection</td>
+</tr>
+<tr>
+<td><strong>Cancel</strong></td>
+<td>keeps it</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Terminate on a server that keeps Recent Closed has the same undo grace as a local close: Reopen Closed Item (⌘Z) brings it back for a few seconds. While the remote window is frontmost, File ▸ Open Recent and Reopen Last Closed Item read that server's list; <code>agtermctl recent list|open|clear --window W</code> reaches it from a script. An older server ends it with no undo.</li>
+<li>Running overlays close either way.</li>
+<li><strong>File ▸ Detached Sessions…</strong> (<code>detached_sessions</code>) brings a detached session or workspace back. <code>agtermctl session detach|reattach</code> and <code>workspace detach|reattach</code> do the same from a script.</li>
+</ul>
+<p><strong>Ended sessions.</strong> A shell that exits is handled on the host as it would be locally. When the server loses the program in a session's last primary or split pane, or cannot start its replacement, the row stays in the sidebar marked <strong>Ended on HOST</strong>, its scratch still running if it had one.</p>
+<ul>
+<li>Closing it needs no prompt while connected and with nothing in its group still running.</li>
+<li>Detached Sessions… lists an ended session only to remove its record.</li>
+<li>An unreachable host never marks a session Ended; it reads Disconnected.</li>
+</ul>
+<h3 id="remote-server-scratch">Scratch, custom commands and pages</h3>
+<ul>
+<li><strong>Scratch.</strong> A remote session's scratch is a shell on the host. It is kept while hidden and across a closed window, and ends only with its own exit, the session's close, a server restart or <code>session scratch --command</code> replacing it.</li>
+<li><strong>Custom commands</strong> run on the Mac, with <code>AGT_*</code> tokens naming the server's session and host. An <code>agtermctl</code> call they make goes to agterm on the Mac, which passes the actions a remote row supports on to the server.</li>
+<li><strong>Pages at the host's loopback.</strong> A page at a loopback URL on the host, such as <code>http://localhost:3000</code>, opens through an ssh forward on a free local port kept for the page's life; a failed forward shows as the page's error.</li>
+</ul>
+<p><strong>Page rows.</strong> A page session or page companion made on the host (<code>agtermctl session overlay open --page --html FILE</code> with a path on the host, or <code>--url</code>) shows in the remote window as a page row, and the same command aimed at one of the window's rows makes one on the server.</p>
+<ul>
+<li>A page at the host's own loopback is refused there, since no Mac would reach it.</li>
+<li>Each Mac shows the row through a view of its own. While it has none, the row shows why (waiting for the host, the host unreachable, or the page's connection ended) and keeps retrying until the page shows. A refusal from the server stays shown; detaching and reattaching the row tries again.</li>
+<li>Only closing the row on the server removes it, which closing its page from the Mac does.</li>
+<li>An older agterm on the Mac does not show page rows, and their companions appear there as top-level rows.</li>
+</ul>
+</section>
 
           <!-- NOTIFICATIONS -->
-          <section id="notifications" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Notifications
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
-              A program in any session can raise a desktop notification (via OSC 9 / 777, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
-              as a macOS banner and an unseen-count badge on the sidebar row, and the workspace row shows the total of its sessions, collapsed or expanded; clicking the
-              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session or typing in it clears its badge (the Badge reset setting can limit typing to Enter or turn it off) — or
-              clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
-              so an orchestrator driving a session over the socket can acknowledge it without pulling focus
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unseen</span> count).
-              Banners and count badges toggle independently in the Notifications settings, which also sets the Dock-icon
-              bounce for a background notification (off, once, or until you focus agterm) and an optional notification
-              sound (a system sound attached to each delivered banner; None by default, silenced by Do Not Disturb). For a coding agent that just needs to say it is
-              waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
-            </p>
-          </section>
+          <section id="notifications" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Notifications</h2>
+<p>A program in any session can raise a desktop notification with OSC 9 or OSC 777, or with <code>agtermctl notify</code>. It shows as a macOS banner and as an unseen-count badge on the session's sidebar row; the workspace row shows the total of its sessions, folded or not.</p>
+<ul>
+<li>Clicking the banner brings agterm forward and focuses the exact pane that raised it.</li>
+<li>Focusing a session or typing in it clears its badge. <strong>Badge reset</strong> in Settings can limit typing to Enter, or turn the typing reset off.</li>
+<li><code>agtermctl session seen</code> clears a badge without moving focus, so a script driving a session can acknowledge it. <code>agtermctl tree --json</code> reports each session's <code>unseen</code> count.</li>
+</ul>
+<p><strong>Settings ▸ Notifications</strong> turns banners and count badges on and off separately, and sets:</p>
+<ul>
+<li>the Dock icon bounce for a notification while agterm is in the background: off, once, or until you focus agterm;</li>
+<li>a notification sound, a system sound played with each banner: None by default, silenced by Do Not Disturb.</li>
+</ul>
+<p>For a coding agent that only needs to say it is waiting, <a href="#status">agent status</a> usually fits better.</p>
+</section>
 
           <!-- ACCESSIBILITY -->
-          <section id="accessibility" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Accessibility
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
-              Voice dictation tools that probe for a focused text field — MacWhisper and similar assistive apps — engage
-              over the terminal: the on-screen pane advertises itself to the accessibility system as an editable text area,
-              so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text
-              arrives at the cursor the same way typing does, and an insert carrying a newline, a tab, or any other control
-              character goes in as a bracketed paste, so a program that accepts bracketed paste takes it as literal text
-              instead of running the line or completing the word. That last part is the same caveat &#8984;V carries: at a raw
-              prompt with bracketed paste off, a trailing newline still submits and a tab still triggers completion.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Two limits are worth knowing. The scrollback is deliberately not mirrored, so the exposed pane reads to a
-              screen reader as an empty text area named "Terminal" rather than as the terminal's contents — mirroring the
-              grid is a separate, much larger piece of work. And because the terminal appends at the cursor with nothing to
-              read back, a dictation tool that re-sends its whole transcription on every revision (rather than only the new
-              words) will concatenate its drafts at the prompt; tools that insert incrementally, MacWhisper among them, are
-              unaffected.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              System Dictation inserts text through macOS text input, the same path used by the keyboard and input
-              methods.
-            </p>
-          </section>
+          <section id="accessibility" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Accessibility</h2>
+<p><strong>Dictation tools.</strong> MacWhisper and similar apps that look for a focused text field work over the terminal: the pane on screen presents itself to macOS as an editable text area, so a hold-to-dictate widget anchors to it and the text lands at the prompt.</p>
+<ul>
+<li>Text arrives at the cursor the same way typing does.</li>
+<li>Text carrying a newline, a tab or another control character goes in as a bracketed paste, so a program that supports bracketed paste takes it as literal text instead of running the line or completing the word. At a raw prompt with bracketed paste off, the same caveat as ⌘V applies: a trailing newline still submits and a tab still completes.</li>
+<li>System Dictation types through macOS text input, the same path the keyboard and input methods use.</li>
+</ul>
+<p><strong>Limits.</strong></p>
+<ul>
+<li>Scrollback is not exposed: to a screen reader the pane reads as an empty text area named "Terminal", not as the terminal's contents.</li>
+<li>The terminal only appends at the cursor, with nothing to read back. A dictation tool that re-sends its whole transcription on every revision, instead of only the new words, leaves each draft at the prompt one after another. Tools that insert as they go, MacWhisper among them, are unaffected.</li>
+</ul>
+</section>
 
           <!-- SETTINGS -->
-          <section id="settings" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Customization &amp; settings
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A live-preview theme picker (View ▸ Select Theme…, or the action palette) applies each of the 512 bundled themes to
-              the open terminals as you move through the list — Enter commits and syncs it to Settings, Esc reverts to the one you
-              started on. Settings (⌘,) has six tabs. Most changes apply live; the restore mode says when a restart is required:
-            </p>
-            <div style="display: flex; flex-direction: column; gap: 10px; margin: 0 0 8px">
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed, right-click-to-paste,
-                <strong style="color: #e6e1d7">Open links in</strong> (Browser, or Session overlay at full size, 95%, 75% or 50% to show a ⌘-clicked web
-                link over its session; see <a href="#links" style="color: #6d82f3">links</a>), whether clicking a workspace
-                row expands or collapses it (on by default; the disclosure triangle, the row's icon and the row's right-click
-                Collapse/Expand Workspace always do), a
-                <strong style="color: #e6e1d7">Flagged view layout</strong> that picks a flat list, with or without each row's workspace name, or a workspace tree for the
-                flagged view in every window (the tree shares each workspace's collapse state with the ordinary tree, so
-                folding a group folds that workspace in both), where a new session opens (your home
-                directory by default, the current session's directory, or a fixed folder you pick), whether New Session adds
-                it at the end of the workspace or right after the current session, a restore mode for fresh shells,
-                re-run commands, or live sessions, an opt-in confirm before closing a session, and
-                whether to load your global Ghostty config.
-              </div>
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Appearance</strong> — terminal font and theme, the cursor shape and its blink, the toolbar mode (Normal with the
-                working directory, Compact, or Hidden for a full-bleed terminal with no titlebar or traffic lights), window
-                background opacity and blur, the sidebar tint, the sidebar font size, the sidebar density (Default, or Compact for
-                shorter rows and a smaller indent), the palette and switcher font size, and how much the terminal behind a floating
-                panel dims — the inactive half of a split, and the session left visible around a floating overlay or the
-                quick terminal.
-                A <strong style="color: #e6e1d7">Follow system appearance</strong> toggle (off by default) reveals a second
-                picker for the other appearance, so the theme tracks the macOS light/dark switch live; while following, the
-                Theme picker edits the appearance you are currently in.
-                In Hidden toolbar mode an invisible strip along the window's top edge still drags the window, and a double-click
-                there runs whatever macOS is configured to do on a title-bar double-click, from
-                <strong style="color: #e6e1d7">Desktop &amp; Dock ▸ Double-click a window's title bar to</strong>: Zoom or Fill
-                zooms, Minimize minimizes, Do Nothing does nothing, and the macOS default is Zoom.
-                You can also close, minimize, or zoom the window from the keyboard or the Window menu.
-                With macOS Reduce Transparency enabled, agterm temporarily presents translucent windows, command palettes, and
-                session switchers as opaque and unblurred without changing the saved opacity or blur; disabling it restores those
-                settings. Turn on <strong style="color: #e6e1d7">Ignore Reduce Transparency</strong> (off by default) to keep the
-                window's saved opacity and blur anyway; palettes and switchers stay opaque. Reduce Motion keeps status colors and glyphs visible but suppresses their repeating sidebar and dashboard
-                pulses.
-              </div>
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Interface</strong> — turn individual chrome controls on or off (each shown by
-                default, each toggle beside the icon its control shows): in the title bar the sidebar toggle, the session name, the window name, the remote host, the
-                session context, the recent-sessions, scratch, split, dashboard, and quick-terminal buttons, plus three
-                controls off by default, the workspace name (shown before the session name, cut to 24 characters), the
-                custom-commands button, and the hide-overlays button, which stays in place and is dimmed while the session
-                has no overlay to hide; in the sidebar the new-workspace, new-session,
-                flagged-view, and workspace-filter footer buttons, the per-workspace add-session + revealed on hover, the
-                leading icons of workspace rows and of session rows, hidden separately to give names more room, and the
-                workspace collapse chevrons. A hidden
-                icon takes what it shows with it: a session's split, flag fill, remote cloud, page glyph and icon-only tint,
-                and a workspace's focus mark. A remote session's connection notice then shows when hovering its name.
-                Hiding the workspace chevrons moves every row left into the space they took; a workspace row then gives
-                no sign of being folded. A
-                <strong style="color: #e6e1d7">Session info</strong> picker sets where a session's info line shows: Always, Flagged (the
-                flagged view only) or Off. A
-                <strong style="color: #e6e1d7">Multiple Windows</strong> option (off by default) shows the sidebar only in
-                the frontmost window and collapses it on every other, so switching windows moves the sidebar with focus.
-              </div>
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, the Dock-icon
-                bounce for a background notification (off / once / until focused), the notification sound (None by
-                default), the title-bar attention indicator, and a <strong style="color: #e6e1d7">Badge reset</strong> choice for when
-                typing in a session clears its badge (on the first key, on Enter, or disabled).
-              </div>
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and shapes, the blocked-session
-                sound, a <strong style="color: #e6e1d7">Status reset</strong> choice for when typing into a blocked or completed
-                session clears its glyph (on the first key, on Enter, or disabled), whether attention navigation also stops on
-                active sessions and whether it crosses windows, and an idle timeout to auto-follow blocked sessions. A <strong style="color: #e6e1d7">Reset to defaults</strong> button clears the colors, shapes, sound, and
-                status reset back to the shipped values.
-              </div>
-              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                ><strong style="color: #e6e1d7">Key Mapping</strong> — the directory holding
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>, a list of any
-                parse errors, and a reload button. <strong style="color: #e6e1d7">Lock in agterm</strong> (off by default)
-                picks one of the keyboard layouts enabled in macOS and holds it while any agterm window has the keyboard,
-                terminals, overlays, pickers, dialogs and rename fields included: a switch made there is switched straight
-                back, and the layout you had returns when you move to another app.
-                A crash or force quit leaves the locked layout selected.
-              </div>
-            </div>
-            <figure
-              style="
-                margin: 24px 0 0;
-                background: #22272b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 12px;
-                overflow: hidden;
-              "
-            >
-              <img
-                src="/assets/screenshot-keymap-editor.webp"
-                alt="Keymap editor"
-                width="1330"
-                height="828"
-                loading="lazy"
-                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
-              />
-              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">The keymap editor.</figcaption>
-            </figure>
-          </section>
+          <section id="settings" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Customization &amp; settings</h2>
+<p><strong>Themes.</strong> View ▸ Select Theme… (also in the action palette) previews each of the 512 bundled themes on the open terminals as you move through the list. Enter keeps the theme and saves it to Settings; Esc goes back to the one you started on.</p>
+<p><strong>Settings (⌘,)</strong> has six tabs. Most changes apply at once; a change of restore mode applies at the next launch.</p>
+<h3 id="settings-general">General</h3>
+<ul>
+<li>Mouse scroll speed and right-click to paste.</li>
+<li><strong>Open links in</strong>: the browser, or a session overlay at full size, 95%, 75% or 50%, for a ⌘-clicked web link (see <a href="#links">links</a>).</li>
+<li>Whether clicking a workspace row folds and unfolds it (on by default). The disclosure triangle, the row's icon and the row's right-click Collapse/Expand Workspace always do.</li>
+<li><strong>Flagged view layout</strong> for every window: a flat list with or without each row's workspace name, or a workspace tree. The tree shares each workspace's fold state with the ordinary tree.</li>
+<li>Where a new session opens: your home directory (default), the current session's directory, or a folder you pick; and whether New Session adds it at the end of the workspace or right after the current session.</li>
+<li><strong>Restore mode</strong>: fresh shells, re-run commands, or Live sessions (<a href="#restore">Restore &amp; persistence</a>).</li>
+<li>An optional confirmation before closing a session.</li>
+<li>Whether to load your global Ghostty config (<a href="#ghostty">Ghostty config</a>).</li>
+</ul>
+<h3 id="settings-appearance">Appearance</h3>
+<figure>
+<img src="/assets/docs-settings-appearance.webp" alt="Settings Appearance tab" width="360" height="532" loading="lazy">
+<figcaption>
+The Appearance tab.
+</figcaption>
+</figure>
+<ul>
+<li>Terminal font and size, cursor shape and blink, and theme.</li>
+<li><strong>Follow system appearance</strong> (off by default) adds a second theme picker for the other appearance, so the theme follows the macOS light/dark switch. While it is on, the Theme picker edits the appearance you are in.</li>
+<li><strong>Toolbar</strong>: Normal (with the working directory), Compact, or Hidden for a full-bleed terminal with no title bar or traffic lights. In Hidden mode an invisible strip along the window's top edge still drags the window. A double-click there follows Desktop &amp; Dock ▸ Double-click a window's title bar to: Zoom or Fill zooms, Minimize minimizes, Do Nothing does nothing (Zoom by default). The keyboard and the Window menu still close, minimize and zoom the window.</li>
+<li>Window background opacity and blur. Blur needs opacity below 100%.</li>
+<li>Sidebar tint, sidebar font size, and sidebar density (Default, or Compact for shorter rows and a smaller indent).</li>
+<li>Palette and switcher font size.</li>
+<li><strong>Inactive pane and backdrop mute</strong>: how much the terminal behind a floating panel dims, which covers the inactive half of a split and the session around a floating overlay or the quick terminal.</li>
+</ul>
+<p><strong>Reduce Transparency and Reduce Motion.</strong> With macOS Reduce Transparency on, translucent windows, palettes and switchers show opaque and unblurred; your saved opacity and blur are kept and come back when it is off. <strong>Ignore Reduce Transparency</strong> (off by default) keeps the window's opacity and blur anyway; palettes and switchers stay opaque. Reduce Motion keeps status colors and glyphs but stops their pulsing in the sidebar and the dashboard.</p>
+<h3 id="settings-interface">Interface</h3>
+<figure>
+<img src="/assets/docs-settings-interface.webp" alt="Settings Interface tab with title bar and sidebar toggles" width="360" height="532" loading="lazy">
+<figcaption>
+The Interface tab: title-bar and sidebar controls, plus the quick terminal's size. A toggle for a button shows that button's icon.
+</figcaption>
+</figure>
+<p>Turn individual controls in the title bar and the sidebar on or off. All are on by default except <strong>Workspace name</strong>, <strong>Custom commands</strong> and <strong>Hide overlays</strong>.</p>
+<ul>
+<li><strong>Workspace name</strong> shows before the session name, cut to 24 characters.</li>
+<li><strong>Hide overlays</strong> stays in place and is dimmed while the session has no overlay to hide.</li>
+<li><strong>Workspace add-session</strong> is the + shown on a workspace row on hover.</li>
+<li>Hiding <strong>Workspace icons</strong> or <strong>Session icons</strong> gives names more room, and takes what the icon shows with it: a session's split, flag fill, remote cloud, page glyph and icon-only tint, and a workspace's focus mark. A remote session's connection notice then shows when you hover its name.</li>
+<li>Hiding <strong>Workspace chevrons</strong> moves every row left into their space; a workspace row then gives no sign of being folded.</li>
+<li><strong>Session info</strong>: where a session's <a href="#status-info">info line</a> shows: Always, Flagged (the flagged view only) or Off.</li>
+<li><strong>Active window only</strong> (off by default) shows the sidebar only in the frontmost window and hides it in the others, so the sidebar moves with focus.</li>
+<li><strong>Quick Terminal ▸ Size</strong>: the quick terminal's share of the screen (<a href="#terminals-quick">Quick terminal</a>).</li>
+</ul>
+<h3 id="settings-notifications">Notifications</h3>
+<p>Banners, the unseen-count badge, the Dock icon bounce (off, once, or until focused), the notification sound (None by default), the title-bar attention indicator, and <strong>Badge reset</strong>: when typing in a session clears its badge (on the first key, on Enter, or never). See <a href="#notifications">Notifications</a>.</p>
+<h3 id="settings-agent-status">Agent Status</h3>
+<p>Status glyph colors and shapes, the blocked-session sound, and <strong>Status reset</strong>: when typing into a blocked or completed session clears its glyph (on the first key, on Enter, or never). Navigation settings choose whether attention navigation also stops on active sessions and whether it crosses windows, and an idle time after which agterm moves to a blocked session. <strong>Reset to defaults</strong> restores the colors, shapes, sound and status reset. See <a href="#status">Agent status</a>.</p>
+<h3 id="settings-key-mapping">Key Mapping</h3>
+<p>The folder holding <code>keymap.conf</code>, a list of parse errors, and a reload button (<a href="#keymap">Custom commands &amp; keys</a>).</p>
+<p><strong>Lock in agterm</strong> (off by default) picks one of the keyboard layouts enabled in macOS and holds it while any agterm window has the keyboard, including overlays, pickers, dialogs and rename fields. Switching layouts there is undone at once, and your earlier layout returns when you move to another app. A crash or force quit leaves the locked layout selected.</p>
+<figure>
+<img src="/assets/screenshot-keymap-editor.webp" alt="Keymap editor" width="1330" height="828" loading="lazy">
+<figcaption>
+The keymap editor.
+</figcaption>
+</figure>
+</section>
 
           <!-- KEYMAP -->
-          <section id="keymap" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Custom commands &amp; keys
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              agterm reads a user-editable, kitty-flavored keymap file at
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/keymap.conf</span
-              >. It rebinds built-in menu shortcuts and defines custom shell commands bound to keys (and listed in the action
-              palette). The file is optional — a commented starter is written on first launch, and the directory can be changed in
-              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Three verbs; blank lines and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comments are ignored.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># rebind a built-in to a chord (mods joined by +)</span><br /><span
-                style="color: #5ea1f2"
-                >map</span
-              >
-              cmd+shift+l&nbsp;&nbsp;&nbsp;toggle_split<br /><span style="color: #5ea1f2">map</span>
-              ctrl+shift+k&nbsp;&nbsp;command_palette<br /><br /><span style="color: #6b727a"
-                ># or to several alternatives, joined by | with no spaces around it</span
-              ><br /><span style="color: #5ea1f2">map</span>
-              cmd+t|ctrl+a&gt;t&nbsp;&nbsp;toggle_scratch<br /><br /><span style="color: #6b727a"
-                ># define custom commands ("name" shows in the palette; chord optional)</span
-              ><br /><span style="color: #5ea1f2">command</span>
-              <span style="color: #f2b45c">"Open in Zed"</span>&nbsp;&nbsp;cmd+shift+e&nbsp;&nbsp;open -a Zed {AGT_SESSION_PWD}<br /><span
-                style="color: #5ea1f2"
-                >command</span
-              >
-              <span style="color: #f2b45c">"Lazygit"</span
-              >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl+a&gt;g&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agtermctl session overlay open 'zsh -lc lazygit'
-              --socket {AGT_SOCKET}<br /><span style="color: #5ea1f2">command</span>
-              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh<br /><br /><span
-                style="color: #6b727a"
-                ># one system-wide chord that summons the quick terminal from any application</span
-              ><br /><span style="color: #5ea1f2">global-hotkey</span> ctrl+opt+space
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A chord is modifier words (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >ctrl</span
-              >, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opt</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift</span>) joined by
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and a base key (a single
-              character or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tab</span>/<wbr /><span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >space</span
-              >/<wbr /><span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<wbr /><span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >delete</span
-              >/<wbr /><span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>/<wbr /><span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >right</span
-              >/<wbr /><span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">up</span>/<wbr /><span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >down</span
-              >, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f1</span> through
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f20</span>). A Shift-typed symbol is written
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
-              (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
-              shifted symbol. Custom commands may also use a leader sequence
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
-              must start with a modifier or a function key. For example,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f5</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">f5&gt;x</span>
-              are valid custom shortcuts. On Apple keyboards, hold Fn/Globe or enable standard function keys in
-              System Settings to send F1-F12 instead of media keys.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> takes exactly one
-              chord and binds it <strong style="color: #e6e1d7">system-wide</strong>: it summons the quick terminal while any
-              application is frontmost, which no other binding here can do — the rest only fire while agterm has the keyboard. It
-              needs a modifier unless it is a function key, takes no alternatives and no leader sequence, and a second
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey</span> line replaces the
-              first. macOS registers it by physical key position, so it keeps firing on a non-Latin layout. Because the system owns
-              it rather than agterm, it takes no part in the collision rules below. Note which side wins: the system-wide chord
-              takes the key even while agterm is in front, so binding one a menu item already uses means that menu shortcut stops
-              firing. It is unset unless you add the line: agterm ships no default because registering a chord takes it
-              from every other application on the Mac, and that is not a cost to impose on someone who may never summon
-              the panel from outside agterm. Spending it on the chord the in-app binding already uses is allowed and is
-              the way to get one shortcut that works everywhere —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey ctrl+`</span>
-              makes <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃`</span> summon the panel
-              from any application, at the price of that chord no longer reaching anything else.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">global-hotkey f5</span>
-              similarly takes F5 machine-wide, including from local map and command bindings.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              One binding can offer several <strong style="color: #e6e1d7">alternatives</strong>, joined by
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span> inside a single token with no
-              spaces around it —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+t|ctrl+a&gt;t toggle_scratch</span>
-              fires the action from either, and a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
-              takes alternatives the same way. For a built-in, the first single-chord alternative the menu can carry becomes the menu
-              shortcut; every
-              other alternative, on either verb, is delivered by a key monitor and must start with a modifier or a function key. This
-              is also how a built-in gets a leader sequence, because a menu item holds exactly one key equivalent:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map ctrl+a&gt;s toggle_split</span> binds
-              the sequence and leaves the action with no menu shortcut at all — its shipped ⌘D is gone rather than kept, and free for
-              another action to claim. A typo in one alternative rejects the whole line, so a mistake can't hide behind a line that
-              half worked; an alternative that merely breaks a rule or collides with an existing binding drops on its own and its
-              siblings keep firing. If a line ends up binding nothing at all, the action simply keeps the shortcut it shipped with.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A leader sequence fires once and forgets its prefix. Add
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--repeat</span> after the chord, on either
-              verb, to keep the prefix live until half a second after you release the key, like tmux's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bind -r</span>:
-              with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+opt+up|ctrl+a&gt;ctrl+h --repeat previous_session</span>
-              and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map cmd+opt+down|ctrl+a&gt;ctrl+l --repeat next_session</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">⌃A ⌃L ⌃L ⌃H</span> walks two sessions down and one back,
-              the shipped ⌘⌥↑/⌘⌥↓ still working, and holding the tail repeats it. Any other key ends the window and reaches the terminal
-              as usual; only a leader sequence repeats. A tail without a modifier, like
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;n</span>, takes that letter when you type it
-              within half a second of releasing the previous one.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that cannot type ASCII —
-              Russian, Greek, Hebrew, Arabic, Thai — resolves every chord by the physical key position, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> still fires on the key
-              marked O even though it types <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">щ</span>.
-              A layout that can type ASCII binds what it types, so an alternative Latin layout keeps its own letter positions: on
-              Dvorak, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> follows the O you
-              actually type. A chord holding ⌘ binds what the layout types while ⌘ is held, as the menus do, so on Dvorak - QWERTY ⌘
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+d</span> fires on the QWERTY D key.
-            </p>
-
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Failure panels are opt-in per command. For example,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">command "Build" ctrl+a&gt;b --error-hud ./build.sh</span> shows failures at the center of the
-              whole session. Add <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-position POS</span> to choose a HUD position, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-pane left|right</span> to select a pane role when the failure is reported.
-              Positions are <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top-left</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top-center</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top-right</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center-left</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">center-right</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom-left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom-center</span>, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom-right</span>; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">top</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">bottom</span>
-              are aliases for the middle column. If the chosen pane is hidden or gone, the panel covers the whole
-              session at the configured position. Only opted-in commands capture standard error for the panel.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Flags may appear in any order after the optional chord; for palette-only commands they follow the quoted name.
-              Position and pane require <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-hud</span>. A missing or invalid value, duplicate flag,
-              unknown leading <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-*</span> option, or empty shell body skips the command with a diagnostic.
-              The first ordinary shell token ends option parsing, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--error-hud ./script --error-pane right</span> passes the latter arguments to the script unchanged.
-              Use <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--</span> to end options explicitly before a shell body starting with a reserved name.
-              A chord is never parsed after flags.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Bindable built-in actions
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-              "
-            >
-              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />new_companion&nbsp;&nbsp;&nbsp;duplicate_companion&nbsp;&nbsp;&nbsp;convert_companion<br />close_session&nbsp;&nbsp;&nbsp;reopen_recent&nbsp;&nbsp;&nbsp;undo_close&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_horizontal_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view&nbsp;&nbsp;&nbsp;toggle_overlay<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />toggle_workspace_collapse<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_workspace&nbsp;&nbsp;&nbsp;next_workspace<br />previous_window&nbsp;&nbsp;&nbsp;next_window<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard&nbsp;&nbsp;&nbsp;attach_remote<br />open_remote_window&nbsp;&nbsp;&nbsp;detached_sessions<br />edit_flagged_sessions&nbsp;&nbsp;&nbsp;edit_focused_workspaces
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> is the one
-              action with no menu item of its own. macOS adds an "Enter Full Screen" item to the View menu whenever that menu is
-              drawn, and nothing suppresses it, so an item of agterm's own would sit beside it as a duplicate. The binding (⌃⌘F by
-              default) is handled directly instead, which is why the menu entry advertises the system's Globe+F rather than your
-              chord. Both work, and rebinding
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> changes the
-              chord as usual — it just won't show up next to that menu item.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Command tokens
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-              "
-            >
-              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}&nbsp;&nbsp;&nbsp;{AGT_SESSION_HOST}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_PANE_ID}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Tokens expand at fire time (also exported as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> env vars on the spawned
-              process). A token is substituted <strong style="color: #e6e1d7">raw</strong> into the shell line, so for content you
-              don't control —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SELECTION}</span>, and also
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SESSION_NAME}</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >{AGT_SESSION_PWD}</span
-              >
-              (a remote host can set these via OSC) — prefer the matching quoted env var, e.g.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">"$AGT_SELECTION"</span>.
-
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_PANE}</span> names the
-              pane's current role, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">right</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scratch</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_PANE_ID}</span> the same
-              stable token that pane's shell holds as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE_ID</span>, so a
-              command can keep addressing that terminal with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id</span> after a swap or a
-              promotion has changed its role. A chord pressed inside an overlay carries the token of the pane
-              underneath, the one the role names. It is empty for a launcher fired with no session.
-            </p>
-            <div
-              style="
-                background: rgba(242, 180, 92, 0.07);
-                border: 1px solid rgba(242, 180, 92, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 20px 0 0;
-                font-size: 14px;
-                color: #e2c79a;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">Detached, no TTY</strong> — a
-              custom command runs as a detached
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/bin/sh -c</span> with no controlling terminal, so
-              it suits fire-and-forget launches (GUI apps, scripts) — not interactive TUIs. Run a TUI like
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lazygit</span> in an overlay
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay open</span>) or a scratch
-              terminal, which have a real TTY. A non-zero exit or spawn failure posts a banner when notifications are enabled.
-            </div>
-            <div
-              style="
-                background: rgba(242, 180, 92, 0.07);
-                border: 1px solid rgba(242, 180, 92, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 20px 0 0;
-                font-size: 14px;
-                color: #e2c79a;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">GUI PATH</strong> — a custom
-              command resolves its binaries against the app's GUI
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>: the launchd default plus the bundled
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/usr/local/bin</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span>. A bare
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl</span> or Homebrew binary works;
-              anything else your shell profile adds does not, and fails with exit 127. Give it an absolute path
-              or wrap the line in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc '…'</span> —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -ilc '…'</span> when that
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> comes from
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">~/.zshrc</span>, which
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">-lc</span> does not read. The program an
-              overlay or scratch terminal runs gets the app's own unwidened
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span> and always needs one of those.
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 20px 0 0">
-              Open the file with <strong style="color: #e6e1d7">File ▸ Edit Keymap…</strong> (or the ⌃⇧P palette): it opens in a
-              95% overlay running <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$VISUAL</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >$EDITOR</span
-              >
-              (falling back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vi</span>) and
-              reloads on quit. Apply edits made elsewhere with
-              <strong style="color: #e6e1d7">File ▸ Reload Keymap</strong> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap reload</span>. A
-              malformed line never discards the rest — it surfaces in the diagnostics list in Settings ▸ Key Mapping while the good
-              lines still apply.
-            </p>
-            <p style="font-size: 15.5px; line-height: 1.75; color: #cbc6bc; margin: 0 0 18px">
-              To check what is actually bound,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
-              built-in with the binds it resolved to (the menu shortcut first, then any alternatives, joined with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">|</span>), the custom commands,
-              each diagnostic in full, and the key equivalents the menu
-              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
-              usually a menu problem, not a keymap one. Only the menu shortcut can appear there — an alternative never does, and
-              neither do
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z) and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle_fullscreen</span> (⌃⌘F), which a
-              key monitor delivers rather than a menu item.
-            </p>
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              v1 limitations
-            </h3>
-            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px">
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >A built-in's <em>menu</em> shortcut is single-chord only: a leader sequence binds through the key monitor
-                instead, as an alternative, and so never shows next to its menu item.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map</span> line can't bind a
-                bare, modifier-less arrow — a built-in rides an always-on menu key equivalent, so a bare arrow would
-                swallow the key in the terminal, the palettes, the dashboard grid, and every text field; any modifier
-                makes it bindable. The literal
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
-                key token (they are the separators), but those keys are bindable as
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+.</span>; only
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">increase_font_size</span>'s
-                default ⌘+ shows as a glyph because its stored form doesn't round-trip through the file.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span
-                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
-                  >›</span
-                >Shortcut hints are not written the same way for both verbs. A built-in shows macOS glyphs (⌘⇧E), with every
-                alternative listed space-separated and a sequence's chords joined by
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> as in the file
-                (⌘T ⌃A&gt;T), in the palette and in the toolbar and sidebar tooltips alike. A
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span> shows the raw kitty
-                spelling you typed instead (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >cmd+shift+e</span
-                >), alternatives still joined by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >|</span
-                >.
-              </li>
-            </ul>
-          </section>
+          <section id="keymap" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Custom commands &amp; keys</h2>
+<p><code>~/.config/agterm/keymap.conf</code> rebinds built-in shortcuts and defines your own shell commands, bound to keys and listed in the custom-commands palette (⌃⇧O). The file is optional: a commented starter is written on first launch, and <strong>Settings ▸ Key Mapping</strong> can point to another folder. It uses kitty-style syntax with three verbs; blank lines and <code>#</code> comments are ignored.</p>
+<pre><code># rebind a built-in to a chord (modifiers joined by +)
+map cmd+shift+l   toggle_split
+map ctrl+shift+k  command_palette
+# or to several alternatives, joined by | with no spaces
+map cmd+t|ctrl+a&gt;t  toggle_scratch
+# custom commands: the quoted name shows in the palette; the chord is optional
+command &quot;Open in Zed&quot;  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
+command &quot;Lazygit&quot;      ctrl+a&gt;g     agtermctl session overlay open &#39;zsh -lc lazygit&#39; --socket {AGT_SOCKET}
+command &quot;Deploy&quot;               ./deploy.sh
+# one system-wide chord that summons the quick terminal from any app
+global-hotkey ctrl+opt+space</code></pre>
+<p><strong>Editing.</strong> File ▸ Edit Keymap… (also in the action palette) opens the file in a 95% overlay running <code>$VISUAL</code> or <code>$EDITOR</code> (vi if neither is set) and reloads it when the editor quits. Apply edits made elsewhere with File ▸ Reload Keymap or <code>agtermctl keymap reload</code>. A bad line never discards the rest: it shows in the diagnostics list in Settings ▸ Key Mapping while the good lines apply.</p>
+<h3 id="keymap-chords">Chords</h3>
+<ul>
+<li>A chord is modifier words (<code>ctrl</code>, <code>cmd</code>, <code>opt</code>, <code>shift</code>) joined by <code>+</code>, then a base key: a single character, <code>tab</code>, <code>space</code>, <code>return</code>, <code>delete</code>, <code>left</code>, <code>right</code>, <code>up</code>, <code>down</code>, or <code>f1</code> through <code>f20</code>.</li>
+<li>A symbol typed with Shift is written as Shift plus its base key: <code>shift+/</code> for <code>?</code>, <code>shift+=</code> for <code>+</code>.</li>
+<li>A custom command's chord must start with a modifier or a function key: <code>f5</code> and <code>f5&gt;x</code> are valid.</li>
+<li>On Apple keyboards, hold Fn/Globe or turn on standard function keys in System Settings to send F1-F12 instead of media keys.</li>
+</ul>
+<p><strong>Alternatives.</strong> Join several chords with <code>|</code>, with no spaces: <code>map cmd+t|ctrl+a&gt;t toggle_scratch</code> fires from either, and a command takes alternatives the same way.</p>
+<ul>
+<li>For a built-in, the first single chord becomes the menu shortcut. Every other alternative must start with a modifier or a function key.</li>
+<li>A typo in one alternative rejects the whole line. An alternative that breaks a rule or is already taken is dropped alone, and the others keep working.</li>
+<li>A line that ends up binding nothing leaves the action with its default shortcut.</li>
+</ul>
+<p><strong>Leader sequences.</strong> <code>ctrl+a&gt;g</code> means ⌃A, then G. A built-in bound only to a sequence, like <code>map ctrl+a&gt;s toggle_split</code>, has no menu shortcut at all: its default ⌘D is released and free for another action.</p>
+<p>A sequence fires once. Add <code>--repeat</code> after the chord, on either verb, to keep the prefix live until half a second after you release the key, like tmux's <code>bind -r</code>:</p>
+<pre><code>map cmd+opt+up|ctrl+a&gt;ctrl+h --repeat previous_session
+map cmd+opt+down|ctrl+a&gt;ctrl+l --repeat next_session</code></pre>
+<p>Now ⌃A ⌃L ⌃L ⌃H walks two sessions down and one back, ⌘⌥↑ and ⌘⌥↓ still work, and holding the last key repeats it. Any other key ends the repeat and reaches the terminal as usual. A last key with no modifier, like <code>ctrl+a&gt;n</code>, takes that letter when you type it within half a second.</p>
+<p><strong>Non-Latin layouts.</strong> Chords are written in Latin and keep working on any layout.</p>
+<ul>
+<li>A layout that cannot type ASCII (Russian, Greek, Hebrew, Arabic, Thai) matches by physical key position, so <code>cmd+o</code> fires on the key marked O even though it types щ.</li>
+<li>A layout that can type ASCII matches what it types: on Dvorak, <code>cmd+o</code> follows the O you type.</li>
+<li>A chord with ⌘ matches what the layout types while ⌘ is held, as the menus do, so on Dvorak - QWERTY ⌘, <code>cmd+d</code> fires on the QWERTY D key.</li>
+</ul>
+<h3 id="keymap-global-hotkey">Global hotkey</h3>
+<p><code>global-hotkey</code> binds one chord system-wide: it summons the <a href="#terminals-quick">quick terminal</a> while any app is in front. Every other binding works only while agterm has the keyboard.</p>
+<ul>
+<li>It needs a modifier unless it is a function key, and takes no alternatives and no leader sequence. A second <code>global-hotkey</code> line replaces the first.</li>
+<li>macOS registers it by physical key position, so it keeps working on a non-Latin layout.</li>
+<li>It wins over agterm's own bindings, even while agterm is in front: give it a chord a menu item uses and that menu shortcut stops working.</li>
+<li>None is set by default, because a system-wide chord is taken from every other app on the Mac. <code>global-hotkey ctrl+`</code> gives ⌃<code>one meaning everywhere: it summons the panel from any app, and no app gets that chord any more.</code>global-hotkey f5` likewise takes F5 from every app, agterm's own bindings included.</li>
+</ul>
+<h3 id="keymap-actions">Built-in actions</h3>
+<pre><code>new_window   rename_window   delete_window
+new_workspace   rename_workspace   delete_workspace
+new_session   open_directory   rename_session   duplicate_session
+new_companion   duplicate_companion   convert_companion
+close_session   reopen_recent   undo_close   clear_status
+increase_font_size   decrease_font_size   reset_font_size
+toggle_split   toggle_horizontal_split   toggle_scratch   toggle_search
+toggle_sidebar   toggle_flag   toggle_flagged_view   toggle_overlay
+focus_left_pane   focus_right_pane   focus_workspace   toggle_workspace_filter
+toggle_workspace_collapse
+previous_session   next_session   first_session   last_session
+previous_workspace   next_workspace
+previous_window   next_window
+previous_attention_session   next_attention_session
+quick_terminal   session_palette   command_palette
+custom_command_palette   show_attention
+select_theme   toggle_fullscreen   toggle_terminal_zoom
+dashboard   attach_remote
+open_remote_window   detached_sessions
+edit_flagged_sessions   edit_focused_workspaces</code></pre>
+<p><code>toggle_fullscreen</code> (⌃⌘F by default) has no menu item of its own: macOS adds its own Enter Full Screen item to the View menu and shows Globe+F there. Both work, and rebinding <code>toggle_fullscreen</code> changes agterm's chord as usual; it just does not appear next to that menu item.</p>
+<h3 id="keymap-commands">Custom commands</h3>
+<p><strong>Tokens</strong> expand when the command fires, and are also exported to it as <code>$AGT_*</code> environment variables:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Token</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{AGT_SESSION_ID}</code>, <code>{AGT_SESSION_NAME}</code>, <code>{AGT_SESSION_PWD}</code>, <code>{AGT_SESSION_HOST}</code></td>
+<td>the active session</td>
+</tr>
+<tr>
+<td><code>{AGT_WORKSPACE_ID}</code>, <code>{AGT_WORKSPACE_NAME}</code></td>
+<td>its workspace</td>
+</tr>
+<tr>
+<td><code>{AGT_WINDOW_ID}</code>, <code>{AGT_WINDOW_NAME}</code></td>
+<td>its window</td>
+</tr>
+<tr>
+<td><code>{AGT_PANE}</code></td>
+<td>the pane's current role: <code>left</code>, <code>right</code> or <code>scratch</code></td>
+</tr>
+<tr>
+<td><code>{AGT_PANE_ID}</code></td>
+<td>the pane's stable id, the shell's <code>AGTERM_PANE_ID</code>, so <code>--pane-id</code> keeps addressing that terminal after a swap</td>
+</tr>
+<tr>
+<td><code>{AGT_SELECTION}</code></td>
+<td>the selected text</td>
+</tr>
+<tr>
+<td><code>{AGT_SOCKET}</code></td>
+<td>the control socket</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A token is pasted raw into the shell line. For text you do not control (<code>{AGT_SELECTION}</code>, and also <code>{AGT_SESSION_NAME}</code> and <code>{AGT_SESSION_PWD}</code>, which a remote host can set), use the quoted variable instead: <code>"$AGT_SELECTION"</code>.</li>
+<li>A chord pressed inside an overlay carries the pane underneath it. The pane tokens are empty for a command fired with no session.</li>
+</ul>
+<p><strong>How a command runs.</strong></p>
+<ul>
+<li>It runs detached as <code>/bin/sh -c</code> with no terminal, which suits launching apps and scripts, not interactive programs. Run a TUI like lazygit in an overlay (<code>agtermctl session overlay open</code>) or the scratch, which have a real terminal.</li>
+<li>A non-zero exit or a failure to start posts a banner when notifications are on.</li>
+<li>It finds programs on the app's PATH: the macOS default plus the bundled <code>agtermctl</code>, <code>/usr/local/bin</code> and <code>/opt/homebrew/bin</code>. Anything else your shell profile adds is missing and fails with exit 127: use an absolute path, or wrap the line in <code>zsh -lc '…'</code> (<code>zsh -ilc '…'</code> when that PATH comes from <code>~/.zshrc</code>). A program run in an overlay or the scratch gets the app's plain PATH and always needs one of those.</li>
+</ul>
+<p><strong>Failure panels.</strong> A command can show its failures in a panel over the session. Only commands that opt in have their standard error captured.</p>
+<pre><code>command &quot;Build&quot; ctrl+a&gt;b --error-hud ./build.sh</code></pre>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--error-hud</code></td>
+<td>show a failure panel, centered over the whole session; a running program overlay keeps its place</td>
+</tr>
+<tr>
+<td><code>--error-position POS</code></td>
+<td>panel position: <code>top-left</code>, <code>top-center</code>, <code>top-right</code>, <code>center-left</code>, <code>center</code>, <code>center-right</code>, <code>bottom-left</code>, <code>bottom-center</code>, <code>bottom-right</code>; <code>top</code> and <code>bottom</code> mean the middle column</td>
+</tr>
+<tr>
+<td><code>--error-pane left\|right</code></td>
+<td>show it over that pane; a hidden or closed pane gets the whole session</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Flags go after the chord in any order, or after the quoted name for a command with no chord. <code>--error-position</code> and <code>--error-pane</code> need <code>--error-hud</code>.</li>
+<li>A missing or invalid value, a repeated flag, an unknown <code>--error-*</code> option or an empty command body skips the line with a diagnostic.</li>
+<li>The first ordinary word starts the command, so in <code>--error-hud ./script --error-pane right</code> the last two words go to the script. Use <code>--</code> to end the flags before a command whose first word looks like a flag. A chord is never read after the flags.</li>
+</ul>
+<h3 id="keymap-check">Check what is bound</h3>
+<p><code>agtermctl keymap list</code> prints every built-in with the chords it resolved to (the menu shortcut first, then the alternatives, joined with <code>|</code>), the custom commands, each diagnostic in full, and the shortcuts the menu bar actually carries. If a binding does not fire, compare the last two: an action whose chord no menu item holds is usually a menu problem, not a keymap one. Only menu shortcuts appear in that last list: alternatives never do, nor do <code>undo_close</code> (⌘Z) and <code>toggle_fullscreen</code> (⌃⌘F), which agterm handles itself.</p>
+<p><code>increase_font_size</code>'s default is listed as <code>cmd++</code>, which the file cannot parse: write that chord as <code>cmd+shift+=</code> in <code>keymap.conf</code>.</p>
+<h3 id="keymap-limits">Limits</h3>
+<ul>
+<li>A built-in's menu shortcut is a single chord. A leader sequence binds as an alternative and never shows next to the menu item.</li>
+<li>A built-in cannot be bound to a bare arrow key with no modifier: it would take the key from the terminal, the palettes, the dashboard and every text field. Any modifier makes it bindable.</li>
+<li><code>+</code> and <code>&gt;</code> cannot be a bare key, since they are separators; bind those keys as <code>shift+=</code> and <code>shift+.</code>.</li>
+<li>The Ctrl-Tab switcher and Ctrl-1/Ctrl-2 pane focus cannot be rebound yet.</li>
+<li>Shortcut hints differ by verb. A built-in shows macOS glyphs (⌘⇧E), alternatives separated by spaces and a sequence's chords joined by <code>&gt;</code> (⌘T ⌃A&gt;T), in the palette and in tooltips. A command shows the spelling you typed (<code>cmd+shift+e</code>), alternatives joined by <code>|</code>.</li>
+</ul>
+</section>
 
           <!-- HOOKS -->
-          <section id="hooks" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Event hooks
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              A hook is a shell line agterm runs when a control event fires: an agent status change, a notification, a session
-              created or closed, a split or scratch pane shown or hidden, or the sidebar tree changing. Nothing has to stay running
-              to react. Hooks live in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/hooks.conf</span>,
-              beside <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>; a commented starter is written on first launch, and
-              <strong style="color: #e6e1d7">File &#9656; Edit Hooks&hellip;</strong> and
-              <strong style="color: #e6e1d7">File &#9656; Reload Hooks</strong> (or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl hooks reload</span>) edit and apply it. One verb; blank lines and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comment lines are ignored.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >
-<span style="color: #6b727a"># on &lt;kind&gt; &lt;shell...&gt;</span>
-<span style="color: #5ea1f2">on</span> status           ~/.config/agterm/hooks/status.sh
-<span style="color: #5ea1f2">on</span> session.closed   echo "$(date +%T) closed $AGT_SESSION_ID" &gt;&gt; ~/.local/state/agterm/sessions.log
-<span style="color: #5ea1f2">on</span> pane.scratch     ~/.config/agterm/hooks/scratch-layout.sh
-<span style="color: #5ea1f2">on</span> tree.changed     ~/.config/agterm/hooks/sync-outline.sh
-<span style="color: #5ea1f2">on</span> app.launched     ~/.config/agterm/hooks/reopen-pages.sh</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              The redirection in the second line does not create its directory:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mkdir -p ~/.local/state/agterm</span> first. A status script that reacts to one status must
-              exit 0 for the others, or every idle event reports a failure:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                margin-top: 12px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >
-<span style="color: #6b727a">#!/bin/sh</span>
-[ "$AGT_EVENT_STATUS" = blocked ] || exit 0
+          <section id="hooks" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Event hooks</h2>
+<p>A hook is a shell line agterm runs when an event fires: an agent status change, a notification, a session created or closed, a split or scratch shown or hidden, the sidebar tree changing. Nothing has to stay running to react.</p>
+<p>Hooks live in <code>~/.config/agterm/hooks.conf</code>, beside <code>keymap.conf</code>. A commented starter is written on first launch. File ▸ Edit Hooks… opens it, and File ▸ Reload Hooks or <code>agtermctl hooks reload</code> applies it. Each line is <code>on &lt;kind&gt; &lt;shell line&gt;</code>; blank lines and <code>#</code> comments are ignored.</p>
+<pre><code>on status          ~/.config/agterm/hooks/status.sh
+on session.closed  echo &quot;$(date +%T) closed $AGT_SESSION_ID&quot; &gt;&gt; ~/.local/state/agterm/sessions.log
+on pane.scratch    ~/.config/agterm/hooks/scratch-layout.sh
+on tree.changed    ~/.config/agterm/hooks/sync-outline.sh
+on app.launched    ~/.config/agterm/hooks/reopen-pages.sh</code></pre>
+<p>The redirection in the second line does not create its folder: run <code>mkdir -p ~/.local/state/agterm</code> first. A status script that cares about one status must exit 0 for the others, or every idle event counts as a failure:</p>
+<pre class="bash"><code>#!/bin/sh
+[ &quot;$AGT_EVENT_STATUS&quot; = blocked ] || exit 0
 afplay /System/Library/Sounds/Glass.aiff &amp;
-agtermctl notify "needs input" --target "$AGT_SESSION_ID" --socket "$AGT_SOCKET"</div>
-            <ul style="list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-direction: column; gap: 10px">
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Kinds.</strong> <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.created</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.closed</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.selected</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree.changed</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane.split</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane.scratch</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane.focused</span>, which names the split pane a session's selection settled on, with its <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">paneID</span>. The split and scratch kinds carry <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shown</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hidden</span> and fire only on a real change, closing a split or the scratch shell exiting included. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remote.opened</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remote.closed</span> fire beside the created and closed edges of a local row created by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx attach</span> and carry its ssh destination as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">host</span> and the origin's session id as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteSessionID</span>; they describe the row in the tree, not the ssh connection, so undo re-emits <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remote.opened</span>. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree.changed</span> also covers an overlay, page or HUD opening or closing, coalesced over 100 ms per window, so it says the tree moved and not what happened. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">app.launched</span> fires once per app run, after this file is loaded and the control socket accepts connections, with the restored sessions already in the tree: the place to recreate what a relaunch does not restore, such as pages kept in overlays. A hook added by a later reload does not get that launch's event. The same kinds <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events</span> prints; a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> event also carries <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">previous</span>, the status before the write, so a script sees the transition without keeping state.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Several lines per kind.</strong> Each line is its own hook with its own queue and child; they start together with no ordering between them. An identical kind and command twice is skipped with a diagnostic.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">What the script gets.</strong> The event as one JSON object on stdin followed by a newline and end of file, the shape <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl events --json</span> prints, plus <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_EVENT_KIND</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_EVENT_STATUS</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_EVENT_HOST</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_SESSION_ID</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_WORKSPACE_ID</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_WINDOW_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGT_SOCKET</span>, each set explicitly and empty when the event has no such field. The line runs detached through <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/bin/sh -c</span> in the app's working directory with the same widened <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">PATH</span> a custom command gets, so a bare <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> resolves; pass <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket "$AGT_SOCKET"</span> so it reaches the instance that fired the hook.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">One process per line at a time.</strong> While a hook's script runs, further events for that line queue in order, up to 256; past that the oldest is dropped and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl hooks list</span> shows the count. Nothing waits on a script: a slow or hung one holds only its own queue, and there is no timeout.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Failures.</strong> A non-zero exit, a script that could not be started, or an event that could not be handed to a running script posts one banner per hook until that hook next succeeds or the file is reloaded. A script that never reads stdin is fine; only its exit status counts. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks list</span> keeps the last failure.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Reload.</strong> A hook whose line is unchanged keeps its running script, queue and counters across a reload, comments and reordering included. A removed line accepts no more events and finishes its running script, which <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks list</span> still shows marked retired until it exits.
-              </li>
-              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
-                <span style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">›</span><strong style="color: #bfbab0">Loops.</strong> A hook whose command emits another event of the kind it listens to triggers itself again. The queue bounds how many processes run; it does not detect the loop. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud open</span> under <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree.changed</span> is one, since opening replaces the panel and emits the kind again: open only when the tree shows no HUD and use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud update</span> otherwise.
-              </li>
-            </ul>
-          </section>
+agtermctl notify &quot;needs input&quot; --target &quot;$AGT_SESSION_ID&quot; --socket &quot;$AGT_SOCKET&quot;</code></pre>
+<h3 id="hooks-kinds">Kinds</h3>
+<p>The kinds are the ones <code>agtermctl events</code> prints.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Kind</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td>a session's agent status is set; also carries <code>previous</code>, the status before, so a script sees the change without keeping state</td>
+</tr>
+<tr>
+<td><code>notify</code></td>
+<td>a notification is raised</td>
+</tr>
+<tr>
+<td><code>session.created</code>, <code>session.closed</code></td>
+<td>a session is created or closed</td>
+</tr>
+<tr>
+<td><code>session.selected</code></td>
+<td>a session is selected</td>
+</tr>
+<tr>
+<td><code>pane.split</code>, <code>pane.scratch</code></td>
+<td>the split or scratch is shown or hidden; carries <code>shown</code> or <code>hidden</code> and fires only on a real change, including a split closing or the scratch shell exiting</td>
+</tr>
+<tr>
+<td><code>pane.focused</code></td>
+<td>a session's selection settles on a split pane; names the pane and its <code>paneID</code></td>
+</tr>
+<tr>
+<td><code>remote.opened</code>, <code>remote.closed</code></td>
+<td>a row attached from another Mac with <code>zmx attach</code> appears in or leaves the tree; carries its ssh destination as <code>host</code> and the origin's session id as <code>remoteSessionID</code>. It describes the row, not the connection, so undo fires <code>remote.opened</code> again</td>
+</tr>
+<tr>
+<td><code>tree.changed</code></td>
+<td>the sidebar tree changes, including an overlay, page or HUD opening or closing. Changes within 100 ms in one window fire once, so it says the tree moved, not what happened</td>
+</tr>
+<tr>
+<td><code>app.launched</code></td>
+<td>once per app run, after this file is loaded and the control socket is up, with the restored sessions already in the tree: the place to recreate what a relaunch does not restore, such as pages in overlays. A hook added by a later reload does not get it</td>
+</tr>
+</tbody>
+</table>
+<h3 id="hooks-input">What a script gets</h3>
+<ul>
+<li>The event as one JSON object on standard input, followed by a newline and end of file: the shape <code>agtermctl events --json</code> prints.</li>
+<li><code>AGT_EVENT_KIND</code>, <code>AGT_EVENT_STATUS</code>, <code>AGT_EVENT_HOST</code>, <code>AGT_SESSION_ID</code>, <code>AGT_WORKSPACE_ID</code>, <code>AGT_WINDOW_ID</code> and <code>AGT_SOCKET</code>, each set and empty when the event has no such field.</li>
+<li>The line runs detached through <code>/bin/sh -c</code> in the app's working directory, with the same PATH a custom command gets, so a bare <code>agtermctl</code> works. Pass <code>--socket "$AGT_SOCKET"</code> so it reaches the agterm that fired the hook.</li>
+</ul>
+<h3 id="hooks-running">How hooks run</h3>
+<ul>
+<li><strong>Several lines per kind.</strong> Each line is its own hook; they start together in no particular order. The same kind and command twice is skipped with a diagnostic.</li>
+<li><strong>One process per line at a time.</strong> While a hook's script runs, further events for that line queue in order, up to 256; past that the oldest is dropped and <code>agtermctl hooks list</code> shows the count. Nothing waits on a script: a slow or stuck one holds only its own queue, and there is no timeout.</li>
+<li><strong>Failures.</strong> A non-zero exit, a script that could not start, or an event that could not be handed to it posts one banner per hook until that hook next succeeds or the file is reloaded. A script that never reads standard input is fine; only its exit status counts. <code>hooks list</code> keeps the last failure.</li>
+<li><strong>Reload.</strong> A hook whose line is unchanged keeps its running script, queue and counters across a reload, even if comments or the line order changed. A removed line takes no more events and finishes its running script, which <code>hooks list</code> shows as retired until it exits.</li>
+<li><strong>Loops.</strong> A hook whose command fires the kind it listens to runs itself again; the queue limits how many processes run but does not stop the loop. <code>session hud open</code> under <code>tree.changed</code> is one, since opening a panel fires the kind again: open a HUD only when the tree shows none, and use <code>session hud update</code> otherwise.</li>
+</ul>
+</section>
 
           <!-- AGTERMCTL -->
-          <section id="page-bridge" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Page bridge
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
-              A page shown with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay open --html</span> can run any agterm command: read the tree, switch
-              sessions, rename, set a status, or hand a value back to the script that opened it. These are pages you or your
-              agents write, trusted like a program in an overlay, which can already run every command; a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--url</span> page gets none of this. A page that pastes in outside text, an issue body say, escapes it.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 12px">
-              Tag a button or a form with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm</span> and the socket's command name. It works with the page's
-              JavaScript off, because agterm's own script handles the tags. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-target</span> is the target,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-args</span> a JSON object of fixed arguments, and a form's named inputs add to it by their field
-              name: a number input sends a number, a checkbox true or false, anything else a string. A name that would send
-              two values is refused. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">data-agterm-into</span> names an element that shows the reply as text, or the error.
-              A button outside a form must be <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">type=&quot;button&quot;</span>.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                margin-top: 12px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            ><span style="color: #6b727a">&lt;!-- switch sessions, rename this one, and the page's own controls --&gt;</span>
-&lt;button type="button" data-agterm="session.select" data-agterm-target="3F2A"&gt;api&lt;/button&gt;
-&lt;form data-agterm="session.rename"&gt;&lt;input name="name"&gt;&lt;button&gt;Rename&lt;/button&gt;&lt;/form&gt;
-&lt;button type="button" data-agterm="session.overlay.reload"&gt;Refresh&lt;/button&gt;
-&lt;button type="button" data-agterm="session.overlay.close"&gt;Done&lt;/button&gt;
-&lt;button type="button" data-agterm="window.list" data-agterm-into="#out"&gt;Windows&lt;/button&gt;&lt;pre id="out"&gt;&lt;/pre&gt;</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              What a page leaves out comes from where it sits: a command that addresses a session, left without a target,
-              acts on the page's own session, a command that addresses one window acts on the page's window, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.overlay.close</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">resize</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">navigate</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> on the page itself. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hide</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">show</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">toggle</span> act on the page's pane, or on every overlay of its session for a page that covers the whole session. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">reload</span> from a page re-reads the shown page. An
-              explicit target, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> or window is used as given. Global commands stay global, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">window.go</span>, like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>, steps from the frontmost window. Without JavaScript the rows above are what the
-              file says when it was written; a live list, built from <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> and redrawn on Refresh, needs
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--js</span>, which also gives the page <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm.request(cmd, {target, args})</span>. It returns a promise
-              with the reply, or rejects with the error.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                margin-top: 12px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            ><span style="color: #6b727a">&lt;!-- switcher.html, opened with --js --&gt;</span>
-&lt;div id="list"&gt;&lt;/div&gt;
-&lt;script type="module"&gt;
-const list = document.getElementById('list');
-const {tree} = await agterm.request('tree');
+          <section id="page-bridge" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Page bridge</h2>
+<p>A page shown with <code>session overlay open --html</code> can run any agterm command: read the tree, switch sessions, rename one, set a status, or hand a value back to the script that opened it.</p>
+<ul>
+<li>These are pages you or your agents write, trusted like a program in an overlay, which can already run every command. A <code>--url</code> page gets none of this.</li>
+<li>A page that inserts outside text, such as an issue body, must escape it.</li>
+</ul>
+<h3 id="page-bridge-tags">Tags</h3>
+<p>Tag a button or a form with <code>data-agterm</code> and the command name. This works with the page's JavaScript off, because agterm's own script handles the tags.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Attribute</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data-agterm</code></td>
+<td>the command, as the socket names it (<code>session.select</code>)</td>
+</tr>
+<tr>
+<td><code>data-agterm-target</code></td>
+<td>its target</td>
+</tr>
+<tr>
+<td><code>data-agterm-args</code></td>
+<td>a JSON object of fixed arguments</td>
+</tr>
+<tr>
+<td><code>data-agterm-into</code></td>
+<td>an element that shows the reply as text, or the error</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>A form's named inputs add arguments by their name: a number input sends a number, a checkbox <code>true</code> or <code>false</code>, anything else a string. A name that would send two values is refused.</li>
+<li>A button outside a form must be <code>type="button"</code>.</li>
+</ul>
+<pre class="html"><code>&lt;!-- switch sessions, rename this one, and the page&#39;s own controls --&gt;
+&lt;button type=&quot;button&quot; data-agterm=&quot;session.select&quot; data-agterm-target=&quot;3F2A&quot;&gt;api&lt;/button&gt;
+&lt;form data-agterm=&quot;session.rename&quot;&gt;&lt;input name=&quot;name&quot;&gt;&lt;button&gt;Rename&lt;/button&gt;&lt;/form&gt;
+&lt;button type=&quot;button&quot; data-agterm=&quot;session.overlay.reload&quot;&gt;Refresh&lt;/button&gt;
+&lt;button type=&quot;button&quot; data-agterm=&quot;session.overlay.close&quot;&gt;Done&lt;/button&gt;
+&lt;button type=&quot;button&quot; data-agterm=&quot;window.list&quot; data-agterm-into=&quot;#out&quot;&gt;Windows&lt;/button&gt;&lt;pre id=&quot;out&quot;&gt;&lt;/pre&gt;</code></pre>
+<p><strong>What a command acts on when the page leaves it out:</strong></p>
+<ul>
+<li>A session command with no target acts on the page's own session; a window command on the page's window.</li>
+<li><code>session.overlay.close</code>, <code>reload</code>, <code>resize</code>, <code>navigate</code> and <code>submit</code> act on the page itself; <code>reload</code> re-reads the shown page.</li>
+<li><code>hide</code>, <code>show</code> and <code>toggle</code> act on the page's pane, or on every overlay of its session for a page that covers the whole session.</li>
+<li>An explicit target, <code>active</code> or window is used as given. Global commands stay global, and <code>window.go</code>, <code>sidebar</code> and <code>sidebar mode</code> act from the frontmost window, as over the socket.</li>
+</ul>
+<h3 id="page-bridge-js">JavaScript</h3>
+<p>Without JavaScript, the buttons above are what the file says when it was written. A live list, built from <code>tree</code> and redrawn on Refresh, needs <code>--js</code>, which also gives the page <code>agterm.request(cmd, {target, args})</code>. It returns a promise with the reply, or rejects with the error.</p>
+<pre class="html"><code>&lt;!-- switcher.html, opened with --js --&gt;
+&lt;div id=&quot;list&quot;&gt;&lt;/div&gt;
+&lt;script type=&quot;module&quot;&gt;
+const list = document.getElementById(&#39;list&#39;);
+const {tree} = await agterm.request(&#39;tree&#39;);
 for (const ws of tree.workspaces) for (const s of ws.sessions) {
-  const row = list.appendChild(document.createElement('button'));
+  const row = list.appendChild(document.createElement(&#39;button&#39;));
   row.textContent = `${ws.name} / ${s.name}`;
-  row.onclick = () =&gt; agterm.request('session.select', {target: s.id});
+  row.onclick = () =&gt; agterm.request(&#39;session.select&#39;, {target: s.id});
 }
-&lt;/script&gt;</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              A page can also answer the script that opened it, like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl pick</span>. Open it with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span>: the command waits, prints the outcome as JSON, and exits 0 with the submitted value, or 2
-              when the page closes unanswered.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                margin-top: 12px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.9;
-                overflow-x: auto;
-                color: #cbc6bc;
-                white-space: pre;
-              "
-            >choice=$(agtermctl session overlay open --html branches.html --block) || exit
-<span style="color: #6b727a">&lt;!-- branches.html --&gt;</span>
-&lt;button type="button" data-agterm="session.overlay.submit" data-agterm-args='{"value":"main"}'&gt;main&lt;/button&gt;
-&lt;form data-agterm="session.overlay.submit"&gt;&lt;input name="value" placeholder="other"&gt;&lt;/form&gt;</div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Commands that stream or finish after their reply (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx present</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx reset</span> and the
-              overlay and page helpers) are refused from a page, and so are requests from a frame inside it. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar</span>
-              and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">sidebar mode</span> act on the frontmost window, as over the socket. See
-              <a href="commands.html#session" style="color: #6d82f3">the command reference</a> for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">submit</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result --page</span>.
-            </p>
-          </section>
+&lt;/script&gt;</code></pre>
+<h3 id="page-bridge-submit">Answer the script that opened it</h3>
+<p>Like <code>agtermctl pick</code>, a page can return a value. Open it with <code>--block</code>: the command waits, prints the outcome as JSON, and exits 0 with the submitted value, or 2 when the page closes unanswered.</p>
+<pre class="bash"><code>choice=$(agtermctl session overlay open --html branches.html --block) || exit</code></pre>
+<pre class="html"><code>&lt;!-- branches.html --&gt;
+&lt;button type=&quot;button&quot; data-agterm=&quot;session.overlay.submit&quot; data-agterm-args=&#39;{&quot;value&quot;:&quot;main&quot;}&#39;&gt;main&lt;/button&gt;
+&lt;form data-agterm=&quot;session.overlay.submit&quot;&gt;&lt;input name=&quot;value&quot; placeholder=&quot;other&quot;&gt;&lt;/form&gt;</code></pre>
+<p><strong>Refused from a page:</strong> commands that stream or finish after their reply (<code>zmx.present</code>, <code>zmx.reset</code>, <code>catalog.subscribe</code>, <code>session.overlay.job.run</code>, <code>session.overlay.page.serve</code> and <code>session.companion.page.attach</code>), and any request from a frame inside the page. See the <a href="/commands">command reference</a> for <code>submit</code> and <code>result --page</code>.</p>
+</section>
           <section id="agtermctl" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>agtermctl</h2>
 <p><code>agtermctl</code> drives agterm from scripts over a local socket: create and arrange workspaces and sessions, type into them, run actions, open overlays and dialogs, and poll an event feed for status and lifecycle changes. It does not stream terminal output. Every command, with arguments, results and errors, is in the <a href="/commands">Command reference</a>.</p>
