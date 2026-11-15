@@ -23,6 +23,32 @@ func runCompanionRequest(_ request: ControlRequest, options: ClientOptions, echo
     if !reply.response.ok { throw ExitCode.failure }
 }
 
+// `session move --parent` sends its own wire command: an app predating it would drop the field and run a plain move
+extension Session.Move {
+    func validateCompanionMove() throws {
+        guard parent != nil else { throw ValidationError("--index requires --parent") }
+        if workspace != nil || to != nil || after != nil || before != nil {
+            throw ValidationError("--parent takes no workspace, --to, --after or --before")
+        }
+        if target.targets.count > 1 { throw ValidationError("--parent moves one companion") }
+        if let index, index < 0 { throw ValidationError("--index must be 0 or more") }
+    }
+
+    func run() throws {
+        if parent == nil { return try defaultRun() }
+        try runCompanionRequest(companionMoveRequest(), options: options, echoID: false,
+                                tooOld: "the running app is too old for companion moves")
+    }
+
+    func companionMoveRequest() -> ControlRequest {
+        var args = ControlArgs()
+        args.parent = parent
+        args.index = index
+        return operation.stamp(ControlRequest(cmd: .sessionCompanionMove, target: target.targets.first ?? "active",
+                                              args: options.withWindow(args)))
+    }
+}
+
 extension Session {
     struct Collapse: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Fold a parent session's companions in the sidebar tree.")

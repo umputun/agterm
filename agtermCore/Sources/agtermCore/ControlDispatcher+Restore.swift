@@ -56,6 +56,8 @@ extension ControlDispatcher {
             if case .failure = restartOptions(request.args) { return true }
         case .sessionRestore:
             if case .failure = restoreUpdate(request.args) { return true }
+        case .sessionCompanionMove:
+            if case .failure = companionMoveArguments(request.args) { return true }
         default:
             break
         }

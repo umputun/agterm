@@ -22,7 +22,7 @@ final class ControlCompanionsUITests: ControlAPITestCase {
         let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"other"}}"#)
         let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
         let refused = try sendCommand(#"{"cmd":"session.move","target":"\#(companion)","args":{"workspace":"\#(other)"}}"#)
-        XCTAssertEqual(refused["error"] as? String, "a companion moves only among its siblings")
+        XCTAssertEqual(refused["error"] as? String, "a companion moves only among its siblings; use --parent to move it under another session")
         let moved = try sendCommand(#"{"cmd":"session.move","target":"\#(parent)","args":{"workspace":"\#(other)"}}"#)
         XCTAssertEqual(moved["ok"] as? Bool, true, "\(moved)")
         XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [parent, sibling, companion].compactMap(UUID.init(uuidString:)), timeout: 5))

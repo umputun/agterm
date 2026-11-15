@@ -934,3 +934,136 @@ struct AppStoreCompanionsTests {
 private final class CompanionEventKinds {
     var kinds: [ControlEventKind] = []
 }
+
+@MainActor
+extension AppStoreCompanionsTests {
+    private func moveRefusal(_ result: Result<Void, CompanionMoveRefusal>) -> CompanionMoveRefusal? {
+        if case .failure(let refusal) = result { return refusal }
+        return nil
+    }
+
+    @Test func aMovedCompanionLandsLastUnderTheNewParentAsTheSameSession() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.after.id, options: CompanionOptions(cwd: "/third")).get()
+
+        try g.store.moveCompanion(g.first.id, under: g.after.id).get()
+
+        #expect(g.order == [g.parent.id, g.second.id, g.after.id, third.id, g.first.id])
+        #expect(g.first.parentID == g.after.id)
+        #expect(g.store.session(withID: g.first.id) === g.first)
+        #expect(g.store.companions(of: g.parent.id).map(\.id) == [g.second.id])
+    }
+
+    @Test(arguments: [(0, 0), (1, 1), (99, 2), (Int.max, 2)])
+    func aMovedCompanionTakesTheRequestedSlot(index: Int, slot: Int) throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.after.id, options: CompanionOptions(cwd: "/third")).get()
+        let fourth = try g.store.addCompanion(to: g.after.id, options: CompanionOptions(cwd: "/fourth")).get()
+
+        try g.store.moveCompanion(g.first.id, under: g.after.id, at: index).get()
+
+        var expected = [third.id, fourth.id]
+        expected.insert(g.first.id, at: slot)
+        #expect(g.store.companions(of: g.after.id).map(\.id) == expected)
+    }
+
+    @Test func aCompanionMovesUnderAParentInAnotherWorkspace() throws {
+        let g = try CompanionGroup()
+        let other = try #require(g.store.addSession(toWorkspace: g.personal.id, cwd: "/other"))
+        let tail = try #require(g.store.addSession(toWorkspace: g.personal.id, cwd: "/tail"))
+
+        try g.store.moveCompanion(g.second.id, under: other.id).get()
+
+        #expect(g.order == [g.parent.id, g.first.id, g.after.id])
+        #expect(g.store.workspaces[1].sessions.map(\.id) == [other.id, g.second.id, tail.id])
+        #expect(g.second.parentID == other.id)
+    }
+
+    @Test func aMoveUnderItsOwnParentReordersTheGroup() throws {
+        let g = try CompanionGroup()
+
+        try g.store.moveCompanion(g.second.id, under: g.parent.id, at: 0).get()
+
+        #expect(g.order == [g.parent.id, g.second.id, g.first.id, g.after.id])
+        #expect(g.second.parentID == g.parent.id)
+    }
+
+    @Test func aRefusedMoveLeavesTheTreeAndAgreesWithCanMove() throws {
+        let g = try CompanionGroup()
+        let remote = try #require(g.store.addSession(toWorkspace: g.work.id, cwd: "/r", remoteHost: "buildbox"))
+        let before = g.order
+        let cases: [(UUID, UUID, CompanionMoveRefusal)] = [
+            (g.parent.id, g.after.id, .notCompanion),
+            (g.first.id, g.second.id, .parentIsCompanion),
+            (g.first.id, g.first.id, .parentIsCompanion),
+            (g.first.id, UUID(), .noSuchSession),
+            (UUID(), g.after.id, .noSuchSession),
+            (g.first.id, remote.id, .otherHost),
+        ]
+
+        for (id, parent, expected) in cases {
+            #expect(moveRefusal(g.store.canMoveCompanion(id, under: parent)) == expected)
+            #expect(moveRefusal(g.store.moveCompanion(id, under: parent, at: 0)) == expected)
+        }
+        #expect(g.order == before)
+        #expect(g.first.parentID == g.parent.id)
+        #expect(moveRefusal(g.store.canMoveCompanion(g.first.id, under: g.after.id)) == nil)
+    }
+
+    @Test func companionMoveRefusalsCarryTheirMessage() {
+        #expect(CompanionMoveRefusal.noSuchSession.message == "no such session")
+        #expect(CompanionMoveRefusal.notCompanion.message == "not a companion")
+        #expect(CompanionMoveRefusal.parentIsCompanion.message == "the new parent must be a top-level session")
+        #expect(CompanionMoveRefusal.otherHost.message == "a companion moves only under a session from the same host")
+    }
+
+    @Test func aSelectedCompanionStaysSelectedAfterTheMove() throws {
+        let g = try CompanionGroup()
+        g.store.selectSession(g.first.id)
+
+        try g.store.moveCompanion(g.first.id, under: g.after.id).get()
+
+        #expect(g.store.selectedSessionID == g.first.id)
+    }
+
+    @Test func onlyARealMoveAnnouncesTheTree() throws {
+        let events = CompanionEventKinds()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), controlEventSink: { events.kinds.append($0.kind) })
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/p"))
+        let other = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/o"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/c")).get()
+        events.kinds.removeAll()
+
+        try store.moveCompanion(companion.id, under: parent.id).get()
+        #expect(!events.kinds.contains(.treeChanged))
+
+        try store.moveCompanion(companion.id, under: other.id).get()
+        #expect(events.kinds.contains(.treeChanged))
+    }
+
+    @Test func aMovedCompanionRoundTripsThroughSnapshot() throws {
+        let g = try CompanionGroup()
+        try g.store.moveCompanion(g.first.id, under: g.after.id).get()
+
+        let restored = makeStore()
+        restored.restore(from: g.store.snapshot())
+
+        let sessions = try #require(restored.workspaces.first).sessions
+        #expect(sessions.map(\.id) == [g.parent.id, g.second.id, g.after.id, g.first.id])
+        #expect(sessions[3].parentID == g.after.id)
+    }
+
+    @Test func aPageCompanionMovesAndAPageRootTakesCompanions() throws {
+        let g = try CompanionGroup()
+        let page = try g.store.addPageCompanion(to: g.parent.id, overlay: HtmlOverlay(source: .file(path: "/tmp/a.html", grantRoot: nil))).get()
+        let root = try g.store.addPageSession(after: g.after.id, overlay: HtmlOverlay(source: .file(path: "/tmp/r.html", grantRoot: nil))).get()
+
+        try g.store.moveCompanion(page.id, under: g.after.id).get()
+        try g.store.moveCompanion(g.first.id, under: root.id).get()
+
+        #expect(g.order == [g.parent.id, g.second.id, g.after.id, page.id, root.id, g.first.id])
+        #expect(page.htmlOverlay != nil)
+    }
+}

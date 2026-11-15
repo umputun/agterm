@@ -4,7 +4,7 @@ import Foundation
 extension ControlServer: CompanionDuplicating {}
 
 extension ControlServer {
-    static let companionMoveError = "a companion moves only among its siblings"
+    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session"
 
     /// pageCompanionRefusal answers a request a page session cannot take, before any command runs.
     func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {

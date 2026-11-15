@@ -188,11 +188,14 @@ struct Session: ParsableCommand {
 
     struct Move: RequestCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Move a session: to another workspace, reorder with --to, or place relative to an anchor with --after/--before.")
+            abstract: "Move a session: to another workspace, reorder with --to, place relative to an anchor with --after/--before, or put a companion under another session with --parent.")
         @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
+        @Option(name: .long, help: "Move the target companion under this top-level session (id/prefix) instead.") var parent: String?
+        @Option(name: .long, help: "With --parent: the companion's slot among the new parent's companions, 0 first; omitted appends.")
+        var index: Int?
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
         @OptionGroup var operation: OperationOptions
@@ -201,6 +204,7 @@ struct Session: ParsableCommand {
         // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
         // without a socket. the anchor carries its own workspace, so placement excludes --to and a workspace.
         func validate() throws {
+            if parent != nil || index != nil { return try validateCompanionMove() }
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
             }
@@ -217,13 +221,14 @@ struct Session: ParsableCommand {
                 throw ValidationError("session.move --target can be repeated only with a workspace or --after/--before")
             }
             switch (workspace, to) {
-            case (nil, nil): throw ValidationError("provide a destination workspace, --to, or --after/--before")
+            case (nil, nil): throw ValidationError("provide a destination workspace, --to, --after/--before, or --parent")
             case (.some, .some): throw ValidationError("provide a destination workspace or --to, not both")
             default: break
             }
         }
 
         func makeRequest() throws -> ControlRequest {
+            if parent != nil { return companionMoveRequest() }
             let args: ControlArgs
             if let after {
                 args = ControlArgs(after: after)

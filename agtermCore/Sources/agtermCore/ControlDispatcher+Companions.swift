@@ -12,6 +12,12 @@ extension ControlDispatcher {
                                                       select: request.args?.noSelect != true)
         case .sessionCompanionConvert:
             return actions.convertToCompanion(request.target, window: request.args?.window)
+        case .sessionCompanionMove:
+            switch Self.companionMoveArguments(request.args) {
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            case .success(let move):
+                return await actions.moveCompanion(request.target, parent: move.parent, index: move.index, window: request.args?.window)
+            }
         case .sessionCompanionPageAttach:
             return actions.attachCompanionPage(request.target, window: request.args?.window)
         case .sessionCollapse:
@@ -63,6 +69,29 @@ extension ControlDispatcher {
             follow: args?.follow ?? false, pane: nil, page: page, navigation: args?.navigation ?? false,
             javascript: args?.javascript ?? false, chromeless: args?.chromeless ?? false,
             persistent: args?.persistent ?? false, browse: args?.browse ?? false))
+    }
+
+    /// CompanionMove is a validated `session.companion.move`: the new parent and the slot in its group, nil appending.
+    struct CompanionMove: Equatable {
+        let parent: String
+        let index: Int?
+    }
+
+    // the move lands under `parent`, so a raw client's workspace, placement or batch field is refused, not dropped
+    static func companionMoveArguments(_ args: ControlArgs?) -> Result<CompanionMove, ArgumentRejection> {
+        guard let parent = args?.parent?.trimmingCharacters(in: .whitespaces), !parent.isEmpty else {
+            return .failure(ArgumentRejection(message: "session.companion.move needs a parent"))
+        }
+        if args?.workspace != nil || args?.to != nil || args?.after != nil || args?.before != nil {
+            return .failure(ArgumentRejection(message: "session.companion.move takes no workspace, --to, --after or --before"))
+        }
+        if args?.targets != nil {
+            return .failure(ArgumentRejection(message: "session.companion.move moves one companion, named by target"))
+        }
+        if let index = args?.index, index < 0 {
+            return .failure(ArgumentRejection(message: "index must be 0 or more"))
+        }
+        return .success(CompanionMove(parent: parent, index: args?.index))
     }
 
     // a companion lands under its parent, so a raw client's workspace or placement field is refused, not dropped

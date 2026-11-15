@@ -21,6 +21,8 @@ public protocol ControlActions {
     func duplicateAsCompanion(_ target: String?, window: String?, select: Bool) async -> ControlResponse
     /// convertToCompanion nests the target and its companions under a fresh session in its slot.
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse
+    /// moveCompanion puts the target companion under `parent`, at `index` among its companions or last.
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse
     /// Hands out one attachment of the target page companion to another Mac.
     func attachCompanionPage(_ target: String?, window: String?) -> ControlResponse
     /// Folds or unfolds a parent's companions in the sidebar tree.

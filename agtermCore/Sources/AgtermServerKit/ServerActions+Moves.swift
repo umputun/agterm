@@ -3,7 +3,7 @@ import agtermCore
 
 /// `session.move` on the catalog, the forms and placement math of the Mac's sidebar.
 extension ServerActions {
-    static let companionMoveError = "a companion moves only among its siblings"
+    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session"
 
     public func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
         withSession(target, window: window) { session in
