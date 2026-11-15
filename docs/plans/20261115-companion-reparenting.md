@@ -231,18 +231,18 @@
 - Modify: `agterm/Control/ControlServer+AttachedForward.swift`, `agterm/AppActions+Companions.swift` (attached branch)
 - Modify: `AttachedForwardTests`, `agtermTests/ControlServerAttachedForwardTests.swift`
 
-- [ ] forward case carrying both origin session ids, added to the forwarded set behind `refusesArguments`
-- [ ] the route checks `canMoveCompanion` here before any network call: a row attached alone can be top-level
+- [x] forward case carrying both origin session ids, added to the forwarded set behind `refusesArguments`
+- [x] the route checks `canMoveCompanion` here before any network call: a row attached alone can be top-level
       here while a companion on the origin, and is refused before the origin moves it
-- [ ] destination equal to the current parent: local reorder, no origin call
-- [ ] otherwise origin first, without `index`; after its success re-check both rows here, then `moveCompanion`
+- [x] destination equal to the current parent: local reorder, no origin call
+- [x] otherwise origin first, without `index`; after its success re-check both rows here, then `moveCompanion`
       with the requested slot; an origin success with a local failure is reported as such, no retry
-- [ ] sidebar drop and menu on an attached row go through the same seam
-- [ ] tests: id translation; zero runner calls for a negative raw `index`, a top-level-here/companion-there
+- [x] sidebar drop and menu on an attached row go through the same seam
+- [x] tests: id translation; zero runner calls for a negative raw `index`, a top-level-here/companion-there
       row, mixed or different-origin pairs, and a current-parent reorder; origin failure leaves this Mac
       unchanged; origin too old (exit 64 and `refusesUnknown`); origin success then local move; origin success
       with a row gone meanwhile
-- [ ] run the touched tests - must pass before task 5
+- [x] run the touched tests - must pass before task 5
 
 ### Task 5: Docs, acceptance and gates
 - [ ] `site/docs.html` (companions: drag rules in the tree, Move to, the flagged layouts, the attached-viewer

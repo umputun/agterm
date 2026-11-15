@@ -99,6 +99,11 @@ extension AppActions {
             _ = performRemote(.moveCompanion(id, parent: parentID, index: mapped), in: store)
             return
         }
+        var args = ControlArgs()
+        args.parent = parentID.uuidString
+        args.index = index
+        if forwardAttached(ControlRequest(cmd: .sessionCompanionMove, target: id.uuidString, args: args), row: id, in: store,
+                           action: "Move Companion") { return }
         switch store.moveCompanion(id, under: parentID, at: index) {
         case .failure(let refusal):
             showCompanionRefusal(refusal.message, action: "Move Companion", over: id, in: store)
