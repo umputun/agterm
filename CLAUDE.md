@@ -331,6 +331,11 @@ C-boundary concurrency before changing the bridge.
   keeps a new command off every page that merely mentions the catalog. `control-api.md` owns that rule.
   The positioning claim must stay consistent in substance, not byte-identical: `site/index.html`'s title and
   social tags insert `macOS` for search intent, and `site/llms.txt` carries a libghostty-based variant.
+- `site/docs.html` is the complete user reference, written for people: every behavior, setting, flag, file format,
+  env var and JSON field a user sees or scripts against, organized by task in short paragraphs, lists and tables,
+  with screenshots for anything visual.
+  The mechanism behind a behavior (which process answers what, transport, internal limits) goes in
+  `.claude/rules` or `ARCHITECTURE.md`, never the guide. One body text color.
 - `site/index.html` reflects major features and current `softwareVersion`; `site/commands.html` mirrors
   every command, arguments, and read-back field.
 - `cookbook/` is not a synchronized surface. Recipes pin a minimum version;
