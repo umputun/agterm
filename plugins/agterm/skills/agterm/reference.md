@@ -1145,7 +1145,8 @@ error keeps those names for compatibility.
   server must be reachable from the agterm the command reaches, where `localhost` points: this Mac from a local
   session, the host from a session agterm-server or another Mac runs, whose page the Mac showing it reaches through
   an ssh forward (a page session or page companion on a loopback URL is still refused there). Plain http works for
-  local addresses (localhost, `.local`, IP literals); use https for public hosts. Pass `--js` for web
+  local addresses (localhost, `.local`, private and link-local IP addresses); use https for public hosts and IP
+  addresses outside those ranges, including Tailscale's 100.x addresses. Pass `--js` for web
   apps that require client-side JavaScript; without it only the static markup renders. The page is pinned to
   its origin: same-origin navigations and redirects load in place; a clicked link elsewhere, or a clicked
   link's redirect elsewhere, goes through the confirmation above and leaves the page loaded; a redirect to another

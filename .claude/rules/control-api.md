@@ -755,9 +755,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `page`, as it does for every other page. A blank document is named `about:blank`. New-window requests stay confirmed-external and a URL page still gets no bridge.
 - A clicked terminal link follows `LinkPolicy.route` through `LinkOpener.shared`, which the app points at
   the setting and at `ControlServer.openLinkOverlay`. `route` sends plain http to the overlay only for a
-  host ATS exempts by syntax (unqualified, `.local`, an IP literal): the store would accept any other and
-  the load would then fail, with no refusal for the browser fallback to act on. Explicit `--url` is not
-  narrowed. That opens `--url --browse --js --navigation
+  host ATS exempts (unqualified, `.local`, a loopback, private or link-local IP literal): the store would
+  accept any other and the load would then fail, with no refusal for the browser fallback to act on.
+  Explicit `--url` is not narrowed. That opens `--url --browse --js --navigation
   --persistent` on the click's owning session at the mode's `sizePercent` (full size for `overlay`), without
   selecting it, and returns false, sending
   the link to the browser, when a HUD is up on the session, when its window has a zoomed terminal, or when
