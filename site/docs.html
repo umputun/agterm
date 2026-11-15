@@ -57,12 +57,16 @@
       .doc-v2 a { color: #6d82f3; }
       .doc-v2 code { font-family: "JetBrains Mono", monospace; font-size: 0.9em; color: #e6e1d7;
         background: rgba(255, 255, 255, 0.06); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+      .doc-v2 pre { margin: 4px 0 20px; padding: 14px 18px; background: #15191c; border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px; overflow-x: auto; }
+      .doc-v2 pre code { background: none; padding: 0; font-size: 13.5px; line-height: 1.7; overflow-wrap: normal;
+        white-space: pre; color: #e6e1d7; }
       .doc-v2 table { width: 100%; border-collapse: collapse; margin: 4px 0 20px; font-size: 15px; line-height: 1.55;
-        display: block; overflow-x: auto; }
+        table-layout: auto; }
       .doc-v2 th, .doc-v2 td { text-align: left; vertical-align: top; padding: 9px 12px; color: #cbc6bc;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
       .doc-v2 th { color: #e6e1d7; font-weight: 600; background: #22272b; }
-      .doc-v2 td:first-child { white-space: nowrap; color: #e6e1d7; }
+      .doc-v2 td:first-child, .doc-v2 th:first-child { width: 30%; color: #e6e1d7; }
       .doc-v2 figure { width: fit-content; max-width: 100%; margin: 8px 0 24px; background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px; overflow: hidden; }
       .doc-v2 figure img { display: block; max-width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
@@ -219,6 +223,7 @@
             <a href="#terminals" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Terminals</a>
             <a href="#navigation" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Navigation</a>
             <a href="#windows" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Windows</a>
+            <a href="#remote-sessions" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Remote sessions</a>
             <a href="#remote-server" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Remote server</a>
             <a href="#notifications" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Notifications</a>
             <a href="#accessibility" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Accessibility</a>
@@ -1050,6 +1055,13 @@
                 A session's right-click context menu.
               </figcaption>
             </figure>
+                      <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 20px 0 0">
+              <strong style="color: #e6e1d7">Open a directory without the CLI.</strong> Run
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">open -a agterm &lt;path&gt;</span>, or right-click a
+              folder in Finder and choose Open With ▸ agterm: agterm adds a session in that directory to the last-active window.
+              This works while agterm is running (its usual state); otherwise launch it first. To place the session precisely,
+              use <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session new --cwd &lt;path&gt;</span>.
+            </p>
           </section>
 
           <!-- TERMINALS -->
@@ -1450,6 +1462,153 @@
           </section>
 
           <!-- REMOTE SERVER -->
+          <section id="remote-sessions" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Remote sessions</h2>
+<p>Open a session that runs on another Mac in this sidebar, as a row marked remote, splits and companions included. Its programs keep running over there; this Mac shows them at its own window size. For sessions on a Linux host, see <a href="#remote-server">Remote server</a>, which shows them in a remote window instead.</p>
+<h3 id="remote-sessions-setup">Set up the other Mac</h3>
+<ul>
+<li>agterm runs in <strong>Live sessions</strong> mode there (<a href="#restore-live">Restore</a>), which keeps a live program behind each pane. A page session needs no live program.</li>
+<li><code>agtermctl</code> is installed there by the cask or <strong>Help ▸ Install Command Line Tool…</strong>. A Mac that only runs agterm has no CLI an ssh command can find.</li>
+<li>Key-based ssh works without prompts. agterm runs ssh non-interactively, so a password or host-key prompt is a failure, not a question.</li>
+</ul>
+<p>Check the connection the way agterm makes it:</p>
+<pre class="bash"><code>ssh -o BatchMode=yes studio.local true</code></pre>
+<p>No output means agterm can reach the host. A password or host-key prompt means agterm fails the same way. agterm runs ssh from the app, which has the launch environment, not your shell's: an agent exported in <code>.zshrc</code> passes this check and still fails in agterm. Put <code>IdentityAgent</code> and key settings in <code>~/.ssh/config</code>, which both read.</p>
+<h3 id="remote-sessions-attach">Attach a session</h3>
+<p><strong>File ▸ Attach Remote…</strong> (the <code>attach_remote</code> action, ⌘⇧R by default) lists the Macs in <code>remotes.conf</code>:</p>
+<pre><code># remotes.conf, in the config directory: destination [label]
+studio.local          Studio
+me@mini.lan           Mac mini</code></pre>
+<ul>
+<li>The destination is what ssh takes; the rest of the line is an optional picker label. Lines starting with <code>#</code> are comments.</li>
+<li>With more than one Mac listed, the picker asks which, then shows that Mac's sessions. The one you choose attaches in the current window, with its companions when it is a top-level session.</li>
+<li>A panel over the session reports the connection while it is made. A failure stays up for five seconds, over the new session when part of a group could not be attached.</li>
+<li>The item is greyed out while the file is missing or empty. An unusable line or an unreadable file is reported in a notification.</li>
+</ul>
+<p>From a script:</p>
+<pre class="bash"><code>agtermctl zmx tree studio.local                       # window/workspace/name (split) [id] cwd, every open window
+agtermctl zmx tree                                    # without a host: what this Mac offers, in the same shape
+agtermctl zmx attach studio.local 7c1e…               # the id from that listing, not the name
+agtermctl zmx attach studio.local 7c1e… --companions  # with its companions
+agtermctl zmx attach studio.local 7c1e… --window &quot;$win&quot;  # into an open window (id from window list), not raised
+
+# pick from the listing and attach the choice
+s=$(agtermctl zmx tree studio.local --json \
+  | jq &#39;[.result.remote.sessions[] | {id, label: .name, subtitle: (.windowName + &quot;/&quot; + .workspaceName + &quot; &quot; + .cwd)}]&#39; \
+  | agtermctl pick --prompt &quot;Attach which session?&quot; | jq -r &#39;.id // empty&#39;)
+[ -n &quot;$s&quot; ] &amp;&amp; agtermctl zmx attach studio.local &quot;$s&quot;</code></pre>
+<p>Without <code>--window</code> the session opens in the frontmost window.</p>
+<p><strong>What can be attached</strong></p>
+<ul>
+<li>Only a session whose every pane still has a live program is listed. The choice is checked again at attach time, so a session that ended in between fails instead of handing back a fresh shell wearing its name.</li>
+<li><code>--companions</code> attaches each companion under the session. If one cannot be attached, the rest stay and the command fails naming what is missing.</li>
+<li>A terminal companion attached on its own joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.</li>
+<li>A page session is listed too: attaching it opens that Mac's page as a top-level row here. A page companion attaches only under the row attached from its parent, so the picker leaves it out.</li>
+</ul>
+<h3 id="remote-sessions-row">The attached row</h3>
+<ul>
+<li>The title bar shows a cloud and the host; hide it with <strong>Settings ▸ Interface ▸ Remote host</strong>. The Ctrl-Tab switcher and the recent and attention lists mark the row the same way.</li>
+<li>Closing the row ends only this Mac's connection, and the programs over there keep running. <code>agtermctl session close --terminate</code> ends the session on the other Mac too, and <code>agtermctl zmx kill</code> ends the targeted pane's program there.</li>
+<li>A closed row joins <strong>File ▸ Open Recent</strong> under Remote Sessions. Reopening attaches again while the other Mac still lists the session, or has it reopen its own entry first. Reopen Closed Item (⌘Z) inside the other Mac's undo time undoes a terminate there.</li>
+<li>An open row is saved and attached again at the next launch. If the other Mac no longer has the session, the row says it ended there.</li>
+<li><code>agtermctl tree --json</code> reports <code>remoteHost</code> and <code>remoteSessionID</code> on the row.</li>
+</ul>
+<h3 id="remote-sessions-lead">Who leads a pane</h3>
+<p>The program in a pane sees the window size of the one Mac that leads it.</p>
+<ul>
+<li>Attaching takes the lead in every pane, so the session arrives at your size with nothing to press.</li>
+<li>On the other Mac, those panes are covered with a note that they are in use elsewhere. A key press on the cover, or <code>agtermctl session lead</code>, takes the lead back and covers the pane here.</li>
+<li>Scripts typing into a covered pane on the other Mac still work, and so do their screen reads: both go through the session, not the covered view.</li>
+<li>Closing the session here uncovers the panes over there.</li>
+<li>Both Macs need an agterm with this behavior; against an older one the session arrives at the other Mac's size until you type.</li>
+<li>While another Mac leads at a different size, cursor and screen-text reads here can disagree with the program's layout. Automation that relies on them is unsupported in that state.</li>
+</ul>
+<h3 id="remote-sessions-mirror">What follows the session to this Mac</h3>
+<p>Each terminal attach also opens a presentation stream back to the other Mac. Over it, this Mac mirrors:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Mirrored</th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>layout</td>
+<td>two remote panes follow the other Mac's split direction, hide and show, and swaps; a split opened there later attaches here into an empty split slot; a replica closed here stays closed</td>
+</tr>
+<tr>
+<td>status</td>
+<td>clearing the row's status or badge here (typing, selecting, Clear Status) clears it there too, under that Mac's reset settings, when the status came from there; a status set on this Mac's row clears here only</td>
+</tr>
+<tr>
+<td>session context</td>
+<td>a context set here wins over the mirrored one; clearing it here shows the other Mac's again</td>
+</tr>
+<tr>
+<td>sidebar info line, <code>notify</code> notifications, HUD</td>
+<td>a timed HUD closes on this Mac's own count of the time left, so the two can close a moment apart</td>
+</tr>
+</tbody>
+</table>
+<p>What stays local: local panes, the divider ratio and keyboard focus. A HUD or overlay opened by a program on this Mac is never replaced by a mirrored one. A terminal notification (OSC 9/777) is not mirrored: it already arrives in the pane's output and shows here once.</p>
+<ul>
+<li>A page session uses its page channel instead and mirrors none of this.</li>
+<li>The stream needs only <code>agtermctl</code> on the other Mac's ssh PATH. An agterm there from before context mirroring mirrors everything but the context; one too old for the stream reads <code>unsupported</code> and the attach still works.</li>
+<li><code>agtermctl tree --json</code> reports the stream as the row's <code>presentation</code>. <code>connected</code> means mirroring works; it says nothing about the panes' own ssh connections.</li>
+<li>An older other Mac leaves the layout alone.</li>
+</ul>
+<h3 id="remote-sessions-origin">What runs on the other Mac</h3>
+<p>Commands that change the session run on the Mac it came from, and the result attaches here:</p>
+<ul>
+<li>Duplicate Session, a new split and Close Split, Convert to Companion;</li>
+<li>the scratch terminal, refused while the row is not connected or when the other Mac's agterm is too old to show its scratch;</li>
+<li><code>agtermctl session restart</code>, <code>zmx kill</code> and <code>session restore</code>; a session from agterm-server refuses <code>session restore</code>, since the server keeps every pane running.</li>
+</ul>
+<p>When the other Mac gives no answer, the request is reported as unknown and is never sent again or done here.</p>
+<p>Commands that only inherit the session's directory run here: a custom command, an overlay opened without <code>--cwd</code>, the quick terminal, and New Session set to open in the current directory. They start in the other Mac's reported directory when that path exists here, else in your home. A custom command still sees the reported path in <code>$AGT_SESSION_PWD</code> and the host in <code>$AGT_SESSION_HOST</code> (empty for a local session).</p>
+<h3 id="remote-sessions-present">Questions, overlays and pages from the other Mac</h3>
+<p>The first attached Mac to ask presents the session while nobody else does; its row's <code>presentation</code> reads <code>mode: presenter</code>.</p>
+<ul>
+<li>A question (<code>ask</code>) or program overlay that a program there opens is shown on the presenting Mac, where you are, while the other Mac follows another Mac's lead in that pane, or in every pane for one covering the whole session. Otherwise it stays over there, and one already open stays put when the lead changes.</li>
+<li>The answer or exit status still reaches the program over there. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this Mac opens for it.</li>
+<li>If this Mac refuses a question, it goes back to the other Mac. An overlay this Mac cannot show fails rather than opening over there. Closing such an overlay from a script asks it to end, and its result says how it did.</li>
+<li>A status sound follows the same condition, for the pane that set the status: it plays on the presenting Mac while another Mac leads that pane, with the presenting Mac's own blocked sound.</li>
+</ul>
+<p><strong>Pages</strong> follow the same condition and open on the presenting Mac:</p>
+<ul>
+<li>A file page reads its files from the other Mac as needed, and its buttons and scripts act on the other Mac's session, so a page that answers its caller answers the program over there. Finder and browser are refused for it, since the file is not on this Mac.</li>
+<li>A web page loads directly here; with <code>--persistent</code> it uses this Mac's saved browser storage. A <code>localhost</code> page names a server on the other Mac, so it loads through an ssh forward from this Mac; an agterm here too old to forward refuses it.</li>
+<li>A picture, markdown or text page (<code>--image</code>, <code>--markdown</code>, <code>--text</code>) is fetched and built here. A markdown page follows its links to the other Mac's files (an older agterm here keeps them as text), and a picture opened without a size is sized for this screen, so an agent there can show you its screenshot. An agterm here too old for these pages refuses the open.</li>
+<li>A log page follows the file over there. <code>session overlay follow</code>, <code>search</code>, <code>wrap</code> and <code>changes</code> from the other Mac act on the page here and answer as they would locally; what you do in the page's bar reads back there. An agterm here too old for live text pages refuses a log page, opens a clicked log as a plain page, and refuses those commands.</li>
+<li>Closing the page from a script over there takes it down here; reloading asks this Mac to do it.</li>
+</ul>
+<h3 id="remote-sessions-clipboard">Clipboard</h3>
+<p><code>pbcopy</code> on the other Mac fills that Mac's clipboard, not yours. <a href="/commands#clipboard"><code>agtermctl clipboard set</code></a> sends the text through the pane, asking every terminal attached to it to set its clipboard, this Mac's included; each applies its own <code>clipboard-write</code> setting. It needs no terminal, so an agent's shell tool can use it.</p>
+<h3 id="remote-sessions-disconnect">When the connection drops</h3>
+<p><strong>The presentation stream.</strong> Mirrored status, context and HUD clear here and return on reconnect. Retries run after 1, 2, 4, 8, 16, then 30 seconds, every 5 minutes after eight failures in a row, and never stop; waking the Mac or a network change retries at once. While it is down:</p>
+<ul>
+<li>the row says so and names the host;</li>
+<li>a notification raised over there is never shown here;</li>
+<li>a handed-over question goes back to the other Mac, a finished overlay held open with <code>--wait</code> closes, and a running overlay keeps running until its program ends.</li>
+</ul>
+<p>Close and reattach the session to retry by hand.</p>
+<p><strong>A pane's ssh connection.</strong> The pane keeps its last screen.</p>
+<ul>
+<li>If ssh itself failed (exit 255, which a refused login also gives), a bar under the pane names the host and says it is reconnecting. agterm attaches again once the host answers, on the stream's schedule; any key, waking the Mac or a network change retries at once and restarts the schedule. ⌘W still closes the session.</li>
+<li>While the host keeps refusing, a line along the pane's bottom edge shows what ssh said last, such as a changed host key or a rejected login.</li>
+<li>When the host answers, the last screen is replaced before the new connection is up, so a link that drops again right away leaves an empty pane with only the bar.</li>
+<li>The pane comes back without taking the lead: if the other Mac leads by then, it arrives covered. It also arrives covered while the other Mac still counts this Mac's dropped connection as leader, which clears once that connection times out.</li>
+<li>Any other exit prints one line naming the host, session, pane and exit status, and waits for a key.</li>
+<li>If the other Mac removes the session, its replica here closes without waiting for a key, even over a disconnect prompt. The last replica waits for its ssh to exit and may then close the row.</li>
+</ul>
+<p><strong>Keepalive.</strong> When your ssh config sets no <code>ServerAliveInterval</code> for the host, or sets 0, agterm adds <code>ServerAliveInterval 5</code> and <code>ServerAliveCountMax 2</code>, so a dead connection is noticed within about 15 seconds. Set a large value to opt out. A connection that joins an existing ControlMaster ignores these; the master's settings decide.</p>
+</section>
+
           <section id="remote-server" style="scroll-margin-top: 88px; padding-top: 56px">
             <h2
               style="
@@ -2418,1007 +2577,432 @@ for (const ws of tree.workspaces) for (const s of ws.sessions) {
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result --page</span>.
             </p>
           </section>
-          <section id="agtermctl" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              agtermctl reference
-            </h2>
-            <div
-              style="
-                background: #22272b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-left: 3px solid #6d82f3;
-                border-radius: 11px;
-                padding: 16px 20px;
-                margin: 0 0 20px;
-              "
-            >
-              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? Every command, with its arguments, return values, and errors, lives on the
-                <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
-              </p>
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              agterm can be driven from a script over a local unix-domain socket through the companion CLI,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span>. This is for
-              fire-and-forget scripting that manages workspaces and sessions, injects text, invokes control actions, and polls a
-              control-event feed for status and lifecycle changes. There is no terminal-output streaming.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              To open a terminal at a directory without the CLI,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">open -a agterm &lt;path&gt;</span> — or
-              right-click a folder in Finder and choose <strong style="color: #e6e1d7">Open With ▸ agterm</strong>. agterm adds a
-              session in that directory to the last-active window. This works when agterm is already running (its usual state); if it
-              isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session new --cwd &lt;path&gt;</span>.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> (the selected session /
-              current workspace). <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span>
-              defaults to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>, so the
-              current one rarely needs naming. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >--target</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--workspace</span> take an id, a
-              prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> — never a
-              name. For workspaces,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> is the one a new session
-              lands in: a workspace you just created in the foreground, otherwise the selected session's, otherwise the last one.
-              A newly created workspace stays the target until the selection changes — to a different session or to none —
-              or until you delete it or hide it behind the workspace filter.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace select</span> moves the
-              target to the workspace you name, an empty one included. So New Session (and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new</span>) right after
-              creating one lands in the new workspace rather than the one you came from. Mutating commands normally print the
-              affected id; batch
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session move</span> accept repeated
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> options and print the
-              number of sessions actually changed. With
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--undoable</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close</span> appends
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(undoable)</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(not undoable)</span> to its output, after
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ok</span> or the count. Add
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--json</span> for the raw response,
-              or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket PATH</span> to override
-              the socket. The exit code is zero on success, non-zero on error.
-            </p>
+          <section id="agtermctl" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>agtermctl</h2>
+<p><code>agtermctl</code> drives agterm from scripts over a local socket: create and arrange workspaces and sessions, type into them, run actions, open overlays and dialogs, and poll an event feed for status and lifecycle changes. It does not stream terminal output. Every command, with arguments, results and errors, is in the <a href="/commands">Command reference</a>.</p>
+<h3 id="agtermctl-addressing">Addressing</h3>
+<ul>
+<li><code>--target</code> and <code>--workspace</code> take a session or workspace UUID, a unique prefix of it (git-style), or <code>active</code>. Never a name.</li>
+<li><code>--target</code> defaults to <code>active</code>, so the current session rarely needs naming.</li>
+<li>For a session, <code>active</code> is the selected one. For a workspace, it is the one a new session lands in: a workspace you just created in the foreground, else the selected session's, else the last one.</li>
+<li>A new workspace stays the target until the selection changes (to another session or to none), or until you delete it or hide it with the workspace filter. <code>workspace select</code> moves the target to the one you name, an empty one included. So <code>session new</code> right after <code>workspace new</code> lands in the new workspace.</li>
+<li><code>--window</code> addresses another window's tree; see <a href="#agtermctl-windows">Windows</a>.</li>
+</ul>
+<h3 id="agtermctl-output">Output and exit codes</h3>
+<ul>
+<li>A mutating command normally prints the id it changed; a few print a count or a diagnostic instead.</li>
+<li>Batch <code>session close</code> and <code>session move</code> take repeated <code>--target</code> and print how many sessions actually changed.</li>
+<li><code>session close --undoable</code> appends <code>(undoable)</code> or <code>(not undoable)</code> after <code>ok</code> or the count.</li>
+<li><code>--json</code> prints the raw response; <code>--socket PATH</code> overrides the socket.</li>
+<li>Exit code 0 on success, non-zero on error.</li>
+</ul>
+<h3 id="agtermctl-env">Inside a session</h3>
+<p>A shell inside agterm gets these variables, so a script can drive its own window without hard-coded ids:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AGTERM_ENABLED</code></td>
+<td>set in every agterm shell</td>
+</tr>
+<tr>
+<td><code>AGTERM_WINDOW_ID</code></td>
+<td>the window</td>
+</tr>
+<tr>
+<td><code>AGTERM_WORKSPACE_ID</code></td>
+<td>the workspace the shell started in; not updated when the session moves (<code>tree</code> shows the current one)</td>
+</tr>
+<tr>
+<td><code>AGTERM_SESSION_ID</code></td>
+<td>the session</td>
+</tr>
+<tr>
+<td><code>AGTERM_SOCKET</code></td>
+<td>the live socket path</td>
+</tr>
+<tr>
+<td><code>AGTERM_PANE</code></td>
+<td>the pane's role at spawn: <code>left</code>, <code>right</code> or <code>scratch</code>; not updated after a promotion or swap, unset in an overlay</td>
+</tr>
+<tr>
+<td><code>AGTERM_PANE_ID</code></td>
+<td>a stable per-pane token; <code>--pane-id</code> on <code>session status</code>, <code>restore</code>, <code>text</code>, <code>type</code>, <code>restart</code> and <code>surface cursor</code> resolves the pane's current slot from it</td>
+</tr>
+<tr>
+<td><code>TERM_PROGRAM</code>, <code>TERM_PROGRAM_VERSION</code></td>
+<td><code>agterm</code> and its version</td>
+</tr>
+</tbody>
+</table>
+<p>A tool that picks capabilities from a list of terminal names may need its own override. Claude Code prints links as plain text until <code>FORCE_HYPERLINK=1</code> is set; see <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#claude-code-prints-links-as-plain-text-instead-of-clickable-labels">troubleshooting</a>.</p>
+<h3 id="agtermctl-sessions">Sessions and workspaces</h3>
+<p><strong>See and create</strong></p>
+<pre class="bash"><code>agtermctl tree                                   # the workspace/session tree with ids
+ws=$(agtermctl workspace new work)               # create a workspace, keep its id
+agtermctl session new --workspace &quot;$ws&quot; --cwd ~/src/agterm
+agtermctl session new --name myhost --workspace-name servers --create-workspace
+agtermctl session new --after active             # right after the current session (--before to precede)
+agtermctl session new --cwd ~/src/agterm --no-select   # in the background, without switching to it
+agtermctl session duplicate --target 9f3c        # a fresh shell in that session&#39;s workspace and cwd, after it</code></pre>
+<p><strong>Run a command as the session's process</strong></p>
+<pre class="bash"><code>agtermctl session new --command &quot;ssh user@host&quot;
+agtermctl session new --command &quot;zsh -lc &#39;make test&#39;&quot; --wait   # after exit, a key press closes it; needs --command</code></pre>
+<p>Wrap a <code>;</code> or <code>&amp;&amp;</code> list in <code>sh -c</code>.</p>
+<p><strong>Companions</strong></p>
+<pre class="bash"><code>agtermctl session new --parent active --command &#39;tail -f build.log&#39; --name logs   # under the current session</code></pre>
+<p><code>session collapse</code> folds it under its parent.</p>
+<p><strong>Step, reorder, relocate</strong></p>
+<pre class="bash"><code>agtermctl session go --to next             # next | prev | first | last
+agtermctl session move --to up             # up | down | top | bottom
+agtermctl session move &quot;$ws&quot;               # into another workspace
+agtermctl session move --after 9f3c        # after an anchor, in the anchor&#39;s workspace
+agtermctl session move &quot;$ws&quot; --target 9f3c --target abcd   # a batch, as one ordered block</code></pre>
+<p><strong>Close</strong></p>
+<pre class="bash"><code>agtermctl session close --target 9f3c --target abcd   # one undo for the whole batch
+agtermctl session close --target 9f3c --undoable      # with ⌘W&#39;s undo time</code></pre>
+<p><strong>Workspaces</strong></p>
+<pre class="bash"><code>agtermctl workspace go --to next          # select the next workspace&#39;s first session
+agtermctl workspace move --to top
+agtermctl workspace new work --collapsed  # created closed; fill it with session new --no-select
+agtermctl workspace collapse --target 9f3c   # workspace expand reopens it</code></pre>
+<p><strong>Focus a set of workspaces</strong></p>
+<pre class="bash"><code>agtermctl workspace focus on              # mark this one alone and filter to it (on | off | toggle | add)
+agtermctl workspace focus add --target a1b2   # mark another without narrowing yet
+agtermctl workspace filter on             # apply the marked set; filter off keeps the set</code></pre>
+<p><strong>Reveal in Finder</strong></p>
+<pre class="bash"><code>agtermctl session reveal --target 9f3c    # the focused pane&#39;s directory</code></pre>
+<h3 id="agtermctl-text">Typing and reading text</h3>
+<pre class="bash"><code>agtermctl session type --target 9f3c $&#39;make test\n&#39;   # every newline is a real Return
+echo &#39;make test&#39; | agtermctl session type --stdin
+agtermctl session type --pane right $&#39;ls\n&#39;          # left (default) | right | scratch, even hidden
+agtermctl session type --target &quot;$id&quot; $&#39;echo hi\n&#39;   # a background session, focus unchanged
 
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 24px 0 12px;
-              "
-            >
-              Native picker
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl pick</span> reads nonblank
-              lines or a JSON array of
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{id,label,subtitle?}</span> objects,
-              optionally with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusColor</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusShape</span> for a trailing status glyph,
-              from stdin and opens agterm's fuzzy picker. It blocks by default and prints the picked, custom, or cancelled result as
-              bare JSON. Add <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-block</span> to
-              get the picker id immediately, then use
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pick result</span> or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pick cancel</span>. The target tree's
-              top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pickPending</span> field
-              carries that id while the picker waits.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Typing matches item labels only; a subtitle is shown but never searched, so consequence text on one row cannot filter
-              out its safer neighbour. An empty query lists the items in the order they were supplied, so without
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--select</span> the caller's first item
-              is the one Return runs on open.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query TEXT</span> prefills the field
-              and filters immediately, which ranks by match score and therefore does not preserve that order.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--select ID</span> opens with that item
-              highlighted and scrolled into view, so a picker listing windows or sessions can start on the current one and
-              Return on an untouched list stays put; a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query</span> that filters the item
-              out leaves the first visible row highlighted. With
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--allow-custom</span> the item list may
-              be empty, which turns the picker into a plain text prompt: the custom row appears as soon as the query is nonblank,
-              whether prefilled by <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--query</span> or
-              typed. An itemless call still reads stdin, so redirect it
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&lt; /dev/null</span>) or it blocks.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              printf <span style="color: #f2b45c">'%s\n'</span> staging production | agtermctl pick --prompt
-              <span style="color: #f2b45c">"Deploy where?"</span><br /><br />
-              agtermctl pick --allow-custom --query <span style="color: #f2b45c">"$name"</span> --prompt
-              <span style="color: #f2b45c">"Rename to"</span> &lt; /dev/null<br /><br />
-              <span style="color: #6d82f3">id</span>=$(printf <span style="color: #f2b45c">'%s\n'</span> alpha beta |
-              agtermctl pick --no-block | jq -r <span style="color: #f2b45c">'.id'</span>)<br />
-              agtermctl pick result <span style="color: #f2b45c">"$id"</span><br />
-              agtermctl pick cancel <span style="color: #f2b45c">"$id"</span><br />
-              agtermctl tree --json | jq -r
-              <span style="color: #f2b45c">'.result.tree.pickPending // empty'</span>
-            </div>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 24px 0 12px;
-              "
-            >
-              Question dialogs
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl ask "Continue?" --button yes=Yes --button no=No --default no</span>
-              opens a question in the selected session and waits for a bare JSON answer. Inspect its id before acting: Yes and No both exit 0.
-              The default terminal style uses the session's theme and allows one pending question per session.
-              Add <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane right</span> to cover only that pane;
-              the left pane and the rest of the window stay usable. An explicit
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> can name an unselected session,
-              where the question waits hidden until the session is selected.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--style gui</span> uses native buttons and a window modal
-              shared with pick. Terminal questions can coexist with it. On a question with buttons only, Tab and arrows
-              move the highlight; Return answers the interactive question. Esc and Command-W dismiss it with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">escaped</span> and exit 3; cancellation exits 2.
-              See the <a href="/commands#ask" style="color: #6d82f3">ask reference</a> for placement, sizing,
-              input priority, result polling, and cancellation rules.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A question can also collect text or a choice. The field has the keyboard as soon as it opens, buttons default to
-              OK and Cancel, and Cancel ends it like Esc with nothing returned:
-            </p>
-            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 16px 18px; font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px; overflow-x: auto">
-              agtermctl ask <span style="color: #f2b45c">"Commit message"</span> --input multiline
-              --placeholder <span style="color: #f2b45c">"subject, blank line, body"</span><br />
-              <span style="color: #6b727a"># {"result":"answered","id":"ok","label":"OK","index":0,"text":"fix: ..."}</span><br />
-              agtermctl ask <span style="color: #f2b45c">"Open which?"</span> --multiple
-              --choice 398=<span style="color: #f2b45c">"issue #398"</span>
-              --choice-subtitle 398=<span style="color: #f2b45c">"waits on you: review"</span>
-              --choice 395=<span style="color: #f2b45c">"PR #395"</span><br />
-              <span style="color: #6b727a"># {"result":"answered","id":"ok","label":"OK","index":0,"selected":["398"]}</span>
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              Return answers a one-line field and Command-Return a multiline one; in a list Up/Down move and Space toggles.
-              Without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--multiple</span> the list is radio buttons
-              and returns exactly one id.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--other "Something else"</span> adds a free-form line
-              after the items: typing into it selects it, clearing it deselects it, and while selected its text comes back as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">"text"</span> beside the selected ids. A radio list then
-              returns one id or that text, never both.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 24px 0 12px;
-              "
-            >
-              Sessions &amp; workspaces
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># print the workspace/session tree with ids</span><br />agtermctl tree<br /><br /><span
-                style="color: #6b727a"
-                ># create a workspace, capture its id, open a session in it</span
-              ><br /><span style="color: #6d82f3">ws</span>=$(agtermctl workspace new work)<br />agtermctl session new --workspace
-              <span style="color: #f2b45c">"$ws"</span> --cwd ~/src/agterm<br /><br /><span style="color: #6b727a"
-                ># run a command as the session's process (wrap a ; or &amp;&amp; list in sh -c)</span
-              ><br />agtermctl session new --command <span style="color: #f2b45c">"ssh user@host"</span><br />agtermctl session new --command
-              <span style="color: #f2b45c">"zsh -lc 'make test'"</span> --wait
-              <span style="color: #6b727a">&nbsp;&nbsp;# hold open after the command exits (press any key to close); needs --command</span><br />agtermctl session new
-              --name <span style="color: #f2b45c">myhost</span> --workspace-name
-              <span style="color: #f2b45c">servers</span> --create-workspace<br /><br /><span style="color: #6b727a"
-                ># step / reorder / relocate</span
-              ><br />agtermctl session go --to next
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# next|prev|first|last</span><br />agtermctl session move --to up
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder: up|down|top|bottom</span><br />agtermctl session move
-              <span style="color: #f2b45c">"$ws"</span> <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# relocate to a workspace</span
-              ><br />agtermctl session new --after active
-              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span
-              ><br />agtermctl session new --cwd ~/src/agterm --no-select
-              <span style="color: #6b727a">&nbsp;&nbsp;# create in the background without switching to it</span
-              ><br />agtermctl session duplicate --target <span style="color: #f2b45c">9f3c</span>
-              <span style="color: #6b727a">&nbsp;&nbsp;# a fresh shell in that session's workspace and cwd, right after it</span><br />agtermctl session new --parent active
-              --command <span style="color: #f2b45c">'tail -f build.log'</span> --name logs
-              <span style="color: #6b727a">&nbsp;&nbsp;# a companion session under the current one; session collapse folds it</span><br />agtermctl session move --after
-              <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
-              ><br />agtermctl session move <span style="color: #f2b45c">"$ws"</span> --target 9f3c --target abcd
-              <span style="color: #6b727a">&nbsp;&nbsp;# move a batch as one ordered block</span
-              ><br />agtermctl session close --target 9f3c --target abcd
-              <span style="color: #6b727a">&nbsp;&nbsp;# one grace-period undo for the batch</span
-              ><br />agtermctl session close --target <span style="color: #f2b45c">9f3c</span> --undoable
-              <span style="color: #6b727a">&nbsp;&nbsp;# close one with ⌘W's undo grace</span
-              ><br />agtermctl workspace go --to next
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# step to the next workspace and select its first session</span
-              ><br />agtermctl workspace move --to top
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder a workspace</span><br />agtermctl workspace new work --collapsed
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# create a workspace closed in the sidebar (fill with session new --no-select)</span
-              ><br />agtermctl workspace collapse --target <span style="color: #f2b45c">9f3c</span>
-              <span style="color: #6b727a">&nbsp;# collapse one workspace; workspace expand re-opens it</span><br />agtermctl workspace focus on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# mark this workspace alone and apply the filter (on|off|toggle|add)</span>
-              <br />agtermctl workspace focus add --target <span style="color: #f2b45c">a1b2</span>
-              <span style="color: #6b727a">&nbsp;&nbsp;# mark another one without narrowing the tree yet</span
-              ><br />agtermctl workspace filter on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# apply the marked set; filter off suspends it without losing the set</span>
-              <br />agtermctl session reveal --target <span style="color: #f2b45c">9f3c</span>
-              <span style="color: #6b727a">&nbsp;# reveal the focused pane's cwd in Finder</span>
-            </div>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Typing, selection &amp; text
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># inject text (every newline is a real Return; use $'…\n' or --stdin)</span
-              ><br />agtermctl session type --target 9f3c <span style="color: #f2b45c">$'make test\n'</span><br />echo
-              <span style="color: #f2b45c">'make test'</span> | agtermctl session type --stdin<br /><br /><span
-                style="color: #6b727a"
-                ># route to a pane: left (default) | right (split) | scratch (even when hidden)</span
-              ><br />agtermctl session type --pane right <span style="color: #f2b45c">$'ls\n'</span><br /><br /><span
-                style="color: #6b727a"
-                ># type into a background session without changing focus</span
-              ><br />agtermctl session type --target <span style="color: #f2b45c">"$id"</span>
-              <span style="color: #f2b45c">$'echo hi\n'</span><br /><br /><span style="color: #6b727a"
-                ># read a pane's selection (does not touch the clipboard) or its output</span
-              ><br /><span style="color: #6d82f3">sel</span>=$(agtermctl session copy --target 9f3c)<br />agtermctl session text
-              --pane scratch --target 9f3c<br /><br /><span style="color: #6b727a"
-                ># paste the system clipboard (⌘V), or select the whole buffer (⌘A) then copy it</span
-              ><br />agtermctl session paste --target 9f3c<br />agtermctl session select-all --target 9f3c
-            </div>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Splits, scratch, quick &amp; search
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl session split toggle --axis horizontal<br />agtermctl session split close
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# vertical=left/right; horizontal=top/bottom</span><br />agtermctl session resize --split-ratio 0.7
-              <span style="color: #6b727a">&nbsp;# primary fraction; grow role/position aliases also work</span><br />agtermctl session scratch toggle
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle</span><br />agtermctl session flag on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl session seen --target 9f3c
-              <span style="color: #6b727a">&nbsp;# clear the unseen badge, focus-free</span><br />agtermctl
-              sidebar mode flagged <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# tree|flagged|toggle</span><br />agtermctl quick
-              toggle <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# show|hide|toggle</span><br />agtermctl quick type <span style="color: #f2b45c">'ls -la'</span>
-              <span style="color: #6b727a">&nbsp;# or --stdin; quick text reads it back</span><br />agtermctl surface zoom <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# fill the window with the active surface (show|hide|toggle; --target surface:&lt;id&gt;:right)</span><br />agtermctl dashboard <span style="color: #f2b45c">"$a" "$b" "$c"</span> --auto-size <span style="color: #6b727a">&nbsp;# view-only grid; a split session is two cells, capped at 9 panes (--mru; --font-size N | --auto-size; --close)</span><br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# main pane font size</span><br />agtermctl font dec --pane right <span style="color: #6b727a">&nbsp;# just the split pane (left|right|scratch)</span
-              ><br /><br /><span style="color: #6b727a"># open the search bar, print the "N of M" counter</span><br />agtermctl
-              session search <span style="color: #f2b45c">"error"</span><br />agtermctl session search --next
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# --prev | --close</span>
-            </div>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Overlays
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># full overlay on a session (hides the shell beneath)</span><br />agtermctl session
-              overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --target 9f3c<br /><br /><span
-                style="color: #6b727a"
-                ># floating framed panel at 70% of the pane, optionally tinted</span
-              ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --size-percent 70<br />agtermctl
-              session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80 --background-color
-              <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
-                ># switch the user to the target as the overlay opens</span
-              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80
-              --target 9f3c --follow<br /><br /><span style="color: #6b727a"
-                ># keep it open after exit, or block until it exits and inherit its status</span
-              ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
-              overlay open <span style="color: #f2b45c">"make test"</span> --block<br /><br /><span style="color: #6b727a"
-                ># resize an open overlay in place — floating percent, or back to full (the program keeps running)</span
-              ><br />agtermctl session overlay resize --size-percent 60 --target 9f3c<br />agtermctl session overlay resize --full
-              --target 9f3c<br /><br />agtermctl session overlay close --target
-              9f3c<br />agtermctl session overlay result
-              <span style="color: #6b727a">&nbsp;&nbsp;# last overlay's exit status</span><br /><br /><span style="color: #6b727a"
-                ># cover only one split pane, leaving the sibling pane live</span
-              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --target 9f3c --pane right<br /><br /><span
-                style="color: #6b727a"
-                ># read what is INSIDE the overlay — the selection the user made, or its drawn screen</span
-              ><br />agtermctl session overlay copy --target 9f3c --pane right<br />agtermctl session overlay text --target 9f3c
-              --pane right
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> keeps a "press any key
-              to close" prompt so you can read the final output;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span> reports only the exit
-              status (the overlay never captures stdout — a TUI writes its own result file). By default an overlay opens on its
-              target without switching the active session (full and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >--size-percent</span
-              >
-              floating alike);
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--follow</span> switches the user to
-              the target.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an
-              open overlay in place —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> makes it floating,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> switches it back, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--width</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--height</span> set a floating panel's size in points on one axis — without
-              restarting the program. A
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
-              whose overlay is open.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay copy</span> returns the
-              selection made inside the overlay and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay text</span> its terminal
-              buffer. These exist because
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session copy</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session text</span> address the pane the
-              overlay covers: text you highlight in an overlay reads there as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">no selection</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session text --pane right</span> hands
-              back the shell underneath. Reach for them when the read is not chord-driven: an agent polling from outside, or a
-              script wanting the selection some time after the fact. A chord already receives the selection of the surface it
-              fired in, the overlay included, as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SELECTION</span>, so a custom
-              command should use that rather than a later socket read. The buffer one returns a TUI's screen as drawn, wrapped
-              where it wrapped — for a program's real output, still read the file it writes.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left|right</span> scopes the
-              overlay to one split pane instead of the whole session: it covers exactly that pane and leaves the sibling pane
-              visible and interactive, so an agent working in the split can show a diff or a TUI over its own pane without
-              blanking the one you are reading. The two panes are independent and may both hold an overlay at once, each with its
-              own background color. A pane overlay is always full-pane — there is no floating variant, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> cannot combine with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> takes no
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> — and everything else
-              matches the session-wide overlay. A non-split session accepts
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane left</span>. A newly spawned
-              shell reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE=left</span>, but
-              that value is its spawn role and is not rewritten after a pane promotion or swap. A long-running shell must not
-              assume <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> still
-              names its current slot. A pane that is not on screen is refused with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pane not visible</span>; hiding the
-              split after opening is fine, the program keeps running and reappears when the split comes back. A pane overlay
-              opened while a session-wide program or page is open draws above it: the session overlay keeps running but steps
-              out of sight while the pane overlay is shown, and comes back when that pane overlay closes or is hidden, unless
-              you hid it yourself.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">copy</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">text</span> take the same
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, ⌘W dismisses the
-              focused pane's overlay before it would close the session (one on the other pane is not in front of you, so ⌘W keeps
-              its ordinary meaning), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports the
-              covered panes as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">paneOverlays</span>.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Message panel (HUD)
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># post a message over a session; the session keeps focus and stays typable</span><br />agtermctl
-              session hud <span style="color: #f2b45c">"gathering options…"</span> --spinner --detail
-              <span style="color: #f2b45c">"scanning branches"</span> --target
-              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
-                ># repaint in place, no re-spawn and no blink</span
-              ><br />agtermctl session hud update <span style="color: #f2b45c">"ready"</span> --detail
-              <span style="color: #f2b45c">"pick a branch"</span> --target
-              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
-                ># let it take itself down after ten seconds; omit the flag and it stays until you close it</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"deploy finished"</span> --hide-after 10 --target
-              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"
-                ># anchor it and set its width by hand instead of measuring the message</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --position top-right --size-percent
-              30<br /><br /><span style="color: #6b727a"># keep the HUD inside the calling pane, even after its role changes</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"working"</span> --pane
-              <span style="color: #f2b45c">"$AGTERM_PANE"</span> --pane-id
-              <span style="color: #f2b45c">"$AGTERM_PANE_ID"</span> --target
-              <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span><br /><br /><span style="color: #6b727a"># color both halves of the panel</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"deploying"</span> --text-color
-              <span style="color: #f2b45c">"#7ec07e"</span> --background-color
-              <span style="color: #f2b45c">"#202020"</span><br /><br /><span style="color: #6b727a"
-                ># a caption: a strip flush across the top, as tall as its text, with links that open on ⌘-click</span
-              ><br />agtermctl session hud <span style="color: #f2b45c">"**deploy api** [PR](https://example.com/pr)"</span> --markdown --sticky
-              --no-frame --position top --size-percent 100<br /><br />agtermctl session hud close --target <span style="color: #f2b45c">"$AGTERM_SESSION_ID"</span>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A HUD carries a message rather than a program, and it is passive: the session keeps first responder and stays
-              typable under the panel, the terminal behind it is neither dimmed nor click-blocked, and nothing waits for an
-              answer. It is for the seconds a script or an agent needs before it can show anything, so the session says what is
-              happening rather than sitting silent.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">open</span> is the default
-              subcommand, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud "…"</span>
-              posts one.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--position</span>
-              anchors it to any of the nine positions
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session background</span> takes —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-center</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top-right</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center-left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center-right</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-center</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom-right</span> — defaulting to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span>, with every anchor off
-              center holding a margin off that pane edge on its own; a corner is what keeps a panel out of the text you are
-              reading.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span> drops that margin
-              and lets the width reach 100%, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-frame</span> drops the
-              border and the blank row above and below the text; together they make the caption above. It is still the one
-              transient panel, so a script posts it again after a restart. A frameless panel is its rendered rows plus 12
-              points of padding tall, one row more than its text with the default font and padding, so a program meant to
-              sit under a caption leaves that room. The bare
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">top</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bottom</span> this took before are
-              still accepted for the middle column. The panel comes from the message on both axes — width from the longest line, height
-              from the number of them, so a title and a subtitle give a wide, short panel rather than a square one.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span> uses one pane as the
-              bounds for sizing, anchors, and margins.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id "$AGTERM_PANE_ID"</span>
-              follows the same shell through pane swaps and promotion, with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane "$AGTERM_PANE"</span> as
-              the fallback. Open refuses a pane that is not rendered. Hiding that pane hides the panel without stopping it;
-              showing the pane restores it, and closing the pane closes its HUD.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> overrides the
-              width only, bounded to at most 80% of the pane, or 100% with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span> off center, so a message never covers the session it is about.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span> sets the text's
-              own color and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> the panel's
-              backing, so the two halves are independent.
-              An update replaces the whole message, so
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--detail</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text-color</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sticky</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-frame</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane-id</span> have to be repeated
-              to survive it. The spinner takes a style —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--spinner-style bar|braille|circle|blocks|dot|none</span>,
-              which turns it on by itself, with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">dot</span> blinking rather than
-              animating — and an update may switch style in place;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--background-color</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--font-size</span> are the exceptions, read once when the panel is created and kept — in the panel and in
-              the read-back — across every update, which is why an update does not take them at all.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> turns the panel into a small board: headings, bold, lists, code blocks, quotes and
-              tables render, and the message may run to 4096 characters. Standard markdown rules apply, so a single newline
-              inside a paragraph is a space; use list items, or end a line with two spaces, to keep rows apart. A board taller
-              than the panel is clipped, its excess rows giving way to a dim <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">… N more</span>. The file is read once per
-              command, so push each change with an update. A link shows its label underlined, and a ⌘-click opens it as it
-              would in the terminal, so a board can carry the pull request or the ticket it is about. That is the one click
-              the panel takes; any other still reaches the terminal behind it.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--file status.md</span> reads the message from a file, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--font-size PT</span> gives the panel its own
-              font size, set when it opens. A controller agent can keep one in a corner of its session with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud --file status.md --markdown --font-size 11 --position top-right</span> and refresh it with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session hud update --file status.md --markdown --position top-right</span>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              It shares the overlay slot, so a second
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud</span> replaces the first,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay open</span> replaces a
-              HUD, and ⌘W or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay close</span> takes one
-              down; a HUD over a <em>running</em> program is refused instead, because a message is replaceable and a program is
-              not.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay result</span> over a
-              HUD errors, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> accepts a
-              percent but refuses <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span>,
-              which would cover the session the message is about.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
-              the panel as the session node's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud</span> object, with
-              a pane-scoped HUD's current role in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hud.pane</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlay</span> reading false beside it;
-              there is no event, so a script that needs the state polls the tree.
-            </p>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Windows
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl window list <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# id  name  [open]  [active]</span
-              ><br /><span style="color: #6d82f3">w</span>=$(agtermctl window new work)<br />agtermctl window new proj-b
-              --minimized <span style="color: #6b727a">&nbsp;# create one, parked in the Dock</span
-              ><br />agtermctl window select
-              <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;# raise it (opening if closed)</span
-              ><br />agtermctl window go --to next
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# raise the next open window, wrapping (next|prev)</span
-              ><br />agtermctl window rename <span style="color: #f2b45c">"$w"</span> personal
-              <br />agtermctl window minimize <span style="color: #f2b45c">"$w"</span> on
-              <span style="color: #6b727a">&nbsp;# park it in the Dock (off restores)</span
-              ><br />agtermctl window close
-              <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;&nbsp;# close its window (bundle kept)</span
-              ><br />agtermctl window delete <span style="color: #f2b45c">"$w"</span>
-              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span><br /><br /><span
-                style="color: #6b727a"
-                ># --window targets a specific window's tree on session/workspace/tree/font</span
-              ><br />agtermctl tree --window <span style="color: #f2b45c">"$w"</span><br />agtermctl session new --window
-              <span style="color: #f2b45c">"$w"</span> --cwd ~/src/agterm
-            </div>
-
-            <h3
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-              "
-            >
-              Keymap, config &amp; notify
-            </h3>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl keymap reload
-              <span style="color: #6b727a">&nbsp;# re-read keymap.conf, returns the diagnostic count</span><br />agtermctl config
-              reload <span style="color: #6b727a">&nbsp;# re-read the ghostty config, returns the diagnostic count</span
-              ><br />agtermctl notify --title <span style="color: #f2b45c">Build</span> --body
-              <span style="color: #f2b45c">"tests passed"</span>
-            </div>
-
-            <h3
-              id="messages"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Messages between panes
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A program in one pane can leave a message for another pane without typing into its terminal, so nothing has to guess
-              when the receiver is ready for input. Every live pane has a mailbox; the receiver reads it when it chooses and
-              acknowledges what it handled. Run inside a pane, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl msg</span> acts as that pane through
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_SESSION_ID</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_PANE_ID</span>. Mail lives in the running app only: closing or
-              restarting the pane, or closing its session, workspace or window, drops it, and so does quitting agterm.
-              A full mailbox refuses that recipient alone. On agterm-server the panes of that server message each other the same way,
-              and a Mac showing the server window sees their pending counts and gets their <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">message</span>
-              events; a local pane and a server pane cannot message each other yet. Details in the
-              <a href="/commands#msg" style="color: #6d82f3">command reference</a>.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl msg send <span style="color: #f2b45c">"build done"</span> --to <span style="color: #f2b45c">"$AGTERM_SESSION_ID:right"</span>
-              <span style="color: #6b727a">&nbsp;# the split pane</span><br />agtermctl msg send --all <span style="color: #f2b45c">"deploy starting"</span>
-              <span style="color: #6b727a">&nbsp;# every live pane but this one</span><br />agtermctl msg read
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# oldest first; removes nothing</span><br />agtermctl msg ack <span style="color: #f2b45c">ID</span>
-              <span style="color: #6b727a">&nbsp;&nbsp;# remove what was handled</span><br />agtermctl msg read --ack --wait --timeout 60
-              <span style="color: #6b727a">&nbsp;# block until mail arrives and take it</span>
-            </div>
-
-            <h3
-              id="remote-sessions"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 16px;
-                color: #5ea1f2;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Remote sessions
-            </h3>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
-              A session running on another Mac that is also running agterm can be opened here, in the sidebar, marked remote.
-              Sessions on a Linux host can also run under agterm-server, shown in a
-              <a href="#remote-server" style="color: #6d82f3">remote window</a>.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx tree [HOST]</span> lists what
-              that machine has to offer across <em>every</em> open window, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl zmx attach HOST ID [--window W]</span> opens
-              one of them, split included. A terminal session needs the far side in
-              <strong style="color: #e6e1d7">Live sessions</strong> mode, since that is what puts a daemon behind each pane; a page
-              session needs no daemon. Both commands run ssh non-interactively — key-based auth has to work for the host already, because a password or host-key prompt is a
-              failure rather than a question. The far side also needs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>
-              installed by the cask or the Help action: a machine merely running agterm has no CLI an ssh command can find.
-              To check the connection before you need it, run
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ssh -o BatchMode=yes studio.local true</span> —
-              that is the same non-interactive form agterm uses, so if it exits without printing anything, agterm can reach the host;
-              if it asks for a password or a host key, agterm fails the same way. One difference to know about: agterm runs ssh from the
-              app, which inherits the launch environment rather than your shell's, so an agent exported in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.zshrc</span> passes this check and still fails here.
-              Put <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">IdentityAgent</span> and key settings in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.ssh/config</span>, which both paths read.
-              Use <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--window</span> to choose an open local window without bringing it forward; otherwise the
-              session opens in the frontmost window after discovery.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              The pane reports the far side's working directory, and the local launches that would inherit it — a custom
-              command, the scratch terminal, an overlay opened without
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cwd</span>, the quick terminal, a local
-              split (the first on a session that arrived without one, or one opened after the attach-time split is closed),
-              Duplicate Session, and New Session when set to open in the current session's directory — start in that path when it
-              exists here as a directory, else in your home. A custom command still sees the reported path in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_PWD</span> and the
-              destination in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_SESSION_HOST</span>,
-              empty for a local session, so it can reach the remote directory itself; one fired from the scratch, a local shell,
-              sees that shell's directory and no destination. When another client leads at a different
-              terminal size, local cursor and screen-text reads can disagree with the application's layout; automation relying on
-              those reads is unsupported in that state.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl zmx tree <span style="color: #f2b45c">studio.local</span>
-              <span style="color: #6b727a">&nbsp;# window/workspace/name  (split)  [id]  cwd</span><br />agtermctl zmx attach
-              <span style="color: #f2b45c">studio.local</span> <span style="color: #f2b45c">7c1e…</span>
-              <span style="color: #6b727a">&nbsp;# the id from that listing, not the name</span><br /><br /><span
-                style="color: #6b727a"
-                ># pipe the listing into the picker and attach what was chosen</span
-              ><br /><span style="color: #6d82f3">s</span>=$(agtermctl zmx tree
-              <span style="color: #f2b45c">studio.local</span> --json | jq
-              <span style="color: #f2b45c">'[.result.remote.sessions[] | {id, label: .name, subtitle: (.windowName + "/" + .workspaceName + "  " + .cwd)}]'</span> |<br />agtermctl
-              pick --prompt <span style="color: #f2b45c">"Attach which session?"</span> | jq -r
-              <span style="color: #f2b45c">'.id // empty'</span>)<br />[ -n
-              <span style="color: #f2b45c">"$s"</span> ] &amp;&amp; agtermctl zmx attach
-              <span style="color: #f2b45c">studio.local</span> <span style="color: #f2b45c">"$s"</span>
-            </div>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              Only a session whose every pane still has a live daemon is listed, and the remote is resolved again at attach time, so a
-              session that has gone in between fails instead of handing back a fresh shell wearing its name. Closing the row here ends
-              only this side's connection — the far-side processes keep running, and nothing agterm does from this end can kill them.
-              An open attached row is saved and attached again at the next launch; one whose session the origin no longer has
-              shows that it ended there. Its tree node carries
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteHost</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remoteSessionID</span>.
-              The title bar shows a cloud and the remote host, which you can hide with the Remote host toggle in Settings ▸ Interface.
-              The Ctrl-Tab switcher and the title-bar recent and attention lists mark the row with the same cloud and name the host.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx attach --companions</span> brings the session together with its companions, each under it.
-              If one cannot be attached, the rest stay and the command fails naming what is missing. A terminal companion attached on its own
-              joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.
-              A page session on that Mac is listed too, though it has no daemon: attaching it opens that Mac's page as a top-level row here.
-              A page companion attaches only under the row attached from its parent, so the picker below leaves it out.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              File ▸ Attach Remote… does the same from the menu. It offers the Macs named in
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">remotes.conf</span> in the config directory, one per line as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">destination [label]</span>: the destination is what ssh takes, and the rest of
-              the line is an optional name for the picker. Lines starting with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> are comments.
-              It is the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">attach_remote</span>
-              action, on ⌘⇧R unless you map another chord.
-              With more than one Mac listed it asks which in the picker, then shows that Mac's sessions and attaches the one
-              you choose in the current window, with its companions when you pick a top-level session. A panel over the session reports the connection while it is being made, and a
-              failure stays up for five seconds, over the new session when part of a group could not be attached. The item is greyed out while the file is missing or lists nothing. A line that cannot be used, or a file that
-              cannot be read, is reported by a notification.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
-              A program in an attached session runs on the other Mac and talks to that Mac's agterm, so every terminal attach also opens a
-              presentation stream back to it (a page session uses its page channel instead and mirrors none of this): this Mac mirrors the layout of panes already attached, the session's status, its session context, its sidebar info line, its
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> notifications and its HUD. A context set on this Mac's
-              row wins over the mirrored one, and clearing it here shows the other Mac's again. Clearing the row's status or
-              badge here (typing, selecting it, Clear Status) clears it on the other Mac too, under that Mac's own reset settings,
-              when the status is the one mirrored from there; a status set on this Mac's row is cleared here only. A far side running an agterm
-              from before context mirroring still connects and mirrors the rest, with no context. It needs nothing beyond
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> on the far side's ssh PATH. The session's tree node reports it as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">presentation</span>, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">connected</span> means
-              mirroring works and says nothing about the panes' own ssh connections; a far side too old for the stream reads
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unsupported</span> and the attach still works.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              Two existing remote panes follow the origin's split direction, hide/show and swaps. Local panes, divider ratio and
-              keyboard focus stay local. A split opened on the origin after attach attaches here into an empty split slot, and a
-              replica closed here stays closed. Older origins leave the layout alone.
-              Confirmed origin removal closes its replica without requiring a keypress, even if it already shows a disconnect
-              prompt. The last replica waits for its ssh exit and may then close the row; automatic primary removal is skipped
-              while a local split is pending. An ordinary connection failure still shows the disconnect line, reconnecting on its own when
-              ssh itself failed and otherwise holding for a keypress.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              What changes the session itself runs on the Mac or server it came from, and the result attaches here: Duplicate
-              Session, a new split and Close Split, the scratch, Convert to Companion, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session restart</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">zmx kill</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session restore</span> (refused for an agterm-server session, which keeps every pane
-              running). The scratch is refused while the row is not connected, or when the origin's agterm is too old to show
-              its scratch. Closing the row here still ends only this side's connection;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close --terminate</span> ends the session on its origin as well. When the origin gives no answer, the
-              request is reported as unknown and never sent again or done here instead. A closed row joins File ▸ Open Recent
-              under Remote Sessions: reopening it attaches the session again while the origin still lists it, or has the origin
-              reopen its own entry first, and Reopen Closed Item (⌘Z) inside the origin's grace undoes a terminate there.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              When the stream drops, the mirrored status, context and HUD are cleared here and come back on reconnect, which is retried after
-              1, 2, 4, 8, 16 then 30 seconds, slows to every 5 minutes after eight failures in a row, and never stops. A notification
-              raised while it is down is never shown here. A terminal notification (OSC 9/777) is not mirrored, because it already
-              arrives in the pane's bytes and is raised here once. A timed HUD closes on this Mac's own countdown of the time the
-              other side had left, so the two panels can close a moment apart, and a HUD or overlay opened by a program on this Mac
-              is never replaced by a mirrored one.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              One Mac attached to a session <em>presents</em> it, the first to ask while nobody does, and its row's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">presentation</span> reads <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mode: presenter</span>. A question (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ask</span>) or a program overlay a
-              program then opens in that session is handed to the presenting Mac, where you are, only while the other Mac follows
-              another Mac's lead in its pane, or in every pane for one covering the whole session. Otherwise the request stays on the other Mac,
-              and one already open stays where it is when the lead changes. The answer or the program's exit status still
-              reaches the program on the other side. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this
-              Mac opens for it. If this Mac refuses a question, it goes back to the other side; if it cannot show an overlay, the
-              overlay fails rather than opening over there. Closing such an overlay from a script asks for it to end, and its
-              result says how it did. A status sound follows the same rule for the pane that set the status: it plays on the
-              presenting Mac and not on the other one, and the blocked sound is the presenting Mac's own setting.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              An HTML page follows the same rule: it opens on the presenting Mac, where you are. A page opened from a file reads
-              its files from the other Mac as it needs them, and the buttons and scripts in it act on the other Mac's session, so
-              a page that answers its caller answers the program over there. A web page loads directly on the presenting Mac;
-              with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--persistent</span>, it uses that Mac's saved browser storage. A page for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">localhost</span> names a server on the other Mac, so it loads through an ssh forward from this Mac; an agterm here too old to forward it refuses it. Closing the
-              page from a script on the other Mac takes it down here, and reloading asks this Mac to do it; Finder and the browser are refused for a
-              file page, whose file is not on this Mac.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              A picture, markdown or text page opened on the other Mac with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--image</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--text</span>
-              shows here the same way: this Mac fetches the file and builds the same page, a markdown page follows its links to
-              the other Mac's files as it would there (an older agterm here keeps them as text), and a picture opened without a size is sized for this
-              screen, so an agent there can show you its screenshot. If this Mac's agterm is too old for these pages, the open is refused.
-              A log page shows here too and follows the file over there, and a script on the other Mac that follows, searches,
-              wraps or steps it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay follow</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">search</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">wrap</span> or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">changes</span> acts on
-              the page here and gets the answer it would get locally; what you do in the page's bar reads back there too. If this
-              Mac's agterm is too old for live text pages, a log page is refused, a clicked log opens as the plain page, and those
-              commands are refused.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              While the stream is down the row says so and names the host. A question goes back to the other side, a finished
-              overlay held open with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> closes, and a running overlay keeps running until its program
-              ends. Retrying is automatic, and at once when the Mac wakes or the network changes; close and reattach the session to retry by hand.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              A program on the other Mac that copies with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pbcopy</span> fills that Mac's clipboard, not yours.
-              <a href="/commands#clipboard" style="color: #6d82f3"><span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl clipboard set</span></a>
-              sends the text through the pane instead, asking every terminal attached to that pane to set its clipboard, this
-              Mac's included; each applies its own clipboard-write setting. It needs no terminal, which is what lets an
-              agent's shell tool use it.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
-              Each pane has one Mac that leads it, and the program inside sees that Mac's window size. Attaching takes the
-              lead in every pane at once, so the session arrives at <em>your</em> size with nothing to press, and the same
-              panes on the Mac the session runs on are covered with a note that it is in use elsewhere. Pressing a key on a
-              cover, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session lead</span>, takes the lead back and covers the pane on the other
-              side. Scripts typing into a covered pane on the Mac the session runs on still work, and so do their reads of
-              its screen: both go through the session itself, not the covered view. When you close the session the panes
-              on the far side uncover by themselves. Both Macs need an agterm with this behaviour; against an older one
-              the attach still arrives at the other Mac's size until you type. When a connection drops, the pane keeps its last screen. If ssh
-              itself failed (exit 255, which is also what a refused login gives), a bar under it names the host and says it is reconnecting,
-              under whatever ssh printed, and agterm attaches the pane again once the host answers, retried on the
-              schedule the stream uses; any key, waking the Mac or a network change retries at once and starts that schedule over, and ⌘W still closes the session. While the host keeps refusing, a line along the pane's bottom edge shows what ssh said on the last try, such as a changed host key or a rejected login. The last screen is replaced when the host answers, before the new connection is up, so if the link drops again right away the pane waits on an empty terminal with only the bar. The pane comes back without taking the lead, so
-              if the other Mac leads it by then, it arrives covered, and also while the other Mac still counts this Mac's dropped connection
-              as the leader, which clears by itself once that connection times out. Any other exit prints one line naming the host, the
-              session, the pane and the exit status, and holds on Ghostty's press-any-key prompt. When your ssh config sets no
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ServerAliveInterval</span> for the connection, or sets it to 0, agterm adds ssh keepalive options (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ServerAliveInterval</span> 5,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ServerAliveCountMax</span> 2), so a dead connection is noticed within about fifteen seconds; a large value is the way to opt out.
-              When the pane's ssh joins an existing <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ControlMaster</span> connection the options do nothing, and that master's own settings decide.
-            </p>
-
-            <div
-              style="
-                background: rgba(94, 161, 242, 0.07);
-                border: 1px solid rgba(94, 161, 242, 0.22);
-                border-radius: 10px;
-                padding: 16px 18px;
-                margin: 22px 0 0;
-                font-size: 14px;
-                color: #a9c6ec;
-                line-height: 1.65;
-              "
-            >
-              <strong style="color: #5ea1f2; font-family: &quot;JetBrains Mono&quot;, monospace">In-session env</strong> — a shell
-              inside agterm gets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_ENABLED</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span> (the workspace
-              the shell started in; it is not rewritten when the session moves to another workspace, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> shows the current one),
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (the surface's spawn role,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span>, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; it is not rewritten after a promotion or
-              swap and is unset in an overlay), and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (the stable per-surface token used by
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session restore --pane-id</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session text --pane-id</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session type --pane-id</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session restart --pane-id</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface cursor --pane-id</span> to resolve the current slot), so a
-              script can drive its own window without hard-coding ids. The shell also identifies its terminal as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TERM_PROGRAM=agterm</span>, with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">TERM_PROGRAM_VERSION</span> carrying agterm's version, so a
-              tool that decides a capability from a list of terminal names may need its own override. Claude Code prints links as
-              plain text until <span style="font-family: &quot;JetBrains Mono&quot;, monospace">FORCE_HYPERLINK=1</span> is set; see
-              <a href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#claude-code-prints-links-as-plain-text-instead-of-clickable-labels"
-                style="color: #6d82f3">troubleshooting</a>.
-            </div>
-
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 22px 0 16px">
-              The <a href="https://github.com/umputun/agterm/tree/master/cookbook" style="color: #6d82f3">cookbook</a> collects
-              complete <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>
-              workflows, each in its own directory with a README and, where it needs one, its scripts: switching the sidebar to a
-              single project, closing a project's workspaces and bringing them back later, picking a path with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">fzf</span> and typing it into the
-              shell, and giving each tab its own Claude Code or Codex conversation across a restart. They are written to be copied
-              into your own setup and edited, not only read;
-              <a href="https://github.com/umputun/agterm/blob/master/cookbook/CONTRIBUTING.md" style="color: #6d82f3"
-                >cookbook/CONTRIBUTING.md</a
-              >
-              has the rules for adding one.
-            </p>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
-              Recipes come from other people as well as the maintainer. Every one is reviewed before it is accepted, but they are
-              shell scripts you run on your own machine against your own sessions, and several close sessions or delete
-              workspaces, so read a recipe before you run it.
-            </p>
-          </section>
+sel=$(agtermctl session copy --target 9f3c)          # the selection; the clipboard is untouched
+agtermctl session text --pane scratch --target 9f3c  # the pane&#39;s text
+agtermctl session paste --target 9f3c                # paste the clipboard, like ⌘V
+agtermctl session select-all --target 9f3c           # like ⌘A; session copy then reads it</code></pre>
+<h3 id="agtermctl-panes">Splits, scratch, quick terminal and search</h3>
+<pre class="bash"><code>agtermctl session split toggle --axis horizontal   # vertical = left/right, horizontal = top/bottom
+agtermctl session split close
+agtermctl session resize --split-ratio 0.7         # the primary pane&#39;s share
+agtermctl session resize --grow-left 0.05          # or --grow-right|top|bottom|primary|split
+agtermctl session scratch toggle                   # on | off | toggle
+agtermctl session flag on                          # on | off | toggle | clear
+agtermctl session seen --target 9f3c               # clear the unseen badge without focusing
+agtermctl sidebar mode flagged                     # tree | flagged | toggle
+agtermctl quick toggle                             # show | hide | toggle
+agtermctl quick type &#39;ls -la&#39;                      # or --stdin; quick text reads it back
+agtermctl surface zoom                             # fill the window with the active pane
+agtermctl surface zoom --target &quot;surface:${id}:right&quot;  # a specific pane (show | hide | toggle)
+agtermctl dashboard &quot;$a&quot; &quot;$b&quot; &quot;$c&quot; --auto-size     # view-only grid
+agtermctl font inc                                 # main pane font size
+agtermctl font dec --pane right                    # one pane: left | right | scratch
+agtermctl session search &quot;error&quot;                   # open the search bar, print &quot;N of M&quot;
+agtermctl session search --next                    # --prev | --close</code></pre>
+<p>The dashboard shows a split session as two cells, up to nine panes. It takes <code>--mru</code>, <code>--font-size N</code> or <code>--auto-size</code>, and <code>--close</code>.</p>
+<h3 id="agtermctl-windows">Windows</h3>
+<pre class="bash"><code>agtermctl window list                        # id name [open] [active]
+w=$(agtermctl window new work)
+agtermctl window new proj-b --minimized      # created in the Dock
+agtermctl window select &quot;$w&quot;                 # raise it, opening it if closed
+agtermctl window go --to next                # next | prev, wrapping
+agtermctl window rename &quot;$w&quot; personal
+agtermctl window minimize &quot;$w&quot; on            # off restores
+agtermctl window close &quot;$w&quot;                  # closes the window, keeps its sessions
+agtermctl window delete &quot;$w&quot;                 # the last window cannot be deleted
+# --window works on session, workspace, tree and font commands
+agtermctl tree --window &quot;$w&quot;
+agtermctl session new --window &quot;$w&quot; --cwd ~/src/agterm</code></pre>
+<h3 id="agtermctl-config">Keymap, config and notifications</h3>
+<pre class="bash"><code>agtermctl keymap reload    # re-read keymap.conf; prints the diagnostic count
+agtermctl config reload    # re-read the ghostty config; prints the diagnostic count
+agtermctl notify --title Build --body &quot;tests passed&quot;</code></pre>
+<h3 id="agtermctl-pick">Picker</h3>
+<p><code>agtermctl pick</code> opens agterm's fuzzy picker over a list your script supplies and prints the choice as JSON.</p>
+<pre class="bash"><code>printf &#39;%s\n&#39; staging production | agtermctl pick --prompt &quot;Deploy where?&quot;
+agtermctl pick --allow-custom --query &quot;$name&quot; --prompt &quot;Rename to&quot; &lt; /dev/null
+id=$(printf &#39;%s\n&#39; alpha beta | agtermctl pick --no-block | jq -r &#39;.id&#39;)
+agtermctl pick result &quot;$id&quot;
+agtermctl pick cancel &quot;$id&quot;
+agtermctl tree --json | jq -r &#39;.result.tree.pickPending // empty&#39;</code></pre>
+<figure>
+<img src="/assets/docs-pick.webp" alt="agterm picker with three deploy targets, each with a subtitle and a status glyph" width="565" height="220" loading="lazy">
+<figcaption>
+Items with subtitles and status glyphs; the prompt is the field placeholder.
+</figcaption>
+</figure>
+<p><strong>Input.</strong> Nonblank lines on stdin, or a JSON array of <code>{id, label, subtitle?}</code> objects, each optionally with <code>status</code>, <code>statusColor</code> and <code>statusShape</code> for a status glyph at the end of the row.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(none)</td>
+<td>blocks and prints the picked, custom or cancelled result as bare JSON</td>
+</tr>
+<tr>
+<td><code>--no-block</code></td>
+<td>prints the picker id at once; read it later with <code>pick result</code>, end it with <code>pick cancel</code></td>
+</tr>
+<tr>
+<td><code>--query TEXT</code></td>
+<td>prefills the field and filters at once, ranked by match score</td>
+</tr>
+<tr>
+<td><code>--select ID</code></td>
+<td>opens with that item highlighted and scrolled into view; a <code>--query</code> that filters it out leaves the first visible row highlighted</td>
+</tr>
+<tr>
+<td><code>--allow-custom</code></td>
+<td>allows an empty item list, turning the picker into a text prompt; the custom row appears once the query is not blank</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Typing matches labels only. A subtitle is shown but never searched, so warning text on one row cannot filter out its safer neighbor.</li>
+<li>With an empty query the items keep your order, so without <code>--select</code> Return on open runs your first item.</li>
+<li>A call with no items still reads stdin: redirect it (<code>&lt; /dev/null</code>) or it blocks.</li>
+<li>While the picker waits, <code>tree</code> reports its id as the top-level <code>pickPending</code>.</li>
+</ul>
+<h3 id="agtermctl-ask">Question dialogs</h3>
+<p><code>agtermctl ask</code> puts a question over a session and prints the answer as JSON.</p>
+<pre class="bash"><code>agtermctl ask &quot;Continue?&quot; --button yes=Yes --button no=No --default no
+agtermctl ask &quot;Commit message&quot; --input multiline --placeholder &quot;subject, blank line, body&quot;
+# {&quot;result&quot;:&quot;answered&quot;,&quot;id&quot;:&quot;ok&quot;,&quot;label&quot;:&quot;OK&quot;,&quot;index&quot;:0,&quot;text&quot;:&quot;fix: ...&quot;}
+agtermctl ask &quot;Open which?&quot; --multiple --choice 398=&quot;issue #398&quot; \
+  --choice-subtitle 398=&quot;waits on you: review&quot; --choice 395=&quot;PR #395&quot;
+# {&quot;result&quot;:&quot;answered&quot;,&quot;id&quot;:&quot;ok&quot;,&quot;label&quot;:&quot;OK&quot;,&quot;index&quot;:0,&quot;selected&quot;:[&quot;398&quot;]}</code></pre>
+<p>Check the answer's <code>id</code> before acting: Yes and No both exit 0.</p>
+<table>
+<thead>
+<tr>
+<th>Result</th>
+<th>Exit code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>answered (any button)</td>
+<td>0</td>
+</tr>
+<tr>
+<td>cancelled</td>
+<td>2</td>
+</tr>
+<tr>
+<td>escaped (Esc or ⌘W)</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<figure>
+<img src="/assets/docs-ask-styles.webp" alt="The same yes/no question in the terminal style and in the gui style" width="771" height="162" loading="lazy">
+<figcaption>
+The same question in the default terminal style and with <code>--style gui</code>.
+</figcaption>
+</figure>
+<p><strong>Where it appears</strong></p>
+<ul>
+<li>The default terminal style uses the session's theme, one pending question per session.</li>
+<li><code>--pane right</code> covers only that pane; the other pane and the rest of the window stay usable.</li>
+<li>An explicit <code>--target</code> can name an unselected session; the question waits hidden until you select it.</li>
+<li><code>--style gui</code> uses native buttons in a window modal shared with <code>pick</code>. Terminal questions can be open beside it.</li>
+</ul>
+<p><strong>Keys</strong></p>
+<ul>
+<li>Buttons only: Tab and the arrows move the highlight, Return answers.</li>
+<li>A text field has the keyboard as soon as it opens. Return answers a one-line field, ⌘Return a multiline one.</li>
+<li>A list: Up and Down move, Space toggles.</li>
+<li>Esc and ⌘W dismiss the question as <code>escaped</code>.</li>
+</ul>
+<p><strong>Forms</strong></p>
+<figure class="narrow">
+<img src="/assets/docs-ask-list.webp" alt="Question with a checkbox list, subtitles and a Something else row" width="270" height="244" loading="lazy">
+<figcaption>
+<code>--multiple</code> with subtitles and <code>--other</code>.
+</figcaption>
+</figure>
+<ul>
+<li>Buttons default to OK and Cancel; Cancel ends it like Esc, returning nothing.</li>
+<li>Without <code>--multiple</code> a list is radio buttons and returns exactly one id.</li>
+<li><code>--other "Something else"</code> adds a free-form line after the items. Typing selects it, clearing deselects it, and while selected its text comes back as <code>text</code> beside <code>selected</code>. A radio list returns one id or that text, never both.</li>
+</ul>
+<p>Placement, sizing, input priority, result polling and cancellation are in the <a href="/commands#ask">ask reference</a>.</p>
+<h3 id="agtermctl-overlays">Overlays</h3>
+<p>An overlay runs a program over a session without disturbing the shell beneath.</p>
+<pre class="bash"><code>agtermctl session overlay open &quot;revdiff HEAD~3&quot; --target 9f3c        # full, hides the shell beneath
+agtermctl session overlay open &quot;htop&quot; --size-percent 70             # floating, framed, 70% of the pane
+agtermctl session overlay open &quot;revdiff HEAD~3&quot; --size-percent 80 --background-color &quot;#2a1a3a&quot;
+agtermctl session overlay open &quot;revdiff HEAD~3&quot; --size-percent 80 --target 9f3c --follow
+agtermctl session overlay open &quot;make test&quot; --wait      # keep it open after exit
+agtermctl session overlay open &quot;make test&quot; --block     # wait for exit, return its status
+agtermctl session overlay resize --size-percent 60 --target 9f3c   # in place; the program keeps running
+agtermctl session overlay resize --full --target 9f3c
+agtermctl session overlay close --target 9f3c
+agtermctl session overlay result                       # the last overlay&#39;s exit status
+agtermctl session overlay open &quot;revdiff HEAD~3&quot; --target 9f3c --pane right   # cover one split pane
+agtermctl session overlay copy --target 9f3c --pane right   # the selection made inside it
+agtermctl session overlay text --target 9f3c --pane right   # its screen</code></pre>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--wait</code></td>
+<td>keeps a "press any key to close" prompt so you can read the final output</td>
+</tr>
+<tr>
+<td><code>--block</code></td>
+<td>reports only the exit status; an overlay never captures stdout, so a TUI writes its own result file</td>
+</tr>
+<tr>
+<td><code>--follow</code></td>
+<td>switches you to the target; without it the overlay opens there without changing the active session</td>
+</tr>
+<tr>
+<td><code>resize --size-percent</code> / <code>--full</code> / <code>--width</code> <code>--height</code></td>
+<td>floating at a percent, back to full, or one floating axis in points</td>
+</tr>
+<tr>
+<td><code>--pane left\|right</code></td>
+<td>covers one split pane (below)</td>
+</tr>
+</tbody>
+</table>
+<p><code>agtermctl tree</code> tags a session with an open overlay <code>(overlay)</code>.</p>
+<p><strong>Reading an overlay.</strong> <code>session overlay copy</code> returns the selection made inside the overlay, <code>session overlay text</code> its screen as drawn, wrapped where it wrapped. <code>session copy</code> and <code>session text</code> read the pane underneath instead: a selection in the overlay reads there as no selection, and <code>session text --pane right</code> returns the shell under it. A chord already gets the selection of the pane it fired in, overlay included, as <code>$AGT_SELECTION</code>, so a custom command uses that. For a program's real output, read the file it writes.</p>
+<p><strong>Pane overlays</strong> (<code>--pane left|right</code>) cover one split pane and leave the other visible and usable, so an agent in the split can show a diff over its own pane without blanking the one you read.</p>
+<ul>
+<li>Each pane can hold its own overlay at once, each with its own background color.</li>
+<li>Always full-pane: <code>--pane</code> does not combine with <code>--size-percent</code>, and <code>overlay resize</code> takes no <code>--pane</code>.</li>
+<li>A session without a split accepts <code>--pane left</code>.</li>
+<li>A pane that is not on screen is refused with <code>pane not visible</code>. Hiding the split afterwards is fine: the program keeps running and returns with the split.</li>
+<li>Over a session-wide program or page, a pane overlay draws on top; the session overlay keeps running out of sight and comes back when the pane overlay closes or hides, unless you hid it yourself.</li>
+<li><code>close</code>, <code>result</code>, <code>copy</code> and <code>text</code> take the same <code>--pane</code>. ⌘W dismisses the focused pane's overlay before it would close the session; one on the other pane is not in front of you, so ⌘W keeps its usual meaning there.</li>
+<li><code>tree --json</code> reports the covered panes as <code>paneOverlays</code>.</li>
+<li><code>AGTERM_PANE</code> is the spawn role and is not updated after a promotion or swap, so a long-running shell should not assume <code>--pane "$AGTERM_PANE"</code> still names its slot.</li>
+</ul>
+<h3 id="agtermctl-hud">Message panel (HUD)</h3>
+<p>A HUD shows a message over a session while a script or agent works, so the session says what is happening instead of sitting silent. It is passive: the session keeps the keyboard, the terminal is neither dimmed nor blocked, and nothing waits for an answer.</p>
+<pre class="bash"><code>agtermctl session hud &quot;gathering options…&quot; --spinner --detail &quot;scanning branches&quot; --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session hud update &quot;ready&quot; --detail &quot;pick a branch&quot; --target &quot;$AGTERM_SESSION_ID&quot;   # repaint in place
+agtermctl session hud &quot;deploy finished&quot; --hide-after 10 --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session hud &quot;deploying&quot; --position top-right --size-percent 30
+agtermctl session hud &quot;working&quot; --pane &quot;$AGTERM_PANE&quot; --pane-id &quot;$AGTERM_PANE_ID&quot; --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session hud &quot;deploying&quot; --text-color &quot;#7ec07e&quot; --background-color &quot;#202020&quot;
+agtermctl session hud &quot;**deploy api** [PR](https://example.com/pr)&quot; --markdown --sticky \
+  --no-frame --position top --size-percent 100          # a caption strip across the top
+agtermctl session hud close --target &quot;$AGTERM_SESSION_ID&quot;</code></pre>
+<p><code>open</code> is the default subcommand, so <code>session hud "…"</code> posts one.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--position</code></td>
+<td>one of nine anchors: <code>top-left</code>, <code>top-center</code>, <code>top-right</code>, <code>center-left</code>, <code>center</code> (default), <code>center-right</code>, <code>bottom-left</code>, <code>bottom-center</code>, <code>bottom-right</code>; bare <code>top</code> and <code>bottom</code> mean the middle column. Off center it keeps a margin from that edge</td>
+</tr>
+<tr>
+<td><code>--sticky</code></td>
+<td>drops the edge margin and lets the width reach 100%</td>
+</tr>
+<tr>
+<td><code>--no-frame</code></td>
+<td>drops the border and the blank rows above and below the text</td>
+</tr>
+<tr>
+<td><code>--size-percent</code></td>
+<td>sets the width only: at most 80% of the pane, or 100% with <code>--sticky</code> off center</td>
+</tr>
+<tr>
+<td><code>--pane</code>, <code>--pane-id</code></td>
+<td>sizes and anchors within one pane; <code>--pane-id "$AGTERM_PANE_ID"</code> follows the shell through swaps and promotion, with <code>--pane "$AGTERM_PANE"</code> as fallback</td>
+</tr>
+<tr>
+<td><code>--text-color</code>, <code>--background-color</code></td>
+<td>the text's color and the panel's backing</td>
+</tr>
+<tr>
+<td><code>--spinner</code>, <code>--spinner-style</code></td>
+<td><code>bar</code>, <code>braille</code>, <code>circle</code>, <code>blocks</code>, <code>dot</code> (blinks) or <code>none</code>; a style turns the spinner on</td>
+</tr>
+<tr>
+<td><code>--hide-after SECONDS</code></td>
+<td>takes the panel down by itself; without it the panel stays until closed</td>
+</tr>
+<tr>
+<td><code>--markdown</code>, <code>--file</code>, <code>--font-size PT</code></td>
+<td>a small board (below)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Size.</strong> Width comes from the longest line and height from the number of lines, so a title and subtitle give a wide, short panel. A frameless panel is its rows plus 12 points of padding tall, one row more than its text at the default font and padding; a program meant to sit under a caption leaves that room.</p>
+<p><strong>Updates.</strong> <code>update</code> replaces the whole message, so <code>--detail</code>, <code>--spinner</code>, <code>--text-color</code>, <code>--sticky</code>, <code>--no-frame</code>, <code>--pane</code> and <code>--pane-id</code> must be repeated. It can switch the spinner style in place. <code>--background-color</code> and <code>--font-size</code> are read once when the panel opens and kept across updates, which is why <code>update</code> does not take them.</p>
+<p><strong>Markdown boards.</strong> <code>--markdown</code> renders headings, bold, lists, code blocks, quotes and tables, up to 4096 characters. A single newline inside a paragraph is a space; use list items, or end a line with two spaces, to keep rows apart. A board taller than the panel is clipped, the hidden rows shown as a dim <code>… N more</code>. A link shows its label underlined and opens on ⌘-click as it would in the terminal, the one click the panel takes; any other click reaches the terminal. <code>--file</code> reads the message from a file once per command, so push each change with <code>update</code>. <code>--font-size PT</code> gives the panel its own font size. A controller agent can keep a board in a corner of its session:</p>
+<pre class="bash"><code>agtermctl session hud --file status.md --markdown --font-size 11 --position top-right
+agtermctl session hud update --file status.md --markdown --position top-right</code></pre>
+<p><strong>One slot.</strong> The HUD shares the overlay slot:</p>
+<ul>
+<li>a second <code>hud</code> replaces the first, and <code>session overlay open</code> replaces a HUD;</li>
+<li>a HUD over a running program is refused, because a message is replaceable and a program is not;</li>
+<li>⌘W or <code>session overlay close</code> takes it down;</li>
+<li><code>session overlay result</code> over a HUD errors, and <code>overlay resize</code> takes a percent but refuses <code>--full</code>.</li>
+</ul>
+<p><strong>Panes.</strong> Opening on a pane that is not shown is refused. Hiding that pane hides the panel without stopping it, showing the pane brings it back, and closing the pane closes it. A restart of agterm drops the panel, so a script posts it again.</p>
+<p><code>tree --json</code> reports the panel as the session's <code>hud</code> object, with a pane HUD's current role in <code>hud.pane</code> and <code>overlay</code> false beside it. There is no event; poll the tree.</p>
+<h3 id="messages">Messages between panes</h3>
+<p>A program in one pane can leave a message for another pane without typing into its terminal, so nothing has to guess when the receiver is ready.</p>
+<pre class="bash"><code>agtermctl msg send &quot;build done&quot; --to &quot;$AGTERM_SESSION_ID:right&quot;   # the split pane
+agtermctl msg send --all &quot;deploy starting&quot;                        # every live pane but this one
+agtermctl msg read                                                # oldest first; removes nothing
+agtermctl msg ack ID                                              # remove what was handled
+agtermctl msg read --ack --wait --timeout 60                      # wait for mail and take it</code></pre>
+<ul>
+<li>Every live pane has a mailbox; the receiver reads it when it chooses and acknowledges what it handled.</li>
+<li>Run inside a pane, <code>agtermctl msg</code> acts as that pane through <code>AGTERM_SESSION_ID</code> and <code>AGTERM_PANE_ID</code>.</li>
+<li>Mail lives in the running app only: closing or restarting the pane, closing its session, workspace or window, or quitting agterm drops it.</li>
+<li>A full mailbox refuses that recipient alone.</li>
+<li>On agterm-server the server's panes message each other the same way, and a Mac showing the server window sees their pending counts and message events. A local pane and a server pane cannot message each other yet.</li>
+</ul>
+<p>Details: <a href="/commands#msg">command reference</a>.</p>
+<h3 id="agtermctl-cookbook">Cookbook</h3>
+<p>The <a href="https://github.com/umputun/agterm/tree/master/cookbook">cookbook</a> collects complete workflows, each with a README and its scripts: switching the sidebar to one project, closing a project's workspaces and bringing them back, picking a path with fzf and typing it into the shell, and giving each tab its own Claude Code or Codex conversation across a restart. Copy them into your setup and edit them; <a href="https://github.com/umputun/agterm/blob/master/cookbook/CONTRIBUTING.md"><code>cookbook/CONTRIBUTING.md</code></a> has the rules for adding one.</p>
+<p>Recipes come from other people as well as the maintainer. Each is reviewed, but they are shell scripts that run on your machine against your sessions, and several close sessions or delete workspaces, so read one before running it.</p>
+</section>
 
           <!-- GHOSTTY -->
           <section id="ghostty" style="scroll-margin-top: 88px; padding-top: 56px">
