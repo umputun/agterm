@@ -143,6 +143,15 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let intent = view.releaseIntent.withLock { $0 }
             DispatchQueue.main.async { view.openLink(link, intent: intent) }
             return true
+        case GHOSTTY_ACTION_MOUSE_OVER_LINK:
+            // libghostty applies `link-previews` before sending, and an empty url clears. Length-delimited
+            // like `open_url`, and valid only for this call.
+            guard let view = surfaceView(from: target) else { return true }
+            let hover = action.action.mouse_over_link
+            let link = hover.len == 0 || hover.url == nil ? ""
+                : String(decoding: UnsafeRawBufferPointer(start: hover.url, count: Int(hover.len)), as: UTF8.self)
+            DispatchQueue.main.async { view.applyLinkHover(link) }
+            return true
         case GHOSTTY_ACTION_COLOR_CHANGE:
             // a dynamic color set or RESET via OSC 10/11/12 (fg/bg/cursor) or their 110/111/112 resets,
             // already applied by libghostty; but under translucency every surface renders background-opacity

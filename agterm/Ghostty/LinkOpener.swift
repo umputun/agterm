@@ -27,6 +27,8 @@ struct LinkOpener {
     var open: (URL) -> Void = { NSWorkspace.shared.open($0) }
     var reveal: (URL) -> Void = { NSWorkspace.shared.activateFileViewerSelecting([$0]) }
     var selectSession: (UUID, LinkPolicy.ClickOrigin, UUID?) -> Void = { _, _, _ in }
+    /// sessionName names the row `selectSession` would select for the same link, nil when it would select none.
+    var sessionName: (UUID, LinkPolicy.ClickOrigin, UUID?) -> String? = { _, _, _ in nil }
     /// exists answers for one candidate `LinkPolicy.locations` offered; it runs off the main actor.
     var exists: @Sendable (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
     /// forward hands a path clicked in a remote pane to the Mac it names a file on; nil when sent, else why not.

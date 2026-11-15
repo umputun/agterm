@@ -267,6 +267,28 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertFalse(HudLinkClick.consumes(try mouse(.leftMouseDown, .command)), "a closed panel claims nothing")
     }
 
+    // regression: leaving the window from a HUD with command held kept the panel's link label up
+    func testLeavingTheWindowWithCommandHeldUnhoversTheHudPanel() throws {
+        let panel = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
+        content.addSubview(panel)
+        panel.frame = NSRect(x: 0, y: 0, width: 120, height: 80)
+        panel.viewOnly = true
+        panel.hudBodyFile = NSTemporaryDirectory() + "agterm-hud-\(UUID().uuidString)"
+        defer { panel.hudBodyFile = nil; panel.removeFromSuperview() }
+        HudLinkClick.hover(try mouse(.mouseMoved, .command))
+        XCTAssertTrue(HudLinkClick.hovered === panel)
+
+        let exit = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseExited, location: NSPoint(x: -5, y: 30), modifierFlags: .command,
+                                                        timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                        eventNumber: 0, trackingNumber: 0, userData: nil))
+        NSApp.postEvent(exit, atStart: true)
+        if let next = NSApp.nextEvent(matching: .any, until: Date().addingTimeInterval(1), inMode: .default, dequeue: true) {
+            NSApp.sendEvent(next)
+        }
+
+        XCTAssertNil(HudLinkClick.hovered)
+    }
+
     func testRendererVisibilityRequiresAnOnScreenHost() {
         surface.wantsLayer = true
         surface.layer?.contents = NSColor.red.cgColor

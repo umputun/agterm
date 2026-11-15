@@ -296,9 +296,11 @@ final class QuickTerminalPanel: NSPanel {
 private struct QuickTerminalPanelContent: View {
     let controller: QuickTerminalController
     let terminalColor: Color
+    @State private var linkHover = LinkHoverModel()
 
     var body: some View {
-        QuickTerminalPane(controller: controller)
+        QuickTerminalPane(controller: controller, linkHover: linkHover)
+            .overlay(alignment: .bottomLeading) { LinkHoverLabel(model: linkHover) }
             .background(terminalColor)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .overlay(
@@ -314,14 +316,16 @@ private struct QuickTerminalPanelContent: View {
 /// the panel must keep the shell alive.
 struct QuickTerminalPane: NSViewRepresentable {
     let controller: QuickTerminalController
+    let linkHover: LinkHoverModel
 
     func makeNSView(context _: Context) -> GhosttySurfaceView {
         let view = controller.surface()
+        linkHover.adopt(view)
         controller.focus()
         return view
     }
 
-    func updateNSView(_: GhosttySurfaceView, context _: Context) {}
+    func updateNSView(_ view: GhosttySurfaceView, context _: Context) { linkHover.adopt(view) }
 
     static func dismantleNSView(_: GhosttySurfaceView, coordinator _: ()) {
         // no-op: the controller owns the surface so it survives hide/show.

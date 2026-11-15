@@ -143,6 +143,10 @@ struct agtermApp: App {
         LinkOpener.shared.selectSession = { [weak actions] id, origin, pane in
             actions?.followSessionLink(id, from: origin, pane: pane)
         }
+        LinkOpener.shared.sessionName = { [weak library] id, origin, pane in
+            guard let library, let target = library.sessionLinkTarget(id, from: origin, pane: pane) else { return nil }
+            return library.store(for: target.windowID)?.session(withID: target.sessionID)?.displayName
+        }
         controlServer.installRemoteLinkClicks()
         LinkOpener.shared.overlay = { [weak controlServer] url, session, percent in
             controlServer?.openLinkOverlay(url, session: session, sizePercent: percent) ?? false

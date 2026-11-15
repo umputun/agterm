@@ -334,7 +334,7 @@ extension WindowContentView {
                             TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                          makeSurface: { makeOverlaySurface($0, nil) },
                                          isActive: live, deckVisible: live, viewOnly: !style.interactive,
-                                         onScreen: onScreen && shown)
+                                         onScreen: onScreen && shown, labelAbove: session.hudActive)
                         }
                     }
                         .frame(width: panelFrame.width, height: panelFrame.height)
@@ -355,6 +355,13 @@ extension WindowContentView {
                         // without the generation SwiftUI reuses the host: `makeNSView` never re-runs and
                         // `updateNSView` hits a torn-down view with `overlaySurface` nil.
                         .id("\(session.id.uuidString)-overlay-\(session.overlaySlotGeneration)")
+                }
+            }
+            .overlayPreferenceValue(LinkHoverModelKey.self) { model in
+                if let model {
+                    LinkHoverLabel(model: model)
+                        .frame(width: layoutFrame.width, height: layoutFrame.height, alignment: .bottomLeading)
+                        .position(x: layoutFrame.midX, y: layoutFrame.midY)
                 }
             }
             .opacity(shown ? 1 : 0)

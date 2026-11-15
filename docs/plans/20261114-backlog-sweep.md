@@ -221,18 +221,22 @@ Viewer side:
 - Create: `agtermCore/Sources/agtermCore/LinkHover.swift`, `agtermCore/Tests/agtermCoreTests/LinkHoverTests.swift`
 - Modify: `site/docs.html`
 
-- [ ] check whether libghostty at `83fb956` gates `MOUSE_OVER_LINK` on `link-previews`; record the answer here
-- [ ] handle `GHOSTTY_ACTION_MOUSE_OVER_LINK`; write the hovered link into the surface's hover model
-- [ ] `TerminalView` wrapper with the `@Observable` hover model and the non-hit-testing bottom-leading label;
+- [x] check whether libghostty at `83fb956` gates `MOUSE_OVER_LINK` on `link-previews`; record the answer here
+  - answer: it does (`Surface.zig` cursor handling): OSC 8 unless `link-previews = false`, detected links only when
+    `true`, only while ⌘ is held, and an empty url clears on leaving the link, including the -1,-1 exit and hide
+    reports; agterm adds no check of its own. A HUD's label goes to the bottom-left of the pane it floats over
+    (Eugene, after the Debug look).
+- [x] handle `GHOSTTY_ACTION_MOUSE_OVER_LINK`; write the hovered link into the surface's hover model
+- [x] `TerminalView` wrapper with the `@Observable` hover model and the non-hit-testing bottom-leading label;
   `QuickTerminalPane` gets the same; clears on mouse exit, hide, host move and teardown
-- [ ] `LinkHover` label text: neutralized control and bidi-format scalars, one line, middle truncation, session
+- [x] `LinkHover` label text: neutralized control and bidi-format scalars, one line, middle truncation, session
   name for a resolving `agterm://session/` link
-- [ ] build and launch an isolated Debug instance and show Eugene the label (http link, session link, split pane,
+- [x] build and launch an isolated Debug instance and show Eugene the label (http link, session link, split pane,
   zoomed pane, scratch, quick terminal, HUD, remote pane) before writing tests
-- [ ] `LinkHoverTests`: plain URL, session link resolving and not, each neutralized scalar class, truncation;
+- [x] `LinkHoverTests`: plain URL, session link resolving and not, each neutralized scalar class, truncation;
   hosted test that the action sets and clears the hover model
-- [ ] `site/docs.html`: one line where links are described
-- [ ] run the touched tests; must pass
+- [x] `site/docs.html`: one line where links are described
+- [x] run the touched tests; must pass
 
 ### Task 5: Backlog, verification and gates
 

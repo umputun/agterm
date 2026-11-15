@@ -643,6 +643,14 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
                                  remote: linkClickRemoteSession)
     }
 
+    /// applyLinkHover shows the link under a ⌘-held pointer, naming the session a session link would select.
+    func applyLinkHover(_ link: String) {
+        // the callback hops to main, so one queued before teardown arrives after the label was cleared
+        guard !isDestroyed else { return }
+        let (origin, pane) = (linkClickOrigin, linkClickPane)
+        linkHover?.label = link.isEmpty ? nil : LinkHover.label(for: link) { LinkOpener.shared.sessionName($0, origin, pane) }
+    }
+
     /// linkClickPane is the identity of the pane this surface shows, nil for a surface no session pane owns. A scratch
     /// running on its row's origin is named by the origin's identity, which the click carries there.
     var linkClickPane: UUID? {
