@@ -77,11 +77,20 @@ extension AppStore {
         withdrawRemoteReplicas(of: session)
     }
 
-    /// sendToOrigin hands `body` to the origin of a session this Mac presents; false when it is not the presenter or
-    /// the origin does not take the frame, and the caller then keeps to what this Mac decides alone.
+    /// sendToOrigin hands `body` to the origin of a session this Mac presents or leads a pane of; false when it does
+    /// neither or the origin does not take the frame, and the caller then keeps to what this Mac decides alone.
     func sendToOrigin(_ body: PresentationFrame.Body, forSession id: UUID) -> Bool {
-        guard session(withID: id)?.remotePresentation?.mode == .presenter else { return false }
+        guard let session = session(withID: id), session.remotePresentation?.mode == .presenter || !originLeads(of: session).isEmpty
+        else { return false }
         return onOriginFrame?(id, body) ?? false
+    }
+
+    /// originLeads is the set of the origin's panes `session` leads on this Mac, the claim its presentation stream
+    /// reports; a pane with no origin twin claims nothing.
+    public func originLeads(of session: Session) -> Set<UUID> {
+        guard let binding = session.remotePresentation?.binding else { return [] }
+        let panes = [session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }
+        return Set(panes.filter { ZmxLeadBook.shared.role(pane: $0) == .leader }.compactMap { binding.remotePane(forLocal: $0) })
     }
 
     /// markSeen lowers the badge of a session the user is looking at, and asks an attached row's origin to lower its own.

@@ -252,15 +252,18 @@ later changes in #661 and #1008.
   `AppStoreRemoteLayoutTests.swift`, `RemotePresentationStateTests.swift`, `AppStoreForwardedClickTests.swift`,
   `agtermTests/ControlServerRemoteLinkClickTests.swift`
 
-- [ ] write failing tests: the client sends a report only after a hello answer listing `lead.report`; the
+- [x] write failing tests: the client sends a report only after a hello answer listing `lead.report`; the
       computed set maps local panes to origin pane ids and skips panes with no binding; the set re-sends on a
       role report, `forget`, a fresh `begin`, a binding change and a remote-window catalog row, and is not
       re-sent when unchanged; an empty set is sent when the Mac leads nothing
-- [ ] write failing tests: a claiming mirror may forward a click and send clear/seen to an origin that negotiated
+- [x] write failing tests: a claiming mirror may forward a click and send clear/seen to an origin that negotiated
       `lead.report`; the same mirror is refused by an older origin; a non-claiming mirror is refused
-- [ ] add the single computation seam and the client's report path, wired from the app side
-- [ ] relax `linkClickRequest` and `sendToOrigin` by the Viewer-side gates rule
-- [ ] run the targeted tests
+- [x] add the single computation seam and the client's report path, wired from the app side
+      ➕ the seam is `AppStore.originLeads(of:)`, read through `RemotePresentationEffects.leads`; the client sends on
+      the hello answer, after a layout, on `ZmxLeadBook.onChange` (begin, role change, forget), and checks on every
+      tick, which catches a binding the catalog or a restore rewrote without a hook in each writer
+- [x] relax `linkClickRequest` and `sendToOrigin` by the Viewer-side gates rule
+- [x] run the targeted tests
 
 ### Task 4: Headless pending per recipient, read-back, docs and gates
 

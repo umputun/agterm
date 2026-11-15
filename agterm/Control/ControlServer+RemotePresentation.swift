@@ -30,13 +30,20 @@ extension ControlServer {
         library.store(forSession: id)?.onOriginFrame = { [weak self] session, body in
             MainActor.assumeIsolated { self?.sendToOrigin(body, forSession: session) ?? false }
         }
+        ZmxLeadBook.shared.onChange = { [weak self] in
+            guard let self else { return }
+            for client in remoteClients.values { client.refreshLeads() }
+        }
         client.start()
         startRemoteTick()
     }
 
-    /// sendToOrigin hands a presenter's `status.clear` or `status.seen` to an origin that agreed the kind.
+    /// sendToOrigin hands a `status.clear` or `status.seen` to an origin that agreed the kind, from the presenter or
+    /// from a Mac the origin knows leads one of its panes.
     func sendToOrigin(_ body: PresentationFrame.Body, forSession id: UUID) -> Bool {
-        guard let client = remoteClients[id], client.originSupports(PresentationHub.statusClearKind) else { return false }
+        guard let client = remoteClients[id], client.originSupports(PresentationHub.statusClearKind),
+              library.store(forSession: id)?.session(withID: id)?.remotePresentation?.mode == .presenter || client.claimsLead
+        else { return false }
         client.answer(body)
         return true
     }
@@ -115,6 +122,10 @@ extension ControlServer {
             linkRefused: { [weak self] reason in self?.refuseRemoteLinkClick(reason, session: id) },
             message: { [weak self] message in self?.library.store(forSession: id)?.emitRemoteMessage(message, forSession: id) },
             mail: { [weak self] mail in self?.library.store(forSession: id)?.applyRemoteMail(mail, forSession: id) },
+            leads: { [weak self] in
+                guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return [] }
+                return store.originLeads(of: session)
+            },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })

@@ -56,6 +56,7 @@ struct RemotePresentationClientTests {
         var respawns: [(PresentationRespawns, Bool)] = []
         var linkRefusals: [RemoteLinkRefusal] = []
         var warnings: [String] = []
+        var leads: Set<UUID> = []
     }
 
     final class Clock { var now = Date(timeIntervalSince1970: 1_789_000_000) }
@@ -102,6 +103,7 @@ struct RemotePresentationClientTests {
             linkRefused: { recorder.linkRefusals.append($0) },
             message: { recorder.messages.append($0) },
             mail: { recorder.mails.append($0) },
+            leads: { recorder.leads },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -147,6 +149,59 @@ struct RemotePresentationClientTests {
         transport.deliver(line(.pendingCommit, rev: 2 + chunks.count))
 
         #expect(recorder.asks == asks)
+    }
+
+    private func leadReports(_ link: Link?) -> [Set<UUID>] {
+        (link?.sent ?? []).compactMap { if case .leadReport(let report) = $0.body { Set(report.leaders) } else { nil } }
+    }
+
+    @Test(arguments: [true, false])
+    func theLeadSetIsReportedOnlyToAnOriginThatTakesIt(takes: Bool) {
+        let client = makeClient()
+        client.start()
+        let pane = UUID()
+        recorder.leads = [pane]
+
+        connect(client, kinds: ["status"] + (takes ? [PresentationHub.leadReportKind] : []))
+
+        #expect(leadReports(transport.links.last) == (takes ? [[pane]] : []))
+        #expect(client.claimsLead == takes)
+    }
+
+    @Test func theLeadSetIsReportedEmptyAndAgainOnlyWhenItChanges() {
+        let client = makeClient()
+        client.start()
+        let pane = UUID()
+        connect(client, kinds: [PresentationHub.leadReportKind])
+        #expect(!client.claimsLead)
+
+        client.refreshLeads()
+        client.tick()
+        recorder.leads = [pane]
+        client.tick()
+        client.refreshLeads()
+        recorder.leads = []
+        transport.deliver(line(.layout(PresentationLayout(panes: [pane], primary: pane, axis: nil, shown: false)), rev: 2))
+
+        #expect(leadReports(transport.links.last) == [[], [pane], []])
+        #expect(!client.claimsLead)
+    }
+
+    @Test func aNewLinkReportsTheLeadSetAgain() {
+        let client = makeClient()
+        client.start()
+        let pane = UUID()
+        recorder.leads = [pane]
+        connect(client, kinds: [PresentationHub.leadReportKind])
+
+        transport.close("gone")
+        clock.now = clock.now.addingTimeInterval(60)
+        client.tick()
+        connect(client, gen: 8, kinds: [PresentationHub.leadReportKind])
+
+        #expect(transport.links.count == 2)
+        #expect(leadReports(transport.links.first) == [[pane]])
+        #expect(leadReports(transport.links.last) == [[pane]])
     }
 
     @Test func chunksALostStreamLeftUncommittedApplyNothing() throws {

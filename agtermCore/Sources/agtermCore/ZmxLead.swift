@@ -147,6 +147,9 @@ public final class ZmxLeadBook {
     /// Counts attachments begun. A pane's surface slot is not observed, so a view hosting one reads this
     /// to learn that a fresh attach replaced the surface.
     public private(set) var attachments = 0
+    /// onChange runs after any pane's state is replaced, changed or forgotten, so an attached row can report
+    /// what it now leads to its origin.
+    @ObservationIgnored public var onChange: (() -> Void)?
 
     init() {}
 
@@ -154,12 +157,14 @@ public final class ZmxLeadBook {
     public func begin(_ attachment: ZmxLeadAttachment, pane: UUID, reattaching: Bool = false) {
         states[pane] = ZmxLeadState(attachment: attachment, reattaching: reattaching)
         attachments &+= 1
+        onChange?()
     }
 
     /// The role `notice` moved `pane` to, nil when it changed nothing.
     public func apply(_ notice: ZmxLeadNotice, pane: UUID) -> ZmxLeadRole? {
         guard var state = states[pane], state.apply(notice) else { return nil }
         states[pane] = state
+        onChange?()
         return state.role
     }
 
@@ -169,7 +174,10 @@ public final class ZmxLeadBook {
 
     public func reattaching(pane: UUID?) -> Bool { pane.flatMap { states[$0]?.reattaching } ?? false }
 
-    public func forget(pane: UUID) { states[pane] = nil }
+    public func forget(pane: UUID) {
+        states[pane] = nil
+        onChange?()
+    }
 }
 
 extension AppStore {
