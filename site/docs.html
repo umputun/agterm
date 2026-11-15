@@ -70,7 +70,7 @@
       .doc-v2 figure { width: fit-content; max-width: 100%; margin: 8px 0 24px; background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px; overflow: hidden; }
       .doc-v2 figure img { display: block; max-width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
-      .doc-v2 figcaption { padding: 12px 16px; font-size: 13.5px; color: #949ba4; }
+      .doc-v2 figcaption { contain: inline-size; padding: 12px 16px; font-size: 13.5px; color: #949ba4; }
     </style>
   </head>
   <body>
@@ -3200,608 +3200,333 @@ A clicked <code>.md</code> file, rendered in the terminal's theme.
 </section>
 
           <!-- STATUS -->
-          <section id="status" style="scroll-margin-top: 88px; padding-top: 56px">
-            <h2
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 700;
-                font-size: 28px;
-                letter-spacing: -0.02em;
-                margin: 0 0 16px;
-                padding-bottom: 12px;
-                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-              "
-            >
-              Agent status
-            </h2>
-            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 22px">
-              A coding agent running in a session can flag its status on that session's sidebar row, so you can tell at a glance
-              which of many concurrent agents needs you. The glyph shows just left of the notification badge on every non-idle
-              session; a one-time
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">completed</span> flash auto-clears
-              once you visit the session.
-            </p>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 24px">
-              <div
-                style="
-                  background: #22272b;
-                  border: 1px solid rgba(255, 255, 255, 0.08);
-                  border-radius: 11px;
-                  padding: 16px 18px;
-                  display: flex;
-                  align-items: center;
-                  gap: 12px;
-                "
-              >
-                <span
-                  style="width: 9px; height: 9px; border-radius: 100px; background: #dbd9e6; box-shadow: 0 0 10px #dbd9e6"
-                ></span>
-                <div>
-                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">active</div>
-                  <div style="font-size: 12px; color: #949ba4">lavender-grey glyph</div>
-                </div>
-              </div>
-              <div
-                style="
-                  background: #22272b;
-                  border: 1px solid rgba(255, 255, 255, 0.08);
-                  border-radius: 11px;
-                  padding: 16px 18px;
-                  display: flex;
-                  align-items: center;
-                  gap: 12px;
-                "
-              >
-                <span
-                  style="width: 9px; height: 9px; border-radius: 100px; background: #f2b45c; box-shadow: 0 0 10px #f2b45c"
-                ></span>
-                <div>
-                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">blocked</div>
-                  <div style="font-size: 12px; color: #949ba4">amber glyph</div>
-                </div>
-              </div>
-              <div
-                style="
-                  background: #22272b;
-                  border: 1px solid rgba(255, 255, 255, 0.08);
-                  border-radius: 11px;
-                  padding: 16px 18px;
-                  display: flex;
-                  align-items: center;
-                  gap: 12px;
-                "
-              >
-                <span
-                  style="width: 9px; height: 9px; border-radius: 100px; background: #7ece8f; box-shadow: 0 0 10px #7ece8f"
-                ></span>
-                <div>
-                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">
-                    completed
-                  </div>
-                  <div style="font-size: 12px; color: #949ba4">green glyph</div>
-                </div>
-              </div>
-              <div
-                style="
-                  background: #22272b;
-                  border: 1px solid rgba(255, 255, 255, 0.08);
-                  border-radius: 11px;
-                  padding: 16px 18px;
-                  display: flex;
-                  align-items: center;
-                  gap: 12px;
-                "
-              >
-                <span style="width: 9px; height: 9px; border-radius: 100px; border: 1.5px solid #4a5158"></span>
-                <div>
-                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">idle</div>
-                  <div style="font-size: 12px; color: #949ba4">nothing</div>
-                </div>
-              </div>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0 0 22px">
-              Every state draws a filled circle by default, so the tint is what tells them apart. The shape is configurable per
-              state under <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Colors and Shapes</strong>, where each state
-              carries its own color well and shape picker on one row. The shapes are circle (the default), square, triangle,
-              down triangle, play, diamond, capsule, seal, star, bolt, bell, and checkmark, each drawn in that state's current
-              color. Choosing a distinct shape per state adds a
-              second signal alongside the tint, so the states stay apart at a peripheral glance and without depending on hue.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0 0 14px">
-              An agent sets it over the control channel:
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              <span style="color: #6b727a"># state is idle | active | completed | blocked</span><br />agtermctl session status
-              active --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status blocked
-              --sound default --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status
-              completed --auto-reset --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
-              status blocked --color <span style="color: #5ea1f2">'#ff0000'</span> --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
-              status blocked --shape triangle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
-              status blocked --pane right --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
-              status idle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
-              <span style="color: #6b727a">&nbsp;# clear it</span>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--auto-reset</span> clears the
-              indicator the moment you visit the session;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--blink</span> requests an attention
-              pulse; macOS Reduce Motion suppresses the repeating sidebar and dashboard animation while keeping the status visible,
-              and the pulse resumes when Reduce Motion is disabled;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sound</span> plays a one-shot sound
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">default</span>, or a system sound
-              name like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Basso</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >Ping</span
-              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Tink</span>). To make every blocked
-              prompt sound without touching the hooks, set
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--color</span>
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span>) overrides the glyph
-              tint for that one call — it rides the status, so the next status set without it reverts to the configured color.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--shape</span>
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">circle</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">square</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">triangle</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">triangle-down</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">play</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">diamond</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">capsule</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">seal</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">star</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bolt</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">bell</span>, or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">checkmark</span>) overrides the silhouette
-              the same way, reverting to the configured shape on the next status set without it. Both read back on
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusColor</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusShape</span>, each reporting
-              the per-call override only. Every applied status write, including idle, also stamps the session's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusChangedAt</span> (epoch seconds,
-              omitted before any set), including a call that re-pushes the same status — so a script polling
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> can tell how long ago the
-              status was last written without tracking that itself. Automatic and manual clears also count.
-              It is ephemeral and does not survive a restart.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>|<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >right</span
-              >|<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scratch</span>, defaulting to the
-              main pane) records which pane set the status: a block set from a background pane survives typing in another pane, and
-              when the status needs attention (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>
-              or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">completed</span>), any GUI selection
-              of the session (auto-follow, attention nav ⌃⌥↑/↓, plain session nav, the command palettes, a
-              Dock-menu session, and
-              a sidebar click) reveals and focuses that pane — the split, or a hidden scratch — instead of the main pane, so an
-              agent that blocks or completes in a split or scratch tags its own pane to be found. An
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> status keeps the existing
-              pane selection (the control <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session go next-attention</span>
-              only steps the selection, it does not itself move focus into the pane). It reads back on
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              The tag also protects the block itself. While a session is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>, a status written from a
-              different pane is refused unless it is another
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span> — so with an agent working in
-              each pane, one reporting its ordinary progress cannot erase the other's request for input. That holds for
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> too, which the bundled agent
-              hooks send unprompted when an agent starts or finishes. The pane that set the block changes it freely, typing into that
-              pane clears it, and Clear Status in the sidebar row menu clears it from anywhere.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Typing into a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >completed</span
-              >
-              session clears its status, on the first key by default.
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Status reset</strong> can move that to Enter, so a reply
-              you started and walked away from keeps the glyph until you send it (Esc or Ctrl-C still clears a blocked one,
-              since cancelling the prompt answers it), or disable it, leaving the status to the
-              agent's next hook or Clear Status. An interrupt keystroke, Esc or Ctrl-C, interrupts an
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> one and clears it
-              whatever the setting.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              To come back to a session later, <strong style="color: #e6e1d7">Mark for Attention</strong> in its sidebar row menu
-              gives an idle session a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">completed</span> status that stays
-              when you visit it, so it shows up in attention navigation again. It never replaces a live status, and typing in the
-              session's main pane, Clear Status, or the agent's next update clears it as usual.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Attention navigation (⌃⌥↑/↓) steps through blocked and completed sessions. Turn on
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Attention navigation includes active sessions</strong>
-              (off by default) to stop on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> sessions too, in the same sidebar
-              order. Landing on an active session keeps the existing pane selection.
-              <strong style="color: #e6e1d7">Attention navigation crosses windows</strong> (off by default) lets the
-              keys walk every open window, window by window in sidebar order, raising the window it lands in.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              When the sidebar is hidden the glyphs go with it, so an optional
-              <strong style="color: #e6e1d7">title-bar bell</strong> (Settings ▸ Notifications ▸ Show attention indicator, off by
-              default) reflects every open window: dimmed when nothing needs you, plain when a session is active or completed,
-              filled amber when any is blocked. Clicking it opens a <strong style="color: #e6e1d7">popover</strong> of the non-idle
-              sessions across all open windows, sorted blocked → active → completed and newest first within each, that you
-              hover to highlight and click to jump to the session. With more than one window open each row names its window,
-              and picking a session in another window brings that window forward first.
-              A blocked or completed row also reveals the pane that set its status; an active row keeps the existing pane selection.
-              ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>, or the action
-              palette's "Show Attention" opens the same <strong style="color: #e6e1d7">attention list</strong> as a searchable
-              palette. Right-clicking agterm's Dock icon exposes the last-active window's own ordered list under
-              <strong style="color: #e6e1d7">Sessions Needing Attention</strong>, alongside its recent sessions. Over the control channel,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
-              each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span> (which pane set it).
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <strong style="color: #e6e1d7">Auto-follow blocked sessions.</strong> When several agents run at once, a session
-              that blocks is easy to miss. Turn on
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Auto-follow blocked sessions</strong>
-              (Disabled by default, or a 5s/10s/30s/60s/5m idle timeout) and, after you have been idle from input for that long,
-              the window selects and focuses the oldest waiting blocked session, so you are pulled to whatever agent is
-              waiting. It is per-window and window-wide (crossing workspaces within the window). Auto-follow pulls you to each
-              blocked session at most once: after you have been shown a block and moved on (even without replying), it will not
-              pull you back to it, so it walks the waiting blocks oldest-first, shows each once, then stays quiet. A session
-              becomes eligible again only after it leaves blocked and re-enters it. Being parked on a blocked session likewise
-              suppresses jumps while you stay on it. The opt-in <strong style="color: #e6e1d7">Don't auto-follow away from a
-              running session</strong> (off by default) holds the selection put while the current session is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>. Over the control
-              channel, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span>
-              reports the window's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>
-              (ms since your last input, live) and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> (the configured
-              timeout in ms, omitted when Disabled);
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window list --json</span>
-              reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> per
-              window (as of the last refresh), but not the live
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Status says how a session is going; <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session context</span>
-              says what it is about. It is a short line of text set from outside the session and shown in the title bar —
-              the PR, the issue, the task in hand. It states durable purpose
-              rather than current activity: it survives quit and relaunch, and only
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--clear</span> removes it.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl session context <span style="color: #5ea1f2">"PR #517: restore reap ordering"</span> --target
-              <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session context --clear --target
-              <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              In Normal toolbar mode it takes the second title-bar line, in place of the working directory; in Compact it
-              follows the session and window names on the single row, where a long value truncates before the names do.
-              Hide it without clearing it under <strong style="color: #e6e1d7">Settings ▸ Interface</strong>. It reads back on
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">context</span> field.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              For current activity there is <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session info</span>:
-              one line drawn under the session's sidebar row, such as the step an agent is on or how many tests have run. With
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--markdown</span> it takes bold, italic and code,
-              and colors a fragment with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](color: "green")</span>
-              (any named tint color, not a hex) or dims it with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">^[text](dim: true)</span>.
-              Each successful set replaces the whole line, and the line is never saved, so it is gone after a relaunch.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--hide-after SECONDS</span> clears it by itself.
-              Use a positive interval and repeat it on each refresh; the line then expires if the script stops.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl session info --markdown --hide-after 30 --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
-              <span style="color: #5ea1f2">'**3** agents ^[running](color: "green") ^[1 idle](dim: true)'</span><br />agtermctl session info
-              --clear --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <strong style="color: #e6e1d7">Settings ▸ Interface ▸ Session info</strong> shows the line Always, the default,
-              only in the flagged view (Flagged), or never (Off); hiding it never clears it. A session attached from another
-              Mac shows that Mac's line too, unless one is set here. It reads back on
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">info</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">infoMarkdown</span> and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">infoHideAfter</span> fields.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A <strong style="color: #e6e1d7">row tint</strong> tells sessions apart at a glance, red for production and green for
-              development, say. Pick one from <strong style="color: #e6e1d7">Tint</strong> in a session or workspace row menu: None or one of
-              twelve colors (red, orange, yellow, green, blue, purple, gray, teal, pink, brown, indigo, mint), which follow
-              light and dark mode, then
-              <strong style="color: #e6e1d7">Show On</strong> Icon, Name, or Icon and Name. On a multi-row selection Show On is available
-              only when every selected row is tinted. A color picked from the menu for an untinted row starts on the
-              last Show On choice made while the app runs, and Show On shows it checked. The command palette offers "Tint Session: Red" through "Tint
-              Session: None" for the active session. A workspace tint colors only the workspace row, never the
-              sessions in it. Any other color is a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span> hex through
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>; it stays the same in
-              light and dark mode, and the Tint submenu shows it as a checked Custom entry.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 18px 20px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13.5px;
-                line-height: 1.95;
-                overflow-x: auto;
-                color: #e6e1d7;
-              "
-            >
-              agtermctl session tint red --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl
-              session tint green --on icon,name --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span
-              ><br />agtermctl workspace tint red<br />agtermctl session tint clear --target
-              <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
-            </div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              A tint on a local session or workspace survives quit and relaunch, and a duplicated session starts
-              without one. On a session attached from another Mac it stays on this Mac: the row does not show the origin's
-              tint, and a tint set on it is saved with the row. A remote window's row shows the server's tint, which every Mac shares.
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace new --tint</span> create a
-              row already tinted. The tint reads back on <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tint</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tintOn</span>. On an older agterm, an emoji and a
-              PROD or DEV word in the session or workspace name gives a visible marker, at the cost of pinning the
-              name: the row no longer shows the live terminal title.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              To wire it up automatically, <strong style="color: #e6e1d7">Help ▸ Install Agent Status Hooks…</strong> installs a
-              hooks package: a generic bash/zsh/fish shell integration (flags
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
-              matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
-              the default set is gemini, cursor-agent, aider, crush, goose), five Claude Code hooks (prompt → active,
-              tool run → active, Stop → completed, permission request and permission prompt → blocked), and an OpenCode lifecycle plugin.
-              When Claude Code runs as a worker under another agent with a shell process still between them, as in a
-              tool call, its hooks stay silent, so the status of the pane that spawned it is not overwritten.
-              A background subagent or workflow keeps the row working: its activity lights an idle row but never replaces the
-              main agent's status, and while Claude Code (2.1.145 or later) reports one still running, Stop posts active
-              instead of completed; the completed comes from the Stop after the last one finishes. Two gaps remain: the main
-              agent's activity can replace a subagent's permission prompt, and when the key that answers that prompt leaves
-              the block in place, the row stays blocked until the main agent's next event. After upgrading, restart agterm and
-              run the install again: a running older app ignores the subagent's
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--if-idle</span> and applies the
-              write.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              The scripts go to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/agterm/agent-status/</span>,
-              with the bundled <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>'s
-              absolute path baked in so they work even without the CLI on your PATH. A marker-guarded
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">source</span> line for the generic
-              shell integration is added to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.zshrc</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.bashrc</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/fish/config.fish</span>
-              (fish only when that directory already exists); open a new terminal for it to take effect. The per-agent hooks are
-              merged into each agent's own config: five Claude Code hooks into
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.claude/settings.json</span> and
-              six Codex lifecycle hooks into
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>. Before it
-              changes either of those, the installer copies it beside the original with a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.bak</span> suffix, so the previous
-              config is recoverable.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Both the skill and hooks installers read exported
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span> from your interactive
-              login shell. A nonempty value selects the Codex directory, with relative paths resolved against
-              that shell's working directory. Unset or empty values, shell-launch failures, malformed output,
-              and timeouts fall back to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex</span>. OpenCode being absent does not affect Codex
-              discovery. The selected directory must already exist; a missing custom directory is skipped
-              without installing into
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex</span>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              Six Codex lifecycle events run a dedicated adapter.
-              A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
-              active and changes the row to blocked only after a real approval or structured question appears in that pane.
-              On Stop, a final assistant message that ends a sentence with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span> reports blocked.
-              The check is a heuristic: it ignores single-backtick spans and triple-backtick blocks, and a mark
-              that stands alone, opens quoted text, or sits inside a word, as in a URL query string, does not count.
-              Every other final message reports completed and auto-resets.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              <strong style="color: #e6e1d7"
-                >Codex only: run <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/hooks</span> in Codex after
-                installing or upgrading.</strong
-              >
-              Codex requires changed command hooks to be reviewed and approved before they run, so the merged lifecycle hooks stay
-              inert until you open Codex, run
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/hooks</span> once, and approve them.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              When Pi
-              has already created <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.pi/agent</span>,
-              the installer also adds a lifecycle extension: Pi work starts as active and settles as completed after retries and
-              queued continuations finish. Pi has no built-in permission or structured-question event, so it does not infer blocked
-              from assistant prose. Restart Pi or run <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/reload</span>
-              after installing it. Re-running upgrades agterm-managed integrations and is otherwise idempotent.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              When OpenCode's selected configuration directory already exists,
-              the installer runs <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opencode --version</span>
-              and installs the matching plugin. OpenCode v1 uses
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-status.js</span>:
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">busy</span>/<span
-                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >retry</span
-              >
-              → active,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> → completed
-              (only when no session remains busy, so a task subagent cannot complete a busy parent),
-              permission/question prompts → blocked,
-              turn-ending
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.error</span>
-              for a session already reported busy → blocked
-              (following idle from halt swallowed, and a clean sibling's idle cannot erase it; abort
-              ignored, context overflow decided by the next event — busy means compaction resumed,
-              idle means the turn ended → blocked),
-              reply/reject → active once no other prompt is still waiting.
-              Deprecated
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.idle</span>
-              is ignored so it does not double-fire with
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>.
-              Restart OpenCode after installing it. The plugin serves OpenCode 1.x; OpenCode 2 does not load 1.x plugins,
-              so it shows no status there.
-            </p>
-
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
-              For OpenCode v2, the default plugin path is
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-v2/tui.js</span>.
-              This CLI plugin reports the selected OpenCode session and its descendants into the current agterm pane,
-              even when several clients share a server. Background tabs, ancestors, and sibling sessions are excluded.
-              Running work, retries, and recovering compaction stay active; pending permissions and questions are blocked
-              until all are answered or cancelled. Success or user interruption completes only when the family is no longer busy;
-              a terminal failure becomes blocked once the family stops working and stays blocked until the next run.
-              Switching sessions, reconnecting, and unloading the plugin refresh or clear the indicator.
-              Detection uses your interactive login shell's PATH ($SHELL, or /bin/zsh if unset).
-              V2 resolves its directory from that shell's OPENCODE_CONFIG_DIR, then $XDG_CONFIG_HOME/opencode,
-              then ~/.config/opencode. An empty OPENCODE_CONFIG_DIR skips v2 with a warning. So does an unavailable shell
-              configuration when ~/.config/opencode exists; without that directory OpenCode is skipped as not installed.
-              If the version cannot be determined, choose v1 or v2 in the installer, or skip OpenCode.
-              No npm dependencies or configuration edits are needed. Re-run the installer after switching major versions:
-              a v2 install removes the marked v1 plugin in its selected directory, while a v1 install leaves the v2 plugin directory alone.
-              User-owned or unreadable v1 files are preserved and reported in the install result. Then restart OpenCode.
-            </p>
-
-            <h3
-              id="codex-hooks-manual"
-              style="
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-weight: 600;
-                font-size: 17px;
-                color: #e6e1d7;
-                margin: 28px 0 12px;
-                scroll-margin-top: 88px;
-              "
-            >
-              Add Codex hooks by hand
-            </h3>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
-              When you use
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">CODEX_HOME</span>, edit
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&lt;CODEX_HOME&gt;/config.toml</span> instead of
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
-              The installer never rewrites a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>
-              it does not own. If that file already defines its own
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[hooks…]</span>
-              entries, or is not valid TOML, it is left untouched and the install alert sends you here. Add the
-              six blocks below yourself, replacing
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/Users/you</span>
-              with your own home directory — the path has to be absolute, since Codex runs the hook without
-              your shell's PATH.
-            </p>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
-              Check the shape of your existing hooks first, because that is the reason the installer declined to
-              do this for you. If every one of them is written as an
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[[hooks.…]]</span>
-              array-of-tables entry, appending is safe, including for events you already hook — a repeated
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[[…]]</span>
-              header adds an element rather than redefining a key, so both your hook and agterm's run. If
-              instead you have an inline
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">hooks = { … }</span>
-              table or a plain
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">[hooks.SessionStart]</span>
-              table, appending makes the file stop parsing, since TOML allows neither extending a closed inline
-              table nor overwriting a defined value. Convert those entries to the array-of-tables form first,
-              then append. Do not add a second
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">command</span>
-              line inside an existing entry — a repeated key in one table breaks the file just as surely.
-            </p>
-            <div
-              style="
-                background: #15191c;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-                padding: 16px 18px;
-                font-family: &quot;JetBrains Mono&quot;, monospace;
-                font-size: 13px;
-                line-height: 1.6;
-                color: #e6e1d7;
-                overflow-x: auto;
-                white-space: pre;
-              "
-            >[[hooks.SessionStart]]
+          <section id="status" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
+<h2>Agent status</h2>
+<p>A coding agent running in a session can put its status on that session's sidebar row, so you can tell at a glance which of many agents needs you. The glyph sits just left of the notification badge on every session that is not idle.</p>
+<figure>
+<img src="/assets/docs-status-rows.webp" alt="Sidebar with an active, a blocked and a completed session, info lines under two rows, a red and a green tinted row, and the session context in the title bar" width="655" height="233" loading="lazy">
+<figcaption>
+Active, blocked and completed rows; an info line under two of them; two tinted rows; the selected session's context in the title bar.
+</figcaption>
+</figure>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>State</th>
+<th>Glyph</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>active</code></td>
+<td>lavender-grey</td>
+</tr>
+<tr>
+<td><code>blocked</code></td>
+<td>amber</td>
+</tr>
+<tr>
+<td><code>completed</code></td>
+<td>green; a one-time completed flash clears once you visit the session</td>
+</tr>
+<tr>
+<td><code>idle</code></td>
+<td>nothing</td>
+</tr>
+</tbody>
+</table>
+<h3 id="status-shapes">Colors and shapes</h3>
+<p>Every state draws a filled circle by default, so the color tells them apart. <strong>Settings ▸ Agent Status ▸ Colors and Shapes</strong> gives each state its own color and shape. A distinct shape per state adds a second signal, so the states stay apart at a glance from the corner of your eye and without depending on color.</p>
+<figure class="narrow">
+<img src="/assets/docs-settings-status.webp" alt="Colors and Shapes settings with a color well and a shape picker for Active, Blocked and Completed" width="480" height="165" loading="lazy">
+<figcaption>
+One row per state: color, then shape.
+</figcaption>
+</figure>
+<figure class="narrow">
+<img src="/assets/docs-status-shapes.webp" alt="Twelve sidebar rows, each named after the status shape it shows" width="220" height="370" loading="lazy">
+<figcaption>
+The twelve shapes, each row named after its own.
+</figcaption>
+</figure>
+<h3 id="status-set">Set it from a script</h3>
+<pre class="bash"><code># the state is idle, active, completed or blocked
+agtermctl session status active --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status blocked --sound default --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status completed --auto-reset --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status blocked --color &#39;#ff0000&#39; --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status blocked --shape triangle --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status blocked --pane right --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session status idle --target &quot;$AGTERM_SESSION_ID&quot;       # clear it</code></pre>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--auto-reset</code></td>
+<td>clears the status the moment you visit the session</td>
+</tr>
+<tr>
+<td><code>--blink</code></td>
+<td>adds an attention pulse. macOS Reduce Motion stops the repeating sidebar and dashboard animation and keeps the status; the pulse returns when Reduce Motion is off</td>
+</tr>
+<tr>
+<td><code>--sound NAME</code></td>
+<td>plays a sound once: <code>default</code>, or a system sound such as <code>Basso</code>, <code>Ping</code> or <code>Tink</code>. To sound on every blocked prompt without touching the hooks, set <strong>Settings ▸ Agent Status ▸ Blocked sound</strong></td>
+</tr>
+<tr>
+<td><code>--color #rrggbb</code></td>
+<td>overrides the color for this call only; the next status set without it goes back to the configured color</td>
+</tr>
+<tr>
+<td><code>--shape NAME</code></td>
+<td>overrides the shape the same way: <code>circle</code>, <code>square</code>, <code>triangle</code>, <code>triangle-down</code>, <code>play</code>, <code>diamond</code>, <code>capsule</code>, <code>seal</code>, <code>star</code>, <code>bolt</code>, <code>bell</code> or <code>checkmark</code></td>
+</tr>
+<tr>
+<td><code>--pane left\|right\|scratch</code></td>
+<td>records which pane set the status, the main pane by default (<a href="#status-pane">below</a>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>agtermctl tree --json</code> reports on each session:</p>
+<ul>
+<li><code>status</code> and <code>statusPane</code>, the pane that set it;</li>
+<li><code>statusColor</code> and <code>statusShape</code>, only while a per-call override is in effect;</li>
+<li><code>statusChangedAt</code>, epoch seconds of the last applied write. Every write counts, <code>idle</code> and a repeat of the same status included, and so do automatic and manual clears, so a script polling <code>tree</code> can tell how long ago the status was last written. It is absent before the first set and is not kept across a restart.</li>
+</ul>
+<h3 id="status-pane">Which pane set it</h3>
+<ul>
+<li>A block set from a background pane survives typing in another pane.</li>
+<li>When the status needs you (blocked or completed), selecting the session reveals and focuses the pane that set it (the split, or a hidden scratch) instead of the main pane. That covers every way of selecting it: auto-follow, attention navigation ⌃⌥↑/↓, plain session navigation, the command palettes, a Dock-menu session and a sidebar click. An active status keeps the current pane. <code>agtermctl session go --to next-attention</code> only steps the selection and does not move focus into the pane.</li>
+<li>While a session is blocked, a status written from a different pane is refused unless it is another <code>blocked</code>. With an agent in each pane, one reporting its progress cannot erase the other's request for input. That holds for <code>idle</code> too, which the bundled agent hooks send on their own when an agent starts or finishes.</li>
+<li>The pane that set the block changes it freely, typing into that pane clears it, and <strong>Clear Status</strong> in the sidebar row menu clears it from anywhere.</li>
+</ul>
+<h3 id="status-clear">Clearing it</h3>
+<ul>
+<li>Typing into a blocked or completed session clears its status, on the first key by default. <strong>Settings ▸ Agent Status ▸ Status reset</strong> can move that to <strong>On Enter</strong>, so a reply you started and walked away from keeps the glyph until you send it; Esc or Ctrl-C still clears a blocked one, since cancelling the prompt answers it. <strong>Disabled</strong> leaves the status to the agent's next hook or Clear Status.</li>
+<li>Esc or Ctrl-C interrupts an active session and clears its status, whatever the setting.</li>
+<li>To come back to a session later, <strong>Mark for Attention</strong> in its row menu gives an idle session a completed status that stays when you visit it, so attention navigation stops on it again. It never replaces a live status; typing in the session's main pane, Clear Status or the agent's next update clears it as usual.</li>
+</ul>
+<h3 id="status-attention">Finding the sessions that need you</h3>
+<p><strong>Attention navigation</strong> (⌃⌥↑/↓) steps through blocked and completed sessions. Two settings under <strong>Settings ▸ Agent Status</strong>, both off by default, widen it:</p>
+<ul>
+<li><strong>Attention navigation includes active sessions</strong> stops on active sessions too, in the same sidebar order. Landing on one keeps the current pane.</li>
+<li><strong>Attention navigation crosses windows</strong> walks every open window, window by window in sidebar order, raising the window it lands in.</li>
+</ul>
+<p>When the sidebar is hidden the glyphs go with it. The <strong>title-bar bell</strong> (<strong>Settings ▸ Notifications ▸ Show attention indicator</strong>, off by default) covers every open window: dimmed when nothing needs you, plain when a session is active or completed, filled amber when any is blocked.</p>
+<ul>
+<li>Clicking it lists the sessions that are not idle across all open windows: blocked, then active, then completed, newest first within each. Hover to highlight, click to jump.</li>
+<li>With more than one window open each row names its window, and picking a session in another window brings that window forward first.</li>
+<li>A blocked or completed row reveals the pane that set its status; an active row keeps the current pane.</li>
+</ul>
+<p>The same list opens as a searchable palette with ⌃⇧I, <strong>Navigate ▸ Go to Attention…</strong>, or Show Attention in the action palette. Right-clicking agterm's Dock icon shows the last-active window's list under <strong>Sessions Needing Attention</strong>, beside its recent sessions.</p>
+<h3 id="status-autofollow">Auto-follow blocked sessions</h3>
+<p>With several agents running, a session that blocks is easy to miss. <strong>Settings ▸ Agent Status ▸ Auto-follow blocked sessions</strong> (Disabled by default, or 5 sec, 10 sec, 30 sec, 60 sec or 5 min idle) selects and focuses the oldest waiting blocked session once you have not typed or clicked for that long.</p>
+<ul>
+<li>It works per window, across that window's workspaces.</li>
+<li>It takes you to each block once. After you have been shown a block and moved on, even without replying, it does not pull you back; it walks the waiting blocks oldest first, then stays quiet. A session counts again only after it leaves blocked and enters it again.</li>
+<li>While you stay on a blocked session, it does not jump.</li>
+<li>Turn off <strong>Auto-follow away from a running session</strong> (on by default) to keep the selection where it is while the current session is active.</li>
+</ul>
+<p><code>agtermctl tree --json</code> reports the window's <code>idleMs</code> (milliseconds since your last input, live) and <code>autoFollowMs</code> (the timeout in milliseconds, omitted when Disabled). <code>agtermctl window list --json</code> reports <code>autoFollowMs</code> per window as of the last refresh, but not the live <code>idleMs</code>.</p>
+<h3 id="status-context">Session context</h3>
+<p>Status says how a session is going; context says what it is about: a short line shown in the title bar, such as the PR, the issue or the task in hand. It states lasting purpose rather than current activity, so it survives quit and relaunch, and only <code>--clear</code> removes it.</p>
+<pre class="bash"><code>agtermctl session context &quot;PR #517: restore reap ordering&quot; --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session context --clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre>
+<ul>
+<li>In the Normal toolbar it takes the title bar's second line, in place of the working directory.</li>
+<li>In Compact it follows the session and window names on the one row, and a long value is cut before the names are.</li>
+<li><strong>Settings ▸ Interface</strong> hides it without clearing it.</li>
+<li><code>tree</code> reports it as the session's <code>context</code>.</li>
+</ul>
+<h3 id="status-info">Session info</h3>
+<p>For current activity there is session info: one line under the session's sidebar row, such as the step an agent is on or how many tests have run.</p>
+<pre class="bash"><code>agtermctl session info --markdown --hide-after 30 --target &quot;$AGTERM_SESSION_ID&quot; \
+  &#39;**3** agents ^[running](color: &quot;green&quot;) ^[1 idle](dim: true)&#39;
+agtermctl session info --clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre>
+<ul>
+<li><code>--markdown</code> allows bold, italic and code. <code>^[text](color: "green")</code> colors a fragment with any named tint color (not a hex), and <code>^[text](dim: true)</code> dims it.</li>
+<li>Each set replaces the whole line. The line is never saved, so it is gone after a relaunch.</li>
+<li><code>--hide-after SECONDS</code> clears it by itself. Give a positive interval and repeat it on each refresh, so the line expires if the script stops.</li>
+<li><strong>Settings ▸ Interface ▸ Session info</strong> shows it Always (the default), only in the flagged view (Flagged), or never (Off). Hiding never clears it.</li>
+<li>A session attached from another Mac shows that Mac's line too, unless one is set here.</li>
+<li><code>tree</code> reports <code>info</code>, <code>infoMarkdown</code> and <code>infoHideAfter</code>.</li>
+</ul>
+<h3 id="status-tint">Row tint</h3>
+<p>A tint tells rows apart at a glance: red for production, green for development. Pick one from <strong>Tint</strong> in a session or workspace row menu: None or one of twelve colors (red, orange, yellow, green, blue, purple, gray, teal, pink, brown, indigo, mint) that follow light and dark mode. Then <strong>Show On</strong> chooses Icon, Name, or Icon and Name.</p>
+<pre class="bash"><code>agtermctl session tint red --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl session tint green --on icon,name --target &quot;$AGTERM_SESSION_ID&quot;
+agtermctl workspace tint red
+agtermctl session tint clear --target &quot;$AGTERM_SESSION_ID&quot;</code></pre>
+<ul>
+<li>A workspace tint colors only the workspace row, never the sessions in it.</li>
+<li>With several rows selected, Show On is available only when every selected row is tinted.</li>
+<li>A color picked for an untinted row starts on the last Show On choice made while the app runs, and Show On shows it checked.</li>
+<li>The command palette offers <strong>Tint Session: Red</strong> through <strong>Tint Session: None</strong> for the active session.</li>
+<li>Any other color is a <code>#rrggbb</code> hex through <code>agtermctl</code>. It stays the same in light and dark mode, and the Tint submenu shows it as a checked Custom entry.</li>
+<li><code>session new --tint</code> and <code>workspace new --tint</code> create a row already tinted. <code>tree</code> reports <code>tint</code> and <code>tintOn</code>.</li>
+</ul>
+<p>A tint on a local row survives quit and relaunch; a duplicated session starts without one. On a session attached from another Mac the tint stays on this Mac: the row does not show the other Mac's tint, and a tint set here is saved with the row. A remote window's row shows the server's tint, which every Mac shares. On an older agterm, an emoji or a PROD or DEV word in the name gives a visible marker, at the cost of pinning the name: the row then no longer shows the live terminal title.</p>
+<h3 id="status-hooks">Install the agent hooks</h3>
+<p><strong>Help ▸ Install Agent Status Hooks…</strong> wires agents up for you:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Reports</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>any shell (bash, zsh, fish)</td>
+<td>active while a command matching <code>AGTERM_AGENT_RE</code> runs; by default gemini, cursor-agent, aider, crush and goose</td>
+</tr>
+<tr>
+<td>Claude Code</td>
+<td>five hooks: prompt and tool run → active, Stop → completed, permission request and permission prompt → blocked</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>six lifecycle hooks through an adapter (<a href="#status-codex">below</a>)</td>
+</tr>
+<tr>
+<td>Pi</td>
+<td>a lifecycle extension, when <code>~/.pi/agent</code> already exists</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>a lifecycle plugin for v1 or v2, when its configuration directory already exists</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Where it writes</strong></p>
+<ul>
+<li>The scripts go to <code>~/.config/agterm/agent-status/</code>, with the bundled <code>agtermctl</code>'s absolute path baked in, so they work without the CLI on your PATH.</li>
+<li>A marker-guarded line for the shell integration goes into <code>~/.zshrc</code>, <code>~/.bashrc</code> and <code>~/.config/fish/config.fish</code> (fish only when that directory exists). Open a new terminal for it to take effect.</li>
+<li>The Claude Code hooks are merged into <code>~/.claude/settings.json</code> and the six Codex hooks into <code>~/.codex/config.toml</code>. Before changing either, the installer saves a copy beside it with a <code>.bak</code> suffix.</li>
+<li>Running it again upgrades agterm-managed integrations and otherwise changes nothing.</li>
+</ul>
+<h4 id="status-claude">Claude Code</h4>
+<ul>
+<li>When Claude Code runs as a worker under another agent with a shell between them, as in a tool call, its hooks stay silent, so the status of the pane that started it is not overwritten.</li>
+<li>A background subagent or workflow keeps the row working. Its activity lights an idle row but never replaces the main agent's status. While Claude Code (2.1.145 or later) reports one still running, Stop posts active instead of completed; completed comes from the Stop after the last one finishes.</li>
+<li>Two gaps remain: the main agent's activity can replace a subagent's permission prompt, and when the key that answers that prompt leaves the block in place, the row stays blocked until the main agent's next event.</li>
+<li>After upgrading, restart agterm and run the install again: a running older app ignores the subagent's <code>--if-idle</code> and applies the write.</li>
+</ul>
+<h4 id="status-codex">Codex</h4>
+<ul>
+<li>A permission request is only a candidate, because it fires before Auto Review. The adapter keeps automatic decisions active and turns the row blocked only once a real approval or structured question appears in that pane.</li>
+<li>On Stop, a final message that ends a sentence with <code>?</code> reports blocked. This is a guess from the text: it ignores code in single and triple backticks, and a <code>?</code> that stands alone, opens quoted text, or sits inside a word (as in a URL query string) does not count. Every other final message reports completed and auto-resets.</li>
+<li><strong>Run <code>/hooks</code> in Codex after installing or upgrading</strong> and approve the hooks. Codex runs changed command hooks only once they are approved, so until then they do nothing.</li>
+</ul>
+<p>Both the skill and the hooks installers read <code>CODEX_HOME</code> as exported by your interactive login shell. A nonempty value selects the Codex directory, a relative path resolved against that shell's working directory. An unset or empty value, a shell that fails to start, unreadable output or a timeout falls back to <code>~/.codex</code>. The selected directory must already exist: a missing custom directory is skipped, with nothing installed into <code>~/.codex</code> instead. Whether OpenCode is installed does not affect this.</p>
+<h4 id="status-pi">Pi</h4>
+<p>Pi work starts as active and settles as completed once retries and queued continuations finish. Pi has no permission or structured-question event, so blocked is never guessed from its replies. Restart Pi or run <code>/reload</code> after installing.</p>
+<h4 id="status-opencode">OpenCode</h4>
+<p>The installer runs <code>opencode --version</code> and installs the matching plugin. It finds OpenCode on your interactive login shell's PATH (<code>$SHELL</code>, or <code>/bin/zsh</code> when unset). If the version cannot be told, it asks you to choose v1 or v2, or to skip OpenCode. Nothing else is needed: no npm dependencies, no configuration edits. Restart OpenCode after installing.</p>
+<p><strong>v1</strong> installs <code>~/.config/opencode/plugins/agterm-status.js</code>. It serves OpenCode 1.x only; OpenCode 2 does not load 1.x plugins and shows no status with it.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>OpenCode event</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session.status</code> busy or retry</td>
+<td>active</td>
+</tr>
+<tr>
+<td>idle</td>
+<td>completed, only when no session is still busy, so a task subagent cannot complete a busy parent</td>
+</tr>
+<tr>
+<td>permission or question prompt</td>
+<td>blocked</td>
+</tr>
+<tr>
+<td>reply or reject</td>
+<td>active, once no other prompt is waiting</td>
+</tr>
+<tr>
+<td>a turn-ending <code>session.error</code> for a session already busy</td>
+<td>blocked. The idle that follows the halt is ignored, and a clean sibling's idle cannot erase it. An abort is ignored. A context overflow waits for the next event: busy means compaction resumed, idle means the turn ended (blocked)</td>
+</tr>
+<tr>
+<td>deprecated <code>session.idle</code></td>
+<td>ignored, so it does not fire twice with <code>session.status</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>v2</strong> installs a plugin at <code>~/.config/opencode/plugins/agterm-v2/tui.js</code> by default. It reports the selected OpenCode session and its descendants into the current pane, even when several clients share a server; background tabs, ancestors and sibling sessions are left out.</p>
+<ul>
+<li>Running work, retries and recovering compaction are active. Pending permissions and questions are blocked until all are answered or cancelled.</li>
+<li>Success or an interruption by you is completed, but only once the whole family is no longer busy. A failure that ends the work is blocked once the family stops, and stays blocked until the next run.</li>
+<li>Switching sessions, reconnecting and unloading the plugin refresh or clear the status.</li>
+<li>The directory comes from that shell's <code>OPENCODE_CONFIG_DIR</code>, then <code>$XDG_CONFIG_HOME/opencode</code>, then <code>~/.config/opencode</code>. An empty <code>OPENCODE_CONFIG_DIR</code> skips v2 with a warning, and so does a shell configuration that cannot be read while <code>~/.config/opencode</code> exists; without that directory OpenCode is skipped as not installed.</li>
+</ul>
+<p>Re-run the installer after switching major versions. A v2 install removes the agterm-marked v1 plugin in its directory; a v1 install leaves the v2 plugin directory alone. A v1 file you own, or one that cannot be read, is kept and reported in the install result.</p>
+<h4 id="codex-hooks-manual">Add Codex hooks by hand</h4>
+<p>The installer never rewrites a <code>~/.codex/config.toml</code> it does not own. If that file already defines its own <code>[hooks…]</code> entries, or is not valid TOML, it is left untouched and the install alert sends you here. With <code>CODEX_HOME</code> set, edit <code>&lt;CODEX_HOME&gt;/config.toml</code> instead.</p>
+<p>Check the shape of your existing hooks first, since that is why the installer declined:</p>
+<ul>
+<li>If every one is an <code>[[hooks.…]]</code> array-of-tables entry, appending is safe, including for events you already hook. A repeated <code>[[…]]</code> header adds an element, so both your hook and agterm's run.</li>
+<li>An inline <code>hooks = { … }</code> table or a plain <code>[hooks.SessionStart]</code> table makes the file stop parsing once you append, since TOML allows neither extending a closed inline table nor redefining a value. Convert those entries to the array-of-tables form first.</li>
+<li>Do not add a second <code>command</code> line inside an existing entry: a repeated key in one table breaks the file too.</li>
+</ul>
+<p>Then add the six blocks below, replacing <code>/Users/you</code> with your home directory. The path must be absolute, since Codex runs the hook without your shell's PATH.</p>
+<pre class="toml"><code>[[hooks.SessionStart]]
 [[hooks.SessionStart.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' session-start"
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; session-start&quot;
 
 [[hooks.UserPromptSubmit]]
 [[hooks.UserPromptSubmit.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' user-prompt-submit"
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; user-prompt-submit&quot;
 
 [[hooks.PreToolUse]]
 [[hooks.PreToolUse.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' pre-tool-use"
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; pre-tool-use&quot;
 
 [[hooks.PostToolUse]]
 [[hooks.PostToolUse.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' post-tool-use"
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; post-tool-use&quot;
 
 [[hooks.PermissionRequest]]
 [[hooks.PermissionRequest.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' permission-request"
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; permission-request&quot;
 
 [[hooks.Stop]]
 [[hooks.Stop.hooks]]
-type = "command"
-command = "'/Users/you/.config/agterm/agent-status/agterm-codex-status.sh' stop"</div>
-            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
-              The adapter script itself is already in place — the installer copies it to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/agterm/agent-status/</span>
-              on every run, whether or not the config merge succeeded. Once the blocks are added, run
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/hooks</span>
-              in Codex and approve them; command hooks stay inert until you do. For the unparseable case, fixing
-              the TOML and re-running the installer is the easier route — it will merge the blocks for you.
-            </p>
-          </section>
+type = &quot;command&quot;
+command = &quot;&#39;/Users/you/.config/agterm/agent-status/agterm-codex-status.sh&#39; stop&quot;</code></pre>
+<p>The adapter script is already in place: the installer copies it to <code>~/.config/agterm/agent-status/</code> on every run, whether or not the config merge succeeded. Once the blocks are added, run <code>/hooks</code> in Codex and approve them. For a file that is not valid TOML, fixing it and running the installer again is easier: it merges the blocks for you.</p>
+</section>
 
           <!-- RESTORE -->
           <section id="restore" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
