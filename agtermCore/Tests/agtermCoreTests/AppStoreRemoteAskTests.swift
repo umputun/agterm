@@ -47,7 +47,23 @@ struct AppStoreRemoteAskTests {
         PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: Self.buttons, style: style)
     }
 
-    private func owner(of session: Session) -> Int { hub.presenterGeneration(session: session.id) }
+    private func owner(of session: Session) -> Int { hub.presenter(of: session.id) ?? -1 }
+
+    @Test(arguments: [true, false])
+    func anAskGoesToThePrimaryPanesClaimantElseTheHolder(claimed: Bool) throws {
+        let (session, _) = try origin(split: true)
+        let claimant = Sink()
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [PresentationHub.leadReportKind],
+                                                                                 mode: .presenter), sink: claimant) { PresentationSnapshot(status: nil, hud: nil) }
+        let leads = claimed ? [session.paneIdentity] : [try #require(session.splitPaneIdentity)]
+        hub.receive(PresentationFrame(gen: claimant.frames[0].gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leads))), from: id)
+
+        #expect(store.presentAskRemotely(ask(), in: session, paneIdentity: nil, window: Self.window) == true)
+
+        let asked = { (sink: Sink) in sink.bodies.contains { if case .askRequest = $0 { true } else { false } } }
+        #expect(asked(claimant) == claimed)
+        #expect(asked(presenter) == !claimed)
+    }
 
     private func setLead(_ role: ZmxLeadRole?, pane: UUID) {
         let attachment = ZmxLeadAttachment(claim: false)
@@ -59,11 +75,11 @@ struct AppStoreRemoteAskTests {
 
     @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?],
           [nil, .unowned, .leader, .follower] as [ZmxLeadRole?])
-    func aSessionAskRequiresEveryPaneToFollow(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
+    func aSessionAskFollowsThePrimaryPaneOnly(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
         let (session, _) = try origin(split: true)
         setLead(left, pane: session.paneIdentity)
         setLead(right, pane: try #require(session.splitPaneIdentity))
-        let remote = left == .follower && right == .follower
+        let remote = left == .follower
 
         let result = store.presentAskRemotely(ask(), in: session, paneIdentity: nil, window: Self.window)
 
@@ -138,7 +154,7 @@ struct AppStoreRemoteAskTests {
         let pending = ask()
         #expect(store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window) == nil)
         #expect(session.openAsk(pending))
-        hub.onPresenterLost = { [store] in _ = store.takeBackRemoteAsk(forSession: $0) }
+        hub.onOwnerLost = { [store] session, owner in _ = store.takeBackRemoteAsk(forSession: session, owner: owner) }
 
         hub.unsubscribe(try #require(id))
 
@@ -438,7 +454,7 @@ struct AppStoreRemoteAskTests {
         store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
         let stale = PresentationAskAnswer(id: pending.id, owner: owner(of: session), button: "yes")
 
-        #expect(store.takeBackRemoteAsk(forSession: session.id) == nil)
+        #expect(store.takeBackRemoteAsk(forSession: session.id, owner: owner(of: session)) == nil)
 
         #expect(session.askPending?.id == pending.id)
         #expect(!session.askPresentedRemotely)
@@ -450,7 +466,7 @@ struct AppStoreRemoteAskTests {
         let pending = ask(style: .gui)
         store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
 
-        #expect(store.takeBackRemoteAsk(forSession: session.id)?.id == pending.id)
+        #expect(store.takeBackRemoteAsk(forSession: session.id, owner: owner(of: session))?.id == pending.id)
         #expect(session.askPresentedRemotely)
     }
 
@@ -478,7 +494,7 @@ struct AppStoreRemoteAskTests {
 
     @Test func losingThePresenterReportsTheSessionToTheHost() throws {
         var lost: [UUID] = []
-        hub.onPresenterLost = { lost.append($0) }
+        hub.onOwnerLost = { session, _ in lost.append(session) }
         let (session, id) = try origin()
 
         hub.unsubscribe(try #require(id))
@@ -488,7 +504,7 @@ struct AppStoreRemoteAskTests {
 
     @Test func onlyTheCurrentPresentersAskFramesReachTheHost() throws {
         var received: [PresentationFrame.Body] = []
-        hub.onPresenterFrame = { _, body in received.append(body) }
+        hub.onPresenterFrame = { _, _, body in received.append(body) }
         let (_, id) = try origin()
         let presenterID = try #require(id)
         let mirrorID = PresentationHub.SubscriberID(generation: 2)

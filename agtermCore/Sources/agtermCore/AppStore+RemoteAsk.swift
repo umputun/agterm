@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Asks handed to the viewer presenting a session, on the origin
 
 extension AppStore {
-    /// Hands a session-associated ask to its presenter when the target follows remotely.
+    /// Hands a session-associated ask to the viewer leading its pane when the target follows remotely.
     /// Nil leaves it local; false means the session's ask slot is taken.
     ///
     /// The ask keeps the session's slot and its result on this Mac, marked as presented elsewhere, so every
@@ -22,11 +22,10 @@ extension AppStore {
     public func openRemoteAsk(_ ask: PendingAsk, in session: Session, paneIdentity: UUID?,
                               window: WindowInfo.ID) -> RemoteAskOpening {
         // an expired ask is never shown: the caller holds it and its deadline ends it
-        guard let hub = presentationHub, hub.hasPresenter(session: session.id), !ask.expired(at: Date()),
-              presentsRemotely(session, paneIdentity: paneIdentity) else { return .notPresented }
-        let owner = hub.presenterGeneration(session: session.id)
+        guard let hub = presentationHub, !ask.expired(at: Date()),
+              let owner = remoteRecipient(session, paneIdentity: paneIdentity) else { return .notPresented }
         let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
-        if let refusal = askOfferRefusal(request, session: session.id, hub: hub) { return refusal }
+        if let refusal = askOfferRefusal(request, hub: hub) { return refusal }
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner, registry: askRegistry) else { return .slotTaken }
         askRegistry.register(id: ask.id, owner: .session(session.id, window: window))
         handOver(request, in: session, hub: hub)
@@ -41,43 +40,43 @@ extension AppStore {
         return true
     }
 
-    /// offerPendingAsk hands `id`'s unpresented ask to its presenter under the current generation; false when there
-    /// is none, or the presenter cannot show it and it stays unpresented.
+    /// offerPendingAsk hands `id`'s unpresented ask to the viewer its pane routes to; false when there is none, or that
+    /// viewer cannot show it and it stays unpresented.
     @discardableResult
     public func offerPendingAsk(forSession id: UUID) -> Bool {
-        guard let hub = presentationHub, hub.hasPresenter(session: id), let session = session(withID: id),
-              let ask = session.askPending, !session.askPresentedRemotely, !session.askReplica else { return false }
-        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) },
-                                      owner: hub.presenterGeneration(session: id))
-        guard askOfferRefusal(request, session: id, hub: hub) == nil else { return false }
+        guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
+              !session.askPresentedRemotely, !session.askReplica,
+              let owner = remoteRecipient(session, paneIdentity: session.askPaneIdentity) else { return false }
+        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner)
+        guard askOfferRefusal(request, hub: hub) == nil else { return false }
         session.askRemoteOwner = request.owner
         handOver(request, in: session, hub: hub)
         return true
     }
 
-    /// returnAskToPending takes `id`'s handed-over ask back as unpresented after its presenter was lost or refused
-    /// it; an answer from that presenter is then stale.
-    public func returnAskToPending(forSession id: UUID) {
-        guard let session = session(withID: id), session.askPresentedRemotely else { return }
+    /// returnAskToPending takes `id`'s ask back as unpresented after the viewer `owner` it was handed to was lost or
+    /// refused it; an answer from that viewer is then stale.
+    public func returnAskToPending(forSession id: UUID, owner: Int) {
+        guard let session = session(withID: id), session.askPresentedRemotely, session.askRemoteOwner == owner else { return }
         session.takeAskBack()
     }
 
-    private func askOfferRefusal(_ request: PresentationAsk, session: UUID, hub: PresentationHub) -> RemoteAskOpening? {
+    private func askOfferRefusal(_ request: PresentationAsk, hub: PresentationHub) -> RemoteAskOpening? {
         if request.needsFormSupport {
-            guard hub.presenterSupports(PresentationHub.askFormKind, session: session) else { return .formUnsupported }
+            guard hub.supports(PresentationHub.askFormKind, owner: request.owner) else { return .formUnsupported }
             guard request.fitsFrames() else { return .tooLarge }
         }
-        if request.needsOtherSupport, !hub.presenterSupports(PresentationHub.askOtherKind, session: session) {
+        if request.needsOtherSupport, !hub.supports(PresentationHub.askOtherKind, owner: request.owner) {
             return .otherUnsupported
         }
         return nil
     }
 
     private func handOver(_ request: PresentationAsk, in session: Session, hub: PresentationHub) {
-        session.onRemoteAskEnded = { [weak hub, id = session.id, owner = request.owner] askID in
-            hub?.sendToPresenter(.askDismiss(PresentationAskRef(id: askID, owner: owner)), session: id)
+        session.onRemoteAskEnded = { [weak hub, owner = request.owner] askID in
+            hub?.send(.askDismiss(PresentationAskRef(id: askID, owner: owner)), toOwner: owner)
         }
-        hub.sendToPresenter(.askRequest(request), session: session.id)
+        hub.send(.askRequest(request), toOwner: request.owner)
     }
 
     /// Applies the presenter's answer. Refused unless it is for the ask this session is presenting under that
@@ -104,13 +103,12 @@ extension AppStore {
         return session.askPending?.id == ref.id && session.askRemoteOwner == ref.owner
     }
 
-    /// Takes a remotely presented ask back after its presenter was lost or refused it. A terminal ask is
-    /// drawn here from now on. A GUI ask needs a window slot only the host can place, so it is returned still
+    /// Takes a remotely presented ask back after the viewer `owner` it was handed to was lost or refused it. A terminal
+    /// ask is drawn here from now on. A GUI ask needs a window slot only the host can place, so it is returned still
     /// marked remote; the host moves it or completes it with `failHandback`.
-    public func takeBackRemoteAsk(forSession id: UUID) -> PendingAsk? {
-        guard let session = session(withID: id), let ask = session.askPending, session.askPresentedRemotely else {
-            return nil
-        }
+    public func takeBackRemoteAsk(forSession id: UUID, owner: Int) -> PendingAsk? {
+        guard let session = session(withID: id), let ask = session.askPending, session.askPresentedRemotely,
+              session.askRemoteOwner == owner else { return nil }
         guard ask.style == .gui else {
             session.takeAskBack()
             return nil
@@ -126,7 +124,7 @@ extension AppStore {
     }
 }
 
-/// RemoteAskOpening is what became of an ask handed to a session's presenter.
+/// RemoteAskOpening is what became of an ask handed to a viewer.
 public enum RemoteAskOpening: Equatable, Sendable {
     case opened
     case slotTaken

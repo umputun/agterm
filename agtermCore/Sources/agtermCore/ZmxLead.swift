@@ -173,17 +173,24 @@ public final class ZmxLeadBook {
 }
 
 extension AppStore {
-    /// presentsRemotely is whether a session effect goes to its presenter: always when headless, else when it follows.
+    /// presentsRemotely is whether a session effect goes to a viewer: always when headless, else when it follows.
     func presentsRemotely(_ session: Session, paneIdentity: UUID?) -> Bool {
         headless || session.followsRemotely(paneIdentity: paneIdentity)
+    }
+
+    /// remoteRecipient is the token of the viewer new work for `paneIdentity` of `session`, or for the whole session
+    /// when nil, goes to; nil keeps it on this Mac or, headless, holds it for a viewer to come.
+    func remoteRecipient(_ session: Session, paneIdentity: UUID?) -> Int? {
+        guard let hub = presentationHub, presentsRemotely(session, paneIdentity: paneIdentity) else { return nil }
+        return hub.route(session: session.id, pane: paneIdentity ?? session.paneIdentity)
     }
 }
 
 extension Session {
-    /// Remote presentation requires the target pane, or every existing pane, to follow on this Mac.
+    /// Remote presentation requires the target pane, or the primary pane for session-wide work, to follow on this Mac,
+    /// the same pane whose leader the work is routed to.
     func followsRemotely(paneIdentity: UUID?) -> Bool {
-        let panes = paneIdentity.map { [$0] } ?? ([self.paneIdentity] + [splitPaneIdentity].compactMap { $0 })
-        return panes.allSatisfy { ZmxLeadBook.shared.role(pane: $0) == .follower }
+        ZmxLeadBook.shared.role(pane: paneIdentity ?? self.paneIdentity) == .follower
     }
 
     /// The identity of the pane behind a surface slot, a Live scratch's included; nil for the ephemeral ones, which

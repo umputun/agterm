@@ -55,7 +55,25 @@ struct SessionPickTests {
         return id
     }
 
-    private func owner(of session: Session) -> Int { hub.presenterGeneration(session: session.id) }
+    private func owner(of session: Session) -> Int { hub.presenter(of: session.id) ?? -1 }
+
+    @Test(arguments: [true, false])
+    func aPickGoesToThePrimaryPanesClaimantElseTheHolder(claimed: Bool) throws {
+        let session = try session()
+        try presented(session)
+        let claimant = Sink()
+        let hello = PresentationHello(version: 1, kinds: PresentationHub.pickKinds + [PresentationHub.leadReportKind], mode: .presenter)
+        let id = try hub.subscribe(session: session.id, hello: hello, sink: claimant) { PresentationSnapshot(status: nil, hud: nil) }
+        let leads = claimed ? [session.paneIdentity] : [UUID()]
+        hub.receive(PresentationFrame(gen: claimant.frames[0].gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leads))), from: id)
+        let remote = pick()
+
+        #expect(store.presentPickRemotely(remote, in: session, window: nil) == true)
+
+        let asked = { (sink: Sink) in sink.bodies.contains { if case .pickRequest = $0 { true } else { false } } }
+        #expect(asked(claimant) == claimed)
+        #expect(asked(presenter) == !claimed)
+    }
 
     @Test(arguments: [
         ("a", nil, ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0)),
@@ -216,11 +234,11 @@ struct SessionPickTests {
         let remote = pick()
         _ = store.presentPickRemotely(remote, in: session, window: nil)
 
-        book.handBack(session: session.id, refused: PresentationPickRef(id: remote.id, owner: owner(of: session) + 1),
-                      to: controller, window: windowID)
+        book.handBack(session: session.id, owner: owner(of: session) + 1,
+                      refused: PresentationPickRef(id: remote.id, owner: owner(of: session) + 1), to: controller, window: windowID)
         #expect(controller.pending == nil, "a refusal under another owner takes nothing back")
-        book.handBack(session: session.id, refused: PresentationPickRef(id: remote.id, owner: owner(of: session)),
-                      to: controller, window: windowID)
+        book.handBack(session: session.id, owner: owner(of: session),
+                      refused: PresentationPickRef(id: remote.id, owner: owner(of: session)), to: controller, window: windowID)
 
         #expect(controller.pending == remote)
         #expect(book.node(forSession: session.id) == ControlSessionPick(id: remote.id))
@@ -237,13 +255,14 @@ struct SessionPickTests {
         controller.open(unrelated)
         let remote = pick()
         _ = store.presentPickRemotely(remote, in: session, window: nil)
+        let held = owner(of: session)
 
         if lost {
             hub.unsubscribe(subscriber)
-            book.handBack(session: session.id, to: controller, window: windowID)
+            book.handBack(session: session.id, owner: held, to: controller, window: windowID)
         } else {
-            book.handBack(session: session.id, refused: PresentationPickRef(id: remote.id, owner: owner(of: session)),
-                      to: controller, window: windowID)
+            book.handBack(session: session.id, owner: held, refused: PresentationPickRef(id: remote.id, owner: held),
+                          to: controller, window: windowID)
         }
 
         #expect(controller.pending == unrelated)
@@ -260,8 +279,8 @@ struct SessionPickTests {
         let second = pick()
         _ = store.presentPickRemotely(second, in: session, window: windowID)
 
-        book.handBack(session: session.id, refused: PresentationPickRef(id: first.id, owner: owner(of: session)),
-                      to: controller, window: windowID)
+        book.handBack(session: session.id, owner: owner(of: session),
+                      refused: PresentationPickRef(id: first.id, owner: owner(of: session)), to: controller, window: windowID)
 
         #expect(controller.pending == nil)
         #expect(book.node(forSession: session.id) == ControlSessionPick(id: second.id, remote: true))
@@ -271,7 +290,7 @@ struct SessionPickTests {
         let session = try session()
         try presented(session)
         let (windowID, controller) = window()
-        hub.onPresenterLost = { [book] lost in book.handBack(session: lost, to: controller, window: windowID) }
+        hub.onOwnerLost = { [book] lost, owner in book.handBack(session: lost, owner: owner, to: controller, window: windowID) }
         let remote = pick()
         _ = store.presentPickRemotely(remote, in: session, window: windowID)
         presenter.refusesDismissal = true
@@ -317,7 +336,7 @@ struct SessionPickTests {
         let remote = pick()
         _ = store.presentPickRemotely(remote, in: session, window: nil)
 
-        book.handBack(session: session.id, to: nil, window: nil)
+        book.handBack(session: session.id, owner: owner(of: session), to: nil, window: nil)
 
         #expect(book.result(for: remote.id) == ControlPickResult(result: .cancelled))
     }

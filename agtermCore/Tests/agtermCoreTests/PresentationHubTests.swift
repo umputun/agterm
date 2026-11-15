@@ -258,8 +258,8 @@ struct PresentationHubTests {
         let ask = PresentationFrame.Body.askRequest(PresentationAsk(
             PendingAsk(id: "a1", title: "deploy?", buttons: [ControlAskButton(id: "y", label: "Yes")]), pane: nil, owner: 1))
 
-        #expect(hub.sendToPresenter(sound, session: Self.session) == advertised)
-        #expect(hub.sendToPresenter(ask, session: Self.session))
+        #expect(hub.send(sound, toOwner: sink.frames[0].gen) == advertised)
+        #expect(hub.send(ask, toOwner: sink.frames[0].gen))
 
         #expect(sink.bodies.contains(sound) == advertised)
         #expect(sink.bodies.last == ask)
@@ -268,7 +268,7 @@ struct PresentationHubTests {
     @Test func onlyThePresentersLinkClickReachesTheHost() throws {
         let hub = makeHub()
         var received: [PresentationFrame.Body] = []
-        hub.onPresenterFrame = { _, body in received.append(body) }
+        hub.onPresenterFrame = { _, _, body in received.append(body) }
         let hello = PresentationHello(version: 1, kinds: [PresentationHub.linkClickKind], mode: .presenter)
         let presenterSink = Sink()
         let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
@@ -284,10 +284,10 @@ struct PresentationHubTests {
         #expect(presenterSink.bodies.first == .hello(hello))
     }
 
-    @Test func onlyThePresentersPageResultReachesTheHost() throws {
+    @Test func aPageResultReachesTheHostWithItsSender() throws {
         let hub = makeHub()
-        var received: [PresentationFrame.Body] = []
-        hub.onPresenterFrame = { _, body in received.append(body) }
+        var received: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in received.append(sender) }
         let hello = PresentationHello(version: 1, kinds: [PresentationHub.pageTextKind], mode: .presenter)
         let presenterSink = Sink()
         let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
@@ -299,22 +299,23 @@ struct PresentationHubTests {
         hub.receive(PresentationFrame(gen: mirrorSink.frames[0].gen, rev: 1, body: result), from: mirror)
         hub.receive(PresentationFrame(gen: presenterSink.frames[0].gen, rev: 1, body: result), from: presenter)
 
-        #expect(received == [result])
+        #expect(received == [mirrorSink.frames[0].gen, presenterSink.frames[0].gen])
         #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageTextKind))
     }
 
     @Test(arguments: [true, false])
-    func presenterSupportReflectsTheHelloOfTheCurrentPresenterOnly(advertised: Bool) throws {
+    func supportReflectsTheViewersOwnHello(advertised: Bool) throws {
         let hub = makeHub()
         let sink = Sink()
+        let other = Sink()
         let kinds = advertised ? ["status", PresentationHub.askFormKind] : ["status"]
-        let id = try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter),
-                                   sink: sink) { Self.empty }
-        #expect(!hub.presenterSupports(PresentationHub.askFormKind, session: Self.session))
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: kinds, mode: .presenter),
+                          sink: sink) { Self.empty }
+        try hub.subscribe(session: Self.session, hello: PresentationHello(version: 1, kinds: ["status", PresentationHub.askFormKind],
+                                                                          mode: .presenter), sink: other) { Self.empty }
 
-        hub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .presenterAcquire), from: id)
-
-        #expect(hub.presenterSupports(PresentationHub.askFormKind, session: Self.session) == advertised)
+        #expect(hub.supports(PresentationHub.askFormKind, owner: sink.frames[0].gen) == advertised)
+        #expect(hub.supports(PresentationHub.askFormKind, owner: other.frames[0].gen))
         #expect(sink.bodies.first == .hello(PresentationHello(version: 1, kinds: kinds, mode: .presenter)))
     }
 
@@ -328,9 +329,9 @@ struct PresentationHubTests {
         let big = PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024), pane: nil, source: "osc")
         let before = sink.frames.count
 
-        hub.batchToPresenter(session: Self.session) {
-            for notify in small { hub.sendToPresenter(.notify(notify), session: Self.session) }
-            hub.sendToPresenter(.notify(big), session: Self.session)
+        hub.batch(toOwner: sink.frames[0].gen) {
+            for notify in small { hub.send(.notify(notify), toOwner: sink.frames[0].gen) }
+            hub.send(.notify(big), toOwner: sink.frames[0].gen)
         }
 
         let sent = sink.bodies.dropFirst(before)
@@ -427,7 +428,7 @@ struct PresentationHubTests {
     @Test func onlyThePresentersStatusClearAndSeenReachTheHost() throws {
         let hub = makeHub()
         var received: [PresentationFrame.Body] = []
-        hub.onPresenterFrame = { _, body in received.append(body) }
+        hub.onPresenterFrame = { _, _, body in received.append(body) }
         let hello = PresentationHello(version: 1, kinds: [PresentationHub.statusClearKind], mode: .presenter)
         let presenterSink = Sink()
         let presenter = try hub.subscribe(session: Self.session, hello: hello, sink: presenterSink) { Self.empty }
@@ -526,14 +527,14 @@ struct PresentationHubTests {
         #expect(hub.subscribedSessions == [Self.session])
     }
 
-    static let leadHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.leadReportKind], mode: .presenter)
+    static let leadHello = PresentationHello(version: 1, kinds: ["status", "sound", PresentationHub.leadReportKind], mode: .presenter)
     static let left = UUID()
     static let right = UUID()
     static let split = PresentationSnapshot(status: nil, hud: nil,
                                             layout: PresentationLayout(panes: [left, right], primary: left, axis: "horizontal", shown: true))
 
-    func viewer(_ hub: PresentationHub, hello: PresentationHello = Self.leadHello) throws -> (id: PresentationHub.SubscriberID, gen: Int) {
-        let sink = Sink()
+    func viewer(_ hub: PresentationHub, hello: PresentationHello = Self.leadHello,
+                sink: Sink = Sink()) throws -> (id: PresentationHub.SubscriberID, gen: Int) {
         let id = try hub.subscribe(session: Self.session, hello: hello, sink: sink) { Self.split }
         return (id, sink.frames[0].gen)
     }
@@ -638,5 +639,119 @@ struct PresentationHubTests {
 
         #expect(hub.route(session: Self.session, pane: Self.left) == nil)
         #expect(hub.route(session: other, pane: Self.left) == sink.frames[0].gen)
+    }
+
+    @Test func aSendToAnOwnerReachesThatViewerAlone() throws {
+        let hub = makeHub()
+        let firstSink = Sink()
+        let secondSink = Sink()
+        let first = try viewer(hub, sink: firstSink)
+        _ = try viewer(hub, sink: secondSink)
+
+        #expect(hub.send(.sound(PresentationSound(name: nil)), toOwner: first.gen))
+
+        #expect(firstSink.bodies.last == .sound(PresentationSound(name: nil)))
+        #expect(!secondSink.bodies.contains(.sound(PresentationSound(name: nil))))
+    }
+
+    @Test func aSendToAGoneOwnerOrOfAnUnlistedKindIsRefused() throws {
+        let hub = makeHub()
+        let gone = try viewer(hub)
+        let older = try viewer(hub, hello: Self.hello)
+        hub.unsubscribe(gone.id)
+
+        #expect(!hub.send(.sound(PresentationSound(name: nil)), toOwner: gone.gen))
+        #expect(!hub.send(.sound(PresentationSound(name: nil)), toOwner: older.gen))
+        #expect(!hub.isConnected(owner: gone.gen))
+        #expect(hub.isConnected(owner: older.gen))
+        #expect(hub.supports("status", owner: older.gen))
+        #expect(!hub.supports("sound", owner: older.gen))
+    }
+
+    @Test func anAnswerEchoingAnotherViewersOwnerIsDropped() throws {
+        let hub = makeHub()
+        let owner = try viewer(hub)
+        let other = try viewer(hub)
+        var received: [(Int, PresentationFrame.Body)] = []
+        hub.onPresenterFrame = { _, sender, body in received.append((sender, body)) }
+        let answer = PresentationFrame.Body.askResolve(PresentationAskAnswer(id: "a1", owner: owner.gen, button: "y"))
+
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: answer), from: other.id)
+        hub.receive(PresentationFrame(gen: owner.gen, rev: 0, body: answer), from: owner.id)
+
+        #expect(received.map(\.0) == [owner.gen])
+        #expect(received.map(\.1) == [answer])
+    }
+
+    @Test func anOverlayOrPageAnswerArrivesWithItsSender() throws {
+        let hub = makeHub()
+        _ = try viewer(hub)
+        let other = try viewer(hub)
+        var senders: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in senders.append(sender) }
+
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: .overlayClosed(PresentationOverlayChange(job: "j1"))), from: other.id)
+        hub.receive(PresentationFrame(gen: other.gen, rev: 0, body: .pageClosed(PresentationPageChange(page: "p1"))), from: other.id)
+
+        #expect(senders == [other.gen, other.gen])
+    }
+
+    @Test func clearsSeenAndClicksComeFromTheHolderOrALeader() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let leader = try viewer(hub)
+        let bystander = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+        report(hub, leader, [Self.right])
+        var senders: [Int] = []
+        hub.onPresenterFrame = { _, sender, _ in senders.append(sender) }
+        let bodies: [PresentationFrame.Body] = [
+            .statusSeen(PresentationSeen(reason: .viewed)), .statusClear(PresentationStatusClear(reason: .manual)),
+            .linkClick(PresentationLinkClick(raw: "a.md", pane: Self.right, mode: .overlay)),
+        ]
+
+        for body in bodies {
+            for viewer in [holder, leader, bystander] {
+                hub.receive(PresentationFrame(gen: viewer.gen, rev: 0, body: body), from: viewer.id)
+            }
+        }
+
+        #expect(senders == [holder.gen, leader.gen, holder.gen, leader.gen, holder.gen, leader.gen])
+    }
+
+    @Test func everyDroppedViewerReportsTheLossOfItsOwnWork() throws {
+        let hub = makeHub()
+        let holder = try viewer(hub)
+        let other = try viewer(hub)
+        hub.receive(PresentationFrame(gen: holder.gen, rev: 0, body: .presenterAcquire), from: holder.id)
+        var lost: [Int] = []
+        hub.onOwnerLost = { session, owner in
+            #expect(session == Self.session)
+            lost.append(owner)
+        }
+
+        hub.unsubscribe(other.id)
+        hub.unsubscribe(holder.id)
+
+        #expect(lost == [other.gen, holder.gen])
+    }
+
+    @Test func aBatchGoesToItsOwnerAloneAsOneCommit() throws {
+        let hub = makeHub()
+        let firstSink = Sink()
+        let secondSink = Sink()
+        let first = try viewer(hub, sink: firstSink)
+        let second = try viewer(hub, sink: secondSink)
+        let sound = PresentationFrame.Body.sound(PresentationSound(name: nil))
+
+        hub.batch(toOwner: first.gen) {
+            hub.send(sound, toOwner: first.gen)
+            hub.send(sound, toOwner: second.gen)
+            #expect(!firstSink.bodies.contains(sound))
+        }
+
+        #expect(firstSink.bodies.suffix(2).last == .pendingCommit)
+        #expect(!firstSink.bodies.contains(sound))
+        #expect(secondSink.bodies.last == sound)
     }
 }

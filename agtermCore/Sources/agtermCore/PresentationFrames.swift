@@ -8,6 +8,12 @@ public enum PresentationPane: Equatable, Sendable, Codable {
 
     private static let scratchName = "scratch"
 
+    /// identity is the pane's stable identity, nil for the scratch.
+    public var identity: UUID? {
+        if case .identity(let id) = self { return id }
+        return nil
+    }
+
     public init(from decoder: Decoder) throws {
         let text = try decoder.singleValueContainer().decode(String.self)
         if text == Self.scratchName {

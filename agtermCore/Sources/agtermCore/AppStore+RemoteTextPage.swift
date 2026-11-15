@@ -81,21 +81,21 @@ extension AppStore {
     public func remoteTextAction(_ sessionID: UUID, pane: OverlayPane?, _ action: TextPageAction) async -> RemoteTextOutcome {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane), slot.page != nil
         else { return .local }
-        // a headless origin holds the page with no owner until a presenter connects
-        guard let hub = presentationHub, hub.presenterGeneration(session: sessionID) == slot.owner else {
+        // a headless origin holds the page with no owner until a viewer takes it
+        guard let hub = presentationHub, let owner = slot.owner, hub.isConnected(owner: owner) else {
             return .failed(OverlayResultError.viewerGone)
         }
-        guard hub.presenterSupports(PresentationHub.pageTextKind, session: sessionID) else { return .local }
-        if case .files = action, !hub.presenterSupports(PresentationHub.pageFilesKind, session: sessionID) { return .local }
+        guard hub.supports(PresentationHub.pageTextKind, owner: owner) else { return .local }
+        if case .files = action, !hub.supports(PresentationHub.pageFilesKind, owner: owner) { return .local }
         var seq = 0
         session.remoteOverlays.updatePage(slot.job) { seq = $0.nextSeq() }
         let wait = RemoteTextWait(job: slot.job, seq: seq)
         let command = action.command(page: slot.job, seq: seq)
         let deadline = remoteTextDeadline
         return await withCheckedContinuation { continuation in
-            // registered before the send, which can drop a stalled presenter and end the page synchronously
+            // registered before the send, which can drop a stalled viewer and end the page synchronously
             remoteTextWaits[wait] = continuation
-            guard hub.sendToPresenter(.pageCommand(command), session: sessionID) else {
+            guard hub.send(.pageCommand(command), toOwner: owner) else {
                 return settleRemoteText(wait, .failed(OverlayResultError.viewerGone))
             }
             Task { @MainActor [weak self] in
@@ -105,11 +105,10 @@ extension AppStore {
         }
     }
 
-    /// receiveRemoteTextResult applies the state a result carries, then answers the action waiting for it. A result
-    /// from a presenter that no longer holds the page is dropped.
-    func receiveRemoteTextResult(_ result: PresentationPageResult, in session: Session) {
-        guard let slot = session.remoteOverlays.slot(job: result.page),
-              slot.owner == presentationHub?.presenterGeneration(session: session.id) else { return }
+    /// receiveRemoteTextResult applies the state a result from viewer `sender` carries, then answers the action waiting
+    /// for it. A result from a viewer that does not hold the page is dropped.
+    func receiveRemoteTextResult(_ result: PresentationPageResult, in session: Session, from sender: Int) {
+        guard session.remoteOverlays.slot(job: result.page)?.owner == sender else { return }
         var changed = false
         if let state = result.state { session.remoteOverlays.updatePage(result.page) { changed = $0.apply(state) } }
         if changed { scheduleTreeChanged() }

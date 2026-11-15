@@ -216,7 +216,7 @@ later changes in #661 and #1008.
   `ControlServerRemotePresentationTests.swift`, `ControlServerForwardedClickTests.swift`,
   `ControlServerPageServeTests.swift`, `ControlServerStatusSoundTests.swift`
 
-- [ ] write failing tests, each run red before its code:
+- [x] write failing tests, each run red before its code:
       - concurrent left and right overlays and pages owned by two viewers; each answer accepted only from its owner;
       - an ask and a pick routed to the pane's claimant (one slot each, separate cases), and to the grant holder
         when nobody claims;
@@ -229,17 +229,17 @@ later changes in #661 and #1008.
       - a clicked page and a refusal return to the clicking viewer on both origins;
       - the Mac origin's gate runs first: pane-targeted unchanged, session-wide passes when only the primary
         follows and stays local when the primary leads
-- [ ] add `route`/`supports`/`send(_:toOwner:)`/`isConnected(owner:)`/`batch(toOwner:)` and remove the old
+- [x] add `route`/`supports`/`send(_:toOwner:)`/`isConnected(owner:)`/`batch(toOwner:)` and remove the old
       presenter-wide calls; book every new piece of work route → supports → reserve with token → send to owner,
       and send every follow-up to the stored owner
-- [ ] replace grant-generation liveness checks (page claims, `remotePagePlace`) with `isConnected(owner:)`
-- [ ] let `receive` forward answer frames from any subscriber with the sender's token; accept owner-less frames
+- [x] replace grant-generation liveness checks (page claims, `remotePagePlace`) with `isConnected(owner:)`
+- [x] let `receive` forward answer frames from any subscriber with the sender's token; accept owner-less frames
       by the Answer rule; fire `onOwnerLost(session, owner)` for every dropped subscriber and filter every loss
       handler by owner
-- [ ] carry the clicking subscriber's token through the async page helpers and `ServerStreams.clickedPage`
-- [ ] change `followsRemotely` for session-wide work to check the primary pane; update the #661 tests that pinned
+- [x] carry the clicking subscriber's token through the async page helpers and `ServerStreams.clickedPage`
+- [x] change `followsRemotely` for session-wide work to check the primary pane; update the #661 tests that pinned
       the every-pane rule
-- [ ] run the targeted core, server and hosted tests (`-only-testing:` for the hosted ones)
+- [x] run the targeted core, server and hosted tests (`-only-testing:` for the hosted ones)
 
 ### Task 3: Viewer reports its leads; viewer-side gates
 

@@ -36,25 +36,26 @@ public enum RemoteOverlayResize: Equatable, Sendable {
 // MARK: - Overlays handed to the viewer presenting a session, on the origin
 
 extension AppStore {
-    /// Hands an overlay to the viewer presenting `sessionID`: registers the job, reserves the slot so no
-    /// second overlay opens on it, and asks the presenter to show it. Nothing is mounted here, so the session
-    /// stays uncovered on this Mac. The slot's previous result is cleared, as a local open clears it.
+    /// Hands an overlay to the viewer leading its pane: registers the job, reserves the slot so no second overlay
+    /// opens on it, and asks that viewer to show it. Nothing is mounted here, so the session stays uncovered on this
+    /// Mac. The slot's previous result is cleared, as a local open clears it.
     public func openRemoteOverlay(_ sessionID: UUID, options: ControlSessionOverlayOpenOptions,
                                   context: OverlayLaunchContext) -> RemoteOverlayOpen {
         let pane = options.pane
-        // a headless origin holds the overlay for a presenter to come; a Mac shows it here
-        guard let hub = presentationHub, let jobs = overlayJobs, hub.hasPresenter(session: sessionID) || headless,
+        // a headless origin holds the overlay for a viewer to come; a Mac shows it here
+        guard let hub = presentationHub, let jobs = overlayJobs, hub.subscriberCount(session: sessionID) > 0 || headless,
               let session = session(withID: sessionID) else { return .notPresented }
         guard session.remoteOverlays.slot(pane) == nil, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
         if case .some(nil) = identity { return .paneMissing }
-        guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .notPresented }
+        let owner = remoteRecipient(session, paneIdentity: identity.flatMap { $0 })
+        guard owner != nil || headless else { return .notPresented }
         guard let frame = try? OverlayJobFrame.context(context).line(),
               frame.count <= PresentationCodec.maxFrameBytes else { return .tooLarge }
         // a HUD yields the session-wide slot to a program, as it does to a local one
         if pane == nil, session.hudActive { closeHud(sessionID) }
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
-        guard hub.hasPresenter(session: sessionID) else {
+        guard let owner else {
             let job = jobs.registerUnpresented(session: sessionID, pane: pane, context: context)
             var slot = RemoteOverlaySlot(job: job, pane: pane, owner: nil, sizePercent: size, wait: options.wait)
             if size != nil { slot.points = options.points }
@@ -66,8 +67,7 @@ extension AppStore {
             scheduleTreeChanged()
             return .opened(job: job)
         }
-        let owner = hub.presenterGeneration(session: sessionID)
-        let token = hub.presenterSupports(PresentationHub.jobTokenKind, session: sessionID) ? UUID().uuidString : nil
+        let token = hub.supports(PresentationHub.jobTokenKind, owner: owner) ? UUID().uuidString : nil
         let job = jobs.register(session: sessionID, pane: pane, owner: owner, context: context, token: token)
         var slot = RemoteOverlaySlot(job: job, pane: pane, owner: owner, sizePercent: size, wait: options.wait)
         if size != nil { slot.points = options.points }
@@ -79,28 +79,27 @@ extension AppStore {
         clearOverlayExitCode(pane, in: session)
         scheduleTreeChanged()
         var sent = request
-        sent.points = presentablePoints(request.points, session: sessionID)
+        sent.points = presentablePoints(request.points, owner: owner)
         sent.token = token
-        hub.sendToPresenter(.overlayRequest(sent), session: sessionID)
+        hub.send(.overlayRequest(sent), toOwner: owner)
         return .opened(job: job)
     }
 
-    /// offerPendingOverlay hands the program a headless origin holds in `slot` to the session's presenter, with a
-    /// fresh offer token; false when nothing there waits.
+    /// offerPendingOverlay hands the program a headless origin holds in `slot` to the viewer its pane routes to, with
+    /// a fresh offer token; false when nothing there waits.
     @discardableResult
     func offerPendingOverlay(_ slot: RemoteOverlaySlot, in session: Session) -> Bool {
         guard slot.owner == nil, slot.page == nil, var request = slot.request, let hub = presentationHub, let jobs = overlayJobs,
-              hub.hasPresenter(session: session.id) else { return false }
-        let owner = hub.presenterGeneration(session: session.id)
+              let owner = remoteRecipient(session, paneIdentity: request.pane?.identity) else { return false }
         let token = UUID().uuidString
         guard jobs.offer(slot.job, owner: owner, token: token) else { return false }
         trackingSlots(of: session) {
             session.remoteOverlays.update(job: slot.job) { $0.owner = owner; $0.wait = request.wait }
         }
         request.sizePercent = slot.sizePercent
-        request.points = presentablePoints(slot.points, session: session.id)
+        request.points = presentablePoints(slot.points, owner: owner)
         request.token = token
-        hub.sendToPresenter(.overlayRequest(request), session: session.id)
+        hub.send(.overlayRequest(request), toOwner: owner)
         return true
     }
 
@@ -126,30 +125,31 @@ extension AppStore {
     }
 
     /// Closes the remote overlay on a slot: an unclaimed job ends at once, a running one through its
-    /// helper, a held surface whose program ended is freed, and the presenter is asked to take its surface
+    /// helper, a held surface whose program ended is freed, and the viewer showing it is asked to take its surface
     /// down. It reports the request, not the program's end, which `session.overlay.result` answers. False
     /// when no viewer holds the slot.
     @discardableResult
     public func closeRemoteOverlay(_ sessionID: UUID, pane: OverlayPane?) -> Bool {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(pane) else { return false }
         if slot.page != nil {
-            presentationHub?.sendToPresenter(.pageClose(PresentationPageChange(page: slot.job)), session: sessionID)
+            if let owner = slot.owner { presentationHub?.send(.pageClose(PresentationPageChange(page: slot.job)), toOwner: owner) }
             endRemotePage(slot.job, in: session)
             return true
         }
-        presentationHub?.sendToPresenter(.overlayClose(PresentationOverlayChange(job: slot.job)), session: sessionID)
+        if let owner = slot.owner { presentationHub?.send(.overlayClose(PresentationOverlayChange(job: slot.job)), toOwner: owner) }
         trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: slot.job) }
         overlayJobs?.cancel(slot.job)
         return true
     }
 
-    /// The viewer closed its surface for `job`, so a slot held only for that surface is freed.
-    public func remoteOverlaySurfaceClosed(_ job: String, forSession sessionID: UUID) {
-        guard let session = session(withID: sessionID) else { return }
+    /// The viewer `sender` closed its surface for `job`, so a slot held only for that surface is freed. A close from a
+    /// viewer the job was not handed to changes nothing.
+    public func remoteOverlaySurfaceClosed(_ job: String, forSession sessionID: UUID, from sender: Int) {
+        guard let session = session(withID: sessionID), session.remoteOverlays.slot(job: job)?.owner == sender else { return }
         trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: job) }
     }
 
-    /// Asks the presenter to resize a session-wide remote overlay and records the requested size. Nil when no
+    /// Asks the viewer showing a session-wide remote overlay to resize it and records the requested size. Nil when no
     /// viewer holds the slot, false when the stream the job was handed to is gone, even if another is up.
     public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool? {
         switch resizeRemoteOverlay(sessionID, sizePercent: sizePercent, points: OverlayPointSize()) {
@@ -163,8 +163,7 @@ extension AppStore {
     /// a picture the presenter sized, which sends only its axes to merge; nil means no remote slot.
     public func resizeRemoteOverlay(_ sessionID: UUID, sizePercent: Int?, points: OverlayPointSize) -> RemoteOverlayResize? {
         guard let session = session(withID: sessionID), let slot = session.remoteOverlays.slot(nil) else { return nil }
-        guard let hub = presentationHub, hub.hasPresenter(session: sessionID),
-              hub.presenterGeneration(session: sessionID) == slot.owner else { return .viewerGone }
+        guard let hub = presentationHub, let owner = slot.owner, hub.isConnected(owner: owner) else { return .viewerGone }
         let size: Int?
         let merged: OverlayPointSize
         if let sizePercent {
@@ -182,26 +181,25 @@ extension AppStore {
         // and any other resize replaces the size whole and ends that
         let merge = slot.presenterSized && sizePercent == nil && !points.isEmpty
         session.remoteOverlays.resize(job: slot.job, sizePercent: size, points: merged, presenterSized: merge)
-        let sent = presentablePoints(merge ? points : merged, session: sessionID)
+        let sent = presentablePoints(merge ? points : merged, owner: owner)
         let delivered = slot.page != nil
             ? sendRemotePageCommand(sessionID, pane: nil, action: .resize, sizePercent: size, points: sent, merge: merge ? true : nil)
-            : hub.sendToPresenter(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size, points: sent)),
-                                  session: sessionID)
+            : hub.send(.overlayResize(PresentationOverlayChange(job: slot.job, sizePercent: size, points: sent)), toOwner: owner)
         return delivered ? .sent : .viewerGone
     }
 
-    func presentablePoints(_ points: OverlayPointSize, session sessionID: UUID) -> OverlayPointSize {
-        presentationHub?.presenterSupports(PresentationHub.overlayPointsKind, session: sessionID) == true
-            ? points : OverlayPointSize()
+    func presentablePoints(_ points: OverlayPointSize, owner: Int) -> OverlayPointSize {
+        presentationHub?.supports(PresentationHub.overlayPointsKind, owner: owner) == true ? points : OverlayPointSize()
     }
 
-    /// The viewer presenting `sessionID` is gone. On a Mac every overlay it held goes with it for good: an unclaimed
+    /// The viewer `owner` of `sessionID` is gone. On a Mac every overlay it held goes with it for good: an unclaimed
     /// job is cancelled and can no longer launch, a slot whose program already ended is freed, and a claimed or running
-    /// job keeps its slot until its helper reports. A headless origin keeps pages and unclaimed jobs for the next one.
-    public func remoteOverlayPresenterLost(forSession sessionID: UUID) {
+    /// job keeps its slot until its helper reports. A headless origin keeps pages and unclaimed jobs for another viewer.
+    /// What other viewers hold stays with them.
+    public func remoteOverlayOwnerLost(forSession sessionID: UUID, owner: Int) {
         guard let session = session(withID: sessionID) else { return }
-        if headless { return withdrawRemoteOverlays(of: session) }
-        for slot in session.remoteOverlays.slots {
+        if headless { return withdrawRemoteOverlays(of: session, owner: owner) }
+        for slot in session.remoteOverlays.slots where slot.owner == owner {
             if slot.page != nil {
                 endRemotePage(slot.job, in: session)
                 continue
@@ -211,11 +209,11 @@ extension AppStore {
         }
     }
 
-    /// withdrawRemoteOverlays takes back, on a headless origin, what the lost presenter held without a running
-    /// program: every page, shown or claimed, and every job no helper claimed wait for the next presenter. A claimed or
+    /// withdrawRemoteOverlays takes back, on a headless origin, what the lost viewer `owner` held without a running
+    /// program: every page, shown or claimed, and every job no helper claimed wait for another viewer. A claimed or
     /// running job keeps its slot until its helper reports, as on a Mac, and is never launched again.
-    private func withdrawRemoteOverlays(of session: Session) {
-        for slot in session.remoteOverlays.slots where slot.owner != nil {
+    private func withdrawRemoteOverlays(of session: Session, owner: Int) {
+        for slot in session.remoteOverlays.slots where slot.owner == owner {
             if let page = slot.page {
                 session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
                 session.remoteOverlays.updatePage(slot.job) { $0.claimed = false }
@@ -232,9 +230,9 @@ extension AppStore {
         scheduleTreeChanged()
     }
 
-    /// Fails a job its presenter refused to show, before any helper claimed it.
-    public func rejectRemoteOverlay(_ job: String, forSession sessionID: UUID) {
-        guard let session = session(withID: sessionID), session.remoteOverlays.slot(job: job) != nil else { return }
+    /// Fails a job the viewer `sender` it was handed to refused to show, before any helper claimed it.
+    public func rejectRemoteOverlay(_ job: String, forSession sessionID: UUID, from sender: Int) {
+        guard let session = session(withID: sessionID), session.remoteOverlays.slot(job: job)?.owner == sender else { return }
         // no surface was ever shown, so a --wait slot has nothing left to hold it
         trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: job) }
         overlayJobs?.finish(job, .launchFailed)

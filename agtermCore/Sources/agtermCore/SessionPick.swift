@@ -1,7 +1,7 @@
 import Foundation
 
-/// PresentationPick is a session-bound pick the origin hands to the viewer presenting the session. `owner` is the
-/// presenter generation it went out under, so an answer from a presenter that has since lost the role is dropped.
+/// PresentationPick is a session-bound pick the origin hands to a viewer of the session. `owner` is that viewer's token,
+/// so an answer from any other viewer, or from that one after its stream ended, is dropped.
 public struct PresentationPick: Codable, Equatable, Sendable {
     public var id: String
     public var owner: Int
@@ -172,12 +172,12 @@ public final class SessionPickBook {
         entries[id]?.dismiss = dismiss
     }
 
-    /// returnToPending takes `session`'s presenter-held pick back as unpresented after its presenter was lost or
-    /// refused it (`refused`, which must name it under its owner); an answer from that presenter is then stale.
-    public func returnToPending(session: UUID, refused: PresentationPickRef? = nil) {
+    /// returnToPending takes `session`'s pick back as unpresented after the viewer `owner` holding it was lost or
+    /// refused it (`refused`, which must name it under that owner); an answer from that viewer is then stale.
+    public func returnToPending(session: UUID, owner: Int, refused: PresentationPickRef? = nil) {
         guard let (id, entry) = entries.first(where: { $0.value.session == session }),
-              case .presenter(let held) = entry.placement,
-              refused.map({ $0.id == id && $0.owner == held }) ?? true else { return }
+              entry.placement == .presenter(owner: owner),
+              refused.map({ $0.id == id && $0.owner == owner }) ?? true else { return }
         entries[id]?.placement = .unpresented
         entries[id]?.dismiss = nil
     }
@@ -211,15 +211,15 @@ public final class SessionPickBook {
         return true
     }
 
-    /// handBack moves `session`'s presenter-held pick into `controller`, the session's window here, after the
-    /// presenter refused it (`refused`, which must name it under its owner) or was lost (nil). With no
+    /// handBack moves `session`'s pick held by the viewer `owner` into `controller`, the session's window here, after
+    /// that viewer refused it (`refused`, which must name it under that owner) or was lost (nil). With no
     /// controller, or one whose modal slot holds another pick or ask, the pick ends cancelled and stays readable:
     /// it never waits where nothing draws it, and the unrelated modal is left alone.
-    public func handBack(session: UUID, refused: PresentationPickRef? = nil, to controller: PickController?,
+    public func handBack(session: UUID, owner: Int, refused: PresentationPickRef? = nil, to controller: PickController?,
                          window: WindowInfo.ID?) {
         guard let (id, entry) = entries.first(where: { $0.value.session == session }),
-              case .presenter(let held) = entry.placement,
-              refused.map({ $0.id == id && $0.owner == held }) ?? true else { return }
+              entry.placement == .presenter(owner: owner),
+              refused.map({ $0.id == id && $0.owner == owner }) ?? true else { return }
         guard let controller, let window, controller.open(entry.pick) else {
             finish(id, ControlPickResult(result: .cancelled))
             return
@@ -358,41 +358,40 @@ public final class SessionPickBook {
 // MARK: - Origin routing
 
 extension AppStore {
-    /// presentPickRemotely hands a session-bound pick to the session's presenter when the session presents remotely
-    /// and its presenter speaks the pick frames. Nil leaves it to the caller; false means the session already has
-    /// a pick.
+    /// presentPickRemotely hands a session-bound pick to the viewer leading the session's primary pane, or its
+    /// presenter, when the session presents remotely and that viewer speaks the pick frames. Nil leaves it to the
+    /// caller; false means the session already has a pick.
     public func presentPickRemotely(_ pick: PendingPick, in session: Session, window: WindowInfo.ID?,
                                     follow: Bool = false) -> Bool? {
-        guard let hub = presentationHub, hub.hasPresenter(session: session.id), presentsRemotely(session, paneIdentity: nil),
-              hub.presenterSupports("pick.request", session: session.id) else { return nil }
+        guard let hub = presentationHub, let owner = remoteRecipient(session, paneIdentity: nil),
+              hub.supports("pick.request", owner: owner) else { return nil }
         // an expired pick is never shown: the caller holds it and its deadline ends it
         guard !pick.expired(at: Date()) else { return nil }
-        let owner = hub.presenterGeneration(session: session.id)
         let request = PresentationPick(pick, owner: owner, follow: follow)
         guard request.fitsFrame else { return nil }
         let booked = SessionPickBook.shared.openRemote(pick, as: request, session: session.id,
-                                                       window: window) { [weak hub, id = session.id] in
-            hub?.sendToPresenter(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), session: id)
+                                                       window: window) { [weak hub] in
+            hub?.send(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), toOwner: owner)
         }
         guard booked else { return false }
-        // booked first: a presenter dropped by this send is taken back through onPresenterLost
-        hub.sendToPresenter(.pickRequest(request), session: session.id)
+        // booked first: a viewer dropped by this send is taken back through onOwnerLost
+        hub.send(.pickRequest(request), toOwner: owner)
         return true
     }
 
-    /// offerPendingPick hands `id`'s unpresented pick to its presenter under the current generation; false when
-    /// there is none, or the presenter cannot show it and it stays unpresented.
+    /// offerPendingPick hands `id`'s unpresented pick to the viewer the session routes to; false when there is none,
+    /// or that viewer cannot show it and it stays unpresented.
     @discardableResult
     public func offerPendingPick(forSession id: UUID) -> Bool {
-        guard let hub = presentationHub, hub.hasPresenter(session: id), hub.presenterSupports("pick.request", session: id),
+        guard let hub = presentationHub, let session = session(withID: id),
+              let owner = remoteRecipient(session, paneIdentity: nil), hub.supports("pick.request", owner: owner),
               let (pick, follow) = SessionPickBook.shared.unpresented(forSession: id) else { return false }
-        let owner = hub.presenterGeneration(session: id)
         let request = PresentationPick(pick, owner: owner, follow: follow)
         guard request.fitsFrame else { return false }
         SessionPickBook.shared.offer(session: id, owner: owner) { [weak hub] in
-            hub?.sendToPresenter(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), session: id)
+            hub?.send(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), toOwner: owner)
         }
-        hub.sendToPresenter(.pickRequest(request), session: id)
+        hub.send(.pickRequest(request), toOwner: owner)
         return true
     }
 }

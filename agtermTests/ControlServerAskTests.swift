@@ -534,6 +534,26 @@ final class ControlServerAskTests: XCTestCase {
                        ControlSessionAsk(id: ask.id, remote: true))
     }
 
+    func testATerminalAskReachesALeadingViewerWhenNobodyHoldsThePresenterRole() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        ZmxLeadBook.shared.begin(ZmxLeadAttachment(nonce: "n", claim: true), pane: session.paneIdentity)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:follower:1")), pane: session.paneIdentity)
+        server.attachPresentationHub()
+        let sink = PresenterSink()
+        let id = try server.presentationHub.subscribe(
+            session: session.id, hello: PresentationHello(version: 1, kinds: [PresentationHub.leadReportKind], mode: .mirror),
+            sink: sink
+        ) { PresentationSnapshot(status: nil, hud: nil) }
+        server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .leadReport(
+            PresentationLeadReport(leaders: [session.paneIdentity]))), from: id)
+        let ask = makeTerminalAsk()
+
+        XCTAssertTrue(open(ask).ok)
+
+        XCTAssertTrue(session.askPresentedRemotely)
+        XCTAssertTrue(sink.bodies.contains { if case .askRequest = $0 { true } else { false } })
+    }
+
     func testATerminalAskStaysHereWhileThisMacLeadsAPresentedSession() throws {
         let session = try XCTUnwrap(library.activeStore?.activeSession)
         let (sink, _) = try present(session)

@@ -6,8 +6,10 @@ import Testing
 struct AppStoreRemoteOverlayTests {
     final class Sink: PresentationSink {
         var frames: [PresentationFrame] = []
+        var stalls = false
 
         func offer(_ frame: PresentationFrame) -> Bool {
+            guard !stalls else { return false }
             frames.append(frame)
             return true
         }
@@ -63,7 +65,7 @@ struct AppStoreRemoteOverlayTests {
         let job = try job(of: open(session, wait: true))
 
         #expect(treeChanges { jobs.finish(job, .exited(0)) } == 0)
-        #expect(treeChanges { store.remoteOverlaySurfaceClosed(job, forSession: session.id) } == 1)
+        #expect(treeChanges { store.remoteOverlaySurfaceClosed(job, forSession: session.id, from: hub.presenter(of: session.id) ?? -1) } == 1)
     }
 
     @Test func promotingTheSplitInvalidatesTheTreeForAReservationThatChangesPane() throws {
@@ -94,12 +96,126 @@ struct AppStoreRemoteOverlayTests {
         #expect(second == .slotTaken)
     }
 
+    @Test func twoViewersEachGetTheirPanesOverlayAndOnlyItsOwnerAnswersIt() throws {
+        let (session, _) = try origin(split: true)
+        let left = try claimant(session, leads: [session.paneIdentity])
+        let right = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
+
+        let leftJob = try job(of: open(session, pane: .left))
+        let rightJob = try job(of: open(session, pane: .right))
+
+        #expect(requests(left.sink) == [leftJob])
+        #expect(requests(right.sink) == [rightJob])
+        #expect(requests(presenter).isEmpty)
+        store.rejectRemoteOverlay(rightJob, forSession: session.id, from: left.gen)
+        store.remoteOverlaySurfaceClosed(rightJob, forSession: session.id, from: left.gen)
+        #expect(session.remoteOverlays.slot(.right)?.job == rightJob)
+        store.rejectRemoteOverlay(rightJob, forSession: session.id, from: right.gen)
+        #expect(session.remoteOverlays.slot(.right) == nil)
+        #expect(session.remoteOverlays.slot(.left)?.job == leftJob)
+    }
+
+    @Test func anUnclaimedPaneGoesToTheHolder() throws {
+        let (session, _) = try origin(split: true)
+        let left = try claimant(session, leads: [session.paneIdentity])
+
+        let job = try job(of: open(session, pane: .right))
+
+        #expect(requests(presenter) == [job])
+        #expect(requests(left.sink).isEmpty)
+    }
+
+    @Test func aResizeAndCloseReachTheOriginalOwnerAfterTheLeadMoves() throws {
+        let (session, _) = try origin()
+        let first = try claimant(session, leads: [session.paneIdentity])
+        _ = try job(of: open(session, size: 50))
+        let second = try claimant(session, leads: [session.paneIdentity])
+
+        #expect(store.resizeRemoteOverlay(session.id, sizePercent: 70) == true)
+        #expect(store.closeRemoteOverlay(session.id, pane: nil))
+
+        #expect(first.sink.bodies.contains { if case .overlayResize = $0 { true } else { false } })
+        #expect(first.sink.bodies.contains { if case .overlayClose = $0 { true } else { false } })
+        #expect(!second.sink.bodies.contains { if case .overlayResize = $0 { true } else { false } })
+        #expect(!second.sink.bodies.contains { if case .overlayClose = $0 { true } else { false } })
+    }
+
+    @Test func losingOneViewerTakesBackOnlyTheOverlayItHeld() throws {
+        let (session, _) = try origin(split: true)
+        let left = try claimant(session, leads: [session.paneIdentity])
+        _ = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
+        let leftJob = try job(of: open(session, pane: .left))
+        let rightJob = try job(of: open(session, pane: .right))
+
+        hub.unsubscribe(left.id)
+
+        #expect(jobs.job(leftJob)?.state == .finished(.canceled))
+        #expect(session.remoteOverlays.slot(.left) == nil)
+        #expect(session.remoteOverlays.slot(.right)?.job == rightJob)
+        guard case .unclaimed? = jobs.job(rightJob)?.state else { Issue.record("the other viewer's job ended"); return }
+    }
+
+    @Test func aHeadlessOriginReturnsOnlyTheLostViewersJobToPending() throws {
+        let (headless, session) = headlessOrigin()
+        let left = try claimant(session, leads: [session.paneIdentity])
+        let right = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
+        let leftJob = try job(of: headlessOpen(headless, session, pane: .left))
+        let rightJob = try job(of: headlessOpen(headless, session, pane: .right))
+
+        hub.unsubscribe(left.id)
+
+        #expect(session.remoteOverlays.slot(.left)?.owner == nil)
+        #expect(jobs.job(leftJob)?.state == .unpresented)
+        #expect(session.remoteOverlays.slot(.right)?.owner == right.gen)
+        guard case .unclaimed? = jobs.job(rightJob)?.state else { Issue.record("the other viewer's job was withdrawn"); return }
+    }
+
+    @Test func aViewerThatStallsOnItsOwnOfferLeavesTheJobPending() throws {
+        let (headless, session) = headlessOrigin()
+        let job = try job(of: headlessOpen(headless, session, pane: .left))
+        let stalling = try claimant(session, leads: [session.paneIdentity])
+        stalling.sink.stalls = true
+
+        #expect(headless.offerPendingOverlay(try #require(session.remoteOverlays.slot(.left)), in: session))
+
+        #expect(!hub.isConnected(owner: stalling.gen))
+        #expect(session.remoteOverlays.slot(.left)?.owner == nil)
+        #expect(jobs.job(job)?.state == .unpresented)
+    }
+
+    private func claimant(_ session: Session, leads: [UUID]) throws -> (id: PresentationHub.SubscriberID, gen: Int, sink: Sink) {
+        let sink = Sink()
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.leadReportKind], mode: .presenter)
+        let id = try hub.subscribe(session: session.id, hello: hello, sink: sink) { PresentationSnapshot(status: nil, hud: nil) }
+        let gen = sink.frames[0].gen
+        hub.receive(PresentationFrame(gen: gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leads))), from: id)
+        return (id, gen, sink)
+    }
+
+    private func requests(_ sink: Sink) -> [String] {
+        sink.bodies.compactMap { if case .overlayRequest(let request) = $0 { request.job } else { nil } }
+    }
+
+    private func headlessOrigin() -> (AppStore, Session) {
+        let (headless, session) = makeHeadlessSession(split: true)
+        headless.presentationHub = hub
+        headless.overlayJobs = jobs
+        hub.onOwnerLost = { [headless] session, owner in headless.remoteOverlayOwnerLost(forSession: session, owner: owner) }
+        return (headless, session)
+    }
+
+    private func headlessOpen(_ headless: AppStore, _ session: Session, pane: OverlayPane) -> RemoteOverlayOpen {
+        headless.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
+            command: "revdiff", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil, follow: true, pane: pane),
+            context: Self.context)
+    }
+
     private func origin(presented: Bool = true, split: Bool = false,
                         kinds: [String] = []) throws -> (Session, PresentationHub.SubscriberID?) {
         store.presentationHub = hub
         store.overlayJobs = jobs
         jobs.onFinished = { [store] in store.finishRemoteOverlay($0) }
-        hub.onPresenterLost = { [store] in store.remoteOverlayPresenterLost(forSession: $0) }
+        hub.onOwnerLost = { [store] session, owner in store.remoteOverlayOwnerLost(forSession: session, owner: owner) }
         let workspace = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
         if split { store.toggleSplit(session.id) }
@@ -136,11 +252,11 @@ struct AppStoreRemoteOverlayTests {
 
     @Test(arguments: [nil, .unowned, .leader, .follower] as [ZmxLeadRole?],
           [nil, .unowned, .leader, .follower] as [ZmxLeadRole?])
-    func aSessionOverlayRequiresEveryPaneToFollow(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
+    func aSessionOverlayFollowsThePrimaryPaneOnly(left: ZmxLeadRole?, right: ZmxLeadRole?) throws {
         let (session, _) = try origin(split: true)
         setLead(left, pane: session.paneIdentity)
         setLead(right, pane: try #require(session.splitPaneIdentity))
-        let remote = left == .follower && right == .follower
+        let remote = left == .follower
 
         let result = open(session)
 
@@ -178,7 +294,7 @@ struct AppStoreRemoteOverlayTests {
 
         _ = try job(of: open(session, pane: .left))
         #expect(open(session, pane: .right) == .notPresented)
-        #expect(open(session) == .notPresented)
+        _ = try job(of: open(session))
     }
 
     @Test func aRemoteOverlayStillResizesAndClosesAfterTakingTheLeadHere() throws {
@@ -329,7 +445,7 @@ struct AppStoreRemoteOverlayTests {
 
         #expect(presenter.bodies.last == .overlayRequest(PresentationOverlay(
             job: job, pane: nil, sizePercent: 60, backgroundColor: "#102030", follow: true, wait: true)))
-        var expected = RemoteOverlaySlot(job: job, pane: nil, owner: hub.presenterGeneration(session: session.id),
+        var expected = RemoteOverlaySlot(job: job, pane: nil, owner: hub.presenter(of: session.id),
                                          sizePercent: 60, wait: true)
         expected.request = PresentationOverlay(job: job, pane: nil, sizePercent: 60, backgroundColor: "#102030",
                                                follow: true, wait: true)
@@ -443,7 +559,7 @@ struct AppStoreRemoteOverlayTests {
         let job = try job(of: open(session, wait: true))
         jobs.finish(job, .exited(0))
 
-        store.remoteOverlaySurfaceClosed(job, forSession: session.id)
+        store.remoteOverlaySurfaceClosed(job, forSession: session.id, from: hub.presenter(of: session.id) ?? -1)
 
         #expect(session.remoteOverlays.slots.isEmpty)
     }
@@ -454,7 +570,7 @@ struct AppStoreRemoteOverlayTests {
         _ = jobs.claim(job) {}
         jobs.started(job)
 
-        store.remoteOverlaySurfaceClosed(job, forSession: session.id)
+        store.remoteOverlaySurfaceClosed(job, forSession: session.id, from: hub.presenter(of: session.id) ?? -1)
         #expect(session.remoteOverlays.slot(nil)?.job == job)
         jobs.finish(job, .canceled)
 
@@ -558,7 +674,7 @@ struct AppStoreRemoteOverlayTests {
         let (session, _) = try origin()
         let job = try job(of: open(session))
 
-        store.rejectRemoteOverlay(job, forSession: session.id)
+        store.rejectRemoteOverlay(job, forSession: session.id, from: hub.presenter(of: session.id) ?? -1)
 
         #expect(jobs.job(job)?.state == .finished(.launchFailed))
         #expect(session.remoteOverlays.failure(nil) == "launch-failed")
@@ -719,7 +835,7 @@ struct AppStoreRemoteOverlayTests {
         let (session, _) = try origin()
         let job = try job(of: open(session, wait: true))
 
-        store.rejectRemoteOverlay(job, forSession: session.id)
+        store.rejectRemoteOverlay(job, forSession: session.id, from: hub.presenter(of: session.id) ?? -1)
 
         #expect(session.remoteOverlays.failure(nil) == "launch-failed")
         #expect(session.remoteOverlays.slots.isEmpty)

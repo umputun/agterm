@@ -17,12 +17,12 @@ extension ControlServer {
             let checked = await MarkdownFile.checkDetached(path: path)
             let links = await Task.detached(priority: .userInitiated) { MarkdownPage.linkGrant(for: path) }.value
             guard let self, case .success = checked, canShowLinkOverlay(session: id, forwarded: forward != nil),
-                  forwardIsCurrent(forward, session: id), let store = library.store(forSession: id) else { return completion(false) }
+                  forwardIsCurrent(forward), let store = library.store(forSession: id) else { return completion(false) }
             if forward == nil { releaseHiddenClickedPage(session: id, persistent: false) }
             guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                            backgroundColor: nil, page: .markdown(path: path), navigation: true,
-                                                           clicked: true, forwarded: forward != nil, markdownLinks: links)
+                                                           clicked: true, forwardedTo: forward, markdownLinks: links)
             completion(openHtmlOverlay(in: store, sessionID: id, page: .markdown(path: path), options: options).ok)
         }
     }

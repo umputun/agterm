@@ -39,8 +39,8 @@ extension ServerActions {
     /// fetches its content over a page channel.
     func openPage(_ page: HtmlSource, in session: Session, options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         // with no Mac connected the log page waits for one; a connected one without live text pages would show it static
-        if options.textLog != nil, let hub = store.presentationHub, hub.hasPresenter(session: session.id),
-           !hub.presenterSupports(PresentationHub.pageTextKind, session: session.id) {
+        if options.textLog != nil, let hub = store.presentationHub, let recipient = store.pageRecipient(session, pane: options.pane),
+           !hub.supports(PresentationHub.pageTextKind, owner: recipient) {
             return ControlResponse(ok: false, error: OverlayHtmlError.logRemote)
         }
         let checked: ControlSessionOverlayOpenOptions
