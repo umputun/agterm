@@ -121,10 +121,11 @@ struct PresenterGrantTests {
         let presenter = Sink()
         let mirror = Sink()
         let older = Sink()
+        let elsewhere = Sink()
         let presenterID = try hub.subscribe(session: Self.session, hello: Self.vacancyHello, sink: presenter) { Self.empty }
         let mirrorID = try hub.subscribe(session: Self.session, hello: Self.vacancyHello, sink: mirror) { Self.empty }
         try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: older) { Self.empty }
-        try hub.subscribe(session: UUID(), hello: Self.vacancyHello, sink: Sink()) { Self.empty }
+        try hub.subscribe(session: UUID(), hello: Self.vacancyHello, sink: elsewhere) { Self.empty }
         acquire(hub, presenterID, gen: presenter.frames[0].gen)
         acquire(hub, mirrorID, gen: mirror.frames[0].gen)
 
@@ -133,6 +134,7 @@ struct PresenterGrantTests {
 
         #expect(mirror.bodies.suffix(3) == [.presenterRefused, .presenterVacant, .presenterGranted])
         #expect(!older.bodies.contains(.presenterVacant))
+        #expect(!elsewhere.bodies.contains(.presenterVacant))
         #expect(hub.hasPresenter(session: Self.session))
     }
 
