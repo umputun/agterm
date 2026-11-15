@@ -146,6 +146,8 @@ public final class PresentationHub {
     private var batches: [Int: [PresentationFrame.Body]] = [:]
     /// onPresenterGranted runs once a viewer took `session`'s presenter role and was told so.
     public var onPresenterGranted: (@MainActor (UUID) -> Void)?
+    /// onLeadReport runs once a viewer of `session` replaced the set of panes it leads.
+    public var onLeadReport: (@MainActor (UUID) -> Void)?
     /// onPresenterFrame runs with what a viewer sent about work, and that viewer's token. An answer echoing another
     /// viewer's owner, and a clear, seen or click from a viewer neither holding the role nor leading a pane, are dropped
     /// before this is reached; the receiver checks that the sender owns the page or overlay a frame names.
@@ -206,15 +208,19 @@ public final class PresentationHub {
         return send(body, to: id)
     }
 
-    /// batch sends what `fill` hands viewer `owner` as pending chunks and one commit, so it applies them all together
-    /// or, when its stream ends first, none of them. What `fill` sends other viewers goes out at once.
-    public func batch(toOwner owner: Int, _ fill: () -> Void) {
-        batches[owner] = []
+    /// batch sends what `fill` hands each viewer of `session` as pending chunks and one commit of its own, so each
+    /// applies its share together or, when its stream ends first, none of it. A viewer already inside a batch, as when
+    /// a commit's stall drops a viewer and its work is offered again, keeps that batch.
+    public func batch(session: UUID, _ fill: () -> Void) {
+        let owners = subscribers.values.filter { $0.session == session && batches[$0.generation] == nil }.map(\.generation)
+        for owner in owners { batches[owner] = [] }
         fill()
-        let bodies = batches.removeValue(forKey: owner) ?? []
-        guard !bodies.isEmpty, let chunks = try? PresentationPendingBatch.chunks(bodies) else { return }
-        for chunk in chunks { send(.pendingChunk(chunk), toOwner: owner) }
-        send(.pendingCommit, toOwner: owner)
+        for owner in owners {
+            let bodies = batches.removeValue(forKey: owner) ?? []
+            guard !bodies.isEmpty, let chunks = try? PresentationPendingBatch.chunks(bodies) else { continue }
+            for chunk in chunks { send(.pendingChunk(chunk), toOwner: owner) }
+            send(.pendingCommit, toOwner: owner)
+        }
     }
 
     /// publishMail sends `session`'s mail counts to each viewer whose last accepted counts differ, so every viewer
@@ -265,6 +271,7 @@ public final class PresentationHub {
             lastLeadReport += 1
             subscriber.leads = Set(report.leaders)
             subscriber.leadsAt = lastLeadReport
+            onLeadReport?(subscriber.session)
         case .askResolve(let answer):
             if answer.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
         case .askRejected(let ref):

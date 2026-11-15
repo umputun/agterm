@@ -25,6 +25,8 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     public let paneID: String?
     /// pendingMessages counts the pane's unacked bus messages, omitted at zero.
     public let pendingMessages: Int?
+    /// remote is true when this pane's next ask, overlay or page goes to an attached Mac, omitted otherwise.
+    public let remote: Bool?
 
     public init(id: String, kind: String, active: Bool, visible: Bool) {
         self.init(id: id, kind: kind, active: active, visible: visible, backedByZmx: nil)
@@ -32,7 +34,7 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
 
     public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?,
                 lead: ZmxLeadRole? = nil, reconnect: ControlReconnect? = nil, paneID: String? = nil,
-                pendingMessages: Int? = nil) {
+                pendingMessages: Int? = nil, remote: Bool? = nil) {
         self.id = id
         self.kind = kind
         self.active = active
@@ -42,6 +44,7 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
         self.reconnect = reconnect
         self.paneID = paneID
         self.pendingMessages = pendingMessages
+        self.remote = remote
     }
 }
 
@@ -663,11 +666,17 @@ public struct ControlPresentationNode: Codable, Sendable, Equatable {
 public struct ControlPresentersNode: Codable, Sendable, Equatable {
     public let mirrors: Int
     public let presenter: Bool?
+    /// viewers counts every attached stream, the presenter included; absent from an app that predates it.
+    public let viewers: Int?
 
-    public init(mirrors: Int, presenter: Bool? = nil) {
+    public init(mirrors: Int, presenter: Bool? = nil, viewers: Int? = nil) {
         self.mirrors = mirrors
         self.presenter = presenter
+        self.viewers = viewers
     }
+
+    /// viewedBy is the number of attached streams, derived from `mirrors` and `presenter` for an older app.
+    public var viewedBy: Int { viewers ?? mirrors + (presenter == true ? 1 : 0) }
 }
 
 /// A workspace and its sessions as projected into the `tree` response.

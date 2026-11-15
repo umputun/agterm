@@ -90,7 +90,7 @@ extension AppStore {
     @discardableResult
     func offerPendingOverlay(_ slot: RemoteOverlaySlot, in session: Session) -> Bool {
         guard slot.owner == nil, slot.page == nil, var request = slot.request, let hub = presentationHub, let jobs = overlayJobs,
-              let owner = remoteRecipient(session, paneIdentity: request.pane?.identity) else { return false }
+              let owner = pendingRecipient(session, paneIdentity: request.pane?.identity) else { return false }
         let token = UUID().uuidString
         guard jobs.offer(slot.job, owner: owner, token: token) else { return false }
         trackingSlots(of: session) {

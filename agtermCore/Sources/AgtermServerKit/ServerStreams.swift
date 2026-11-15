@@ -54,7 +54,8 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         store.presentationHub = presentationHub
         store.overlayJobs = overlayJobs
         presentationHub.onOwnerLost = { [weak self] session, owner in self?.ownerLost(session, owner: owner) }
-        presentationHub.onPresenterGranted = { [weak self] session in self?.presenterGranted(session) }
+        presentationHub.onPresenterGranted = { [weak self] session in self?.offerPending(session) }
+        presentationHub.onLeadReport = { [weak self] session in self?.offerPending(session) }
         presentationHub.onPresenterFrame = { [weak self] session, sender, body in
             self?.receivePresenterFrame(body, forSession: session, from: sender)
         }
@@ -93,20 +94,21 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     // a headless origin has nowhere to draw what a lost viewer held: an ask, pick, page or unclaimed job waits for
-    // another viewer, and a claimed or running job keeps its slot until its helper reports
+    // another viewer, and a claimed or running job keeps its slot until its helper reports. A stalled send drops its
+    // viewer mid-call, so the re-offer waits a turn for the interrupted close or withdraw to finish
     private func ownerLost(_ session: UUID, owner: Int) {
         store.returnAskToPending(forSession: session, owner: owner)
         SessionPickBook.shared.returnToPending(session: session, owner: owner)
         store.remoteOverlayOwnerLost(forSession: session, owner: owner)
+        Task { @MainActor [weak self] in self?.offerPending(session) }
     }
 
-    // pending work goes only to a presenter that takes it and its job tokens; an older one sees only what opens
-    // while it holds the session
-    private func presenterGranted(_ session: UUID) {
-        guard let holder = presentationHub.presenter(of: session),
-              presentationHub.supports(PresentationHub.pendingSnapshotKind, owner: holder),
-              presentationHub.supports(PresentationHub.jobTokenKind, owner: holder) else { return }
-        presentationHub.batch(toOwner: holder) { store.offerPendingInteractions(forSession: session, now: now()) }
+    // held work goes to the viewer each piece routes to, once that viewer takes held work; a grant, a lead report and
+    // a lost viewer can each change who that is
+    private func offerPending(_ session: UUID) {
+        var offered = false
+        presentationHub.batch(session: session) { offered = store.offerPendingInteractions(forSession: session, now: now()) }
+        guard offered else { return }
         scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
         schedulePageClaimExpiry(after: AppStore.pageClaimWindow)
     }

@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 @testable import AgtermServerKit
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 struct ServerStreamsTests {
@@ -591,9 +591,125 @@ struct ServerStreamsTests {
         #expect(!session.askPresentedRemotely)
     }
 
-    private func openOverlay(on session: Session, page: HtmlSource? = nil) -> ControlResponse {
+    private func openOverlay(on session: Session, page: HtmlSource? = nil, pane: OverlayPane? = nil) -> ControlResponse {
         harness.actions.openSessionOverlay(session.id.uuidString, window: nil, options: ControlSessionOverlayOpenOptions(
-            command: "tput colors", cwd: "/tmp", wait: false, sizePercent: nil, backgroundColor: nil, page: page))
+            command: "tput colors", cwd: "/tmp", wait: false, sizePercent: nil, backgroundColor: nil, pane: pane, page: page))
+    }
+
+    private func claimant(for session: Session, leads: [UUID]) async throws -> Viewer {
+        let viewer = try await connect(session, mode: .presenter)
+        try viewer.send(.leadReport(PresentationLeadReport(leaders: leads)))
+        return viewer
+    }
+
+    private func splitSession() throws -> (Session, UUID) {
+        let session = try newSession()
+        _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
+        return (session, try #require(session.splitPaneIdentity))
+    }
+
+    @Test func aHeldPaneAskReachesTheViewerLeadingThatPaneOnceItReports() async throws {
+        let (session, right) = try splitSession()
+        let ask = Self.ask()
+        #expect(harness.actions.openAsk(ask, target: session.id.uuidString, window: nil, placement: ControlAskPlacement(pane: .right),
+                                        follow: false).ok)
+        let other = try await claimant(for: session, leads: [session.paneIdentity])
+        defer { other.disconnect() }
+
+        let unoffered = await offPool { other.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
+        #expect(unoffered == nil)
+        let leader = try await claimant(for: session, leads: [right])
+        defer { leader.disconnect() }
+
+        let offered = await offPool { leader.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = offered else { Issue.record("no ask offer"); return }
+        #expect(shown.id == ask.id)
+        #expect(shown.owner == leader.gen)
+    }
+
+    @Test func heldOverlaysOnBothPanesGoToTheirOwnLeadersInSeparateCommits() async throws {
+        let (session, right) = try splitSession()
+        #expect(openOverlay(on: session, pane: .left).ok)
+        #expect(openOverlay(on: session, pane: .right).ok)
+
+        let leftViewer = try await claimant(for: session, leads: [session.paneIdentity])
+        defer { leftViewer.disconnect() }
+        let rightViewer = try await claimant(for: session, leads: [right])
+        defer { rightViewer.disconnect() }
+
+        for (viewer, pane) in [(leftViewer, session.paneIdentity), (rightViewer, right)] {
+            let commit = await offPool { viewer.first { $0 == .pendingCommit } }
+            #expect(commit == .pendingCommit)
+            let panes = viewer.delivered.compactMap { if case .overlayRequest(let overlay) = $0 { overlay.pane } else { nil } }
+            #expect(panes == [.identity(pane)])
+        }
+    }
+
+    @Test func workAViewerHeldIsOfferedToTheHolderWhenThatViewerLeaves() async throws {
+        let session = try newSession()
+        let ask = Self.ask()
+        #expect(openAsk(ask, on: session).ok)
+        let leader = try await claimant(for: session, leads: [session.paneIdentity])
+        let first = await offPool { leader.first { if case .askRequest = $0 { true } else { false } } }
+        #expect(first != nil)
+        let holder = try await presenter(for: session)
+        defer { holder.disconnect() }
+        let early = await offPool { holder.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
+        #expect(early == nil)
+
+        leader.disconnect()
+
+        let offered = await offPool { holder.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = offered else { Issue.record("no re-offer"); return }
+        #expect(shown.id == ask.id)
+        #expect(shown.owner == holder.gen)
+    }
+
+    final class StallingSink: PresentationSink {
+        var stalls = false
+        func offer(_: PresentationFrame) -> Bool { !stalls }
+        func close(_: PresentationHub.CloseReason) {}
+    }
+
+    private func stallingLeader(of session: Session, page: Bool) throws -> (sink: StallingSink, job: String) {
+        let path = harness.scratch.root + "/page.md"
+        try Data("# hi".utf8).write(to: URL(fileURLWithPath: path))
+        let sink = StallingSink(), hub = streams.presentationHub
+        let hello = PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds, mode: .mirror)
+        let id = try hub.subscribe(session: session.id, hello: hello, sink: sink) { harness.store.presentationSnapshot(forSession: session.id) }
+        hub.receive(PresentationFrame(gen: id.generation, rev: 0, body: .leadReport(PresentationLeadReport(leaders: [session.paneIdentity]))), from: id)
+        #expect(openOverlay(on: session, page: page ? .markdown(path: path) : nil).ok)
+        #expect(session.remoteOverlays.slot(nil)?.owner == id.generation)
+        return (sink, try #require(session.remoteOverlays.slot(nil)?.job))
+    }
+
+    @Test(arguments: [false, true])
+    func closingWorkWhoseViewerStallsEndsItAndOffersItToNobody(page: Bool) async throws {
+        let session = try newSession()
+        let (sink, job) = try stallingLeader(of: session, page: page)
+        let holder = try await presenter(for: session)
+        defer { holder.disconnect() }
+
+        sink.stalls = true
+        #expect(harness.actions.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).ok)
+
+        #expect(page ? session.remoteOverlays.slot(nil) == nil : streams.overlayJobs.job(job)?.state == .finished(.canceled))
+        let offered = await offPool { holder.first(within: 1) { if case .overlayRequest = $0 { true } else if case .pageRequest = $0 { true } else { false } } }
+        #expect(offered == nil)
+    }
+
+    @Test func aPageWithdrawnFromAStallingViewerIsOwnedByTheViewerItIsOfferedTo() async throws {
+        let session = try newSession()
+        let (sink, job) = try stallingLeader(of: session, page: true)
+        let holder = try await presenter(for: session)
+        defer { holder.disconnect() }
+
+        sink.stalls = true
+        harness.store.withdrawRemotePage(try #require(UUID(uuidString: job)))
+
+        let offered = await offPool { holder.first { if case .pageRequest = $0 { true } else { false } } }
+        #expect(offered != nil)
+        #expect(await eventually { session.remoteOverlays.slot(nil)?.owner == holder.gen })
     }
 
     @Test func aProgramOverlayLaunchesWithTheServersIdentityAndTerminfo() async throws {

@@ -46,7 +46,7 @@ extension AppStore {
     public func offerPendingAsk(forSession id: UUID) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
               !session.askPresentedRemotely, !session.askReplica,
-              let owner = remoteRecipient(session, paneIdentity: session.askPaneIdentity) else { return false }
+              let owner = pendingRecipient(session, paneIdentity: session.askPaneIdentity) else { return false }
         let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner)
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
         session.askRemoteOwner = request.owner

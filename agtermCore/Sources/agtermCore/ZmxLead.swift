@@ -192,6 +192,15 @@ extension AppStore {
         guard let hub = presentationHub, presentsRemotely(session, paneIdentity: paneIdentity) else { return nil }
         return hub.route(session: session.id, pane: paneIdentity ?? session.paneIdentity)
     }
+
+    /// pendingRecipient is `remoteRecipient` for work a headless origin holds, nil when that viewer cannot take held
+    /// work and its job tokens; an older one sees only what opens while it is connected.
+    func pendingRecipient(_ session: Session, paneIdentity: UUID?) -> Int? {
+        guard let hub = presentationHub, let owner = remoteRecipient(session, paneIdentity: paneIdentity),
+              hub.supports(PresentationHub.pendingSnapshotKind, owner: owner),
+              hub.supports(PresentationHub.jobTokenKind, owner: owner) else { return nil }
+        return owner
+    }
 }
 
 extension Session {

@@ -64,17 +64,21 @@ extension AppStore {
         return nodes.isEmpty ? nil : nodes
     }
 
-    /// offerPendingInteractions hands `id`'s unpresented ask, pick, pages and jobs to its presenter, ending first an
-    /// ask or pick whose deadline passed, so an expired one is never shown.
-    public func offerPendingInteractions(forSession id: UUID, now: Date) {
-        if let ask = session(withID: id)?.askPending, !expireInteraction(ask.id, now: now) { offerPendingAsk(forSession: id) }
+    /// offerPendingInteractions hands `id`'s unpresented ask, pick, pages and jobs each to the viewer it routes to,
+    /// ending first an ask or pick whose deadline passed, so an expired one is never shown. True when any was handed.
+    @discardableResult
+    public func offerPendingInteractions(forSession id: UUID, now: Date) -> Bool {
+        var offered = false
+        if let ask = session(withID: id)?.askPending, !expireInteraction(ask.id, now: now) { offered = offerPendingAsk(forSession: id) }
         if let (pick, _) = SessionPickBook.shared.unpresented(forSession: id), !SessionPickBook.shared.expire(pick.id, now: now) {
-            offerPendingPick(forSession: id)
+            offered = offerPendingPick(forSession: id) || offered
         }
-        guard let session = session(withID: id) else { return }
+        guard let session = session(withID: id) else { return offered }
         for slot in session.remoteOverlays.slots where slot.owner == nil {
-            if slot.page != nil { offerPendingPage(slot, in: session, now: now) } else { offerPendingOverlay(slot, in: session) }
+            let sent = slot.page != nil ? offerPendingPage(slot, in: session, now: now) : offerPendingOverlay(slot, in: session)
+            offered = sent || offered
         }
+        return offered
     }
 
     /// expireInteraction cancels the ask or pick `id` once its deadline passed, telling a presenter holding it to

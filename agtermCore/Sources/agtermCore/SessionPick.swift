@@ -384,7 +384,7 @@ extension AppStore {
     @discardableResult
     public func offerPendingPick(forSession id: UUID) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id),
-              let owner = remoteRecipient(session, paneIdentity: nil), hub.supports("pick.request", owner: owner),
+              let owner = pendingRecipient(session, paneIdentity: nil), hub.supports("pick.request", owner: owner),
               let (pick, follow) = SessionPickBook.shared.unpresented(forSession: id) else { return false }
         let request = PresentationPick(pick, owner: owner, follow: follow)
         guard request.fitsFrame else { return false }

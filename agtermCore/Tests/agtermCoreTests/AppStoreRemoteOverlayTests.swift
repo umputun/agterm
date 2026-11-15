@@ -173,7 +173,7 @@ struct AppStoreRemoteOverlayTests {
     @Test func aViewerThatStallsOnItsOwnOfferLeavesTheJobPending() throws {
         let (headless, session) = headlessOrigin()
         let job = try job(of: headlessOpen(headless, session, pane: .left))
-        let stalling = try claimant(session, leads: [session.paneIdentity])
+        let stalling = try claimant(session, leads: [session.paneIdentity], kinds: PresentationHub.supportedKinds)
         stalling.sink.stalls = true
 
         #expect(headless.offerPendingOverlay(try #require(session.remoteOverlays.slot(.left)), in: session))
@@ -183,9 +183,10 @@ struct AppStoreRemoteOverlayTests {
         #expect(jobs.job(job)?.state == .unpresented)
     }
 
-    private func claimant(_ session: Session, leads: [UUID]) throws -> (id: PresentationHub.SubscriberID, gen: Int, sink: Sink) {
+    private func claimant(_ session: Session, leads: [UUID],
+                          kinds: [String] = [PresentationHub.leadReportKind]) throws -> (id: PresentationHub.SubscriberID, gen: Int, sink: Sink) {
         let sink = Sink()
-        let hello = PresentationHello(version: 1, kinds: [PresentationHub.leadReportKind], mode: .presenter)
+        let hello = PresentationHello(version: 1, kinds: kinds, mode: .presenter)
         let id = try hub.subscribe(session: session.id, hello: hello, sink: sink) { PresentationSnapshot(status: nil, hud: nil) }
         let gen = sink.frames[0].gen
         hub.receive(PresentationFrame(gen: gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: leads))), from: id)

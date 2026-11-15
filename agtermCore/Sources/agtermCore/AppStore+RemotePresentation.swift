@@ -290,7 +290,15 @@ extension AppStore {
         let viewers = hub.subscriberCount(session: session.id)
         guard viewers > 0 else { return nil }
         let presented = hub.hasPresenter(session: session.id)
-        return ControlPresentersNode(mirrors: presented ? viewers - 1 : viewers, presenter: presented ? true : nil)
+        return ControlPresentersNode(mirrors: presented ? viewers - 1 : viewers, presenter: presented ? true : nil, viewers: viewers)
+    }
+
+    /// remotelyPresented is the `tree` read-back of whether `pane`, a primary or split pane of `session`, hands its
+    /// next work to an attached Mac; nil for any other pane and when it does not.
+    func remotelyPresented(_ session: Session, pane: UUID?) -> Bool? {
+        guard let pane, pane == session.paneIdentity || pane == session.splitPaneIdentity,
+              remoteRecipient(session, paneIdentity: pane) != nil else { return nil }
+        return true
     }
 
     /// The local role standing for one of the origin's panes, resolved at use so a swap or promotion on this

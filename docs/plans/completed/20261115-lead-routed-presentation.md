@@ -278,22 +278,22 @@ later changes in #661 and #1008.
 - Modify docs: `.claude/rules/control-api.md`, `site/docs.html`, `site/commands.html`,
   `plugins/agterm/skills/agterm/reference.md`, `plugins/agterm/skills/agterm/SKILL.md`, `ARCHITECTURE.md`
 
-- [ ] write failing tests: a pending ask on pane A reaches the viewer that claims A once its report arrives, not
+- [x] write failing tests: a pending ask on pane A reaches the viewer that claims A once its report arrives, not
       the viewer claiming B; pending left and right overlays/pages go to two viewers in separate batches, each
       after its own capability check; a non-grant owner's disconnect while the grant holder stays idle re-offers
       its returned work to the holder; claimed or running jobs are not relaunched; the tree marks a surface
       `remote` exactly when its next work goes to a viewer; `presenters.viewers` and the CLI "viewed by" line;
       a tree without `viewers` (older app) decodes and the CLI derives the total from `mirrors` and `presenter`;
       a tree with `viewers` decodes into a struct that has only `mirrors` and `presenter` (older client)
-- [ ] offer pending work per recipient on a lead report, a grant and after owner loss
-- [ ] add the surface `remote` field and the optional `presenters.viewers`, keep `mirrors` and `presenter`, and
+- [x] offer pending work per recipient on a lead report, a grant and after owner loss
+- [x] add the surface `remote` field and the optional `presenters.viewers`, keep `mirrors` and `presenter`, and
       update the CLI line
-- [ ] sweep every "presenter" statement in `control-api.md`, `commands.html`, `reference.md`, `SKILL.md`,
+- [x] sweep every "presenter" statement in `control-api.md`, `commands.html`, `reference.md`, `SKILL.md`,
       `docs.html` and `ARCHITECTURE.md`: state the routing rule, the session-wide gate, click and clear rules, the
       new read-back and the older-Mac fallback once each, in their owning surface
-- [ ] verify every Overview requirement on both origins and with an older viewer beside a current one
-- [ ] run the gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] verify every Overview requirement on both origins and with an older viewer beside a current one
+- [x] run the gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

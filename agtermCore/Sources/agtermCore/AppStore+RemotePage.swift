@@ -143,7 +143,7 @@ extension AppStore {
     @discardableResult
     func offerPendingPage(_ slot: RemoteOverlaySlot, in session: Session, now: Date) -> Bool {
         guard slot.owner == nil, var request = slot.page?.request,
-              let owner = remoteRecipient(session, paneIdentity: request.pane?.identity),
+              let owner = pendingRecipient(session, paneIdentity: request.pane?.identity),
               presenterShows(request.source, log: request.textLog != nil, owner: owner) else { return false }
         request.token = UUID().uuidString
         request.textSeed = slot.page.flatMap { Self.textState($0.overlay) }

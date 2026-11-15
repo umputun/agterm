@@ -281,8 +281,8 @@ session; an attached row is saved and attached again at relaunch, while a remote
 `remoteSessionID` (the origin's id for the session an attached row shows, the id `zmx attach` takes; on a remote window's row it equals the row's `id`; omitted for a local session),
 `presentation` (attached session only: the mirroring stream's `state` - `connecting`, `connected`,
 `unsupported`, or `failed` with `error` - not the ssh connection's - plus `mode`, `presenter` while its stream holds that role, else `mirror`),
-`presenters` (origin session: `mirrors`, the streams mirroring it without presenting, and `presenter: true`
-when one presents it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
+`presenters` (origin session: `viewers`, the attached streams showing it, `mirrors`, those without the
+presenter role, and `presenter: true` when one holds it) and `remoteOverlays` (origin session: overlay slots a presenting Mac holds, a page's
 `pageID` included; HTML pages follow the same placement, see reference.md Remote sessions),
 `hasSplit` (whether a second pane exists at all, shown or hidden; omitted when there is none — read this
 rather than `split`, which is false for a split hidden with ⌘D even though its pane is still alive),
@@ -781,11 +781,11 @@ saved and attached again at the next launch; one whose session is gone from the 
 nothing; an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself
 ([details](reference.md#restore)); read
-`presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. One
-attached row per session holds the presenter role: an `ask open` or `session overlay open` newly aimed at
-the session on the origin is handed to it only when the target pane reports `follower` there, or every
-existing pane does for session-wide placement. Mixed, unknown or unowned roles stay local; one already
-open stays where it is when the lead changes. The overlay's program still runs once on the origin, and a remote
+`presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. An
+`ask open` or `session overlay open` newly aimed at the session on the origin goes to the attached Mac leading
+the target pane (session-wide work: the primary pane), else to the row holding the presenter role, and on a
+Mac origin only when that pane reports `follower` there; otherwise it stays local. One already open stays
+with its Mac when the lead changes; a pane's `remote` in `tree` says where its next one goes. The overlay's program still runs once on the origin, and a remote
 `overlay close` replies when the cancel is requested
 ([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm

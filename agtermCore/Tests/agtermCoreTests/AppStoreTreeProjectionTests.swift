@@ -795,7 +795,39 @@ struct AppStoreTreeProjectionTests {
                               sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
         }
 
-        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2))
+        #expect(store.controlTree().workspaces[0].sessions[0].presenters == ControlPresentersNode(mirrors: 2, viewers: 2))
+    }
+
+    @Test func anOriginSurfaceIsRemoteExactlyWhenItsNextWorkGoesToAViewer() throws {
+        let store = makeStore()
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let workspace = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        store.toggleSplit(session.id)
+        session.surface = SpySurface(paneToken: "left")
+        session.splitSurface = SpySurface(paneToken: "right")
+        let remote = { () -> [String: Bool?] in
+            Dictionary(uniqueKeysWithValues: (store.controlTree().workspaces[0].sessions[0].surfaces ?? []).map { ($0.kind, $0.remote) })
+        }
+        lead(.follower, pane: session.paneIdentity)
+        lead(.leader, pane: try #require(session.splitPaneIdentity))
+        #expect(remote()["left"] == .some(nil))
+
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: [], mode: .presenter),
+                                   sink: NullSink()) { store.presentationSnapshot(forSession: session.id) }
+        hub.receive(PresentationFrame(gen: 1, rev: 0, body: .presenterAcquire), from: id)
+
+        #expect(remote()["left"] == .some(true))
+        #expect(remote()["right"] == .some(nil))
+    }
+
+    private func lead(_ role: ZmxLeadRole, pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
     }
 
     @Test func anOriginRowReportsItsPresenterApartFromItsMirrors() throws {
@@ -815,7 +847,7 @@ struct AppStoreTreeProjectionTests {
         hub.receive(PresentationFrame(gen: 1, rev: 0, body: .presenterAcquire), from: presenter)
 
         #expect(store.controlTree().workspaces[0].sessions[0].presenters
-            == ControlPresentersNode(mirrors: 1, presenter: true))
+            == ControlPresentersNode(mirrors: 1, presenter: true, viewers: 2))
     }
 
     @Test func aViewerRowReportsTheModeItWasGranted() throws {

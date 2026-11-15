@@ -1246,7 +1246,25 @@ struct SocketClientTests {
         let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
 
         #expect(out.contains("presentation: failed (exit 255)"))
-        #expect(out.contains("mirrored by: 2"))
+        #expect(out.contains("viewed by: 2"))
+    }
+
+    @Test(arguments: [(ControlPresentersNode(mirrors: 1, presenter: true, viewers: 3), 3), (ControlPresentersNode(mirrors: 1, presenter: true), 2),
+                      (ControlPresentersNode(mirrors: 2), 2)])
+    func theViewerCountComesFromViewersOrFromAnOlderAppsMirrorsAndPresenter(node: ControlPresentersNode, count: Int) {
+        #expect(node.viewedBy == count)
+    }
+
+    @Test func presentersDecodeAcrossVersions() throws {
+        struct OlderPresenters: Decodable, Equatable {
+            let mirrors: Int
+            let presenter: Bool?
+        }
+        let current = try JSONEncoder().encode(ControlPresentersNode(mirrors: 1, presenter: true, viewers: 2))
+        let older = Data(#"{"mirrors":1,"presenter":true}"#.utf8)
+
+        #expect(try JSONDecoder().decode(OlderPresenters.self, from: current) == OlderPresenters(mirrors: 1, presenter: true))
+        #expect(try JSONDecoder().decode(ControlPresentersNode.self, from: older).viewedBy == 2)
     }
 
     @Test func formatTreeShowsThePresenterOnBothSides() {
@@ -1262,8 +1280,7 @@ struct SocketClientTests {
         let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)))
 
         #expect(out.contains("presentation: connected, presenter"))
-        #expect(out.contains("presented remotely"))
-        #expect(!out.contains("mirrored by"))
+        #expect(out.contains("viewed by: 1"))
     }
 
     @Test func formatResponseTree() {

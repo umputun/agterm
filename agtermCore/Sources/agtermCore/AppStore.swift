@@ -400,7 +400,8 @@ public final class AppStore {
                                               lead: ZmxLeadBook.shared.role(pane: pane),
                                               reconnect: RemoteReconnectBook.shared.readback(pane: pane),
                                               paneID: token?.isEmpty == false ? token : nil,
-                                              pendingMessages: pendingMessages(session, pane: pane, token: token))
+                                              pendingMessages: pendingMessages(session, pane: pane, token: token),
+                                              remote: remotelyPresented(session, pane: pane))
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: (session.content == .page ? parent(of: session) : nil)?.effectiveCwd

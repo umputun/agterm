@@ -1072,7 +1072,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(OverlayPanelStyle.resolve(viewer).interactive)
         XCTAssertEqual(viewer.hudSpec?.message, "deploying")
         XCTAssertEqual(store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == origin.id.uuidString }?
-            .presenters, ControlPresentersNode(mirrors: 0, presenter: true))
+            .presenters, ControlPresentersNode(mirrors: 0, presenter: true, viewers: 1))
 
         server.shutdownPresentationStreams()
         waitUntil("the mirrored status and HUD leave with the stream") {

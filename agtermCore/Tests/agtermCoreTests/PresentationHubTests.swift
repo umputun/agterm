@@ -329,7 +329,7 @@ struct PresentationHubTests {
         let big = PresentationNotify(title: "t", body: String(repeating: "y", count: 150 * 1024), pane: nil, source: "osc")
         let before = sink.frames.count
 
-        hub.batch(toOwner: sink.frames[0].gen) {
+        hub.batch(session: Self.session) {
             for notify in small { hub.send(.notify(notify), toOwner: sink.frames[0].gen) }
             hub.send(.notify(big), toOwner: sink.frames[0].gen)
         }
@@ -736,22 +736,47 @@ struct PresentationHubTests {
         #expect(lost == [other.gen, holder.gen])
     }
 
-    @Test func aBatchGoesToItsOwnerAloneAsOneCommit() throws {
+    @Test func aSessionBatchCommitsEachViewersShareOnItsOwn() throws {
         let hub = makeHub()
-        let firstSink = Sink()
-        let secondSink = Sink()
+        let firstSink = Sink(), secondSink = Sink(), idleSink = Sink(), elsewhereSink = Sink()
         let first = try viewer(hub, sink: firstSink)
         let second = try viewer(hub, sink: secondSink)
+        _ = try viewer(hub, sink: idleSink)
+        let elsewhere = try hub.subscribe(session: UUID(), hello: Self.leadHello, sink: elsewhereSink) { Self.split }
         let sound = PresentationFrame.Body.sound(PresentationSound(name: nil))
+        let idleBefore = idleSink.frames.count
 
-        hub.batch(toOwner: first.gen) {
+        hub.batch(session: Self.session) {
             hub.send(sound, toOwner: first.gen)
-            hub.send(sound, toOwner: second.gen)
+            hub.send(.sound(PresentationSound(name: "Glass")), toOwner: second.gen)
+            hub.send(sound, toOwner: elsewhere.generation)
             #expect(!firstSink.bodies.contains(sound))
         }
 
-        #expect(firstSink.bodies.suffix(2).last == .pendingCommit)
-        #expect(!firstSink.bodies.contains(sound))
-        #expect(secondSink.bodies.last == sound)
+        #expect(try committed(firstSink) == [sound])
+        #expect(try committed(secondSink) == [.sound(PresentationSound(name: "Glass"))])
+        #expect(idleSink.frames.count == idleBefore)
+        #expect(elsewhereSink.bodies.last == sound)
+    }
+
+    @Test func aBatchStartedInsideAnotherKeepsTheOuterViewersShareInTheOuterCommit() throws {
+        let hub = makeHub()
+        let sink = Sink()
+        let first = try viewer(hub, sink: sink)
+        let sound = PresentationFrame.Body.sound(PresentationSound(name: nil))
+
+        hub.batch(session: Self.session) {
+            hub.batch(session: Self.session) { hub.send(sound, toOwner: first.gen) }
+            #expect(!sink.bodies.contains(.pendingCommit))
+        }
+
+        #expect(try committed(sink) == [sound])
+    }
+
+    private func committed(_ sink: Sink) throws -> [PresentationFrame.Body] {
+        #expect(sink.bodies.last == .pendingCommit)
+        var batch = PresentationPendingBatch()
+        for case .pendingChunk(let chunk) in sink.bodies { batch.add(chunk) }
+        return try batch.commit()
     }
 }
