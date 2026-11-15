@@ -635,6 +635,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <p>A split is one session with two terminals, sharing one sidebar row.</p>
 <ul>
 <li>⌘D splits side by side, ⌘⇧D top and bottom. The other shortcut turns a shown split to its axis; the current one hides the split without closing the second shell.</li>
+<li>⌥⌘← and Ctrl-1 focus the left or top pane, ⌥⌘→ and Ctrl-2 the right or bottom one. On a hidden split they swap which pane is shown. <code>agtermctl session focus</code> with no pane switches to the other one.</li>
 <li>The divider follows the axis and remembers its position. Drag it to resize, double-click it for an even split.</li>
 <li><strong>Close Split</strong> in the action palette ends the second pane, whatever it is running.</li>
 <li><strong>Swap Panes</strong> (View or the action palette) exchanges the two terminals without restarting them. The primary and split roles follow the positions, focus follows its terminal, and the divider stays put. <code>agtermctl session swap</code> does the same, also while the split is hidden.</li>
