@@ -97,7 +97,7 @@ public final class SessionPickBook {
     static let retainedResultLimit = 32
 
     public enum Placement: Equatable, Sendable {
-        /// drawn by the session's presenter, handed over under that presenter generation
+        /// drawn by an attached viewer, handed over under that viewer's token
         case presenter(owner: Int)
         /// drawn in this window's modal slot
         case local(WindowInfo.ID)
@@ -165,7 +165,7 @@ public final class SessionPickBook {
         entries.values.first { $0.session == session && $0.placement == .unpresented }.map { ($0.pick, $0.follow) }
     }
 
-    /// offer marks `session`'s unpresented pick as handed to the presenter under `owner`.
+    /// offer marks `session`'s unpresented pick as handed to the viewer `owner`.
     func offer(session: UUID, owner: Int, dismiss: @escaping @MainActor () -> Void) {
         guard let (id, _) = entries.first(where: { $0.value.session == session && $0.value.placement == .unpresented }) else { return }
         entries[id]?.placement = .presenter(owner: owner)

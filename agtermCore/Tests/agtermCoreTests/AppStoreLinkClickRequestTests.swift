@@ -79,6 +79,20 @@ struct AppStoreLinkClickRequestTests {
                                        originTakesLeads: true) == .failure(.notPresenter))
     }
 
+    @Test func aMirrorLeadingTheOriginsScratchForwardsAClickFromIt() throws {
+        let mirror = try attached(mode: .mirror)
+        let scratch = UUID(), client = UUID()
+        mirror.remotePresentation?.layout = PresentationLayout(panes: [Self.remoteLeft], primary: Self.remoteLeft, shown: false,
+                                                               scratch: scratch, scratchShown: true)
+        mirror.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+        mirror.originScratchClient = client
+        lead(.leader, pane: client)
+
+        let request = store.linkClickRequest(click(mirror, pane: scratch), originSupportsClick: true, hidden: false, originTakesLeads: true)
+
+        #expect(try request.get().pane == scratch)
+    }
+
     @Test func theLeadSetNamesOnlyOriginPanesThisMacLeads() throws {
         let session = try attached(mode: .mirror, mapSplit: false)
         #expect(store.originLeads(of: session).isEmpty)

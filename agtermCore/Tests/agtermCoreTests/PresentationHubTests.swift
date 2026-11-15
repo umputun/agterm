@@ -759,20 +759,6 @@ struct PresentationHubTests {
         #expect(elsewhereSink.bodies.last == sound)
     }
 
-    @Test func aBatchStartedInsideAnotherKeepsTheOuterViewersShareInTheOuterCommit() throws {
-        let hub = makeHub()
-        let sink = Sink()
-        let first = try viewer(hub, sink: sink)
-        let sound = PresentationFrame.Body.sound(PresentationSound(name: nil))
-
-        hub.batch(session: Self.session) {
-            hub.batch(session: Self.session) { hub.send(sound, toOwner: first.gen) }
-            #expect(!sink.bodies.contains(.pendingCommit))
-        }
-
-        #expect(try committed(sink) == [sound])
-    }
-
     private func committed(_ sink: Sink) throws -> [PresentationFrame.Body] {
         #expect(sink.bodies.last == .pendingCommit)
         var batch = PresentationPendingBatch()

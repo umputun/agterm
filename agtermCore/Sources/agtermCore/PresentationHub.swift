@@ -209,10 +209,9 @@ public final class PresentationHub {
     }
 
     /// batch sends what `fill` hands each viewer of `session` as pending chunks and one commit of its own, so each
-    /// applies its share together or, when its stream ends first, none of it. A viewer already inside a batch, as when
-    /// a commit's stall drops a viewer and its work is offered again, keeps that batch.
+    /// applies its share together or, when its stream ends first, none of it.
     public func batch(session: UUID, _ fill: () -> Void) {
-        let owners = subscribers.values.filter { $0.session == session && batches[$0.generation] == nil }.map(\.generation)
+        let owners = subscribers.values.filter { $0.session == session }.map(\.generation)
         for owner in owners { batches[owner] = [] }
         fill()
         for owner in owners {

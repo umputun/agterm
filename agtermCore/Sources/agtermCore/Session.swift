@@ -374,7 +374,7 @@ public final class Session: Identifiable {
     public internal(set) var askDraft: AskDraft?
     /// Stable identity of the covered pane; nil covers the whole session.
     public private(set) var askPaneIdentity: UUID?
-    /// The presenter generation the pending ask was handed to, nil while this Mac draws it. A remotely
+    /// askRemoteOwner is the token of the viewer the pending ask was handed to, nil while this Mac draws it. A remotely
     /// presented ask keeps the slot and its result here but is neither drawn nor answered on this Mac.
     public internal(set) var askRemoteOwner: Int?
     /// Tells the presenter a handed-over ask ended here. Set with the handover, run once when it resolves.

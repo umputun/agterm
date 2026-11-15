@@ -146,8 +146,8 @@ public struct PresentationSound: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationAsk is an ask the origin hands its presenter to draw. `owner` is the presenter generation it
-/// was handed under, and every answer echoes it, so one arriving after a handback is recognisably stale.
+/// PresentationAsk is an ask the origin hands a viewer to draw. `owner` is the token of the viewer it
+/// was handed to, and every answer echoes it, so one arriving after a handback is recognisably stale.
 public struct PresentationAsk: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
