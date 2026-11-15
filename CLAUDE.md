@@ -43,6 +43,9 @@ C-boundary concurrency before changing the bridge.
 - A decline of a feature request that a custom command covers explains the extension model with the request
   as the worked example: README's "bind X yourself", `site/docs.html#extend`, the agent skill, the cookbook.
   It also points "can you add X" requests to Discussions ▸ Ideas instead of issues.
+- Custom forks are not supported. An answer, recipe or decision is made for agterm itself and is never limited or
+  adjusted for what a reporter's fork has or lacks. agterm-linux stays in view only as `agtermCore`'s downstream
+  consumer (module boundaries below).
 - When adding a process that runs user commands or reparents a session, weigh its effect on macOS TCC
   attribution per service, up front. The responsible process is not always TCC's authorization subject:
   the #574 microphone test recorded `agterm-session-host` as responsible, `com.umputun.agterm` as the
