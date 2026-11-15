@@ -2,7 +2,7 @@
 name: agterm
 description: >
   Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
-  manage sessions, companions and workspaces; split panes; toggle the scratch; run, hide or show overlays;
+  manage sessions, companions and workspaces, move a companion under another session; split panes; toggle the scratch; run, hide or show overlays;
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
   page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code; type
@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -385,6 +385,8 @@ omitted when expanded).
   each pane's program (Duplicate as Companion); nothing is created when a pane's program cannot be copied.
   `session convert --companion` turns a running top-level session into a companion of a fresh shell opened in its
   place, keeping its program, id and companions (Convert to Companion).
+  `session move --parent SID [--index N]` moves a companion under another top-level session, any workspace,
+  still running (Move to in the row menu, or a sidebar drag).
   `session overlay open --html FILE --companion` (or `--url URL --companion`) adds a page companion: a row
   under the target session that shows the page and runs no shell. `--page` instead of `--companion` opens a
   top-level page session after the target's group, which holds companions of its own. Every local page row is

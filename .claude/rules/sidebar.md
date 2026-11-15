@@ -99,7 +99,9 @@ paths:
   untouched rather than clearing it. No control form — see `control-api.md`.
 - Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, Convert to Companion, and Reveal in
   Finder appear only for one target. Duplicate as Companion is omitted on a page row; Convert to Companion is omitted
-  on a companion row; a row attached from another host is converted by its origin. Duplicate inserts a fresh
+  on a companion row; a row attached from another host is converted by its origin.
+- Move to lists workspaces for top-level rows and batches. On a single companion row it lists the window's other
+  top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
@@ -290,10 +292,15 @@ paths:
   persistence suppressed. `applyParentExpansion(under:)` re-applies parents when their workspace opens.
 - A folded parent shows `companion-marker` for the companions `companionsNeedingAttention` returns, beside its
   own glyph and badge, with their names as the accessibility label. `RowContent.foldedAttention` reloads it.
-- A companion moves only among its siblings: a gap among them, or a drop on one. It has no workspace-level
-  slot in the ordinary tree, and every drop asks `canMoveSessions` before showing an indicator.
+- In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
+  a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
+  companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Several rows and a workspace-level
+  slot keep the sibling-only rule and ask `canMoveSessions`. No flagged drag changes a parent: the flagged tree keeps
+  siblings, and the flat and plain lists reorder `flaggedOrder` (`moveFlagged`). Move to is the reparenting path there.
+- `syncSelection` reveals on a change of the selected row's parent as well as of the selection
+  (`lastRevealedParent`), so a companion moved under a folded parent or into another workspace stays in view.
 - Companion rows keep the `session-row` identifier with accessibility label `companion`; the value stays the name.
-- Convert to Companion is the one path that changes a `parentID` after creation. A recorded parent can therefore be
+- Convert to Companion and a companion move are the paths that change a `parentID` after creation. A recorded parent can therefore be
   a companion by the time its child reopens: both restore paths resolve it through `groupRoot(of:)`, and Recent
   Closed's `restoresSession` finds a parent inside a closed group or workspace, not only as an entry's root.
   A group hard close finalizes the parked companions of every member, not only of the closed parent.

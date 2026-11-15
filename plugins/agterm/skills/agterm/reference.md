@@ -533,7 +533,8 @@ buys nothing. A caller with no tree uses `version`.
   Use a command companion to keep a related program next to a session:
   `agtermctl session new --parent active --command 'tail -f build.log' --name logs`, adding `--wait` to keep
   its output after it exits.
-  A companion reorders only among its siblings (drag or `session move`), and moving the parent carries its
+  A companion reorders among its siblings (drag or `session move`) and moves under another session with
+  `session move --parent` or a drag onto that session; moving the parent carries its
   companions. Other session commands (status, notify, type, split, rename, flag, close) act on a companion
   as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
   (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
@@ -574,6 +575,18 @@ buys nothing. A caller with no tree uses `version`.
   session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
   nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
   and the keyless `convert_companion` action.
+- `session move --parent SID [--index N] [--target T] [--window W]` - move a companion under another top-level
+  session of the same window, any workspace, keeping its id and running panes. `--index` is its 0-based place
+  among the new parent's companions (omitted or past the end: last); the current parent reorders it. Takes no
+  workspace, `--to`, `--after`/`--before`, and one target. Refusals: `not a companion`, `the new parent must be a
+  top-level session`, `a companion moves only under a session from the same host`; an app predating it answers
+  `the running app is too old for companion moves`. A server window's row moves on its server (an older one
+  answers `the agterm-server on HOST is too old for companion moves`); on a session attached from another Mac
+  both rows must come from it; for a new parent that Mac moves its companion and then the row moves here (a
+  reorder under the same parent stays here), and another Mac attached
+  to the same sessions keeps the old grouping until it reattaches. Wire command `session.companion.move`;
+  returns `result.id` and `result.parent`. Read back as the node's `parent` and tree order. GUI twins: a drag in
+  the sidebar tree and Move to in a companion row's context menu.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -645,7 +658,8 @@ buys nothing. A caller with no tree uses `version`.
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
   counting only sessions whose position/workspace changed. Moving a parent carries its companions; a move
-  that would take a companion out of its group errors `a companion moves only among its siblings`, while an
+  that would take a companion out of its group errors `a companion moves only among its siblings; use --parent
+  to move it under another session`, while an
   ordinary no-op move still answers ok.
 
 Shared pane selectors accept `primary`/`left`/`top` for the primary pane and

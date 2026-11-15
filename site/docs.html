@@ -505,7 +505,8 @@ Two parents, each with its companions indented under it; the blocked <code>logs<
 </figure>
 <ul>
 <li>The parent's disclosure triangle folds its companions away. A folded parent shows a small marker when a hidden companion is blocked, completed or has unread notifications.</li>
-<li>Companions reorder only among themselves, and moving the parent carries them.</li>
+<li>Drag a companion among its siblings to reorder it, or onto another top-level session, or into that session's companions, to move it under that session, in any workspace of the window. <strong>Move to</strong> in a companion's context menu lists the window's other top-level sessions. From a script: <code>agtermctl session move --parent SID [--index N]</code>. In the flagged view a drag never changes a companion's parent; use Move to there.</li>
+<li>Moving the parent carries its companions.</li>
 <li>Closing a companion closes only it. Closing the parent closes the group, and one Reopen Closed Item brings it all back.</li>
 <li>While a parent has companions, its shell exiting starts a fresh shell in the same directory instead of closing the session; one that exits again within 2 seconds closes the group. A Mac viewing that session attaches to the new shell.</li>
 <li>Flat lists (the ⌃P palette, the Ctrl-Tab switcher, the Dock menu and the Attach Remote picker) label a companion <code>parent › child</code>; the tree, rename and Copy Name keep the bare name.</li>
@@ -551,6 +552,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <ul>
 <li>New Companion and Duplicate as Companion ask that Mac to create the companion under its own session and attach it here. Closing it here only detaches it.</li>
 <li>Convert to Companion runs on that Mac, and its new parent attaches here.</li>
+<li>A companion moves only under another session from that Mac: when the parent changes, that Mac moves it under its own session first, then the row moves here; a reorder under the same parent stays here. Another Mac attached to the same sessions keeps the old grouping until it attaches them again.</li>
 <li>A page companion opened there is that Mac's page, shown here through its own channel; it stays there when you close it here.</li>
 </ul>
 <h3 id="workspaces-finder">Opening sessions from Finder</h3>
@@ -875,7 +877,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <h3 id="remote-sessions-origin">What runs on the other Mac</h3>
 <p>Commands that change the session run on the Mac it came from, and the result attaches here:</p>
 <ul>
-<li>Duplicate Session, a new split and Close Split, Convert to Companion;</li>
+<li>Duplicate Session, a new split and Close Split, Convert to Companion, moving a companion under another session;</li>
 <li>the scratch terminal, refused while the row is not connected or when the other Mac's agterm is too old to show its scratch;</li>
 <li><code>agtermctl session restart</code>, <code>zmx kill</code> and <code>session restore</code>; a session from agterm-server refuses <code>session restore</code>, since the server keeps every pane running.</li>
 </ul>

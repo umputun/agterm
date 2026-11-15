@@ -245,15 +245,15 @@
 - [x] run the touched tests - must pass before task 5
 
 ### Task 5: Docs, acceptance and gates
-- [ ] `site/docs.html` (companions: drag rules in the tree, Move to, the flagged layouts, the attached-viewer
+- [x] `site/docs.html` (companions: drag rules in the tree, Move to, the flagged layouts, the attached-viewer
       limit) and `site/commands.html` (command, arguments, read-back, refusals)
-- [ ] `.claude/rules/control-api.md`: catalog list, a Companions bullet, and the `companionMoveError` line
-- [ ] `.claude/rules/sidebar.md`: the companion-move rule ("moves only among its siblings"), the "Convert is
+- [x] `.claude/rules/control-api.md`: catalog list, a Companions bullet, and the `companionMoveError` line
+- [x] `.claude/rules/sidebar.md`: the companion-move rule ("moves only among its siblings"), the "Convert is
       the one path that changes a `parentID`" line, the row-menu list, and the owner-chain reveal exception
-- [ ] bundled skill `plugins/agterm/skills/agterm/` reference entry and a SKILL.md trigger for moving a companion
-- [ ] verify every Overview requirement and each refusal end to end
-- [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] bundled skill `plugins/agterm/skills/agterm/` reference entry and a SKILL.md trigger for moving a companion
+- [x] verify every Overview requirement and each refusal end to end
+- [x] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 **Manual verification:**
