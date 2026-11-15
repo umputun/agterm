@@ -68,15 +68,26 @@ public enum LinkPolicy {
     /// markdownExtensions lists the local file extensions rendered as Markdown.
     public static let markdownExtensions: Set<String> = ["md", "markdown"]
 
-    /// Whether a web view of this app can load plain http from `host`. The app allows local networking
-    /// only, and App Transport Security reads "local" off the host's SYNTAX, never off where it resolves:
-    /// an unqualified name, a `.local` name, or an IP literal, a public one included.
+    /// loadsPlainHTTP says whether a web view of this app can load plain http from `host`: an unqualified or
+    /// `.local` name, or a loopback, private or link-local IP literal. ATS can refuse any other literal, even
+    /// one reached through a tunnel, so those open in the browser.
     static func loadsPlainHTTP(host: String) -> Bool {
         let host = normalizedHost(host)
         guard !host.isEmpty else { return false }
         if host.hasSuffix(".local") || !host.contains(where: { $0 == "." || $0 == ":" }) { return true }
-        var v4 = in_addr(), v6 = in6_addr()
-        return inet_pton(AF_INET, host, &v4) == 1 || inet_pton(AF_INET6, host, &v6) == 1
+        var v4 = in_addr()
+        if inet_pton(AF_INET, host, &v4) == 1 {
+            let b = withUnsafeBytes(of: v4) { Array($0) }
+            switch (b[0], b[1]) {
+            case (127, _), (10, _), (172, 16...31), (192, 168), (169, 254): return true
+            default: return false
+            }
+        }
+        var v6 = in6_addr()
+        guard inet_pton(AF_INET6, host, &v6) == 1 else { return false }
+        let b = withUnsafeBytes(of: v6) { Array($0) }
+        let loopback = b.dropLast().allSatisfy { $0 == 0 } && b[15] == 1
+        return loopback || b[0] & 0xfe == 0xfc || (b[0] == 0xfe && b[1] & 0xc0 == 0x80)
     }
 
     /// Whether a session web overlay can show `url`: https, or plain http from a host `loadsPlainHTTP`
