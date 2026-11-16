@@ -1287,6 +1287,14 @@ error keeps those names for compatibility.
   `no text page` for any other page, and, from a presenting agterm too old for live text pages, `remote page: wrap it
   on the Mac that shows it`. Wire `mode`. Read back `htmlOverlays[].text.wrap`, true while wrapped and omitted
   otherwise. The page's Wrap button and `w` toggle the same state.
+- `session overlay expand on|off|toggle [--pane left|right] [--target] [--window W]`
+  - lay the records of the `.jsonl` or `.ndjson` page in the addressed slot out over indented rows, numbered by file
+  line, show them as written, or toggle; returns `result.text` `expanded` or `collapsed`. A page opens as written and
+  keeps its choice until it closes; a line that does not parse, and a record that does not fit the page's 4 MB
+  layout budget, stays as written. Refused `no JSON Lines page` for any other page, `log page: expand works on a static page` for a log
+  page, and `remote page: expand it on the Mac that shows it` from a presenting agterm without `page.expand`. Wire
+  `mode`. Read back `htmlOverlays[].text.expand`, true while expanded and omitted otherwise. The page's Expand button
+  and `e` toggle the same state.
 - `session overlay open --html FILE|--url URL --companion [page flags] [--follow] [--target] [--window W]`
   - open the page as a page companion of the target instead of in its overlay slot: a companion session
   (see `session new --parent`) that shows the page and never starts a shell. Its row sits under the parent,

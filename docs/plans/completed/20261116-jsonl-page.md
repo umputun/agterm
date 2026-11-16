@@ -248,14 +248,17 @@ and every exhaustive switch over them; no half of it builds alone.
 - Modify: `plugins/agterm/skills/agterm/SKILL.md`, `plugins/agterm/skills/agterm/reference.md`
 - Modify: `.claude/rules/control-api.md`
 
-- [ ] `site/docs.html`: `.jsonl`, `.ndjson` row in the local files table; the Expand toggle in the text page
+- [x] `site/docs.html`: `.jsonl`, `.ndjson` row in the local files table; the Expand toggle in the text page
       section beside Wrap; the 4 MB limit applies
-- [ ] `site/commands.html`: `session overlay expand` entry and the `expand` read-back field
-- [ ] skill: the command in SKILL.md beside wrap, reference.md entry
-- [ ] `control-api.md`: Expand beside the wrap line, the `page.expand` kind, log pages refused
-- [ ] verify every Overview point; run `cd agtermCore && swift test`, `make test-app`, `make lint` once each
-- [ ] check `lsappinfo list | grep -A4 agterm.debug` after the hosted run
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `site/commands.html`: `session overlay expand` entry and the `expand` read-back field
+- [x] skill: the command in SKILL.md beside wrap, reference.md entry
+- [x] `control-api.md`: Expand beside the wrap line, the `page.expand` kind, log pages refused
+- [x] verify every Overview point; run `cd agtermCore && swift test`, `make test-app`, `make lint` once each
+- ⚠️ the first `make test-app` failed `TextPageRenderingTests.testANearCapFileRendersInBoundedTime`: its
+  `colored.log` case took 41 s against 30 s; the rerun passed all 2313 with that test at 6 s. The branch leaves
+  the colored-page path unchanged, and the cause is open, raised with Eugene at the end of the run
+- [x] check `lsappinfo list | grep -A4 agterm.debug` after the hosted run
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
