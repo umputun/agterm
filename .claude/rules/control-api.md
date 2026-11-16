@@ -820,6 +820,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Session links use `LinkPolicy.sessionLink`: exactly `agterm://session/` (case-insensitive prefix) plus a
   36-character hyphenated UUID (either case), with no suffix, query, fragment, credentials, port or encoding.
   The raw string is checked, not URL components, so even an empty port is refused.
+  A plain-text link reaches it through `scripts/ghostty-patches/0004`, which adds `agterm://session/` to
+  libghostty's URL pattern: Codex renders an `agterm://` Markdown link as plain `label (url)` text, and ghostty's
+  `link` setting cannot be set.
   The `.selectSession` route precedes remote forwarding in every link-open mode, from pane, remote pane and
   scratch only; quick terminal and program overlay clicks are ignored, as for the link-open overlay.
   `WindowLibrary.sessionLinkTarget` takes the namespace from the clicked pane's binding: local shells use local

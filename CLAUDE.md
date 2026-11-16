@@ -243,7 +243,7 @@ C-boundary concurrency before changing the bridge.
 
 - `scripts/setup.sh` builds upstream `ghostty-org/ghostty` at `GHOSTTY_REV` using
   `zig build -Demit-xcframework=true -Dxcframework-target=native`, after applying
-  `scripts/ghostty-patches/*.patch`, then runs the teardown patch's Zig tests before staging anything.
+  `scripts/ghostty-patches/*.patch`, then runs the patches' Zig tests before staging anything.
   That directory documents each backport, its tests and its removal.
 - `GHOSTTY_REV` is `83fb956` (v1.4.0, 2026-10-27), a plain reproducibility pin carrying upstream's
   hidden-surface GPU release.

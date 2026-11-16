@@ -1,0 +1,52 @@
+diff --git a/src/config/url.zig b/src/config/url.zig
+index 463ea9b..d1dcf52 100644
+--- a/src/config/url.zig
++++ b/src/config/url.zig
+@@ -25,7 +25,7 @@ const oni = @import("oniguruma");
+ /// There are many complicated cases where these heuristics break down, but
+ /// handling them well requires a non-regex approach.
+ const url_schemes =
+-    \\https?://|mailto:|ftp://|file:|ssh:|git://|ssh://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:
++    \\https?://|mailto:|ftp://|file:|ssh:|git://|ssh://|tel:|magnet:|ipfs://|ipns://|gemini://|gopher://|news:|agterm://session/
+ ;
+ 
+ const ipv6_url_pattern =
+@@ -515,3 +515,38 @@ test "url regex" {
+         } else |_| {}
+     }
+ }
++
++test "agterm session link regex" {
++    const testing = std.testing;
++
++    try oni.testing.ensureInit();
++    var re = try oni.Regex.init(regex, .{}, oni.Encoding.utf8, oni.Syntax.default, null);
++    defer re.deinit();
++
++    const link = "agterm://session/3B334BAA-791C-478B-94E2-9A11F8E2DF85";
++    const cases = [_][]const u8{
++        link,
++        "Open .dot-files session (" ++ link ++ ")",
++        "switch to " ++ link ++ ".",
++        link ++ ", then return",
++        "- [api](" ++ link ++ ")",
++    };
++    for (cases) |input| {
++        var reg = try re.search(input, .{});
++        defer reg.deinit();
++        const match = input[@intCast(reg.starts()[0])..@intCast(reg.ends()[0])];
++        try testing.expectEqualStrings(link, match);
++    }
++
++    const no_match_cases = [_][]const u8{
++        "agterm://window/3B334BAA",
++        "agterm://other",
++    };
++    for (no_match_cases) |input| {
++        var result = re.search(input, .{});
++        if (result) |*reg| {
++            reg.deinit();
++            return error.TestUnexpectedResult;
++        } else |_| {}
++    }
++}

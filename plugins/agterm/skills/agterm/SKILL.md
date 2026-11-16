@@ -916,6 +916,9 @@ which Claude Code emits as OSC 8. When Claude Code captures the mouse, use ⌘�
 printf '\e]8;;agterm://session/%s\e\\%s\e]8;;\e\\\n' "$AGTERM_SESSION_ID" "back to this session"
 ```
 
+The bare URL `agterm://session/<id>` in plain text is a link too. Codex renders an `agterm://` Markdown
+link as plain `label (url)` text, so from Codex write the full URL in the answer.
+
 A ⌘-click in a pane, split or scratch selects the session and raises its window without confirmation or
 revealing an attention pane; in a session attached from another Mac, the id is that Mac's and selects the
 one row here showing it, never attaching anything or acting there.

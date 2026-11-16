@@ -184,8 +184,9 @@ if $need_xc || $need_res; then
   ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true \
       -Dxcframework-target=native -Demit-macos-app=false )
   # before staging, so a red test never leaves artifacts under a stamp that marks them current
-  echo "testing the teardown patch..."
-  ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build test -Dtest-filter=teardown -Demit-macos-app=false )
+  echo "testing the libghostty patches..."
+  ( cd "$ghostty_build" && "$GHOSTTY_ZIG" build test -Dtest-filter=teardown -Dtest-filter="url regex" \
+      -Dtest-filter="agterm session link" -Demit-macos-app=false )
 
   if $need_xc; then
     echo "staging GhosttyKit.xcframework..."
