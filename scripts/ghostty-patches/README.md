@@ -58,6 +58,16 @@ stays allocated until its threads are gone, since agterm keeps its address from 
 (`replacePane(spawnFirst:)`). Its Zig tests are named `teardown` and run with `0001`'s; the app side is pinned
 by `SurfaceRetirementTests`.
 
+## 0004: plain-text session links
+
+`0004` adds `agterm://session/` to the URL schemes in `src/config/url.zig`, so a session link printed as plain
+text is clickable. Codex renders an `agterm://` Markdown link as plain `label (url)` text, and
+ghostty's `link` setting, the configurable alternative, returns `NotImplemented`. Only the session form is
+added: `LinkPolicy.sessionLink` ignores every other `agterm://` URL, which should not show a link pointer.
+Its Zig test is `agterm session link regex`, run with the `url regex` test it extends.
+
+Remove the patch when `GHOSTTY_REV` lets the embedder add a link pattern, and add the pattern there.
+
 ## Removing the last patch
 
 Remove `GHOSTTY_PATCH_DIR`, the digest calculation and apply loop in `setup.sh`, and either set
