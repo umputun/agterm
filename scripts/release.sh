@@ -174,6 +174,10 @@ if [ "$SIGNED" = "1" ]; then
       exit 1
     fi
   done
+  if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q 'com.apple.security.cs.'; then
+    echo "the Developer ID app carries a hardened-runtime exception; it must be signed with agterm.entitlements" >&2
+    exit 1
+  fi
 else
   # the checksum file joined the bundle after the build sealed it; the helpers are untouched, so only the app re-seals
   codesign --force --entitlements "$ROOT/agterm/agterm.entitlements" --sign - "$APP"

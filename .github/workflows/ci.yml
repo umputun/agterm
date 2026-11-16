@@ -309,10 +309,11 @@ jobs:
               exit 1
             fi
           done
-      # the Debug-only hardened-runtime exceptions (allow-jit, allow-unsigned-executable-memory,
-      # disable-library-validation) must never reach a shipped build, and the TCC set must not shrink
-      # either — losing one silently removes the user's only path to granting that permission (#396).
-      # Pin the exact Release set; adding or dropping a key is a deliberate act that edits this list.
+      # this ad-hoc Release build carries the TCC set plus disable-library-validation, which it needs to load
+      # Sparkle.framework; allow-jit and allow-unsigned-executable-memory stay Debug-only, and the TCC set must
+      # not shrink either — losing one silently removes the user's only path to granting that permission (#396).
+      # Pin the exact set; adding or dropping a key is a deliberate act that edits this list. The notarized app's
+      # strict set is checked by scripts/release.sh after its Developer ID re-sign.
       - name: Verify the app's Release entitlements
         shell: bash
         run: |
@@ -323,6 +324,7 @@ jobs:
           # accepts <string>true</string>, which renders as bare true without the tojson below.
           expected=$(printf '%s=true\n' \
             com.apple.security.automation.apple-events \
+            com.apple.security.cs.disable-library-validation \
             com.apple.security.device.audio-input \
             com.apple.security.device.camera \
             com.apple.security.personal-information.addressbook \
@@ -344,7 +346,7 @@ jobs:
       # added to the shipping file and missed here leaves Debug unable to prompt for it, with every job
       # green — the failure surfaces only when someone verifies the new permission by hand in a Debug
       # instance. Derive Debug's expected content from the shipping file so the two cannot drift.
-      - name: Verify the Debug entitlements are the shipping set plus the exceptions
+      - name: Verify the Debug and ad-hoc entitlements are the shipping set plus their exceptions
         shell: bash
         run: |
           keys() { plutil -convert json -o - -- "$1" | jq -r 'to_entries[] | "\(.key)=\(.value|tojson)"' | sort; }
@@ -358,6 +360,13 @@ jobs:
           if [ "$debug" != "$expected" ]; then
             echo "agterm-debug.entitlements is not the shipping set plus the three exceptions." >&2
             diff <(echo "$expected") <(echo "$debug") >&2 || true
+            exit 1
+          fi
+          adhoc=$(keys agterm/agterm-adhoc.entitlements)
+          expected=$(printf '%s\ncom.apple.security.cs.disable-library-validation=true\n' "$release" | sort)
+          if [ "$adhoc" != "$expected" ]; then
+            echo "agterm-adhoc.entitlements is not the shipping set plus disable-library-validation." >&2
+            diff <(echo "$expected") <(echo "$adhoc") >&2 || true
             exit 1
           fi
 

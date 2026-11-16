@@ -118,6 +118,8 @@ extension agtermApp {
     var appCommands: some Commands {
             CommandGroup(replacing: .appInfo) {
                 Button("About Agterm") { showAboutPanel() }
+                Button("Check for Updates…") { updates.checkForUpdates() }
+                    .disabled(!updates.isAvailable)
             }
             // the reset quits and reopens the app, so it shares Quit's group rather than sitting in Help beside
             // the installers.

@@ -139,13 +139,16 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
   `.claude/rules/menu-actions.md`
 - Create: `agterm/UpdateController.swift`, `agtermTests/UpdateControllerTests.swift`
 
-- [ ] Sparkle pinned to 2.9.6 (the version whose sources this plan was checked against) in `project.yml` for the app target only; `SUFeedURL` from `AGTERM_UPDATE_FEED`
+- [x] Sparkle pinned to 2.9.6 (the version whose sources this plan was checked against) in `project.yml` for the app target only; `SUFeedURL` from `AGTERM_UPDATE_FEED`
       (empty by default)
-- [ ] the maintainer creates the EdDSA key pair with the package's `generate_keys` (Claude Code runs it after his yes); public
+- [x] the maintainer creates the EdDSA key pair with the package's `generate_keys` (Claude Code runs it after his yes); public
       key into `SUPublicEDKey`
-- [ ] `UpdateController` created only with a feed; Check for Updates… in the app menu, disabled without one
-- [ ] an ad-hoc `make release` build launches on an isolated state directory with Sparkle.framework loaded
-- [ ] hosted tests: no updater and a disabled menu item without a feed; run them
+- [x] `UpdateController` created only with a feed; Check for Updates… in the app menu, disabled without one
+- [x] an ad-hoc `make release` build launches on an isolated state directory with Sparkle.framework loaded
+- [x] ➕ ad-hoc Release builds sign with `agterm-adhoc.entitlements` (shipping set plus `disable-library-validation`):
+      without it dyld refused Sparkle.framework on a Team-ID mismatch. `release.sh` rejects a Developer ID app carrying
+      a `cs.` exception; CI pins both sets. Eugene approved 2026-11-16.
+- [x] hosted tests: no updater and a disabled menu item without a feed; run them
 
 ### Task 2: Release signing, appcast and cask
 

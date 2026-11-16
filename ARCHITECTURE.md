@@ -23,7 +23,7 @@
 
 ### App target (XcodeGen project)
 
-The app target adds the SwiftUI shell (`ContentView`, `TerminalView`), the AppKit `WorkspaceSidebar` (an `NSOutlineView`), the libghostty bridge (`GhosttyApp`, `GhosttyCallbacks`, `GhosttyResources`, `GhosttySurfaceView`), and the git layer (`GitStatusService`, `GitStatusPill`). The bridge files are adapted from macterm (MIT). The app links `GhosttyKit.xcframework` and depends on the `agtermCore` package.
+The app target adds the SwiftUI shell (`ContentView`, `TerminalView`), the AppKit `WorkspaceSidebar` (an `NSOutlineView`), the libghostty bridge (`GhosttyApp`, `GhosttyCallbacks`, `GhosttyResources`, `GhosttySurfaceView`), and the git layer (`GitStatusService`, `GitStatusPill`). The bridge files are adapted from macterm (MIT). The app links `GhosttyKit.xcframework` and depends on the `agtermCore` package and Sparkle 2; `UpdateController` owns Sparkle's updater and exists only in a build whose `SUFeedURL` is set, which only `scripts/release.sh` passes.
 
 Selection is a single `Session.ID?`. Workspace rows are non-selectable headers; only sessions are detail targets, so one id suffices and the owning workspace is derived.
 

@@ -19,6 +19,8 @@ paths:
 
 ## Menu bar and actions
 
+- agterm ▸ Check for Updates… sits under About Agterm and is disabled in a build without an update feed
+  (`UpdateController.isAvailable`).
 - `@MainActor AppActions` shares nontrivial behavior among titlebar/footer, menu, palette, and control:
   placement, directory picking, split/focus, and font. Trivial toggles may call their owner directly.
 - **`PaletteCommand.isEnabled(in:)` is the single owner of menu enablement.** Every menu item backed by a
