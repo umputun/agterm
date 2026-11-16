@@ -149,6 +149,7 @@ final class FakeZmxRunner: ZmxRunner, @unchecked Sendable {
         Thread.sleep(forTimeInterval: 0.05)
         return lock.withLock {
             storedKills.append(name)
+            if !storedKillFails { storedRecords = storedRecords?.filter { $0.name != name } }
             return !storedKillFails
         }
     }
