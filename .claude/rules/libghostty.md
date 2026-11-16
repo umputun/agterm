@@ -92,6 +92,8 @@ paths:
 - AppKit draws disclosure triangles from `NSAppearance`, not explicit tint. Pin outline appearance to
   aqua/darkAqua from perceived luminance of the sidebar-tinted theme background, using the 0.5 midpoint.
   Apply at creation and `.agtermAppearanceChanged`. Verify by eye.
+  A selected row's triangle sits on the pill instead, so `SidebarRowView` gives its button the side matching
+  the selected row text, and nil again on deselect.
 - Disable AppKit outline selection immediately after `.plain`, which otherwise restores it. Also clear
   outline/scroll backgrounds; `.plain` avoids source-list's roughly 10px top inset but installs opaque
   control background.

@@ -50,7 +50,7 @@ final class SidebarInfoCellView: SidebarCellView {
     }
 
     private func render() {
-        let foreground = themeTextColor(selected: selected)
+        let foreground = Self.themeTextColor(selected: selected)
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
         let text = NSMutableAttributedString()

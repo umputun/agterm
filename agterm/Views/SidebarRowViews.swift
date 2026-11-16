@@ -137,7 +137,7 @@ class SidebarCellView: NSTableCellView {
     /// a row `tint` colors, which keep it selected or not. Never drive it from `backgroundStyle`, which AppKit
     /// flips only while the table is first responder.
     func setColors(selected: Bool) {
-        let color = themeTextColor(selected: selected)
+        let color = Self.themeTextColor(selected: selected)
         let tintColor = tint.map { NSColor.tint($0.color) }
         textField?.textColor = tint?.shows(.name) == true ? tintColor : color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
@@ -146,7 +146,7 @@ class SidebarCellView: NSTableCellView {
     }
 
     /// themeTextColor is the row text color the theme gives for a selection state, never a row tint.
-    func themeTextColor(selected: Bool) -> NSColor {
+    static func themeTextColor(selected: Bool) -> NSColor {
         let app = GhosttyApp.shared
         return selected
             ? (app.terminalSelectionForegroundColor ?? app.terminalForegroundColor ?? .white)
@@ -314,6 +314,7 @@ final class SidebarRowView: NSTableRowView {
             // AppKit won't redraw with selectionHighlightStyle == .none; re-tint the cell from the pill's state.
             needsDisplay = true
             retintCellViews()
+            applyDisclosureAppearance()
         }
     }
 
@@ -322,10 +323,28 @@ final class SidebarRowView: NSTableRowView {
         // a cell materialized into an already-selected row (reload/expand row-map flux can make the cell
         // builder's own selection lookup miss) picks up the row's live state on attach.
         (subview as? SidebarCellView)?.setColors(selected: isSelected)
+        if subview.identifier == NSOutlineView.disclosureButtonIdentifier { applyDisclosureAppearance() }
     }
 
     private func retintCellViews() {
         for case let cell as SidebarCellView in subviews { cell.setColors(selected: isSelected) }
+    }
+
+    /// applyDisclosureAppearance gives a selected row's triangle the appearance that matches the selected row
+    /// text, since AppKit colors it from appearance alone and the outline's pin reads the sidebar background,
+    /// not the pill. An unselected triangle inherits that pin.
+    func applyDisclosureAppearance() {
+        let appearance = isSelected ? Self.selectedTriangleAppearance() : nil
+        for subview in subviews where subview.identifier == NSOutlineView.disclosureButtonIdentifier {
+            subview.appearance = appearance
+        }
+    }
+
+    private static func selectedTriangleAppearance() -> NSAppearance? {
+        guard let text = SidebarCellView.themeTextColor(selected: true).usingColorSpace(.sRGB) else { return nil }
+        let textIsDark = ThemeBrightness.isDark(red: Double(text.redComponent), green: Double(text.greenComponent),
+                                                blue: Double(text.blueComponent))
+        return NSAppearance(named: textIsDark ? .aqua : .darkAqua)
     }
 
     override func drawBackground(in dirtyRect: NSRect) {

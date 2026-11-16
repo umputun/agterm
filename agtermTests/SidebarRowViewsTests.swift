@@ -266,6 +266,36 @@ final class SidebarRowViewsTests: XCTestCase {
         XCTAssertNil(try renderedNameField(forSession: remote.id).toolTip, "a reconnect must clear the notice")
     }
 
+    func testASelectedCompanionParentsTriangleFollowsTheSelectedRowText() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        _ = try store.addCompanion(to: parent.id).get()
+        buildSidebar(for: store)
+        let row = try rowIndex(forSession: parent.id)
+        let triangle = try renderedTriangle(atRow: row)
+
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        XCTAssertEqual(triangle.appearance?.name, try selectedTriangleAppearance())
+
+        outline.deselectAll(nil)
+        XCTAssertNil(triangle.appearance, "an unselected triangle inherits the outline's theme pin")
+    }
+
+    func testAnAppearanceChangeReappliesTheSelectedTriangle() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let parent = try XCTUnwrap(store.activeSession)
+        _ = try store.addCompanion(to: parent.id).get()
+        buildSidebar(for: store)
+        let row = try rowIndex(forSession: parent.id)
+        let triangle = try renderedTriangle(atRow: row)
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        let expected = try selectedTriangleAppearance()
+        triangle.appearance = NSAppearance(named: expected == .darkAqua ? .aqua : .darkAqua)
+
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        XCTAssertEqual(triangle.appearance?.name, expected)
+    }
+
     func testFlaggedRenameRestoresTheLabelAfterAnUnchangedCustomName() async throws {
         try await checkFlaggedRename(customName: "api", edited: "api", expected: "api")
     }
@@ -620,5 +650,28 @@ final class SidebarRowViewsTests: XCTestCase {
         }, "the session row should be visible in the outline")
         let cell = try XCTUnwrap(outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? SidebarCellView)
         return cell.imageView?.image
+    }
+
+    private func rowIndex(forSession id: UUID) throws -> Int {
+        outline.layoutSubtreeIfNeeded()
+        return try XCTUnwrap((0..<outline.numberOfRows).first { index in
+            guard let node = outline.item(atRow: index) as? SidebarNode else { return false }
+            return node.kind == .session && node.id == id
+        }, "the session row should be visible in the outline")
+    }
+
+    private func renderedTriangle(atRow row: Int) throws -> NSView {
+        outline.layoutSubtreeIfNeeded()
+        let rowView = try XCTUnwrap(outline.rowView(atRow: row, makeIfNecessary: true) as? SidebarRowView)
+        rowView.layoutSubtreeIfNeeded()
+        return try XCTUnwrap(rowView.subviews.first { $0.identifier == NSOutlineView.disclosureButtonIdentifier },
+                             "the companion parent's row should host a disclosure button")
+    }
+
+    private func selectedTriangleAppearance() throws -> NSAppearance.Name {
+        let text = try XCTUnwrap(SidebarCellView.themeTextColor(selected: true).usingColorSpace(.sRGB))
+        let textIsDark = ThemeBrightness.isDark(red: Double(text.redComponent), green: Double(text.greenComponent),
+                                                blue: Double(text.blueComponent))
+        return textIsDark ? .aqua : .darkAqua
     }
 }

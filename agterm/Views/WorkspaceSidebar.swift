@@ -273,7 +273,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 let selected = outline.selectedRowIndexes.contains(row)
                 (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView)?.setColors(selected: selected)
             }
-            outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+            outline.enumerateAvailableRowViews { rowView, _ in
+                rowView.needsDisplay = true
+                (rowView as? SidebarRowView)?.applyDisclosureAppearance()
+            }
         }
 
         /// Pin the outline's appearance to the terminal theme's brightness so AppKit-drawn chrome — the
