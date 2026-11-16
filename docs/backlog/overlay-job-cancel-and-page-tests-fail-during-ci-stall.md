@@ -22,6 +22,15 @@ jobs, passed after 65 s, and unrelated tests around 08:36 to 08:37 reported 98 s
   claim the page, so `AppStore.pageClaimWindow` (30 s, real clock) would end it during a long stall; the page offer
   time was not measured. `docs/ci-flakes.md` lists the same test under #949's pre-merge runs. Cause unresolved.
 
+Second sighting on #1021 at f5a04f7b (run 43866829158, job 133297572799), a change with no `agtermCore` code.
+Both `OverlayRunJobTests` cancel tests failed the same way after about 30 s.
+`ServerStreamsTests.everyPageKindOpensInEveryLinkMode` (`.overlay75`) answered `no overlay`, and two more page
+tests failed after 117.8 s: `aClickReplacesAHiddenClickedPageOnlyOnceTheNewFileChecksOut`
+(`ServerStreamsTests.swift:1542`, slot job nil) and `aHeldMarkdownPageOffersItsGrantOnlyToAPresenterThatFollowsLinks`
+(`:980`, `page not claimable`). The suite then went silent from 12:39:24 UTC, the last test started being
+`SessionHostServerTests.killedHostReleasesLockAndListenerWhileDaemonAndShellSurvive`, until the 600 s watchdog
+fired and the job ended with exit 124.
+
 Diagnostics for the next occurrence: print the received frames; record when the `asyncAfter` callback starts, when
 `cancel()` runs and which group it signals, and when the child is reaped; for the page tests, record the page offer
 time, its claim deadline and when the slot was removed.
