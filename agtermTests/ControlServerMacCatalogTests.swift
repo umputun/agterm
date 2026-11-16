@@ -321,6 +321,47 @@ final class ControlServerMacCatalogTests: XCTestCase {
         XCTAssertEqual(selections, [])
     }
 
+    func testARecentClearFromAnotherMacEmptiesOnlyItsWindow() throws {
+        let window = try window()
+        let store = try XCTUnwrap(library.store(for: window))
+        let closing = try XCTUnwrap(store.addSession(toWorkspace: workspace(in: window).id, cwd: "/tmp"))
+        let other = library.newWindow(name: "other").id
+        let otherStore = try XCTUnwrap(library.loadStore(for: other))
+        let kept = try XCTUnwrap(otherStore.workspaces.first?.sessions.first)
+        XCTAssertTrue(try operation("session.close", target: closing.id.uuidString, opID: "op-1", window: window).ok)
+        XCTAssertTrue(try request(#"{"cmd":"session.close","target":"\#(kept.id.uuidString)","args":{"window":"\#(other.uuidString)"}}"#).ok)
+
+        let cleared = try operation("recent.clear", opID: "op-2", window: window)
+
+        XCTAssertTrue(cleared.ok, cleared.error ?? "")
+        XCTAssertTrue(library.recentClosedItems(inWindow: window).isEmpty)
+        XCTAssertEqual(library.recentClosedItems(inWindow: other).compactMap(\.session?.snapshot.id), [kept.id])
+    }
+
+    func testASplitFromAnotherMacLeavesTheOriginsPaneFocus() throws {
+        let window = try window()
+        let store = try XCTUnwrap(library.store(for: window))
+        let session = try session()
+        store.selectSession(session.id)
+
+        let response = try operation("session.split", target: session.id.uuidString, args: #""mode":"on","#, opID: "op-1", window: window)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertTrue(session.isSplit)
+        XCTAssertFalse(session.splitFocused)
+    }
+
+    func testClearFlaggedFromAnotherMacClearsTheWindowsFlags() throws {
+        let window = try window()
+        let session = try session()
+        session.flagged = true
+
+        let response = try operation("session.flag", target: "active", args: #""mode":"clear","#, opID: "op-1", window: window)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertFalse(session.flagged)
+    }
+
     func testClosingTheOriginsSelectedRowFromAnotherMacReselects() throws {
         let window = try window()
         let store = try XCTUnwrap(library.store(for: window))
@@ -367,15 +408,16 @@ final class ControlServerMacCatalogTests: XCTestCase {
         let catalog = try XCTUnwrap(server.originCatalogs[window])
         catalog.projection.evidence = CatalogPaneEvidence(running: [pane])
         _ = offMain { client.frame() }
-        let count = { catalog.hub.snapshot().workspaces.flatMap(\.sessions).first?.panes.first?.pendingMessages }
+        let mail = { () -> Int?? in
+            guard case .delta(_, _, .paneChanged(let changed, _))? = self.offMain({ client.frame() }) ?? nil else { return nil }
+            return .some(changed.pendingMessages)
+        }
 
         try MessageBus.shared.send("hi", from: nil, to: [MessageRecipient(pane: pane, address: "test")], now: 0)
-        _ = offMain { client.frame() }
-        XCTAssertEqual(count(), 1)
+        XCTAssertEqual(mail(), .some(1))
 
         _ = MessageBus.shared.readAndAck(pane: pane)
-        _ = offMain { client.frame() }
-        XCTAssertNil(count())
+        XCTAssertEqual(mail(), .some(nil))
     }
 
     func testAWindowNobodyMirrorsReportsNoViewers() throws {

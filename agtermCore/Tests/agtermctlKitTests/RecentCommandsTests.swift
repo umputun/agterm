@@ -22,6 +22,14 @@ struct RecentCommandsTests {
         #expect(try request(["recent", "clear", "--window", "w1"]) == ControlRequest(cmd: .recentClear, args: ControlArgs(window: "w1")))
     }
 
+    @Test func clearCarriesAnOperationIDForAMacWindow() throws {
+        var args = ControlArgs(window: "w1")
+        args.opID = "op-1"
+        args.epoch = "e1"
+        #expect(try request(["recent", "clear", "--window", "w1", "--op-id", "op-1", "--epoch", "e1"])
+            == ControlRequest(cmd: .recentClear, args: args))
+    }
+
     @Test func undoCarriesTheUndoIDAndWindow() throws {
         #expect(try request(["session", "undo", "--target", "u1"]) == ControlRequest(cmd: .sessionUndo, target: "u1"))
         #expect(try request(["session", "undo", "--target", "u1", "--window", "w1"])

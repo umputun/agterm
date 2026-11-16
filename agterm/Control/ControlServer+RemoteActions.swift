@@ -4,8 +4,8 @@ import agtermCore
 /// RemoteRoute is where a control request on a remote window's rows goes: to the window's server, or refused here.
 enum RemoteRoute: Sendable {
     case send(RemoteCatalogActions, PreparedRemoteOperation, select: Bool)
-    /// request asks a server window's server something that changes no row.
-    case request(RemoteCatalogActions, words: [String])
+    /// recent reads or clears a remote window's Recent Closed.
+    case recent(RemoteCatalogActions, clear: Bool)
     case pageResult(host: String, page: UUID)
     /// attached sends a request on rows attached from another host to their origin.
     case attached(AttachedPlan)
@@ -51,8 +51,8 @@ extension ControlServer {
         guard [.recentList, .recentClear, .recentOpen, .sessionUndo].contains(request.cmd), let window = request.args?.window,
               let store = resolver.placementStore(window), let actions = store.remoteActions else { return nil }
         switch request.cmd {
-        case .recentList: return .request(actions, words: ["recent", "list"])
-        case .recentClear: return .request(actions, words: ["recent", "clear"])
+        case .recentList: return .recent(actions, clear: false)
+        case .recentClear: return .recent(actions, clear: true)
         case .sessionUndo:
             guard let id = request.target?.trimmingCharacters(in: .whitespaces), !id.isEmpty else {
                 return .refused(ControlResponse(ok: false, error: "session.undo requires --target with the undo id a close answered"))
@@ -119,8 +119,8 @@ extension ControlServer {
                 forwardedPages[page] = actions.mirror.host
             }
             return reply
-        case .request(let actions, let words):
-            return await actions.request(words)
+        case .recent(let actions, let clear):
+            return clear ? await actions.clearRecent() : await actions.listRecent()
         case .pageResult(let host, let page):
             return await serverPageResult(page, host: host)
         case .attached(let plan):

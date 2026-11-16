@@ -722,6 +722,60 @@ final class RemoteCatalogActionsTests {
         }
     }
 
+    private func macActions(window: UUID = UUID()) -> RemoteCatalogActions {
+        let mac = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState(), originWindow: window)
+        let script = script
+        return RemoteCatalogActions(mirror: mac, runner: { argv in await script.answer(argv) })
+    }
+
+    private func connect(_ mac: RemoteCatalogActions, recent: [ControlRecentItem]? = nil) {
+        _ = mac.mirror.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        var catalog = snapshot(sessions: [])
+        catalog.recent = recent
+        _ = mac.mirror.receive(.snapshot(catalog))
+    }
+
+    @Test func aMacWindowClearsItsRecentClosedThroughAnOperationInThatWindow() async throws {
+        let window = UUID()
+        let mac = macActions(window: window)
+        connect(mac, recent: [])
+        queue(reply(.applied, rev: 1))
+
+        let response = await mac.clearRecent()
+
+        let line = Script.plain(try #require(script.calls.last))
+        #expect(response.ok)
+        #expect(line.contains("recent clear") && line.contains("--op-id") && line.contains("--window \(window.uuidString)"))
+    }
+
+    @Test func aMacWindowStillConnectingRefusesToClearAndSendsNothing() async {
+        let response = await macActions().clearRecent()
+
+        #expect(!response.ok)
+        #expect(script.calls.isEmpty)
+    }
+
+    @Test func aServerWindowClearsWithAPlainRequest() async throws {
+        install(snapshot())
+        script.commands.append { _ in #"{"ok":true}"# }
+
+        let response = await actions.clearRecent()
+
+        let line = Script.plain(try #require(script.calls.last))
+        #expect(response.ok)
+        #expect(line.contains("recent clear") && !line.contains("--op-id"))
+    }
+
+    @Test func aMacWindowListsItsRecentClosedFromTheCatalogWithoutAsking() async throws {
+        let mac = macActions()
+        connect(mac, recent: [recentItem([sessionID])])
+
+        let response = await mac.listRecent()
+
+        #expect(response.result?.recent?.map(\.sessionIDs) == [[sessionID.uuidString]])
+        #expect(script.calls.isEmpty)
+    }
+
     @Test func aRowReopenedFromRecentClosedTakesTheLeadWhenItArrives() async throws {
         installMac(snapshot(sessions: []))
         let row = session(sessionID, panes: [panes[0]])

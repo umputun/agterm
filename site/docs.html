@@ -980,7 +980,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <li>Changes made here happen in that Mac's window, even while someone works in it. They never change the selection there, except that closing the selected row selects another, as it would locally.</li>
 <li>A Mac not in Live sessions mode is refused before any window opens.</li>
 <li>Rows that Mac attached from a third Mac are not shown. A workspace holding such rows cannot be deleted from here; the refusal says how many it holds.</li>
-<li>Recent Closed and Reopen Closed Item read the list of that one window. The other Mac's own File ▸ Open Recent still lists every window.</li>
+<li>Recent Closed, Reopen Closed Item and Clear Menu use the list of that one window. The other Mac's own File ▸ Open Recent still lists every window.</li>
 <li>Asks, picks and page questions follow the rules of an <a href="#remote-sessions-present">attached session</a>.</li>
 <li>A pane stopped on that Mac shows its end here and is not attached again while it stays stopped; a session whose every pane stopped reads <strong>Ended on HOST</strong>.</li>
 <li>A hidden split on that Mac whose shell exits by itself can still read as running here until that window's panes change, an action is sent from here, or this Mac reconnects.</li>

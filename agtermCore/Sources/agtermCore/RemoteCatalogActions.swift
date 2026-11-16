@@ -139,6 +139,8 @@ public enum RemoteOperation: Equatable, Sendable {
     case undoClose(String)
     /// reopenRecent reopens the server's Recent Closed entry, the newest when nil.
     case reopenRecent(String?)
+    /// clearRecent empties a Mac window's own Recent Closed entries.
+    case clearRecent
 
     public var label: String {
         switch self {
@@ -169,6 +171,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .killDaemon: "Kill Daemon"
         case .undoClose: "Reopen Closed Item"
         case .reopenRecent: "Reopen Last Closed Item"
+        case .clearRecent: "Clear Menu"
         }
     }
 
@@ -180,7 +183,7 @@ public enum RemoteOperation: Equatable, Sendable {
              .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _, _): .session(id)
         // a batch is marked on its first row
         case .closeSessions(let ids, _), .moveSessions(let ids, _): ids.first.map { .session($0) }
-        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent: nil
+        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent, .clearRecent: nil
         case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _), .setWorkspaceFlag(let id, _),
              .setWorkspaceTint(let id, _): .workspace(id)
         }
@@ -239,6 +242,7 @@ public enum RemoteOperation: Equatable, Sendable {
             ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] } + (undoable ? ["--undoable"] : [])
         case .undoClose(let id): ["session", "undo", "--target", id]
         case .reopenRecent: ["recent", "open"]
+        case .clearRecent: ["recent", "clear"]
         case .setFlag(let id, let on): ["session", "flag", on ? "on" : "off", "--target", id.uuidString]
         case .clearFlags: ["session", "flag", "clear"]
         case .setTint(let id, let update): ["session", "tint"] + update.words + ["--target", id.uuidString]
@@ -499,9 +503,27 @@ public final class RemoteCatalogActions {
         if let newSplit { mirror.claimSplitWhenShown(newSplit) }
     }
 
-    /// request sends a command that changes no catalog row, a Recent Closed read or clear, and answers the server's
-    /// reply. It carries no operation id: repeating it after a lost reply is harmless.
-    public func request(_ words: [String]) async -> ControlResponse {
+    /// listRecent answers the window's Recent Closed. A Mac window's comes from its catalog, which lists only that
+    /// window's entries; asking the Mac would answer its whole list.
+    public func listRecent() async -> ControlResponse {
+        guard mirror.originWindow != nil else { return await request(["recent", "list"]) }
+        guard let items = recentItems else { return ControlResponse(ok: false, error: "\(host) is not connected") }
+        return ControlResponse(ok: true, result: ControlResult(recent: items))
+    }
+
+    /// clearRecent empties the window's Recent Closed. A Mac window sends it as an operation the Mac runs in that
+    /// window alone, since a plain `recent clear` there empties the whole Mac's list.
+    public func clearRecent() async -> ControlResponse {
+        guard mirror.originWindow != nil else { return await request(["recent", "clear"]) }
+        switch prepare(.clearRecent) {
+        case .refused(let response): return response
+        case .ready(let prepared): return await send(prepared)
+        }
+    }
+
+    /// request sends a command that changes no catalog row and answers the server's reply. It carries no operation
+    /// id: repeating it after a lost reply is harmless.
+    func request(_ words: [String]) async -> ControlResponse {
         switch await run(words, operands: []) {
         case .notSent: return ControlResponse(ok: false, error: "no connection to \(host)")
         case .lost: return ControlResponse(ok: false, error: "\(host) did not answer")

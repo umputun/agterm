@@ -2699,7 +2699,8 @@ keeps no record of it` when neither works, and an unreachable host keeps the ent
 `agtermctl recent clear` — empty the list; ok only when the list is empty afterwards.
 
 `list` and `clear` refuse a target. With `--window` naming a server window, `list`, `open` and `clear` run on
-that server against the list it keeps; any other `--window` reads this Mac's list.
+that server against the list it keeps; naming a window of another Mac, they act on that window's entries only,
+`clear` as an operation the Mac runs in that window. Any other `--window` reads this Mac's list.
 
 ## clipboard
 

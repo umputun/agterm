@@ -4,12 +4,12 @@ import Foundation
 /// request reaches must be that window's, by full id, and a row attached from another host, which the catalog does not
 /// show, is never a target or an anchor. Undo ids and Recent Closed entries are scoped by their own commands.
 @MainActor
-public enum OriginCatalogScope {
-    static let unscoped: Set<Command> = [.sessionUndo, .recentOpen, .workspaceNew]
+enum OriginCatalogScope {
+    static let unscoped: Set<Command> = [.sessionUndo, .recentOpen, .recentClear, .workspaceNew]
     static let workspaceTargeted: Set<Command> = [.workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFlag, .workspaceTint]
 
     /// refusal answers why `request` reaches outside `store`, nil when it stays inside.
-    public static func refusal(_ request: ControlRequest, in store: AppStore) -> String? {
+    static func refusal(_ request: ControlRequest, in store: AppStore) -> String? {
         guard !unscoped.contains(request.cmd) else { return nil }
         let args = request.args ?? ControlArgs()
         // an omitted target resolves the origin's own selection, which can be a row the catalog does not show
@@ -18,7 +18,9 @@ public enum OriginCatalogScope {
         if workspaceTargeted.contains(request.cmd), let target = request.target {
             return workspaceRefusal(target, in: store) ?? deleteRefusal(request, target: target, in: store)
         }
-        let rows = [request.target].compactMap { $0 } + (args.targets ?? []) + [args.after, args.before].compactMap { $0 }
+        // a rowless command's target is the CLI's unused default, never a row
+        let target = rowless ? nil : request.target
+        let rows = [target].compactMap { $0 } + (args.targets ?? []) + [args.after, args.before].compactMap { $0 }
         for row in rows {
             if let refusal = sessionRefusal(row, in: store) { return refusal }
         }

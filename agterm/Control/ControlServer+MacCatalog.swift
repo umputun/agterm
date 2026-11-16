@@ -200,6 +200,17 @@ extension ControlServer {
             return await store.preservingSelection {
                 convertToCompanion(request.target, window: request.args?.window, focus: false)
             }
+        case .sessionSplit:
+            let raw = request.args?.axis, axis = raw.flatMap(SplitAxis.init(rawValue:))
+            // an unknown axis goes on to the dispatcher, which names it
+            guard raw == nil || axis != nil else { break }
+            return splitSession(request.target, window: request.args?.window, mode: request.args?.mode, axis: axis, focus: false)
+        case .recentClear:
+            library.clearRecentClosedItems(inWindow: catalog.window)
+            guard library.recentClosedItems(inWindow: catalog.window).isEmpty else {
+                return ControlResponse(ok: false, error: "could not clear recent items")
+            }
+            return ControlResponse(ok: true)
         default:
             break
         }

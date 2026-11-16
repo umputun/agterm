@@ -70,7 +70,7 @@ public final class RemoteCatalogMirror {
     public private(set) var state: State = .connecting
     public private(set) var catalog: CatalogSnapshot?
     /// originIsMac is set when the origin advertised a Mac catalog rather than agterm-server's.
-    public private(set) var originIsMac = false
+    private(set) var originIsMac = false
     /// needsSnapshot is set by a gap in the revisions; the transport answers by subscribing again.
     public private(set) var needsSnapshot = false
     /// onCatalogMoved runs after every revision the mirror takes, with true for a whole snapshot.
@@ -187,7 +187,7 @@ public final class RemoteCatalogMirror {
 
     /// claimLeadWhenShown takes the lead of a row this Mac created on a Mac origin, now or once the catalog brings it.
     /// A reconnect drops a claim still waiting for its row.
-    public func claimLeadWhenShown(_ id: UUID) {
+    func claimLeadWhenShown(_ id: UUID) {
         guard originIsMac, let store, let effects else { return }
         guard let row = store.session(withID: id), let entry = catalog?.session(id) else {
             pendingClaims.insert(id)
@@ -199,7 +199,7 @@ public final class RemoteCatalogMirror {
     /// claimSplitWhenShown takes the lead of the split this Mac added to row `id` on a Mac origin, now or once the
     /// catalog lists it running, which comes after a held first listing while its daemon starts; the row's primary
     /// keeps whoever leads it.
-    public func claimSplitWhenShown(_ id: UUID) {
+    func claimSplitWhenShown(_ id: UUID) {
         guard originIsMac else { return }
         pendingSplitClaims.insert(id)
         claimPendingSplit(id)

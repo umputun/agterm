@@ -42,7 +42,10 @@ struct Recent: ParsableCommand {
             discussion: "--window naming an agterm-server window empties that server's list."
         )
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
-        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .recentClear, args: options.withWindow()) }
+        func makeRequest() throws -> ControlRequest {
+            operation.stamp(ControlRequest(cmd: .recentClear, args: options.withWindow()))
+        }
     }
 }

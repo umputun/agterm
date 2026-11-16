@@ -355,6 +355,12 @@ extension ControlServer: ControlActions {
     /// the current axis. `on|off|toggle` is computed against `isSplit` and keeps a hidden pane alive;
     /// `session.split.close` is the teardown verb.
     func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?) -> ControlResponse {
+        splitSession(target, window: window, mode: mode, axis: axis, focus: true)
+    }
+
+    /// splitSession with `focus` false leaves first responder and a new split's pane focus alone, for a split
+    /// another Mac asked for.
+    func splitSession(_ target: String?, window: String?, mode: String?, axis: SplitAxis?, focus: Bool) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
@@ -364,13 +370,13 @@ extension ControlServer: ControlActions {
             }
             switch parsedMode {
             case .on:
-                store.setSplitVisibility(id, shown: true, axis: axis)
+                store.setSplitVisibility(id, shown: true, axis: axis, focusesNewSplit: focus)
             case .off:
                 store.setSplitVisibility(id, shown: false)
             case .toggle:
-                store.toggleSplit(id, axis: axis)
+                store.toggleSplit(id, axis: axis, focusesNewSplit: focus)
             }
-            actions.focusSplitPane(session, wantSplit: session.splitFocused)
+            if focus { actions.focusSplitPane(session, wantSplit: session.splitFocused) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

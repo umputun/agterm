@@ -160,7 +160,7 @@ extension AppActions {
     func clearServerRecent() {
         guard let store, let remote = store.remoteActions else { return }
         Task { @MainActor in
-            let reply = await remote.request(["recent", "clear"])
+            let reply = await remote.clearRecent()
             guard !reply.ok else { return }
             NotificationManager.shared.notifyCommandFailure(name: "Clear Menu", detail: reply.error ?? "not cleared")
         }

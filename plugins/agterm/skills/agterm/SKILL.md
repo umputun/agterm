@@ -747,7 +747,8 @@ entry by id or prefix, the newest with no id; the session keeps its id, goes to 
 holds its session or workspace when one does, and the window is not raised; `complete` false means the
 entry stayed in the list · `recent clear` - empty the list. `list` and `clear` refuse a target. A row attached
 from another host and closed here is a `remote` entry naming its `host`; opening it attaches the session again or
-has the host reopen it first. `--window` naming a server window runs `list`, `open` and `clear` on that server.
+has the host reopen it first. `--window` naming a server window runs `list`, `open` and `clear` on that server; naming a window of another
+Mac, they act on that window's entries only.
 
 **zmx** - `zmx list` - every daemon behind a live session joined against the pane that claims it, under the
 restore status as a header; a CLOSED window's panes are claimed with zero clients, which is a resting

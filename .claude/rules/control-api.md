@@ -1759,6 +1759,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   still pending its close is undone in place and `restoreDestination` may pick another window than the
   requested one; the reply names the actual one. It neither raises nor focuses that window, and it skips
   the menu's `uiActionsEnabled` gate, like every other socket command that selects.
+- A Mac remote window's `recent.list` answers from its catalog's per-window `recent`, and its `recent.clear` is
+  `RemoteOperation.clearRecent`, run by the origin with `clearRecentClosedItems(inWindow:)`: the origin's own
+  `--window` forms keep meaning its app-wide list, and `RemoteCatalogActions` owns the choice so the menu and the
+  CLI cannot diverge.
 - `complete` and `recent.clear`'s ok are read from the reloaded list, never from the call:
   `RecentClosedStore.save` logs a failed write and returns, so a restore can finish with its entry still
   on disk. Restore coverage only decides whether removal is attempted.
