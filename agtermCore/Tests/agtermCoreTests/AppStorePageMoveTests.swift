@@ -214,7 +214,8 @@ struct AppStorePageMoveTests {
         let page = HtmlOverlay(source: .text(path: "/tmp/a.go", line: nil))
         #expect(open(session, page, size: 40, points: OverlayPointSize(width: 600)) == .opened)
         store.receiveRemotePageFrame(state(page, offer: first.sink.requests.last?.offer, hidden: true,
-                                           text: PresentationTextState(query: "err", revision: 2, matches: 3, current: 1, wrap: true)),
+                                           text: PresentationTextState(query: "err", revision: 2, matches: 3, current: 1, wrap: true,
+                                                                       expand: true)),
                                      forSession: session.id, from: first.gen)
 
         #expect(store.offerPageCandidate(page.id, forSession: session.id, to: second.gen, now: Self.start))
@@ -224,6 +225,7 @@ struct AppStorePageMoveTests {
         #expect(offered.points == OverlayPointSize(width: 600))
         #expect(offered.textSeed?.query == "err")
         #expect(offered.textSeed?.wrap == true)
+        #expect(offered.textSeed?.expand == true)
         #expect(second.sink.commands.map(\.action) == [.hide])
     }
 

@@ -1397,6 +1397,11 @@ struct ServerStreamsTests {
                                                files: TextFiles(count: 3, current: 2, path: "b.go")))
         #expect(await files.value.result?.text == "2 of 3: b.go")
         #expect(textNode(session)?.files == ControlTextFilesNode(count: 3, current: 2, path: "b.go"))
+
+        let expand = Task { await harness.actions.setSessionOverlayExpand(target, window: nil, pane: nil, mode: .on) }
+        try await answer(viewer, page: page, .expand(.on), text: "expanded", PresentationTextState(following: false, revision: 1, expand: true))
+        #expect(await expand.value.result?.text == "expanded")
+        #expect(textNode(session)?.expand == true)
     }
 
     private static let olderKinds = PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageTextKind }

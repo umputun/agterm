@@ -79,6 +79,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionOverlayChanges = "session.overlay.changes"
     case sessionOverlayFiles = "session.overlay.files"
     case sessionOverlayWrap = "session.overlay.wrap"
+    case sessionOverlayExpand = "session.overlay.expand"
     case sessionHudOpen = "session.hud.open"
     case sessionHudUpdate = "session.hud.update"
     case sessionHudClose = "session.hud.close"

@@ -270,6 +270,20 @@ struct AppStoreReplicaPageTests {
                                                current: 0, wrap: true))
     }
 
+    @Test func aJSONLinesReplicaOpensExpandedFromItsSeedAndReportsTheToggle() throws {
+        let (store, session) = try attached()
+        var offered = page(.text(path: "/src/events.jsonl", line: nil))
+        offered.textSeed = PresentationTextState(revision: 0, expand: true)
+
+        #expect(store.presentReplicaPage(offered, forSession: session.id) == nil)
+
+        let shown = try #require(session.htmlOverlay)
+        #expect(shown.textExpand)
+        #expect(store.replicaPageState(shown.id, appliedSeq: 0)?.text?.expand == true)
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .off) == .success(false))
+        #expect(store.replicaPageState(shown.id, appliedSeq: 0)?.text?.expand == nil)
+    }
+
     @Test func aTextReplicaReportsItsChangesAndOtherReplicasCarryNoTextState() throws {
         let (store, session) = try attached()
         #expect(store.presentReplicaPage(page(.text(path: "/src/a.diff", line: nil)), forSession: session.id) == nil)
@@ -278,12 +292,14 @@ struct AppStoreReplicaPageTests {
         store.onReplicaPageChanged = { changes.ids.append($0) }
 
         #expect(store.setTextWrap(session.id, pane: nil, mode: .on) == .success(true))
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .failure(.notJSONLines))
         let revision = store.setTextSearch(local, query: "x")
         store.setTextChangesReport(local, changes: TextChanges(count: 3, current: 1))
 
         #expect(changes.ids == [local, local, local])
         let state = try #require(store.replicaPageState(local, appliedSeq: 0)?.text)
         #expect(state.wrap && state.query == "x" && state.revision == revision)
+        #expect(state.expand == nil)
         #expect(state.changes == TextChanges(count: 3, current: 1))
         #expect(store.textChangesPage(session.id, pane: nil).map(\.id) == .success(local))
         #expect(store.closeOverlay(session.id))

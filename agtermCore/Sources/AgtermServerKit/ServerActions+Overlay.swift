@@ -147,6 +147,12 @@ extension ServerActions {
         await textPageAction(target, window: window, pane: pane, .wrap(mode))
     }
 
+    /// setSessionOverlayExpand sets the layout of the JSON Lines page the presenting Mac shows in the addressed slot.
+    public func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                        mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .expand(mode))
+    }
+
     /// searchSessionOverlay sets, steps or closes the search on the text page the presenting Mac shows.
     public func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
                                      request: TextSearchRequest) async -> ControlResponse {
@@ -178,6 +184,7 @@ extension ServerActions {
         switch action {
         case .follow(let mode): if case .failure(let refused) = store.setTextLogFollowing(session.id, pane: pane, mode: mode) { failure = refused.message }
         case .wrap(let mode): if case .failure(let refused) = store.setTextWrap(session.id, pane: pane, mode: mode) { failure = refused.message }
+        case .expand(let mode): if case .failure(let refused) = store.setTextExpand(session.id, pane: pane, mode: mode) { failure = refused.message }
         case .search: if case .failure(let refused) = store.textSearchPage(session.id, pane: pane) { failure = refused.message }
         case .changes, .files: if case .failure(let refused) = store.textChangesPage(session.id, pane: pane) { failure = refused.message }
         }

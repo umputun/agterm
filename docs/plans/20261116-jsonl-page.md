@@ -195,25 +195,25 @@ and every exhaustive switch over them; no half of it builds alone.
   `ServerActionsSessionsTests`, `ServerCommandPolicyTests`, `ServerStreamsTests`,
   `agtermTests/ControlServerTextPageTests`, `agtermTests/ControlServerRemotePageTests`
 
-- [ ] `HtmlOverlay.textExpand`; `AppStore.setTextExpand` (page id form and slot form) with `TextExpandFailure`
+- [x] `HtmlOverlay.textExpand`; `AppStore.setTextExpand` (page id form and slot form) with `TextExpandFailure`
       refusing non-text, non-JSON-Lines, log and remote pages; the JSON Lines check matches `.text` and `.replica`
-- [ ] read-back `expand` on `ControlTextOverlayNode`
-- [ ] `session.overlay.expand` through protocol, dispatcher, actions, defaults, `HtmlBridge` allowed list, the app's
+- [x] read-back `expand` on `ControlTextOverlayNode`
+- [x] `session.overlay.expand` through protocol, dispatcher, actions, defaults, `HtmlBridge` allowed list, the app's
       `setSessionOverlayExpand` via `textPageAction(.expand)`, and
       `agtermctl session overlay expand on|off|toggle [--pane] [--target] [--window]`
-- [ ] remote: `TextPageAction.expand`, `PresentationPageAction.expand` answering with a result, the
+- [x] remote: `TextPageAction.expand`, `PresentationPageAction.expand` answering with a result, the
       `runTextPageAction` and `applyReplicaPageCommand` switches, `pageExpandKind` advertised and gated in
       `remoteTextAction`; `PresentationTextState.expand: Bool?` with nil as false through `seeded`, `textState` and
       `mirror`'s comparison; server actions and command policy as for wrap
-- [ ] tests, host-free: store set/toggle and each refusal including a replica page that is accepted; read-back
+- [x] tests, host-free: store set/toggle and each refusal including a replica page that is accepted; read-back
       true/nil; protocol round-trip; dispatcher mode parsing; `HtmlBridge` own-overlay list; CLI argument mapping;
       `expand` frame action decodes and answers with a result; `supportedKinds` lists `page.expand`; a presenter
       without it is never sent the action; text state with and without the key decodes; a report without the key
       clears the origin's `expand`; a mirrored change reports a change; a page move seeds `expand`; server forwards
       end to end and refuses page rows as for wrap
-- [ ] tests, hosted: the app adapter against a real text page; a replica page command applies expand
-- [ ] run the touched suites (`swift test --filter`, `-only-testing:`) - must pass before next task
-- [ ] after the hosted run, `lsappinfo list | grep -A4 agterm.debug`
+- [x] tests, hosted: the app adapter against a real text page; a replica page command applies expand
+- [x] run the touched suites (`swift test --filter`, `-only-testing:`) - must pass before next task
+- [x] after the hosted run, `lsappinfo list | grep -A4 agterm.debug`
 
 ### Task 3: Renderer and bridge: Expand button, rebuild and anchor
 

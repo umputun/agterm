@@ -700,6 +700,8 @@ struct AppStoreRemotePageTests {
         #expect(treeChanges { textReport(page, session, counts) } == 0)
 
         for change in [PresentationTextState(following: false, revision: 0), PresentationTextState(following: false, query: "x", revision: 1),
+                       PresentationTextState(following: false, query: "x", revision: 1, wrap: true),
+                       PresentationTextState(following: false, query: "x", revision: 1, wrap: true, expand: true),
                        PresentationTextState(following: false, query: "x", revision: 1, wrap: true)] {
             #expect(treeChanges { textReport(page, session, change) } == 1)
         }
@@ -714,6 +716,7 @@ struct AppStoreRemotePageTests {
         #expect(node.following == false)
         #expect(node.search == ControlTextSearchNode(query: "x", matches: 4, current: 2))
         #expect(node.wrap == true)
+        #expect(node.expand == nil)
         #expect(node.lines == 9)
         #expect(node.files == ControlTextFilesNode(count: 3, current: 2, path: "b.go"))
     }
@@ -749,6 +752,14 @@ struct AppStoreRemotePageTests {
         #expect(open(session, HtmlOverlay(source: .text(path: "/tmp/a.diff", line: nil))) == .opened)
 
         #expect(await store.remoteTextAction(session.id, pane: nil, .files("2")) == .local)
+        #expect(presenter.commands.isEmpty)
+    }
+
+    @Test func aPresenterWithoutExpandIsSentNoExpandAction() async throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.pageExpandKind })
+        #expect(open(session, HtmlOverlay(source: .text(path: "/tmp/a.jsonl", line: nil))) == .opened)
+
+        #expect(await store.remoteTextAction(session.id, pane: nil, .expand(.on)) == .local)
         #expect(presenter.commands.isEmpty)
     }
 
@@ -793,7 +804,7 @@ struct AppStoreRemotePageTests {
     }
 
     @Test(arguments: [
-        TextPageAction.follow(.toggle), .wrap(.off), .search(.query("q")), .search(.next), .search(.previous), .search(.close),
+        TextPageAction.follow(.toggle), .wrap(.off), .expand(.on), .expand(.toggle), .search(.query("q")), .search(.next), .search(.previous), .search(.close),
         .changes(forward: true), .changes(forward: false), .files("3"), .files("src/b.go"),
     ])
     func aTextActionTravelsAsAPageCommand(action: TextPageAction) {

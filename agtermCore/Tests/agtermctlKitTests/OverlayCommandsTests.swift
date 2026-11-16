@@ -278,6 +278,21 @@ struct OverlayCommandsTests {
         #expect(rejects(["session", "overlay", "wrap", "on", "--pane", "scratch"]))
     }
 
+    @Test(arguments: ["on", "off", "toggle"])
+    func expandSendsItsModePaneAndTarget(_ mode: String) throws {
+        let req = try request(["session", "overlay", "expand", mode, "--pane", "right", "--target", "s"])
+        #expect(req.cmd == .sessionOverlayExpand)
+        #expect(req.target == "s")
+        #expect(req.args?.mode == mode)
+        #expect(req.args?.pane == "right")
+    }
+
+    @Test func expandRefusesABadModeOrPane() {
+        #expect(rejects(["session", "overlay", "expand", "maybe"]))
+        #expect(rejects(["session", "overlay", "expand"]))
+        #expect(rejects(["session", "overlay", "expand", "on", "--pane", "scratch"]))
+    }
+
     @Test(arguments: [
         (["main()"], "main()" as String?, nil as String?),
         (["--next"], nil as String?, "next" as String?),

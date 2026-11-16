@@ -75,6 +75,11 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.wrap"))
     }
 
+    func setSessionOverlayExpand(_: String?, window _: String?, pane _: OverlayPane?,
+                                 mode _: ControlToggleMode) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.expand"))
+    }
+
     func searchSessionOverlay(_: String?, window _: String?, pane _: OverlayPane?,
                               request _: TextSearchRequest) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.overlay.search"))

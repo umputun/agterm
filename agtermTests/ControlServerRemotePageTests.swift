@@ -424,6 +424,20 @@ final class ControlServerRemotePageTests: XCTestCase {
                                                            state: answered[1].state))
     }
 
+    func testAnOriginExpandRunsOnAJSONLinesReplicaAndAnswersWithThePageState() async throws {
+        let fix = try fixture(files: ["/src/a.jsonl": ("text/plain", Data("{\"a\":1}\n".utf8))])
+        _ = try present(fix, page(.text(path: "/src/a.jsonl", line: nil)))
+        let origin = Self.origin.uuidString
+
+        try fix.transport.feed(.pageCommand(PresentationPageCommand(page: origin, seq: 1, action: .expand, toggle: .on)))
+
+        try await waitFor("the action is answered") { !self.results(fix).isEmpty }
+        let answered = results(fix)
+        XCTAssertEqual(answered.first?.text, "expanded")
+        XCTAssertEqual(answered.first?.state?.expand, true)
+        XCTAssertEqual(fix.session.htmlOverlay?.textExpand, true)
+    }
+
     func testAQueuedTextActionNeverReachesAPageThatReplacedItsOwn() async throws {
         let fix = try fixture(files: ["/src/a.txt": ("text/plain", Data("a\n".utf8))])
         _ = try present(fix, page(.text(path: "/src/a.txt", line: nil)))

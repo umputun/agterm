@@ -149,7 +149,18 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 63, body: .pageResult(PresentationPageResult(
             page: "p10", seq: 4, ok: true, text: "2 of 4: src/b.go",
             state: PresentationTextState(revision: 4, files: TextFiles(count: 4, current: 2, path: "src/b.go"))))),
+        PresentationFrame(gen: 1, rev: 64, body: .pageCommand(PresentationPageCommand(page: "p10", seq: 5, action: .expand, toggle: .on))),
+        PresentationFrame(gen: 1, rev: 65, body: .pageResult(PresentationPageResult(
+            page: "p10", seq: 5, ok: true, text: "expanded", state: PresentationTextState(revision: 4, expand: true)))),
     ]
+
+    @Test func aTextStateFromAPresenterWithoutExpandDecodesWithNone() throws {
+        let line = #"{"kind":"page.result","gen":1,"rev":1,"page":{"page":"p1","seq":1,"ok":true,"state":{"revision":0,"wrap":true}}}"#
+        guard case .pageResult(let result) = try PresentationCodec.decode(Data(line.utf8)).body else { throw DecodedOtherKind() }
+
+        #expect(result.state?.expand == nil)
+        #expect(result.state?.wrap == true)
+    }
 
     @Test(arguments: [
         #"{"kind":"overlay.request","gen":1,"rev":1,"overlay":{"job":"j1","sizePercent":60,"follow":false,"wait":false}}"#,
@@ -332,10 +343,10 @@ struct PresentationFramesTests {
     }
 
     @Test func onlyTheTextActionsAnswerWithAResult() {
-        let answering = Set([PresentationPageAction.follow, .search, .wrap, .changes])
+        let answering = Set([PresentationPageAction.follow, .search, .wrap, .expand, .changes])
 
         for action in [PresentationPageAction.hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize,
-                       .follow, .search, .wrap, .changes] {
+                       .follow, .search, .wrap, .expand, .changes] {
             #expect(action.answersWithResult == answering.contains(action))
         }
     }

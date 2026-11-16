@@ -194,6 +194,10 @@ public protocol ControlActions {
     /// the state left.
     func setSessionOverlayWrap(_ target: String?, window: String?, pane: OverlayPane?,
                                mode: ControlToggleMode) async -> ControlResponse
+    /// setSessionOverlayExpand sets whether the JSON Lines page in the addressed slot lays its records out;
+    /// `result.text` names the state left.
+    func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) async -> ControlResponse
     /// Answers the page in the addressed slot with `value` and closes it; `session.overlay.result --page` reads it.
     func submitSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?, value: String) -> ControlResponse
     /// The selector outcome of page `pageID`, readable after the page and its session are gone.

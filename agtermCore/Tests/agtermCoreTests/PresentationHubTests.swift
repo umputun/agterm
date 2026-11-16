@@ -301,6 +301,7 @@ struct PresentationHubTests {
 
         #expect(received == [mirrorSink.frames[0].gen, presenterSink.frames[0].gen])
         #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageTextKind))
+        #expect(PresentationHub.supportedKinds.contains(PresentationHub.pageExpandKind))
     }
 
     @Test(arguments: [true, false])
