@@ -245,8 +245,8 @@ glyph-tint override — the `--color` value; omitted when idle or using the conf
 omitted when idle or using the configured shape.
 Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
 absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
-`ts` carries, so the two compare directly; omitted before any set. It is stamped on every ACCEPTED
-`session status` — a call refused by the pane-precedence rule below stamps nothing — not only on a
+`ts` carries, so the two compare directly; omitted before any set. It is stamped on every
+`session status` the row shows — one another pane's status keeps off the row stamps nothing — not only on a
 change of state, so a hook re-pushing `active` refreshes it and
 `now - statusChangedAt` reads as how long ago the status was last WRITTEN, including idle.
 Automatic and manual clears and pane promotion also count.
@@ -819,8 +819,8 @@ error keeps those names for compatibility.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--if-idle] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell|checkmark] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
   set the sidebar agent-status glyph. Every APPLIED write stamps the session node's
   `statusChangedAt`, including idle and one that re-pushes the same status, so a poller can read the last
-  set time without keeping state of its own; a call refused by the pane-precedence rule
-  changes nothing, the stamp included. `--blink` requests an attention pulse; macOS Reduce Motion
+  set time without keeping state of its own; a call another pane's status keeps off the row
+  leaves the stamp alone. `--blink` requests an attention pulse; macOS Reduce Motion
   suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
   pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
   is visited (use for a one-shot completion flash). `--if-idle` applies the status only while the
@@ -853,12 +853,14 @@ error keeps those names for compatibility.
   no longer wiped by foreground typing in the main pane, and only input in the OWNING pane clears it,
   whether typed by hand or sent with `session type`, and only as Settings ▸ Agent Status ▸ Status reset
   allows: the first key by default, Return or a newline in the text under On Enter, never when Disabled), (2) while the session is `blocked`, a status from
-  another pane that is not itself `blocked` is REFUSED with `blocked status owned by pane <pane>` —
-  it changes nothing and plays no sound, so an agent working in one pane cannot erase the other pane's
-  request for input; a second pane may still report its own `blocked`, `idle` is NOT exempt (Codex's
-  `session-start` hook and the shell integration's post-command hook both send it from their own pane),
-  and the owning
-  pane writes freely, and (3) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
+  another pane that is not itself `blocked` leaves the block shown and unstamped, so an agent working in one
+  pane cannot erase the other pane's request for input; the call still answers ok, plays its sound and
+  counts as that pane's work. A second pane may still report its own `blocked`, `idle` is NOT exempt
+  (Codex's `session-start` hook and the shell integration's post-command hook both send it from their own
+  pane), and the owning pane writes freely. While one pane reports `active`, another pane's `completed` or
+  `idle` leaves the row on that pane's work, and Esc or Ctrl-C in a pane ends only that pane's. The panes
+  still reporting `active` read back as the session node's `activePanes` (`[]` when none): wait for one pane's
+  agent on that, not on `status`, which can show the other pane. And (3) when the status needs attention (`blocked`/`completed`), any user-initiated GUI selection of
   the session lands on the tagged pane — auto-follow,
   the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last),
   the command palettes, a sidebar row click, and a Dock-menu session row all reveal and focus it, flipping to the split or
@@ -2562,7 +2564,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   the two panels can close a moment apart.
 - A HUD or overlay opened by a program on THIS Mac wins: a mirrored HUD never replaces or closes it.
 - A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
-  repeat of the same value included. A reconnect does not end it, even when the origin's status changed
+  repeat of the same value included. A `completed` or `idle` set here for another pane, such as this Mac's own
+  scratch, leaves the origin's `active` shown. A reconnect does not end it, even when the origin's status changed
   while the stream was down. Clearing it here gives the row back to the origin's status.
 - Clearing the status mirrored from the origin here (typing in the pane, selecting the row, Clear Status), or the
   row's badge (viewing it, typing), goes to the origin, which applies its own reset settings, so the cleared status
@@ -2882,7 +2885,5 @@ raw socket; the `agtermctl` CLI rejects the same value locally with
 canonical read-back names while the role and position aliases documented above are accepted. The
 `agtermctl` CLI rejects a bad pane with this for session status/type/text/paste, and over the raw socket
 `session.status`, `session.restore` and `session.paste` return this same string;
-`session.type`, `session.text` and `font.*` over the raw socket instead return `invalid pane: <value>`),
-`blocked status owned by pane <pane> (write from that pane to change it)` (session status,
-the pane-precedence refusal — the one `session status` error a well-formed call can hit, so retry from the
-owning pane rather than treating it as a bad argument). Unknown commands fail to decode and return a structured error, never a crash.
+`session.type`, `session.text` and `font.*` over the raw socket instead return `invalid pane: <value>`).
+Unknown commands fail to decode and return a structured error, never a crash.

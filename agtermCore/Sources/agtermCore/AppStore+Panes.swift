@@ -159,6 +159,7 @@ extension AppStore {
         (session.paneBackgrounds.left, session.paneBackgrounds.right) =
             (session.paneBackgrounds.right, session.paneBackgrounds.left)
 
+        (session.paneActivity[.left], session.paneActivity[.right]) = (session.paneActivity[.right], session.paneActivity[.left])
         var indicator = session.agentIndicator
         if indicator.status == .idle {
             indicator.statusPane = nil
@@ -177,16 +178,6 @@ extension AppStore {
         return nil
     }
 
-    /// Clear the agent-status indicator when the pane that OWNED it is torn down, so a pane-tagged block
-    /// can't strand a glyph no surviving surface can keystroke-clear (`AgentIndicator.clearedBy` requires the
-    /// typing pane to match `statusPane`). `owner` is the departing pane; a nil tag counts as `.left`,
-    /// matching the clear-decision default. Mirrors `clearSearch()` on these same teardown paths.
-    private func clearIndicatorOwnedByPane(_ owner: StatusPane, of session: Session) {
-        guard session.agentIndicator.status != .idle,
-              (session.agentIndicator.statusPane ?? .left) == owner else { return }
-        setAgentIndicator(AgentIndicator(), forSession: session.id)
-    }
-
     /// dropScratchDaemon forgets the server scratch of `sessionID`, whose daemon ended or is being replaced, with the
     /// state its pane owned, as `closeScratch` does for a surface.
     public func dropScratchDaemon(_ sessionID: UUID) {
@@ -199,7 +190,7 @@ extension AppStore {
     /// releaseScratchOwnedState drops what a departing scratch owned: a `.scratch`-tagged block (a main/split tag
     /// survives), its background label, since a respawn runs another program, its mailbox, and its directory.
     func releaseScratchOwnedState(of session: Session, token: String) {
-        clearIndicatorOwnedByPane(.scratch, of: session)
+        clearPaneStatus(.scratch, of: session)
         dropPaneBackground(.scratch, of: session)
         disposeMailbox(token: token)
         session.scratchCwd = nil
@@ -216,7 +207,7 @@ extension AppStore {
         closePaneOverlay(sessionID, pane: slot)
         // one handed to another Mac lives in the remote slot only, and the pane's kill does not end its job
         closeRemoteOverlay(sessionID, pane: slot)
-        clearIndicatorOwnedByPane(pane, of: session)
+        clearPaneStatus(pane, of: session)
     }
 
     // drops a departing pane's override and its text file; call it before the identity naming the file goes.
@@ -276,7 +267,7 @@ extension AppStore {
         // zeroes but `searchActive` stays true), so reset search on the surviving session.
         session.clearSearch()
         // the departing right pane owned any `.right`-tagged block, which no survivor can keystroke-clear.
-        clearIndicatorOwnedByPane(.right, of: session)
+        clearPaneStatus(.right, of: session)
         if wasShown { emitPaneVisibility(.paneSplit, session: session, shown: false) }
         savePaneLayout(session)
     }
@@ -372,9 +363,10 @@ extension AppStore {
         // the exited primary owned any `.left`/nil tag, which dies with it; a `.right` tag belonged to the
         // survivor and FOLLOWS it, re-tagged `.left` so `tree` (now `split:false`) and the survivor's
         // `.left`-role keystroke-clear agree instead of contradicting. `.scratch` is untouched.
+        session.paneActivity[.left] = session.paneActivity.removeValue(forKey: .right)
         if session.agentIndicator.status != .idle, session.remotePresentation?.statusOwnerUnknown != true {
             switch session.agentIndicator.statusPane ?? .left {
-            case .left: setAgentIndicator(AgentIndicator(), forSession: session.id)
+            case .left: showRemainingActivity(of: session)
             case .right:
                 var promoted = session.agentIndicator
                 promoted.statusPane = .left

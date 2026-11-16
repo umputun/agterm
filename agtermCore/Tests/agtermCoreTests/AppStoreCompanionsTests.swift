@@ -437,6 +437,22 @@ struct AppStoreCompanionsTests {
         #expect(store.session(withID: parent.id) != nil)
     }
 
+    @Test func aParentRespawnEndsBothPanesWorkAndKeepsTheScratchs() throws {
+        let store = makeStore()
+        let workspace = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: workspace.id, cwd: "/start"))
+        _ = try store.addCompanion(to: parent.id).get()
+        store.toggleSplit(parent.id)
+        for pane in [StatusPane.scratch, .right, .left] {
+            store.applyControlStatus(AgentIndicator(status: .active, statusPane: pane), forSession: parent.id)
+        }
+
+        store.respawnPrimaryPane(parent, now: Date())
+
+        #expect(parent.agentIndicator == AgentIndicator(status: .active, statusPane: .scratch))
+        #expect(Array(parent.paneActivity.keys) == [.scratch])
+    }
+
     @Test func aParentsLastPaneExitStartsAFreshShellInItsLastCwd() throws {
         let store = makeStore()
         let workspace = store.addWorkspace(name: "work")

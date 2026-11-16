@@ -738,9 +738,9 @@ struct agtermApp: App {
     }
 
     /// Wires the pane-scoped keystroke-clear: `keyDown` fires `onUserInputClearsStatus` unconditionally, and this
-    /// closure clears to idle only when host-free `AgentIndicator.clearedBy(pane:keystroke:reset:)` says the
-    /// keystroke's OWN pane owns the status under the Status reset setting, read live from `GhosttyApp` so a
-    /// Settings change applies to the next key. A block set from a background pane survives typing elsewhere. Main/split read
+    /// closure hands it to `AppStore.clearStatus(by:)`, which clears only when the keystroke's OWN pane owns the
+    /// status under the Status reset setting, read live from `GhosttyApp` so a Settings change applies to the
+    /// next key. A block set from a background pane survives typing elsewhere. Main/split read
     /// the LIVE `isSplitPane` at keystroke time, so a promoted survivor clears as `.left`, matching its migrated
     /// status identity and `tree` addressing; a captured `.right` would clear the wrong pane and leave both panes
     /// `.right`-wired after a re-split. The scratch passes `fixedPane: .scratch`: never promoted, no `view.session`.
@@ -753,10 +753,7 @@ struct agtermApp: App {
             if store.forwardStatusKeystroke(keystroke, pane: pane, forSession: sessionID) { return }
             // a status mirrored from an origin pane this Mac has no counterpart for is not this pane's to clear
             guard store.session(withID: sessionID)?.remotePresentation?.allowsKeystrokeStatusClear != false else { return }
-            if store.session(withID: sessionID)?.agentIndicator
-                .clearedBy(pane: pane, keystroke: keystroke, reset: reset) == true {
-                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
-            }
+            store.clearStatus(by: keystroke, pane: pane, reset: reset, forSession: sessionID)
         }
     }
 

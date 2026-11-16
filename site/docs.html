@@ -855,7 +855,7 @@ s=$(agtermctl zmx tree studio.local --json \
 </tr>
 <tr>
 <td>status</td>
-<td>clearing the row's status or badge here (typing, selecting, Clear Status) clears it there too, under that Mac's reset settings, when the status came from there; a status set on this Mac's row clears here only</td>
+<td>clearing the row's status or badge here (typing, selecting, Clear Status) clears it there too, under that Mac's reset settings, when the status came from there; a status set on this Mac's row clears here only, and one pane here finishing leaves the other Mac's active shown</td>
 </tr>
 <tr>
 <td>session context</td>
@@ -2244,19 +2244,21 @@ agtermctl session status idle --target &quot;$AGTERM_SESSION_ID&quot;       # cl
 <ul>
 <li><code>status</code> and <code>statusPane</code>, the pane that set it;</li>
 <li><code>statusColor</code> and <code>statusShape</code>, only while a per-call override is in effect;</li>
-<li><code>statusChangedAt</code>, epoch seconds of the last applied write. Every write counts, <code>idle</code> and a repeat of the same status included, and so do automatic and manual clears, so a script polling <code>tree</code> can tell how long ago the status was last written. It is absent before the first set and is not kept across a restart.</li>
+<li><code>activePanes</code>, the panes still reporting <code>active</code> (<code>left</code>, <code>right</code>, <code>scratch</code>), an empty list when none, whatever the row shows. A script waiting for one pane's agent reads this rather than <code>status</code>, which can show the other pane's work;</li>
+<li><code>statusChangedAt</code>, epoch seconds of the last applied write. Every write counts, <code>idle</code> and a repeat of the same status included, except one another pane's status keeps off the row, and so do automatic and manual clears, so a script polling <code>tree</code> can tell how long ago the status was last written. It is absent before the first set and is not kept across a restart.</li>
 </ul>
 <h3 id="status-pane">Which pane set it</h3>
 <ul>
 <li>A block set from a background pane survives typing in another pane.</li>
 <li>When the status needs you (blocked or completed), selecting the session reveals and focuses the pane that set it (the split, or a hidden scratch) instead of the main pane. That covers every way of selecting it: auto-follow, attention navigation ⌃⌥↑/↓, plain session navigation, the command palettes, a Dock-menu session and a sidebar click. An active status keeps the current pane. <code>agtermctl session go --to next-attention</code> only steps the selection and does not move focus into the pane.</li>
-<li>While a session is blocked, a status written from a different pane is refused unless it is another <code>blocked</code>. With an agent in each pane, one reporting its progress cannot erase the other's request for input. That holds for <code>idle</code> too, which the bundled agent hooks send on their own when an agent starts or finishes.</li>
+<li>While a session is blocked, a status written from a different pane does not replace the block unless it is another <code>blocked</code>. With an agent in each pane, one reporting its progress cannot erase the other's request for input. That holds for <code>idle</code> too, which the bundled agent hooks send on their own when an agent starts or finishes. The write is still accepted: it plays its sound, and the row shows that pane's work once the block ends.</li>
+<li>While one pane's agent is still working, the other pane finishing leaves the row active. When Codex in the split finishes a turn while Claude Code waits on a background command in the main pane, the row stays active until Claude Code finishes too.</li>
 <li>The pane that set the block changes it freely, typing into that pane clears it, and <strong>Clear Status</strong> in the sidebar row menu clears it from anywhere.</li>
 </ul>
 <h3 id="status-clear">Clearing it</h3>
 <ul>
 <li>Typing into a blocked or completed session clears its status, on the first key by default. <strong>Settings ▸ Agent Status ▸ Status reset</strong> can move that to <strong>On Enter</strong>, so a reply you started and walked away from keeps the glyph until you send it; Esc or Ctrl-C still clears a blocked one, since cancelling the prompt answers it. <strong>Disabled</strong> leaves the status to the agent's next hook or Clear Status.</li>
-<li>Esc or Ctrl-C interrupts an active session and clears its status, whatever the setting.</li>
+<li>Esc or Ctrl-C interrupts an active session and clears its status, whatever the setting. In a split it ends that pane's work only, so the row shows what the other pane still runs.</li>
 <li>To come back to a session later, <strong>Mark for Attention</strong> in its row menu gives an idle session a completed status that stays when you visit it, so attention navigation stops on it again. It never replaces a live status; typing in the session's main pane, Clear Status or the agent's next update clears it as usual.</li>
 </ul>
 <h3 id="status-attention">Finding the sessions that need you</h3>

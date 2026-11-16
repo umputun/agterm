@@ -130,7 +130,8 @@ public final class ServerControlSocket: @unchecked Sendable {
     static func runBlocking<T: Sendable>(_ body: @escaping @Sendable () async -> T) -> T {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox<T>()
-        Task {
+        // above the default: a same-priority task waits behind every task already queued on the shared pool
+        Task(priority: .high) {
             box.value = await body()
             semaphore.signal()
         }

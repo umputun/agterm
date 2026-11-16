@@ -401,20 +401,20 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
 
         try blockPane("blocked", pane: "right", target: sessionA)
 
-        let refused = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"left"}}"#)
-        XCTAssertEqual(refused["ok"] as? Bool, false, "a left-pane active must not replace the right pane's block: \(refused)")
-        XCTAssertEqual(refused["error"] as? String,
-                       "blocked status owned by pane right (write from that pane to change it)")
-        let node = try sessionNode(id: sessionA)
-        XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the refused write")
-        XCTAssertEqual(node["statusPane"] as? String, "right", "the refused write must not retag the status")
+        let kept = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"left"}}"#)
+        XCTAssertEqual(kept["ok"] as? Bool, true, "a left-pane active under the right pane's block is accepted: \(kept)")
+        var node = try sessionNode(id: sessionA)
+        XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the other pane's write")
+        XCTAssertEqual(node["statusPane"] as? String, "right", "the other pane's write must not retag the status")
+        XCTAssertEqual(node["activePanes"] as? [String], ["left"], "the left pane's work is read back under the block")
 
         // the shape the bundled hooks produce: Codex's session-start and the shell integration's
         // post-command hook both send `idle` from their own pane, which must not clear the sibling's block.
-        let refusedIdle = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"idle","pane":"left"}}"#)
-        XCTAssertEqual(refusedIdle["ok"] as? Bool, false, "a left-pane idle must not clear the right pane's block: \(refusedIdle)")
-        XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
-                       "the block should stand after the refused idle")
+        let idle = try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"idle","pane":"left"}}"#)
+        XCTAssertEqual(idle["ok"] as? Bool, true, "a left-pane idle under the right pane's block is accepted: \(idle)")
+        node = try sessionNode(id: sessionA)
+        XCTAssertEqual(node["status"] as? String, "blocked", "the block should stand after the other pane's idle")
+        XCTAssertEqual(node["activePanes"] as? [String], [], "the left pane's idle ends its work")
 
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"active","pane":"right"}}"#)["ok"] as? Bool,
                        true, "the owning pane's own active should still apply")

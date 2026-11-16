@@ -169,6 +169,22 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   reproduces the message locally.
 - **Fix.** `LogClient` waits 60 s, as `Viewer` and `eventually` do; the same 11 s hold then passes.
 
+### `ServerControlSocketTests`: every case reads its reply one step late
+
+- **Symptom.** All four cases fail together: `reply.contains(...)` sees `""` and the next read gets that reply
+  (`echo == "echo:frame"` fails with the ok line), at the same instant 68 to 80 s into the run.
+- **Runs.** Jobs 133141445740 and 133146669623 (run 43820229578, PR #1016), on both attempts.
+- **Cause, demonstrated.** `ServerControlSocket.runBlocking` answered through a `Task` at the default priority,
+  and the pool runs same-priority jobs in arrival order. With coverage on, CI runs every test target in one
+  process, so the reply queued behind the startup backlog of test bodies on 3 threads and outlived the client's
+  60 s read. A probe queuing 3000 2 ms jobs got its reply when the last finished, 6.0 s under a one-thread pool
+  (`LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`), and in 0.00 s with the jobs at background priority or the reply at
+  `.high`. Passing runs of other PRs had the socket suite end 49 to 73 s in, so the margin predates the PR.
+- **Fix.** `runBlocking` starts its task at `.high`, in agterm-server and in the app's `ControlServer`, each
+  pinned by a test that sends a request behind 600 queued same-priority jobs. `ControlAcceptLoopTests` also
+  parked `loop.next()` on the pool through `Task.detached`, which deadlocked the one-thread run; it runs on a
+  plain thread now.
+
 ### Linux test process killed by SIGPIPE
 
 - **Symptom.** The Linux core tests job ends with signal 13 about 6 s after `swift test` starts, before any test

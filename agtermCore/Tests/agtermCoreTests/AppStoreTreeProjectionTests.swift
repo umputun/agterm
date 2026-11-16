@@ -268,6 +268,7 @@ struct AppStoreTreeProjectionTests {
             ControlSessionNode(id: a.id.uuidString, name: "alpha", cwd: "/repo/a",
                                active: false, split: false,
                                backedByZmx: false,
+                               activePanes: [],
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: a.id, surface: .primary).rawValue,
                                                    kind: "left", active: true, visible: true,
@@ -282,7 +283,7 @@ struct AppStoreTreeProjectionTests {
                                hasSplit: true, backedByZmx: false,
                                splitAxis: "vertical", splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
-                               status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000,
+                               status: "blocked", statusPane: "right", statusChangedAt: 1_700_000_000, activePanes: [],
                                background: BackgroundWatermark(kind: .text, text: "PROD"),
                                surfaces: [
                                 ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .primary).rawValue,

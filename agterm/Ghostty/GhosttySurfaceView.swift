@@ -128,9 +128,9 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
 
     /// Called on the main actor on EVERY keystroke into this surface, carrying what the key means to the glyph
     /// (`InterruptKeystroke.classify`: interrupt, submit or plain typing). The factory decides per pane via
-    /// `AgentIndicator.clearedBy(pane:keystroke:reset:)`: clear the glyph to idle only when THIS surface's pane
-    /// owns a clearable status — `blocked`/`completed` as the Status reset setting says, `active` only on an
-    /// interrupt — so foreground typing cannot wipe a background pane's block. Passing the pane rather than
+    /// `AppStore.clearStatus(by:)`: clear the glyph only when THIS surface's pane owns a clearable status —
+    /// `blocked`/`completed` as the Status reset setting says, `active` only on an interrupt — so foreground
+    /// typing cannot wipe a background pane's block. Passing the pane rather than
     /// reading `view.session` lets the scratch, which has none, self-clear. Status is otherwise
     /// control-driven; this is the one input-driven clear, for the decline case Claude Code fires no hook for.
     var onUserInputClearsStatus: ((StatusKeystroke) -> Void)?
