@@ -41,6 +41,11 @@ enum PaneLead {
               let role = ZmxLeadBook.shared.apply(notice, pane: pane) else { return }
         RemoteRespawnBook.shared.acknowledged(pane: pane)
         roleChanged?(view)
+        // a pane this Mac created or opened, whose attach started before it knew to claim
+        if ZmxLeadBook.shared.takeClaim(pane: pane), role != .leader {
+            reattach?(view, true)
+            return
+        }
         // without the claim, so this attach leads only if nobody claimed the session in the meantime
         if role == .unowned { reattach?(view, false) }
     }

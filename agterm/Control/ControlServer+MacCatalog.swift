@@ -23,13 +23,19 @@ extension ControlServer {
     static let originCreations: Set<Command> = [.sessionNew, .sessionCompanionNew, .sessionCompanionDuplicate]
 
     var macCatalogVersions: CatalogVersions {
-        CatalogVersions(server: identity.version, protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version)
+        CatalogVersions(server: identity.version, protocolVersion: PresentationCodec.version, catalog: CatalogCodec.version,
+                        live: originLiveActive())
     }
 
     var originHostName: String { Host.current().localizedName ?? "this Mac" }
 
-    func catalogSubscribe() -> ControlResponse {
-        refreshOriginEvidence()
+    /// catalogSubscribe reads the panes before the stream opens, so the hello's snapshot lists every running row; a
+    /// failed read is refused for the viewer to retry. Without Live sessions the hello refuses for good instead.
+    func catalogSubscribe() async -> ControlResponse {
+        guard originLiveActive(), zmxClient != nil else { return ControlResponse(ok: true) }
+        guard await readOriginEvidence(always: true) else {
+            return ControlResponse(ok: false, error: "\(originHostName) could not list its sessions")
+        }
         return ControlResponse(ok: true)
     }
 
@@ -107,24 +113,32 @@ extension ControlServer {
         Task { await readOriginEvidence() }
     }
 
-    func readOriginEvidence() async {
-        guard !originCatalogs.isEmpty, let client = zmxClient else { return }
-        guard !originReading else {
+    /// readOriginEvidence reads which panes run, for every window catalog and the next one made, answering whether
+    /// the read succeeded. `always` reads with no catalog yet, for a viewer about to subscribe.
+    @discardableResult
+    func readOriginEvidence(always: Bool = false) async -> Bool {
+        guard always || !originCatalogs.isEmpty, let client = zmxClient else { return false }
+        if let running = originRead {
             originRereads = true
-            return
+            return await running.value
         }
-        originReading = true
-        defer { originReading = false }
-        repeat {
-            originRereads = false
-            guard let observed = await client.backgroundSessionRecords(timeout: Self.originInventoryTimeout) else { return }
-            let walk = library.paneClaims()
-            let inventory = ZmxInventory.join(observed: observed, claims: walk.claims, inventoryComplete: walk.complete)
-            let evidence = CatalogPaneEvidence(inventory: inventory, restarting: restartingPanes)
-            for catalog in originCatalogs.values where catalog.projection.evidence != evidence {
-                catalog.projection.evidence = evidence
-            }
-        } while originRereads
+        let read = Task { @MainActor in
+            repeat {
+                originRereads = false
+                guard let observed = await client.backgroundSessionRecords(timeout: Self.originInventoryTimeout) else { return false }
+                let walk = library.paneClaims()
+                let inventory = ZmxInventory.join(observed: observed, claims: walk.claims, inventoryComplete: walk.complete)
+                let evidence = CatalogPaneEvidence(inventory: inventory, restarting: restartingPanes)
+                originEvidence = evidence
+                for catalog in originCatalogs.values where catalog.projection.evidence != evidence {
+                    catalog.projection.evidence = evidence
+                }
+            } while originRereads
+            return true
+        }
+        originRead = read
+        defer { originRead = nil }
+        return await read.value
     }
 
     private static let stopping = ControlResponse(ok: false, error: "agterm is stopping")
@@ -144,6 +158,7 @@ extension ControlServer {
                 (self?.library.recentClosedItems(inWindow: window) ?? []).map(ControlRecentItem.init)
             }
             let created = OriginCatalog(window: id, options: options)
+            if let originEvidence { created.projection.evidence = originEvidence }
             // the bus is not observable; the relay is what republishes a count an ack changed
             mailRelay.start()
             originCatalogs[id] = created

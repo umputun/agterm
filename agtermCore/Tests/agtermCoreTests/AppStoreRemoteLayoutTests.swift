@@ -296,7 +296,8 @@ struct AppStoreRemoteLayoutTests {
         let store = makeStore()
         let row = try addAttachedRow(to: store, workspace: store.addWorkspace(name: "work").id, catalogOwned: true)
         let origin = try #require(row.remotePresentation?.binding.remotePane(forLocal: row.paneIdentity))
-        row.catalogMail = [row.paneIdentity: 4]
+        row.catalogPanes = [row.paneIdentity: CatalogPane(identity: row.paneIdentity, daemon: "d", endpoint: ControlZmxEndpoint(executable: "/z", socketDirectory: "/s"),
+                                                          pendingMessages: 4)]
 
         store.applyRemoteMail(PresentationMail(panes: [origin.uuidString: 9]), forSession: row.id)
 

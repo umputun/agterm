@@ -85,10 +85,11 @@ extension AppStore {
         workspaces.flatMap(\.sessions).first { livePanes(of: $0).contains { $0.pane == pane } }
     }
 
-    /// applyCatalogMail keeps a remote window row's mail counts on what its server's catalog lists.
-    func applyCatalogMail(_ session: Session, entry: CatalogSession) {
+    /// applyCatalogPanes keeps a remote window row's panes, their mail counts and held state, on what its server's
+    /// catalog lists.
+    func applyCatalogPanes(_ session: Session, entry: CatalogSession) {
         let panes = entry.panes + [entry.fields.scratch?.pane].compactMap { $0 }
-        session.catalogMail = Dictionary(panes.compactMap { pane in pane.pendingMessages.map { (pane.identity, $0) } }) { $1 }
+        session.catalogPanes = Dictionary(panes.map { ($0.identity, $0) }) { $1 }
     }
 
     /// livePanes are the session's panes a message can reach: a realized surface carrying a pane token, or on a
@@ -113,7 +114,7 @@ extension AppStore {
     func pendingMessages(_ session: Session, pane: UUID?, token: String?) -> Int? {
         guard session.remoteHost != nil else { return pendingMessages(token: token) }
         guard let pane else { return nil }
-        guard let state = session.remotePresentation, !state.binding.catalogOwned else { return session.catalogMail[pane] }
+        guard let state = session.remotePresentation, !state.binding.catalogOwned else { return session.catalogPanes[pane]?.pendingMessages }
         let scratch = pane == session.scratchClientIdentity || pane == session.originScratch
         let origin = scratch ? session.originScratch : state.binding.remotePane(forLocal: pane)
         return origin.flatMap { state.mail?.panes[$0.uuidString] }

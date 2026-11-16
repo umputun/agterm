@@ -201,6 +201,11 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.remote.open"))
     }
 
+    func windowRemoteOpen(host: String, originWindow: String?) async -> ControlResponse {
+        guard originWindow == nil else { return ControlResponse(ok: false, error: ControlActionsUnsupported.message("--origin-window")) }
+        return await windowRemoteOpen(host: host)
+    }
+
     func claimOverlayJob(_ job: String, token: String?) -> ControlResponse {
         token == nil ? claimOverlayJob(job) : ControlResponse(ok: false, error: "job not claimable")
     }

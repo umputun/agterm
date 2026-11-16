@@ -229,6 +229,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var force: Bool?
     /// The machine `zmx tree` reaches, spelled as ssh would take it.
     public var host: String?
+    /// For `window.remote.open`: the Mac host's window to show, an id or unique prefix there. Distinct from `window`,
+    /// which names a window on this Mac and which a page's bridge fills in.
+    public var originWindow: String?
     /// For `session.new`: create in the background without selecting or focusing (the CLI's `--no-select`);
     /// omitted/`false` keeps select-and-focus. Read back via the `tree` `active` flag — the new node is not it.
     public var noSelect: Bool?

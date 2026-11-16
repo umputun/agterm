@@ -4,7 +4,8 @@ import Foundation
 /// pane, and the surface work a model change cannot do alone.
 @MainActor
 public protocol RemoteCatalogEffects: AnyObject {
-    func attachCommand(host: String, pane: CatalogPane) -> String
+    /// attachCommand attaches a pane, taking its lead from whoever holds it when `claim` is set.
+    func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String
     /// scratchAttachCommand attaches a row's server scratch: no lead, and a lost link keeps its screen for a reconnect.
     func scratchAttachCommand(host: String, pane: CatalogPane) -> String
     /// catalogRowAdded starts what a row runs beside its panes, its presentation stream, while it is live or its
@@ -24,12 +25,15 @@ public protocol RemoteCatalogEffects: AnyObject {
     func catalogViewStateChanged()
     /// catalogWorkspaceCollapsed folds a shown workspace row, as a user's collapse does.
     func catalogWorkspaceCollapsed(_ id: UUID)
+    /// catalogClaimLead takes the lead of a pane whose attach already started, as a key press on its cover does.
+    func catalogClaimLead(_ identity: UUID, session: UUID)
 }
 
 extension RemoteCatalogEffects {
     public func catalogViewStateChanged() {}
     public func catalogWorkspaceCollapsed(_: UUID) {}
-    public func scratchAttachCommand(host: String, pane: CatalogPane) -> String { attachCommand(host: host, pane: pane) }
+    public func scratchAttachCommand(host: String, pane: CatalogPane) -> String { attachCommand(host: host, pane: pane, claim: false) }
+    public func catalogClaimLead(_: UUID, session _: UUID) {}
 }
 
 /// RemoteCatalogMirror keeps one remote window's store equal to its server's catalog. Frames move the mirrored
@@ -61,6 +65,8 @@ public final class RemoteCatalogMirror {
     }
 
     public let host: String
+    /// originWindow is the window of a Mac origin this mirror shows, nil for agterm-server's one catalog.
+    public let originWindow: UUID?
     public private(set) var state: State = .connecting
     public private(set) var catalog: CatalogSnapshot?
     /// originIsMac is set when the origin advertised a Mac catalog rather than agterm-server's.
@@ -78,10 +84,18 @@ public final class RemoteCatalogMirror {
     private var pendingSelection: (id: UUID, from: UUID?)?
     private var pendingCollapse: Set<UUID> = []
     private var windowViewApplied = false
+    /// openClaim is set for a window the user just opened: the rows of its first snapshot take the lead.
+    private var openClaim: Bool
+    /// claimingAll marks the reconcile of that first snapshot.
+    private var claimingAll = false
+    /// pendingClaims are rows this Mac created whose reply came before the catalog brought them.
+    private var pendingClaims: Set<UUID> = []
 
     public init(host: String, store: AppStore, effects: any RemoteCatalogEffects, viewState: RemoteWindowViewState,
-                pool: SshConnectionPool? = nil) {
+                pool: SshConnectionPool? = nil, originWindow: UUID? = nil, claimOnOpen: Bool = false) {
         self.host = host
+        self.originWindow = originWindow
+        self.openClaim = claimOnOpen
         self.pool = pool
         self.store = store
         self.effects = effects
@@ -169,8 +183,20 @@ public final class RemoteCatalogMirror {
         pendingSelection = (id, baseline)
     }
 
+    /// claimLeadWhenShown takes the lead of a row this Mac created on a Mac origin, now or once the catalog brings it.
+    /// A reconnect drops a claim still waiting for its row.
+    public func claimLeadWhenShown(_ id: UUID) {
+        guard originIsMac, let store, let effects else { return }
+        guard let row = store.session(withID: id), let entry = catalog?.session(id) else {
+            pendingClaims.insert(id)
+            return
+        }
+        store.claimCatalogLead(row, panes: entry.panes, host: host, effects: effects)
+    }
+
     /// subscribing marks a new stream: until its snapshot arrives the window shows Connecting, keeping its rows.
     public func subscribing() {
+        pendingClaims.removeAll()
         guard !isRefused else { return }
         needsSnapshot = false
         chunks = CatalogChunks()
@@ -245,7 +271,10 @@ public final class RemoteCatalogMirror {
         catalog = snapshot
         needsSnapshot = false
         store?.catalogMirrored = true
+        claimingAll = openClaim && originIsMac
+        openClaim = false
         reconcile()
+        claimingAll = false
         if !windowViewApplied, let store {
             windowViewApplied = true
             viewState.applyWindow(to: store, parked: parkedFlags)
@@ -290,7 +319,8 @@ public final class RemoteCatalogMirror {
             if store.catalogHiddenFocus.remove(workspace.id) != nil { store.markFocusMember(workspace.id) }
         }
         defer { store.finishCatalogWorkspaces(shown) }
-        let context = CatalogRowContext(host: host, protocolVersion: catalog.versions.protocolVersion, effects: effects)
+        let context = CatalogRowContext(host: host, protocolVersion: catalog.versions.protocolVersion, effects: effects,
+                                        headless: !originIsMac)
         for workspace in shown {
             for (index, session) in workspace.sessions.enumerated() {
                 if let local = store.session(withID: session.id) {
@@ -300,7 +330,8 @@ public final class RemoteCatalogMirror {
                     }
                     continue
                 }
-                let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context)
+                let claim = originIsMac && (pendingClaims.remove(session.id) != nil || claimingAll)
+                let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context, claim: claim)
                 if let kept = store.catalogHiddenViews.removeValue(forKey: row.id) { kept.apply(to: row) } else { viewState.apply(to: row) }
                 if row.presentsCatalog { effects.catalogRowAdded(row) }
             }

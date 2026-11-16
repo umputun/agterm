@@ -99,8 +99,11 @@ final class ControlServer {
     var originCatalogs: [UUID: OriginCatalog] = [:]
     var originSignatures: [UUID: Set<String>] = [:]
     var restartingPanes: Set<UUID> = []
-    var originReading = false
+    /// originRead is the inventory read in flight, answering whether it succeeded; a request during it rereads.
+    var originRead: Task<Bool, Never>?
     var originRereads = false
+    /// originEvidence is the last inventory read's evidence, which a window's new catalog starts from.
+    var originEvidence: CatalogPaneEvidence?
     var originEventsWired = false
     /// originLiveActive is whether this launch runs Live sessions, which serving a window needs; hosted tests set it.
     var originLiveActive: () -> Bool = { GhosttyApp.shared.launchRestoreMode == .live }

@@ -268,6 +268,21 @@ public enum RemoteOperation: Equatable, Sendable {
     }
 }
 
+extension RemoteOperation {
+    /// createdRow is the terminal row this operation created, as its reply names it: convert's new parent, every
+    /// other creation's id.
+    func createdRow(_ result: ControlResult?) -> UUID? {
+        switch self {
+        case .newSession, .newSessionInNamedWorkspace, .newCompanion, .duplicateCompanion:
+            result?.id.flatMap(UUID.init(uuidString:))
+        case .convertCompanion:
+            result?.parent.flatMap(UUID.init(uuidString:))
+        default:
+            nil
+        }
+    }
+}
+
 /// PreparedRemoteOperation is an operation with what it was decided on: the catalog position and, for a pane action,
 /// the session's panes as the window showed them, so a change arriving before it is sent cannot retarget it.
 public struct PreparedRemoteOperation: Equatable, Sendable {
@@ -431,6 +446,7 @@ public final class RemoteCatalogActions {
             return ControlResponse(ok: false, error: "no connection to \(host)")
         case .reply(let reply) where reply.result?.receipt?.opID == opID:
             settle(opID, reply.result?.receipt)
+            if reply.ok, let created = operation.createdRow(reply.result) { mirror.claimLeadWhenShown(created) }
             if selectingCreated, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.selectWhenShown(id, from: prepared.selection)
             }
@@ -574,6 +590,7 @@ public final class RemoteCatalogActions {
     // MARK: transport
 
     private func run(_ words: [String], operands: [String]) async -> Outcome {
+        let words = words + (mirror.originWindow.map { ["--window", $0.uuidString] } ?? [])
         let slot = pool?.leaseOnce()
         defer { slot.map { pool?.release($0.user) } }
         if let pool, let slot, !(await pool.ready(slot.path)) { return .notSent }

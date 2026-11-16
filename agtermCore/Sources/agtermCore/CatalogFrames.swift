@@ -6,15 +6,18 @@ public struct CatalogVersions: Codable, Equatable, Sendable {
     public var server: String
     public var protocolVersion: Int
     public var catalog: Int
+    /// live is whether a Mac runs Live sessions, which its windows need to be served; agterm-server leaves it out.
+    public var live: Bool?
 
-    public init(server: String, protocolVersion: Int, catalog: Int) {
+    public init(server: String, protocolVersion: Int, catalog: Int, live: Bool? = nil) {
         self.server = server
         self.protocolVersion = protocolVersion
         self.catalog = catalog
+        self.live = live
     }
 
     enum CodingKeys: String, CodingKey {
-        case server, protocolVersion = "protocol", catalog
+        case server, protocolVersion = "protocol", catalog, live
     }
 }
 

@@ -175,6 +175,16 @@ struct CatalogFramesTests {
         #expect(json.contains(#""protocol":1"#))
     }
 
+    @Test func aMacsLiveFlagTravelsAndAServersVersionsCarryNone() throws {
+        let mac = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1, live: false)
+
+        let decoded = try JSONDecoder().decode(CatalogVersions.self, from: JSONEncoder().encode(mac))
+        let server = String(decoding: try JSONEncoder().encode(CatalogFixture.versions), as: UTF8.self)
+
+        #expect(decoded.live == false)
+        #expect(!server.contains("live"))
+    }
+
     @Test func aHelloNamesTheOriginWindowAndAnOlderHelloHasNone() throws {
         let hello = CatalogHello(version: 1, pageRows: true, window: "W1")
         let older = try JSONDecoder().decode(CatalogHello.self, from: JSONEncoder().encode(CatalogHello(version: 1)))

@@ -27,7 +27,7 @@ final class RemoteCatalogActionsTests {
     deinit { try? FileManager.default.removeItem(at: directory) }
 
     private final class Effects: RemoteCatalogEffects {
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -635,5 +635,52 @@ final class RemoteCatalogActionsTests {
         let response = await send(.newSession(workspace: workspaceID))
 
         #expect(response.result?.id == "new-id")
+    }
+
+    @Test func everyCommandAndLookupToAMacNamesItsWindow() async {
+        let window = UUID()
+        let mac = RemoteCatalogMirror(host: "mac", store: store, effects: effects, viewState: RemoteWindowViewState(),
+                                      originWindow: window)
+        let script = script
+        let macActions = RemoteCatalogActions(mirror: mac, runner: { argv in await script.answer(argv) })
+        _ = mac.receive(.hello(CatalogHello(version: 1, epoch: "e1", versions: Self.versions)))
+        _ = mac.receive(.snapshot(snapshot(rev: 3)))
+        queue({ _ in "" })
+        queueLookup(reply(.applied, rev: 3))
+
+        guard case .ready(let prepared) = macActions.prepare(rename) else {
+            Issue.record("not prepared")
+            return
+        }
+        _ = await macActions.send(prepared)
+        await macActions.lookupTask?.value
+
+        #expect(script.commandCalls.count == 1)
+        #expect(script.lookupCalls.count == 1)
+        #expect(script.calls.map(Script.plain).allSatisfy { $0.contains("--window \(window.uuidString)") })
+    }
+
+    @Test func aServerWindowsCommandsNameNoWindow() async {
+        install(snapshot(rev: 3))
+        queue(reply(.applied, rev: 3))
+
+        _ = await send(rename)
+
+        #expect(script.commandCalls.count == 1)
+        #expect(script.calls.map(Script.plain).allSatisfy { !$0.contains("--window") })
+    }
+
+    @Test func aCreationNamesTheRowItMadeAndConvertItsNewParent() {
+        let made = UUID(), parent = UUID(), row = UUID()
+        let created = ControlResult(id: made.uuidString)
+        let converted = ControlResult(id: row.uuidString, parent: parent.uuidString)
+
+        #expect(RemoteOperation.newSession(workspace: UUID()).createdRow(created) == made)
+        #expect(RemoteOperation.newSessionInNamedWorkspace(name: "w", create: true).createdRow(created) == made)
+        #expect(RemoteOperation.newCompanion(parent: row).createdRow(created) == made)
+        #expect(RemoteOperation.duplicateCompanion(row).createdRow(created) == made)
+        #expect(RemoteOperation.convertCompanion(row).createdRow(converted) == parent)
+        #expect(RemoteOperation.newWorkspace(name: "w").createdRow(created) == nil)
+        #expect(RemoteOperation.reopenRecent(nil).createdRow(created) == nil)
     }
 }

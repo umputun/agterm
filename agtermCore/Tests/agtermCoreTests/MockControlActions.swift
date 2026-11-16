@@ -137,7 +137,7 @@ final class MockControlActions: ControlActions {
         case windowZoom(target: String?)
         case windowFullscreen(target: String?)
         case windowMinimize(target: String?, mode: ControlToggleMode)
-        case windowRemoteOpen(host: String)
+        case windowRemoteOpen(host: String, originWindow: String?)
         case pickOpen(PendingPick, window: String?, follow: Bool)
         case pickResult(target: String, window: String?)
         case pickCancel(target: String, window: String?)
@@ -930,7 +930,11 @@ final class MockControlActions: ControlActions {
     }
 
     func windowRemoteOpen(host: String) async -> ControlResponse {
-        calls.append(.windowRemoteOpen(host: host))
+        await windowRemoteOpen(host: host, originWindow: nil)
+    }
+
+    func windowRemoteOpen(host: String, originWindow: String?) async -> ControlResponse {
+        calls.append(.windowRemoteOpen(host: host, originWindow: originWindow))
         return nextWindowRemoteOpenResponse
     }
 

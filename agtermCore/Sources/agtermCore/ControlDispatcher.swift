@@ -57,7 +57,7 @@ public struct ControlDispatcher {
         case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
             return dispatchDetachCommand(request)
         case .catalogSubscribe:
-            return actions.catalogSubscribe()
+            return await actions.catalogSubscribe()
         case .catalogOp:
             guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
                 return ControlResponse(ok: false, error: "catalog.op requires an operation id")
@@ -728,7 +728,7 @@ public struct ControlDispatcher {
             guard RemoteSession.isHost(host) else {
                 return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
             }
-            return await actions.windowRemoteOpen(host: host)
+            return await actions.windowRemoteOpen(host: host, originWindow: request.args?.originWindow?.trimmedOrNil)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

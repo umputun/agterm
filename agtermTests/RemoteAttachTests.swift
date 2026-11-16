@@ -173,6 +173,90 @@ final class RemoteAttachTests: XCTestCase {
         await finishListing()
     }
 
+    private func window(_ id: String, _ name: String, open: Bool = true) -> ControlWindowNode {
+        ControlWindowNode(id: id, name: name, open: open, active: false)
+    }
+
+    private func openedRemote(_ opened: [WindowInfo.ID]) -> WindowSource? {
+        opened.last.flatMap { id in library.windows.first { $0.id == id }?.source }
+    }
+
+    func testAServerHostOpensItsWindowWithNoWindowStep() async {
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertEqual(attacher.originHosts, ["studio"])
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio"))
+        XCTAssertNil(controller.pending)
+    }
+
+    func testAMacWithOneOpenWindowOpensItWithoutAsking() async throws {
+        let build = UUID()
+        var mirrored = window(UUID().uuidString, "server")
+        mirrored.remote = ControlRemoteWindow(host: "box", catalogID: nil, state: nil)
+        attacher.origin = .mac([window(UUID().uuidString, "old", open: false), mirrored, window(build.uuidString, "build")])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio", originWindow: build))
+        XCTAssertEqual(library.windows.first { $0.id == opened.last }?.name, "studio · build")
+    }
+
+    func testAMacWithSeveralOpenWindowsAsksWhichAndOpensThePickedOne() async throws {
+        let build = UUID(), notes = UUID()
+        attacher.origin = .mac([window(build.uuidString, "build"), window(UUID().uuidString, "old", open: false),
+                                window(notes.uuidString, "notes")])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the window picker opens") { controller.pending != nil }
+        let pick = try XCTUnwrap(controller.pending)
+        controller.resolve(ControlPickResult(result: .picked, id: notes.uuidString, label: "notes", index: 1))
+        await waitUntil("the window opens") { !opened.isEmpty }
+
+        XCTAssertEqual(pick.prompt, "Open which window of studio?")
+        XCTAssertEqual(pick.items, [ControlPickItem(id: build.uuidString, label: "build"), ControlPickItem(id: notes.uuidString, label: "notes")])
+        XCTAssertEqual(openedRemote(opened), WindowSource(host: "studio", originWindow: notes))
+    }
+
+    func testAMacWithNoOpenWindowSaysSoAndOpensNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.origin = .mac([window(UUID().uuidString, "old", open: false)])
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString,
+                                                   spec: HudSpec(message: "Open Remote Window: studio has no open window", hideAfter: 5)))
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertNil(controller.pending)
+    }
+
+    func testAHostThatCannotServeAWindowSaysWhyAndOpensNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.origin = .failed("studio does not run Live sessions, which a remote window needs")
+        var opened: [WindowInfo.ID] = []
+        actions.openWindow = { opened.append($0) }
+
+        actions.openRemoteWindow("studio", in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString, spec: HudSpec(
+            message: "Open Remote Window: studio does not run Live sessions, which a remote window needs", hideAfter: 5)))
+        XCTAssertTrue(opened.isEmpty)
+        XCTAssertFalse(library.windows.contains { $0.isRemote })
+    }
+
     func testNoRemotesDoesNothing() async {
         actions.attachRemote()
         for _ in 0..<200 { await Task.yield() }
@@ -415,12 +499,19 @@ private final class FakeAttacher: RemoteAttaching {
     }
 
     private(set) var treeHosts: [String?] = []
+    private(set) var originHosts: [String] = []
+    var origin = RemoteOrigin.server
     private(set) var attaches: [Attach] = []
     private(set) var huds: [Hud] = []
     private var generation: Int?
     private var opens = 0
     var attachResponse = ControlResponse(ok: true)
     private var trees: [CheckedContinuation<ControlResponse, Never>] = []
+
+    func remoteOrigin(host: String) async -> RemoteOrigin {
+        originHosts.append(host)
+        return origin
+    }
 
     func remoteTree(host: String?) async -> ControlResponse {
         treeHosts.append(host)

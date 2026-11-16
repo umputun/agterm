@@ -276,29 +276,36 @@ The design was reviewed with codex over three revisions and the plan by the plan
   `agtermCore/Tests/agtermctlKitTests/` (`--origin-window`), `agtermTests/` (`AppActions+RemoteCatalogTests.swift`,
   remote window open end to end)
 
-- [ ] show the picker's window step and the strip's non-final reason in an isolated Debug instance before their tests
-- [ ] write failing tests: client accepts a Mac advertisement, sends the saved origin window in the hello, stops on a
+- [x] show the picker's window step and the strip's non-final reason in an isolated Debug instance before their tests
+- [x] write failing tests: client accepts a Mac advertisement, sends the saved origin window in the hello, stops on a
       final `refused`, keeps backoff with the reason shown on a non-final one; every Mac-origin command and lookup
       carries `--window`; `originHeadless` follows the advertisement (scratch daemon naming, ask and pick waits)
-- [ ] write failing tests: `WindowSource.originWindow` saved and restored (old index decodes; relaunch reconnect sends
+- [x] write failing tests: `WindowSource.originWindow` saved and restored (old index decodes; relaunch reconnect sends
       the saved window); raise-existing by host plus origin window before any snapshot, two windows of one Mac side
       by side with distinct names; picker skips the window step for one window and lists all open local windows
       otherwise
-- [ ] write failing tests: `window remote open HOST --origin-window W` through protocol, dispatcher, CLI and end to
+- [x] write failing tests: `window remote open HOST --origin-window W` through protocol, dispatcher, CLI and end to
       end; ambiguity error, "no open window", unknown or remote selector, server host rejecting the option; the HTML
       bridge leaves `originWindow` alone; an older app dropping the field; read-back of origin kind and origin window,
       omitted when nil
-- [ ] ➕ write failing tests: held panes. A held pane gets `RemoteSession.endedCommand` in its own slot with no
+- [x] ➕ write failing tests: held panes. A held pane gets `RemoteSession.endedCommand` in its own slot with no
       attach, roles unchanged; an `.ended` row carrying held panes keeps both slots on a cold snapshot and on reconnect
       (`insertCatalogSession` adds the split only for `.live` today, and the ended update branch returns before pane
       reconciliation); a pane whose `held` clears gets a fresh attach; `handlePaneExit`, respawn and reconnect never
-      attach a held pane or a held scratch, in a mixed live/held row included
-- [ ] implement the client, actions, binding, `WindowSource.originWindow`, library keying and naming, picker step,
+      attach a held pane, in a mixed live/held row included (a Mac lists a scratch only while it runs, so none is held)
+- [x] ➕ refuse at open (Eugene, after the demo): a Mac's `version` carries `macCatalog.live`; with it false the window
+      step and `window remote open` refuse with the hello's notLive reason and create no window
+- [x] ➕ lead on open (Eugene, after the demo): a Mac window's rows take the zmx lead on a user's open (first snapshot
+      after `newRemoteWindow` created or reopened it) and for rows this Mac creates (convert's new parent included);
+      never on reconnect, relaunch restore, origin-created rows or a server window. The origin's `catalog.subscribe`
+      reads the panes first and refuses a failed read, so that first snapshot is complete; a pane whose attach started
+      unclaimed takes the lead on its first role report
+- [x] implement the client, actions, binding, `WindowSource.originWindow`, library keying and naming, picker step,
       `originWindow` arg and `--origin-window`, read-back, per-pane held handling
-- [ ] confirm a server host takes exactly today's path (no window step, no `--window`)
-- [ ] downstream check for changed `public` symbols (`windowRemoteOpen` overload with a default, `WindowSource`,
+- [x] confirm a server host takes exactly today's path (no window step, no `--window`)
+- [x] downstream check for changed `public` symbols (`windowRemoteOpen` overload with a default, `WindowSource`,
       `ControlRemoteWindow.init`, client and actions)
-- [ ] focused agtermCore and hosted tests pass
+- [x] focused agtermCore and hosted tests pass
 
 ### Task 4: Docs, skill and gates
 
@@ -307,6 +314,8 @@ The design was reviewed with codex over three revisions and the plan by the plan
   `.claude/rules/control-api.md`, `.claude/rules/windows.md` (rule at :33), `.claude/rules/menu-actions.md`,
   `ARCHITECTURE.md`, `agtermCore/Sources/agtermCore/EventFormatter.swift` (if events change)
 
+- [ ] ➕ `site/docs.html` "Who leads a pane": a Mac remote window takes the lead when opened and for rows this Mac
+      creates; a reconnect does not
 - [ ] `site/docs.html` remote window section: Mac hosts, the window step, Live sessions requirement, dialogs follow
       Attach Remote rules, rows attached from a third Mac not shown, Recent Closed per window
 - [ ] `site/commands.html` and the bundled skill updated for `--origin-window`, `catalog op --window` and the read-back

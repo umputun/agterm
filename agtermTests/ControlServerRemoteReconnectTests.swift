@@ -257,6 +257,11 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         func release() { lock.withLock { waiter }?.resume() }
     }
 
+    private func heldPane(_ identity: UUID) -> CatalogPane {
+        CatalogPane(identity: identity, daemon: ZmxSupport.daemonName(for: identity),
+                    endpoint: ControlZmxEndpoint(executable: "/zmx", socketDirectory: "/run/zmx"), held: true)
+    }
+
     private func catalogRow() throws -> (Session, GhosttySurfaceView, GhosttySurfaceView) {
         let (session, view) = try replica()
         let split = UUID()
@@ -293,6 +298,46 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertFalse(book.waiting(pane: session.paneIdentity))
         XCTAssertFalse(book.waiting(pane: split))
         XCTAssertTrue(session.surface === view)
+        XCTAssertTrue(session.splitSurface === splitView)
+    }
+
+    func testAnExitAttachesTheRunningPaneAgainButNotOneItsOriginHoldsStopped() throws {
+        let (session, view, splitView) = try catalogRow()
+        splitView.isSplitPane = true
+        var reattached: [GhosttySurfaceView] = []
+        PaneLead.reattach = { view, _ in reattached.append(view) }
+        defer { PaneLead.reattach = nil }
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        session.catalogPanes = [split: heldPane(split)]
+
+        agtermApp.handlePaneExit(splitView, store: store, sessionID: session.id, library: library)
+        agtermApp.handlePaneExit(view, store: store, sessionID: session.id, library: library)
+
+        XCTAssertEqual(reattached.count, 1)
+        XCTAssertTrue(reattached.first === view)
+        XCTAssertTrue(session.hasSplit && session.splitSurface === splitView)
+    }
+
+    func testAPaneItsOriginHoldsStoppedStopsWaitingWhileItsSiblingReconnects() async throws {
+        let (session, view, splitView) = try catalogRow()
+        let server = server(probe: 0)
+        var reconnected: [GhosttySurfaceView] = []
+        PaneLead.reconnect = { view, _ in
+            reconnected.append(view)
+            return true
+        }
+        let book = RemoteReconnectBook.shared
+        let split = try XCTUnwrap(session.splitPaneIdentity)
+        defer { book.cancel(pane: split); book.cancel(pane: session.paneIdentity) }
+        server.waitToReconnect(view, cover: false)
+        server.waitToReconnect(splitView, cover: false)
+
+        session.catalogPanes = [split: heldPane(split)]
+        server.tickReconnects()
+        for _ in 0..<50 where reconnected.isEmpty { await Task.yield() }
+
+        XCTAssertFalse(book.waiting(pane: split))
+        XCTAssertTrue(reconnected.allSatisfy { $0 === view })
         XCTAssertTrue(session.splitSurface === splitView)
     }
 

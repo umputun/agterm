@@ -13,21 +13,24 @@ extension WindowLibrary {
 
     var remoteDirectory: URL { directory.appendingPathComponent("remote", isDirectory: true) }
 
-    /// newRemoteWindow opens a window for `host`, or returns the one already showing it. It is never seeded:
-    /// its rows arrive with the first catalog snapshot.
+    /// newRemoteWindow opens a window for `host`, or for its Mac window `originWindow` named `originName`, or returns
+    /// the one already showing it. It is never seeded: its rows arrive with the first catalog snapshot.
     @discardableResult
-    public func newRemoteWindow(host: String) -> WindowInfo {
-        if let existing = windows.first(where: { $0.source?.host == host }) {
+    public func newRemoteWindow(host: String, originWindow: UUID? = nil, originName: String? = nil) -> WindowInfo {
+        if let existing = windows.first(where: { $0.source?.host == host && $0.source?.originWindow == originWindow }) {
+            if stores[existing.id] == nil { remoteOpenClaims.insert(existing.id) }
             loadStore(for: existing.id)
             return existing
         }
-        let info = WindowInfo(name: TerminalText.sanitized(host), source: WindowSource(host: host))
+        let name = originWindow.map { "\(host) · \(originName ?? $0.uuidString.prefix(8).lowercased())" } ?? host
+        let info = WindowInfo(name: TerminalText.sanitized(name), source: WindowSource(host: host, originWindow: originWindow))
         windows.append(info)
         let store = makeStore(for: info.id, persistence: remotePersistence(for: info.id), remote: true)
         stores[info.id] = store
         openSetVersion += 1
         frontmostWindowID = info.id
         saveIndex()
+        remoteOpenClaims.insert(info.id)
         onRemoteStoreOpened?(info.id, store)
         return info
     }
@@ -57,6 +60,10 @@ extension WindowLibrary {
         return store
     }
 
+    /// takeOpenClaim answers whether the user just opened remote window `id`, so its first rows take the lead; it is
+    /// asked once, by the window's mirror, and a relaunch never sets it.
+    public func takeOpenClaim(_ id: UUID) -> Bool { remoteOpenClaims.remove(id) != nil }
+
     /// openRemoteStores is every remote window whose store is loaded, for a caller wiring the hooks late.
     public var openRemoteStores: [(id: UUID, store: AppStore)] {
         windows.filter(\.isRemote).compactMap { info in stores[info.id].map { (info.id, $0) } }
@@ -75,10 +82,12 @@ extension WindowLibrary {
     public func remoteNode(for id: UUID) -> ControlRemoteWindow? {
         guard let source = windows.first(where: { $0.id == id })?.source else { return nil }
         let store = stores[id]
+        let mac = store?.remoteActions?.mirror.originIsMac == true
         return ControlRemoteWindow(host: source.host, catalogID: source.catalogID, state: store?.catalogState,
                                    detachedSessions: store?.catalogDetachedSessions ?? [],
                                    detachedWorkspaces: store?.catalogDetachedWorkspaces ?? [],
-                                   operations: store?.remoteActions?.marks ?? [])
+                                   operations: store?.remoteActions?.marks ?? [],
+                                   origin: mac ? "mac" : nil, originWindow: source.originWindow)
     }
 
     /// CloseTarget is where a `session.close` id or prefix lands once hidden rows count: a local window's row (closed
@@ -184,10 +193,13 @@ extension WindowLibrary {
 public struct WindowSource: Codable, Sendable, Equatable {
     public var host: String
     public var catalogID: UUID?
+    /// originWindow is the window a Mac host serves this window from, nil for agterm-server.
+    public var originWindow: UUID?
 
-    public init(host: String, catalogID: UUID? = nil) {
+    public init(host: String, catalogID: UUID? = nil, originWindow: UUID? = nil) {
         self.host = host
         self.catalogID = catalogID
+        self.originWindow = originWindow
     }
 }
 
@@ -233,10 +245,17 @@ public struct ControlRemoteWindow: Codable, Sendable, Equatable {
     public let detachedSessions: [String]?
     public let detachedWorkspaces: [String]?
     public let operations: [ControlRemoteOperation]?
+    /// origin is `mac` once the host advertised a Mac's catalog; omitted for agterm-server and before an answer.
+    public let origin: String?
+    /// originWindow is the Mac window this window shows, omitted for agterm-server.
+    public let originWindow: String?
 
     public init(host: String, catalogID: UUID?, state: RemoteCatalogMirror.State?, detachedSessions: Set<UUID> = [],
-                detachedWorkspaces: Set<UUID> = [], operations: [RemoteOperationMark] = []) {
+                detachedWorkspaces: Set<UUID> = [], operations: [RemoteOperationMark] = [], origin: String? = nil,
+                originWindow: UUID? = nil) {
         self.host = host
+        self.origin = origin
+        self.originWindow = originWindow?.uuidString
         self.catalogID = catalogID?.uuidString
         self.detachedSessions = detachedSessions.isEmpty ? nil : detachedSessions.map(\.uuidString).sorted()
         self.detachedWorkspaces = detachedWorkspaces.isEmpty ? nil : detachedWorkspaces.map(\.uuidString).sorted()

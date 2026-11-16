@@ -226,4 +226,25 @@ final class PaneLeadTests: XCTestCase {
         XCTAssertTrue(PaneLead.consumes(try key(.keyDown, code: 0), in: fresh))
         XCTAssertEqual(reattached.map(\.claim), [true], "a fresh press still claims")
     }
+
+    func testAPaneOwedAClaimTakesItOnItsFirstReportAsAFollower() throws {
+        let (view, identity) = pane()
+        ZmxLeadBook.shared.claimOnReport(pane: identity)
+
+        PaneLead.report(try notice("n:follower:1"), from: view)
+
+        XCTAssertEqual(reattached.map(\.claim), [true])
+        XCTAssertTrue(reattached.first?.view === view)
+        XCTAssertFalse(ZmxLeadBook.shared.takeClaim(pane: identity))
+    }
+
+    func testAPaneOwedAClaimThatAlreadyLeadsSpendsIt() throws {
+        let (view, identity) = pane()
+        ZmxLeadBook.shared.claimOnReport(pane: identity)
+
+        PaneLead.report(try notice("n:leader:1"), from: view)
+
+        XCTAssertTrue(reattached.isEmpty)
+        XCTAssertFalse(ZmxLeadBook.shared.takeClaim(pane: identity))
+    }
 }

@@ -75,8 +75,9 @@ public struct CatalogPaneEvidence: Equatable, Sendable {
     public func runs(_ pane: UUID) -> Bool { running.contains(pane) || restarting.contains(pane) }
 }
 
-/// OriginCatalogProjection is one Mac window's catalog. A terminal row is listed from its primary's first run, then
-/// keeps every pane, a stopped one held, until it leaves the store; a companion is listed only with its parent.
+/// OriginCatalogProjection is one Mac window's catalog. A terminal row is listed once a pane or its scratch runs or a
+/// pane's program exited held, then keeps every pane, a stopped one held, until it leaves the store; a companion is
+/// listed only with its parent.
 /// Observed, so a `CatalogPublisher` republishes when the evidence changes.
 @Observable
 @MainActor
@@ -104,9 +105,12 @@ public final class OriginCatalogProjection {
         var row = projection.session(session, scratch: scratch.map { Session.ScratchDaemon(identity: $0, shown: session.scratchActive) })
         if let scratch { row.fields.scratch?.pane = projection.pane(scratch) }
         guard session.content == .terminal else { return row }
-        guard listed.contains(session.id) || evidence.runs(session.paneIdentity) else { return nil }
+        let identities = CatalogProjection.identities(of: session)
+        // a pane that has not started yet stays out; one whose program exited and is held is listed, held
+        let exited = [session.surface, session.splitSurface].contains { $0?.childExitHeld == true }
+        guard listed.contains(session.id) || identities.contains(where: evidence.runs) || scratch != nil || exited else { return nil }
         listed.insert(session.id)
-        row.panes = CatalogProjection.identities(of: session).map { identity in
+        row.panes = identities.map { identity in
             var pane = projection.pane(identity)
             if !evidence.runs(identity) { pane.held = true }
             return pane

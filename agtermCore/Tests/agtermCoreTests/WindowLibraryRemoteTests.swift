@@ -16,7 +16,7 @@ final class WindowLibraryRemoteTests {
     private final class Binder: RemoteCatalogEffects {
         let bind: (UUID) -> Bool
         init(bind: @escaping (UUID) -> Bool) { self.bind = bind }
-        func attachCommand(host _: String, pane _: CatalogPane) -> String { "attach" }
+        func attachCommand(host _: String, pane _: CatalogPane, claim _: Bool) -> String { "attach" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -409,5 +409,85 @@ final class WindowLibraryRemoteTests {
         let localOnly = library.resolveCloseTarget(row.id.uuidString, window: nil)
 
         guard case .refused = shared, case .local = localOnly else { Issue.record("the two windows' rows were not weighed together"); return }
+    }
+
+    @Test func twoWindowsOfOneMacOpenSideBySideAndEachIsRaisedByItsOriginWindow() {
+        let library = WindowLibrary(directory: directory)
+        let build = UUID(), notes = UUID()
+
+        let first = library.newRemoteWindow(host: "mac", originWindow: build, originName: "build")
+        let second = library.newRemoteWindow(host: "mac", originWindow: notes, originName: "notes")
+        let again = library.newRemoteWindow(host: "mac", originWindow: build, originName: "renamed")
+        let server = library.newRemoteWindow(host: "mac")
+
+        #expect(first.id != second.id)
+        #expect(again.id == first.id)
+        #expect(server.id != first.id && server.id != second.id)
+        #expect(first.name == "mac · build")
+        #expect(second.name == "mac · notes")
+        #expect(server.name == "mac")
+    }
+
+    @Test func aMacWindowKeepsItsOriginWindowAcrossARelaunch() throws {
+        let library = WindowLibrary(directory: directory)
+        let origin = UUID()
+        let remote = library.newRemoteWindow(host: "mac", originWindow: origin, originName: "build")
+
+        let relaunched = WindowLibrary(directory: directory)
+
+        #expect(relaunched.windows.first { $0.id == remote.id }?.source == WindowSource(host: "mac", originWindow: origin))
+    }
+
+    @Test func aSourceSavedBeforeOriginWindowsDecodes() throws {
+        let source = try JSONDecoder().decode(WindowSource.self, from: Data(#"{"host":"buildbox"}"#.utf8))
+
+        #expect(source == WindowSource(host: "buildbox"))
+        #expect(source.originWindow == nil)
+    }
+
+    @Test func theRemoteNodeReadsBackAMacOriginAndItsWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        let origin = UUID()
+        let mac = library.newRemoteWindow(host: "mac", originWindow: origin, originName: "build")
+        let server = library.newRemoteWindow(host: "buildbox")
+        let store = try #require(library.store(for: mac.id))
+        let mirror = RemoteCatalogMirror(host: "mac", store: store, effects: Binder { _ in true },
+                                         viewState: RemoteWindowViewState(), originWindow: origin)
+        let actions = RemoteCatalogActions(mirror: mirror, runner: { _ in (0, "") })
+        store.remoteActions = actions
+
+        let before = library.remoteNode(for: mac.id)
+        mirror.checkVersions(nil, mac: CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1), app: nil)
+        let after = withExtendedLifetime(actions) { library.remoteNode(for: mac.id) }
+        let plain = try #require(library.remoteNode(for: server.id))
+
+        #expect(before?.originWindow == origin.uuidString)
+        #expect(before?.origin == nil)
+        #expect(after?.origin == "mac")
+        #expect(plain.originWindow == nil)
+        #expect(plain.origin == nil)
+        let encoded = String(decoding: try JSONEncoder().encode(plain), as: UTF8.self)
+        #expect(!encoded.contains("origin"))
+    }
+
+    @Test func onlyAUserOpenMarksAWindowsFirstRowsToClaimTheLead() throws {
+        let library = WindowLibrary(directory: directory)
+        let origin = UUID()
+        let remote = library.newRemoteWindow(host: "mac", originWindow: origin, originName: "build")
+
+        let opened = library.takeOpenClaim(remote.id)
+        let askedTwice = library.takeOpenClaim(remote.id)
+        _ = library.newRemoteWindow(host: "mac", originWindow: origin, originName: "build")
+        let raised = library.takeOpenClaim(remote.id)
+        library.closeWindow(remote.id)
+        _ = library.newRemoteWindow(host: "mac", originWindow: origin, originName: "build")
+        let reopened = library.takeOpenClaim(remote.id)
+        let relaunched = WindowLibrary(directory: directory)
+
+        #expect(opened)
+        #expect(!askedTwice)
+        #expect(!raised)
+        #expect(reopened)
+        #expect(!relaunched.takeOpenClaim(remote.id))
     }
 }

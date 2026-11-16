@@ -45,7 +45,7 @@ struct ServerCatalogTests {
 
     @MainActor
     private final class MacEffects: RemoteCatalogEffects {
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -319,6 +319,13 @@ struct ServerCatalogTests {
 
     @Test func catalogSubscribeIsServed() {
         #expect(ServerCommandPolicy.refusal(.catalogSubscribe) == nil)
+    }
+
+    @Test func aServerRefusesAnOriginWindow() async {
+        let refused = await harness.actions.windowRemoteOpen(host: "mac", originWindow: "6f1c")
+
+        #expect(refused.ok == false)
+        #expect(refused.error == ControlActionsUnsupported.message("--origin-window"))
     }
 
     @Test func aServerOpensNoRemoteWindows() async {

@@ -364,5 +364,44 @@ final class ControlServerMacCatalogTests: XCTestCase {
         XCTAssertNil(response.result?.versions)
         XCTAssertEqual(response.result?.macCatalog?.catalog, CatalogCodec.version)
         XCTAssertEqual(response.result?.macCatalog?.protocolVersion, PresentationCodec.version)
+        XCTAssertEqual(response.result?.macCatalog?.live, true)
+    }
+
+    func testVersionSaysWhenLiveSessionsAreOff() throws {
+        server.originLiveActive = { false }
+
+        let response = try request(#"{"cmd":"version"}"#)
+
+        XCTAssertEqual(response.result?.macCatalog?.live, false)
+    }
+
+    func testANewWindowCatalogStartsFromTheLastPaneRead() throws {
+        let window = try window()
+        let session = try session()
+        server.originEvidence = CatalogPaneEvidence(running: [session.paneIdentity])
+
+        let (_, frames) = try subscribe(window: window.uuidString)
+
+        guard frames.count == 2, case .snapshot(let snapshot) = frames[1] else { return XCTFail("expected hello then a snapshot, got \(frames)") }
+        XCTAssertEqual(snapshot.workspaces.flatMap(\.sessions).map(\.id), [session.id])
+    }
+
+    func testASubscribeWhosePaneReadFailsIsRefusedForARetry() async throws {
+        let other = WindowLibrary(directory: stateDir.appendingPathComponent("other", isDirectory: true))
+        let path = "/tmp/agterm-cat-\(UUID().uuidString.prefix(8)).sock"
+        let failing = ControlServer(library: other, actions: AppActions(library: other),
+                                    settingsModel: SettingsModel(library: other, settingsStore: SettingsStore(directory: stateDir)),
+                                    identity: AppIdentity(version: "9.9.9"),
+                                    zmxClient: ZmxClient(executablePath: stateDir.appendingPathComponent("no-zmx").path,
+                                                         socketDirectory: stateDir.path),
+                                    socketPath: path)
+        failing.originLiveActive = { true }
+        defer { unlink(path + ".lock") }
+
+        let response = await failing.catalogSubscribe()
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "\(failing.originHostName) could not list its sessions")
+        XCTAssertNil(failing.originEvidence)
     }
 }

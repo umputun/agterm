@@ -83,6 +83,8 @@ public final class WindowLibrary {
     @ObservationIgnored public var onRemoteStoreClosed: ((UUID) -> Void)?
     /// remoteDuplicates maps a remote window whose server turned out to be another window's to that window.
     @ObservationIgnored var remoteDuplicates: [UUID: UUID] = [:]
+    /// remoteOpenClaims are remote windows the user opened whose mirror has not asked yet; never saved.
+    @ObservationIgnored var remoteOpenClaims: Set<UUID> = []
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?

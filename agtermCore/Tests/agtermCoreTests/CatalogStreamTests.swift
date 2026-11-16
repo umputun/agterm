@@ -12,9 +12,8 @@ final class CatalogStreamTests {
         var clock = Date(timeIntervalSince1970: 1000)
         var answer: CatalogSubscription?
         var hellos: [CatalogHello] = []
-        lazy var hub = CatalogHub(epoch: "e1", staleTimeout: 30, now: { [unowned self] in clock }) {
-            CatalogFixture.snapshot([])
-        }
+        lazy var hub = CatalogHub(epoch: "e1", staleTimeout: 30, now: { [unowned self] in clock },
+                                  source: { CatalogFixture.snapshot([]) })
 
         var catalogHubs: [CatalogHub] { [hub] }
 

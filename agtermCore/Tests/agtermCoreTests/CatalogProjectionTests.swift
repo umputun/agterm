@@ -27,6 +27,14 @@ struct CatalogProjectionTests {
 
     private func held(_ row: CatalogSession?) -> [Bool] { row?.panes.map { $0.held == true } ?? [] }
 
+    private final class Surface: TerminalSurface {
+        var isRealized = true
+        var paneToken = ""
+        var childExitHeld = false
+        func teardown() {}
+        func promoteToPrimaryPane() {}
+    }
+
     @Test func aSessionCarriesEveryPaneInOrderWithItsScratch() throws {
         let session = try terminal(in: workspace(), split: true)
         let scratch = UUID()
@@ -103,6 +111,51 @@ struct CatalogProjectionTests {
         #expect(listed.fields.primary == session.paneIdentity)
         #expect(listed.panes.map(\.identity) == [session.paneIdentity, split])
         #expect(held(listed) == [true, false])
+    }
+
+    @Test func aFirstCatalogListsAHeldPrimaryBesideItsRunningSplit() throws {
+        let session = try terminal(in: workspace(), split: true)
+        let split = try #require(session.splitPaneIdentity)
+
+        origin.evidence = CatalogPaneEvidence(running: [split])
+
+        let listed = try #require(row(session))
+        #expect(listed.fields.lifecycle == .live)
+        #expect(held(listed) == [true, false])
+    }
+
+    @Test func aFirstCatalogListsARowWhosePanesExitedHeldAsEnded() throws {
+        let session = try terminal(in: workspace(), split: true)
+        let primary = Surface(), split = Surface()
+        primary.childExitHeld = true
+        split.childExitHeld = true
+        session.surface = primary
+        session.splitSurface = split
+
+        let listed = try #require(row(session))
+
+        #expect(listed.fields.lifecycle == .ended)
+        #expect(held(listed) == [true, true])
+    }
+
+    @Test func aFirstCatalogLeavesOutARowStillStarting() throws {
+        let session = try terminal(in: workspace())
+        session.surface = Surface()
+
+        #expect(row(session) == nil)
+    }
+
+    @Test func aFirstCatalogListsARowWhoseOnlyRunningPaneIsItsScratchAsEnded() throws {
+        let session = try terminal(in: workspace())
+        let scratch = UUID()
+        session.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: false)
+
+        origin.evidence = CatalogPaneEvidence(running: [scratch])
+
+        let listed = try #require(row(session))
+        #expect(listed.fields.lifecycle == .ended)
+        #expect(listed.fields.scratch?.pane.identity == scratch)
+        #expect(held(listed) == [true])
     }
 
     @Test func aHeldSplitBesideARunningPrimaryStaysListedAsHeld() throws {
