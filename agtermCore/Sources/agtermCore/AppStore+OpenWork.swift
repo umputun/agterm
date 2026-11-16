@@ -85,6 +85,12 @@ extension AppStore {
 
     private func connected(_ owner: Int) -> Bool { presentationHub?.isConnected(owner: owner) == true }
 
+    // a Mac origin moves a shown GUI ask or pick only to a viewer that holds what it cannot show yet: an older one refuses,
+    // and the refused piece can end cancelled. A headless origin keeps moving to any viewer, whose refusal returns it to pending
+    private func takesWorkFromHolder(_ owner: Int) -> Bool {
+        headless || presentationHub?.supports(PresentationHub.offerIdentityKind, owner: owner) == true
+    }
+
     // MARK: asks
 
     private func placeSessionAsk(_ session: Session, local: OpenWorkLocal?) {
@@ -96,7 +102,8 @@ extension AppStore {
         }
         if connected(owner) {
             switch place(session, pane: pane) {
-            case .viewer(let next)? where next != owner: moveRemoteAsk(forSession: session.id, to: next)
+            case .viewer(let next)? where next != owner && (ask.style != .gui || takesWorkFromHolder(next)):
+                moveRemoteAsk(forSession: session.id, to: next)
             case .origin?: bringAskHome(session, gui: ask.style == .gui, local: local)
             default: break
             }
@@ -132,7 +139,7 @@ extension AppStore {
     private func placeWindowAsk(_ session: Session, local: OpenWorkLocal?) {
         guard !headless, session.askPending == nil, let target = local?.modal(session),
               let shown = target.controller.pendingAsk, shown.anchor?.sessionID == session.id,
-              case .viewer(let next)? = place(session, pane: shown.anchor?.paneIdentity) else { return }
+              case .viewer(let next)? = place(session, pane: shown.anchor?.paneIdentity), takesWorkFromHolder(next) else { return }
         _ = handGuiAskToViewer(target.controller, window: target.window, forSession: session.id, to: next)
     }
 
@@ -143,7 +150,7 @@ extension AppStore {
         switch book.placement(forSession: session.id) {
         case .presenter(let owner)? where connected(owner):
             switch place(session, pane: nil) {
-            case .viewer(let next)? where next != owner: movePick(forSession: session.id, to: next)
+            case .viewer(let next)? where next != owner && takesWorkFromHolder(next): movePick(forSession: session.id, to: next)
             case .origin?:
                 guard let target = local?.modal(session), let id = book.pickID(forSession: session.id) else { return }
                 if book.moveHome(session: session.id, owner: owner, to: target.controller, window: target.window) { noteGivenUp(id, by: owner) }
@@ -156,7 +163,7 @@ extension AppStore {
             let target = local?.modal(session)
             book.handBack(session: session.id, owner: owner, to: target?.controller, window: target?.window)
         case .local?:
-            if case .viewer(let next)? = place(session, pane: nil) { movePick(forSession: session.id, to: next) }
+            if case .viewer(let next)? = place(session, pane: nil), takesWorkFromHolder(next) { movePick(forSession: session.id, to: next) }
         case .unpresented?, nil:
             break
         }

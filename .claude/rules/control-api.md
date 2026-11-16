@@ -2365,6 +2365,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   reply to an earlier copy is refused. A viewer without `offer.id` is never handed back a piece it gave up while
   connected (`OfferlessHolders`), a refusal included. An `offer.id` viewer holds a pick while its modal is busy and a GUI ask while
   its row is off screen, instead of refusing.
+  So a Mac origin moves a GUI ask or pick that a connected viewer or this Mac shows only to an `offer.id` viewer
+  (#1026): an older one could refuse it, ending it cancelled. A refused terminal ask is drawn here, so it moves to any viewer.
 - A lost viewer's work goes where new work would: on a Mac to `pendingRecipient`, else here, a page with its
   outcome still pending and dismissed only when no slot here can show it, a GUI ask that cannot be seen here as
   `presentation-lost`; on agterm-server back to pending. A Mac shows here a recovered page the next viewer refuses. A page whose connection breaks after it loaded under its
