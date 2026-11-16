@@ -112,7 +112,7 @@ final class SidebarInfoRowTests: XCTestCase {
         let text = cell.infoField.attributedStringValue
         XCTAssertEqual(rgba(color(in: text, at: 0)), rgba(NSColor.tint(.green)))
         XCTAssertEqual(rgba(color(in: text, at: text.length - 1)),
-                       rgba(cell.themeTextColor(selected: true).withAlphaComponent(0.85)))
+                       rgba(SidebarCellView.themeTextColor(selected: true).withAlphaComponent(0.85)))
     }
 
     func testARowTintNeverReachesTheInfoLine() throws {
@@ -125,7 +125,7 @@ final class SidebarInfoRowTests: XCTestCase {
 
         for selected in [false, true] {
             cell.setColors(selected: selected)
-            let expected = cell.themeTextColor(selected: selected).withAlphaComponent(selected ? 0.85 : 0.62)
+            let expected = SidebarCellView.themeTextColor(selected: selected).withAlphaComponent(selected ? 0.85 : 0.62)
             XCTAssertEqual(rgba(color(in: cell.infoField.attributedStringValue, at: 0)), rgba(expected), "selected: \(selected)")
             XCTAssertEqual(rgba(cell.textField?.textColor), rgba(NSColor.tint(.orange)), "the name keeps its tint")
         }
