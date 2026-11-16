@@ -828,10 +828,19 @@ final class ControlServerPageServeTests: XCTestCase {
 
     private func viewer(_ fix: Fixture, session: Session? = nil) throws -> (gen: Int, sink: Sink) {
         let sink = Sink()
+        let target = session ?? fix.session
+        if ZmxLeadBook.shared.role(pane: target.paneIdentity) == nil {
+            let attachment = ZmxLeadAttachment(claim: false)
+            ZmxLeadBook.shared.begin(attachment, pane: target.paneIdentity)
+            _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1")), pane: target.paneIdentity)
+            leads.append(target.paneIdentity)
+        }
         let hello = PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)
-        _ = try fix.server.presentationHub.subscribe(session: (session ?? fix.session).id, hello: hello, sink: sink) {
+        let id = try fix.server.presentationHub.subscribe(session: target.id, hello: hello, sink: sink) {
             PresentationSnapshot(status: nil, hud: nil)
         }
+        fix.server.presentationHub.receive(PresentationFrame(gen: sink.frames[0].gen, rev: 0, body: .leadReport(
+            PresentationLeadReport(leaders: [target.paneIdentity]))), from: id)
         return (sink.frames[0].gen, sink)
     }
 
@@ -841,6 +850,60 @@ final class ControlServerPageServeTests: XCTestCase {
             client.send(.resource(id: 1, path: index))
             return client.body(1).data
         }
+    }
+
+    private func leadHere(_ pane: UUID) throws {
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):leader:1")), pane: pane)
+        leads.append(pane)
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { DispatchQueue.main.async { drained.fulfill() } }
+        wait(for: [drained], timeout: 5)
+    }
+
+    func testAPageTheOriginLeadsComesHomeOnceItsSlotHereFrees() throws {
+        let fix = try fixture()
+        let page = try openFile(fix)
+        fix.session.overlayActive = true
+        try leadHere(fix.session.paneIdentity)
+        drainMainQueue()
+        XCTAssertEqual(fix.session.remoteOverlays.slot(nil)?.owner, fix.presenter.frames[0].gen)
+
+        fix.session.overlayActive = false
+
+        waitUntil("the page comes home") { fix.session.htmlOverlay?.id == page }
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
+        XCTAssertEqual(ZmxLeadBook.shared.role(pane: fix.session.paneIdentity), .leader)
+    }
+
+    func testAPaneThePageIsForComesHomeOnceThatPaneIsShownAgain() throws {
+        let fix = try fixture()
+        fix.store.toggleSplit(fix.session.id)
+        let right = try XCTUnwrap(fix.session.splitPaneIdentity)
+        let attachment = ZmxLeadAttachment(claim: false)
+        ZmxLeadBook.shared.begin(attachment, pane: right)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):follower:1")), pane: right)
+        leads.append(right)
+        let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil,
+                                                       pane: .right, page: .file(path: docs.appendingPathComponent("index.html").path,
+                                                                                 grantRoot: docs.path))
+        let response = fix.server.openSessionOverlay(fix.session.id.uuidString, window: nil, options: options)
+        let page = try XCTUnwrap(response.result?.pageID.flatMap(UUID.init(uuidString:)), response.error ?? "")
+        fix.session.splitFocused = false
+        fix.store.toggleSplit(fix.session.id)
+        XCTAssertFalse(fix.session.rendersPane(.right))
+        try leadHere(right)
+        drainMainQueue()
+        XCTAssertEqual(fix.session.remoteOverlays.slot(.right)?.page?.overlay.id, page)
+
+        fix.store.toggleSplit(fix.session.id)
+
+        waitUntil("the page comes home") { fix.session.paneOverlay(.right)?.html?.id == page }
+        XCTAssertNil(fix.session.remoteOverlays.slot(.right))
     }
 
     func testAnOfferAdoptedOnItsChannelTakesThePageAndOutlivesTheRetiredChannel() throws {

@@ -295,8 +295,10 @@ carried row by row first, then its Solution Overview rules this plan touches.
       - a pass for a soft-closed or removed session does nothing;
       - headless: held work moves between viewers; lost and pending work, page-row GUI asks and ownerless
         program jobs still go through the pending offer
-- [ ] move `ServerStreamsTests`' owner-loss re-offer behavior tests into `AppStoreOpenWorkTests` with every
+- [x] move `ServerStreamsTests`' owner-loss re-offer behavior tests into `AppStoreOpenWorkTests` with every
       assertion kept
+      ➕ moved the two that need no server claim or channel API (the holder re-offer, the size and hidden
+      re-offer); the rest drive `claimPageStream`/`adoptPageServeStream` and stay socket tests
 - [x] run the touched tests - must pass before task 4
 
 ### Task 4: Event wiring on both origins, docs and gates
@@ -312,12 +314,15 @@ carried row by row first, then its Solution Overview rules this plan touches.
 - Modify: `.claude/rules/control-api.md`, `site/docs.html`, `plugins/agterm/skills/agterm/` where it states
   where open work shows, `ARCHITECTURE.md` if it describes presentation ownership
 
-- [ ] reproduce red first: origin takes the lead while V1 (connected) holds a GUI ask and the window modal
+- [x] reproduce red first: origin takes the lead while V1 (connected) holds a GUI ask and the window modal
       holds an unrelated pick -> today the ask is cancelled
-- [ ] add the hub's layout signal; install the origin `ZmxLeadBook.onChange` observer at server start with the
+- [x] add the hub's layout signal; install the origin `ZmxLeadBook.onChange` observer at server start with the
       viewer-side `refreshLeads`; coalesce scheduling; wire the three page loss paths, candidate confirmation
       and the admission events on the Mac; schedule claim and job expiry after a pass that offered something
-- [ ] tests after: each event schedules exactly one pass per session per turn, never inside hub teardown;
+      ➕ the Mac observes lead roles, the modal, GUI-ask fit and its local slots in one
+      `trackOpenWorkPlaces` tracker in place of an origin `onChange` owner (codex agreed); candidate
+      confirmation needs no pass
+- [x] tests after: each event schedules exactly one pass per session per turn, never inside hub teardown;
       the Mac `local` admission:
       - the unrelated-pick case leaves the ask on V1 and the pick untouched, and brings the ask back once the
         modal frees;
@@ -326,12 +331,12 @@ carried row by row first, then its Solution Overview rules this plan touches.
       - V1 gone, no viewer, the GUI ask cannot be shown -> `presentation-lost` (today);
       - a returned GUI ask/pick that fits is placed with id, deadline and result intact;
       headless: one wiring test per event in `ServerStreamsTests`
-- [ ] update the contract once in `control-api.md` (presentation ownership, loss, offer identity, holding, the
+- [x] update the contract once in `control-api.md` (presentation ownership, loss, offer identity, holding, the
       #630 line), cross-referenced; `site/docs.html` attached sessions: where questions and pages show and that
       they follow the lead; the skill if it states the old behavior
-- [ ] verify every Overview requirement against the tests; run `cd agtermCore && swift test`, `make test-app`,
+- [x] verify every Overview requirement against the tests; run `cd agtermCore && swift test`, `make test-app`,
       `make lint`, and the app build, once each
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

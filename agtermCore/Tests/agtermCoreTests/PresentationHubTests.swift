@@ -759,6 +759,68 @@ struct PresentationHubTests {
         #expect(elsewhereSink.bodies.last == sound)
     }
 
+    final class Passes {
+        var sessions: [UUID] = []
+    }
+
+    private func passes(of hub: PresentationHub, after events: () -> Void) async -> (during: [UUID], later: [UUID]) {
+        let seen = Passes(), sentinel = UUID()
+        hub.onOpenWork = { seen.sessions.append($0) }
+        events()
+        let during = seen.sessions
+        hub.scheduleOpenWork(sentinel)
+        for _ in 0..<400 where !seen.sessions.contains(sentinel) { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(seen.sessions.last == sentinel)
+        return (during, seen.sessions.filter { $0 != sentinel })
+    }
+
+    @Test(arguments: ["lead", "grant", "layout"])
+    func anEventThatChangesWhereWorkBelongsRunsOnePassOnALaterTurn(event: String) async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+
+        let ran = await passes(of: hub) {
+            switch event {
+            case "lead": report(hub, first, [Self.left])
+            case "grant": hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            default: hub.publishLayout(PresentationLayout(panes: [Self.left, Self.right], primary: Self.right, axis: "horizontal",
+                                                          shown: true), session: Self.session)
+            }
+        }
+
+        #expect(ran.during.isEmpty)
+        #expect(ran.later == [Self.session])
+    }
+
+    @Test func eventsInOneTurnRunOnePassPerSession() async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        let second = try viewer(hub)
+
+        let ran = await passes(of: hub) {
+            hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            report(hub, first, [Self.left])
+            report(hub, second, [Self.right])
+            hub.unsubscribe(second.id)
+        }
+
+        #expect(ran.later == [Self.session])
+    }
+
+    @Test func aRepeatedAcquireAndAnUnchangedLayoutRunNoPass() async throws {
+        let hub = makeHub()
+        let first = try viewer(hub)
+        hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+        _ = await passes(of: hub) {}
+
+        let ran = await passes(of: hub) {
+            hub.receive(PresentationFrame(gen: first.gen, rev: 0, body: .presenterAcquire), from: first.id)
+            hub.publishLayout(Self.split.layout!, session: Self.session)
+        }
+
+        #expect(ran.later.isEmpty)
+    }
+
     private func committed(_ sink: Sink) throws -> [PresentationFrame.Body] {
         #expect(sink.bodies.last == .pendingCommit)
         var batch = PresentationPendingBatch()

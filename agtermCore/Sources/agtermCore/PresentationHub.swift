@@ -258,6 +258,7 @@ public final class PresentationHub {
         guard subscriberCount(session: session) > 0, layouts[session] != layout else { return }
         layouts[session] = layout
         publish(.layout(layout), session: session)
+        scheduleOpenWork(session)
     }
 
     public func publish(_ body: PresentationFrame.Body, session: UUID) {
@@ -281,13 +282,16 @@ public final class PresentationHub {
             let repeated = grant.holder(of: subscriber.session) == id
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-            if granted, !repeated { onPresenterGranted?(subscriber.session) }
+            guard granted, !repeated else { return }
+            onPresenterGranted?(subscriber.session)
+            scheduleOpenWork(subscriber.session)
         case .leadReport(let report):
             guard subscriber.kinds.contains(Self.leadReportKind) else { return }
             lastLeadReport += 1
             subscriber.leads = Set(report.leaders)
             subscriber.leadsAt = lastLeadReport
             onLeadReport?(subscriber.session)
+            scheduleOpenWork(subscriber.session)
         case .askResolve(let answer):
             if answer.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
         case .askRejected(let ref):

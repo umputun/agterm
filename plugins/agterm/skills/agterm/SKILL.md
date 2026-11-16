@@ -787,8 +787,9 @@ notifications, HUD and the layout of attached panes over a stream that reconnect
 `presentation.state` in `tree`, and expect mirrored status, context and HUD to clear while it is down. An
 `ask open` or `session overlay open` newly aimed at the session on the origin goes to the attached Mac leading
 the target pane (session-wide work: the primary pane), else to the row holding the presenter role, and on a
-Mac origin only when that pane reports `follower` there; otherwise it stays local. One already open stays
-with its Mac when the lead changes; a pane's `remote` in `tree` says where its next one goes. The overlay's program still runs once on the origin, and a remote
+Mac origin only when that pane reports `follower` there; otherwise it stays local. An open ask, pick or page
+follows the lead to the Mac now leading, the origin included, and a program overlay stays where it started; a
+pane's `remote` in `tree` says where its next one goes. The overlay's program still runs once on the origin, and a remote
 `overlay close` replies when the cancel is requested
 ([details](reference.md#restore)). Both run ssh non-interactively, so key-based auth must already work, and
 the far side needs `agtermctl` installed by the cask or the Help action: a machine merely running agterm

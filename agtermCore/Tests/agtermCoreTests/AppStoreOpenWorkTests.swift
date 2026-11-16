@@ -135,6 +135,22 @@ struct AppStoreOpenWorkTests {
         #expect(answer(pending, from: second, in: session))
     }
 
+    @Test func aProgramOverlayStaysWithItsViewerWhenTheLeadMoves() throws {
+        store.overlayJobs = OverlayJobs()
+        let (_, session) = try session()
+        let first = try viewer(session, leads: true, acquire: true)
+        let opened = store.openRemoteOverlay(session.id, options: ControlSessionOverlayOpenOptions(
+            command: "top", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil),
+                                             context: OverlayLaunchContext(command: "top", cwd: "/tmp", sessionEnvironment: [:]))
+        guard case .opened(let job) = opened else { Issue.record("no job: \(opened)"); return }
+        let second = try viewer(session, leads: true)
+
+        pass(session)
+
+        #expect(session.remoteOverlays.slot(job: job)?.owner == first.gen)
+        #expect(!second.sink.bodies.contains { if case .overlayRequest = $0 { true } else { false } })
+    }
+
     @Test func theOriginTakingTheLeadBringsWorkHereAndAViewerTakingItSendsItOut() throws {
         let (_, session) = try session()
         let first = try viewer(session, leads: true, acquire: true)
@@ -499,6 +515,27 @@ struct AppStoreOpenWorkTests {
         let shown = try #require(holder.sink.asks.last)
         #expect(shown.id == pending.id)
         #expect(shown.owner == holder.gen)
+    }
+
+    @Test func headlessAReofferedPageComesBackAtItsCurrentSizeAndHidden() throws {
+        let (host, session) = try session(headless: true)
+        let first = try viewer(session, acquire: true)
+        let page = try url()
+        #expect(openPage(page, in: session, on: host) == .opened)
+        let shown = try #require(first.sink.pages.last)
+        #expect(host.resizeRemoteOverlay(session.id, sizePercent: 40) == true)
+        host.receiveRemotePageFrame(.pageState(PresentationPageState(
+            page: shown.page, title: nil, address: nil, load: .loaded, error: nil, canGoBack: false, canGoForward: false,
+            hidden: true, appliedSeq: 0, offer: shown.offer)), forSession: session.id, from: first.gen)
+
+        hub.unsubscribe(first.id)
+        let next = try viewer(session, acquire: true)
+        pass(session, on: host)
+
+        let fresh = try #require(next.sink.pages.last)
+        #expect(fresh.page == shown.page)
+        #expect(fresh.sizePercent == 40)
+        #expect(next.sink.bodies.contains { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } })
     }
 
     @Test func headlessHeldWorkMovesToTheNewLeaderAndLostWorkGoesThroughThePendingOffer() throws {

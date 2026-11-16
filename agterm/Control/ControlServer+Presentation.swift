@@ -60,6 +60,7 @@ extension ControlServer: PresentationStreamHost {
         dropOrphanedPresentationStreams()
         resumeRestoredAttachedRows()
         mailRelay.start()
+        trackOpenWorkPlaces()
     }
 
     /// publishPresentationMail sends each viewed session's mail counts through the store hosting it.
@@ -71,12 +72,44 @@ extension ControlServer: PresentationStreamHost {
 
     /// reconcileOpenWork places `id`'s open ask, pick and pages where its pane's lead now is, this Mac included.
     func reconcileOpenWork(forSession id: UUID) {
+        defer { trackOpenWorkPlaces() }
         guard let store = library.store(forSession: id), let windowID = library.windowID(for: store) else { return }
         let local = OpenWorkLocal(modal: { _ in PickRegistry.shared.controller(for: windowID).map { ($0, windowID) } },
                                   showsGuiAsk: { [weak self] session in self?.guiAskFits(session, in: store, windowID: windowID) == true })
         guard store.reconcileOpenWork(forSession: id, now: hudClock(), local: local).offered else { return }
         scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
         schedulePageClaimExpiry(after: AppStore.pageClaimWindow)
+    }
+
+    /// trackOpenWorkPlaces runs a pass for every viewed session once anything a pass reads here changes: this Mac's
+    /// lead of a pane, the window modal, whether a GUI ask could be seen, and the local slots a page would take.
+    /// Obsolete trackers still deliver changes; only the newest re-arms.
+    func trackOpenWorkPlaces() {
+        openWorkTracking &+= 1
+        let generation = openWorkTracking
+        withObservationTracking {
+            for id in presentationHub.subscribedSessions { readOpenWorkPlaces(of: id) }
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    for id in self.presentationHub.subscribedSessions { self.presentationHub.scheduleOpenWork(id) }
+                    guard generation == self.openWorkTracking else { return }
+                    self.trackOpenWorkPlaces()
+                }
+            }
+        }
+    }
+
+    private func readOpenWorkPlaces(of id: UUID) {
+        guard let store = library.store(forSession: id), let session = store.session(withID: id),
+              let windowID = library.windowID(for: store) else { return }
+        for pane in [session.paneIdentity, session.splitPaneIdentity].compactMap({ $0 }) { _ = ZmxLeadBook.shared.role(pane: pane) }
+        _ = PickRegistry.shared.controller(for: windowID)?.modalPending
+        _ = guiAskFits(session, in: store, windowID: windowID)
+        _ = session.askPending
+        _ = (session.overlayActive, session.hudActive)
+        for pane in OverlayPane.allCases { _ = (session.paneOverlay(pane) != nil, session.rendersPane(pane)) }
     }
 
     func presentationSourceExists(_ session: UUID) -> Bool {

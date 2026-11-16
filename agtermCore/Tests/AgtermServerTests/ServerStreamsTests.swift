@@ -602,6 +602,22 @@ struct ServerStreamsTests {
         return viewer
     }
 
+    @Test func aViewerTakingTheLeadTakesTheAskAnotherViewerHolds() async throws {
+        let session = try newSession()
+        let holder = try await presenter(for: session)
+        defer { holder.disconnect() }
+        let ask = Self.ask()
+        #expect(openAsk(ask, on: session).ok)
+        _ = await offPool { holder.first { if case .askRequest = $0 { true } else { false } } }
+        let leader = try await claimant(for: session, leads: [session.paneIdentity])
+        defer { leader.disconnect() }
+
+        let taken = await offPool { leader.first { if case .askRequest = $0 { true } else { false } } }
+        guard case .askRequest(let shown)? = taken else { Issue.record("no ask request"); return }
+        #expect(shown.id == ask.id && shown.owner == leader.gen)
+        #expect(await offPool { holder.first { if case .askDismiss = $0 { true } else { false } } } != nil)
+    }
+
     private func splitSession() throws -> (Session, UUID) {
         let session = try newSession()
         _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
@@ -1226,30 +1242,6 @@ struct ServerStreamsTests {
         #expect(session.remoteOverlays.slot(nil)?.page != nil)
         streams.adoptPageServeStream(descriptor: current[0], page: page, token: fresh.token)
         #expect(streams.pageServeStreams[page] != nil)
-    }
-
-    @Test func aReofferedPageComesBackAtItsCurrentSizeAndHidden() async throws {
-        let session = try newSession()
-        let first = try await presenter(for: session)
-        let shown = try #require(try await offeredPage(session, to: first))
-        let id = session.id.uuidString
-        #expect(harness.actions.resizeSessionOverlay(id, window: nil, sizePercent: 40).ok)
-        _ = await offPool { first.first { if case .pageCommand = $0 { true } else { false } } }
-        try first.send(.pageState(PresentationPageState(page: shown.page, title: nil, address: nil, load: .loaded, error: nil,
-                                                        canGoBack: false, canGoForward: false, hidden: true, appliedSeq: 0, offer: shown.offer)))
-        try await Task.sleep(for: .milliseconds(200))
-
-        first.disconnect()
-        let returned = await eventually { session.remoteOverlays.slot(nil)?.owner == nil }
-        #expect(returned)
-        let next = try await presenter(for: session)
-        defer { next.disconnect() }
-
-        let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
-        guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer: \(next.missed ?? ""), session \(session.id)"); return }
-        #expect(fresh.sizePercent == 40)
-        let hide = await offPool { next.first { if case .pageCommand(let command) = $0 { command.action == .hide } else { false } } }
-        #expect(hide != nil, "\(next.missed ?? ""), session \(session.id)")
     }
 
     @Test func offeredPagesAndJobsReadBackTheirWindows() async throws {
