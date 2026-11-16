@@ -197,6 +197,47 @@ public final class SessionPickBook {
         entries[id]?.dismiss = nil
     }
 
+    /// pickToMove is `session`'s pick drawn in a window here or by a viewer other than `owner`, with whether it follows.
+    func pickToMove(session: UUID, to owner: Int) -> (pick: PendingPick, follow: Bool)? {
+        guard let entry = entries.values.first(where: { $0.session == session }) else { return nil }
+        switch entry.placement {
+        case .local: return (entry.pick, entry.follow)
+        case .presenter(let previous): return previous == owner ? nil : (entry.pick, entry.follow)
+        case .unpresented: return nil
+        }
+    }
+
+    /// reassign hands `session`'s pick to viewer `owner`: taken from its window's slot here, or from the viewer showing it,
+    /// whose `dismiss` runs once the new owner is booked. False when there is none, or its window will not release it
+    /// to an app caller waiting on it.
+    func reassign(session: UUID, to owner: Int, offer: Int?, dismiss: @escaping @MainActor () -> Void) -> Bool {
+        guard let (id, entry) = entries.first(where: { $0.value.session == session }) else { return false }
+        if case .local(let window) = entry.placement {
+            guard let controller = PickRegistry.shared.controller(for: window), controller.pending?.id == id,
+                  controller.takePick() != nil else { return false }
+        } else {
+            guard case .presenter(let previous) = entry.placement, previous != owner else { return false }
+        }
+        entries[id]?.placement = .presenter(owner: owner)
+        entries[id]?.offer = offer
+        entries[id]?.dismiss = dismiss
+        entry.dismiss?()
+        return true
+    }
+
+    /// moveHome moves `session`'s pick from viewer `owner` into `controller`, its window's slot here, and the viewer takes
+    /// its copy down; false when that slot is taken, and the pick stays with the viewer.
+    public func moveHome(session: UUID, owner: Int, to controller: PickController, window: WindowInfo.ID) -> Bool {
+        guard let (id, entry) = entries.first(where: { $0.value.session == session }),
+              entry.placement == .presenter(owner: owner), controller.open(entry.pick) else { return false }
+        entries[id]?.placement = .local(window)
+        entries[id]?.window = window
+        entries[id]?.dismiss = nil
+        entries[id]?.offer = nil
+        entry.dismiss?()
+        return true
+    }
+
     /// expire cancels the pick `id` once its deadline passed; false while it has time left or is not booked.
     @discardableResult
     public func expire(_ id: String, now: Date) -> Bool {
@@ -390,6 +431,20 @@ extension AppStore {
         }
         guard booked else { return false }
         // booked first: a viewer dropped by this send is taken back through onOwnerLost
+        hub.send(.pickRequest(request), toOwner: owner)
+        return true
+    }
+
+    /// movePick hands `id`'s pick, drawn in its window here or by another viewer, to viewer `owner`; false when that viewer
+    /// cannot show it, and the pick stays where it is.
+    @discardableResult
+    public func movePick(forSession id: UUID, to owner: Int) -> Bool {
+        guard let hub = presentationHub, hub.supports("pick.request", owner: owner), takesHeldWork(owner),
+              let (pick, follow) = SessionPickBook.shared.pickToMove(session: id, to: owner) else { return false }
+        let request = PresentationPick(pick, owner: owner, follow: follow, offer: hub.newOffer(toOwner: owner))
+        guard request.fitsFrame, SessionPickBook.shared.reassign(session: id, to: owner, offer: request.offer, dismiss: { [weak hub] in
+            hub?.send(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), toOwner: owner)
+        }) else { return false }
         hub.send(.pickRequest(request), toOwner: owner)
         return true
     }

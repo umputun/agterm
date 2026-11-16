@@ -49,6 +49,26 @@ extension ControlServer: PageServeHost {
         openStores.lazy.compactMap { $0.remotePageClaimToken(page) }.first == token
     }
 
+    func isPageCandidateClaim(_ page: UUID, token: String) -> Bool {
+        openStores.contains { $0.pageCandidateClaimed(page, token: token) }
+    }
+
+    func commitPageCandidate(_ page: UUID, token: String) -> PageMove? {
+        // a lazy compactMap runs its closure twice per element, and a commit only once succeeds
+        for store in openStores {
+            if let move = store.commitPageCandidate(page, token: token) { return move }
+        }
+        return nil
+    }
+
+    func finishPageMove(_ move: PageMove) {
+        for store in openStores { store.finishPageMove(move) }
+    }
+
+    func pageCandidateFailed(_ page: UUID, token: String) -> Bool {
+        openStores.contains { $0.failPageCandidate(page, token: token) }
+    }
+
     /// remotePagePlace finds where page `page` is reserved now, nil once it ended or the viewer it was handed to left:
     /// a swap moves the slot, and a gone owner means the page belongs to a stream that ended.
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)? {

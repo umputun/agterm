@@ -62,7 +62,7 @@ public struct RemotePage: Equatable, Sendable {
     public internal(set) var hidden = false
     /// requested is a visibility sent and not yet echoed back by the presenter.
     private(set) var requested: VisibilityRequest?
-    private var lastSeq = 0
+    private(set) var lastSeq = 0
 
     init(overlay: HtmlOverlay, token: String, claimDeadline: Date) {
         self.overlay = overlay
@@ -110,6 +110,13 @@ public struct RemotePage: Equatable, Sendable {
 public struct RemoteOverlays: Equatable, Sendable {
     public private(set) var slots: [RemoteOverlaySlot] = []
     private var failures: [OverlayPane?: String] = [:]
+    /// candidates are pages offered to the viewer they move to, by page id, until that viewer confirms or the offer
+    /// is dropped; the page meanwhile stays where it is shown.
+    private(set) var candidates: [String: PageCandidate] = [:]
+
+    func candidate(job: String) -> PageCandidate? { candidates[job] }
+
+    mutating func setCandidate(_ candidate: PageCandidate?, job: String) { candidates[job] = candidate }
 
     public func slot(_ pane: OverlayPane?) -> RemoteOverlaySlot? { slots.first { $0.pane == pane } }
 
@@ -173,12 +180,17 @@ public struct RemoteOverlays: Equatable, Sendable {
         for index in slots.indices where slots[index].pane != nil {
             slots[index].pane = slots[index].pane == .left ? .right : .left
         }
+        for job in candidates.keys {
+            guard let pane = candidates[job]?.arriving?.pane else { continue }
+            candidates[job]?.arriving?.pane = pane == .left ? .right : .left
+        }
         (failures[.left], failures[.right]) = (failures[.right], failures[.left])
     }
 
     /// The split was promoted to the primary pane, whose own slot is already dropped.
     mutating func promoteRight() {
         for index in slots.indices where slots[index].pane == .right { slots[index].pane = .left }
+        for job in candidates.keys where candidates[job]?.arriving?.pane == .right { candidates[job]?.arriving?.pane = .left }
         failures[.left] = failures[.right]
         failures[.right] = nil
     }
@@ -187,4 +199,24 @@ public struct RemoteOverlays: Equatable, Sendable {
 
     /// A local open on the slot starts a new result, as the local exit code does.
     mutating func clearFailure(_ pane: OverlayPane?) { failures[pane] = nil }
+}
+
+/// PageCandidate is a page offered to the viewer it moves to, beside its current presentation until that viewer
+/// confirms it: by adopting the page channel, or with its first report for a URL page.
+struct PageCandidate: Equatable, Sendable {
+    let owner: Int
+    let token: String
+    let offer: Int?
+    let claimDeadline: Date
+    var claimed = false
+    /// arriving is the slot a page shown on this Mac takes once the move is confirmed; nil when a viewer shows it.
+    var arriving: RemoteOverlaySlot?
+}
+
+/// PageMove is a confirmed page move: the viewer that showed the page before, nil when this Mac did, is told to take
+/// its copy down once the new presentation is in place.
+public struct PageMove: Equatable, Sendable {
+    public let page: UUID
+    let session: UUID
+    let previous: Int?
 }

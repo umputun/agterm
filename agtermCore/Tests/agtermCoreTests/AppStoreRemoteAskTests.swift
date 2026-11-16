@@ -512,6 +512,111 @@ struct AppStoreRemoteAskTests {
                                        forSession: session.id))
     }
 
+    private static let heldKinds = [PresentationHub.offerIdentityKind, PresentationHub.pendingSnapshotKind, PresentationHub.jobTokenKind]
+
+    private func secondViewer(_ session: Session, kinds: [String] = Self.heldKinds) throws -> (gen: Int, sink: Sink) {
+        let sink = Sink()
+        let hello = PresentationHello(version: 1, kinds: kinds, mode: .presenter)
+        _ = try hub.subscribe(session: session.id, hello: hello, sink: sink) { PresentationSnapshot(status: nil, hud: nil) }
+        return (sink.frames[0].gen, sink)
+    }
+
+    private func requests(_ sink: Sink) -> [PresentationAsk] {
+        sink.bodies.compactMap { if case .askRequest(let r) = $0 { r } else { nil } }
+    }
+
+    @Test func anAskMovesToAnotherViewerWithItsIdAndDeadlineAndOnlyThatViewersAnswerCounts() throws {
+        let (session, _) = try origin(kinds: Self.heldKinds)
+        var pending = ask()
+        pending.deadline = Date().addingTimeInterval(60)
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
+        let old = owner(of: session)
+        let oldOffer = requests(presenter).last?.offer
+        let next = try secondViewer(session)
+
+        #expect(store.moveRemoteAsk(forSession: session.id, to: next.gen))
+
+        #expect(presenter.bodies.last == .askDismiss(PresentationAskRef(id: pending.id, owner: old)))
+        let moved = try #require(requests(next.sink).last)
+        #expect(moved.id == pending.id)
+        #expect(session.askPending?.deadline == pending.deadline)
+        #expect(!store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: old, button: "yes", offer: oldOffer),
+                                        forSession: session.id))
+        #expect(store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: next.gen, button: "yes", offer: moved.offer),
+                                       forSession: session.id))
+        #expect(store.askRegistry.result(for: pending.id)?.result.id == "yes")
+    }
+
+    @Test func anAskStaysWithItsViewerWhenTheNextOneCannotTakeHeldWork() throws {
+        let (session, _) = try origin(kinds: Self.heldKinds)
+        let pending = ask()
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
+        let old = owner(of: session)
+        let next = try secondViewer(session, kinds: [])
+
+        #expect(!store.moveRemoteAsk(forSession: session.id, to: next.gen))
+
+        #expect(session.askRemoteOwner == old)
+        #expect(requests(next.sink).isEmpty)
+    }
+
+    @Test func aTerminalAskComesHomeAndItsLocalAnswerIsTheResult() throws {
+        let (session, _) = try origin(kinds: Self.heldKinds)
+        let pending = ask()
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
+        let old = owner(of: session)
+
+        #expect(store.takeTerminalAskHome(forSession: session.id))
+
+        #expect(!session.askPresentedRemotely)
+        #expect(presenter.bodies.last == .askDismiss(PresentationAskRef(id: pending.id, owner: old)))
+        #expect(session.resolveAsk(id: pending.id, ControlAskResult(result: .answered, id: "no", label: "No", index: 1)))
+        #expect(store.askRegistry.result(for: pending.id)?.result.id == "no")
+    }
+
+    @Test func aGuiAskShownHereMovesToAViewerAndItsAnswerIsTheResult() throws {
+        let (session, _) = try origin(kinds: Self.heldKinds)
+        let window = UUID()
+        let controller = PickController()
+        let pending = ask(style: .gui)
+        controller.openAsk(pending.anchored(at: AskAnchor(sessionID: session.id)))
+        store.askRegistry.register(id: pending.id, owner: .window(window))
+
+        #expect(store.handGuiAskToViewer(controller, window: window, forSession: session.id, to: owner(of: session)))
+
+        #expect(controller.pendingAsk == nil)
+        #expect(session.askPending?.id == pending.id)
+        #expect(store.askRegistry.owner(for: pending.id) == .session(session.id, window: window))
+        let moved = try #require(requests(presenter).last)
+        #expect(store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: owner(of: session), button: "yes", offer: moved.offer),
+                                       forSession: session.id))
+        #expect(store.askRegistry.result(for: pending.id)?.result.id == "yes")
+    }
+
+    @Test func aGuiAskComesHomeIntoItsWindowOnlyWhenTheModalIsFree() throws {
+        let (session, _) = try origin(kinds: Self.heldKinds)
+        let window = UUID()
+        let controller = PickController()
+        PickRegistry.shared.register(window, controller: controller)
+        defer { PickRegistry.shared.unregister(window) }
+        let pending = ask(style: .gui)
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: window)
+        let old = owner(of: session)
+        controller.open(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "A")]))
+
+        #expect(!store.moveGuiAskHome(forSession: session.id, into: controller, window: window))
+        #expect(session.askRemoteOwner == old)
+        controller.cancel()
+        #expect(store.moveGuiAskHome(forSession: session.id, into: controller, window: window))
+
+        #expect(controller.pendingAsk?.id == pending.id)
+        #expect(controller.pendingAsk?.anchor?.sessionID == session.id)
+        #expect(session.askPending == nil)
+        #expect(presenter.bodies.last == .askDismiss(PresentationAskRef(id: pending.id, owner: old)))
+        controller.resolveAsk(ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        #expect(store.askRegistry.result(for: pending.id)?.result.id == "yes")
+    }
+
     @Test func aRefusalIsHonouredOnlyForTheAskBeingPresented() throws {
         let (session, _) = try origin()
         let pending = ask()

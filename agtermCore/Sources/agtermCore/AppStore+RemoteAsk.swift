@@ -44,14 +44,80 @@ extension AppStore {
     /// viewer cannot show it and it stays unpresented.
     @discardableResult
     public func offerPendingAsk(forSession id: UUID) -> Bool {
-        guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
-              !session.askPresentedRemotely, !session.askReplica,
+        guard let session = session(withID: id),
               let owner = pendingRecipient(session, paneIdentity: session.askPaneIdentity) else { return false }
+        return offerAsk(forSession: id, to: owner)
+    }
+
+    /// offerAsk hands `id`'s ask in its session slot, drawn here or held unpresented, to viewer `owner`; false when there
+    /// is none, or that viewer cannot show it and the ask stays where it is.
+    @discardableResult
+    public func offerAsk(forSession id: UUID, to owner: Int) -> Bool {
+        guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
+              !session.askPresentedRemotely, !session.askReplica, takesHeldWork(owner) else { return false }
         let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner,
                                       offer: hub.newOffer(toOwner: owner))
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
         session.askRemoteOwner = request.owner
         handOver(request, in: session, hub: hub)
+        return true
+    }
+
+    /// moveRemoteAsk hands `id`'s ask from the viewer presenting it to viewer `owner`, then takes the old copy down;
+    /// false when that viewer cannot show it, and the ask stays with its presenter.
+    @discardableResult
+    public func moveRemoteAsk(forSession id: UUID, to owner: Int) -> Bool {
+        guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
+              let previous = session.askRemoteOwner, previous != owner, takesHeldWork(owner) else { return false }
+        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner,
+                                      offer: hub.newOffer(toOwner: owner))
+        guard askOfferRefusal(request, hub: hub) == nil else { return false }
+        // the new owner is recorded before either send, so a viewer a stalled send drops finds nothing it owns
+        session.askRemoteOwner = owner
+        handOver(request, in: session, hub: hub)
+        hub.send(.askDismiss(PresentationAskRef(id: ask.id, owner: previous)), toOwner: previous)
+        return true
+    }
+
+    /// handGuiAskToViewer moves the GUI ask `controller` shows for session `id` into the session's slot, handed to viewer
+    /// `owner`; false when the slot is taken or that viewer cannot show it, and the ask stays in its window.
+    public func handGuiAskToViewer(_ controller: PickController, window: WindowInfo.ID, forSession id: UUID, to owner: Int) -> Bool {
+        guard let hub = presentationHub, let session = session(withID: id), session.askPending == nil,
+              let shown = controller.pendingAsk, shown.anchor?.sessionID == id, !shown.expired(at: Date()),
+              takesHeldWork(owner) else { return false }
+        let identity = shown.anchor?.paneIdentity
+        let ask = shown.anchored(at: nil)
+        let request = PresentationAsk(ask, pane: identity.map { .identity($0) }, owner: owner, offer: hub.newOffer(toOwner: owner))
+        guard askOfferRefusal(request, hub: hub) == nil, controller.takeAsk() != nil,
+              session.openAsk(ask, paneIdentity: identity, remoteOwner: owner, registry: askRegistry) else { return false }
+        askRegistry.reassign(id: ask.id, to: .session(id, window: window))
+        handOver(request, in: session, hub: hub)
+        return true
+    }
+
+    /// takeTerminalAskHome draws `id`'s terminal ask here again, and the viewer presenting it takes its copy down; false
+    /// for a GUI ask or none.
+    @discardableResult
+    public func takeTerminalAskHome(forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), let ask = session.askPending, ask.style != .gui,
+              let owner = session.askRemoteOwner else { return false }
+        RemoteAskOffers.shared.forget(ask: ask.id)
+        session.takeAskBack()
+        presentationHub?.send(.askDismiss(PresentationAskRef(id: ask.id, owner: owner)), toOwner: owner)
+        return true
+    }
+
+    /// moveGuiAskHome moves `id`'s GUI ask from the viewer presenting it into `controller`, its window's modal slot here,
+    /// whose fit the host checked; false when that slot is taken, and the ask stays with its presenter.
+    public func moveGuiAskHome(forSession id: UUID, into controller: PickController, window: WindowInfo.ID) -> Bool {
+        guard let session = session(withID: id), let ask = session.askPending, ask.style == .gui,
+              let owner = session.askRemoteOwner else { return false }
+        let anchor = AskAnchor(sessionID: id, pane: session.askTargetPane, paneIdentity: session.askPaneIdentity)
+        guard controller.openAsk(ask.anchored(at: anchor)) else { return false }
+        RemoteAskOffers.shared.forget(ask: ask.id)
+        session.releaseAsk()
+        askRegistry.reassign(id: ask.id, to: .window(window))
+        presentationHub?.send(.askDismiss(PresentationAskRef(id: ask.id, owner: owner)), toOwner: owner)
         return true
     }
 

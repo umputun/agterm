@@ -301,6 +301,75 @@ struct SessionPickTests {
         #expect(book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: owner(of: session), item: "a"), session: session.id))
     }
 
+    private static let heldKinds = PresentationHub.pickKinds + [PresentationHub.offerIdentityKind, PresentationHub.pendingSnapshotKind,
+                                                                PresentationHub.jobTokenKind]
+
+    private func secondViewer(_ session: Session) throws -> (gen: Int, sink: Sink) {
+        let sink = Sink()
+        let hello = PresentationHello(version: 1, kinds: Self.heldKinds, mode: .presenter)
+        _ = try hub.subscribe(session: session.id, hello: hello, sink: sink) { PresentationSnapshot(status: nil, hud: nil) }
+        return (sink.frames[0].gen, sink)
+    }
+
+    private func requests(_ sink: Sink) -> [PresentationPick] {
+        sink.bodies.compactMap { if case .pickRequest(let r) = $0 { r } else { nil } }
+    }
+
+    @Test func aPickMovesToAnotherViewerWithItsIdAndDeadlineAndOnlyThatViewersAnswerCounts() throws {
+        let session = try session()
+        try presented(session, kinds: Self.heldKinds)
+        var remote = pick()
+        remote.deadline = Date().addingTimeInterval(60)
+        _ = store.presentPickRemotely(remote, in: session, window: nil)
+        let old = owner(of: session)
+        let oldOffer = requests(presenter).last?.offer
+        let next = try secondViewer(session)
+
+        #expect(store.movePick(forSession: session.id, to: next.gen))
+
+        #expect(presenter.bodies.last == .pickDismiss(PresentationPickRef(id: remote.id, owner: old)))
+        let moved = try #require(requests(next.sink).last)
+        #expect(moved.id == remote.id)
+        #expect(book.placement(forSession: session.id) == .presenter(owner: next.gen))
+        #expect(!book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: old, item: "a", offer: oldOffer), session: session.id))
+        #expect(book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: next.gen, item: "b", offer: moved.offer), session: session.id))
+        #expect(book.result(for: remote.id) == ControlPickResult(result: .picked, id: "b", label: "Beta", index: 1))
+    }
+
+    @Test func aPickShownInItsWindowMovesToAViewer() throws {
+        let session = try session()
+        try presented(session, kinds: Self.heldKinds)
+        let (windowID, controller) = window()
+        let local = pick()
+        #expect(book.openLocal(local, session: session.id, window: windowID, controller: controller) == nil)
+
+        #expect(store.movePick(forSession: session.id, to: owner(of: session)))
+
+        #expect(controller.pending == nil)
+        #expect(requests(presenter).last?.id == local.id)
+        #expect(book.result(for: local.id) == ControlPickResult(result: .pending))
+    }
+
+    @Test func aPickComesHomeIntoItsWindowOnlyWhenTheModalIsFree() throws {
+        let session = try session()
+        try presented(session, kinds: Self.heldKinds)
+        let (windowID, controller) = window()
+        let remote = pick()
+        _ = store.presentPickRemotely(remote, in: session, window: windowID)
+        let old = owner(of: session)
+        controller.open(pick())
+
+        #expect(!book.moveHome(session: session.id, owner: old, to: controller, window: windowID))
+        #expect(book.placement(forSession: session.id) == .presenter(owner: old))
+        controller.cancel()
+        #expect(book.moveHome(session: session.id, owner: old, to: controller, window: windowID))
+
+        #expect(controller.pending == remote)
+        #expect(presenter.bodies.last == .pickDismiss(PresentationPickRef(id: remote.id, owner: old)))
+        controller.resolve(ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+        #expect(book.result(for: remote.id) == ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+    }
+
     @Test func aStaleRefusalUnderTheSameOwnerLeavesTheNewerPick() throws {
         let session = try session()
         try presented(session)
@@ -402,6 +471,23 @@ struct SessionPickTests {
         controller.cancel()
 
         #expect(controller.pending?.id == request.id)
+    }
+
+    @Test func takingTheWindowsModalShowsTheQueuedReplica() throws {
+        let session = try session()
+        let (windowID, controller) = window()
+        controller.open(pick())
+        let first = replica()
+        #expect(book.openReplica(first, session: session.id, window: windowID, controller: controller) { _ in })
+        _ = controller.takePick()
+        #expect(controller.pending?.id == first.id)
+
+        controller.resolve(ControlPickResult(result: .cancelled))
+        controller.openAsk(PendingAsk(id: UUID().uuidString, title: "t", buttons: [], style: .gui))
+        let second = replica()
+        #expect(book.openReplica(second, session: session.id, window: windowID, controller: controller) { _ in })
+        _ = controller.takeAsk()
+        #expect(controller.pending?.id == second.id)
     }
 
     @Test func aClosingWindowDetachesItsShownAndQueuedReplicasWithoutAnsweringOrMountingThem() throws {

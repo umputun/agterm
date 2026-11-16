@@ -84,8 +84,10 @@ final class ControlServerPageServeTests: XCTestCase {
 
     private final class Sink: PresentationSink {
         var frames: [PresentationFrame] = []
+        var stallsOnClose = false
 
         func offer(_ frame: PresentationFrame) -> Bool {
+            if stallsOnClose, case .pageClose = frame.body { return false }
             frames.append(frame)
             return true
         }
@@ -799,5 +801,97 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertTrue(fix.session.remoteOverlays.slots.isEmpty)
         XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .dismissed)
         XCTAssertNil(offMain { client.readLine() } ?? nil)
+    }
+
+    private func viewer(_ fix: Fixture, session: Session? = nil) throws -> (gen: Int, sink: Sink) {
+        let sink = Sink()
+        let hello = PresentationHello(version: 1, kinds: PresentationHub.supportedKinds, mode: .presenter)
+        _ = try fix.server.presentationHub.subscribe(session: (session ?? fix.session).id, hello: hello, sink: sink) {
+            PresentationSnapshot(status: nil, hud: nil)
+        }
+        return (sink.frames[0].gen, sink)
+    }
+
+    private func served(_ client: HelperClient) -> Data? {
+        let index = docs.appendingPathComponent("index.html").path
+        return offMain { () -> Data in
+            client.send(.resource(id: 1, path: index))
+            return client.body(1).data
+        }
+    }
+
+    func testAnOfferAdoptedOnItsChannelTakesThePageAndOutlivesTheRetiredChannel() throws {
+        let fix = try fixture()
+        let page = try openFile(fix)
+        let (first, _) = try claim(try XCTUnwrap(fix.presenter.token))
+        waitUntil("the first channel is adopted") { fix.server.pageServeStreams[page] != nil }
+        let retired = fix.server.pageServeStreams[page]
+        let next = try viewer(fix)
+        XCTAssertTrue(fix.store.offerPageCandidate(page, forSession: fix.session.id, to: next.gen))
+
+        let (client, reply) = try claim(try XCTUnwrap(next.sink.token))
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#))
+        waitUntil("the offer's channel replaces the first") {
+            fix.server.pageServeStreams[page] != nil && fix.server.pageServeStreams[page] !== retired
+        }
+        XCTAssertEqual(fix.session.remoteOverlays.slot(nil)?.owner, next.gen)
+        XCTAssertTrue(fix.presenter.bodies.contains(.pageClose(PresentationPageChange(page: page.uuidString,
+                                                                                      reason: PresentationPageChange.channelLost))))
+        XCTAssertNil(offMain { first.readLine() } ?? nil)
+        XCTAssertEqual(served(client), Data("<p>index</p>".utf8))
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
+    }
+
+    func testAHolderThatStallsOnItsCloseLeavesTheMovedPageWithItsNewViewer() throws {
+        let fix = try fixture()
+        let page = try openFile(fix)
+        let next = try viewer(fix)
+        XCTAssertTrue(fix.store.offerPageCandidate(page, forSession: fix.session.id, to: next.gen))
+        fix.presenter.stallsOnClose = true
+
+        let (client, _) = try claim(try XCTUnwrap(next.sink.token))
+
+        waitUntil("the offer's channel is adopted") { fix.server.pageServeStreams[page] != nil }
+        XCTAssertFalse(fix.server.presentationHub.isConnected(owner: fix.presenter.frames[0].gen))
+        XCTAssertEqual(fix.session.remoteOverlays.slot(nil)?.owner, next.gen)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
+        XCTAssertEqual(served(client), Data("<p>index</p>".utf8))
+    }
+
+    func testAPageShownHereIsClaimedByTheViewerItIsOfferedToAndServedFromHere() throws {
+        let fix = try fixture()
+        let other = try XCTUnwrap(fix.store.addSession(toWorkspace: try XCTUnwrap(fix.store.currentWorkspaceID), cwd: "/tmp"))
+        let page = HtmlOverlay(source: .file(path: docs.appendingPathComponent("index.html").path, grantRoot: docs.path))
+        XCTAssertNil(fix.store.openHtmlOverlay(other.id, pane: nil, overlay: page, sizePercent: nil))
+        let next = try viewer(fix, session: other)
+        XCTAssertTrue(fix.store.offerPageCandidate(page.id, forSession: other.id, to: next.gen))
+        XCTAssertEqual(other.htmlOverlay?.id, page.id)
+
+        let (client, reply) = try claim(try XCTUnwrap(next.sink.token))
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#))
+        waitUntil("the offer's channel is adopted") { fix.server.pageServeStreams[page.id] != nil }
+        XCTAssertNil(other.htmlOverlay)
+        XCTAssertEqual(other.remoteOverlays.slot(nil)?.owner, next.gen)
+        XCTAssertEqual(served(client), Data("<p>index</p>".utf8))
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome, .pending)
+    }
+
+    func testAnOfferWhoseClaimReplyFailsLeavesThePageWithItsHolder() throws {
+        let fix = try fixture(responseWriter: { _, response in !response.ok })
+        let page = try openFile(fix)
+        let next = try viewer(fix)
+        XCTAssertTrue(fix.store.offerPageCandidate(page, forSession: fix.session.id, to: next.gen))
+
+        let (_, reply) = try claim(try XCTUnwrap(next.sink.token))
+
+        XCTAssertNil(reply)
+        waitUntil("the offer is taken down") {
+            next.sink.bodies.contains(.pageClose(PresentationPageChange(page: page.uuidString, reason: PresentationPageChange.channelLost)))
+        }
+        XCTAssertEqual(fix.session.remoteOverlays.slot(nil)?.owner, fix.presenter.frames[0].gen)
+        XCTAssertNil(fix.server.pageServeStreams[page])
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
     }
 }

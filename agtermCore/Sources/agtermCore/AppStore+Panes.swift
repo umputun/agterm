@@ -352,6 +352,7 @@ extension AppStore {
         // the left slot WITH its exit code, so `session.overlay.result --pane left` still answers afterwards.
         // a torn-down left overlay and a right one changing role both move the tree's pane slots
         if holdsPaneOverlay(session) { scheduleTreeChanged() }
+        if let page = session.paneOverlay(.left)?.html { dropPageCandidate(page.id.uuidString, in: session) }
         session.teardownPaneOverlay(.left)
         session.promotePaneOverlay()
         dropRemoteOverlay(.left, of: session)
@@ -530,6 +531,7 @@ extension AppStore {
             closeSession(sessionID)
             return true
         }
+        if let page = session.htmlOverlay { dropPageCandidate(page.id.uuidString, in: session) }
         let replica = session.overlayReplica
         session.overlayReplica = nil
         session.overlayActive = false
@@ -647,6 +649,7 @@ extension AppStore {
     /// on explicit close and when the program exits. No-op (false) with no overlay on that pane.
     @discardableResult public func closePaneOverlay(_ sessionID: UUID, pane: OverlayPane) -> Bool {
         guard let session = session(withID: sessionID), let overlay = session.paneOverlay(pane) else { return false }
+        if let page = overlay.html { dropPageCandidate(page.id.uuidString, in: session) }
         HtmlOverlayReleases.shared.release(overlay.html)
         session.setPaneOverlay(nil, pane: pane)
         session.paneOverlaySurface(pane)?.teardown()

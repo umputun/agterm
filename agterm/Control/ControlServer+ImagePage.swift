@@ -47,7 +47,7 @@ extension ControlServer {
         let sized = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: ImagePage.basePercent,
                                                      backgroundColor: options.backgroundColor, follow: options.follow,
                                                      page: options.page, points: points, clicked: options.clicked,
-                                                     forwardedTo: options.forwardedTo)
+                                                     imagePixels: pixels, forwardedTo: options.forwardedTo)
         return openHtmlOverlay(in: store, sessionID: id, page: .image(path: path), options: sized)
     }
 

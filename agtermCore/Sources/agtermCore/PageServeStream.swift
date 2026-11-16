@@ -32,6 +32,14 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func dropPageAttachmentClaim(_ claim: UUID) -> Bool
     func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     func pageAttachmentClosed(_ attachment: PageServeStream.Attachment)
+    /// isPageCandidateClaim is whether `token` is the claimed offer of page `page` to the viewer it moves to.
+    func isPageCandidateClaim(_ page: UUID, token: String) -> Bool
+    /// commitPageCandidate confirms that offer, sending nothing; nil once it no longer stands.
+    func commitPageCandidate(_ page: UUID, token: String) -> PageMove?
+    /// finishPageMove tells the page's previous holder, once its new channel is registered.
+    func finishPageMove(_ move: PageMove)
+    /// pageCandidateFailed drops the offer `token` names, false when it names none.
+    func pageCandidateFailed(_ page: UUID, token: String) -> Bool
 }
 
 /// PendingPageClaim is a page channel claim answered ok, waiting for its connection.
@@ -50,6 +58,10 @@ extension PageServeHost {
         nil
     }
     public func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) {}
+    public func isPageCandidateClaim(_ page: UUID, token: String) -> Bool { false }
+    public func commitPageCandidate(_ page: UUID, token: String) -> PageMove? { nil }
+    public func finishPageMove(_ move: PageMove) {}
+    public func pageCandidateFailed(_ page: UUID, token: String) -> Bool { false }
 }
 
 /// PageServeAdmission counts one kind of request a page channel has taken in and not finished. It never
@@ -441,11 +453,21 @@ extension PageServeHost {
     public func adoptPageServeStream(descriptor: Int32, page: UUID, token: String) {
         if adoptPageAttachment(descriptor: descriptor, claim: page) { return }
         let claim = pendingPageClaims.removeValue(forKey: token)
-        let live = claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token)
+        let candidate = claim?.page == page && isPageCandidateClaim(page, token: token)
+        let live = candidate || (claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token))
         guard let stream = PageServeStream.adopt(descriptor: descriptor, page: page, source: live ? claim?.served.source : nil,
                                                  links: claim?.served.links, log: claim?.served.log, attachment: nil,
                                                  host: self) else { return }
-        pageServeStreams[page] = stream
+        var move: PageMove?
+        if candidate {
+            guard let committed = commitPageCandidate(page, token: token) else { return stream.shutdown() }
+            move = committed
+        }
+        // the page's channel is replaced before its previous holder hears of it, so a stalled send drops a viewer that
+        // no longer holds the page
+        let displaced = pageServeStreams.updateValue(stream, forKey: page)
+        if displaced !== stream { displaced?.shutdown() }
+        move.map(finishPageMove)
     }
 
     /// pageClaimUnanswered handles a claim whose reply never reached its helper, which leaves nobody to load the page,
@@ -454,6 +476,7 @@ extension PageServeHost {
         // an attachment that never connected leaves the page and its other viewers alone
         if dropPageAttachmentClaim(page) { return }
         pendingPageClaims[token] = nil
+        if pageCandidateFailed(page, token: token) { return }
         guard isCurrentPageClaim(page, token: token) else { return }
         pageChannelLost(page)
     }

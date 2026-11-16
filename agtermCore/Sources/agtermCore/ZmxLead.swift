@@ -205,10 +205,15 @@ extension AppStore {
     /// pendingRecipient is `remoteRecipient` for work a headless origin holds, nil when that viewer cannot take held
     /// work and its job tokens; an older one sees only what opens while it is connected.
     func pendingRecipient(_ session: Session, paneIdentity: UUID?) -> Int? {
-        guard let hub = presentationHub, let owner = remoteRecipient(session, paneIdentity: paneIdentity),
-              hub.supports(PresentationHub.pendingSnapshotKind, owner: owner),
-              hub.supports(PresentationHub.jobTokenKind, owner: owner) else { return nil }
+        guard let owner = remoteRecipient(session, paneIdentity: paneIdentity), takesHeldWork(owner) else { return nil }
         return owner
+    }
+
+    /// takesHeldWork is whether viewer `owner` can be handed work already open, which reaches it in a pending batch
+    /// and may carry a job token.
+    func takesHeldWork(_ owner: Int) -> Bool {
+        guard let hub = presentationHub else { return false }
+        return hub.supports(PresentationHub.pendingSnapshotKind, owner: owner) && hub.supports(PresentationHub.jobTokenKind, owner: owner)
     }
 }
 

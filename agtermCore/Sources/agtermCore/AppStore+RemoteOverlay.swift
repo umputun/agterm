@@ -198,6 +198,7 @@ extension AppStore {
     /// What other viewers hold stays with them.
     public func remoteOverlayOwnerLost(forSession sessionID: UUID, owner: Int) {
         guard let session = session(withID: sessionID) else { return }
+        forgetPageCandidates(of: owner, in: session)
         if headless { return withdrawRemoteOverlays(of: session, owner: owner) }
         for slot in session.remoteOverlays.slots where slot.owner == owner {
             if slot.page != nil {
@@ -256,6 +257,7 @@ extension AppStore {
         session.cancelPendingAsk()
         SessionPickBook.shared.sessionEnded(session.id)
         disposeMailboxes(of: session)
+        for job in session.remoteOverlays.candidates.keys { dropPageCandidate(job, in: session) }
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()
         for slot in session.overlayReplicas { closeReplicaOverlay(slot.replica.job, forSession: session.id) }

@@ -267,6 +267,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var textFiles: TextFiles?
     /// textWrap is whether a text page wraps long lines.
     public internal(set) var textWrap = false
+    /// imagePixels is an image page's probed size, which it needs to be handed to another Mac.
+    public let imagePixels: ImagePixels?
     public var loadState: HtmlLoadState = .loading
     public var loadError: String?
     /// loadFailurePinned keeps a failure the page cannot load past, such as its port forward ending, over every
@@ -294,8 +296,10 @@ public struct HtmlOverlay: Equatable, Sendable {
     /// Forward its links cannot use.
     public init(source: HtmlSource, navigation: Bool = false, javascript: Bool = false, chromeless: Bool = false,
                 persistent: Bool = false, browse: Bool = false, clicked: Bool = false, id: UUID = UUID(),
-                replicaOf: UUID? = nil, textLog: TextLog? = nil, markdownLinks: MarkdownLinkGrant? = nil) {
+                replicaOf: UUID? = nil, textLog: TextLog? = nil, markdownLinks: MarkdownLinkGrant? = nil,
+                imagePixels: ImagePixels? = nil) {
         self.id = id
+        self.imagePixels = imagePixels
         self.textLog = textLog
         logState = textLog.map { TextLogState(following: $0.follow) }
         self.clicked = clicked
@@ -550,6 +554,11 @@ public final class HtmlOverlayReleases {
     func release(_ overlay: HtmlOverlay?) {
         guard let overlay else { return }
         HtmlPageOutcomes.shared.dismiss(overlay.id)
+        moved(overlay)
+    }
+
+    /// moved frees what showed `overlay` here once it left its slot for another Mac, its outcome still open.
+    func moved(_ overlay: HtmlOverlay) {
         onRelease?(overlay.id)
         onServedRelease?(overlay.id)
         if let origin = overlay.replicaOf { onReplicaRelease?(overlay.id, origin) }

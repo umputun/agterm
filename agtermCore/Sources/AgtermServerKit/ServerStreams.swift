@@ -190,6 +190,14 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool { store.remotePageClaimToken(page) == token }
 
+    func isPageCandidateClaim(_ page: UUID, token: String) -> Bool { store.pageCandidateClaimed(page, token: token) }
+
+    func commitPageCandidate(_ page: UUID, token: String) -> PageMove? { store.commitPageCandidate(page, token: token) }
+
+    func finishPageMove(_ move: PageMove) { store.finishPageMove(move) }
+
+    func pageCandidateFailed(_ page: UUID, token: String) -> Bool { store.failPageCandidate(page, token: token) }
+
     func endRemotePage(_ page: UUID) {
         for session in store.workspaces.flatMap(\.sessions) {
             guard let slot = session.remoteOverlays.slot(job: page.uuidString) else { continue }

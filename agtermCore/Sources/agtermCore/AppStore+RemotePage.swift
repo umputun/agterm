@@ -59,7 +59,8 @@ extension AppStore {
         // a headless origin holds the page for a viewer to come; a Mac shows it here
         guard let hub = presentationHub, hub.subscriberCount(session: sessionID) > 0 || headless,
               let session = session(withID: sessionID),
-              var source = Self.presentationSource(overlay.source, imagePixels: options.imagePixels) else { return .local }
+              let source = Self.handedSource(overlay, imagePixels: overlay.imagePixels ?? options.imagePixels)
+        else { return .local }
         let replaces = options.forwarded && holdsHiddenClickedRemotePage(pane, in: session)
         guard session.remoteOverlays.slot(pane) == nil || replaces, !localOverlayHolds(pane, in: session) else { return .slotTaken }
         let identity = pane.map { $0 == .right ? session.splitPaneIdentity : session.paneIdentity }
@@ -67,24 +68,16 @@ extension AppStore {
         guard presentsRemotely(session, paneIdentity: identity.flatMap { $0 }) else { return .local }
         let recipient = options.forwardedTo ?? remoteRecipient(session, paneIdentity: identity.flatMap { $0 })
         if recipient == nil, !headless { return .local }
-        // a loopback URL is reached through the viewer's own forward to this host
-        if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) {
-            source = .forwarded(url.absoluteString)
-        }
         let shows = recipient.map { presenterShows(source, log: overlay.textLog != nil, owner: $0) } ?? false
         if case .forwarded = source, recipient != nil, !shows { return .loopback }
         if !shows, !headless { return .unsupported }
         let token = UUID().uuidString
         let size = pane == nil ? options.sizePercent.map { min(100, max(1, $0)) } : nil
         let points = size == nil ? OverlayPointSize() : options.points
-        let request = PresentationPage(
-            page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
-            chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
-            browse: overlay.browse, persistent: overlay.persistent, backgroundColor: options.backgroundColor,
-            pane: identity.flatMap { $0 }.map { .identity($0) }, sizePercent: size,
-            points: recipient.map { presentablePoints(points, owner: $0) } ?? OverlayPointSize(), follow: options.follow,
-            markdownLinks: overlay.markdownLinks,
-            textLog: overlay.textLog)
+        let request = Self.pageRequest(overlay, source: source, token: token, backgroundColor: options.backgroundColor,
+                                       pane: identity.flatMap { $0 }, sizePercent: size,
+                                       points: recipient.map { presentablePoints(points, owner: $0) } ?? OverlayPointSize(),
+                                       follow: options.follow)
         // a frame over the cap fails the offer, and the hub then drops the presenter with every page it shows
         guard (try? PresentationCodec.encode(PresentationFrame(gen: .max, rev: .max, body: .pageRequest(request)))) != nil
         else { return .tooLarge }
@@ -110,9 +103,26 @@ extension AppStore {
         return .opened
     }
 
+    /// handedSource is how `overlay` travels to another Mac: a loopback URL is reached through that Mac's own forward to
+    /// this host. Nil for a page that cannot be handed over.
+    static func handedSource(_ overlay: HtmlOverlay, imagePixels: ImagePixels?) -> PresentationPageSource? {
+        if case .url(let url) = overlay.source, HtmlSource.isLoopback(url.absoluteString) { return .forwarded(url.absoluteString) }
+        return presentationSource(overlay.source, imagePixels: imagePixels)
+    }
+
+    static func pageRequest(_ overlay: HtmlOverlay, source: PresentationPageSource, token: String, backgroundColor: String? = nil,
+                            pane: UUID? = nil, sizePercent: Int? = nil, points: OverlayPointSize = OverlayPointSize(),
+                            follow: Bool = false) -> PresentationPage {
+        PresentationPage(page: overlay.id.uuidString, token: token, source: source, identity: overlay.identity,
+                         chromeless: overlay.chromeless, javascript: overlay.javascript, navigation: overlay.navigation,
+                         browse: overlay.browse, persistent: overlay.persistent, backgroundColor: backgroundColor,
+                         pane: pane.map { .identity($0) }, sizePercent: sizePercent, points: points, follow: follow,
+                         markdownLinks: overlay.markdownLinks, textLog: overlay.textLog)
+    }
+
     /// presenterShows is whether viewer `owner` speaks the page frames and, for a content page, its sources; a log page
     /// also needs live text pages, which an older viewer would show as a static page.
-    private func presenterShows(_ source: PresentationPageSource, log: Bool, owner: Int) -> Bool {
+    func presenterShows(_ source: PresentationPageSource, log: Bool, owner: Int) -> Bool {
         guard let hub = presentationHub, PresentationHub.pageKinds.allSatisfy({ hub.supports($0, owner: owner) }) else { return false }
         if log, !hub.supports(PresentationHub.pageTextKind, owner: owner) { return false }
         if source.isContent, !hub.supports(PresentationHub.pageContentKind, owner: owner) { return false }
@@ -147,12 +157,7 @@ extension AppStore {
         guard slot.owner == nil, var request = slot.page?.request,
               let owner = pendingRecipient(session, paneIdentity: request.pane?.identity),
               presenterShows(request.source, log: request.textLog != nil, owner: owner) else { return false }
-        request.token = UUID().uuidString
-        request.textSeed = slot.page.flatMap { Self.textState($0.overlay) }
-        // a picture the presenter sizes goes unsized, its point overrides following as the merge resize they were made by
-        let merged = slot.presenterSized ? slot.points : OverlayPointSize()
-        if !slot.presenterSized { request.sizePercent = slot.sizePercent }
-        request.points = slot.presenterSized ? OverlayPointSize() : presentablePoints(slot.points, owner: owner)
+        let merged = reoffer(&request, from: slot, token: UUID().uuidString, owner: owner)
         let hidden = slot.page?.effectiveHidden == true
         session.remoteOverlays.update(job: slot.job) { $0.owner = owner }
         session.remoteOverlays.updatePage(slot.job) { page in
@@ -171,10 +176,21 @@ extension AppStore {
         return true
     }
 
+    /// reoffer readies `request` for viewer `owner` under `token` at what `slot` shows now: its size and points and a text
+    /// page's state. It returns the point overrides a picture the presenter sizes takes as a merge resize after it.
+    func reoffer(_ request: inout PresentationPage, from slot: RemoteOverlaySlot, token: String, owner: Int) -> OverlayPointSize {
+        request.token = token
+        request.textSeed = slot.page.flatMap { Self.textState($0.overlay) }
+        // a picture the presenter sizes goes unsized, its point overrides following as the merge resize they were made by
+        if !slot.presenterSized { request.sizePercent = slot.sizePercent }
+        request.points = slot.presenterSized ? OverlayPointSize() : presentablePoints(slot.points, owner: owner)
+        return slot.presenterSized ? slot.points : OverlayPointSize()
+    }
+
     /// receiveRemotePageFrame applies what viewer `sender` reported about a page of `sessionID`; a report about a page
     /// it was not handed changes nothing.
     public func receiveRemotePageFrame(_ body: PresentationFrame.Body, forSession sessionID: UUID, from sender: Int) {
-        guard let session = session(withID: sessionID) else { return }
+        guard let session = session(withID: sessionID), !receiveCandidateFrame(body, in: session, from: sender) else { return }
         switch body {
         case .pageState(let state):
             guard let slot = session.remoteOverlays.slot(job: state.page), slot.owner == sender, slot.page?.offer == state.offer
@@ -204,6 +220,7 @@ extension AppStore {
     /// the connected viewer it was handed to. A token claims once.
     public func claimRemotePage(token: String, now: Date = Date()) -> RemotePageClaim? {
         for session in workspaces.flatMap(\.sessions) {
+            if let claim = claimPageCandidate(token: token, in: session, now: now) { return claim }
             guard let slot = session.remoteOverlays.slots.first(where: { $0.page?.token == token }),
                   let page = slot.page, !page.claimed, now <= page.claimDeadline,
                   let owner = slot.owner, presentationHub?.isConnected(owner: owner) == true else { continue }
@@ -217,6 +234,7 @@ extension AppStore {
     /// the presenter with no channel and never expires.
     public func expireRemotePageClaims(now: Date = Date()) {
         for session in workspaces.flatMap(\.sessions) {
+            expirePageCandidates(in: session, now: now)
             for slot in session.remoteOverlays.slots {
                 guard slot.owner != nil, let page = slot.page, !page.claimed, now > page.claimDeadline,
                       page.overlay.source.kind != .url else { continue }
@@ -293,6 +311,7 @@ extension AppStore {
     /// endRemotePage drops the page's reservation and records it dismissed unless it was already answered.
     func endRemotePage(_ job: String, in session: Session) {
         guard let slot = session.remoteOverlays.slot(job: job), let page = slot.page else { return }
+        dropPageCandidate(job, in: session)
         session.remoteOverlays.remove(job: job)
         settleRemoteTextWaits(job: job)
         HtmlPageOutcomes.shared.dismiss(page.overlay.id)

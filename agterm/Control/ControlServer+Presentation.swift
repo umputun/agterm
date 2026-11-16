@@ -39,6 +39,10 @@ extension ControlServer: PresentationStreamHost {
             self?.receivePresenterFrame(body, forSession: session, from: sender)
         }
         RemotePageEnds.shared.onEnd = { [weak self] page in self?.pageServeStreams[page]?.shutdown() }
+        RemotePageEnds.shared.onWithdrawn = { [weak self] page in
+            self?.pendingPageClaims = self?.pendingPageClaims.filter { $0.value.page != page } ?? [:]
+            self?.pageServeStreams.removeValue(forKey: page)?.shutdown()
+        }
         HtmlOverlayReleases.shared.onReplicaRelease = { [weak self] local, origin in self?.replicaPageReleased(local, origin: origin) }
         overlayJobs.onFinished = { [weak self] job in
             self?.pendingJobCancels.remove(job.id)

@@ -242,13 +242,13 @@ carried row by row first, then its Solution Overview rules this plan touches.
   (retire the exact old stream on confirmation)
 - Modify: tests for each
 
-- [ ] implement the take operations, the remote ask/pick reassign (dismiss to the old owner, offer to the new
+- [x] implement the take operations, the remote ask/pick reassign (dismiss to the old owner, offer to the new
       one under a fresh offer), local -> remote and remote -> local transfers for each kind with admission
       checked first, and the ask registry owner moved with the ask
-- [ ] implement the page candidate: offer, confirmation on adoption or first state, the one-step switch, the
+- [x] implement the page candidate: offer, confirmation on adoption or first state, the one-step switch, the
       exact old stream retired, and refusal / unanswered claim / expiry discarding only the candidate
-- [ ] store an image page's probed pixels on the page at open
-- [ ] tests after: `takeAsk`/`takePick` free the slot with no retained result and drain queued replicas, and
+- [x] store an image page's probed pixels on the page at open
+- [x] tests after: `takeAsk`/`takePick` free the slot with no retained result and drain queued replicas, and
       refuse a pick with an app-internal waiter; a moved ask/pick keeps id and deadline, and `ask result` /
       `--block` returns its answer after a move each way; a local page (html, markdown, image) hands over to a
       viewer and a remote page mounts locally with outcome `pending` and its `--wait` caller waiting; a moved
@@ -257,7 +257,7 @@ carried row by row first, then its Solution Overview rules this plan touches.
       A owns, B gets a candidate, A retakes the lead before B adopts -> B's candidate is closed and its late
       adoption or state moves nothing; the page closed or submitted before confirmation -> the candidate
       replica is closed too and a late adoption resurrects nothing
-- [ ] run the touched tests - must pass before task 3
+- [x] run the touched tests - must pass before task 3
 
 ### Task 3: Reconcile pass and the loss transitions
 
