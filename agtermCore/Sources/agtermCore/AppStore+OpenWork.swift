@@ -173,6 +173,7 @@ extension AppStore {
                 // headless, a page nobody holds waits for the pending offer
                 guard !headless else { continue }
                 if offerPendingPage(slot, in: session, now: now) {
+                    session.remoteOverlays.updatePage(slot.job) { $0.recovered = true }
                     offered = true
                 } else if !mountRemotePageHere(id, forSession: session.id) {
                     endRemotePage(slot.job, in: session)

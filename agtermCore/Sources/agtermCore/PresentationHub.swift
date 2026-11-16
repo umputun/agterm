@@ -141,6 +141,7 @@ public final class PresentationHub {
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
     private var lastLeadReport = 0
+    private var sessionLeadReports: [UUID: Int] = [:]
     private var lastOffer = 0
     private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
@@ -290,6 +291,7 @@ public final class PresentationHub {
             lastLeadReport += 1
             subscriber.leads = Set(report.leaders)
             subscriber.leadsAt = lastLeadReport
+            sessionLeadReports[subscriber.session, default: 0] += 1
             onLeadReport?(subscriber.session)
             scheduleOpenWork(subscriber.session)
         case .askResolve(let answer):
@@ -354,6 +356,9 @@ public final class PresentationHub {
 
     /// isConnected is whether the stream of viewer `owner` is still up, so work it owns can still be answered.
     public func isConnected(owner: Int) -> Bool { subscribers[SubscriberID(generation: owner)] != nil }
+
+    /// leadReports counts the lead reports session `id`'s viewers sent.
+    func leadReports(of id: UUID) -> Int { sessionLeadReports[id] ?? 0 }
 
     /// leadClaimant is the token of the viewer newest leading `pane` of `session`, nil when none does; unlike `route`
     /// it never falls back to the grant holder.

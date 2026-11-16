@@ -182,7 +182,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     func pageChannelLost(_ page: UUID) {
-        if !store.remotePageLost(page) { store.withdrawRemotePage(page) }
+        if !reofferLostPage(page) { store.withdrawRemotePage(page) }
     }
 
     func claimPageAttachment(_ token: String) -> ControlResponse? { pageAttachments.claim(token) }

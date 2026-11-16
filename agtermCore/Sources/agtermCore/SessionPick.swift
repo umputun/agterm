@@ -196,6 +196,7 @@ public final class SessionPickBook {
     public func returnToPending(session: UUID, owner: Int, refused: PresentationPickRef? = nil) {
         guard let (id, entry) = entries.first(where: { $0.value.session == session }),
               entry.placement == .presenter(owner: owner), entry.accepts(refused, id: id, owner: owner) else { return }
+        noteRefusal(refused, of: entry, id: id, by: owner)
         entries[id]?.placement = .unpresented
         entries[id]?.dismiss = nil
     }
@@ -271,6 +272,12 @@ public final class SessionPickBook {
         return true
     }
 
+    // a viewer without offers refusing its pick is never handed it again, or the next pass hands it straight back
+    private func noteRefusal(_ refused: PresentationPickRef?, of entry: Entry, id: String, by owner: Int) {
+        guard refused != nil, entry.offer == nil else { return }
+        OfferlessHolders.shared.record(owner, gaveUp: id)
+    }
+
     /// handBack moves `session`'s pick held by the viewer `owner` into `controller`, the session's window here, after
     /// that viewer refused it (`refused`, which must name it under that owner) or was lost (nil). With no
     /// controller, or one whose modal slot holds another pick or ask, the pick ends cancelled and stays readable:
@@ -279,6 +286,7 @@ public final class SessionPickBook {
                          window: WindowInfo.ID?) {
         guard let (id, entry) = entries.first(where: { $0.value.session == session }),
               entry.placement == .presenter(owner: owner), entry.accepts(refused, id: id, owner: owner) else { return }
+        noteRefusal(refused, of: entry, id: id, by: owner)
         guard let controller, let window, controller.open(entry.pick) else {
             finish(id, ControlPickResult(result: .cancelled))
             return

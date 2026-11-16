@@ -59,6 +59,7 @@ extension AppStore {
                                       offer: hub.newOffer(toOwner: owner))
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
         session.askRemoteOwner = request.owner
+        session.askDraft = AskDraft(form: ask.form)
         handOver(request, in: session, hub: hub)
         return true
     }
@@ -130,6 +131,7 @@ extension AppStore {
     public func returnAskToPending(forSession id: UUID, owner: Int) {
         guard let session = session(withID: id), session.askPresentedRemotely, session.askRemoteOwner == owner else { return }
         session.askPending.map { RemoteAskOffers.shared.forget(ask: $0.id) }
+        session.askPending.map { noteGivenUp($0.id, by: owner) }
         session.takeAskBack()
     }
 
@@ -186,6 +188,7 @@ extension AppStore {
         guard let session = session(withID: id), let ask = session.askPending, session.askPresentedRemotely,
               session.askRemoteOwner == owner else { return nil }
         RemoteAskOffers.shared.forget(ask: ask.id)
+        noteGivenUp(ask.id, by: owner)
         guard ask.style == .gui else {
             session.takeAskBack()
             return nil

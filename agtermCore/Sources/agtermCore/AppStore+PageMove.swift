@@ -11,6 +11,7 @@ extension AppStore {
         let job = page.uuidString
         guard let hub = presentationHub, let session = session(withID: id), session.content != .page, takesHeldWork(owner),
               mayHandOver(job, to: owner),
+              session.remoteOverlays.refusals[job] != PageRefusal(owner: owner, lead: hub.leadReports(of: id)),
               session.remoteOverlays.candidate(job: job)?.owner != owner,
               let offered = candidateOffer(job, in: session, to: owner, now: now),
               offered.request.markdownLinks == nil || hub.supports(PresentationHub.pageLinksKind, owner: owner),
@@ -53,6 +54,7 @@ extension AppStore {
                                        points: presentablePoints(local.points, owner: owner))
         request.textSeed = Self.textState(local.overlay)
         var page = RemotePage(overlay: local.overlay, token: token, claimDeadline: deadline)
+        page.continueSeq(after: session.remoteOverlays.seqFloors[job] ?? 0)
         page.request = request
         page.hidden = local.hidden
         var arriving = RemoteOverlaySlot(job: job, pane: local.pane, owner: owner, sizePercent: local.sizePercent, page: page)
@@ -132,6 +134,9 @@ extension AppStore {
                   candidate.offer == change.offer else { return false }
             noteGivenUp(change.page, by: sender)
             session.remoteOverlays.setCandidate(nil, job: change.page)
+            if case .pageRejected = body, let hub = presentationHub {
+                session.remoteOverlays.setRefusal(PageRefusal(owner: sender, lead: hub.leadReports(of: session.id)), job: change.page)
+            }
             return true
         default:
             return false
@@ -179,6 +184,7 @@ extension AppStore {
         let previous = slot.owner
         noteGivenUp(job, by: previous)
         dropPageCandidate(job, in: session)
+        session.remoteOverlays.setSeqFloor(held.lastSeq, job: job)
         session.remoteOverlays.remove(job: job)
         settleRemoteTextWaits(job: job)
         RemotePageEnds.shared.onWithdrawn?(page)
@@ -221,6 +227,7 @@ extension AppStore {
             held.claimDeadline = candidate.claimDeadline
             held.claimed = claimed
             held.withdrawnFrom = nil
+            held.withdrawnOffer = nil
         }
         settleRemoteTextWaits(job: job)
         scheduleTreeChanged()

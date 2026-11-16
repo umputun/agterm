@@ -18,10 +18,10 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     /// endRemotePage ends page `page` wherever its reservation sits, which also tells the presenter.
     func endRemotePage(_ page: UUID)
     /// pageChannelLost handles page `page`'s registered channel ending without a close: the page is re-offered when
-    /// `reofferLostPage` takes it, and ends otherwise.
+    /// `reofferLostPage` takes it, and otherwise ends, or on a headless origin waits for the next viewer.
     func pageChannelLost(_ page: UUID)
     /// reofferLostPage handles page `page`'s broken connection by the loss rule (`AppStore.remotePageLost`): it is offered
-    /// again or ends. False when that rule does not apply and the page ends here.
+    /// again or ends. False when that rule does not apply.
     func reofferLostPage(_ page: UUID) -> Bool
     /// isCurrentPageClaim is whether `token` is still the claim page `page` is offered under.
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool

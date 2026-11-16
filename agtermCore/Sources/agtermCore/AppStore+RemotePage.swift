@@ -164,7 +164,6 @@ extension AppStore {
             page.token = request.token
             page.claimDeadline = now.addingTimeInterval(Self.pageClaimWindow)
             page.claimed = false
-            page.withdrawnFrom = nil
         }
         scheduleTreeChanged()
         sendPageRequest(request, job: slot.job, owner: owner, in: session)
@@ -201,15 +200,28 @@ extension AppStore {
         case .pageResult(let result):
             receiveRemoteTextResult(result, in: session, from: sender)
         case .pageRejected(let change), .pageClosed(let change):
+            guard let slot = session.remoteOverlays.slot(job: change.page), let held = slot.page else { return }
+            let lost = change.reason == PresentationPageChange.channelLost
+            // a close of the withdrawn copy that its channel's end overtook still dismisses the page offered since
+            if case .pageClosed = body, !lost, let owner = slot.owner, held.withdrawnFrom == sender, held.withdrawnOffer == change.offer,
+               held.offer != change.offer || owner != sender {
+                presentationHub?.send(.pageClose(PresentationPageChange(page: slot.job)), toOwner: owner)
+                endRemotePage(change.page, in: session)
+                return
+            }
             // only the offer holding the page reports its end; a copy this origin already withdrew says nothing, except
             // a dismissal its viewer sent before seeing the withdrawal, which the channel's end overtook
-            guard let slot = session.remoteOverlays.slot(job: change.page), slot.page?.offer == change.offer,
-                  slot.owner == sender || (slot.owner == nil && slot.page?.withdrawnFrom == sender
-                      && change.reason != PresentationPageChange.channelLost) else { return }
-            let lost = change.reason == PresentationPageChange.channelLost
+            guard held.offer == change.offer, slot.owner == sender || (slot.owner == nil && held.withdrawnFrom == sender && !lost)
+            else { return }
             if lost, let page = UUID(uuidString: change.page), remotePageLost(page) { return }
             if headless, lost, let page = UUID(uuidString: change.page) {
                 withdrawRemotePage(page)
+            } else if case .pageRejected = body, !headless, held.recovered, let page = UUID(uuidString: change.page),
+                      mountRemotePageHere(page, forSession: sessionID) {
+                if let hub = presentationHub {
+                    session.remoteOverlays.setRefusal(PageRefusal(owner: sender, lead: hub.leadReports(of: sessionID)), job: change.page)
+                }
+                return
             } else {
                 endRemotePage(change.page, in: session)
             }
@@ -359,6 +371,7 @@ extension AppStore {
         session.remoteOverlays.updatePage(slot.job) { page in
             page.claimed = false
             page.withdrawnFrom = slot.owner
+            page.withdrawnOffer = page.offer
         }
         settleRemoteTextWaits(job: slot.job)
         RemotePageEnds.shared.onWithdrawn?(page)

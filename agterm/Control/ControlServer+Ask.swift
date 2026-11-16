@@ -128,7 +128,7 @@ extension ControlServer {
         }
     }
 
-    /// Takes back the ask viewer `owner` was presenting for `sessionID`, after that viewer went away or refused it.
+    /// Takes back the ask viewer `owner` was presenting for `sessionID`, after that viewer refused it.
     /// A terminal ask is drawn here from now on; a GUI one moves into its window's slot when its target is
     /// shown and the slot is free, and otherwise ends cancelled with `presentation-lost`.
     func takeBackRemoteAsk(forSession sessionID: UUID, owner: Int) {

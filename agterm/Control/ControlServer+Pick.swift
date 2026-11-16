@@ -60,8 +60,8 @@ extension ControlServer {
     }
 
     /// Takes a session's pick held by viewer `owner` back into the session's window after that viewer refused it
-    /// (`refused`) or was lost; one that cannot be shown there ends cancelled.
-    func takeBackRemotePick(forSession id: UUID, owner: Int, refused: PresentationPickRef? = nil) {
+    /// (`refused`); one that cannot be shown there ends cancelled.
+    func takeBackRemotePick(forSession id: UUID, owner: Int, refused: PresentationPickRef) {
         let windowID = library.store(forSession: id).flatMap { library.windowID(for: $0) }
         SessionPickBook.shared.handBack(session: id, owner: owner, refused: refused, to: PickRegistry.shared.controller(for: windowID),
                                         window: windowID)

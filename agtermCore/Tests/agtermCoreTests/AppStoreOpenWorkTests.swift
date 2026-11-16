@@ -353,7 +353,7 @@ struct AppStoreOpenWorkTests {
         #expect(only.sink.pages.count == 1)
     }
 
-    @Test func aLeadingViewerRefusingAMovedPageLeavesItWorkingUntilTheNextPass() throws {
+    @Test func aLeadingViewerRefusingAMovedPageLeavesItWorkingUntilTheNextLeadReport() throws {
         let (_, session) = try session()
         let first = try viewer(session, leads: true, acquire: true)
         let page = try url()
@@ -368,7 +368,124 @@ struct AppStoreOpenWorkTests {
         #expect(session.remoteOverlays.slot(nil)?.owner == first.gen)
         #expect(!first.sink.closed(page))
         pass(session)
+        #expect(second.sink.pages.count == 1)
+        lead(second, [session.paneIdentity])
+        pass(session)
         #expect(second.sink.pages.count == 2)
+    }
+
+    @Test(arguments: [false, true])
+    func aLostViewersPageTheNextViewerRefusesComesHereUnlessNoSlotHereCanShowIt(slotTaken: Bool) throws {
+        let (_, session) = try session()
+        let first = try viewer(session, leads: true, acquire: true)
+        let page = try url()
+        #expect(openPage(page, in: session) == .opened)
+        let second = try viewer(session, leads: true)
+        hub.unsubscribe(first.id)
+        pass(session)
+        let offered = try #require(second.sink.pages.last)
+        session.overlayActive = slotTaken
+
+        store.receiveRemotePageFrame(.pageRejected(PresentationPageChange(page: page.id.uuidString, reason: "slot taken", offer: offered.offer)),
+                                     forSession: session.id, from: second.gen)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(session.htmlOverlay?.id == (slotTaken ? nil : page.id))
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == (slotTaken ? .dismissed : .pending))
+        guard !slotTaken else { return }
+        pass(session)
+        #expect(second.sink.pages.count == 1)
+        lead(second, [session.paneIdentity])
+        pass(session)
+        #expect(second.sink.pages.count == 2)
+    }
+
+    @Test(arguments: [false, true])
+    func aCloseOfTheCopyThatBrokeDismissesThePageOfferedSince(reloaded: Bool) throws {
+        let (_, session) = try session()
+        let only = try viewer(session, leads: true, acquire: true)
+        let page = try url()
+        #expect(openPage(page, in: session) == .opened)
+        report(page, in: session, from: only)
+        let broken = try #require(only.sink.pages.last?.offer)
+        #expect(store.remotePageLost(page.id))
+        pass(session)
+        #expect(only.sink.pages.count == 2)
+        if reloaded { report(page, in: session, from: only) }
+
+        store.receiveRemotePageFrame(.pageRejected(PresentationPageChange(page: page.id.uuidString, reason: "late", offer: broken)),
+                                     forSession: session.id, from: only.gen)
+        #expect(session.remoteOverlays.slot(nil)?.owner == only.gen)
+        store.receiveRemotePageFrame(.pageClosed(PresentationPageChange(page: page.id.uuidString, offer: broken)),
+                                     forSession: session.id, from: only.gen)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
+        guard case .pageClose(let close)? = only.sink.bodies.last else { Issue.record("no close of the copy offered since"); return }
+        #expect(close.page == page.id.uuidString && close.reason == nil)
+    }
+
+    @Test func aPageTakenHereAndOfferedOutAgainNeverReusesACommandSequence() throws {
+        let (_, session) = try session()
+        let only = try viewer(session, leads: true, acquire: true)
+        let page = try url()
+        #expect(openPage(page, in: session) == .opened)
+        #expect(store.sendRemotePageCommand(session.id, pane: nil, action: .hide))
+
+        setLead(.leader, pane: session.paneIdentity)
+        pass(session)
+        #expect(session.htmlOverlay?.id == page.id)
+        setLead(.follower, pane: session.paneIdentity)
+        lead(only, [session.paneIdentity])
+        pass(session)
+
+        let seqs = only.sink.bodies.compactMap { if case .pageCommand(let c) = $0 { c.seq } else { nil } }
+        #expect(seqs.count == 2)
+        #expect(Set(seqs).count == seqs.count)
+    }
+
+    @Test func aTerminalAskHandedOverLeavesNoUnsentTextHere() throws {
+        let (_, session) = try session()
+        setLead(.leader, pane: session.paneIdentity)
+        let pending = ask()
+        #expect(session.openAsk(pending, paneIdentity: nil, registry: store.askRegistry))
+        session.updateAskDraft(id: pending.id) { $0.text = "half typed" }
+        let next = try viewer(session)
+
+        setLead(.follower, pane: session.paneIdentity)
+        lead(next, [session.paneIdentity])
+        pass(session)
+
+        #expect(session.askRemoteOwner == next.gen)
+        #expect(session.askDraft?.text == "")
+    }
+
+    @Test func aViewerWithoutOffersRefusingTheAskOrPickItIsHandedIsNotHandedItAgain() throws {
+        let (_, session) = try session()
+        let window = UUID(), controller = PickController()
+        PickRegistry.shared.register(window, controller: controller)
+        defer { PickRegistry.shared.unregister(window) }
+        let first = try viewer(session, leads: true, acquire: true)
+        let pending = ask(), choice = pick()
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: window)
+        _ = store.presentPickRemotely(choice, in: session, window: window)
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+        pass(session, local: local(controller, window: window))
+        #expect(session.askRemoteOwner == older.gen)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: older.gen))
+
+        SessionPickBook.shared.handBack(session: session.id, owner: older.gen, refused: PresentationPickRef(id: choice.id, owner: first.gen),
+                                        to: controller, window: window)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: older.gen))
+        _ = store.takeBackRemoteAsk(forSession: session.id, owner: older.gen)
+        SessionPickBook.shared.handBack(session: session.id, owner: older.gen, refused: PresentationPickRef(id: choice.id, owner: older.gen),
+                                        to: controller, window: window)
+        pass(session, local: local(controller, window: window))
+
+        #expect(older.sink.asks.count == 1)
+        #expect(older.sink.picks.count == 1)
+        #expect(session.askPending?.id == pending.id && !session.askPresentedRemotely)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .local(window))
     }
 
     @Test func aViewerWithoutOffersGivesWorkUpButIsNeverHandedItAgain() throws {

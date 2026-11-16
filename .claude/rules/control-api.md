@@ -2340,8 +2340,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and no `zoom`. The presenter lists its replica with `replica: true`; for a file replica `file` names the origin
   path, a URL replica retains `url`.
 - A presenter that refuses the page answers `pageRejected`; the origin's open already answered ok, so the page
-  ends `dismissed` and the reason is logged there. Helper loss, a claim timeout and presenter loss close the
-  channel; what then happens to the page is the placement pass's (Open work, below). Every way a replica leaves its slot tells the origin once (`pageClosed`), through
+  ends `dismissed` and the reason is logged there. A claim timeout ends the page `dismissed`.
+  Helper loss and presenter loss close the channel, and the page is the placement pass's (Open work, below). Every way a replica leaves its slot tells the origin once (`pageClosed`), through
   `HtmlOverlayReleases.onReplicaRelease`, URL replicas included.
 - Losing the presenter ends its program overlays for good: no later stream adopts one. An unclaimed job is cancelled,
   a held surface's slot is freed, and a running job keeps its slot until its helper reports, which the
@@ -2356,19 +2356,21 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   pane role, the window modal, GUI-ask visibility or a local overlay slot change. Program overlays never move.
 - A move admits the destination before taking the work: an ask or pick moves only when the destination can show
   it, and a page goes as a candidate (`AppStore+PageMove`), the old holder showing it until the move commits: for a
-  channel page when the candidate's channel is adopted, for a URL page at its first `pageState`. A refusal, or
-  this Mac being unable to show it yet (modal busy, session off screen, slot taken, pane hidden), leaves the work
-  where it is until the next pass. A candidate whose viewer is no longer wanted, whose holder was lost, or whose
+  channel page when the candidate's channel is adopted, for a URL page at its first `pageState`. A page the
+  viewer refuses stays where it is and goes to that viewer again only after the session's next lead report
+  (`RemoteOverlays.refusals`); an ask or pick it refuses comes back here. This Mac being unable to show work yet
+  (modal busy, session off screen, slot taken, pane hidden) leaves it where it is until the next pass. A candidate whose viewer is no longer wanted, whose holder was lost, or whose
   channel is not claimed in time is dropped, before any new offer.
 - Every hand-over carries `offer` (kind `offer.id`, `PresentationHub.newOffer`) and the viewer echoes it, so a
   reply to an earlier copy is refused. A viewer without `offer.id` is never handed back a piece it gave up while
-  connected (`OfferlessHolders`). An `offer.id` viewer holds a pick while its modal is busy and a GUI ask while
+  connected (`OfferlessHolders`), a refusal included. An `offer.id` viewer holds a pick while its modal is busy and a GUI ask while
   its row is off screen, instead of refusing.
 - A lost viewer's work goes where new work would: on a Mac to `pendingRecipient`, else here, a page with its
   outcome still pending and dismissed only when no slot here can show it, a GUI ask that cannot be seen here as
-  `presentation-lost`; on agterm-server back to pending. A page whose connection breaks after it loaded under its
+  `presentation-lost`; on agterm-server back to pending. A Mac shows here a recovered page the next viewer refuses. A page whose connection breaks after it loaded under its
   current offer is offered once more, the same viewer included (`AppStore.remotePageLost`), and a retried page
-  that breaks again before reporting loaded ends. A first break with no load, or a viewer without offers, keeps the
+  that breaks again before reporting loaded ends. A close of the copy that broke, overtaken by the channel's end,
+  still dismisses the page offered since (`RemotePage.withdrawnOffer`). A first break with no load, or a viewer without offers, keeps the
   earlier handling: the page ends on a Mac and waits for a viewer on a server. A bridge request on a channel that
   is no longer the page's registered one is refused.
 - A row whose stream is not up says so on its sidebar indicator, naming the host. Retrying is automatic;
