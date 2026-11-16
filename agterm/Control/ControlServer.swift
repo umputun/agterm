@@ -135,6 +135,7 @@ final class ControlServer {
     let linkForwards = LinkForwards()
     var pendingReplicaStates: Set<UUID> = []
     var replicaFlushScheduled = false
+    var openWorkTracking = 0
 
     nonisolated private func cachedWindows() -> [ControlWindowNode] {
         cacheLock.lock(); defer { cacheLock.unlock() }

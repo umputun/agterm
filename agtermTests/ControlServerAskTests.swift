@@ -651,6 +651,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask comes back") { !session.askPresentedRemotely }
 
         XCTAssertFalse(session.askPresentedRemotely)
         let input = SessionAskInput(session: session, store: store, actions: actions, windowID: windowID,
@@ -682,6 +683,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask comes back") { controller.pendingAsk != nil }
 
         XCTAssertEqual(controller.pendingAsk?.id, ask.id)
         XCTAssertEqual(controller.pendingAsk?.anchor, AskAnchor(sessionID: session.id))
@@ -702,6 +704,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask, target: background.id.uuidString).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask ends") { background.askPending == nil }
 
         XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
                        ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
@@ -717,10 +720,117 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(controller.open(PendingPick(id: "picker", items: [ControlPickItem(id: "one", label: "One")])))
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask ends") { session.askPending == nil }
 
         XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
                        ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
         XCTAssertEqual(controller.pending?.id, "picker")
+    }
+
+    func testTheOriginTakingTheLeadBringsAViewersGuiAskHomeOnceTheModalFrees() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let (sink, _) = try present(session)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+        XCTAssertTrue(controller.open(PendingPick(id: "picker", items: [ControlPickItem(id: "one", label: "One")])))
+
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: session.paneIdentity)
+        drainMainQueue()
+
+        XCTAssertTrue(session.askPresentedRemotely)
+        XCTAssertEqual(controller.pending?.id, "picker")
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .pending)
+
+        controller.cancel()
+
+        waitUntil("the ask comes home") { controller.pendingAsk?.id == ask.id }
+        XCTAssertFalse(session.askPresentedRemotely)
+        XCTAssertTrue(sink.bodies.contains(.askDismiss(PresentationAskRef(id: ask.id, owner: sink.frames[0].gen))))
+        XCTAssertEqual(AskRegistry.shared.owner(for: ask.id), .window(windowID))
+        controller.answerAsk(id: ask.id, buttonAt: 0)
+        XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask?.result, .answered)
+    }
+
+    func testAViewersGuiAskTheOriginLeadsComesHomeOnceItsSessionIsSelected() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let selectedID = try XCTUnwrap(store.selectedSessionID)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let background = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        store.selectSession(selectedID)
+        let (_, _) = try present(background)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: background.id.uuidString).ok)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: background.paneIdentity)
+        drainMainQueue()
+        XCTAssertTrue(background.askPresentedRemotely)
+
+        store.selectSession(background.id)
+
+        waitUntil("the ask comes home") { controller.pendingAsk?.id == ask.id }
+        XCTAssertFalse(background.askPresentedRemotely)
+        XCTAssertEqual(ZmxLeadBook.shared.role(pane: background.paneIdentity), .leader)
+    }
+
+    func testASessionsAdmissionChangeIsKeptWhenAnotherSessionsPassRunsFirst() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let selectedID = try XCTUnwrap(store.selectedSessionID)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let background = try XCTUnwrap(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        store.selectSession(selectedID)
+        let (_, _) = try present(background)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: background.id.uuidString).ok)
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: background.paneIdentity)
+        drainMainQueue()
+        XCTAssertTrue(background.askPresentedRemotely)
+
+        store.selectSession(background.id)
+        server.reconcileOpenWork(forSession: selectedID)
+
+        waitUntil("the ask comes home") { controller.pendingAsk?.id == ask.id }
+        XCTAssertFalse(background.askPresentedRemotely)
+    }
+
+    func testAViewersGuiAskTheOriginLeadsComesHomeOnceTheDashboardCloses() throws {
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = register(windowID)
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        let (_, _) = try present(session)
+        let ask = makeAsk()
+        XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
+        dashboard.open(members: [DashboardMember(session: session.id, surface: .primary)])
+        _ = ZmxLeadBook.shared.apply(try XCTUnwrap(ZmxLeadNotice(title: "zmx-role;n:leader:2")), pane: session.paneIdentity)
+        drainMainQueue()
+        XCTAssertTrue(session.askPresentedRemotely)
+
+        dashboard.close()
+
+        waitUntil("the ask comes home") { controller.pendingAsk?.id == ask.id }
+        XCTAssertFalse(session.askPresentedRemotely)
+        XCTAssertEqual(ZmxLeadBook.shared.role(pane: session.paneIdentity), .leader)
+    }
+
+    private func drainMainQueue() {
+        let drained = expectation(description: "main queue drained")
+        DispatchQueue.main.async { DispatchQueue.main.async { drained.fulfill() } }
+        wait(for: [drained], timeout: 5)
+    }
+
+    private func waitUntil(_ what: String, _ condition: @escaping @MainActor () -> Bool) {
+        let met = expectation(description: what)
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(8)
+            while !condition(), Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+            met.fulfill()
+        }
+        wait(for: [met], timeout: 10)
+        XCTAssertTrue(condition(), what)
     }
 
     @discardableResult

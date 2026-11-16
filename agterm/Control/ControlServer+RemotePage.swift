@@ -22,6 +22,8 @@ struct ReplicaPageRecord {
     var forward: PageForward?
     /// textActions is the last origin text action queued on the page; each runs after the one before it.
     var textActions: Task<Void, Never>?
+    /// offer is the origin's hand-over this page was shown for, echoed on every report about it.
+    var offer: Int?
 }
 
 extension ControlServer {
@@ -59,7 +61,8 @@ extension ControlServer {
         }
         let local = slot.page.id
         let channel = argv.map { _ in RemotePageChannel() }
-        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser, pool: pool)
+        replicaPages[local] = ReplicaPageRecord(session: id, origin: origin, channel: channel, poolUser: poolUser, pool: pool,
+                                                offer: page.offer)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor,
                                             replica: channel.map { Self.link($0) })
         if let channel, let argv {
@@ -96,7 +99,7 @@ extension ControlServer {
             return "page not shown"
         }
         let pageID = slot.page.id
-        replicaPages[pageID] = ReplicaPageRecord(session: session.id, origin: origin, channel: nil)
+        replicaPages[pageID] = ReplicaPageRecord(session: session.id, origin: origin, channel: nil, offer: page.offer)
         _ = HtmlOverlayRegistry.shared.page(for: slot.page, store: store, backgroundColor: page.backgroundColor, replica: nil)
         let spec = forwarded.spec(localPort: port)
         let onEvent: @MainActor (PortForwardEvent) -> Void = { [weak self, weak store] event in
@@ -131,7 +134,7 @@ extension ControlServer {
         record.poolUser.map { record.pool?.release($0) }
         pendingReplicaStates.remove(local)
         remoteClients[record.session]?.answer(.pageClosed(PresentationPageChange(
-            page: origin.uuidString, reason: record.channelLost ? PresentationPageChange.channelLost : nil)))
+            page: origin.uuidString, reason: record.channelLost ? PresentationPageChange.channelLost : nil, offer: record.offer)))
         record.channel?.onClose = nil
         record.channel?.close("page closed")
     }
@@ -194,7 +197,7 @@ extension ControlServer {
             let state = store.replicaPageState(local, appliedSeq: replicaPages[local]?.appliedSeq ?? 0)?.text
             remoteClients[id]?.answer(.pageResult(PresentationPageResult(
                 page: command.page, seq: command.seq, ok: response.ok, text: response.result?.text, error: response.error,
-                state: state)))
+                state: state, offer: replicaPages[local]?.offer)))
         }
     }
 
@@ -219,7 +222,8 @@ extension ControlServer {
         pendingReplicaStates.removeAll()
         for local in pages {
             guard let record = replicaPages[local], let store = library.store(forSession: record.session),
-                  let state = store.replicaPageState(local, appliedSeq: record.appliedSeq) else { continue }
+                  var state = store.replicaPageState(local, appliedSeq: record.appliedSeq) else { continue }
+            state.offer = record.offer
             remoteClients[record.session]?.answer(.pageState(state))
         }
     }

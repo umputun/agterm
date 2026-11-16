@@ -265,16 +265,25 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         }
     }
 
-    private func connected(player: StatusSoundPlayer = .shared, headless: Bool = false) throws
+    private func connected(player: StatusSoundPlayer = .shared, headless: Bool = false, kinds: [String] = ["status"],
+                           remoteSplit: UUID? = nil) throws
         -> (fix: (server: ControlServer, store: AppStore, session: Session), transport: Transport) {
         let fix = try fixture(player: player, headless: headless)
         XCTAssertFalse(fix.store.catalogMirrored)
+        if let remoteSplit {
+            fix.store.toggleSplit(fix.session.id)
+            let split = try XCTUnwrap(fix.session.splitPaneIdentity)
+            fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [split: ZmxSupport.daemonName(for: remoteSplit)],
+                                               presentationVersion: 1), forSession: fix.session.id)
+        }
         let transport = Transport()
         fix.server.remoteTransport = transport
         fix.server.startRemotePresentation(for: fix.session)
-        try transport.feed(.hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)), rev: 0)
+        try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .mirror)), rev: 0)
         return (fix, transport)
     }
+
+    private static let offerKinds = ["status", PresentationHub.offerIdentityKind]
 
     func testAClearOfABridgedStatusReachesOnlyAnOriginThatTakesIt() throws {
         for (kinds, expected) in [([PresentationHub.statusClearKind], true), (["status"], false)] {
@@ -572,8 +581,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         return controller
     }
 
-    private func handedPick(owner: Int = 2) -> PresentationPick {
-        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner)
+    private func handedPick(owner: Int = 2, offer: Int? = nil) -> PresentationPick {
+        PresentationPick(PendingPick(id: UUID().uuidString, items: [ControlPickItem(id: "a", label: "Alpha")]), owner: owner, offer: offer)
     }
 
     func testAHandedOverPickIsShownInTheRowsWindowAndItsAnswerGoesBack() throws {
@@ -741,9 +750,80 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertFalse(fix.session.overlayActive)
     }
 
-    private func replica(_ style: ControlAskStyle) -> PresentationAsk {
+    private func replica(_ style: ControlAskStyle, pane: UUID? = nil, offer: Int? = nil) -> PresentationAsk {
         PresentationAsk(PendingAsk(id: UUID().uuidString, title: "deploy?", buttons: [ControlAskButton(id: "yes", label: "Yes")],
-                                   style: style), pane: nil, owner: 2)
+                                   style: style), pane: pane.map { .identity($0) }, owner: 2, offer: offer)
+    }
+
+    func testAnswersAndRefusalsForAnOfferIdOriginEchoTheirOffers() throws {
+        let (fix, transport) = try connected(kinds: Self.offerKinds)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        let unplaced = handedPick(offer: 3)
+        try transport.feed(.pickRequest(unplaced), rev: 2)
+        let controller = try pickWindow(fix)
+        let ask = replica(.terminal, offer: 4), pick = handedPick(offer: 5), refusedAsk = replica(.terminal, offer: 6)
+
+        try transport.feed(.askRequest(ask), rev: 3)
+        try transport.feed(.askRequest(refusedAsk), rev: 4)
+        try transport.feed(.pickRequest(pick), rev: 5)
+        fix.session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        controller.resolve(ControlPickResult(result: .picked, id: "a", label: "Alpha", index: 0))
+
+        let sent = transport.links[0].sent
+        XCTAssertTrue(sent.contains(.pickRejected(PresentationPickRef(id: unplaced.id, owner: 2, offer: 3))))
+        XCTAssertTrue(sent.contains(.askRejected(PresentationAskRef(id: refusedAsk.id, owner: 2, offer: 6))))
+        XCTAssertTrue(sent.contains(.askResolve(PresentationAskAnswer(id: ask.id, owner: 2, button: "yes", offer: 4))))
+        XCTAssertTrue(sent.contains(.pickResolve(PresentationPickAnswer(id: pick.id, owner: 2, item: "a", offer: 5))))
+    }
+
+    func testAPickForABusyWindowWaitsForAnOfferIdOriginAndIsRefusedForAnOlderOne() throws {
+        for (kinds, held) in [(Self.offerKinds, true), (["status"], false)] {
+            let (fix, transport) = try connected(kinds: kinds)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+            let controller = try pickWindow(fix)
+            let local = PendingPick(id: "local", items: [ControlPickItem(id: "x", label: "X")])
+            controller.open(local)
+            let pick = handedPick()
+
+            try transport.feed(.pickRequest(pick), rev: 2)
+
+            XCTAssertEqual(transport.links[0].sent.contains(.pickRejected(PresentationPickRef(id: pick.id, owner: 2))), !held, "kinds \(kinds)")
+            controller.cancel()
+            XCTAssertEqual(controller.pending?.id, held ? pick.id : nil, "kinds \(kinds)")
+        }
+    }
+
+    func testAGuiAskForARowNotShownWaitsForAnOfferIdOriginAndIsAnsweredOnceTheRowIsSelected() throws {
+        let (fix, transport) = try connected(kinds: Self.offerKinds)
+        try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        try unselect(fix)
+        let ask = replica(.gui, offer: 9)
+
+        try transport.feed(.askRequest(ask), rev: 2)
+
+        XCTAssertEqual(fix.session.askPending?.id, ask.id)
+        XCTAssertFalse(transport.links[0].sent.contains { if case .askRejected = $0 { true } else { false } })
+        fix.store.selectSession(fix.session.id)
+        fix.session.resolveAsk(id: ask.id, ControlAskResult(result: .answered, id: "yes", label: "Yes", index: 0))
+        XCTAssertEqual(transport.links[0].sent.last, .askResolve(PresentationAskAnswer(id: ask.id, owner: 2, button: "yes", offer: 9)))
+    }
+
+    func testAnAskForASplitHiddenHereWaitsForAnOfferIdOriginAndCoversThePaneOnceShown() throws {
+        for (kinds, held) in [(Self.offerKinds, true), (["status"], false)] {
+            let remoteRight = UUID()
+            let (fix, transport) = try connected(kinds: kinds, remoteSplit: remoteRight)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+            fix.store.setSplitVisibility(fix.session.id, shown: false)
+            let ask = replica(.terminal, pane: remoteRight)
+
+            try transport.feed(.askRequest(ask), rev: 2)
+
+            XCTAssertEqual(fix.session.askPending?.id, held ? ask.id : nil, "kinds \(kinds)")
+            XCTAssertEqual(transport.links[0].sent.contains(.askRejected(PresentationAskRef(id: ask.id, owner: 2))), !held, "kinds \(kinds)")
+            XCTAssertFalse(fix.session.askCovers(.right))
+            fix.store.setSplitVisibility(fix.session.id, shown: true)
+            XCTAssertEqual(fix.session.askCovers(.right), held, "kinds \(kinds)")
+        }
     }
 
     private func unselect(_ fix: (server: ControlServer, store: AppStore, session: Session)) throws {
@@ -1220,7 +1300,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
     }
 
-    func testTheOriginReadsTheViewersPageStateAndPresenterLossDismissesIt() throws {
+    func testTheOriginReadsTheViewersPageStateAndPresenterLossBringsItHere() throws {
         let pair = try bridgedPair()
         follow(pair.origin)
         let launcher = relay(pair)
@@ -1239,7 +1319,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         pair.server.shutdownPresentationStreams()
 
-        waitUntil("presenter loss ends the page") { HtmlPageOutcomes.shared.outcome(for: page)?.outcome == .dismissed }
+        waitUntil("presenter loss brings the page here") { pair.origin.htmlOverlay?.id == page }
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
         waitUntil("the viewer's replica is gone") { pair.viewer.htmlOverlay == nil && pair.server.replicaPages.isEmpty }
         waitUntil("the channel's helper is gone") { launcher.toOrigin.joinsClosed == 1 }

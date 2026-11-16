@@ -2590,8 +2590,12 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   status sound aimed at a pane goes to the Mac whose row reports `lead: leader` for it, the latest to take the
   lead when several do, and session-wide work follows the origin's primary pane. With no attached Mac leading
   it, the presenter takes it. On a Mac origin it leaves only when that pane, or the primary pane for
-  session-wide work, reports `follower` there; otherwise it stays local. Work already open stays with the Mac it
-  went to when the lead moves, and its close, resize and answer go there. The caller on the origin gets the
+  session-wide work, reports `follower` there; otherwise it stays local. An open ask, pick or page follows the
+  lead: it moves to the Mac now leading its pane, where a dialog waits until it can be shown, or back to the origin
+  when the origin leads, once the origin can show it; a refused page stays put until the lead moves again. A move
+  resets unsent text and a pick query and reloads a page. Its close, resize and answer go to wherever it is. A program overlay stays on the Mac it went to.
+  When that Mac goes away, its work moves to the Mac that would take new work, or back to the origin; a page
+  keeps its result open, and one whose connection drops after loading is shown once more. The caller on the origin gets the
   answer or the exit status as usual. A Mac leading one of the session's panes also forwards link clicks and
   status clears, as the presenter does. An origin or attached Mac whose agterm predates this sends everything to
   the presenter. Below, "the presenting Mac" is the Mac the work went to.
@@ -2599,8 +2603,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   origin under the same rule for the status pane; a `scratch` status, or a presenter too old for it, keeps
   it on the origin. The blocked default is the presenting Mac's own Settings choice.
 - A handed-over ask the presenting Mac refuses (its slot is taken, or a GUI question's target is not on
-  screen), or one whose stream drops, goes back to the origin and waits there like a local one. If the
-  origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.
+  screen), or one whose stream drops with no other Mac to take it, goes back to the origin and waits there like
+  a local one. If the origin cannot place it, it ends `{"result":"cancelled","reason":"presentation-lost"}`.
 - A handed-over overlay runs its program ONCE, on the origin, under an ssh terminal the presenting Mac
   opens (`agtermctl session overlay run-job`, plumbing not meant to be typed). The origin's session stays
   uncovered and its slot is reserved (`remoteOverlays`). An overlay the presenting Mac cannot show ends

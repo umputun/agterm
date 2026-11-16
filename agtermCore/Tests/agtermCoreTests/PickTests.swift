@@ -61,6 +61,36 @@ struct PickTests {
         #expect(!controller.modalPending)
     }
 
+    @Test func aTakenPickOrAskFreesTheSlotWithNoResult() {
+        let controller = PickController()
+        let pick = makePick(id: "taken")
+        let ask = PendingAsk(id: UUID().uuidString, title: "Continue?", buttons: [], style: .gui)
+        #expect(controller.takePick() == nil)
+        #expect(controller.takeAsk() == nil)
+
+        controller.open(pick)
+        #expect(controller.takePick() == pick)
+        controller.openAsk(ask)
+        #expect(controller.takeAsk() == ask)
+
+        #expect(!controller.modalPending)
+        #expect(controller.result(for: pick.id) == nil)
+        #expect(controller.recentResults.isEmpty)
+        #expect(controller.askResult(for: ask.id) == nil)
+    }
+
+    @Test func aPickACallerInsideTheAppAwaitsIsNotTaken() async throws {
+        let controller = PickController()
+        let pick = makePick(id: "awaited")
+        async let answer = controller.pick(pick)
+        try await waitUntil { controller.pending == pick }
+
+        #expect(controller.takePick() == nil)
+        #expect(controller.pending == pick)
+        controller.cancel()
+        #expect(await answer == ControlPickResult(result: .cancelled))
+    }
+
     @Test func anAwaitedPickDismissedByTheUserDeliversCancelled() async throws {
         let controller = PickController()
         let pick = makePick(id: "sessions")

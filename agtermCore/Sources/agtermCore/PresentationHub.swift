@@ -74,7 +74,7 @@ public final class PresentationHub {
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind,
-                                        leadReportKind]
+                                        leadReportKind, offerIdentityKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -86,6 +86,10 @@ public final class PresentationHub {
     public static let restartRespawnKind = "restart.respawn"
     /// leadReportKind is a viewer's capability of reporting the panes it leads, so new work for them is routed to it.
     public static let leadReportKind = "lead.report"
+    /// offerIdentityKind is the capability of echoing each hand-over's `offer` in every reply about it, so a reply to an
+    /// earlier offer of the same work to the same viewer is told apart. A viewer holds what an origin listing it hands
+    /// over and it cannot show yet, instead of refusing it.
+    public static let offerIdentityKind = "offer.id"
     /// presenterVacantKind is a viewer's capability of asking for the role again when the origin reports it vacant.
     public static let presenterVacantKind = "presenter.vacant"
     /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
@@ -137,6 +141,8 @@ public final class PresentationHub {
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
     private var lastLeadReport = 0
+    private var sessionLeadReports: [UUID: Int] = [:]
+    private var lastOffer = 0
     private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
 
@@ -148,6 +154,10 @@ public final class PresentationHub {
     public var onPresenterGranted: (@MainActor (UUID) -> Void)?
     /// onLeadReport runs once a viewer of `session` replaced the set of panes it leads.
     public var onLeadReport: (@MainActor (UUID) -> Void)?
+    /// onOpenWork runs a placement pass for a session one main turn after `scheduleOpenWork` asked for it, once
+    /// however often it was asked meanwhile, so a pass never runs inside the call that changed a place.
+    public var onOpenWork: (@MainActor (UUID) -> Void)?
+    private var openWorkDue: Set<UUID> = []
     /// onPresenterFrame runs with what a viewer sent about work, and that viewer's token. An answer echoing another
     /// viewer's owner, and a clear, seen or click from a viewer neither holding the role nor leading a pane, are dropped
     /// before this is reached; the receiver checks that the sender owns the page or overlay a frame names.
@@ -186,6 +196,14 @@ public final class PresentationHub {
             guard send(body, to: id) else { break }
         }
         return id
+    }
+
+    /// newOffer numbers a hand-over to viewer `owner`, nil when that viewer does not echo offers and its replies are
+    /// matched by owner alone.
+    public func newOffer(toOwner owner: Int) -> Int? {
+        guard supports(Self.offerIdentityKind, owner: owner) else { return nil }
+        lastOffer += 1
+        return lastOffer
     }
 
     public func unsubscribe(_ id: SubscriberID) {
@@ -241,6 +259,7 @@ public final class PresentationHub {
         guard subscriberCount(session: session) > 0, layouts[session] != layout else { return }
         layouts[session] = layout
         publish(.layout(layout), session: session)
+        scheduleOpenWork(session)
     }
 
     public func publish(_ body: PresentationFrame.Body, session: UUID) {
@@ -264,13 +283,17 @@ public final class PresentationHub {
             let repeated = grant.holder(of: subscriber.session) == id
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
-            if granted, !repeated { onPresenterGranted?(subscriber.session) }
+            guard granted, !repeated else { return }
+            onPresenterGranted?(subscriber.session)
+            scheduleOpenWork(subscriber.session)
         case .leadReport(let report):
             guard subscriber.kinds.contains(Self.leadReportKind) else { return }
             lastLeadReport += 1
             subscriber.leads = Set(report.leaders)
             subscriber.leadsAt = lastLeadReport
+            sessionLeadReports[subscriber.session, default: 0] += 1
             onLeadReport?(subscriber.session)
+            scheduleOpenWork(subscriber.session)
         case .askResolve(let answer):
             if answer.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
         case .askRejected(let ref):
@@ -334,6 +357,22 @@ public final class PresentationHub {
     /// isConnected is whether the stream of viewer `owner` is still up, so work it owns can still be answered.
     public func isConnected(owner: Int) -> Bool { subscribers[SubscriberID(generation: owner)] != nil }
 
+    /// leadReports counts the lead reports session `id`'s viewers sent.
+    func leadReports(of id: UUID) -> Int { sessionLeadReports[id] ?? 0 }
+
+    /// leadClaimant is the token of the viewer newest leading `pane` of `session`, nil when none does; unlike `route`
+    /// it never falls back to the grant holder.
+    public func leadClaimant(session: UUID, pane: UUID) -> Int? { claimant(session: session, pane: pane)?.generation }
+
+    /// scheduleOpenWork asks for a placement pass over `session`'s open work (`onOpenWork`).
+    public func scheduleOpenWork(_ session: UUID) {
+        guard openWorkDue.insert(session).inserted else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.openWorkDue.remove(session) != nil else { return }
+            self.onOpenWork?(session)
+        }
+    }
+
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
         guard let subscriber = subscribers[id] else { return false }
@@ -361,6 +400,7 @@ public final class PresentationHub {
     private func release(_ id: SubscriberID, session: UUID) {
         let vacated = grant.release(id)
         onOwnerLost?(session, id.generation)
+        scheduleOpenWork(session)
         for session in vacated { announceVacancy(session: session) }
     }
 

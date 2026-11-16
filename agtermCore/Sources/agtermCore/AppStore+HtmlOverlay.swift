@@ -129,6 +129,16 @@ extension AppStore {
                                 backgroundColor: String? = nil) -> HtmlOverlayOpenFailure? {
         guard let session = session(withID: sessionID) else { return .unknownSession }
         if pageBelongsRemote(session, pane: pane) { return .presenter }
+        if let failure = placeHtmlOverlay(overlay, in: session, pane: pane, sizePercent: sizePercent, points: points,
+                                          backgroundColor: backgroundColor) { return failure }
+        if overlay.replicaOf == nil { HtmlPageOutcomes.shared.register(overlay.id) }
+        return nil
+    }
+
+    /// placeHtmlOverlay mounts `overlay` in `session`'s slot `pane` addresses under the slot rules of `openHtmlOverlay`,
+    /// leaving its outcome as it is.
+    func placeHtmlOverlay(_ overlay: HtmlOverlay, in session: Session, pane: OverlayPane?, sizePercent: Int?,
+                          points: OverlayPointSize = OverlayPointSize(), backgroundColor: String? = nil) -> HtmlOverlayOpenFailure? {
         if let pane {
             guard session.paneOverlay(pane) == nil else { return .alreadyOpen }
             guard session.rendersPane(pane) else { return .paneNotVisible }
@@ -137,11 +147,10 @@ extension AppStore {
             var slot = PaneOverlay(html: overlay, backgroundColor: backgroundColor)
             slot.holdsSessionCover = session.coverOverlayActive
             session.setPaneOverlay(slot, pane: pane)
-            if overlay.replicaOf == nil { HtmlPageOutcomes.shared.register(overlay.id) }
             scheduleTreeChanged()
             return nil
         }
-        if session.hudActive { closeOverlay(sessionID) }
+        if session.hudActive { closeOverlay(session.id) }
         guard !session.overlayActive else { return .alreadyOpen }
         session.overlaySlotGeneration += 1
         session.overlayExitCode = nil
@@ -151,7 +160,6 @@ extension AppStore {
         session.overlayBackgroundColor = backgroundColor
         session.htmlOverlay = overlay
         session.overlayActive = true
-        if overlay.replicaOf == nil { HtmlPageOutcomes.shared.register(overlay.id) }
         scheduleTreeChanged()
         return nil
     }

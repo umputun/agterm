@@ -19,6 +19,10 @@ struct AppStoreRemotePageTests {
         var commands: [PresentationPageCommand] {
             bodies.compactMap { if case .pageCommand(let command) = $0 { command } else { nil } }
         }
+
+        func offer(_ page: HtmlOverlay) -> Int? {
+            bodies.compactMap { if case .pageRequest(let r) = $0, r.page == page.id.uuidString { r.offer } else { nil } }.last
+        }
     }
 
     final class Drafts {
@@ -365,7 +369,7 @@ struct AppStoreRemotePageTests {
         let mirror = Sink()
         let mirrorID = try hub.subscribe(session: session.id, hello: PresentationHello(
             version: 1, kinds: PresentationHub.supportedKinds, mode: .mirror), sink: mirror) { PresentationSnapshot(status: nil, hud: nil) }
-        let closed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: page.id.uuidString))
+        let closed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: page.id.uuidString, offer: presenter.offer(page)))
 
         hub.receive(PresentationFrame(gen: mirror.frames[0].gen, rev: 1, body: closed), from: mirrorID)
         #expect(session.remoteOverlays.slots.count == 1)
@@ -394,7 +398,7 @@ struct AppStoreRemotePageTests {
         #expect(open(session, page) == .opened)
 
         #expect(store.submitHtmlOverlay(session.id, pane: nil, value: "notes") == nil)
-        store.receiveRemotePageFrame(.pageClosed(PresentationPageChange(page: page.id.uuidString)), forSession: session.id, from: presenter.frames[0].gen)
+        store.receiveRemotePageFrame(.pageClosed(PresentationPageChange(page: page.id.uuidString, offer: presenter.offer(page))), forSession: session.id, from: presenter.frames[0].gen)
 
         let outcome = try #require(HtmlPageOutcomes.shared.outcome(for: page.id))
         #expect(outcome.outcome == .submitted)
@@ -407,13 +411,13 @@ struct AppStoreRemotePageTests {
         let page = file()
         #expect(open(session, page) == .opened)
 
-        store.receiveRemotePageFrame(.pageRejected(PresentationPageChange(page: page.id.uuidString, reason: "slot taken")),
+        store.receiveRemotePageFrame(.pageRejected(PresentationPageChange(page: page.id.uuidString, reason: "slot taken", offer: presenter.offer(page))),
                                      forSession: session.id, from: presenter.frames[0].gen)
         #expect(session.remoteOverlays.slots.isEmpty)
         #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
     }
 
-    @Test func losingThePresenterEndsThePageAndKeepsAnAcceptedAnswer() throws {
+    @Test func losingThePresenterBringsItsPagesHereAndKeepsAnAcceptedAnswer() throws {
         let (session, presenterID) = try origin(split: true)
         let pending = file(), answered = file()
         #expect(open(session, pending) == .opened)
@@ -421,9 +425,12 @@ struct AppStoreRemotePageTests {
         HtmlPageOutcomes.shared.submit(answered.id, value: "kept")
 
         hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
 
         #expect(session.remoteOverlays.slots.isEmpty)
-        #expect(HtmlPageOutcomes.shared.outcome(for: pending.id)?.outcome == .dismissed)
+        #expect(session.htmlOverlay?.id == pending.id)
+        #expect(session.paneOverlay(.left)?.html?.id == answered.id)
+        #expect(HtmlPageOutcomes.shared.outcome(for: pending.id)?.outcome == .pending)
         #expect(HtmlPageOutcomes.shared.outcome(for: answered.id)?.value == "kept")
     }
 
@@ -577,14 +584,15 @@ struct AppStoreRemotePageTests {
         #expect(!session.overlayActive)
     }
 
-    @Test func aPageThePresenterLossEndedLeavesNoOverlay() throws {
+    @Test func aPageThePresenterLossBroughtHereIsDrivenHere() throws {
         let (session, presenterID) = try origin()
         #expect(open(session, file()) == .opened)
         hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
 
         #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .local)
-        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == .noOverlay)
-        #expect(!session.overlayActive)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == nil)
+        #expect(session.overlayActive)
     }
 
     @Test func aTokenClaimsOnceWithinItsDeadlineForTheSamePresenter() throws {
@@ -719,7 +727,7 @@ struct AppStoreRemotePageTests {
         let command = try await sentCommand()
         #expect(TextPageAction(command) == .follow(.off))
         let result = PresentationPageResult(page: page.id.uuidString, seq: command.seq, ok: true, text: "paused",
-                                            state: PresentationTextState(following: false, revision: 0))
+                                            state: PresentationTextState(following: false, revision: 0), offer: presenter.offer(page))
         store.receiveRemotePageFrame(.pageResult(PresentationPageResult(page: page.id.uuidString, seq: command.seq + 1, ok: true)),
                                      forSession: session.id, from: presenter.frames[0].gen)
         store.receiveRemotePageFrame(.pageResult(result), forSession: session.id, from: presenter.frames[0].gen)
@@ -767,7 +775,7 @@ struct AppStoreRemotePageTests {
         let seed = PresentationTextState(following: false, query: "err", revision: 2, wrap: true)
         headless.receiveRemotePageFrame(.pageState(PresentationPageState(
             page: page.id.uuidString, title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
-            canGoForward: false, hidden: false, appliedSeq: 0, text: seed)), forSession: session.id, from: presenter.frames[0].gen)
+            canGoForward: false, hidden: false, appliedSeq: 0, text: seed, offer: presenter.offer(page))), forSession: session.id, from: presenter.frames[0].gen)
 
         let action = Task { await headless.remoteTextAction(session.id, pane: nil, .search(.next)) }
         _ = try await sentCommand()
@@ -814,7 +822,7 @@ struct AppStoreRemotePageTests {
 
         #expect(pageRequests(left.sink) == [leftPage.id.uuidString])
         #expect(pageRequests(right.sink) == [rightPage.id.uuidString])
-        let closed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: rightPage.id.uuidString))
+        let closed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: rightPage.id.uuidString, offer: right.sink.offer(rightPage)))
         store.receiveRemotePageFrame(closed, forSession: session.id, from: left.gen)
         #expect(session.remoteOverlays.slot(.right)?.page != nil)
         store.receiveRemotePageFrame(closed, forSession: session.id, from: right.gen)
@@ -838,19 +846,38 @@ struct AppStoreRemotePageTests {
         #expect(!second.sink.bodies.contains { if case .pageClose = $0 { true } else { false } })
     }
 
-    @Test func losingOneViewerEndsOnlyThePageItHeld() throws {
+    @Test func losingOneViewerPlacesOnlyThePageItHeld() throws {
         let (session, _) = try origin(split: true)
         let left = try claimant(session, leads: [session.paneIdentity])
-        _ = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
+        let right = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
         let leftPage = file(), rightPage = file()
         #expect(open(session, leftPage, pane: .left) == .opened)
         #expect(open(session, rightPage, pane: .right) == .opened)
 
         hub.unsubscribe(left.id)
+        store.reconcileOpenWork(forSession: session.id)
 
-        #expect(session.remoteOverlays.slot(.left) == nil)
-        #expect(HtmlPageOutcomes.shared.outcome(for: leftPage.id)?.outcome == .dismissed)
-        #expect(session.remoteOverlays.slot(.right)?.page?.overlay.id == rightPage.id)
+        #expect(session.remoteOverlays.slot(.left)?.owner == presenter.frames[0].gen)
+        #expect(pageRequests(presenter) == [leftPage.id.uuidString])
+        #expect(HtmlPageOutcomes.shared.outcome(for: leftPage.id)?.outcome == .pending)
+        #expect(session.remoteOverlays.slot(.right)?.owner == right.gen)
+        #expect(pageRequests(right.sink) == [rightPage.id.uuidString])
+    }
+
+    @Test func aLostViewersPageForAPaneNotShownHereEndsDismissed() throws {
+        let (session, presenterID) = try origin(split: true)
+        let page = file()
+        #expect(open(session, page, pane: .right) == .opened)
+        session.splitFocused = false
+        store.setSplitVisibility(session.id, shown: false)
+        #expect(!session.rendersPane(.right))
+
+        hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: .right) == .noOverlay)
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
     }
 
     @Test func aHeadlessWithdrawalAfterTheLeadMovesClosesOnTheOriginalOwner() throws {
@@ -870,11 +897,54 @@ struct AppStoreRemotePageTests {
         let lost = PresentationFrame.Body.pageClose(PresentationPageChange(page: page.id.uuidString, reason: PresentationPageChange.channelLost))
         #expect(first.sink.bodies.contains(lost))
         #expect(!second.sink.bodies.contains(lost))
-        let dismissed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: page.id.uuidString))
+        let dismissed = PresentationFrame.Body.pageClosed(PresentationPageChange(page: page.id.uuidString, offer: first.sink.offer(page)))
         headless.receiveRemotePageFrame(dismissed, forSession: session.id, from: second.gen)
         #expect(session.remoteOverlays.slot(nil) != nil)
         headless.receiveRemotePageFrame(dismissed, forSession: session.id, from: first.gen)
         #expect(session.remoteOverlays.slot(nil) == nil)
+    }
+
+    @Test func aCloseFromAnEarlierOfferLeavesThePageReofferedToTheSameViewer() throws {
+        let headless = AppStore(persistence: PersistenceStore(directory: FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-tests-\(UUID().uuidString)")), paneFinalizer: nil, headless: true)
+        headless.presentationHub = hub
+        let workspace = headless.addWorkspace(name: "work")
+        let session = try #require(headless.addSession(toWorkspace: workspace.id, cwd: "/tmp"))
+        let viewer = try claimant(session, leads: [session.paneIdentity])
+        let page = file()
+        #expect(headless.openRemotePage(session.id, overlay: page, options: ControlSessionOverlayOpenOptions(
+            command: "", cwd: nil, wait: false, sizePercent: nil, backgroundColor: nil), now: Self.start) == .opened)
+        headless.withdrawRemotePage(page.id)
+        #expect(headless.offerPendingPage(try #require(session.remoteOverlays.slot(nil)), in: session, now: Self.start))
+
+        let offers = viewer.sink.bodies.compactMap { if case .pageRequest(let r) = $0 { r.offer } else { nil } }
+        let first = try #require(offers.first)
+        #expect(offers.count == 2 && offers.last != first)
+
+        let echo = PresentationPageChange(page: page.id.uuidString, reason: PresentationPageChange.channelLost)
+        headless.receiveRemotePageFrame(.pageClosed(echo), forSession: session.id, from: viewer.gen)
+        var stale = echo
+        stale.offer = first
+        headless.receiveRemotePageFrame(.pageClosed(stale), forSession: session.id, from: viewer.gen)
+        headless.receiveRemotePageFrame(.pageState(PresentationPageState(
+            page: page.id.uuidString, title: "stale", address: nil, load: .loaded, error: nil, canGoBack: false,
+            canGoForward: false, hidden: true, appliedSeq: 0, offer: first)), forSession: session.id, from: viewer.gen)
+
+        #expect(session.remoteOverlays.slot(nil)?.owner == viewer.gen)
+        #expect(session.remoteOverlays.slot(nil)?.page?.hidden == false)
+    }
+
+    @Test func aViewerWithoutOfferIdentityReportsOnItsPageWithoutAnOffer() throws {
+        let (session, _) = try origin(kinds: PresentationHub.supportedKinds.filter { $0 != PresentationHub.offerIdentityKind })
+        let page = file()
+        #expect(open(session, page) == .opened)
+        #expect(presenter.offer(page) == nil)
+
+        report(page, session, hidden: true)
+        #expect(session.remoteOverlays.slot(nil)?.page?.hidden == true)
+        store.receiveRemotePageFrame(.pageClosed(PresentationPageChange(page: page.id.uuidString)), forSession: session.id,
+                                     from: presenter.frames[0].gen)
+        #expect(session.remoteOverlays.slots.isEmpty)
     }
 
     private func claimant(_ session: Session, leads: [UUID]) throws -> (id: PresentationHub.SubscriberID, gen: Int, sink: Sink) {
@@ -902,7 +972,8 @@ struct AppStoreRemotePageTests {
     private func textReport(_ page: HtmlOverlay, _ session: Session, _ text: PresentationTextState) {
         store.receiveRemotePageFrame(.pageState(PresentationPageState(
             page: page.id.uuidString, title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
-            canGoForward: false, hidden: false, appliedSeq: 0, text: text)), forSession: session.id, from: presenter.frames[0].gen)
+            canGoForward: false, hidden: false, appliedSeq: 0, text: text, offer: presenter.offer(page))), forSession: session.id,
+            from: presenter.frames[0].gen)
     }
 
     private func sentCommand() async throws -> PresentationPageCommand {
@@ -958,7 +1029,8 @@ struct AppStoreRemotePageTests {
     private func report(_ page: HtmlOverlay, _ session: Session, title: String? = nil, hidden: Bool = false, seq: Int = 0) {
         store.receiveRemotePageFrame(.pageState(PresentationPageState(
             page: page.id.uuidString, title: title, address: "/tmp/docs/b.html", load: .loaded, error: nil, canGoBack: true,
-            canGoForward: false, hidden: hidden, appliedSeq: seq)), forSession: session.id, from: presenter.frames[0].gen)
+            canGoForward: false, hidden: hidden, appliedSeq: seq, offer: presenter.offer(page))), forSession: session.id,
+            from: presenter.frames[0].gen)
     }
 
     private func requestToken() throws -> String {

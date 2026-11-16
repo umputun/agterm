@@ -17,9 +17,12 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     /// endRemotePage ends page `page` wherever its reservation sits, which also tells the presenter.
     func endRemotePage(_ page: UUID)
-    /// pageChannelLost handles page `page`'s registered channel ending without a close: a Mac ends the page, a headless
-    /// origin keeps it for the next presenter.
+    /// pageChannelLost handles page `page`'s registered channel ending without a close: the page is re-offered when
+    /// `reofferLostPage` takes it, and otherwise ends, or on a headless origin waits for the next viewer.
     func pageChannelLost(_ page: UUID)
+    /// reofferLostPage handles page `page`'s broken connection by the loss rule (`AppStore.remotePageLost`): it is offered
+    /// again or ends. False when that rule does not apply.
+    func reofferLostPage(_ page: UUID) -> Bool
     /// isCurrentPageClaim is whether `token` is still the claim page `page` is offered under.
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool
     /// dispatchPageBridge runs one bridge request as a local page's would run; nil when control is unavailable.
@@ -32,6 +35,14 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func dropPageAttachmentClaim(_ claim: UUID) -> Bool
     func pageAttachmentPlace(_ attachment: PageServeStream.Attachment, page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     func pageAttachmentClosed(_ attachment: PageServeStream.Attachment)
+    /// isPageCandidateClaim is whether `token` is the claimed offer of page `page` to the viewer it moves to.
+    func isPageCandidateClaim(_ page: UUID, token: String) -> Bool
+    /// commitPageCandidate confirms that offer, sending nothing; nil once it no longer stands.
+    func commitPageCandidate(_ page: UUID, token: String) -> PageMove?
+    /// finishPageMove tells the page's previous holder, once its new channel is registered.
+    func finishPageMove(_ move: PageMove)
+    /// pageCandidateFailed drops the offer `token` names, false when it names none.
+    func pageCandidateFailed(_ page: UUID, token: String) -> Bool
 }
 
 /// PendingPageClaim is a page channel claim answered ok, waiting for its connection.
@@ -41,7 +52,10 @@ public struct PendingPageClaim: Sendable {
 }
 
 extension PageServeHost {
-    public func pageChannelLost(_ page: UUID) { endRemotePage(page) }
+    public func pageChannelLost(_ page: UUID) {
+        guard !reofferLostPage(page) else { return }
+        endRemotePage(page)
+    }
     public func isCurrentPageClaim(_: UUID, token _: String) -> Bool { true }
     public func claimPageAttachment(_ token: String) -> ControlResponse? { nil }
     public func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool { false }
@@ -50,6 +64,11 @@ extension PageServeHost {
         nil
     }
     public func pageAttachmentClosed(_ attachment: PageServeStream.Attachment) {}
+    public func isPageCandidateClaim(_ page: UUID, token: String) -> Bool { false }
+    public func commitPageCandidate(_ page: UUID, token: String) -> PageMove? { nil }
+    public func finishPageMove(_ move: PageMove) {}
+    public func pageCandidateFailed(_ page: UUID, token: String) -> Bool { false }
+    public func reofferLostPage(_ page: UUID) -> Bool { false }
 }
 
 /// PageServeAdmission counts one kind of request a page channel has taken in and not finished. It never
@@ -351,6 +370,8 @@ public final class PageServeStream {
         if [.image, .markdown, .text, .document, .unreadable].contains(source.kind) {
             return .failure(id: id, error: "this page has no bridge")
         }
+        // a retired channel's queued request must not act on the page its replacement now serves
+        if attachment == nil, host?.pageServeStreams[page] !== self || ending { return .failure(id: id, error: "page closed") }
         guard let host, let place = attachment.map({ host.pageAttachmentPlace($0, page: page) }) ?? host.remotePagePlace(page) else {
             return .failure(id: id, error: "page closed")
         }
@@ -441,11 +462,21 @@ extension PageServeHost {
     public func adoptPageServeStream(descriptor: Int32, page: UUID, token: String) {
         if adoptPageAttachment(descriptor: descriptor, claim: page) { return }
         let claim = pendingPageClaims.removeValue(forKey: token)
-        let live = claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token)
+        let candidate = claim?.page == page && isPageCandidateClaim(page, token: token)
+        let live = candidate || (claim?.page == page && remotePagePlace(page) != nil && isCurrentPageClaim(page, token: token))
         guard let stream = PageServeStream.adopt(descriptor: descriptor, page: page, source: live ? claim?.served.source : nil,
                                                  links: claim?.served.links, log: claim?.served.log, attachment: nil,
                                                  host: self) else { return }
-        pageServeStreams[page] = stream
+        var move: PageMove?
+        if candidate {
+            guard let committed = commitPageCandidate(page, token: token) else { return stream.shutdown() }
+            move = committed
+        }
+        // the page's channel is replaced before its previous holder hears of it, so a stalled send drops a viewer that
+        // no longer holds the page
+        let displaced = pageServeStreams.updateValue(stream, forKey: page)
+        if displaced !== stream { displaced?.shutdown() }
+        move.map(finishPageMove)
     }
 
     /// pageClaimUnanswered handles a claim whose reply never reached its helper, which leaves nobody to load the page,
@@ -454,6 +485,7 @@ extension PageServeHost {
         // an attachment that never connected leaves the page and its other viewers alone
         if dropPageAttachmentClaim(page) { return }
         pendingPageClaims[token] = nil
+        if pageCandidateFailed(page, token: token) { return }
         guard isCurrentPageClaim(page, token: token) else { return }
         pageChannelLost(page)
     }

@@ -247,14 +247,15 @@ extension AppStore {
 
     /// Shows an ask `id`'s origin handed over, in its own style over the mapped session or pane. `answer`
     /// carries the outcome back: the button id alone, nil for Esc or Command-W, and a refusal when the
-    /// dialog is cancelled here. False when it cannot be shown, which the caller reports as a refusal.
-    public func presentReplicaAsk(_ ask: PresentationAsk, forSession id: UUID,
+    /// dialog is cancelled here. False when it cannot be shown, which the caller reports as a refusal. With `holds`,
+    /// an ask for a pane not shown here waits in the slot and appears with its pane.
+    public func presentReplicaAsk(_ ask: PresentationAsk, forSession id: UUID, holds: Bool = false,
                                   answer: @escaping @MainActor (PresentationFrame.Body) -> Void) -> Bool {
         guard let session = session(withID: id), let binding = session.remotePresentation?.binding else { return false }
         var paneIdentity: UUID?
         if case .identity(let remote)? = ask.pane {
             guard let local = binding.localPane(forRemote: remote), let role = session.paneRole(forIdentity: local),
-                  session.rendersPane(role) else { return false }
+                  holds || session.rendersPane(role) else { return false }
             paneIdentity = local
         }
         let pending = PendingAsk(id: ask.id, title: ask.title, message: ask.message, buttons: ask.buttons,
@@ -264,9 +265,9 @@ extension AppStore {
             switch result.result {
             case .answered:
                 answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: result.id,
-                                                         text: result.text, selected: result.selected)))
-            case .escaped: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: nil)))
-            case .cancelled, .pending: answer(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)))
+                                                         text: result.text, selected: result.selected, offer: ask.offer)))
+            case .escaped: answer(.askResolve(PresentationAskAnswer(id: ask.id, owner: ask.owner, button: nil, offer: ask.offer)))
+            case .cancelled, .pending: answer(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner, offer: ask.offer)))
             }
         }
     }

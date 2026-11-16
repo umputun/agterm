@@ -108,9 +108,12 @@ extension AppStore {
     /// receiveRemoteTextResult applies the state a result from viewer `sender` carries, then answers the action waiting
     /// for it. A result from a viewer that does not hold the page is dropped.
     func receiveRemoteTextResult(_ result: PresentationPageResult, in session: Session, from sender: Int) {
-        guard session.remoteOverlays.slot(job: result.page)?.owner == sender else { return }
+        guard let slot = session.remoteOverlays.slot(job: result.page), slot.owner == sender else { return }
+        // the wait is matched by seq, never reused across offers; only the state belongs to the current one
         var changed = false
-        if let state = result.state { session.remoteOverlays.updatePage(result.page) { changed = $0.apply(state) } }
+        if let state = result.state, slot.page?.offer == result.offer {
+            session.remoteOverlays.updatePage(result.page) { changed = $0.apply(state) }
+        }
         if changed { scheduleTreeChanged() }
         settleRemoteText(RemoteTextWait(job: result.page, seq: result.seq), .answered(result))
     }

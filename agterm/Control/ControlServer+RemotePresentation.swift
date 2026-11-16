@@ -132,16 +132,23 @@ extension ControlServer {
     }
 
     /// showReplicaAsk shows an ask `id`'s origin handed over in the row's own ask slot. A terminal one waits hidden
-    /// until its row is shown. A GUI one is refused for a target not on screen, unless the origin is headless and
-    /// has no screen to take it back to.
+    /// until its row is shown. A GUI one is refused for a target not on screen unless `originHoldsWork`, and then
+    /// waits like a terminal one, as does an ask for a hidden pane of an `offer.id` origin.
     private func showReplicaAsk(_ ask: PresentationAsk, forSession id: UUID) -> Bool {
         guard let store = library.store(forSession: id) else { return false }
-        if ask.style == .gui, store.session(withID: id)?.remotePresentation?.binding.originHeadless != true {
+        if ask.style == .gui, !originHoldsWork(forSession: id, in: store) {
             guard let windowID = library.windowID(for: store), guiTargetShown(id, in: store, windowID: windowID) else {
                 return false
             }
         }
-        return store.presentReplicaAsk(ask, forSession: id) { [weak self] body in self?.remoteClients[id]?.answer(body) }
+        let holds = remoteClients[id]?.originSupports(PresentationHub.offerIdentityKind) == true
+        return store.presentReplicaAsk(ask, forSession: id, holds: holds) { [weak self] body in self?.remoteClients[id]?.answer(body) }
+    }
+
+    /// originHoldsWork is whether session `id`'s origin wants work this Mac cannot show yet held here, not refused.
+    func originHoldsWork(forSession id: UUID, in store: AppStore) -> Bool {
+        store.session(withID: id)?.remotePresentation?.binding.originHeadless == true
+            || remoteClients[id]?.originSupports(PresentationHub.offerIdentityKind) == true
     }
 
     /// Shows an overlay `id`'s origin handed over, running the job's helper on the origin over ssh.

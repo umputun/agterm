@@ -192,40 +192,29 @@ extension AppStore {
         presentationHub?.supports(PresentationHub.overlayPointsKind, owner: owner) == true ? points : OverlayPointSize()
     }
 
-    /// The viewer `owner` of `sessionID` is gone. On a Mac every overlay it held goes with it for good: an unclaimed
-    /// job is cancelled and can no longer launch, a slot whose program already ended is freed, and a claimed or running
-    /// job keeps its slot until its helper reports. A headless origin keeps pages and unclaimed jobs for another viewer.
-    /// What other viewers hold stays with them.
+    /// The viewer `owner` of `sessionID` is gone. Its pages are withdrawn, their outcome still open, for the next
+    /// placement pass to show elsewhere. Its jobs: an unclaimed one waits for another viewer on a headless origin and is
+    /// cancelled on a Mac, a slot whose program already ended is freed, and a claimed or running job keeps its slot until
+    /// its helper reports. What other viewers hold stays with them.
     public func remoteOverlayOwnerLost(forSession sessionID: UUID, owner: Int) {
         guard let session = session(withID: sessionID) else { return }
-        if headless { return withdrawRemoteOverlays(of: session, owner: owner) }
-        for slot in session.remoteOverlays.slots where slot.owner == owner {
-            if slot.page != nil {
-                endRemotePage(slot.job, in: session)
-                continue
-            }
-            trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: slot.job) }
-            if case .unclaimed? = overlayJobs?.job(slot.job)?.state { overlayJobs?.cancel(slot.job) }
-        }
-    }
-
-    /// withdrawRemoteOverlays takes back, on a headless origin, what the lost viewer `owner` held without a running
-    /// program: every page, shown or claimed, and every job no helper claimed wait for another viewer. A claimed or
-    /// running job keeps its slot until its helper reports, as on a Mac, and is never launched again.
-    private func withdrawRemoteOverlays(of session: Session, owner: Int) {
+        forgetPageCandidates(of: owner, in: session)
         for slot in session.remoteOverlays.slots where slot.owner == owner {
             if let page = slot.page {
+                dropPageCandidate(slot.job, in: session)
                 session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
                 session.remoteOverlays.updatePage(slot.job) { $0.claimed = false }
                 settleRemoteTextWaits(job: slot.job)
                 RemotePageEnds.shared.onWithdrawn?(page.overlay.id)
                 continue
             }
-            if overlayJobs?.withdraw(slot.job) == true {
+            // headless, a job no helper claimed waits for another viewer
+            if headless, overlayJobs?.withdraw(slot.job) == true {
                 session.remoteOverlays.update(job: slot.job) { $0.owner = nil }
                 continue
             }
             trackingSlots(of: session) { session.remoteOverlays.surfaceGone(job: slot.job) }
+            if !headless, case .unclaimed? = overlayJobs?.job(slot.job)?.state { overlayJobs?.cancel(slot.job) }
         }
         scheduleTreeChanged()
     }
@@ -256,6 +245,7 @@ extension AppStore {
         session.cancelPendingAsk()
         SessionPickBook.shared.sessionEnded(session.id)
         disposeMailboxes(of: session)
+        for job in session.remoteOverlays.candidates.keys { dropPageCandidate(job, in: session) }
         for slot in session.remoteOverlays.slots { closeRemoteOverlay(session.id, pane: slot.pane) }
         session.remoteOverlays = RemoteOverlays()
         for slot in session.overlayReplicas { closeReplicaOverlay(slot.replica.job, forSession: session.id) }

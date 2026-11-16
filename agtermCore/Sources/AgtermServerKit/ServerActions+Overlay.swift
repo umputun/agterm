@@ -98,7 +98,7 @@ extension ServerActions {
     static func pageOverlay(_ page: HtmlSource, options: ControlSessionOverlayOpenOptions) -> HtmlOverlay {
         HtmlOverlay(source: page, navigation: options.navigation, javascript: options.javascript, chromeless: options.chromeless,
                     persistent: options.persistent, browse: options.browse, clicked: options.clicked, textLog: options.textLog,
-                    markdownLinks: options.markdownLinks)
+                    markdownLinks: options.markdownLinks, imagePixels: options.imagePixels)
     }
 
     /// setSessionOverlayVisibility hides or shows the pages shown on the presenting Mac, as a Mac origin does; a program

@@ -2230,8 +2230,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `remoteRecipient` adds the Mac gate: on a Mac origin work leaves only when that pane, the primary for
   session-wide work, reports `follower`; mixed, unknown or unowned roles of other panes do not matter.
   Booking routes, checks the recipient's kinds, reserves, then sends to that owner (`send(_:toOwner:)`);
-  follow-ups go to the stored owner, answers are accepted only from it, and work stays with it when the lead
-  moves. `onOwnerLost` returns only that owner's work. A viewer leading any of the session's panes forwards
+  follow-ups go to the stored owner and answers are accepted only from it, until the placement pass moves the
+  work (Open work, below). `onOwnerLost` returns only that owner's work. A viewer leading any of the session's panes forwards
   clicks and status seen/keystroke frames like the holder (`sendToOrigin`, `client.claimsLead`), only to an
   origin taking `lead.report`. A viewer or origin without the kind keeps the holder-only rule.
 - A `session.status` sound follows the same routing on the status pane, scratch staying local: the origin sends
@@ -2248,10 +2248,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   stream frame (`PresentationAsk.fitsFrames`); otherwise it stays on the origin. A list with an `other` row
   also needs `ask.other`, since an `ask.form`-only presenter would drop the row. It ends when answered or escaped on the viewer, or when the origin cancels it or tears down its
   session or pane, which dismisses the replica. The viewer refusing it (its slot is taken, or a GUI target is
-  not on screen; a terminal replica for a hidden row waits hidden like a local one) or its stream being lost
-  hands it back: the origin owns it again as an ordinary ask, pending until its target is shown, and one it
-  cannot place ends `cancelled` with `reason: presentation-lost`, a field an older client ignores. A late
-  answer from the former presenter is refused.
+  not on screen; a terminal replica for a hidden row waits hidden like a local one) hands it back: the origin
+  owns it again as an ordinary ask, pending until its target is shown, and one it cannot place ends `cancelled`
+  with `reason: presentation-lost`, a field an older client ignores. A lost stream is the placement pass's
+  (Open work, below). A late answer from the former presenter is refused.
 - An overlay handed over is a JOB. The origin reserves the slot, so the session stays uncovered here while
   no second overlay opens on it, and the viewer opens an ordinary overlay running
   `ssh -tt <origin> agtermctl session overlay run-job <job>`. That helper claims the job over
@@ -2340,14 +2340,39 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and no `zoom`. The presenter lists its replica with `replica: true`; for a file replica `file` names the origin
   path, a URL replica retains `url`.
 - A presenter that refuses the page answers `pageRejected`; the origin's open already answered ok, so the page
-  ends `dismissed` and the reason is logged there. Helper loss or claim timeout ends only the page; presenter
-  loss ends it and its channel. Every way a replica leaves its slot tells the origin once (`pageClosed`), through
+  ends `dismissed` and the reason is logged there. A claim timeout ends the page `dismissed`.
+  Helper loss and presenter loss close the channel, and the page is the placement pass's (Open work, below). Every way a replica leaves its slot tells the origin once (`pageClosed`), through
   `HtmlOverlayReleases.onReplicaRelease`, URL replicas included.
-- Losing the presenter ends its overlays for good: no later stream adopts one. An unclaimed job is cancelled,
+- Losing the presenter ends its program overlays for good: no later stream adopts one. An unclaimed job is cancelled,
   a held surface's slot is freed, and a running job keeps its slot until its helper reports, which the
   helper does when the ssh terminal goes. On the viewer a held surface closes at once and a running one
   keeps its program and closes when its ssh ends, held or not. A session leaving either store, soft close
   included, ends all of this before it goes, so undo brings back neither a reservation nor a replica.
+- Open work follows the lead (#1017). `AppStore.reconcileOpenWork` (`AppStore+OpenWork`) places each open ask,
+  pick and page where new work would go now: with the viewer newest leading its pane (`leadClaimant`, never the
+  grant holder) when it takes held work, or here when a Mac origin's own pane leads. The hub coalesces it to one
+  pass per session a turn (`scheduleOpenWork`) after a lead report, a fresh grant, a layout change, an owner's
+  loss or a broken page connection; a Mac origin also runs it when `ControlServer.trackOpenWorkPlaces` sees a
+  pane role, the window modal, GUI-ask visibility or a local overlay slot change. Program overlays never move.
+- A move admits the destination before taking the work: an ask or pick moves only when the destination can show
+  it, and a page goes as a candidate (`AppStore+PageMove`), the old holder showing it until the move commits: for a
+  channel page when the candidate's channel is adopted, for a URL page at its first `pageState`. A page the
+  viewer refuses stays where it is and goes to that viewer again only after the session's next lead report
+  (`RemoteOverlays.refusals`); an ask or pick it refuses comes back here. This Mac being unable to show work yet
+  (modal busy, session off screen, slot taken, pane hidden) leaves it where it is until the next pass. A candidate whose viewer is no longer wanted, whose holder was lost, or whose
+  channel is not claimed in time is dropped, before any new offer.
+- Every hand-over carries `offer` (kind `offer.id`, `PresentationHub.newOffer`) and the viewer echoes it, so a
+  reply to an earlier copy is refused. A viewer without `offer.id` is never handed back a piece it gave up while
+  connected (`OfferlessHolders`), a refusal included. An `offer.id` viewer holds a pick while its modal is busy and a GUI ask while
+  its row is off screen, instead of refusing.
+- A lost viewer's work goes where new work would: on a Mac to `pendingRecipient`, else here, a page with its
+  outcome still pending and dismissed only when no slot here can show it, a GUI ask that cannot be seen here as
+  `presentation-lost`; on agterm-server back to pending. A Mac shows here a recovered page the next viewer refuses. A page whose connection breaks after it loaded under its
+  current offer is offered once more, the same viewer included (`AppStore.remotePageLost`), and a retried page
+  that breaks again before reporting loaded ends. A close of the copy that broke, overtaken by the channel's end,
+  still dismisses the page offered since (`RemotePage.withdrawnOffer`). A first break with no load, or a viewer without offers, keeps the
+  earlier handling: the page ends on a Mac and waits for a viewer on a server. A bridge request on a channel that
+  is no longer the page's registered one is refused.
 - A row whose stream is not up says so on its sidebar indicator, naming the host. Retrying is automatic;
   closing and reattaching the session is the manual way to retry now.
 - The origin bounds each stream: 256 KiB a line checked before delivery, a bounded outbound queue whose
@@ -2377,8 +2402,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the command arriving later is refused. The remote window never resends: a lost reply becomes `unknown`,
   settled through `catalog.op` or dropped once its target leaves the catalog.
 - Asks, picks, pages and overlay jobs on the server wait unpresented until a viewer that can show them is
-  their pane's recipient (`AppStore+Interactions`, `ServerStreams`). `offerPending` runs on a grant, a lead
-  report and after an owner's loss, inside `hub.batch(session:)`, which commits each viewer's share on its own;
+  their pane's recipient (`AppStore+Interactions`, `ServerStreams`). `offerPending` runs on a grant and a lead
+  report, and the placement pass offers after its moves, an owner's loss included, inside `hub.batch(session:)`, which commits each viewer's share on its own;
   `AppStore.pendingRecipient` also requires the pending kinds. Only ask and pick take `--timeout`
   (`armDeadline`); a page or job's claim window starts when it is offered, a claimed job is never
   relaunched, and a restart forgets everything still waiting.
