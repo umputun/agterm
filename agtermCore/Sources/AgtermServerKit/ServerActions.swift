@@ -19,8 +19,11 @@ public final class ServerActions: ControlActions {
     var foregroundArgv: (Int32) -> [String]? = ProcForeground.argv
     /// replayObservation reads, for a replay, the process holding the terminal of the shell with the given pid.
     var replayObservation: (_ leader: Int32, _ shell: String?) -> RestartReplay.Observation = ProcReplay.observation
-    /// processes is the host's process table, through which a kill hangs up the pane's foreground job.
-    var processes: any ProcessTable = ProcProcessTable()
+    /// processes is the panes' process table, so a close and a control kill hang up through the same one.
+    var processes: any ProcessTable {
+        get { panes.processes }
+        set { panes.processes = newValue }
+    }
     /// paneExited runs the exit transition of a pane whose daemon a confirmed kill ended.
     var paneExited: ((Session, UUID) -> Void)?
     /// restartWaits bounds a restart's waits for the old program to end and the new shell to appear.

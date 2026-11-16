@@ -21,7 +21,8 @@ public struct PaneLaunch: Equatable, Sendable {
 public protocol ZmxRunner: Sendable {
     /// create starts a detached daemon; the error is zmx's own message.
     func create(_ launch: PaneLaunch) throws
-    /// kill ends the daemon and every process its shell started in the foreground.
+    /// kill ends the daemon and its shell's process group, past an unreachable socket; a foreground job in another
+    /// group is the caller's to hang up.
     func kill(_ name: String) -> Bool
     /// killConfirmed ends the daemon and reports what zmx printed it did; without `force` an unreachable daemon's
     /// socket is left in place.
