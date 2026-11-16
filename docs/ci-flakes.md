@@ -181,7 +181,7 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   (`LIBDISPATCH_COOPERATIVE_POOL_STRICT=1`), and in 0.00 s with the jobs at background priority or the reply at
   `.high`. Passing runs of other PRs had the socket suite end 49 to 73 s in, so the margin predates the PR.
 - **Fix.** `runBlocking` starts its task at `.high`, in agterm-server and in the app's `ControlServer`, each
-  pinned by a test that sends a request behind 3000 queued same-priority jobs. `ControlAcceptLoopTests` also
+  pinned by a test that sends a request behind 600 queued same-priority jobs. `ControlAcceptLoopTests` also
   parked `loop.next()` on the pool through `Task.detached`, which deadlocked the one-thread run; it runs on a
   plain thread now.
 

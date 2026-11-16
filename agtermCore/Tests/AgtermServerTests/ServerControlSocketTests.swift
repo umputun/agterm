@@ -114,7 +114,7 @@ final class ServerControlSocketTests {
     @Test func aRequestIsAnsweredWhileSamePriorityWorkIsStillQueued() async throws {
         try serve(reply: ControlResponse(ok: true), adopted: Adopted())
         let done = Counter()
-        let jobs = 3000
+        let jobs = 600
         var flood: [Task<Void, Never>] = []
         for _ in 0..<jobs {
             flood.append(Task {

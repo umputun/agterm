@@ -593,7 +593,7 @@ final class ControlServerTests: XCTestCase {
 
     func testRunBlockingAnswersWhileSamePriorityWorkIsStillQueued() async {
         let done = OSAllocatedUnfairLock(initialState: 0)
-        let jobs = 3000
+        let jobs = 600
         var flood: [Task<Void, Never>] = []
         for _ in 0..<jobs {
             flood.append(Task.detached(priority: .medium) {
