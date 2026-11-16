@@ -196,8 +196,9 @@ renumbering. Do not reintroduce a count anywhere.
   `restore.clear`, `restore.mode`, `version`
 - `recent.list`, `recent.open`, `recent.clear`, `session.undo`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.kill.pane`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
-- `catalog.subscribe`, `catalog.op`: served by agterm-server, and by a Mac in Live sessions mode for the window its
-  `--window` names (`ControlServer+MacCatalog`); an `opID` request never reaches a Mac's remote route
+- `catalog.subscribe`, `catalog.op`: served by agterm-server, and by a Mac in Live sessions mode for the window the
+  stream's hello or the op's `--window` names (`ControlServer+MacCatalog`); an `opID` request never reaches a Mac's
+  remote route
 
 `terminfo install` is a CLI-only command with no protocol counterpart, one of the three exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
@@ -1517,7 +1518,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   A Mac remote row is refused by name: `MessagePaneError.detail` becomes `MessageRejection.detail`
   (`remote session`), a field rather than a new `Reason`, since a client decodes the whole reply.
   Local-to-server messaging is `docs/backlog/local-to-server-messaging.md`.
-- Server mail reaches a Mac two ways. Counts ride `CatalogPane.pendingMessages` into `Session.catalogMail`,
+- Server mail reaches a Mac two ways. Counts ride `CatalogPane.pendingMessages` into `Session.catalogPanes`,
   rebuilt from each catalog entry and never part of the binding, so a count change attaches nothing; a server
   scratch reads back on the session (`scratchPaneID`, `scratchPendingMessages`), since the `surfaces[]` entry
   is a zoom address the server's scratch lacks. Each delivered pane is a `message` presentation frame to every
@@ -2366,6 +2367,27 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   builder. Waiting for the catalog connection, an unreachable server and a channel end retry, and each shows the
   reason as the row's failed page; a server refusal stays shown and is not retried. The row closes only when the
   catalog removes it; `session.detach` ends the view and `session.reattach` claims a new one.
+- A Mac in Live sessions mode serves each of its windows as a catalog too, reversing the Linux server plan's
+  headless-only rule at Eugene's request; `site/docs.html#remote-window-mac` owns the user contract.
+  - Advertisement: its `version` keeps `versions` nil and adds `macCatalog`, so an older viewer refuses before it
+    subscribes; the hello names the window (`CatalogHello.window`, saved as `WindowSource.originWindow`).
+    `OriginCatalogRefusal` answers through `CatalogFrame.refused(reason, final)`: only a closed window is retried.
+  - `CatalogStream`, `CatalogHub` and `CatalogOperationBook` are shared with agterm-server behind `CatalogStreamHost`
+    and `CatalogOperationHost`. `OriginCatalog` holds one window's hub, `CatalogPublisher` and receipts from first use
+    until quit, on `ControlServer.originEpoch`, and rebinds to the store when the window reopens.
+  - Publication: `CatalogPublisher` reruns the projection under Observation and `markDirty` covers mail and Recent
+    Closed. Pane liveness is `CatalogPaneEvidence` from `zmx list`, read off the main actor only when it can change
+    (`readOriginEvidence`) and before `catalog.subscribe` answers, which refuses a failed read for a retry.
+  - `OriginCatalogProjection` lists a row once a pane or its scratch runs or a pane exited held, then keeps every
+    pane, a stopped one `held`; every pane held is `.ended`. A viewer never attaches a held pane
+    (`AppStore+Catalog`) and stops reconnecting one (`waitingSurface`, `handlePaneExit`).
+  - Op scope: an `opID` request runs in the window `--window` names (`originOperation`), before the remote route;
+    `OriginCatalogScope` refuses targets, anchors and undo ids outside it, rows attached from a third Mac, and a
+    workspace delete while it holds them. Creation, conversion, undo and Recent Closed never select on the origin.
+  - Lead (`site/docs.html#remote-sessions-lead`): claimed on a user's open (`WindowLibrary.takeOpenClaim`), for rows
+    the viewer creates, reopens or undoes (`RemoteOperation.claimedRows`) and for the new pane of a split it adds
+    (`claimSplitWhenShown`), never on reconnect or relaunch; a pane reported before its claim is reattached with it
+    (`ZmxLeadBook.claimOnReport`).
 - Under musl every `ServerProcess` spawn re-execs the server as `CleanExec`, which closes inherited
   descriptors in the single-threaded child: musl has no closefrom file action, and Foundation opens files
   without `O_CLOEXEC`.

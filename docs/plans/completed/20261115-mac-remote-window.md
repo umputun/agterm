@@ -316,17 +316,17 @@ The design was reviewed with codex over three revisions and the plan by the plan
   `.claude/rules/control-api.md`, `.claude/rules/windows.md` (rule at :33), `.claude/rules/menu-actions.md`,
   `ARCHITECTURE.md`, `agtermCore/Sources/agtermCore/EventFormatter.swift` (if events change)
 
-- [ ] ➕ `site/docs.html` "Who leads a pane": a Mac remote window takes the lead when opened and for rows this Mac
+- [x] ➕ `site/docs.html` "Who leads a pane": a Mac remote window takes the lead when opened and for rows this Mac
       creates; a reconnect does not
-- [ ] `site/docs.html` remote window section: Mac hosts, the window step, Live sessions requirement, dialogs follow
+- [x] `site/docs.html` remote window section: Mac hosts, the window step, Live sessions requirement, dialogs follow
       Attach Remote rules, rows attached from a third Mac not shown, Recent Closed per window
-- [ ] `site/commands.html` and the bundled skill updated for `--origin-window`, `catalog op --window` and the read-back
-- [ ] mechanism (advertisement, refusal frame, stream and receipt seams, dirty seam, op scope, reversed server-plan
+- [x] `site/commands.html` and the bundled skill updated for `--origin-window`, `catalog op --window` and the read-back
+- [x] mechanism (advertisement, refusal frame, stream and receipt seams, dirty seam, op scope, reversed server-plan
       decision) recorded in `control-api.md`, `windows.md` and `ARCHITECTURE.md`
-- [ ] verify requirements in Overview are met; server-window and Attach Remote behavior unchanged
-- [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`; `lsappinfo list | grep -A4 agterm.debug`
+- [x] verify requirements in Overview are met; server-window and Attach Remote behavior unchanged
+- [x] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`; `lsappinfo list | grep -A4 agterm.debug`
       after the hosted run
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

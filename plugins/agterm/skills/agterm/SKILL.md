@@ -11,7 +11,7 @@ description: >
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, session links, AGTERM_* variables,
-  attaching another Mac's sessions, agterm-server hosts, cookbook recipes, version and upgrades, diagnosing
+  another Mac's sessions or windows, agterm-server hosts, cookbook recipes, version and upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
@@ -1091,6 +1091,8 @@ the read-back and what the server refuses. `session overlay open --page|--compan
 from a file on the host or a URL, which a Mac's remote window shows as a page row.
 `agtermctl server install HOST`, run on the Mac, installs or upgrades the server release matching that app's own
 bundle (reference.md "server").
+The same `window remote open` also opens one window of another Mac in Live sessions mode (`--origin-window W`
+picks it when that Mac has several); reference.md "remote server" says what differs from agterm-server.
 
 ## Troubleshooting and reporting
 

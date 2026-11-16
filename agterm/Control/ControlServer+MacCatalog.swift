@@ -196,6 +196,10 @@ extension ControlServer {
             return await store.preservingSelection { reopenOriginRecent(request.target, window: catalog.window) }
         case .workspaceNew:
             return await store.preservingSelection { await dispatch(request) }
+        case .sessionCompanionConvert:
+            return await store.preservingSelection {
+                convertToCompanion(request.target, window: request.args?.window, focus: false)
+            }
         default:
             break
         }

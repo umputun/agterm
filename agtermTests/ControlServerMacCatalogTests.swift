@@ -160,6 +160,7 @@ final class ControlServerMacCatalogTests: XCTestCase {
         XCTAssertEqual(snapshot.catalogID, window)
         XCTAssertEqual(snapshot.workspaces.flatMap(\.sessions).count, 0, "a pane not running yet is not listed")
         XCTAssertEqual(server.buildWindowList().first { $0.id == window.uuidString }?.catalogViewers, 1)
+        XCTAssertEqual(try server.buildTree(in: XCTUnwrap(library.store(for: window))).catalogViewers, 1)
 
         server.originCatalogs[window]?.projection.evidence = CatalogPaneEvidence(running: [session.paneIdentity])
 
@@ -297,6 +298,29 @@ final class ControlServerMacCatalogTests: XCTestCase {
         XCTAssertEqual(selections, [])
     }
 
+    func testConvertingFromAnotherMacLeavesTheOriginSelectionAlone() throws {
+        let window = try window()
+        let store = try XCTUnwrap(library.store(for: window))
+        let kept = try session()
+        let converted = try XCTUnwrap(store.addSession(toWorkspace: workspace(in: window).id, cwd: "/tmp"))
+        store.selectSession(kept.id)
+        var selections: [String?] = []
+        let hooks = library.onControlEvent
+        defer { library.onControlEvent = hooks }
+        library.onControlEvent = { event in
+            hooks?(event)
+            if event.kind == .sessionSelected { selections.append(event.session) }
+        }
+
+        let response = try operation("session.companion.convert", target: converted.id.uuidString, opID: "op-1", window: window)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertNotNil(converted.parentID)
+        XCTAssertEqual(response.result?.parent, converted.parentID?.uuidString)
+        XCTAssertEqual(store.selectedSessionID, kept.id)
+        XCTAssertEqual(selections, [])
+    }
+
     func testClosingTheOriginsSelectedRowFromAnotherMacReselects() throws {
         let window = try window()
         let store = try XCTUnwrap(library.store(for: window))
@@ -355,7 +379,9 @@ final class ControlServerMacCatalogTests: XCTestCase {
     }
 
     func testAWindowNobodyMirrorsReportsNoViewers() throws {
-        XCTAssertNil(server.buildWindowList().first { $0.id == (try? window().uuidString) }?.catalogViewers)
+        let window = try window()
+        XCTAssertNil(server.buildWindowList().first { $0.id == window.uuidString }?.catalogViewers)
+        XCTAssertNil(try server.buildTree(in: XCTUnwrap(library.store(for: window))).catalogViewers)
     }
 
     func testVersionAdvertisesTheMacCatalog() throws {

@@ -1572,13 +1572,21 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 ## remote server
 
-A remote window mirrors agterm-server's catalog on a Linux host (docs: agterm.com/docs#remote-server). The
-window commands run on the Mac; `catalog` is served only by agterm-server.
+A remote window mirrors agterm-server's catalog on a Linux host (docs: agterm.com/docs#remote-server), or one
+window of another Mac in Live sessions mode (docs: agterm.com/docs#remote-window-mac). The window commands run on
+the Mac showing it; `catalog` is served by agterm-server and by that other Mac.
 
-- `window remote open HOST`: open a window mirroring HOST's agterm-server (an ssh destination), or raise
-  the one already showing it; prints the window id. The window's node in `tree` and `window list` carries
+- `window remote open HOST [--origin-window W]`: open a window mirroring HOST's agterm-server or a window of the
+  Mac HOST (an ssh destination), or raise the one already showing it; prints the window id. `--origin-window` names
+  the Mac's window by id or unique prefix: a Mac with one open window needs none, one with several is refused with
+  their names, agterm-server refuses the flag, and a Mac not in Live sessions mode is refused. Everything below
+  applies to a Mac's window with that Mac in the server's place, except that rows it attached from a third Mac are
+  not shown, a workspace holding them is not deleted from the viewer, and asks, picks and pages follow the
+  attached-session rules (docs: agterm.com/docs#remote-sessions-present) rather than the server's waiting ones.
+  The lead rule is in docs: agterm.com/docs#remote-sessions-lead. The window's node in `tree` and `window list` carries
   `remote`: `host`, `catalogID`, `state` (`connecting`, `connected`, `disconnected`, `refused`, with
-  `reason` for the last two; omitted for a closed window), `detachedSessions`, `detachedWorkspaces` and
+  `reason` for the last two; omitted for a closed window), `detachedSessions`, `detachedWorkspaces`, `origin`
+  (`mac` for a Mac's window) with `originWindow` (its window id), both omitted for agterm-server, and
   `operations` (`{id, action, session?, workspace?, state}` for an action still on its way or whose outcome
   was lost), each omitted when empty. Its session rows add `ended` (the server lost the primary and split panes; a
   scratch may still run),
@@ -1599,14 +1607,16 @@ window commands run on the Mac; `catalog` is served only by agterm-server.
   `remote.detachedSessions` / `detachedWorkspaces` list it (`active` and an ended session are refused;
   `session close` removes an ended one).
 - `catalog subscribe`: the stream a remote window runs over ssh; not for use by hand.
-- `catalog op OPID [--epoch E --rev N]`: what became of an operation id: `applied` (with its revision),
+- `catalog op OPID [--epoch E --rev N] [--window W]`: what became of an operation id (on a Mac, in window W): `applied` (with its revision),
   `noop`, `refused` (with the error), `fenced` or `unknown`; an id the server does not hold is recorded so
   the command is refused if it arrives later.
 - Operation ids: the session and workspace structure commands, and `session overlay open` with `--page` or
   `--companion` (`--op-id requires --companion or --page` otherwise), take `--op-id ID --epoch E`; the server keeps
   the last 512 receipts, so the same id within them is not run twice, and answers `result.receipt` `{opID, epoch, outcome, rev?, error?}`; `--expect-panes ID,ID` and `session
-  scratch --expect-scratch ID|none` refuse a target that changed; all need `--op-id`. A Mac app refuses an
-  operation id.
+  scratch --expect-scratch ID|none` refuse a target that changed; all need `--op-id`. A Mac in Live sessions
+  mode takes them for the window `--window` names by full id and refuses a request naming none
+  (`the request names no window on HOST`). That Mac's `window list` and `tree` report `catalogViewers` on a window
+  other Macs show, omitted at none.
 - On agterm-server: one window (the catalog, `--window` takes its id or `active`); `NAME is not available on
   agterm-server` for every command it does not serve (window mutations, sidebar, font, theme, keymap, quick,
   dashboard, zoom and more; `window list`, `msg send/read/ack` between its own panes and the presenter bridges

@@ -958,6 +958,7 @@ final class ControlServer {
             sidebarDensity: GhosttyApp.shared.sidebarDensity
         )
         tree.remote = windowID.flatMap(library.remoteNode(for:))
+        tree.catalogViewers = windowID.flatMap(originViewers)
         return tree
     }
 
