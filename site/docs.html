@@ -855,7 +855,7 @@ s=$(agtermctl zmx tree studio.local --json \
 </tr>
 <tr>
 <td>status</td>
-<td>clearing the row's status or badge here (typing, selecting, Clear Status) clears it there too, under that Mac's reset settings, when the status came from there; a status set on this Mac's row clears here only</td>
+<td>clearing the row's status or badge here (typing, selecting, Clear Status) clears it there too, under that Mac's reset settings, when the status came from there; a status set on this Mac's row clears here only, and one pane here finishing leaves the other Mac's active shown</td>
 </tr>
 <tr>
 <td>session context</td>
@@ -2245,7 +2245,7 @@ agtermctl session status idle --target &quot;$AGTERM_SESSION_ID&quot;       # cl
 <li><code>status</code> and <code>statusPane</code>, the pane that set it;</li>
 <li><code>statusColor</code> and <code>statusShape</code>, only while a per-call override is in effect;</li>
 <li><code>activePanes</code>, the panes still reporting <code>active</code> (<code>left</code>, <code>right</code>, <code>scratch</code>), an empty list when none, whatever the row shows. A script waiting for one pane's agent reads this rather than <code>status</code>, which can show the other pane's work;</li>
-<li><code>statusChangedAt</code>, epoch seconds of the last applied write. Every write counts, <code>idle</code> and a repeat of the same status included, except one another pane's block keeps off the row, and so do automatic and manual clears, so a script polling <code>tree</code> can tell how long ago the status was last written. It is absent before the first set and is not kept across a restart.</li>
+<li><code>statusChangedAt</code>, epoch seconds of the last applied write. Every write counts, <code>idle</code> and a repeat of the same status included, except one another pane's status keeps off the row, and so do automatic and manual clears, so a script polling <code>tree</code> can tell how long ago the status was last written. It is absent before the first set and is not kept across a restart.</li>
 </ul>
 <h3 id="status-pane">Which pane set it</h3>
 <ul>

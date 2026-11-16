@@ -162,6 +162,20 @@ struct RemotePresentationStateTests {
         #expect(store.controlTree().workspaces[0].sessions[0].activePanes == [])
     }
 
+    @Test func losingTheStreamLeavesThisMacsOwnWorkOnTheRow() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        var blocked = status(.blocked, pane: .identity(Self.remoteLeft))
+        blocked.activePanes = []
+        store.applyRemoteStatus(blocked, forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, statusPane: .scratch), forSession: session.id)
+
+        store.setRemoteConnection(.failed("gone"), forSession: session.id)
+
+        #expect(session.agentIndicator == AgentIndicator(status: .active, statusPane: .scratch))
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["scratch"])
+    }
+
     @Test(arguments: [PresentationPane.identity(UUID()), .scratch])
     func anOriginPaneWithNoCounterpartHereGetsNoLocalOwner(_ pane: PresentationPane) throws {
         let (store, session) = try attached()
@@ -1027,6 +1041,20 @@ struct RemotePresentationStateTests {
 
         #expect(session.agentIndicator.status == .blocked)
         #expect(store.controlTree().workspaces[0].sessions[0].activePanes == ["scratch"])
+    }
+
+    @Test(arguments: [AgentStatus.completed, .idle], [true, false])
+    func thisMacsOwnScratchFinishingKeepsTheOriginsWorkShown(_ end: AgentStatus, originListsPanes: Bool) throws {
+        let (store, session) = try attached()
+        var working = status(.active, pane: .identity(Self.remoteLeft))
+        working.activePanes = originListsPanes ? [.identity(Self.remoteLeft)] : nil
+        store.applyRemoteStatus(working, forSession: session.id)
+
+        store.applyControlStatus(AgentIndicator(status: end, statusPane: .scratch), forSession: session.id)
+
+        #expect(session.agentIndicator.status == .active)
+        #expect(session.agentIndicator.statusPane == .left)
+        #expect(store.controlTree().workspaces[0].sessions[0].activePanes == (originListsPanes ? ["left"] : nil))
     }
 
     @Test func theOriginsWorkingPanesFollowASwapHere() throws {

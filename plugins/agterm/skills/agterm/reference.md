@@ -246,7 +246,7 @@ omitted when idle or using the configured shape.
 Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
 absent), `statusChangedAt` (when the status was last SET, in epoch seconds — the same clock an event's
 `ts` carries, so the two compare directly; omitted before any set. It is stamped on every
-`session status` the row shows — one kept off the row by another pane's block stamps nothing — not only on a
+`session status` the row shows — one another pane's status keeps off the row stamps nothing — not only on a
 change of state, so a hook re-pushing `active` refreshes it and
 `now - statusChangedAt` reads as how long ago the status was last WRITTEN, including idle.
 Automatic and manual clears and pane promotion also count.
@@ -819,7 +819,7 @@ error keeps those names for compatibility.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--if-idle] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|triangle-down|play|diamond|capsule|seal|star|bolt|bell|checkmark] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
   set the sidebar agent-status glyph. Every APPLIED write stamps the session node's
   `statusChangedAt`, including idle and one that re-pushes the same status, so a poller can read the last
-  set time without keeping state of its own; a call another pane's block keeps off the row
+  set time without keeping state of its own; a call another pane's status keeps off the row
   leaves the stamp alone. `--blink` requests an attention pulse; macOS Reduce Motion
   suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
   pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
@@ -2564,7 +2564,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   the two panels can close a moment apart.
 - A HUD or overlay opened by a program on THIS Mac wins: a mirrored HUD never replaces or closes it.
 - A non-idle status set on this Mac's row holds until a live status update arrives from the origin, a
-  repeat of the same value included. A reconnect does not end it, even when the origin's status changed
+  repeat of the same value included. A `completed` or `idle` set here for another pane, such as this Mac's own
+  scratch, leaves the origin's `active` shown. A reconnect does not end it, even when the origin's status changed
   while the stream was down. Clearing it here gives the row back to the origin's status.
 - Clearing the status mirrored from the origin here (typing in the pane, selecting the row, Clear Status), or the
   row's badge (viewing it, typing), goes to the origin, which applies its own reset settings, so the cleared status

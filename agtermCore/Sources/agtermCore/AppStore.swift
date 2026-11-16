@@ -618,7 +618,7 @@ public final class AppStore {
         disableFocusIfSelectionOutsideSet(sessionID)
         if let sessionID { markSeen(sessionID) }
         clearAutoResetIndicator(sessionID)
-        clearAutoResetIndicator(previous)
+        if previous != sessionID { clearAutoResetIndicator(previous) }
         recordRecency()
         scheduleSave()
         return destinationIndicator

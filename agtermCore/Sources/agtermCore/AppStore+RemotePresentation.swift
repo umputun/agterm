@@ -171,7 +171,7 @@ extension AppStore {
         applyRemoteContext(nil, forSession: id)
         applyRemoteInfo(nil, forSession: id)
         session.remotePresentation?.mail = nil
-        if session.remotePresentation?.statusBridged == true { setAgentIndicator(AgentIndicator(), forSession: id) }
+        if session.remotePresentation?.statusBridged == true { showRemainingActivity(of: session) }
         session.remotePresentation?.activePanes = nil
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it

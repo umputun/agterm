@@ -397,6 +397,29 @@ struct AppStoreStatusTests {
         #expect(session.agentIndicator == AgentIndicator(status: .active, blink: true, statusPane: .right))
     }
 
+    @Test func reselectingTheSelectedSessionEndsOnlyTheShownPanesAutoResetWork() {
+        let (store, session) = splitSession()
+        store.selectSession(session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .right), forSession: session.id)
+        store.applyControlStatus(AgentIndicator(status: .active, autoReset: true, statusPane: .left), forSession: session.id)
+
+        store.selectSession(session.id)
+
+        #expect(session.agentIndicator.status == .active)
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func aRawIdleSetEndsEveryPanesWork() {
+        let (store, session) = splitSession()
+        post(.active, .left, store, session)
+
+        store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+        post(.completed, .right, store, session)
+
+        #expect(session.agentIndicator.status == .completed)
+        #expect(session.paneActivity.isEmpty)
+    }
+
     @Test func aPresenterSelectionEndsOnlyTheShownPanesWork() {
         let (store, session) = splitSession()
         post(.active, .right, store, session)

@@ -1440,7 +1440,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   (`AppStore.clearStatus(by:)`, which an interrupt in ANY pane uses to drop that pane's activity, forwarded to the
   origin when the row is bridged), teardown, promotion (the split's activity moves left), swap, a parent respawn
   (left and right dropped, scratch kept) and a selection auto-reset (only the shown pane's). Manual Clear Status
-  drops every pane's. A live origin status replaces an attached row's local activity.
+  and any idle `setAgentIndicator` drop every pane's, so a direct clear (agterm-linux's) leaves no cancelled work.
+  A live origin status replaces an attached row's local activity, a local completed or idle from a pane the
+  origin's active does not stand for leaves that active shown, and losing the stream shows the local activity left.
+  `StatusWriteResult.refused` is never returned and stays only so agterm-linux's match on it compiles.
 - `activePanes` on the session node reads back the panes in `paneActivity`, `[]` when none, so a caller can
   tell a pane's turn end from the row's. An attached row showing its origin's status reports the origin's list
   (`PresentationStatus.activePanes`), omitted when that origin sends none.

@@ -1848,7 +1848,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">activePanes</span> (the panes still reporting
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>, empty when none), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusChangedAt</span> — every applied write stamps it,
-                including idle and one that re-pushes the same status but not one another pane's block keeps off the row, so a poller reads the last set time
+                including idle and one that re-pushes the same status but not one another pane's status keeps off the row, so a poller reads the last set time
                 without keeping state of its own. Automatic and manual clears also count.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> is the surface's stable spawn token
                 (the shell's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>), forwarded

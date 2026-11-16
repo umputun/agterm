@@ -8,6 +8,8 @@ public enum StatusWriteResult: Equatable, Sendable {
     case applied
     /// `skipped` is an `ifIdle` write that met a non-idle row and was dropped whole: no change, stamp or event.
     case skipped
+    /// `refused` is never returned; it keeps downstream matches on the retired pane-precedence refusal compiling.
+    case refused(owner: StatusPane)
 }
 
 /// The per-session agent-status indicator (the sidebar glyph driven by the control channel's `session.status`)
@@ -29,13 +31,15 @@ extension AppStore {
         let before = session.paneActivity[writer] != nil
         session.paneActivity[writer] = indicator.status == .active ? indicator : nil
         let shown = session.agentIndicator
-        if shown.status == .blocked, indicator.status != .blocked,
+        let ending = indicator.status == .completed || indicator.status == .idle
+        // another pane finishing here says nothing about the origin's ongoing work
+        let originWorks = ending && shown.status == .active && session.remotePresentation?.statusBridged == true
+        if (shown.status == .blocked && indicator.status != .blocked) || originWorks,
            (shown.normalizedPane(hasSplit: session.hasSplit) ?? .left) != writer {
             noteMirroredActivity(indicator.status == .active, pane: writer, of: session)
             if before != (session.paneActivity[writer] != nil) { publishStatus(of: session) }
             return .applied
         }
-        let ending = indicator.status == .completed || indicator.status == .idle
         setAgentIndicator(ending ? remainingActivity(of: session) ?? indicator : indicator, forSession: id)
         return .applied
     }
@@ -90,7 +94,8 @@ extension AppStore {
     }
 
     /// Sets a session's agent status indicator, the single mutation point for `session.status`. Stamps
-    /// `statusChangedAt` on every set, idle and repeated values included. A transition into blocked re-arms
+    /// `statusChangedAt` on every set, idle and repeated values included. Idle also ends every pane's retained
+    /// activity, so a direct clear cannot leave cancelled work to reappear. A transition into blocked re-arms
     /// idle auto-follow. No-op for an unknown id; never persisted.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
         guard let session = session(withID: id) else { return }
@@ -107,6 +112,7 @@ extension AppStore {
         // surface down with it), so `!hasSplit` still covers every genuinely splitless session.
         indicator.statusPane = indicator.normalizedPane(hasSplit: session.hasSplit)
         session.agentIndicator = indicator
+        if indicator.status == .idle { session.paneActivity.removeAll() }
         session.statusChangedAt = Date()
         // a re-asserted blocked-over-blocked is not a new episode and stays muted (Session.autoFollowConsumed).
         if !wasBlocked, indicator.status == .blocked { session.autoFollowConsumed = false }
