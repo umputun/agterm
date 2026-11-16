@@ -63,6 +63,8 @@ public final class RemoteCatalogMirror {
     public let host: String
     public private(set) var state: State = .connecting
     public private(set) var catalog: CatalogSnapshot?
+    /// originIsMac is set when the origin advertised a Mac catalog rather than agterm-server's.
+    public private(set) var originIsMac = false
     /// needsSnapshot is set by a gap in the revisions; the transport answers by subscribing again.
     public private(set) var needsSnapshot = false
     /// onCatalogMoved runs after every revision the mirror takes, with true for a whole snapshot.
@@ -89,19 +91,22 @@ public final class RemoteCatalogMirror {
         store.catalogDetachedWorkspaces = Set(viewState.detachedWorkspaces)
     }
 
-    /// checkVersions judges what the server's `version` advertised before anything subscribes. A refusal names
-    /// the host and what it runs, and ends retries.
+    /// checkVersions judges what the origin's `version` advertised before anything subscribes: `versions` from
+    /// agterm-server, `mac` from a Mac app serving its windows. A refusal names the host and what it runs, and ends
+    /// retries.
     @discardableResult
-    public func checkVersions(_ versions: CatalogVersions?, app: AppIdentity?) -> Bool {
-        let refusal = Self.versionRefusal(host: host, versions: versions, app: app)
+    public func checkVersions(_ versions: CatalogVersions?, mac: CatalogVersions? = nil, app: AppIdentity?) -> Bool {
+        let refusal = Self.versionRefusal(host: host, versions: versions, mac: mac, app: app)
         if let refusal { setState(.refused(refusal)) }
+        originIsMac = versions == nil && mac != nil
         return refusal == nil
     }
 
-    static func versionRefusal(host: String, versions: CatalogVersions?, app: AppIdentity?) -> String? {
+    static func versionRefusal(host: String, versions: CatalogVersions?, mac: CatalogVersions? = nil,
+                               app: AppIdentity?) -> String? {
         let build = app.map { "agterm \($0.version)" } ?? "an agterm"
-        guard let versions else {
-            return "\(host) runs \(build) without a catalog, a Mac app rather than agterm-server; a remote window needs agterm-server"
+        guard let versions = versions ?? mac else {
+            return "\(host) runs \(build), which cannot serve a remote window; update agterm there or run agterm-server"
         }
         guard versions.catalog >= 1, versions.catalog <= CatalogCodec.version else {
             return "\(host) speaks catalog \(versions.catalog), this Mac speaks catalog \(CatalogCodec.version)"
@@ -201,6 +206,8 @@ public final class RemoteCatalogMirror {
             catalog?.rev = rev
             reconcile()
             onCatalogMoved?(false)
+        case .refused(let reason, let final):
+            if final { setState(.refused(reason)) } else { connectionLost(reason) }
         case .unknown(_, let epoch, let rev):
             // a newer server's change this Mac cannot read moves the cursor past it; the next snapshot heals it
             if let epoch, let rev, advance(epoch: epoch, rev: rev) {

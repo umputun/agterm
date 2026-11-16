@@ -74,7 +74,7 @@ struct Catalog: ParsableCommand {
         @Option(name: .long, help: "The catalog revision the operation was sent at; needs --epoch.")
         var rev: Int?
 
-        @OptionGroup var options: BasicOptions
+        @OptionGroup var options: ClientOptions
 
         func validate() throws {
             guard CatalogReceipt.isValidOpID(opID) else {
@@ -87,7 +87,7 @@ struct Catalog: ParsableCommand {
             var args = ControlArgs()
             args.epoch = epoch
             args.rev = rev
-            return ControlRequest(cmd: .catalogOp, target: opID, args: epoch == nil ? nil : args)
+            return ControlRequest(cmd: .catalogOp, target: opID, args: options.withWindow(epoch == nil ? nil : args))
         }
     }
 

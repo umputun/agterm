@@ -10,6 +10,7 @@ import Testing
 final class MockControlActions: ControlActions {
     enum Call: Equatable {
         case tree(window: String?)
+        case catalogOperation(opID: String, sent: CatalogPosition?, window: String?)
         case eventsRead(ControlEventReadOptions)
         case sessionNew(ControlSessionCreateOptions)
         case sessionDuplicate(target: String?, window: String?)
@@ -240,6 +241,11 @@ final class MockControlActions: ControlActions {
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
         return nextTreeResponse
+    }
+
+    func catalogOperation(_ opID: String, sent: CatalogPosition?, window: String?) -> ControlResponse {
+        calls.append(.catalogOperation(opID: opID, sent: sent, window: window))
+        return ControlResponse(ok: true)
     }
 
     func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {

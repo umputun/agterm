@@ -729,6 +729,7 @@ public final class WindowLibrary {
             launchPaneDrop: launchPaneDrop
         )
         store.flaggedLayout = flaggedLayout
+        store.recentClosedWindow = windowID
         return store
     }
 

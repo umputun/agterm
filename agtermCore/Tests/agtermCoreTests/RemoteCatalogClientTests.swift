@@ -133,7 +133,7 @@ final class RemoteCatalogClientTests {
 
         #expect(transport.links.isEmpty)
         if case .refused(let message) = mirror.state {
-            #expect(message.contains("box runs agterm 1.2.3 without a catalog"))
+            #expect(message == "box runs agterm 1.2.3, which cannot serve a remote window; update agterm there or run agterm-server")
         } else {
             Issue.record("expected refused, got \(mirror.state)")
         }

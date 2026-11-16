@@ -123,13 +123,20 @@ struct CatalogOperationsTests {
 
         let response = await ControlDispatcher(actions: MockControlActions()).dispatch(request)
 
-        #expect(response?.error == "operation receipts are served only by agterm-server")
+        #expect(response?.error == "operation receipts are not taken by this agterm")
     }
 
-    @Test func aMacAppRefusesCatalogOp() async {
-        let response = await ControlDispatcher(actions: MockControlActions()).dispatch(ControlRequest(cmd: .catalogOp, target: "a"))
+    @Test func catalogOpGoesToTheHostWithItsPositionAndWindow() async {
+        let actions = MockControlActions()
+        var args = ControlArgs()
+        args.epoch = "e1"
+        args.rev = 3
+        args.window = "W1"
 
-        #expect(response?.error == "catalog.op is served only by agterm-server")
+        let response = await ControlDispatcher(actions: actions).dispatch(ControlRequest(cmd: .catalogOp, target: "a", args: args))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.catalogOperation(opID: "a", sent: CatalogPosition(epoch: "e1", rev: 3), window: "W1")])
     }
 
     @Test(arguments: [nil, "", "a b"])

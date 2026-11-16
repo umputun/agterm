@@ -1,7 +1,7 @@
 import Foundation
 
-/// CatalogVersions is what a headless origin advertises: its build, the presentation protocol it speaks and the
-/// catalog protocol. A Mac origin advertises none, which is how a remote window knows not to bind to it.
+/// CatalogVersions is what an origin serving a catalog advertises: its build, the presentation protocol it speaks and
+/// the catalog protocol. A Mac advertises it as `macCatalog` on `version`, never as `versions`.
 public struct CatalogVersions: Codable, Equatable, Sendable {
     public var server: String
     public var protocolVersion: Int
@@ -239,12 +239,16 @@ public struct CatalogHello: Codable, Equatable, Sendable {
     public var versions: CatalogVersions?
     /// pageRows is set on a viewer's opening hello when it shows page rows; an older viewer is sent none.
     public var pageRows: Bool?
+    /// window names the Mac window a viewer's opening hello subscribes to; a server's catalog takes none.
+    public var window: String?
 
-    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil, pageRows: Bool? = nil) {
+    public init(version: Int, epoch: String? = nil, versions: CatalogVersions? = nil, pageRows: Bool? = nil,
+                window: String? = nil) {
         self.version = version
         self.epoch = epoch
         self.versions = versions
         self.pageRows = pageRows
+        self.window = window
     }
 }
 
@@ -259,6 +263,8 @@ public enum CatalogFrame: Equatable, Sendable {
     case delta(epoch: String, rev: Int, change: CatalogChange)
     case ping
     case ack
+    /// refused ends a subscription with the reason to show; a final one stops the viewer's retries.
+    case refused(reason: String, final: Bool)
     case unknown(kind: String, epoch: String?, rev: Int?)
 }
 
@@ -269,7 +275,7 @@ extension CatalogFrame {
 
 extension CatalogFrame: Codable {
     private enum Keys: String, CodingKey {
-        case kind, hello, snapshot, index, data, epoch, rev, chunks
+        case kind, hello, snapshot, index, data, epoch, rev, chunks, reason, final
         case workspace, session, id, ids, name, pane, identity, tint, tintOn, recent
     }
 
@@ -286,6 +292,8 @@ extension CatalogFrame: Codable {
                            chunks: try container.decode(Int.self, forKey: .chunks))
         case "ping": self = .ping
         case "ack": self = .ack
+        case "refused":
+            self = .refused(reason: try container.decode(String.self, forKey: .reason), final: try container.decode(Bool.self, forKey: .final))
         default:
             guard let change = try Self.change(kind, container) else {
                 self = .unknown(kind: kind, epoch: try container.decodeIfPresent(String.self, forKey: .epoch),
@@ -356,6 +364,10 @@ extension CatalogFrame: Codable {
             try Self.encode(change, into: &container)
         case .ping: try container.encode("ping", forKey: .kind)
         case .ack: try container.encode("ack", forKey: .kind)
+        case .refused(let reason, let final):
+            try container.encode("refused", forKey: .kind)
+            try container.encode(reason, forKey: .reason)
+            try container.encode(final, forKey: .final)
         case .unknown(let kind, let epoch, let rev):
             try container.encode(kind, forKey: .kind)
             try container.encodeIfPresent(epoch, forKey: .epoch)

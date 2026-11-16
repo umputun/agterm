@@ -163,4 +163,34 @@ struct CatalogFramesTests {
 
         #expect(json.contains(#""protocol":1"#))
     }
+
+    @Test func aHelloNamesTheOriginWindowAndAnOlderHelloHasNone() throws {
+        let hello = CatalogHello(version: 1, pageRows: true, window: "W1")
+        let older = try JSONDecoder().decode(CatalogHello.self, from: JSONEncoder().encode(CatalogHello(version: 1)))
+
+        #expect(try JSONDecoder().decode(CatalogHello.self, from: JSONEncoder().encode(hello)).window == "W1")
+        #expect(older.window == nil)
+    }
+
+    @Test func aRefusalTravelsWithItsReasonAndFinality() throws {
+        for frame in [CatalogFrame.refused(reason: "window closed on box", final: false), .refused(reason: "no Live sessions", final: true)] {
+            #expect(try CatalogCodec.decode(CatalogCodec.encode(frame).dropLast()) == frame)
+        }
+    }
+
+    @Test func aRefusalReachesAnOlderDecoderAsAnUnknownKind() throws {
+        let line = try CatalogCodec.encode(.refused(reason: "gone", final: true)).dropLast()
+        let json = try #require(try JSONSerialization.jsonObject(with: line) as? [String: Any])
+
+        #expect(json["kind"] as? String == "refused")
+        #expect(json["epoch"] == nil && json["rev"] == nil)
+    }
+
+    @Test func versionReplyCarriesTheMacCatalogAdvertisementSeparately() throws {
+        let result = ControlResult(macCatalog: CatalogFixture.versions)
+        let decoded = try JSONDecoder().decode(ControlResult.self, from: JSONEncoder().encode(result))
+
+        #expect(decoded.macCatalog == CatalogFixture.versions)
+        #expect(decoded.versions == nil)
+    }
 }

@@ -31,6 +31,13 @@ struct CatalogCommandsTests {
         #expect(request.args?.rev == 7)
     }
 
+    @Test func catalogOpNamesTheWindowWhoseCatalogItAsks() throws {
+        let op = try Catalog.Operation.parse(["op-1", "--window", "W1"])
+
+        #expect(op.makeRequest().args?.window == "W1")
+        #expect(op.makeRequest().args?.epoch == nil)
+    }
+
     @Test(arguments: [["op-1", "--epoch", "e1"], ["op-1", "--rev", "7"]])
     func catalogOpTakesEpochAndRevTogether(_ words: [String]) {
         #expect(throws: (any Error).self) { try Catalog.Operation.parse(words) }

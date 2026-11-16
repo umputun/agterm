@@ -601,8 +601,34 @@ final class RemoteCatalogMirrorTests {
         mirror.subscribing()
 
         #expect(!refused)
-        #expect(mirror.state == .refused("box runs agterm 0.49.0 without a catalog, a Mac app rather than agterm-server; a remote window needs agterm-server"))
+        #expect(mirror.state == .refused("box runs agterm 0.49.0, which cannot serve a remote window; update agterm there or run agterm-server"))
         #expect(store.workspaces.isEmpty)
+    }
+
+    @Test func aMacAdvertisingACatalogIsAcceptedAndMarkedAsAMacOrigin() {
+        let accepted = mirror.checkVersions(nil, mac: Self.versions, app: AppIdentity(version: "0.60.0"))
+
+        #expect(accepted)
+        #expect(mirror.originIsMac)
+        #expect(mirror.state != .refused(""))
+    }
+
+    @Test func aServerAdvertisementLeavesTheOriginHeadless() {
+        #expect(mirror.checkVersions(Self.versions, app: nil))
+        #expect(!mirror.originIsMac)
+    }
+
+    @Test func aFinalRefusalStopsTheMirrorAndAPassingOneShowsTheReason() {
+        _ = mirror.receive(.refused(reason: "window closed on box", final: false))
+        #expect(mirror.state == .disconnected("window closed on box"))
+
+        _ = mirror.receive(.refused(reason: "box is not running Live sessions", final: true))
+        #expect(mirror.state == .refused("box is not running Live sessions"))
+    }
+
+    @Test func aMacSpeakingANewerCatalogIsRefusedNamingBoth() {
+        #expect(RemoteCatalogMirror.versionRefusal(host: "box", versions: nil, mac: CatalogVersions(server: "9", protocolVersion: 1, catalog: 2),
+                                                   app: nil) == "box speaks catalog 2, this Mac speaks catalog 1")
     }
 
     @Test func aNewerCatalogVersionIsRefusedNamingBoth() {

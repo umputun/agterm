@@ -290,9 +290,9 @@ public protocol ControlActions {
     func reattachWorkspace(_ target: String, window: String?) -> ControlResponse
     /// dismissRemoteUnknown drops window `window`'s marks for actions with an unknown outcome.
     func dismissRemoteUnknown(window: String?) -> ControlResponse
-    /// catalogOperation answers `catalog.op`: what became of `opID`, sent when the catalog stood at `sent`,
-    /// fencing an id the host has not seen.
-    func catalogOperation(_ opID: String, sent: CatalogPosition?) -> ControlResponse
+    /// catalogOperation answers `catalog.op`: what became of `opID`, sent to window `window`'s catalog when it
+    /// stood at `sent`, fencing an id the host has not seen.
+    func catalogOperation(_ opID: String, sent: CatalogPosition?, window: String?) -> ControlResponse
     /// takesOperationReceipts is whether this host answers a structural command's `opID` with a receipt.
     var takesOperationReceipts: Bool { get }
     /// Claim a remote overlay job for the helper asking. After an ok answer the connection carries job frames.

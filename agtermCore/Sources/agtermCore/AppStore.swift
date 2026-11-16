@@ -175,6 +175,8 @@ public final class AppStore {
     @ObservationIgnored public internal(set) var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
+    /// recentClosedWindow is the window this store renders, recorded on every Recent Closed entry it writes.
+    @ObservationIgnored var recentClosedWindow: UUID?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
     /// The settled selected-pane identity per session that `pane.focused` diffs against.
     @ObservationIgnored var paneFocusBaseline: [UUID: UUID] = [:]

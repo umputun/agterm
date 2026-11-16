@@ -74,6 +74,21 @@ final class ControlStreamFramingTests {
         owner.shutdown()
     }
 
+    @Test func aFinalLineIsWrittenBeforeTheStreamCloses() throws {
+        let owner = try makeOwner()
+        let recorder = Recorder()
+        start(owner, recorder)
+
+        #expect(owner.send(Data("first\n".utf8)))
+        #expect(owner.sendFinal(Data("last\n".utf8)))
+        #expect(!owner.send(Data("late\n".utf8)))
+
+        var received = ""
+        #expect(waitUntil { received += readFromPeer(timeout: 1); return received == "first\nlast\n" })
+        #expect(waitUntil { recorder.closes == 1 })
+        #expect(readFromPeer(timeout: 1) == "")
+    }
+
     @Test func anIdleStreamOutlivesTheRequestReceiveTimeout() throws {
         let owner = try makeOwner()
         let recorder = Recorder()

@@ -1,5 +1,19 @@
 import Foundation
 
+/// RecentClosedWindowRefusal is why a window could not reopen one of its own Recent Closed entries.
+public enum RecentClosedWindowRefusal: Error, Equatable, Sendable {
+    case notFound, lacksParent, elsewhere, failed
+
+    public var message: String {
+        switch self {
+        case .notFound: "no such entry in this window's Recent Closed"
+        case .lacksParent: "parent session is not open or in Recent Closed"
+        case .elsewhere: "the entry's workspace or parent session is in another window; reopen it from that window"
+        case .failed: "could not reopen the entry"
+        }
+    }
+}
+
 extension WindowLibrary {
     /// noteOriginRecentID records that `host` keeps its session `sessionID`, closed here, as its entry `recentID`.
     public func noteOriginRecentID(_ recentID: String, host: String, sessionID: String) {
@@ -104,6 +118,38 @@ extension WindowLibrary {
     public func clearRecentClosedItems() {
         recentClosedStore.clear()
         refreshRecentClosedItems()
+    }
+
+    /// recentClosedItems(inWindow:) is the window's own list, the one a remote window on another Mac mirrors:
+    /// entries closed in it, never a remote row's entry or one saved before windows were recorded.
+    public func recentClosedItems(inWindow window: UUID) -> [RecentClosedItem] {
+        recentClosedItems.filter { $0.window == window }
+    }
+
+    public func clearRecentClosedItems(inWindow window: UUID) {
+        recentClosedStore.clear(window: window)
+        refreshRecentClosedItems()
+    }
+
+    /// reopenRecentClosed(_:inWindow:) reopens one of the window's own entries into it, and refuses one the
+    /// restore-destination rule would send to another window, where the person at this Mac would not see it.
+    public func reopenRecentClosed(_ itemID: UUID, inWindow window: UUID) -> Result<RecentClosedReopen, RecentClosedWindowRefusal> {
+        refreshRecentClosedItems()
+        guard let store = store(for: window),
+              let item = recentClosedItems(inWindow: window).first(where: { $0.id == itemID }) else { return .failure(.notFound) }
+        guard !recentClosedItemLacksParent(itemID) else { return .failure(.lacksParent) }
+        guard !reopensElsewhere(item, than: store) else { return .failure(.elsewhere) }
+        guard let outcome = reopenRecentClosedOutcome(itemID, into: store) else { return .failure(.failed) }
+        return .success(outcome)
+    }
+
+    // a lone companion whose parent is closed follows the parent's entry, which reopens first
+    private func reopensElsewhere(_ item: RecentClosedItem, than store: AppStore) -> Bool {
+        if let parentID = item.session?.snapshot.parentID, openStores().allSatisfy({ $0.session(withID: parentID) == nil }),
+           let parentItem = recentClosedItems.first(where: { $0.id != item.id && $0.restoresSession(parentID) }) {
+            return reopensElsewhere(parentItem, than: store)
+        }
+        return restoreDestination(for: item, requested: store) !== store
     }
 
     /// Which store restores `item`, in priority order: the window holding the session itself, then the one

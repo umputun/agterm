@@ -741,6 +741,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var headless: Bool?
     /// versions is what agterm-server advertises on `version`; a Mac app omits it.
     public var versions: CatalogVersions?
+    /// macCatalog is what a Mac app serving remote windows advertises on `version`, apart from `versions`, so a viewer
+    /// predating Mac origins still reads a Mac as one it cannot open.
+    public var macCatalog: CatalogVersions?
     /// receipt answers a command sent with an operation id, and `catalog.op`.
     public var receipt: CatalogReceipt?
     /// The restore-mode policy for `restore.mode`, and the header `zmx list` repeats so its rows can be
@@ -805,7 +808,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 companionPage: PresentationPage? = nil,
                 messageID: String? = nil, delivered: [String]? = nil, rejected: [MessageRejection]? = nil,
                 messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil,
-                remoteGroup: ControlRemoteGroup? = nil) {
+                remoteGroup: ControlRemoteGroup? = nil, macCatalog: CatalogVersions? = nil) {
+        self.macCatalog = macCatalog
         self.messageID = messageID
         self.delivered = delivered
         self.rejected = rejected

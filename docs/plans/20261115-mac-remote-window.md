@@ -195,18 +195,20 @@ The design was reviewed with codex over three revisions and the plan by the plan
 - Tests: `agtermCore/Tests/agtermCoreTests/` (frames, hub, mirror, receipts, Recent Closed),
   `agtermCore/Tests/AgtermServerTests/` (server on shared code), `agtermCore/Tests/agtermctlKitTests/` (catalog op)
 
-- [ ] write failing tests: `macCatalog` advertisement round-trip and old-decoder tolerance; hello `window`; `refused`
+- [x] write failing tests: `macCatalog` advertisement round-trip and old-decoder tolerance; hello `window`; `refused`
       frame encode/decode and an old decoder stepping past it; mirror accepts a Mac hello with real `CatalogVersions`;
       new refusal texts (pinned tests updated)
-- [ ] write failing tests: shared `CatalogStream` heartbeat, stale drop and no-hello deadline with an injected clock;
+- [x] write failing tests: shared `CatalogStream` heartbeat, stale drop and no-hello deadline with an injected clock;
       shared receipt book (applied, noop, refused, repeated op id, fencing, adoption into a new epoch)
-- [ ] write failing tests: Recent Closed window ownership (recorded at close, legacy entry decodes with no window and
+- [x] write failing tests: Recent Closed window ownership (recorded at close, legacy entry decodes with no window and
       is in no catalog list, per-window list excludes merged remote items, per-window clear, cross-window
       workspace/parent refusal); `catalog op --window` parser, request and dispatcher arm
-- [ ] implement the protocol fields and frame, advertisement check and texts, shared stream and receipt book with
+- [x] implement the protocol fields and frame, advertisement check and texts, shared stream and receipt book with
       host seams (server switched, behavior unchanged), Recent Closed ownership, `catalog op --window`
-- [ ] downstream check for every changed `public` symbol and the new `CatalogFrame` case
-- [ ] `cd agtermCore && swift test` for the touched suites passes, the server's catalog suites included
+- [x] downstream check for every changed `public` symbol and the new `CatalogFrame` case
+- [x] `cd agtermCore && swift test` for the touched suites passes, the server's catalog suites included
+- ⚠️ the `catalog` CLI help (`CatalogCommands.swift`, `WindowCommands.swift`) and the docs quoting the old receipt
+  refusal still say only agterm-server serves a catalog; they change with Task 2 and Task 4, once a Mac does
 
 ### Task 2: The origin Mac serves one window's catalog
 
