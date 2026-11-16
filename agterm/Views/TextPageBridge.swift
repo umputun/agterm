@@ -88,8 +88,14 @@ final class TextPageBridge {
     func loadDocument(fresh: Bool) {
         documentLoad += 1
         documentPending = true
-        if let follower { return follower.loadDocument(fresh: fresh, search: search, wrap: wrap) }
         let load = documentLoad, path = path, readText = readText
+        if let follower {
+            return follower.loadDocument(fresh: fresh, search: search, wrap: wrap) { [weak self] in
+                let search = await self?.navigation()?.search
+                guard let self, load == documentLoad else { return }
+                restoreSearch = search
+            }
+        }
         Task { [weak self] in
             // a shown page reopens where it was, so a theme change or a reload never moves the view
             let place = self?.text == nil ? nil : await self?.navigation()

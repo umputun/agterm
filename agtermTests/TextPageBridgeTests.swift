@@ -221,10 +221,11 @@ final class TextPageBridgeTests: HtmlPageTestCase {
         })()
         """
 
-    private func assertTypingContinues(after rebuild: (HtmlOverlayPage) throws -> Void) async throws {
-        let (page, window) = try shown(try openText("events.jsonl", Self.records(2)))
+    private func assertTypingContinues(log: Bool = false, after rebuild: (HtmlOverlayPage) throws -> Void) async throws {
+        let bar = log ? ".agterm-logbar" : ".agterm-expand"
+        let (page, window) = try shown(log ? try openLog("events.log", Self.records(2)) : try openText("events.jsonl", Self.records(2)))
         defer { window.orderOut(nil) }
-        try await waitForScript(Self.button, in: page.webView) { $0 == "Expand: off" }
+        try await waitForScript("document.querySelector('\(bar)') !== null", in: page.webView) { $0 == "true" }
         try await typeIntoSearch(page.webView, insert: "ab", at: 0)
         _ = try await inRenderer("document.querySelector('.agterm-search input').setSelectionRange(1, 1); true", page.webView)
         try await waitFor("the query reaches the model") { self.current?.textSearch?.query == "ab" }
@@ -233,7 +234,7 @@ final class TextPageBridgeTests: HtmlPageTestCase {
 
         try rebuild(page)
 
-        try await waitForScript("document.body.dataset.replaced === undefined && document.querySelector('.agterm-expand') !== null",
+        try await waitForScript("document.body.dataset.replaced === undefined && document.querySelector('\(bar)') !== null",
                                 in: page.webView) { $0 == "true" }
         try await waitForScript(Self.field, in: page.webView) { $0 == "true|ab|1|1" }
         try await typeIntoSearch(page.webView, insert: "X", at: nil)
@@ -251,6 +252,20 @@ final class TextPageBridgeTests: HtmlPageTestCase {
         try await assertTypingContinues { page in
             page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
         }
+    }
+
+    func testTypingContinuesAtTheCaretAfterALogPageThemeRebuild() async throws {
+        try await assertTypingContinues(log: true) { page in
+            page.applyTheme(HtmlOverlayTheme(background: "#101010", foreground: "#e0e0e0", dark: true))
+        }
+    }
+
+    private func openLog(_ name: String, _ text: String) throws -> HtmlOverlay {
+        let url = pages.appendingPathComponent(name)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let overlay = HtmlOverlay(source: .text(path: url.path, line: nil), textLog: TextLog(tail: 500, follow: true))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
     }
 
     // regression: the page keys must leave an e typed into the search field to the field

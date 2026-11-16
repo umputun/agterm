@@ -66,13 +66,16 @@ final class LogFollower {
 
     /// loadDocument builds the page from a fresh read, or from the cached snapshot and anchor when `fresh` is false:
     /// an explicit reload reads the file again, a theme change redraws what is shown. A read that failed after the
-    /// open was accepted shows an empty page marked waiting or unreadable, which the next good read fills.
-    func loadDocument(fresh: Bool, search: TextPage.SearchState? = nil, wrap: Bool = false) {
+    /// open was accepted shows an empty page marked waiting or unreadable, which the next good read fills. `prepare`
+    /// runs first, with ticks already held, so a caller can read the old page before anything replaces it.
+    func loadDocument(fresh: Bool, search: TextPage.SearchState? = nil, wrap: Bool = false,
+                      prepare: (@MainActor () async -> Void)? = nil) {
         documentLoad += 1
         documentPending = true
         let load = documentLoad
         Task { [weak self] in
-            guard let self else { return }
+            await prepare?()
+            guard let self, load == documentLoad else { return }
             if fresh || snapshot == nil { await refresh() }
             guard load == documentLoad else { return }
             let shown = snapshot ?? LogTail.Snapshot(text: "", lines: 0, clipped: false)
