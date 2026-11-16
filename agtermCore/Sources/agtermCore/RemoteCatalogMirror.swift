@@ -90,6 +90,8 @@ public final class RemoteCatalogMirror {
     private var claimingAll = false
     /// pendingClaims are rows this Mac created whose reply came before the catalog brought them.
     private var pendingClaims: Set<UUID> = []
+    /// pendingSplitClaims are rows whose split this Mac added, until the catalog brings the split.
+    private var pendingSplitClaims: Set<UUID> = []
 
     public init(host: String, store: AppStore, effects: any RemoteCatalogEffects, viewState: RemoteWindowViewState,
                 pool: SshConnectionPool? = nil, originWindow: UUID? = nil, claimOnOpen: Bool = false) {
@@ -194,9 +196,27 @@ public final class RemoteCatalogMirror {
         store.claimCatalogLead(row, panes: entry.panes, host: host, effects: effects)
     }
 
+    /// claimSplitWhenShown takes the lead of the split this Mac added to row `id` on a Mac origin, now or once the
+    /// catalog lists it running, which comes after a held first listing while its daemon starts; the row's primary
+    /// keeps whoever leads it.
+    public func claimSplitWhenShown(_ id: UUID) {
+        guard originIsMac else { return }
+        pendingSplitClaims.insert(id)
+        claimPendingSplit(id)
+    }
+
+    private func claimPendingSplit(_ id: UUID) {
+        guard let store, let effects, let row = store.session(withID: id), row.hasSplit, !row.ended,
+              let split = catalog?.session(id)?.panes.dropFirst().first, split.identity == row.splitPaneIdentity,
+              split.held != true else { return }
+        pendingSplitClaims.remove(id)
+        store.claimCatalogLead(row, panes: [split], host: host, effects: effects)
+    }
+
     /// subscribing marks a new stream: until its snapshot arrives the window shows Connecting, keeping its rows.
     public func subscribing() {
         pendingClaims.removeAll()
+        pendingSplitClaims.removeAll()
         guard !isRefused else { return }
         needsSnapshot = false
         chunks = CatalogChunks()
@@ -328,6 +348,7 @@ public final class RemoteCatalogMirror {
                     for pane in store.updateCatalogSession(local, to: session, context: context) {
                         effects.catalogPaneNeedsAttach(pane, session: local.id)
                     }
+                    if pendingSplitClaims.contains(local.id) { claimPendingSplit(local.id) }
                     continue
                 }
                 let claim = originIsMac && (pendingClaims.remove(session.id) != nil || claimingAll)

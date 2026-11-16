@@ -27,7 +27,7 @@ final class RemoteCatalogActionsTests {
     deinit { try? FileManager.default.removeItem(at: directory) }
 
     private final class Effects: RemoteCatalogEffects {
-        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String { "attach \(host) \(pane.daemon)\(claim ? " claim" : "")" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -43,17 +43,30 @@ final class RemoteCatalogActionsTests {
         var calls: [[String]] = []
         var lookupGate: CheckedContinuation<Void, Never>?
         var gateNextLookup = false
+        var commandGate: CheckedContinuation<Void, Never>?
+        var gateNextCommand = false
 
         func answer(_ argv: [String]) async -> (status: Int32, stdout: String) {
             calls.append(argv)
             let line = Self.plain(argv)
             let opID = Self.opID(line)
-            guard line.contains(" catalog op ") else { return (0, commands.isEmpty ? "" : commands.removeFirst()(opID)) }
+            guard line.contains(" catalog op ") else {
+                if gateNextCommand {
+                    gateNextCommand = false
+                    await withCheckedContinuation { commandGate = $0 }
+                }
+                return (0, commands.isEmpty ? "" : commands.removeFirst()(opID))
+            }
             if gateNextLookup {
                 gateNextLookup = false
                 await withCheckedContinuation { lookupGate = $0 }
             }
             return (0, lookups.isEmpty ? "" : lookups.removeFirst()(opID))
+        }
+
+        func openCommandGate() {
+            commandGate?.resume()
+            commandGate = nil
         }
 
         func openGate() {
@@ -670,17 +683,157 @@ final class RemoteCatalogActionsTests {
         #expect(script.calls.map(Script.plain).allSatisfy { !$0.contains("--window") })
     }
 
-    @Test func aCreationNamesTheRowItMadeAndConvertItsNewParent() {
-        let made = UUID(), parent = UUID(), row = UUID()
+    @Test func anOperationNamesTheRowsItBroughtBack() {
+        let made = UUID(), parent = UUID(), row = UUID(), reopened = UUID()
         let created = ControlResult(id: made.uuidString)
         let converted = ControlResult(id: row.uuidString, parent: parent.uuidString)
+        var recent = ControlResult()
+        recent.recentOpen = ControlRecentOpen(item: recentItem([reopened, row]), window: UUID().uuidString, complete: true)
 
-        #expect(RemoteOperation.newSession(workspace: UUID()).createdRow(created) == made)
-        #expect(RemoteOperation.newSessionInNamedWorkspace(name: "w", create: true).createdRow(created) == made)
-        #expect(RemoteOperation.newCompanion(parent: row).createdRow(created) == made)
-        #expect(RemoteOperation.duplicateCompanion(row).createdRow(created) == made)
-        #expect(RemoteOperation.convertCompanion(row).createdRow(converted) == parent)
-        #expect(RemoteOperation.newWorkspace(name: "w").createdRow(created) == nil)
-        #expect(RemoteOperation.reopenRecent(nil).createdRow(created) == nil)
+        #expect(RemoteOperation.newSession(workspace: UUID()).claimedRows(created) == [made])
+        #expect(RemoteOperation.newSessionInNamedWorkspace(name: "w", create: true).claimedRows(created) == [made])
+        #expect(RemoteOperation.newCompanion(parent: row).claimedRows(created) == [made])
+        #expect(RemoteOperation.duplicateCompanion(row).claimedRows(created) == [made])
+        #expect(RemoteOperation.convertCompanion(row).claimedRows(converted) == [parent])
+        #expect(RemoteOperation.reopenRecent(nil).claimedRows(recent) == [reopened, row])
+        #expect(RemoteOperation.newWorkspace(name: "w").claimedRows(created).isEmpty)
+        #expect(RemoteOperation.renameSession(row, name: "x").claimedRows(created).isEmpty)
+    }
+
+    private func recentItem(_ sessions: [UUID]) -> ControlRecentItem {
+        ControlRecentItem(id: UUID().uuidString, kind: "session", title: "s", subtitle: nil, closedAt: 0,
+                          workspaceID: workspaceID.uuidString, sessionIDs: sessions.map(\.uuidString), host: nil)
+    }
+
+    private func installMac(_ snapshot: CatalogSnapshot) {
+        mirror.checkVersions(nil, mac: Self.versions, app: nil)
+        install(snapshot)
+    }
+
+    private func answering(_ edit: @escaping (inout ControlResult) -> Void) -> (String) -> String {
+        let base = reply(.applied, rev: 1)
+        return { opID in
+            var response = try? JSONDecoder().decode(ControlResponse.self, from: Data(base(opID).utf8))
+            if var result = response?.result {
+                edit(&result)
+                response?.result = result
+            }
+            return String(decoding: (try? JSONEncoder().encode(response)) ?? Data(), as: UTF8.self)
+        }
+    }
+
+    @Test func aRowReopenedFromRecentClosedTakesTheLeadWhenItArrives() async throws {
+        installMac(snapshot(sessions: []))
+        let row = session(sessionID, panes: [panes[0]])
+        queue(answering { $0.recentOpen = ControlRecentOpen(item: self.recentItem([self.sessionID]), window: UUID().uuidString, complete: true) })
+
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(row, workspace: workspaceID, index: 0)))
+
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
+    @Test func anUndoneCloseTakesTheLeadOfTheRowsItClosed() async throws {
+        let row = session(sessionID, panes: [panes[0]])
+        installMac(snapshot(sessions: [row]))
+        queue(answering {
+            $0.undoable = true
+            $0.undoID = "u1"
+            $0.closed = [self.sessionID.uuidString]
+        })
+        _ = await send(.closeSession(sessionID, undoable: true))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionRemoved(sessionID)))
+        queue(answering { $0.id = "u1" })
+
+        _ = await send(.undoClose("u1"))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .sessionAdded(row, workspace: workspaceID, index: 0)))
+
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
+    private func splitPane(held: Bool) -> CatalogPane {
+        CatalogPane(identity: panes[1], daemon: "agterm-\(panes[1].uuidString)", endpoint: Self.endpoint, held: held ? true : nil)
+    }
+
+    @Test func aSplitThatStartsHeldTakesTheLeadOnceItRunsReplyFirst() async throws {
+        installMac(snapshot(sessions: [session(sessionID, panes: [panes[0]])]))
+        queue(answering { _ in })
+
+        _ = await send(.setSplit(sessionID, shown: true, axis: nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .paneAdded(splitPane(held: true), session: sessionID)))
+        let whileHeld = store.session(withID: sessionID)?.splitInitialCommand
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        #expect(whileHeld == RemoteSession.endedCommand(host: "box"))
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString) claim")
+    }
+
+    @Test func aSplitThatStartsHeldTakesTheLeadOnceItRunsDeltaFirst() async throws {
+        installMac(snapshot(sessions: [session(sessionID, panes: [panes[0]])]))
+        queue(answering { _ in }, before: { [unowned self] in
+            _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .paneAdded(splitPane(held: true), session: sessionID)))
+        })
+
+        _ = await send(.setSplit(sessionID, shown: true, axis: nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString) claim")
+    }
+
+    @Test func anUndoAcceptedBeforeItsOfferExpiresStillTakesTheLead() async throws {
+        let row = session(sessionID, panes: [panes[0]])
+        installMac(snapshot(sessions: [row]))
+        actions.undoGrace = 0.2
+        queue(answering {
+            $0.undoable = true
+            $0.undoID = "u1"
+            $0.closed = [self.sessionID.uuidString]
+        })
+        _ = await send(.closeSession(sessionID, undoable: true))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionRemoved(sessionID)))
+        queue(answering { $0.id = "u1" })
+        script.gateNextCommand = true
+
+        let undo = Task { await send(.undoClose("u1")) }
+        var turns = 0
+        while script.commandGate == nil, turns < 3000 {
+            turns += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let inFlight = script.commandGate != nil
+        while !actions.undoIDs.isEmpty, turns < 6000 {
+            turns += 1
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let expired = actions.undoIDs.isEmpty
+        script.openCommandGate()
+        _ = await undo.value
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .sessionAdded(row, workspace: workspaceID, index: 0)))
+
+        #expect(inFlight && expired)
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
+    @Test func aSplitAddedFromHereTakesTheLeadOfTheNewPaneOnly() async throws {
+        installMac(snapshot(sessions: [session(sessionID, panes: [panes[0]])]))
+        let added = CatalogPane(identity: panes[1], daemon: "agterm-\(panes[1].uuidString)", endpoint: Self.endpoint)
+        queue(answering { _ in })
+
+        _ = await send(.setSplit(sessionID, shown: true, axis: nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .paneAdded(added, session: sessionID)))
+
+        let row = try #require(store.session(withID: sessionID))
+        #expect(row.splitInitialCommand == "attach box agterm-\(panes[1].uuidString) claim")
+        #expect(row.initialCommand == "attach box agterm-\(panes[0].uuidString)")
+    }
+
+    @Test func showingASplitThatAlreadyRunsClaimsNothing() async throws {
+        let row = session(sessionID, panes: panes)
+        installMac(snapshot(sessions: [row]))
+        queue(answering { _ in })
+
+        _ = await send(.setSplit(sessionID, shown: true, axis: nil))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString)")
     }
 }

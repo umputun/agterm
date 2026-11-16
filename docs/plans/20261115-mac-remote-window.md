@@ -300,6 +300,8 @@ The design was reviewed with codex over three revisions and the plan by the plan
       never on reconnect, relaunch restore, origin-created rows or a server window. The origin's `catalog.subscribe`
       reads the panes first and refuses a failed read, so that first snapshot is complete; a pane whose attach started
       unclaimed takes the lead on its first role report
+- [x] ➕ more leads (Eugene, after Task 3): a row reopened from Recent Closed, the rows an undo brings back (the close's
+      `result.closed`) and a split this Mac adds to a row that had none take the lead too; the primary keeps its leader
 - [x] implement the client, actions, binding, `WindowSource.originWindow`, library keying and naming, picker step,
       `originWindow` arg and `--origin-window`, read-back, per-pane held handling
 - [x] confirm a server host takes exactly today's path (no window step, no `--window`)

@@ -269,16 +269,25 @@ public enum RemoteOperation: Equatable, Sendable {
 }
 
 extension RemoteOperation {
-    /// createdRow is the terminal row this operation created, as its reply names it: convert's new parent, every
-    /// other creation's id.
-    func createdRow(_ result: ControlResult?) -> UUID? {
+    /// newSplit is the row a split shown by this operation creates, nil when the row already has one.
+    @MainActor
+    func newSplit(in store: AppStore?) -> UUID? {
+        guard case .setSplit(let id, true, _) = self, store?.session(withID: id)?.hasSplit == false else { return nil }
+        return id
+    }
+
+    /// claimedRows are the rows this operation brought into the window, as its reply names them: a creation's id,
+    /// convert's new parent, a reopened item's sessions. An undo's rows come from the close it undoes.
+    func claimedRows(_ result: ControlResult?) -> [UUID] {
         switch self {
         case .newSession, .newSessionInNamedWorkspace, .newCompanion, .duplicateCompanion:
-            result?.id.flatMap(UUID.init(uuidString:))
+            result?.id.flatMap(UUID.init(uuidString:)).map { [$0] } ?? []
         case .convertCompanion:
-            result?.parent.flatMap(UUID.init(uuidString:))
+            result?.parent.flatMap(UUID.init(uuidString:)).map { [$0] } ?? []
+        case .reopenRecent:
+            result?.recentOpen?.item.sessionIDs.compactMap(UUID.init(uuidString:)) ?? []
         default:
-            nil
+            []
         }
     }
 }
@@ -358,6 +367,8 @@ public final class RemoteCatalogActions {
     /// undoIDs are the undoable closes this Mac sent whose grace can still be running on the server, oldest first;
     /// each leaves by itself when its grace ends, so a menu reading the list updates with nothing else happening.
     public private(set) var undoIDs: [String] = []
+    /// undoRows are the rows each undoable close answered it closed, which its undo brings back.
+    @ObservationIgnored private var undoRows: [String: [UUID]] = [:]
     @ObservationIgnored var undoGrace: TimeInterval = AppStore.pendingCloseGraceInterval
     /// onChange runs after every change to the operations this window tracks, for read-back that caches them.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
@@ -440,20 +451,25 @@ public final class RemoteCatalogActions {
         let opID = UUID().uuidString
         nextOrder += 1
         entries[opID] = Entry(opID: opID, operation: operation, sent: prepared.sent, order: nextOrder, state: .sending)
+        let newSplit = operation.newSplit(in: mirror.store)
+        // read before the request: the offer can expire while an undo it allowed is in flight
+        let undone = if case .undoClose(let undoID) = operation { undoRows[undoID] ?? [] } else { [UUID]() }
         switch await run(words + ["--op-id", opID, "--epoch", prepared.sent.epoch], operands: operation.operands) {
         case .notSent:
             entries[opID] = nil
             return ControlResponse(ok: false, error: "no connection to \(host)")
         case .reply(let reply) where reply.result?.receipt?.opID == opID:
             settle(opID, reply.result?.receipt)
-            if reply.ok, let created = operation.createdRow(reply.result) { mirror.claimLeadWhenShown(created) }
+            if reply.ok { claimLead(operation.claimedRows(reply.result) + undone, newSplit: newSplit) }
             if selectingCreated, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.selectWhenShown(id, from: prepared.selection)
             }
             if case .newWorkspace(_, true, _) = operation, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.collapseWhenShown(id)
             }
-            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID { noteUndo(undoID) }
+            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID {
+                noteUndo(undoID, rows: reply.result?.closed?.compactMap(UUID.init(uuidString:)) ?? [])
+            }
             return reply
         case .reply, .lost:
             settle(opID, nil)
@@ -466,12 +482,21 @@ public final class RemoteCatalogActions {
         undoIDs.popLast()
     }
 
-    private func noteUndo(_ undoID: String) {
+    private func noteUndo(_ undoID: String, rows: [UUID]) {
         undoIDs = Array((undoIDs + [undoID]).suffix(Self.undoDepth))
+        undoRows[undoID] = rows
         Task { @MainActor [weak self, grace = undoGrace] in
             try? await Task.sleep(for: .seconds(grace))
             self?.undoIDs.removeAll { $0 == undoID }
+            self?.undoRows[undoID] = nil
         }
+    }
+
+    /// claimLead takes the lead of what an operation this Mac sent brought into the window: rows it created, reopened
+    /// or undid, and a split that did not exist when it was sent.
+    private func claimLead(_ rows: [UUID], newSplit: UUID?) {
+        rows.forEach(mirror.claimLeadWhenShown)
+        if let newSplit { mirror.claimSplitWhenShown(newSplit) }
     }
 
     /// request sends a command that changes no catalog row, a Recent Closed read or clear, and answers the server's
