@@ -19,6 +19,8 @@ public protocol CatalogStreamHost: AnyObject {
     var catalogHelloDeadline: TimeInterval { get }
     var catalogHubs: [CatalogHub] { get }
     func catalogSubscription(for hello: CatalogHello) -> CatalogSubscription
+    /// catalogViewersChanged follows every subscribe and unsubscribe.
+    func catalogViewersChanged()
 }
 
 /// CatalogStream is one viewer's catalog stream: a hub's sink on one side, a `ControlStreamOwner` on the other.
@@ -40,6 +42,17 @@ public final class CatalogStream: CatalogSink {
     }
 
     public var subscribed: Bool { subscriber != nil }
+
+    public func serves(_ hub: CatalogHub) -> Bool { self.hub === hub }
+
+    /// refuse sends `reason` as the stream's last frame and closes it; a final refusal stops the viewer's retries.
+    public func refuse(reason: String, final: Bool) {
+        catalogLog.notice("refusing a catalog stream: \(reason)")
+        guard let line = try? CatalogCodec.encode(.refused(reason: reason, final: final)), owner.sendFinal(line) else {
+            owner.shutdown()
+            return
+        }
+    }
 
     public func offer(_ frame: CatalogFrame) -> Bool {
         do {
@@ -81,21 +94,21 @@ public final class CatalogStream: CatalogSink {
             do {
                 subscriber = try hub.subscribe(hello: hello, sink: self, versions: versions)
                 self.hub = hub
+                host.catalogViewersChanged()
             } catch {
                 catalogLog.error("refusing a catalog stream: \(error)")
                 owner.shutdown()
             }
         case .refuse(let reason, let final):
-            catalogLog.notice("refusing a catalog stream: \(reason)")
-            guard let line = try? CatalogCodec.encode(.refused(reason: reason, final: final)), owner.sendFinal(line) else {
-                owner.shutdown()
-                return
-            }
+            refuse(reason: reason, final: final)
         }
     }
 
     func closed() {
-        if let hub, let subscriber { hub.unsubscribe(subscriber) }
+        if let hub, let subscriber {
+            hub.unsubscribe(subscriber)
+            host?.catalogViewersChanged()
+        }
         subscriber = nil
         hub = nil
         host?.catalogStreams.removeAll { $0 === self }
@@ -103,6 +116,8 @@ public final class CatalogStream: CatalogSink {
 }
 
 extension CatalogStreamHost {
+    public func catalogViewersChanged() {}
+
     /// adoptCatalogStream takes over a connection whose `catalog.subscribe` was just answered ok.
     public func adoptCatalogStream(descriptor: Int32) {
         let owner = ControlStreamOwner(descriptor: descriptor, limits: CatalogStream.limits)

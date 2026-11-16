@@ -29,9 +29,10 @@ struct Recent: ParsableCommand {
         )
         @Argument(help: "Entry id or unique prefix, from 'recent list'.") var id: String?
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .recentOpen, target: id, args: options.withWindow())
+            operation.stamp(ControlRequest(cmd: .recentOpen, target: id, args: options.withWindow()))
         }
     }
 

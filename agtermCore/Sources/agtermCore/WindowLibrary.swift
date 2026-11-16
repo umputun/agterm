@@ -193,7 +193,8 @@ public final class WindowLibrary {
     /// supplies each open window's live frame app-side (NSWindow handles live in `WindowRegistry`, not this
     /// host-free model); nil by default so tests and non-AppKit callers get a geometry-free list.
     public func controlWindowNodes(geometry: (WindowInfo.ID) -> ControlWindowFrame? = { _ in nil },
-                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? = { _ in nil })
+                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? = { _ in nil },
+                                   viewers: (WindowInfo.ID) -> Int? = { _ in nil })
         -> [ControlWindowNode] {
         let active = activeWindowID
         return windows.map {
@@ -207,6 +208,7 @@ public final class WindowLibrary {
                                          fullscreen: live?.fullscreen, zoomed: live?.zoomed,
                                          minimized: live?.minimized)
             node.remote = remoteNode(for: $0.id)
+            node.catalogViewers = viewers($0.id)
             return node
         }
     }

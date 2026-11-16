@@ -4,7 +4,7 @@ import agtermCore
 extension ServerActions: CatalogOperationHost {
     public var takesOperationReceipts: Bool { true }
 
-    public var operationStore: AppStore { store }
+    public var operationStore: AppStore? { store }
     public var operationHub: CatalogHub { streams.catalogHub }
 
     /// operationRefusal refuses what a page row cannot take and an operation decided on panes or a scratch the

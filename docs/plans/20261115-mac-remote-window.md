@@ -131,12 +131,15 @@ The design was reviewed with codex over three revisions and the plan by the plan
   does locally there. An op or lookup naming a window that is closed now is refused with the non-final reason.
 - **Origin read-back**: the origin window's tree node reports how many Macs mirror it (`catalogViewers`, omitted when
   zero); nothing is shown on screen (Eugene, 2026-11-15).
-- **Origin selection**: catalog ops create with no select and no workspace reveal; close/terminate of the selected
-  row runs the normal reconciliation. A creation op that executed always answers `applied` with the created id, never a
-  refusal. A terminal creation waits, bounded, for the new row's panes to be eligible so its revision usually includes
-  the row; if the row is still starting at the bound, or its command exited and the row closed first, the receipt
-  carries the revision as of that moment and the row appears later or not at all, as the same create behaves locally.
-  Page and workspace creation have no panes and answer at once.
+- **Origin selection**: catalog ops create with no select and no workspace reveal, and undo and Recent Closed reopen
+  without selecting or reporting a selection (`AppStore.preservingSelection` around them); close/terminate of the selected row
+  runs the normal reconciliation. A creation op that executed answers ok with the created id, never a refusal. A
+  terminal creation waits, bounded, for the new row's panes to be eligible so its receipt is `applied` at a revision
+  that includes the row; if the row is still starting at the bound, or its command exited and the row closed first,
+  no revision moved and the receipt is `noop`, and the row appears later or not at all, as the same create behaves
+  locally.
+- **Targets**: a targeted catalog op names its target; only `session.new`, `workspace.new`, `session flag clear`,
+  undo and Recent Closed take none, since an omitted target resolves the origin's own selection.  Page and workspace creation have no panes and answer at once.
 - **Recent Closed**: `RecentClosedItem` gains an optional window id (`decodeIfPresent`) recorded at close. The
   catalog's `recent` lists that window's own items, never the merged remote ones; remote open restores into that
   window through the existing destination rule and refuses an entry whose workspace or parent now lives in another
@@ -144,15 +147,25 @@ The design was reviewed with codex over three revisions and the plan by the plan
   change carry no window: they appear in no catalog list and stay in the Mac's own File ▸ Open Recent, which remains
   app-global.
 - **Projection**: workspaces (id, order, name, tint) and session fields from the window's model; panes and scratch
-  joined from eligibility (zmx backed, claimed and running) and the Mac's zmx endpoint. Rows with `remoteHost` are
-  left out. A terminal row with no eligible pane is left out until its panes are eligible, never listed paneless,
-  which the viewer would read as ended. Page rows are listed. Shared shape-building code in agtermCore where the
-  server and the Mac agree.
+  joined from the zmx inventory (claimed and running, as `zmx tree`) and the Mac's zmx endpoint. Rows with
+  `remoteHost` are left out. A terminal row is left out until its primary first runs (deferred spawn, first attach),
+  never listed paneless, which the viewer would read as ended. A listed row keeps every pane it has on the origin, in
+  origin order, never compacted: a pane whose daemon is not running and not restarting carries `CatalogPane.held`
+  (optional, set only by a Mac origin), and the row is `.ended` only when every pane is held. A pane being restarted
+  by `session restart` stays listed through the kill and rebuild. The per-window listed set drops a row that leaves
+  the store, so a Recent Closed reopen waits for its new daemon. A restored hidden split is listed from the inventory
+  without a local attach. Page rows are listed. Shared shape-building code in agtermCore where the server and the Mac
+  agree.
+- **Inventory reads**: `zmx list` runs off the main actor only when the window's evidence can change: at subscribe,
+  before and after a receipt op, when the window's pane identity set changes, at a surface slot replacement, a lead
+  role change, a held exit, and a restart's begin and end; cached otherwise, never per publish and never on a poll.
+  Known limitation: a hidden split nobody attaches on the origin, whose shell exits on its own, stays listed as
+  running until the next trigger, indefinitely; `zmx tree` has no such gap because it rereads per request.
 - **`zmx present`**: the Mac's handler also accepts page rows, as the server's does; presentation ownership is
   unchanged.
 - **Publication**: one coalesced per-window dirty mark, separate from persistence. Producers: Observation tracking
   over the projection's observed fields (tree, split layout, scratch, cwd, title); explicit marks at surface backing
-  changes, zmx inventory refreshes that change a claimed/running entry of the window, the mail relay, and Recent Closed
+  changes, inventory reads (above) that change a claimed/running entry of the window, the mail relay, and Recent Closed
   changes. A receipt-bearing op refreshes synchronously before and after it applies.
 - **Hub lifetime**: the epoch is `ControlServer.originEpoch`. A window's hub is created on first use (a subscribe, an
   op or a lookup, none of which needs a subscriber) and kept until the app quits. Receipts are saved with the window's
@@ -221,30 +234,34 @@ The design was reviewed with codex over three revisions and the plan by the plan
 - Tests: `agtermCore/Tests/agtermCoreTests/` (projection, dirty seam, scope rules), `agtermTests/` hosted
   (`ControlServerMacCatalogTests.swift`: socket-level subscribe and op end to end, close/reopen)
 
-- [ ] write failing tests: one-window projection (eligible panes only, row without eligible panes omitted, empty
-      window, empty workspace, page and scratch rows, `remoteHost` rows left out, non-Live refusal by active
-      eligibility)
-- [ ] write failing tests: dirty seam fires for tree edits, split layout, scratch toggle, cwd, title, backing change,
+- [x] write failing tests: one-window projection on an injected inventory (deferred startup omitted, running lists,
+      restart keeps it listed, held primary with a live split keeps both in origin order, held split with a live
+      primary, both held is `.ended` with both panes, Recent Closed reopen waits for its new daemon, restored hidden
+      split listed, empty window, empty workspace, page and scratch rows, `remoteHost` rows left out, non-Live refusal
+      by active eligibility)
+- [x] write failing tests: dirty seam fires for tree edits, split layout, scratch toggle, cwd, title, backing change,
       inventory change, mail count, Recent Closed change; coalesced per window; receipt ops refresh synchronously;
       creation op's receipt revision includes the new row once eligible; a row still starting at the bound and a row
-      whose command exited before eligibility both answer `applied` with the id; page and workspace creation answer at
-      once
-- [ ] write failing tests: op scope table (every batch target, destination, anchor, companion parent, undo id,
+      whose command exited before eligibility both answer ok with the id (`noop`, no revision moved); page and
+      workspace creation answer at once
+      ⚠️ hosted tests run no zmx, so a creation whose row becomes eligible (`applied` at the row's revision) is checked
+      in the two-Mac run under Post-Completion
+- [x] write failing tests: op scope table (every batch target, destination, anchor, companion parent, undo id,
       flag clear, hidden third-Mac row as target or anchor, workspace delete refused while it holds hidden rows with
       the count in the reason, workspace flag and tint applied, closed window), `catalogViewers` read-back counts
       subscribers and is omitted at zero, ops
       never reach `remoteRoute` forwarding; every `RemoteOperation.words` plus `--window <id>` parses in agtermctlKit;
       no incidental selection or reveal, selected-row close still reconciles; an op before any subscribe
-- [ ] write failing hosted tests: `catalog.subscribe` and `catalog.op` over the socket end to end; close the origin
+- [x] write failing hosted tests: `catalog.subscribe` and `catalog.op` over the socket end to end; close the origin
       window (stream ends with non-final "window closed", receipts kept on disk), reopen it (hub, dirty tracking and
       receipt persistence rebound to the new store; a repeated op id answers its recorded outcome; a later edit
       publishes)
-- [ ] implement the hand-off arm, `catalogSubscribe` and `catalogOperation` on the Mac, per-window hubs on
+- [x] implement the hand-off arm, `catalogSubscribe` and `catalogOperation` on the Mac, per-window hubs on
       `originEpoch` kept until quit, durable per-window receipts, op interception before :543, the dirty seam,
       no-select creation with the bounded eligibility wait, window-scoped Recent Closed and undo, window-closed stream
       end, `zmx present` accepting page rows, `version` with `macCatalog`
-- [ ] downstream check for changed `public` symbols (`ControlActions`, `catalogOperation` signature)
-- [ ] focused agtermCore and hosted tests pass
+- [x] downstream check for changed `public` symbols (`ControlActions`, `catalogOperation` signature)
+- [x] focused agtermCore and hosted tests pass
 
 ### Task 3: The viewer opens and drives a Mac-origin remote window
 
@@ -271,8 +288,13 @@ The design was reviewed with codex over three revisions and the plan by the plan
       end; ambiguity error, "no open window", unknown or remote selector, server host rejecting the option; the HTML
       bridge leaves `originWindow` alone; an older app dropping the field; read-back of origin kind and origin window,
       omitted when nil
+- [ ] ➕ write failing tests: held panes. A held pane gets `RemoteSession.endedCommand` in its own slot with no
+      attach, roles unchanged; an `.ended` row carrying held panes keeps both slots on a cold snapshot and on reconnect
+      (`insertCatalogSession` adds the split only for `.live` today, and the ended update branch returns before pane
+      reconciliation); a pane whose `held` clears gets a fresh attach; `handlePaneExit`, respawn and reconnect never
+      attach a held pane or a held scratch, in a mixed live/held row included
 - [ ] implement the client, actions, binding, `WindowSource.originWindow`, library keying and naming, picker step,
-      `originWindow` arg and `--origin-window`, read-back
+      `originWindow` arg and `--origin-window`, read-back, per-pane held handling
 - [ ] confirm a server host takes exactly today's path (no window step, no `--window`)
 - [ ] downstream check for changed `public` symbols (`windowRemoteOpen` overload with a default, `WindowSource`,
       `ControlRemoteWindow.init`, client and actions)

@@ -135,6 +135,17 @@ struct CatalogFramesTests {
         #expect(try JSONDecoder().decode(CatalogPane.self, from: JSONEncoder().encode(counted)).pendingMessages == 3)
     }
 
+    @Test func aHeldPaneIsMarkedAndARunningOneCarriesNoMark() throws {
+        let endpoint = ControlZmxEndpoint(executable: "/bin/zmx", socketDirectory: "/tmp/zmx")
+        var held = CatalogPane(identity: UUID(), daemon: "d", endpoint: endpoint)
+        let running = try JSONEncoder().encode(held)
+        held.held = true
+
+        #expect(!String(decoding: running, as: UTF8.self).contains("held"))
+        #expect(try JSONDecoder().decode(CatalogPane.self, from: running).held == nil)
+        #expect(try JSONDecoder().decode(CatalogPane.self, from: JSONEncoder().encode(held)).held == true)
+    }
+
     @Test func anEmptyCustomNameTravelsAsEmptyAndAnOlderServerOmitsIt() throws {
         var unnamed = CatalogFixture.session().fields
         unnamed.customName = ""

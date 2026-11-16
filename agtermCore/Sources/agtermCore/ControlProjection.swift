@@ -908,6 +908,8 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     public let minimized: Bool?
     /// remote is the server a remote window mirrors; its `state` is omitted for a closed window, which has no stream.
     public var remote: ControlRemoteWindow?
+    /// catalogViewers is how many Macs mirror this window as a remote window, omitted at none.
+    public var catalogViewers: Int?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,

@@ -10,7 +10,8 @@ extension ControlServer: PresentationStreamHost {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
-            guard session.allPanesBackedByZmx else {
+            // a page row has no pane; a remote window's viewer presents it for its asks and picks
+            guard session.allPanesBackedByZmx || (session.content == .page && session.remoteHost == nil) else {
                 return ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

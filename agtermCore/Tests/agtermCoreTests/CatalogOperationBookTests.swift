@@ -17,7 +17,7 @@ struct CatalogOperationBookTests {
             return ControlResponse(ok: true)
         }
 
-        var operationStore: AppStore { store }
+        var operationStore: AppStore? { store }
         var operationHub: CatalogHub { hub }
         func operationRefusal(_ request: ControlRequest) -> String? { refusal }
         func runOperation(_ request: ControlRequest) async -> ControlResponse {

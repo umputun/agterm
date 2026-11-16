@@ -12,8 +12,11 @@ extension Session {
                 """)
         @Option(name: .long, help: "The undoID a 'session close --undoable --json' reply carried.") var target: String
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
-        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .sessionUndo, target: target, args: options.withWindow()) }
+        func makeRequest() throws -> ControlRequest {
+            operation.stamp(ControlRequest(cmd: .sessionUndo, target: target, args: options.withWindow()))
+        }
 
         func run() throws {
             let send = companionSend(SocketClient(path: options.socketPath()).send, json: options.json,

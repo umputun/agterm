@@ -4,7 +4,9 @@ import Foundation
 /// numbering the catalog, the refusals only the origin can judge, and the command itself.
 @MainActor
 public protocol CatalogOperationHost: AnyObject {
-    var operationStore: AppStore { get }
+    /// operationStore holds the table, nil once the catalog's store is gone: nothing is saved then, since another
+    /// store may own the file or the file was deleted.
+    var operationStore: AppStore? { get }
     var operationHub: CatalogHub { get }
     /// operationRefusal answers why `request` cannot run on the catalog as it stands now, nil when it can.
     func operationRefusal(_ request: ControlRequest) -> String?
@@ -27,6 +29,8 @@ public final class CatalogOperationBook {
 
     // set while the table holds an entry its last write failed to save
     private var unsaved = false
+    // operations that finished with no store to save into, recorded into the next store the host has
+    private var held: [CatalogReceipt] = []
 
     public init() {}
 
@@ -37,8 +41,9 @@ public final class CatalogOperationBook {
             return ControlResponse(ok: false, error: "\(request.cmd.rawValue) takes no operation id")
         }
         guard CatalogReceipt.isValidOpID(opID) else { return ControlResponse(ok: false, error: "invalid operation id") }
-        let hub = host.operationHub, store = host.operationStore
-        var table = store.catalogOperations ?? CatalogOperationTable()
+        guard let store = host.operationStore else { return Self.gone }
+        let hub = host.operationHub
+        var table = settleHeld(in: store, host: host)
         if let recorded = table.receipt(opID) { return durable(store) ? Self.reply(recorded) : Self.unsaved(opID) }
         guard request.args?.epoch == hub.epoch else {
             let error = "the catalog is at epoch \(hub.epoch); take its snapshot and send the command again"
@@ -64,7 +69,11 @@ public final class CatalogOperationBook {
             receipt = CatalogReceipt(opID: opID, epoch: hub.epoch, outcome: .noop)
         }
         // another request may have recorded its own operation while this one ran
-        table = store.catalogOperations ?? table
+        guard let current = host.operationStore else {
+            held.append(receipt)
+            return Self.unsaved(opID)
+        }
+        table = settleHeld(in: current, host: host)
         guard save(receipt, into: &table, host: host) else { return Self.unsaved(opID) }
         var reply = response
         var result = reply.result ?? ControlResult()
@@ -77,8 +86,8 @@ public final class CatalogOperationBook {
     /// late is refused rather than run after the caller gave up on it; it is recorded `unknown` instead when a drop
     /// may have taken its entry since `sent`, where the caller sent it.
     public func lookup(_ opID: String, sent: CatalogPosition?, host: any CatalogOperationHost) -> ControlResponse {
-        let store = host.operationStore
-        var table = store.catalogOperations ?? CatalogOperationTable()
+        guard let store = host.operationStore else { return Self.gone }
+        var table = settleHeld(in: store, host: host)
         if let recorded = table.receipt(opID) {
             guard durable(store) else { return Self.unsaved(opID) }
             return ControlResponse(ok: true, result: Self.result(recorded))
@@ -95,9 +104,21 @@ public final class CatalogOperationBook {
     /// the same way, but the caller is told nothing durable was kept.
     private func save(_ receipt: CatalogReceipt, into table: inout CatalogOperationTable, host: any CatalogOperationHost) -> Bool {
         table.record(receipt, at: Self.position(host.operationHub))
-        host.operationStore.catalogOperations = table
-        unsaved = !host.operationStore.saveChecked()
+        guard let store = host.operationStore else { return false }
+        store.catalogOperations = table
+        unsaved = !store.saveChecked()
         return !unsaved
+    }
+
+    /// settleHeld records the held receipts into `store`'s table, which a failed write leaves for `durable` to retry.
+    private func settleHeld(in store: AppStore, host: any CatalogOperationHost) -> CatalogOperationTable {
+        var table = store.catalogOperations ?? CatalogOperationTable()
+        guard !held.isEmpty else { return table }
+        for receipt in held { table.record(receipt, at: Self.position(host.operationHub)) }
+        held = []
+        store.catalogOperations = table
+        unsaved = !store.saveChecked()
+        return table
     }
 
     /// durable is whether the table on disk holds what memory does, retrying a write that failed: an entry only
@@ -108,6 +129,8 @@ public final class CatalogOperationBook {
     }
 
     private static func position(_ hub: CatalogHub) -> CatalogPosition { CatalogPosition(epoch: hub.epoch, rev: hub.rev) }
+
+    private static let gone = ControlResponse(ok: false, error: "the catalog's window is closed")
 
     private static func unsaved(_ opID: String) -> ControlResponse {
         ControlResponse(ok: false, error: "the receipt for operation \(opID) could not be saved; ask catalog.op for it")

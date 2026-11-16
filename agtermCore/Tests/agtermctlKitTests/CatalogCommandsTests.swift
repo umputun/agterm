@@ -133,16 +133,44 @@ struct CatalogCommandsTests {
         let anchor = UUID()
         let operation = RemoteOperation.newPage(anchor: anchor, companion: companion, page: try #require(RemotePageOptions(asked)))
 
-        let parsed = try Agtermctl.parseAsRoot(operation.words + ["--op-id", "op-1", "--epoch", "e1"])
+        let window = UUID().uuidString
+        let parsed = try Agtermctl.parseAsRoot(operation.words + ["--window", window, "--op-id", "op-1", "--epoch", "e1"])
         let request = try #require(parsed as? any RequestCommand).makeRequest()
 
         #expect(request.cmd == (companion ? .sessionCompanionPage : .sessionPage))
         #expect(request.target == anchor.uuidString)
         #expect(request.args?.opID == "op-1")
+        #expect(request.args?.window == window)
         guard case .options(let sent) = ControlDispatcher.pageRowOptions(request.args, row: row, needsPage: "needs a page") else {
             Issue.record("the forwarded page row was refused")
             return
         }
         #expect(sent == asked)
+    }
+}
+
+extension CatalogCommandsTests {
+    static let anyID = UUID()
+    static let everyOperation: [RemoteOperation] = [
+        .newSession(workspace: anyID), .newSession(workspace: anyID, anchor: .after(anyID)),
+        .newSessionInNamedWorkspace(name: "w", create: true), .newCompanion(parent: anyID),
+        .setSplit(anyID, shown: true, axis: nil), .setScratch(anyID, shown: true), .closeSplit(anyID), .swap(anyID),
+        .renameSession(anyID, name: "n"), .moveSession(anyID, to: .workspace(anyID)), .closeSession(anyID, undoable: true),
+        .closeSessions([anyID, UUID()]), .moveSessions([anyID, UUID()], to: .before(anyID)), .setFlag(anyID, on: true),
+        .clearFlags, .setTint(anyID, .clear), .setWorkspaceFlag(anyID, on: true), .setWorkspaceTint(anyID, .clear),
+        .newWorkspace(name: "w"), .renameWorkspace(anyID, name: "w"), .deleteWorkspace(anyID), .moveWorkspace(anyID, to: "up"),
+        .restart(anyID, pane: .left, command: nil), .duplicateCompanion(anyID), .convertCompanion(anyID),
+        .killDaemon(anyID, pane: .left), .undoClose(anyID.uuidString), .reopenRecent(nil),
+    ]
+
+    @Test(arguments: everyOperation)
+    func everyOperationNamesTheWindowItRunsIn(_ operation: RemoteOperation) throws {
+        let window = UUID().uuidString
+        let operands = operation.operands.isEmpty ? [] : ["--"] + operation.operands
+        let parsed = try Agtermctl.parseAsRoot(operation.words + ["--window", window, "--op-id", "op-1", "--epoch", "e1"] + operands)
+        let request = try #require(parsed as? any RequestCommand).makeRequest()
+
+        #expect(request.args?.window == window)
+        #expect(request.args?.opID == "op-1")
     }
 }
