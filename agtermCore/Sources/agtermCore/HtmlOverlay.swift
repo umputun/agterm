@@ -267,6 +267,8 @@ public struct HtmlOverlay: Equatable, Sendable {
     public internal(set) var textFiles: TextFiles?
     /// textWrap is whether a text page wraps long lines.
     public internal(set) var textWrap = false
+    /// textExpand is whether a JSON Lines page lays each record out over indented rows.
+    public internal(set) var textExpand = false
     /// imagePixels is an image page's probed size, which it needs to be handed to another Mac.
     public let imagePixels: ImagePixels?
     public var loadState: HtmlLoadState = .loading
@@ -315,9 +317,9 @@ public struct HtmlOverlay: Equatable, Sendable {
     }
 
     /// mirror takes the text state the presenting Mac reported for this origin record of a page it shows; true when
-    /// following, the query or the wrap changed.
+    /// following, the query, the wrap or the expand changed.
     mutating func mirror(_ text: PresentationTextState) -> Bool {
-        let before = (logState?.following, textSearch?.query, textWrap)
+        let before = (logState?.following, textSearch?.query, textWrap, textExpand)
         if let following = text.following { logState?.following = following }
         if let log = text.log { logState?.report = log }
         searchRevision = text.revision
@@ -325,9 +327,10 @@ public struct HtmlOverlay: Equatable, Sendable {
             $0.isEmpty ? nil : TextSearch(query: $0, matches: text.matches ?? 0, current: text.current ?? 0)
         }
         textWrap = text.wrap
+        textExpand = text.expand ?? false
         textChanges = text.changes
         textFiles = text.files
-        return before != (logState?.following, textSearch?.query, textWrap)
+        return before != (logState?.following, textSearch?.query, textWrap, textExpand)
     }
 
     /// grantError says why `file` cannot be opened under `grantRoot`, nil when it can. Both must be absolute, and the file

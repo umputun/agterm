@@ -283,6 +283,30 @@ final class ControlServerTextPageTests: XCTestCase {
         XCTAssertEqual(remote.error, TextWrapFailure.remote.message)
     }
 
+    func testExpandAnswersTheStateItLeftOnTheModelAndItsReadBack() async throws {
+        let (_, session) = try addSession()
+        let records = stateDir.appendingPathComponent("events.jsonl")
+        try Data("{\"a\":1}\n".utf8).write(to: records)
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(records.path, log: nil)).ok)
+
+        let expanded = await server.setSessionOverlayExpand(session.id.uuidString, window: nil, pane: nil, mode: .toggle)
+
+        XCTAssertEqual(expanded, ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString, text: "expanded")))
+        XCTAssertEqual(try treeText(session)?.expand, true)
+        let collapsed = await server.setSessionOverlayExpand(session.id.uuidString, window: nil, pane: nil, mode: .off)
+        XCTAssertEqual(collapsed.result?.text, "collapsed")
+        XCTAssertNil(try treeText(session)?.expand)
+    }
+
+    func testExpandRefusesAPageThatIsNotJSONLines() async throws {
+        let (_, session) = try addSession()
+        XCTAssertTrue(server.openSessionOverlay(session.id.uuidString, window: nil, options: options(log.path, log: nil)).ok)
+
+        let refused = await server.setSessionOverlayExpand(session.id.uuidString, window: nil, pane: nil, mode: .on)
+
+        XCTAssertEqual(refused.error, TextExpandFailure.notJSONLines.message)
+    }
+
     private func treeText(_ session: Session) throws -> ControlTextOverlayNode? {
         let tree = try XCTUnwrap(server.controlTree(window: nil).result?.tree)
         let node = try XCTUnwrap(tree.workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString })

@@ -7,8 +7,10 @@
   const language = source.dataset.language;
   const target = Number(source.dataset.line);
   const log = source.dataset.log !== undefined;
+  const jsonl = source.dataset.jsonl !== undefined;
+  // a laid-out JSON Lines page: each file line's first shown line, then the shown line count
+  const records = source.dataset.records ? source.dataset.records.split(',').map(Number) : null;
   source.remove();
-
 
   const pre = document.createElement('pre');
   const code = document.createElement('code');
@@ -62,22 +64,39 @@
     if (!lineRows) lineRows = measureRows(lineCount());
     return lineRows[line];
   };
+  // the gutter and the target band number file lines; wrapping keeps to shown lines
+  const slotCount = () => (records ? records.length - 1 : lineCount());
+  const slotStart = (slot) => rowStart(records ? records[slot] : slot);
+  // in document coordinates, which scrollTop measures
+  const rowTop = (row) => {
+    const style = getComputedStyle(pre);
+    return page.offsetTop + pre.offsetTop + parseFloat(style.paddingTop) + row * parseFloat(style.lineHeight);
+  };
+  const topSlot = () => {
+    const view = scroller.scrollTop + bar.offsetHeight;
+    let low = 0, high = slotCount() - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (rowTop(slotStart(mid)) <= view) low = mid; else high = mid - 1;
+    }
+    return low;
+  };
   const placers = [];
 
   let following = false;
   const logControls = log ? startLog() : null;
   if (!log) {
-    const count = lineCount();
+    const count = slotCount();
     const gutter = document.createElement('div');
     gutter.className = 'agterm-gutter';
     gutter.textContent = Array.from({ length: count }, (_, i) => i + 1).join('\n');
     page.append(gutter, pre);
     // a wrapped line's number heads its first row, and blank rows fill the rest
     const drawGutter = () => {
-      gutter.textContent = Array.from({ length: count }, (_, i) => `${i + 1}${'\n'.repeat(rowStart(i + 1) - rowStart(i) - 1)}`)
+      gutter.textContent = Array.from({ length: count }, (_, i) => `${i + 1}${'\n'.repeat(slotStart(i + 1) - slotStart(i) - 1)}`)
         .join('\n');
     };
-    if (wrapped) drawGutter();
+    if (wrapped || records) drawGutter();
     placers.push(drawGutter);
     if (rows) paintRows(rows);
     if (Number.isInteger(target) && target >= 1 && target <= count) {
@@ -86,8 +105,8 @@
       band.className = 'agterm-band';
       const placeBand = () => {
         const height = parseFloat(style.lineHeight);
-        band.style.top = `${parseFloat(style.paddingTop) + rowStart(target - 1) * height}px`;
-        band.style.height = `${(rowStart(target) - rowStart(target - 1)) * height}px`;
+        band.style.top = `${parseFloat(style.paddingTop) + slotStart(target - 1) * height}px`;
+        band.style.height = `${(slotStart(target) - slotStart(target - 1)) * height}px`;
       };
       placeBand();
       placers.push(placeBand);
@@ -97,10 +116,13 @@
     }
     const anchor = Number(source.dataset.anchor);
     if (Number.isFinite(anchor)) scrollTo(anchor);
+    const top = Number(source.dataset.top);
+    if (Number.isInteger(top) && top >= 0 && top < count) scrollTo(top ? rowTop(slotStart(top)) - bar.offsetHeight : 0);
   }
   const changes = rows ? startChanges(rows) : null;
   const files = rows ? startFiles() : null;
   const wrapper = startWrap();
+  const expander = !log && jsonl ? startExpand() : null;
   finder.start();
   window.addEventListener('keydown', keys);
   window.addEventListener('resize', () => {
@@ -264,10 +286,7 @@
       toggle.textContent = wrapped ? 'Wrap: on' : 'Wrap: off';
       toggle.setAttribute('aria-pressed', String(wrapped));
     };
-    const lineTop = (line) => {
-      const style = getComputedStyle(pre);
-      return page.offsetTop + pre.offsetTop + parseFloat(style.paddingTop) + rowStart(line) * parseFloat(style.lineHeight);
-    };
+    const lineTop = (line) => rowTop(rowStart(line));
     const topLine = () => {
       const view = scroller.scrollTop + bar.offsetHeight;
       let low = 0, high = lineCount() - 1;
@@ -298,6 +317,21 @@
       toggle: () => set(!wrapped, true),
       set: (value) => set(value, false),
     };
+  }
+
+  // the app lays the records out and rebuilds the page, so the toggle only asks for it
+  function startExpand() {
+    const expanded = source.dataset.expand !== undefined;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'agterm-expand';
+    toggle.title = 'Lay records out (e)';
+    toggle.textContent = expanded ? 'Expand: on' : 'Expand: off';
+    toggle.setAttribute('aria-pressed', String(expanded));
+    bar.querySelector('.agterm-wrap').after(toggle);
+    const ask = () => send({ expand: !expanded });
+    toggle.addEventListener('click', ask);
+    return { toggle: ask };
   }
 
   function glyph(path) {
@@ -1119,6 +1153,7 @@
       if (event.key === '[' && changes) { changes.step(false); return true; }
       if (event.key === 'f' && files) { files.open(); return true; }
       if (event.key === 'w') { wrapper.toggle(); return true; }
+      if (event.key === 'e' && expander) { expander.toggle(); return true; }
       if (!logControls) return false;
       if (event.key === 'F') { logControls.toggle(); return true; }
       if (event.key === 'G' || event.key === 'End') { logControls.bottom(); return true; }
@@ -1134,9 +1169,15 @@
   window.agtermTextChangeStep = (forward) => (changes ? changes.step(forward) : { count: 0, current: 0 });
   window.agtermTextFileGo = (target) => (files && files.goTo(String(target))) || { count: 0, current: 0 };
   window.agtermTextNavigation = () => ({ top: scroller.scrollTop, entered: changes ? changes.picked() : false,
-                                         file: files ? files.pinned() : 0 });
+                                         file: files ? files.pinned() : 0, line: log ? 0 : topSlot(),
+                                         focused: document.activeElement === finder.field,
+                                         start: finder.field.selectionStart, end: finder.field.selectionEnd });
   window.agtermTextFocusSearch = () => {
     finder.field.focus();
     finder.field.select();
+  };
+  window.agtermTextRestoreSearch = (start, end) => {
+    finder.field.focus();
+    finder.field.setSelectionRange(start, end);
   };
 })();

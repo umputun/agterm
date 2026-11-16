@@ -178,7 +178,7 @@ renumbering. Do not reintroduce a count anywhere.
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
   `.overlay.reload`, `.overlay.navigate`,
   `.overlay.result`, `.overlay.submit`, `.overlay.copy`, `.overlay.text`, `.overlay.job.run`, `.overlay.page.serve`, `.overlay.hide`,
-  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.files`, `.overlay.wrap`,
+  `.overlay.show`, `.overlay.toggle`, `.overlay.follow`, `.overlay.search`, `.overlay.changes`, `.overlay.files`, `.overlay.wrap`, `.overlay.expand`,
   `.hud.open`, `.hud.update`,
   `.hud.close`
 - `surface.zoom`, `surface.cursor`, `dashboard`, `pick.open`, `pick.result`, `pick.cancel`,
@@ -964,6 +964,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   and the end from the code element's last fragment: a diff marker's zero-size rect is empty. The gutter,
   target, diff and change bands all read those rows. A toggle reports a log page's offset, which a rebuild reopens at.
   Read back `htmlOverlays[].text.wrap`, omitted while unwrapped.
+- A static `.jsonl`/`.ndjson` page lays its records out (`session.overlay.expand on|off|toggle`, the bar's Expand
+  button, `e`). Language `jsonl` maps to the `json` grammar through `TextPage.grammar(forFile:)`, which a log page,
+  a diff's `data-files` and `LogFollower.push` share. `HtmlOverlay.textExpand` is per page and never persisted.
+  Unlike Wrap it replaces the text: `JSONLines.format` reindents each record from its own tokens within the 4 MB
+  page budget, and `data-records` maps file lines to shown rows for the gutter and the `:N` band. The page only asks;
+  `TextPageBridge.apply` rebuilds on a model change, reopening at the file line under the bar (`data-top`, never
+  the pixel anchor) with the search field's focus and caret, and replays a change that lands while the document
+  waits for its ready. A log page is refused (`.log`): its follow shift and search restore count file lines.
+  The remote action needs `page.expand`; `PresentationTextState.expand` is sent only when true and read as off
+  when absent. Read back `htmlOverlays[].text.expand`, omitted while collapsed.
 - `browser.clear` removes all website data from the saved store and keeps its id. App-global: a target or
   `--window` is refused. It answers ok without creating anything when no profile exists, and replies only
   after WebKit reports the removal done. It is refused with `N persistent page(s) still open` while any
@@ -2323,9 +2333,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The presenter runs each one through `runTextPageAction`, the local command, queued per page so they apply in order,
   against the replica, which the same commands also reach on its own socket.
   Every text-state change on a replica, its bar's included, rides `pageState.text` and is mirrored into the origin's
-  record; a re-offer seeds the new replica with following, query and wrap (`textSeed`), never a step.
+  record; a re-offer seeds the new replica with following, query, wrap and expand (`textSeed`), never a step.
   An older presenter gets `OverlayHtmlError.logRemote` for a log page, the plain page for a clicked log, and the
-  store's `remote page` refusals for search, changes and wrap, and for files when it also lacks `page.files`.
+  store's `remote page` refusals for search, changes and wrap, for files when it also lacks `page.files`, and for
+  expand when it lacks `page.expand` (the Expand bullet above).
   A headless origin answers a text action on a page held for no presenter `the viewer showing this overlay is gone`.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,

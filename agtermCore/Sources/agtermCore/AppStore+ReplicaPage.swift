@@ -29,7 +29,7 @@ extension AppStore {
         return nil
     }
 
-    // a page offered again opens with the following, query and wrap it had; a step is never replayed
+    // a page offered again opens with the following, query, wrap and expand it had; a step is never replayed
     static func seeded(_ overlay: HtmlOverlay, _ seed: PresentationTextState?) -> HtmlOverlay {
         guard let seed, overlay.source.kind == .text else { return overlay }
         var page = overlay
@@ -37,6 +37,7 @@ extension AppStore {
         page.searchRevision = seed.revision
         page.textSearch = seed.query.flatMap { $0.isEmpty ? nil : TextSearch(query: $0) }
         page.textWrap = seed.wrap
+        page.textExpand = seed.expand ?? false
         return page
     }
 
@@ -199,7 +200,8 @@ extension AppStore {
         return PresentationTextState(following: page.logState?.following, log: page.logState?.report,
                                      query: page.textSearch?.query, revision: page.searchRevision,
                                      matches: page.textSearch?.matches, current: page.textSearch?.current,
-                                     wrap: page.textWrap, changes: page.textChanges, files: page.textFiles)
+                                     wrap: page.textWrap, changes: page.textChanges, files: page.textFiles,
+                                     expand: page.textExpand ? true : nil)
     }
 
     /// closeReplicaPages takes down every page `session` shows for its origin: with the stream gone the origin

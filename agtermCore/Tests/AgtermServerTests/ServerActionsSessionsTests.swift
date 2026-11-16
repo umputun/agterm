@@ -429,10 +429,12 @@ struct ServerActionsSessionsTests {
         #expect(guiAsk.ok, "\(guiAsk)")
         let follow = await harness.actions.setSessionOverlayFollow(row, window: nil, pane: nil, mode: .on)
         let wrap = await harness.actions.setSessionOverlayWrap(row, window: nil, pane: nil, mode: .on)
+        let expand = await harness.actions.setSessionOverlayExpand(row, window: nil, pane: nil, mode: .on)
         let search = await harness.actions.searchSessionOverlay(row, window: nil, pane: nil, request: .next)
         let changes = await harness.actions.stepSessionOverlayChanges(row, window: nil, pane: nil, forward: true)
-        #expect([follow, wrap, search, changes].map(\.error) == [TextLogFollowFailure.notLog.message, TextWrapFailure.notText.message,
-                                                                 TextSearchFailure.notText.message, TextChangesFailure.notDiff.message])
+        #expect([follow, wrap, expand, search, changes].map(\.error)
+            == [TextLogFollowFailure.notLog.message, TextWrapFailure.notText.message, TextExpandFailure.notJSONLines.message,
+                TextSearchFailure.notText.message, TextChangesFailure.notDiff.message])
     }
 
     @Test func aPageRowIsSavedAndReopenedOnRestart() async throws {

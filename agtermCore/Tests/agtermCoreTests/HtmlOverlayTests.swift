@@ -1308,4 +1308,76 @@ struct HtmlOverlayTests {
 
         #expect(text.wrap == true)
     }
+
+    @Test(arguments: [(ControlToggleMode.on, false, true), (.off, true, false), (.toggle, true, false), (.toggle, false, true)])
+    func expandModeSetsTheJSONLinesPage(mode: ControlToggleMode, from: Bool, to: Bool) throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.jsonl", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextExpand(page.id, expanded: from)
+        let opened = events.count
+
+        #expect(store.setTextExpand(session.id, pane: nil, mode: mode) == .success(to))
+
+        #expect(session.htmlOverlay?.textExpand == to)
+        #expect(events.count == opened + 1)
+    }
+
+    @Test func anExpandThatChangesNothingEmitsNothing() throws {
+        let (store, session, events) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.ndjson", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        store.setTextExpand(page.id, expanded: true)
+        let expanded = events.count
+
+        store.setTextExpand(page.id, expanded: true)
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .success(true))
+
+        #expect(events.count == expanded)
+    }
+
+    @Test func expandRefusesEverythingButAStaticJSONLinesPage() throws {
+        let (store, session, _) = try logStore()
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .failure(.page(.noOverlay)))
+        #expect(store.setTextExpand(UUID(), pane: nil, mode: .on) == .failure(.page(.unknownSession)))
+
+        for page in [HtmlOverlay(source: .markdown(path: "/tmp/a.md")), HtmlOverlay(source: .text(path: "/tmp/a.json", line: nil)),
+                     HtmlOverlay(source: .replica(path: "/tmp/a.txt", content: .text(line: nil)), replicaOf: UUID())] {
+            #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+            #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .failure(.notJSONLines))
+            #expect(session.htmlOverlay?.textExpand == false)
+            #expect(store.closeOverlay(session.id))
+        }
+
+        let log = HtmlOverlay(source: .text(path: "/tmp/events.jsonl", line: nil), textLog: TextLog(tail: 50, follow: true))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: log, sizePercent: nil) == nil)
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .failure(.log))
+        #expect(store.closeOverlay(session.id))
+
+        let replica = HtmlOverlay(source: .replica(path: "/tmp/a.jsonl", content: .text(line: nil)), replicaOf: UUID())
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: replica, sizePercent: nil) == nil)
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .success(true))
+        #expect(session.htmlOverlay?.textExpand == true)
+        #expect(store.closeOverlay(session.id))
+
+        #expect(store.openOverlay(session.id, command: "less"))
+        #expect(store.setTextExpand(session.id, pane: nil, mode: .on) == .failure(.page(.notHtml)))
+        #expect(TextExpandFailure.notJSONLines.message == "no JSON Lines page")
+        #expect(TextExpandFailure.log.message == "log page: expand works on a static page")
+        #expect(TextExpandFailure.remote.message == "remote page: expand it on the Mac that shows it")
+    }
+
+    @Test func aTextPageNodeReportsExpandOnlyWhileExpanded() throws {
+        let (store, session, _) = try logStore()
+        let page = HtmlOverlay(source: .text(path: "/tmp/a.jsonl", line: nil))
+        #expect(store.openHtmlOverlay(session.id, pane: nil, overlay: page, sizePercent: nil) == nil)
+        let before = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+        let json = String(data: try JSONEncoder().encode(before), encoding: .utf8) ?? ""
+        #expect(!json.contains("expand"))
+
+        store.setTextExpand(page.id, expanded: true)
+        let text = try #require(store.htmlOverlayNodes(session, zoom: nil)?.first?.text)
+
+        #expect(text.expand == true)
+    }
 }

@@ -109,6 +109,7 @@ final class MockControlActions: ControlActions {
         case overlayVisibility(target: String?, window: String?, pane: OverlayPane?, mode: OverlayVisibilityMode)
         case overlayFollow(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlayWrap(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
+        case overlayExpand(target: String?, window: String?, pane: OverlayPane?, mode: ControlToggleMode)
         case overlaySearch(target: String?, window: String?, pane: OverlayPane?, request: TextSearchRequest)
         case overlayChanges(target: String?, window: String?, pane: OverlayPane?, forward: Bool)
         case overlayFiles(target: String?, window: String?, pane: OverlayPane?, to: String)
@@ -783,6 +784,12 @@ final class MockControlActions: ControlActions {
                                mode: ControlToggleMode) -> ControlResponse {
         calls.append(.overlayWrap(target: target, window: window, pane: pane, mode: mode))
         return ControlResponse(ok: true, result: ControlResult(id: target, text: "wrapped"))
+    }
+
+    func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.overlayExpand(target: target, window: window, pane: pane, mode: mode))
+        return ControlResponse(ok: true, result: ControlResult(id: target, text: "expanded"))
     }
 
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,

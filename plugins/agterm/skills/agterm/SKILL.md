@@ -2,10 +2,10 @@
 name: agterm
 description: >
   Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
-  manage and move sessions, companions and workspaces; split panes; toggle scratch; run, hide or show overlays;
+  manage and move sessions, companions and workspaces; split panes; toggle scratch; run/hide/show overlays;
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
   page row;
-  post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code; type
+  post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
   into or restart a pane by id, copy its selection, set the clipboard, search scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
   split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
-  show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show this HTML page or artifact, make an HTML page or explainer for this and show
+  show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show a JSONL file or expand its records, show this HTML page or artifact, make an HTML page or explainer for this and show
   it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
@@ -872,7 +872,8 @@ agtermctl session overlay follow off --target "$AGTERM_SESSION_ID"   # pause; on
 line. The user pauses by scrolling up and resumes at the bottom or with Resume. Read back `text.tail`, `following`,
 `lines`, `clipped`, `waiting` (file missing) and `unreadable`. On a session another Mac presents, the log page and
 `follow`, `search`, `wrap`, `changes` and `files` work on that Mac when its agterm shows live text pages, `files` only when
-it also navigates files (`page.files`); an older one refuses them.
+it also navigates files (`page.files`); an older one refuses them. `expand` works there on a static JSON Lines page
+when that Mac also lists `page.expand`.
 
 Search a text or log page, not the terminal under it:
 
@@ -894,6 +895,16 @@ agtermctl session overlay wrap on --target "$AGTERM_SESSION_ID"   # off unwraps,
 
 The user wraps with the bar's Wrap button or `w`. A page opens unwrapped and keeps its choice until it closes. Read
 back `text.wrap`, true while wrapped and omitted otherwise.
+
+A `.jsonl` or `.ndjson` file opens as written, one record per line, colored as JSON. To lay every record out over
+indented rows, numbered by its line in the file:
+
+```bash
+agtermctl session overlay expand on --target "$AGTERM_SESSION_ID"   # off shows it as written, toggle flips
+```
+
+The user toggles it with the bar's Expand button or `e`. Read back `text.expand`, true while expanded and omitted
+otherwise. A log page (`--tail`, `--follow-file`) stays as written and is refused.
 
 To show the user changes, write each changed file's diff to its own `.diff` file and list them as links; a ⌘-click
 opens it as a read-only text page:

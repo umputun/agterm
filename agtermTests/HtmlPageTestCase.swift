@@ -116,6 +116,33 @@ class HtmlPageTestCase: XCTestCase {
         return window
     }
 
+    static let rendererWorld = WKContentWorld.world(name: "agterm-markdown")
+
+    func inRenderer(_ script: String, _ view: WKWebView) async throws -> Any? {
+        try await view.evaluateJavaScript(script, in: nil, contentWorld: Self.rendererWorld)
+    }
+
+    func openText(_ name: String, _ text: String, line: Int? = nil) throws -> HtmlOverlay {
+        let url = pages.appendingPathComponent(name)
+        try text.write(to: url, atomically: true, encoding: .utf8)
+        let overlay = HtmlOverlay(source: .text(path: url.path, line: line))
+        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
+        return overlay
+    }
+
+    func json(_ text: String) throws -> String {
+        String(decoding: try JSONEncoder().encode(text), as: UTF8.self)
+    }
+
+    func press(_ key: String, _ view: WKWebView) async throws {
+        _ = try await inRenderer("window.dispatchEvent(new KeyboardEvent('keydown', { key: \(try json(key)) })); true", view)
+    }
+
+    func shown(_ overlay: HtmlOverlay) throws -> (HtmlOverlayPage, NSWindow) {
+        let page = registry.page(for: overlay, store: store)
+        return (page, try host(page.webView))
+    }
+
     /// fetched lists the origin paths a `replicaLink` page asked for, in order.
     var fetched: [String] = []
 

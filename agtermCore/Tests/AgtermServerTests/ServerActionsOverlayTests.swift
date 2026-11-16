@@ -85,10 +85,11 @@ struct ServerActionsOverlayTests {
 
         let follow = await harness.actions.setSessionOverlayFollow(id, window: nil, pane: nil, mode: .on)
         let wrap = await harness.actions.setSessionOverlayWrap(id, window: nil, pane: nil, mode: .on)
+        let expand = await harness.actions.setSessionOverlayExpand(id, window: nil, pane: nil, mode: .on)
         let search = await harness.actions.searchSessionOverlay(id, window: nil, pane: nil, request: .next)
         let changes = await harness.actions.stepSessionOverlayChanges(id, window: nil, pane: nil, forward: true)
 
-        #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayHtmlError.noOverlay, count: 4))
+        #expect([follow, wrap, expand, search, changes].map(\.error) == Array(repeating: OverlayHtmlError.noOverlay, count: 5))
     }
 
     @Test func textCommandsOnALogHeldForNoMacAnswerThatTheViewerIsGone() async throws {
@@ -99,10 +100,11 @@ struct ServerActionsOverlayTests {
 
         let follow = await harness.actions.setSessionOverlayFollow(id, window: nil, pane: nil, mode: .on)
         let wrap = await harness.actions.setSessionOverlayWrap(id, window: nil, pane: nil, mode: .on)
+        let expand = await harness.actions.setSessionOverlayExpand(id, window: nil, pane: nil, mode: .on)
         let search = await harness.actions.searchSessionOverlay(id, window: nil, pane: nil, request: .next)
         let changes = await harness.actions.stepSessionOverlayChanges(id, window: nil, pane: nil, forward: true)
 
-        #expect([follow, wrap, search, changes].map(\.error) == Array(repeating: OverlayResultError.viewerGone, count: 4))
+        #expect([follow, wrap, expand, search, changes].map(\.error) == Array(repeating: OverlayResultError.viewerGone, count: 5))
     }
 
     @Test func followUpsOnAnEmptySlotAreRefused() throws {

@@ -11,7 +11,6 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         <a href="https://example.com/x">x</a> javascript:document.title='ran' <object data=x></object> https://example.com/y
 
         """
-    private static let rendererWorld = WKContentWorld.world(name: "agterm-markdown")
 
     func testHostileTextStaysTextWhetherPlainOrHighlighted() async throws {
         for name in ["hostile.txt", "hostile.js"] {
@@ -286,24 +285,8 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         try handle.close()
     }
 
-    private func inRenderer(_ script: String, _ view: WKWebView) async throws -> Any? {
-        try await view.evaluateJavaScript(script, in: nil, contentWorld: Self.rendererWorld)
-    }
-
     private static let manyLines = (1...200).map { "line \($0)" }.joined(separator: "\n") + "\n"
     private static let bar = "document.querySelector('.agterm-logbar')?.textContent ?? ''"
-
-    private func openText(_ name: String, _ text: String, line: Int? = nil) throws -> HtmlOverlay {
-        let url = pages.appendingPathComponent(name)
-        try text.write(to: url, atomically: true, encoding: .utf8)
-        let overlay = HtmlOverlay(source: .text(path: url.path, line: line))
-        XCTAssertNil(store.openHtmlOverlay(session.id, pane: nil, overlay: overlay, sizePercent: nil))
-        return overlay
-    }
-
-    private func json(_ text: String) throws -> String {
-        String(decoding: try JSONEncoder().encode(text), as: UTF8.self)
-    }
 
     func testALogPageShowsItsBarNoGutterAndItsEnd() async throws {
         let (overlay, _) = try openLog(Self.manyLines)
@@ -476,6 +459,23 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(spans as? Int, 0)
     }
 
+    func testAFollowedJSONLinesLogKeepsItsJSONHighlightingAndOffersNoExpand() async throws {
+        let (overlay, url) = try openLog("{\"a\": 1}\n", name: "events.jsonl")
+        let page = registry.page(for: overlay, store: store)
+        let keys = "document.querySelectorAll('pre code .hljs-attr').length"
+        try await waitForScript(keys, in: page.webView) { $0 == "1" }
+
+        try append("{\"b\": 2}\n", to: url)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent.endsWith('{\"b\": 2}\\n')", in: page.webView) {
+            $0 == "true"
+        }
+        let highlighted = try await page.webView.evaluateJavaScript(keys)
+        XCTAssertEqual(highlighted as? Int, 2)
+        let expand = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-expand') === null")
+        XCTAssertEqual(expand as? Bool, true)
+    }
+
     func testAHeldScrollbarDragPastTheIntentWindowStillResumes() async throws {
         let (overlay, _) = try openLog(Self.manyLines, follow: false)
         let page = registry.page(for: overlay, store: store)
@@ -591,15 +591,6 @@ extension TextPageRenderingTests {
         let bridge = try XCTUnwrap(page.textPage)
         let found = try await bridge.step(forward: forward, query: model.textSearch?.query ?? "", revision: model.searchRevision).get()
         return "\(found.current) of \(found.matches)"
-    }
-
-    private func press(_ key: String, _ view: WKWebView) async throws {
-        _ = try await inRenderer("window.dispatchEvent(new KeyboardEvent('keydown', { key: \(try json(key)) })); true", view)
-    }
-
-    private func shown(_ overlay: HtmlOverlay) throws -> (HtmlOverlayPage, NSWindow) {
-        let page = registry.page(for: overlay, store: store)
-        return (page, try host(page.webView))
     }
 
     private func resume(_ page: HtmlOverlayPage) throws {

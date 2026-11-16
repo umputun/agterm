@@ -443,12 +443,12 @@ public struct PresentationPageChange: Codable, Equatable, Sendable {
 /// the stream.
 public enum PresentationPageAction: String, Codable, Sendable {
     case hide, show, reloadOriginal, reloadCurrent, back, forward, browser, resize
-    case follow, search, wrap, changes, files
+    case follow, search, wrap, expand, changes, files
 
     /// answersWithResult says the presenter answers this action with a `pageResult` rather than only `appliedSeq`.
     public var answersWithResult: Bool {
         switch self {
-        case .follow, .search, .wrap, .changes, .files: return true
+        case .follow, .search, .wrap, .expand, .changes, .files: return true
         case .hide, .show, .reloadOriginal, .reloadCurrent, .back, .forward, .browser, .resize: return false
         }
     }
@@ -543,7 +543,7 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
 }
 
 /// PresentationTextState is a text page's live state on the presenter: a log page's following and last read, the
-/// search query under the presenter's revision with its counts, wrap, and a diff page's changes.
+/// search query under the presenter's revision with its counts, wrap, expand, and a diff page's changes.
 public struct PresentationTextState: Codable, Equatable, Sendable {
     public var following: Bool?
     public var log: TextLogReport?
@@ -552,13 +552,16 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
     public var matches: Int?
     public var current: Int?
     public var wrap: Bool
+    /// expand is true while a JSON Lines page is laid out; nil means off, and is all a presenter predating
+    /// `page.expand` ever sends.
+    public var expand: Bool?
     public var changes: TextChanges?
     /// files is a diff page's file in view; an origin predating `page.files` ignores the key.
     public var files: TextFiles?
 
     public init(following: Bool? = nil, log: TextLogReport? = nil, query: String? = nil, revision: Int = 0,
                 matches: Int? = nil, current: Int? = nil, wrap: Bool = false, changes: TextChanges? = nil,
-                files: TextFiles? = nil) {
+                files: TextFiles? = nil, expand: Bool? = nil) {
         self.files = files.map { TextFiles(count: $0.count, current: $0.current, path: String($0.path.prefix(TextFiles.maxPath))) }
         self.following = following
         self.log = log
@@ -567,6 +570,7 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
         self.matches = matches
         self.current = current
         self.wrap = wrap
+        self.expand = expand
         self.changes = changes
     }
 }

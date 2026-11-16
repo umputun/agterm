@@ -15,6 +15,7 @@ public enum TextPage {
     public static let maxTailBytes = 2 << 20
     private static let logExtensions: Set<String> = ["log", "out"]
     private static let diffLanguage = "diff"
+    private static let recordsLanguage = "jsonl"
 
     private static let languages: [String: String] = [
         "swift": "swift", "go": "go", "py": "python", "rb": "ruby", "rs": "rust",
@@ -22,7 +23,8 @@ public enum TextPage {
         "c": "c", "h": "c", "cc": "cpp", "cpp": "cpp", "cxx": "cpp", "hpp": "cpp", "m": "objectivec", "mm": "objectivec",
         "java": "java", "kt": "kotlin", "kts": "kotlin", "cs": "csharp", "php": "php", "pl": "perl", "pm": "perl",
         "lua": "lua", "r": "r", "sql": "sql", "css": "css", "scss": "scss", "less": "less", "graphql": "graphql",
-        "sh": "bash", "bash": "bash", "zsh": "bash", "json": "json", "yaml": "yaml", "yml": "yaml",
+        "sh": "bash", "bash": "bash", "zsh": "bash", "json": "json", "jsonl": recordsLanguage, "ndjson": recordsLanguage,
+        "yaml": "yaml", "yml": "yaml",
         "toml": "ini", "ini": "ini", "cfg": "ini", "conf": "ini", "xml": "xml", "plist": "xml",
         "diff": diffLanguage, "patch": diffLanguage, "mk": "makefile", "vb": "vbnet",
     ]
@@ -34,11 +36,21 @@ public enum TextPage {
     ]
     private static let plainBasenames: Set<String> = ["Dockerfile", "LICENSE", "README", "CHANGELOG", "Procfile", ".gitignore", ".env"]
 
-    /// language is the bundled highlight.js language for `path`, by lowercased extension and then by exact
-    /// file name; nil means the file shows as plain text, or is not a text page at all.
+    /// language is the page language for `path`, by lowercased extension and then by exact file name: a bundled
+    /// highlight.js language, or `jsonl`, which `grammar(forFile:)` highlights as JSON. nil means the file shows as
+    /// plain text, or is not a text page at all.
     public static func language(forFile path: String) -> String? {
         let name = (path as NSString).lastPathComponent
         return languages[(name as NSString).pathExtension.lowercased()] ?? basenameLanguages[name]
+    }
+
+    /// grammar is the highlight.js grammar for `path`: its `language`, with JSON Lines highlighted as JSON.
+    public static func grammar(forFile path: String) -> String? {
+        grammar(language(forFile: path))
+    }
+
+    private static func grammar(_ language: String?) -> String? {
+        language == recordsLanguage ? "json" : language
     }
 
     /// isEligible says whether a clicked `path` opens as a text page. Markdown, HTML and SVG are not text
@@ -63,7 +75,7 @@ public enum TextPage {
             guard row.hasPrefix("--- ") || row.hasPrefix("+++ ") else { continue }
             let path = String(row.dropFirst(4).prefix { $0 != "\t" })
             let file = path.count > 1 && path.hasPrefix("\"") && path.hasSuffix("\"") ? String(path.dropFirst().dropLast()) : path
-            if let language = language(forFile: file) { found[path] = language }
+            if let language = grammar(forFile: file) { found[path] = language }
         }
         return found
     }
@@ -216,10 +228,27 @@ public enum TextPage {
     /// `change` is the change a rebuilt page reopens on, from 1, still the step's origin when `entered`, and `file` the
     /// file it keeps shown, from 1. Under the limit a diff also carries `diffLanguages` as JSON, so each file's lines
     /// are highlighted in that file's language. `wrap` opens the page with long lines wrapped.
+    /// A plain page of JSON Lines is marked `data-jsonl` whatever its size, so it can offer Expand; with `expand` it
+    /// shows its records laid out, `data-records` mapping each file line to its first shown line for the gutter. A
+    /// log page stays raw, since its follow shift and search restore count file lines. `top`, the file line a rebuilt
+    /// JSON Lines page reopens under its bar, replaces `anchor`, a pixel offset that belongs to the other layout.
     public static func html(text: String, language: String?, line: Int?, style: String, log: TextLogState? = nil,
                             anchor: Double? = nil, search: SearchState? = nil, change: Int? = nil,
-                            entered: Bool = false, file: Int? = nil, wrap: Bool = false) -> String {
+                            entered: Bool = false, file: Int? = nil, wrap: Bool = false, expand: Bool = false,
+                            top: Int? = nil) -> String {
+        var text = text
+        let records = log == nil && language == recordsLanguage
+        let language = grammar(language)
         var attributes = ""
+        if records {
+            attributes += " data-jsonl"
+            if expand {
+                let formatted = JSONLines.format(text, budget: maxBytes)
+                text = formatted.text
+                attributes += " data-expand data-records=\"\(formatted.starts.map(String.init).joined(separator: ","))\""
+            }
+            if let top, top >= 0 { attributes += " data-top=\"\(top)\"" }
+        }
         let highlighted = text.utf8.count <= maxHighlightBytes
         if log == nil, language == diffLanguage {
             attributes += " data-diff"
@@ -254,7 +283,7 @@ public enum TextPage {
         } else if let line {
             attributes += " data-line=\"\(line)\""
         }
-        if let anchor, anchor.isFinite { attributes += " data-anchor=\"\(anchor)\"" }
+        if let anchor, anchor.isFinite, !records || top == nil { attributes += " data-anchor=\"\(anchor)\"" }
         if wrap { attributes += " data-wrap" }
         return """
         <!doctype html><html><head><meta charset="utf-8">\

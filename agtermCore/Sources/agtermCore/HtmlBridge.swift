@@ -56,7 +56,7 @@ public enum HtmlBridge {
                                                    .sessionOverlayNavigate, .sessionOverlaySubmit,
                                                    .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
                                                    .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayChanges,
-                                                   .sessionOverlayFiles, .sessionOverlayWrap]
+                                                   .sessionOverlayFiles, .sessionOverlayWrap, .sessionOverlayExpand]
     // these take their window as `target`, not as `args.window`
     private static let windowTargeted: Set<Command> = [.windowClose, .windowSelect, .windowRename, .windowDelete,
                                                        .windowResize, .windowMove, .windowZoom, .windowFullscreen,

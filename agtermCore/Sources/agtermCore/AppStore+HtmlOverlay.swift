@@ -120,6 +120,24 @@ public enum TextWrapFailure: Error, Equatable, Sendable {
     }
 }
 
+/// TextExpandFailure is why a `session.overlay.expand` request was refused.
+public enum TextExpandFailure: Error, Equatable, Sendable {
+    case page(HtmlOverlayCommandFailure)
+    case notJSONLines
+    case log
+    case remote
+
+    /// message is the control error for this refusal.
+    public var message: String {
+        switch self {
+        case .page(let failure): return failure.message
+        case .notJSONLines: return "no JSON Lines page"
+        case .log: return "log page: expand works on a static page"
+        case .remote: return "remote page: expand it on the Mac that shows it"
+        }
+    }
+}
+
 extension AppStore {
     /// openHtmlOverlay opens a page in the session-wide slot (`pane` nil) or one pane's slot, with the slot
     /// rules of `openOverlay`/`openPaneOverlay`. Refused when the placement rule hands the slot to the presenting
@@ -381,6 +399,40 @@ extension AppStore {
         if changed { scheduleTreeChanged() }
     }
 
+    /// setTextExpand applies `mode` to the JSON Lines page in the slot `pane` addresses, with the slot refusals of
+    /// `textSearchPage`, and returns whether it now lays its records out.
+    public func setTextExpand(_ sessionID: UUID, pane: OverlayPane?, mode: ControlToggleMode) -> Result<Bool, TextExpandFailure> {
+        let page: HtmlOverlay
+        switch textSearchPage(sessionID, pane: pane) {
+        case .success(let found): page = found
+        case .failure(.page(let failure)): return .failure(.page(failure))
+        case .failure(.remote): return .failure(.remote)
+        case .failure: return .failure(.notJSONLines)
+        }
+        switch page.source {
+        case .text(let path, _), .replica(let path, .text):
+            guard TextPage.language(forFile: path) == "jsonl" else { return .failure(.notJSONLines) }
+            guard page.textLog == nil else { return .failure(.log) }
+        default:
+            return .failure(.notJSONLines)
+        }
+        let expanded = mode.desiredValue(current: page.textExpand)
+        setTextExpand(page.id, expanded: expanded)
+        return .success(expanded)
+    }
+
+    /// setTextExpand records whether text page `id` lays its records out, from control or the page's own toggle. A
+    /// change emits `tree.changed`; any other page is left alone.
+    public func setTextExpand(_ id: UUID, expanded: Bool) {
+        var changed = false
+        updateHtmlOverlay(id) {
+            guard $0.source.kind == .text, $0.textExpand != expanded else { return }
+            $0.textExpand = expanded
+            changed = true
+        }
+        if changed { scheduleTreeChanged() }
+    }
+
     /// htmlOverlaySlot finds the slot holding page `id` in a visible session, nil once the page left it.
     public func htmlOverlaySlot(_ id: UUID) -> (session: Session, pane: OverlayPane?)? {
         for session in workspaces.flatMap(\.sessions) {
@@ -435,7 +487,7 @@ extension AppStore {
                                           },
                                           changes: page.textChanges.map { ControlTextChangesNode(count: $0.count, current: $0.current) },
                                           files: page.textFiles.map { ControlTextFilesNode(count: $0.count, current: $0.current, path: $0.path) },
-                                          wrap: page.textWrap ? true : nil)
+                                          wrap: page.textWrap ? true : nil, expand: page.textExpand ? true : nil)
         }
         return ControlHtmlOverlayNode(pane: pane?.rawValue, file: file, cwd: cwd, url: url, image: image, markdown: markdown, document: document, text: text,
                                       state: page.loadState.rawValue,

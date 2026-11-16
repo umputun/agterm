@@ -59,6 +59,12 @@ extension ControlServer {
         await textPageAction(target, window: window, pane: pane, .wrap(mode))
     }
 
+    /// setSessionOverlayExpand returns expanded or collapsed for the addressed JSON Lines page.
+    func setSessionOverlayExpand(_ target: String?, window: String?, pane: OverlayPane?,
+                                 mode: ControlToggleMode) async -> ControlResponse {
+        await textPageAction(target, window: window, pane: pane, .expand(mode))
+    }
+
     /// searchSessionOverlay sets or closes the query in the model, which reaches the page whenever it exists; a step
     /// goes to the loaded page once and answers `N of M`.
     func searchSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?,
@@ -105,6 +111,12 @@ extension ControlServer {
             case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
             case .success(let wrapped):
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: wrapped ? "wrapped" : "unwrapped"))
+            }
+        case .expand(let mode):
+            switch store.setTextExpand(id, pane: pane, mode: mode) {
+            case .failure(let failure): return ControlResponse(ok: false, error: failure.message)
+            case .success(let expanded):
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, text: expanded ? "expanded" : "collapsed"))
             }
         case .search(let request): return await searchTextPage(request, in: store, sessionID: id, pane: pane)
         case .changes(let forward): return await stepTextChanges(forward: forward, in: store, sessionID: id, pane: pane)

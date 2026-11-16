@@ -27,7 +27,7 @@ body { padding-top: 35px; }
 /* the full paused label, Wrap and the search box's floor need about 460px */
 @media (max-width: 480px) { .agterm-prefix, .agterm-changes span { display: none; } }
 .agterm-bar button { flex: none; }
-.agterm-logbar button, .agterm-wrap {
+.agterm-logbar button, .agterm-wrap, .agterm-expand {
   font: inherit; color: var(--fg); background: var(--tint); border: 1px solid var(--rule); border-radius: 4px;
   padding: 0 8px; cursor: pointer;
 }

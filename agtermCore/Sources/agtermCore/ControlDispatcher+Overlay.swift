@@ -341,6 +341,18 @@ extension ControlDispatcher {
         }
     }
 
+    /// dispatchSessionOverlayExpand takes an optional mode, toggle when absent.
+    func dispatchSessionOverlayExpand(_ request: ControlRequest) async -> ControlResponse {
+        guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+            return ControlResponse(ok: false, error: "invalid overlay expand mode: \(request.args?.mode ?? "toggle")")
+        }
+        switch parseOverlayPane(request.args?.pane) {
+        case .rejected(let response): return response
+        case .pane(let pane):
+            return await actions.setSessionOverlayExpand(request.target, window: request.args?.window, pane: pane, mode: mode)
+        }
+    }
+
     /// dispatchSessionOverlayChanges takes a required `to` of next or prev.
     func dispatchSessionOverlayChanges(_ request: ControlRequest) async -> ControlResponse {
         let forward: Bool

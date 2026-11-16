@@ -57,12 +57,16 @@ public struct ControlTextOverlayNode: Codable, Sendable, Equatable {
     public let files: ControlTextFilesNode?
     /// wrap is true while the page wraps long lines, omitted while it does not.
     public let wrap: Bool?
+    /// expand is true while a JSON Lines page lays its records out, omitted while it shows them as written.
+    public let expand: Bool?
 
     public init(file: String, language: String?, line: Int?, tail: Int? = nil, following: Bool? = nil, lines: Int? = nil,
                 clipped: Bool? = nil, waiting: Bool? = nil, unreadable: Bool? = nil, search: ControlTextSearchNode? = nil,
-                changes: ControlTextChangesNode? = nil, files: ControlTextFilesNode? = nil, wrap: Bool? = nil) {
+                changes: ControlTextChangesNode? = nil, files: ControlTextFilesNode? = nil, wrap: Bool? = nil,
+                expand: Bool? = nil) {
         self.search = search
         self.wrap = wrap
+        self.expand = expand
         self.changes = changes
         self.files = files
         self.file = file

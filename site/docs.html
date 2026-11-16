@@ -901,7 +901,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <ul>
 <li>A file page reads its files from the other Mac as needed, and its buttons and scripts act on the other Mac's session, so a page that answers its caller answers the program over there. Finder and browser are refused for it, since the file is not on this Mac.</li>
 <li>A web page loads directly here; with <code>--persistent</code> it uses this Mac's saved browser storage. A <code>localhost</code> page names a server on the other Mac, so it loads through an ssh forward from this Mac; an agterm here too old to forward refuses it.</li>
-<li>A picture, markdown or text page (<code>--image</code>, <code>--markdown</code>, <code>--text</code>) is fetched and built here. A markdown page follows its links to the other Mac's files (an older agterm here keeps them as text), and a picture opened without a size is sized for this screen, so an agent there can show you its screenshot. An agterm here too old for these pages refuses the open.</li>
+<li>A picture, markdown or text page (<code>--image</code>, <code>--markdown</code>, <code>--text</code>) is fetched and built here. A markdown page follows its links to the other Mac's files (an older agterm here keeps them as text), and a picture opened without a size is sized for this screen, so an agent there can show you its screenshot. An agterm here too old for these pages refuses the open. <code>session overlay expand</code> from the other Mac lays out a JSON Lines page here as it would locally; an agterm here too old for it refuses the command.</li>
 <li>A log page follows the file over there. <code>session overlay follow</code>, <code>search</code>, <code>wrap</code> and <code>changes</code> from the other Mac act on the page here and answer as they would locally; what you do in the page's bar reads back there. An agterm here too old for live text pages refuses a log page, opens a clicked log as a plain page, and refuses those commands.</li>
 <li>Closing the page from a script over there takes it down here; reloading asks this Mac to do it.</li>
 </ul>
@@ -2055,6 +2055,10 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 <td>a diff page that steps through changes</td>
 </tr>
 <tr>
+<td><code>.jsonl</code>, <code>.ndjson</code></td>
+<td>a JSON Lines page: one record per line as written, laid out on request</td>
+</tr>
+<tr>
 <td><code>.html</code>, <code>.htm</code></td>
 <td>a page with its scripts off, no access to other files, and nothing loaded from the network; a web link goes to the browser only after asking</td>
 </tr>
@@ -2102,6 +2106,10 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 <td>wrap long lines</td>
 </tr>
 <tr>
+<td><code>e</code> or the Expand button</td>
+<td>JSON Lines: lay records out, or back as written</td>
+</tr>
+<tr>
 <td><code>F</code></td>
 <td>log: follow on or off</td>
 </tr>
@@ -2119,6 +2127,7 @@ Claude Code (left) asks codex (right) to check its reading; the reply arrives in
 </tr>
 </tbody>
 </table>
+<p><strong>JSON Lines pages</strong> show the file as written, one record per line, colored as JSON. Expand lays every record out over indented rows, numbered by its line in the file, and keeps the record you were reading under the bar; the page keeps the choice until it closes. A line that is not a JSON object or array, or does not parse, stays as written, and so does a record that does not fit the page's 4 MB layout budget. A file over 4 MB does not open: the click reveals it in Finder. A <code>.jsonl</code> opened as a log (<code>--tail</code>, <code>--follow-file</code>) stays as written and has no Expand.</p>
 <p><strong>Log pages</strong> show the last 5,000 lines, read from the end so a log of any size opens, and follow the file as it grows. The bar shows whether it follows. Scroll up to pause; scroll back to the bottom or press Resume to follow again. A rotated or truncated log is picked up, and a missing one shows waiting until it returns. <code>app.log:120</code> opens the plain page at that line instead.</p>
 <figure>
 <img src="/assets/docs-page-diff.webp" alt="A patch shown as a diff page with change and file navigation, green and red bands for added and removed lines" width="760" height="535" loading="lazy">

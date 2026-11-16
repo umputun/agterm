@@ -4,7 +4,7 @@ import agtermCore
 
 struct ServerCommandPolicyTests {
     @Test(arguments: [Command.tree, .version, .windowList, .eventsRead, .sessionMove, .sessionOverlayHide, .sessionOverlayShow, .sessionOverlayToggle,
-                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
+                      .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayExpand, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
                       .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen, .sessionFlag, .sessionTint,
                       .workspaceFlag, .workspaceTint, .sessionDuplicate, .sessionRestart,
                       .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxPrune, .sessionTerminate, .zmxKillPane])
