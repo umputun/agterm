@@ -297,7 +297,6 @@ final class StatusIconView: NSImageView {
 /// from) re-tints the hosted `SidebarCellView` whenever AppKit updates it, and `didAddSubview` tints a cell the
 /// moment it attaches. Otherwise pill and text color desync — and on the many themes where
 /// `foreground == selection-background` (the inverted-selection idiom), a stale tint renders the text invisible.
-/// The disclosure triangle follows the same state through `applyDisclosureAppearance`.
 final class SidebarRowView: NSTableRowView {
     private static let keyAlpha: CGFloat = 0.13
     private static let inactiveAlpha: CGFloat = 0.07
