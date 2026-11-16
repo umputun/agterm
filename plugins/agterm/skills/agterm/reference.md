@@ -577,7 +577,8 @@ buys nothing. A caller with no tree uses `version`.
   and the keyless `convert_companion` action.
 - `session move --parent SID [--index N] [--target T] [--window W]` - move a companion under another top-level
   session of the same window, any workspace, keeping its id and running panes. `--index` is its 0-based place
-  among the new parent's companions (omitted or past the end: last); the current parent reorders it. Takes no
+  among the new parent's companions (omitted or past the end: last); on a server window it counts the server's
+  group, rows this Mac detached included. The current parent reorders it. Takes no
   workspace, `--to`, `--after`/`--before`, and one target. Refusals: `not a companion`, `the new parent must be a
   top-level session`, `a companion moves only under a session from the same host`; an app predating it answers
   `the running app is too old for companion moves`. A server window's row moves on its server (an older one

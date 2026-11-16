@@ -244,7 +244,7 @@ extension WorkspaceSidebar.Coordinator {
         let row: SidebarDrop.CompanionDropRow
         if let parent = target.parentID {
             guard index == SidebarDrop.onItemIndex,
-                  let position = companionIDs(of: parent).firstIndex(of: rowNode.id) else { return nil }
+                  let position = store.companions(of: parent).map(\.id).firstIndex(of: rowNode.id) else { return nil }
             row = .companion(parent: parent, position: position)
         } else {
             row = .parent(rowNode.id)
@@ -255,10 +255,6 @@ extension WorkspaceSidebar.Coordinator {
         return CompanionReparentDrop(companion: id, parent: move.parent, slot: move.slot,
                                      dropItem: onParentRow ? rowNode : node(for: move.parent, kind: .session),
                                      dropChildIndex: onParentRow ? SidebarDrop.onItemIndex : move.slot)
-    }
-
-    private func companionIDs(of parentID: UUID) -> [UUID] {
-        store.workspace(forSession: parentID)?.sessions.filter { $0.parentID == parentID }.map(\.id) ?? []
     }
 
     private func outlineSlot(forFlatIndex flat: Int, in workspaceID: UUID, moving ids: [UUID]) -> (SidebarNode?, Int) {

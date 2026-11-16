@@ -99,13 +99,13 @@ paths:
   untouched rather than clearing it. No control form — see `control-api.md`.
 - Rename, Copy Name, Duplicate Session, New Companion, Duplicate as Companion, Convert to Companion, and Reveal in
   Finder appear only for one target. Duplicate as Companion is omitted on a page row; Convert to Companion is omitted
-  on a companion row; a row attached from another host is converted by its origin.
-- Move to lists workspaces for top-level rows and batches. On a single companion row it lists the window's other
-  top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses. Duplicate inserts a fresh
+  on a companion row; a row attached from another host is converted by its origin. Duplicate inserts a fresh
   login-shell session immediately after the source in the same workspace, using only
   `Session.focusedCwd`. It does not copy name, command, panes, status, flag, font size, or watermark.
   `session.duplicate` provides the control form; its `tree.cwd` can differ from focused cwd when a split's
   non-primary pane is focused.
+- Move to lists workspaces for top-level rows and batches. On a single companion row it lists the window's other
+  top-level sessions under workspace headers instead, minus the current parent and what `canMoveCompanion` refuses.
 - `SidebarMode` is per-window `.tree` or `.flagged`. `flaggedSessions` is the derived tree-order
   projection; sessions keep one owning workspace and flags survive moves but not deletion.
 - Each store keeps `flaggedOrder`, the saved order the flat and plain layouts render through

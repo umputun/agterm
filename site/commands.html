@@ -1201,7 +1201,8 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Move a companion under another top-level session of the same window, in any workspace. The companion keeps
                 its id, panes and everything running in them. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--index</span> is its 0-based place among the new
-                parent's companions, past the end or omitted meaning last; a parent that is already its own reorders it.
+                parent's companions, past the end or omitted meaning last; on a server window it counts the server's group,
+                rows this Mac detached included. A parent that is already its own reorders it.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--parent</span> takes no workspace, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--to</span>, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--after</span> or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--before</span>, and one <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>. <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span> and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.parent</span>.

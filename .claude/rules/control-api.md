@@ -487,7 +487,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   the sidebar drop, Move to and control share; `canMoveCompanion` and `CompanionMoveRefusal` own the refusals, and
   `index` is the slot among the new parent's companions counted without the mover, clamped, nil appending.
   A server window's row is moved by its server (`RemoteOperation.moveCompanion`), the GUI slot mapped past this Mac's
-  detached rows by `companionIndex`; a server refusing `--parent` or the command is a final too-old answer for this
+  detached rows by `companionIndex` while a control `index` passes through in the server's terms; a server refusing `--parent` or the command is a final too-old answer for this
   operation only. A row attached from another host is checked here, moved on its origin appended, then placed here
   at the slot (`AttachedFollowUp.moveUnder`); a move under its own parent stays a local reorder. Another Mac attached
   to that origin keeps its old grouping until it reattaches, the presentation stream carrying no grouping.
