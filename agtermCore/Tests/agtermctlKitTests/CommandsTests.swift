@@ -275,7 +275,7 @@ struct CommandsTests {
     }
 
     @Test func sessionMoveRequiresWorkspaceOrTo() {
-        #expect(validationMessage(["session", "move"]) == "provide a destination workspace, --to, or --after/--before")
+        #expect(validationMessage(["session", "move"]) == "provide a destination workspace, --to, --after/--before, or --parent")
     }
 
     @Test func sessionMoveRejectsWorkspaceAndTo() {

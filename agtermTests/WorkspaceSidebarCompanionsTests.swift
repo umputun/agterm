@@ -227,26 +227,105 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
                        [group.parent.id, group.first.id, group.second.id])
     }
 
-    func testMoveToIsOfferedForAParentAndNotForACompanion() throws {
+    func testMoveToIsOfferedForAParentAndListsOtherParentsForACompanion() throws {
         let group = try seed()
-        _ = group.store.addWorkspace(name: "other")
+        let other = group.store.addWorkspace(name: "other")
+        let elsewhere = try XCTUnwrap(group.store.addSession(toWorkspace: other.id, cwd: "/tmp", name: "elsewhere", select: false))
         buildSidebar(for: group.store)
 
         let parentMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.parent.id)))
         XCTAssertNotNil(parentMenu.items.first { $0.title == "Move to" })
         group.store.setSidebarSelection([group.first.id])
         let companionMenu = try XCTUnwrap(coordinator.menu(forRow: try row(group.first.id)))
-        XCTAssertNil(companionMenu.items.first { $0.title == "Move to" }, "\(companionMenu.items.map(\.title))")
+        let submenu = try XCTUnwrap(companionMenu.items.first { $0.title == "Move to" }?.submenu, "\(companionMenu.items.map(\.title))")
+        let titles = submenu.items.map(\.title)
+        XCTAssertEqual(Array(titles.suffix(4)), ["work", "after", "other", "elsewhere"], "\(titles)")
+        XCTAssertFalse(titles.contains("parent"), "the current parent is no destination")
+        XCTAssertEqual(submenu.items.suffix(4).map(\.isSectionHeader), [true, false, true, false])
+
+        let item = try XCTUnwrap(submenu.items.first { $0.title == "elsewhere" })
+        coordinator.perform(item.action, with: item)
+
+        XCTAssertEqual(group.first.parentID, elsewhere.id)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == other.id }?.sessions.map(\.id), [elsewhere.id, group.first.id])
+    }
+
+    func testACompanionDroppedOnAnotherTopLevelRowBecomesItsFirstCompanion() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        group.store.setSessionExpanded(group.after.id, expanded: false)
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onto: group.after.id))
+
+        XCTAssertEqual(group.second.parentID, group.after.id)
+        XCTAssertEqual(group.store.workspaces.first { $0.id == group.work.id }?.sessions.map(\.id),
+                       [group.parent.id, group.first.id, group.after.id, group.second.id, resident.id])
+    }
+
+    func testACompanionDroppedInAGapOrOnARowOfAnotherGroupLandsWhereTheIndicatorShows() throws {
+        let group = try seed()
+        let resident = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        buildSidebar(for: group.store)
+
+        XCTAssertTrue(try drop([group.second.id], onto: group.after.id, childIndex: 1))
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id), [resident.id, group.second.id])
+
+        coordinator.rebuildAndReload()
+        XCTAssertTrue(try drop([group.first.id], onto: resident.id))
+        XCTAssertEqual(group.store.companions(of: group.after.id).map(\.id), [resident.id, group.first.id, group.second.id])
+        XCTAssertTrue(group.store.companions(of: group.parent.id).isEmpty)
+    }
+
+    func testACompanionHasNoSlotBetweenGroupsAndSeveralCannotChangeParentTogether() throws {
+        let group = try seed()
+        buildSidebar(for: group.store)
+
+        XCTAssertFalse(try drop([group.first.id], onto: group.work.id, childIndex: 1))
+        XCTAssertFalse(try drop([group.first.id, group.second.id], onto: group.after.id))
+        XCTAssertEqual(group.store.companions(of: group.parent.id).map(\.id), [group.first.id, group.second.id])
+    }
+
+    func testTheFlaggedTreeKeepsCompanionsAmongTheirSiblings() throws {
+        let group = try seed()
+        GhosttyApp.shared.setFlaggedViewLayout(.tree)
+        group.store.setFlag(true, forSessions: [group.parent.id, group.first.id, group.second.id, group.after.id])
+        group.store.setSidebarMode(.flagged)
+        buildSidebar(for: group.store)
+
+        _ = try drop([group.first.id], onto: group.after.id)
+
+        XCTAssertEqual(group.first.parentID, group.parent.id)
+    }
+
+    func testASelectedCompanionMovedUnderAFoldedParentIsRevealedWithoutPersisting() throws {
+        let group = try seed()
+        _ = try group.store.addCompanion(to: group.after.id, options: CompanionOptions(name: "resident")).get()
+        group.store.setSessionExpanded(group.after.id, expanded: false)
+        group.store.selectSession(group.first.id)
+        buildSidebar(for: group.store)
+        coordinator.syncSelection()
+
+        XCTAssertNoThrow(try group.store.moveCompanion(group.first.id, under: group.after.id).get())
+        coordinator.rebuildAndReload()
+        coordinator.syncSelection()
+
+        XCTAssertEqual(outline.selectedRow, try row(group.first.id))
+        XCTAssertFalse(group.after.isExpanded, "a reveal is a view action")
     }
 
     private func drop(_ ids: [UUID], onRow target: UUID) throws -> Bool {
+        try drop(ids, onto: target)
+    }
+
+    private func drop(_ ids: [UUID], onto target: UUID, childIndex: Int = SidebarDrop.onItemIndex) throws -> Bool {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name("agterm-companions-\(UUID().uuidString)"))
         defer { pasteboard.releaseGlobally() }
         pasteboard.clearContents()
         pasteboard.setString(ids.map(\.uuidString).joined(separator: "\n"), forType: sessionPasteboardType)
         let info = FakeDrag(pasteboard, over: outline)
         let operation = coordinator.outlineView(outline, validateDrop: info, proposedItem: try node(target),
-                                                proposedChildIndex: SidebarDrop.onItemIndex)
+                                                proposedChildIndex: childIndex)
         guard operation == .move else { return false }
         return coordinator.outlineView(outline, acceptDrop: info, item: outline.dropItem,
                                        childIndex: outline.dropChildIndex)

@@ -43,6 +43,11 @@ extension WorkspaceSidebar.Coordinator {
             cancelSpringLoadedExpansion()
             return resolveFlaggedReorder(from: info, item: item, childIndex: index) == nil ? [] : .move
         }
+        if let reparent = resolveCompanionReparent(from: info, item: item, childIndex: index) {
+            cancelSpringLoadedExpansion()
+            outlineView.setDropItem(reparent.dropItem, dropChildIndex: reparent.dropChildIndex)
+            return .move
+        }
         if !draggedSessionIDs(from: info).isEmpty {
             guard store.remoteActions == nil || draggedSessionIDs(from: info).count == 1,
                   let move = resolveSessionMove(from: info, item: item, childIndex: index) else {
@@ -92,6 +97,11 @@ extension WorkspaceSidebar.Coordinator {
             guard let move = resolveFlaggedReorder(from: info, item: item, childIndex: index) else { return false }
             dropSucceeded = store.moveFlagged(move.ids, to: move.placement, of: move.anchor)
             return dropSucceeded
+        }
+        if let reparent = resolveCompanionReparent(from: info, item: item, childIndex: index) {
+            actions.moveCompanion(reparent.companion, under: reparent.parent, at: reparent.slot, in: store)
+            dropSucceeded = true
+            return true
         }
         if !draggedSessionIDs(from: info).isEmpty {
             guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
@@ -216,6 +226,35 @@ extension WorkspaceSidebar.Coordinator {
                            dropChildIndex: highlight ?? move.dropChildIndex, destination: move.destination,
                            onFlaggedTreeRow: flaggedTree && node.kind == .session ? node : nil,
                            dropParent: dropParent)
+    }
+
+    // dropItem/dropChildIndex is what validateDrop sets and acceptDrop reads back, so both resolve the same move
+    private struct CompanionReparentDrop {
+        let companion: UUID
+        let parent: UUID
+        let slot: Int
+        let dropItem: SidebarNode
+        let dropChildIndex: Int
+    }
+
+    private func resolveCompanionReparent(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> CompanionReparentDrop? {
+        let ids = draggedSessionIDs(from: info)
+        guard nestsCompanions, ids.count == 1, let id = ids.first, let rowNode = item as? SidebarNode, rowNode.kind == .session,
+              let current = store.session(withID: id)?.parentID, let target = store.session(withID: rowNode.id) else { return nil }
+        let row: SidebarDrop.CompanionDropRow
+        if let parent = target.parentID {
+            guard index == SidebarDrop.onItemIndex,
+                  let position = store.companions(of: parent).map(\.id).firstIndex(of: rowNode.id) else { return nil }
+            row = .companion(parent: parent, position: position)
+        } else {
+            row = .parent(rowNode.id)
+        }
+        guard let move = SidebarDrop.companionReparent(from: current, onto: row, childIndex: index),
+              case .success = store.canMoveCompanion(id, under: move.parent) else { return nil }
+        let onParentRow = target.parentID == nil && index == SidebarDrop.onItemIndex
+        return CompanionReparentDrop(companion: id, parent: move.parent, slot: move.slot,
+                                     dropItem: onParentRow ? rowNode : node(for: move.parent, kind: .session),
+                                     dropChildIndex: onParentRow ? SidebarDrop.onItemIndex : move.slot)
     }
 
     private func outlineSlot(forFlatIndex flat: Int, in workspaceID: UUID, moving ids: [UUID]) -> (SidebarNode?, Int) {

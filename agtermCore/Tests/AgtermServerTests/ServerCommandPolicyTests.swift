@@ -7,7 +7,7 @@ struct ServerCommandPolicyTests {
                       .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles, .sessionPage,
                       .sessionCompanionPage, .sessionCompanionPageAttach, .surfaceCursor, .zmxList, .zmxScreen, .sessionFlag, .sessionTint,
                       .workspaceFlag, .workspaceTint, .sessionDuplicate, .sessionRestart,
-                      .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxPrune, .sessionTerminate, .zmxKillPane])
+                      .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxPrune, .sessionTerminate, .zmxKillPane])
     func aServedCommandPasses(_ command: Command) {
         #expect(ServerCommandPolicy.refusal(command) == nil)
     }

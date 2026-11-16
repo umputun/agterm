@@ -208,6 +208,40 @@ struct RemoteOperationRequestTests {
         #expect(parse(.sessionCompanionConvert, target: target) == .operation(.convertCompanion(first.id), select: false))
     }
 
+    @Test func aCompanionMoveGoesToTheServerWithTheCallersIndex() throws {
+        let companion = try store.addCompanion(to: first.id, options: CompanionOptions(select: false)).get()
+
+        let parsed = parse(.sessionCompanionMove, target: companion.id.uuidString) { $0.parent = String(second.id.uuidString.prefix(8)); $0.index = 3 }
+
+        #expect(parsed == .operation(.moveCompanion(companion.id, parent: second.id, index: 3), select: false))
+    }
+
+    @Test func aCompanionMoveKeepsTheLocalRefusals() throws {
+        let companion = try store.addCompanion(to: first.id, options: CompanionOptions(select: false)).get()
+        let target = companion.id.uuidString
+
+        #expect(refusal(parse(.sessionCompanionMove, target: target)) == "session.companion.move needs a parent")
+        #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = second.id.uuidString; $0.index = -1 }) == "index must be 0 or more")
+        #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = target }) == "the new parent must be a top-level session")
+        #expect(refusal(parse(.sessionCompanionMove, target: first.id.uuidString) { $0.parent = second.id.uuidString }) == "not a companion")
+        #expect(refusal(parse(.sessionCompanionMove, target: target) { $0.parent = UUID().uuidString })?.isEmpty == false)
+    }
+
+    @Test(arguments: [
+        ((nil, [], []), nil),
+        ((0, [], []), 0),
+        ((0, ["b"], ["a", "b"]), 1),
+        ((1, ["b", "c"], ["b", "a", "c"]), 2),
+        ((2, ["b", "c"], ["b", "c", "a"]), 2),
+        ((5, ["b"], ["b", "a"]), 1),
+    ] as [((Int?, [String], [String]), Int?)])
+    func aVisibleSlotMapsToTheServersGroupPastItsDetachedRows(drop: (slot: Int?, visible: [String], group: [String]), expected: Int?) {
+        let ids = Dictionary(uniqueKeysWithValues: ["a", "b", "c"].map { ($0, UUID()) })
+        let index = RemoteOperation.companionIndex(slot: drop.slot, visible: drop.visible.compactMap { ids[$0] },
+                                                   group: drop.group.compactMap { ids[$0] })
+        #expect(index == expected)
+    }
+
     @Test func aKillNamesOnePaneAndKeepsTheLocalRefusals() {
         let target = first.id.uuidString
 
@@ -335,6 +369,10 @@ struct RemoteOperationRequestTests {
         #expect(RemoteOperation.restart(id, pane: .left, command: nil).words == ["session", "restart", "--target", id.uuidString, "--pane", "left"])
         #expect(RemoteOperation.duplicateCompanion(id).words == ["session", "duplicate", "--companion", "--target", id.uuidString])
         #expect(RemoteOperation.convertCompanion(id).words == ["session", "convert", "--companion", "--target", id.uuidString])
+        #expect(RemoteOperation.moveCompanion(id, parent: id, index: 2).words
+            == ["session", "move", "--target", id.uuidString, "--parent", id.uuidString, "--index", "2"])
+        #expect(RemoteOperation.moveCompanion(id, parent: id, index: nil).words == ["session", "move", "--target", id.uuidString, "--parent", id.uuidString])
+        #expect(RemoteOperation.moveCompanion(id, parent: id, index: nil).label == "Move Companion")
         #expect(RemoteOperation.killDaemon(id, pane: .left).words == ["zmx", "kill", "--target", id.uuidString, "--pane", "left", "--force"])
         #expect(RemoteOperation.killDaemon(id, pane: .right, paneID: "tok").words
             == ["zmx", "kill", "--target", id.uuidString, "--pane", "right", "--pane-id", "tok", "--force"])

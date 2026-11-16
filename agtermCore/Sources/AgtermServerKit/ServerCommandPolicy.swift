@@ -19,7 +19,7 @@ public enum ServerCommandPolicy {
         .sessionOverlayFollow, .sessionOverlaySearch, .sessionOverlayWrap, .sessionOverlayChanges, .sessionOverlayFiles,
         .msgSend, .msgRead, .msgAck, .surfaceCursor, .zmxList, .zmxScreen, .sessionSeen,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint, .sessionDuplicate,
-        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane, .zmxPrune,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxKillPane, .zmxPrune,
         .recentList, .recentOpen, .recentClear,
     ]
 

@@ -32,6 +32,9 @@ public enum AttachedForward: Equatable, Sendable {
     case restart(session: String, paneID: String, command: String?)
     case killPane(session: String, pane: ZmxPaneRole, paneID: String)
     case convert(session: String)
+    /// moveCompanion puts the origin's companion `session` under its session `parent`, at the end of that group: the
+    /// viewer places its own row at the requested slot afterwards.
+    case moveCompanion(session: String, parent: String)
     /// duplicate starts a shell after the origin session, as a server window's Duplicate does, without moving the
     /// origin's own selection.
     case duplicate(after: String, cwd: String?)
@@ -50,6 +53,7 @@ public enum AttachedForward: Equatable, Sendable {
         case .killPane(let session, let pane, let paneID):
             ["zmx", "kill", "--target", session, "--pane", pane.rawValue, "--pane-id", paneID, "--force"]
         case .convert(let session): ["session", "convert", "--companion", "--target", session]
+        case .moveCompanion(let session, let parent): ["session", "move", "--target", session, "--parent", parent]
         case .duplicate(let after, let cwd):
             ["session", "new", "--after", after, "--no-select"] + (cwd.map { ["--cwd=" + $0] } ?? [])
         case .split(let session, let mode, let axis):
@@ -81,6 +85,7 @@ public enum AttachedForward: Equatable, Sendable {
         case .restart: .sessionRestart
         case .killPane: .zmxKillPane
         case .convert: .sessionCompanionConvert
+        case .moveCompanion: .sessionCompanionMove
         case .duplicate: .sessionNew
         case .split: .sessionSplit
         case .closeSplit: .sessionSplitClose
@@ -110,6 +115,7 @@ public enum AttachedForward: Equatable, Sendable {
         case .restart: "the pane was restarted"
         case .killPane: "the pane was killed"
         case .convert: "the session was converted"
+        case .moveCompanion: "the companion was moved"
         case .duplicate: "a session was created"
         case .split, .closeSplit: "the split changed"
         case .scratch: "the scratch changed"

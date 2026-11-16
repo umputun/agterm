@@ -465,4 +465,21 @@ struct SidebarDropTests {
     @Test func flaggedTreeDropOnItsOwnRowIsANoOp() {
         #expect(treeDrop(Self.b, from: (Self.wsA, 2), .onSession(workspace: Self.wsA, index: 2, count: 3)) == nil)
     }
+
+    @Test(arguments: [
+        (SidebarDrop.CompanionDropRow.parent(SidebarDropTests.b), SidebarDrop.onItemIndex, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 0)),
+        (.parent(SidebarDropTests.b), 2, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 2)),
+        (.parent(SidebarDropTests.b), 0, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 0)),
+        (.companion(parent: SidebarDropTests.b, position: 1), SidebarDrop.onItemIndex, SidebarDrop.CompanionReparent(parent: SidebarDropTests.b, slot: 2)),
+    ])
+    func aCompanionDroppedOnAnotherGroupJoinsItWhereTheIndicatorShows(
+        row: SidebarDrop.CompanionDropRow, childIndex: Int, expected: SidebarDrop.CompanionReparent) {
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: childIndex) == expected)
+    }
+
+    @Test(arguments: [SidebarDrop.CompanionDropRow.parent(SidebarDropTests.a), .companion(parent: SidebarDropTests.a, position: 0)])
+    func aCompanionDroppedInItsOwnGroupIsNoReparent(row: SidebarDrop.CompanionDropRow) {
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: SidebarDrop.onItemIndex) == nil)
+        #expect(SidebarDrop.companionReparent(from: Self.a, onto: row, childIndex: 1) == nil)
+    }
 }

@@ -40,6 +40,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case sessionPage = "session.page"
     case sessionCompanionDuplicate = "session.companion.duplicate"
     case sessionCompanionConvert = "session.companion.convert"
+    case sessionCompanionMove = "session.companion.move"
     /// A viewer asking for one attachment of a page companion: a single-use token for `session.overlay.page.serve`
     /// plus what the page shows.
     case sessionCompanionPageAttach = "session.companion.page.attach"
@@ -510,6 +511,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var ack: Bool?
     /// ids are the message ids `msg.ack` removes.
     public var ids: [String]?
+    /// parent is the top-level session `session.companion.move` puts the target companion under.
+    public var parent: String?
+    /// index is the companion's slot among the new parent's companions for `session.companion.move`; nil appends.
+    public var index: Int?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,

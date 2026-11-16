@@ -172,7 +172,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -444,8 +444,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.close` answers `result.closed` with every id it closed, from the group computed before the close,
   deduplicated; a parent close also sets `affected`. A single-target close also answers `recentID`, the Recent Closed
   entry it wrote (the soft close's too, written at close time), which `recent.open` takes; a batch and a row Recent
-  Closed does not keep answer none. A companion leaving its group is
-  `ControlServer.companionMoveError`; an ordinary no-op move stays ok.
+  Closed does not keep answer none. A companion leaving its group through
+  `session.move` is `ControlServer.companionMoveError`, which points to `--parent`; an ordinary no-op move stays ok.
 - `recent.open` names `parent session is not open or in Recent Closed` only when
   `WindowLibrary.recentClosedItemLacksParent` says so; other restore failures keep their own error.
 - A page companion is created by its own wire command, `session.companion.page`, for the same older-app
@@ -482,6 +482,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   is the refusal text both surfaces show. A row attached from another host is converted by its origin, which creates
   the parent there, and the viewer attaches that parent at the row's slot and moves the row under it (`AppStore.nest`);
   a server window's row is converted by its server (`RemoteOperation.convertCompanion`), as Duplicate as Companion is.
+- `session.companion.move` is its own wire command for the same older-app reason
+  (CLI `session move --parent P [--index N]`, too-old text `the running app is too old for companion moves`). `AppStore.moveCompanion` is the seam
+  the sidebar drop, Move to and control share; `canMoveCompanion` and `CompanionMoveRefusal` own the refusals, and
+  `index` is the slot among the new parent's companions counted without the mover, clamped, nil appending.
+  A server window's row is moved by its server (`RemoteOperation.moveCompanion`), the GUI slot mapped past this Mac's
+  detached rows by `companionIndex` while a control `index` passes through in the server's terms; a server refusing `--parent` or the command is a final too-old answer for this
+  operation only. A row attached from another host is checked here, moved on its origin appended, then placed here
+  at the slot (`AttachedFollowUp.moveUnder`); a move under its own parent stays a local reorder. Another Mac attached
+  to that origin keeps its old grouping until it reattaches, the presentation stream carrying no grouping.
+  Read back `parent` and the session order.
 - `PageSessionRefusal` is the one pre-dispatch guard, run by `ControlServer.pageCompanionRefusal`, a remote window's
   route and agterm-server's `pageRowRefusal`, covering the socket and a page's bridge.
   It judges `surface.zoom`/`surface.cursor` only for an explicit target, since their `active` means the
