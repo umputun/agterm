@@ -1193,6 +1193,22 @@ final class RemoteCatalogMirrorTests {
         #expect(store.session(withID: later.id)?.initialCommand == attach(later.panes[0]))
     }
 
+    @Test func aRowShownWhenTheWindowOpenedLeavesItsStoppedPaneToTheOrigin() throws {
+        reopen(claimOnOpen: true)
+        let left = pane()
+        var right = pane()
+        right.held = true
+        let row = session(panes: [left, right])
+
+        _ = open([row])
+        right.held = nil
+        delta(1, .paneChanged(right, session: row.id))
+
+        let local = try #require(store.session(withID: row.id))
+        #expect(local.initialCommand == attach(left, claim: true))
+        #expect(local.splitInitialCommand == attach(right))
+    }
+
     @Test(arguments: [(false, true), (true, false)])
     func noRowClaimsWithoutAUserOpenOrFromAServer(claimOnOpen: Bool, mac: Bool) {
         reopen(claimOnOpen: claimOnOpen, mac: mac)

@@ -405,7 +405,11 @@ public final class WindowLibrary {
     public func loadStore(for id: UUID, launchRestore: Bool = false) -> AppStore? {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
-        if windows.first(where: { $0.id == id })?.isRemote == true { return loadRemoteStore(for: id) }
+        if windows.first(where: { $0.id == id })?.isRemote == true {
+            // a window the user opens takes the lead of its rows; one the launch restores leaves it where it is
+            if !launchRestore { remoteOpenClaims.insert(id) }
+            return loadRemoteStore(for: id)
+        }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
         let snapshot = loadSnapshotForStore(persistence)

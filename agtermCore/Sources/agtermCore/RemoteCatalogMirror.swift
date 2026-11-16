@@ -372,9 +372,11 @@ public final class RemoteCatalogMirror {
                     claimPendingPanes(local.id)
                     continue
                 }
-                let claim = originIsMac && (pendingClaims.remove(session.id) != nil || claimingAll)
+                // only a row this Mac acted on waits for its panes; one present at open leaves a stopped pane to the origin
+                let owed = originIsMac && pendingClaims.remove(session.id) != nil
+                let claim = owed || (originIsMac && claimingAll)
                 let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context, claim: claim)
-                if claim { awaitUnattachedPanes(of: session) }
+                if owed { awaitUnattachedPanes(of: session) }
                 if let kept = store.catalogHiddenViews.removeValue(forKey: row.id) { kept.apply(to: row) } else { viewState.apply(to: row) }
                 if row.presentsCatalog { effects.catalogRowAdded(row) }
             }

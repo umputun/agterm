@@ -18,7 +18,6 @@ extension WindowLibrary {
     @discardableResult
     public func newRemoteWindow(host: String, originWindow: UUID? = nil, originName: String? = nil) -> WindowInfo {
         if let existing = windows.first(where: { $0.source?.host == host && $0.source?.originWindow == originWindow }) {
-            if stores[existing.id] == nil { remoteOpenClaims.insert(existing.id) }
             loadStore(for: existing.id)
             return existing
         }

@@ -79,6 +79,21 @@ final class WindowLibraryRemoteTests {
         #expect(library.openRemoteStores.map(\.id) == [remote.id])
     }
 
+    @Test func reopeningAClosedRemoteWindowTakesTheLeadAndALaunchRestoreDoesNot() throws {
+        let library = WindowLibrary(directory: directory)
+        let remote = library.newRemoteWindow(host: "buildbox", originWindow: UUID())
+        _ = library.takeOpenClaim(remote.id)
+        library.closeWindow(remote.id)
+
+        library.loadStore(for: remote.id)
+        let reopened = library.takeOpenClaim(remote.id)
+        library.closeWindow(remote.id)
+        library.loadStore(for: remote.id, launchRestore: true)
+
+        #expect(reopened)
+        #expect(!library.takeOpenClaim(remote.id))
+    }
+
     @Test func anAliasWhoseSnapshotArrivesAfterItOpenedSettlesToTheWindowShowingThatCatalog() throws {
         let library = WindowLibrary(directory: directory)
         let catalog = UUID()
