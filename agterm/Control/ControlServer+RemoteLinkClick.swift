@@ -21,7 +21,8 @@ extension ControlServer {
         guard let store = library.store(forSession: click.session) else { return .notPresenter }
         let client = remoteClients[click.session]
         let supported = client?.originSupports(PresentationHub.linkClickKind) == true
-        switch store.linkClickRequest(click, originSupportsClick: supported, hidden: remoteLinkPageHidden(click.session)) {
+        switch store.linkClickRequest(click, originSupportsClick: supported, hidden: remoteLinkPageHidden(click.session),
+                                      originTakesLeads: client?.claimsLead == true) {
         case .failure(let reason): return reason
         case .success(let frame):
             client?.answer(.linkClick(frame))

@@ -30,13 +30,13 @@ extension ControlServer: PresentationStreamHost {
     /// Points every open store at the hub. Stores are created by the window library, which this file cannot
     /// reach into, so the server assigns wherever it already walks the open windows.
     func attachPresentationHub() {
-        presentationHub.onPresenterLost = { [weak self] session in
-            self?.takeBackRemoteAsk(forSession: session)
-            self?.takeBackRemotePick(forSession: session)
-            self?.library.store(forSession: session)?.remoteOverlayPresenterLost(forSession: session)
+        presentationHub.onOwnerLost = { [weak self] session, owner in
+            self?.takeBackRemoteAsk(forSession: session, owner: owner)
+            self?.takeBackRemotePick(forSession: session, owner: owner)
+            self?.library.store(forSession: session)?.remoteOverlayOwnerLost(forSession: session, owner: owner)
         }
-        presentationHub.onPresenterFrame = { [weak self] session, body in
-            self?.receivePresenterFrame(body, forSession: session)
+        presentationHub.onPresenterFrame = { [weak self] session, sender, body in
+            self?.receivePresenterFrame(body, forSession: session, from: sender)
         }
         RemotePageEnds.shared.onEnd = { [weak self] page in self?.pageServeStreams[page]?.shutdown() }
         HtmlOverlayReleases.shared.onReplicaRelease = { [weak self] local, origin in self?.replicaPageReleased(local, origin: origin) }

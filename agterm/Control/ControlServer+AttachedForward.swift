@@ -9,7 +9,7 @@ enum AttachedPlan: Sendable {
 }
 
 /// AttachedFollowUp is what the viewer does here once the origin answered ok.
-enum AttachedFollowUp: Sendable {
+enum AttachedFollowUp: Sendable, Equatable {
     case none
     /// attachAfter attaches the session the origin created right after the row.
     case attachAfter
@@ -17,6 +17,8 @@ enum AttachedFollowUp: Sendable {
     case nestUnderCreated
     /// select selects the row, as `--follow` does.
     case select
+    /// moveUnder moves the row under the local `parent` at `index`, the slot the origin was not told.
+    case moveUnder(parent: UUID, index: Int?)
 }
 
 /// TerminatePlan is a `session.terminate` split by where each root runs: one origin close per origin, and the local
@@ -39,8 +41,8 @@ extension ControlServer {
     /// attachedRoute sends a request on a row attached from another host to its origin; nil runs it here as usual.
     func attachedRoute(_ request: ControlRequest) -> RemoteRoute? {
         if request.cmd == .sessionTerminate { return terminateRoute(request) }
-        let forwarded: Set<Command> = [.sessionRestart, .zmxKill, .zmxKillPane, .sessionCompanionConvert, .sessionDuplicate,
-                                       .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionRestore]
+        let forwarded: Set<Command> = [.sessionRestart, .zmxKill, .zmxKillPane, .sessionCompanionConvert, .sessionCompanionMove,
+                                       .sessionDuplicate, .sessionSplit, .sessionSplitClose, .sessionScratch, .sessionRestore]
         // a request the command's own checks refuse goes on to the dispatcher, which answers it in its own words
         guard forwarded.contains(request.cmd), !ControlDispatcher.refusesArguments(request) else { return nil }
         // zmx.kill refuses `active` itself; resolving it here would aim the kill at whatever is in front
@@ -51,10 +53,31 @@ extension ControlServer {
         if request.cmd == .sessionScratch, let refusal = originScratchRefusal(row, origin: origin) {
             return .refused(ControlResponse(ok: false, error: refusal))
         }
+        if request.cmd == .sessionCompanionMove { return companionMoveRoute(request, row: row, origin: origin, in: store) }
         switch attachedForward(request, row: row, origin: origin) {
         case .failure(let refusal): return .refused(ControlResponse(ok: false, error: refusal.message))
         case .success(let (forward, then)): return .attached(.forward(forward, origin: origin, row: id, then: then))
         }
+    }
+
+    /// companionMoveRoute checks the move here before the origin is asked, since a row attached alone can be top-level
+    /// here and a companion there. A move to the row's own parent is a reorder, which stays on this Mac.
+    private func companionMoveRoute(_ request: ControlRequest, row: Session, origin: AttachedOrigin, in store: AppStore) -> RemoteRoute? {
+        guard let parent = request.args?.parent?.trimmingCharacters(in: .whitespaces) else { return nil }
+        let resolution = ControlResolve.resolve(parent, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                                active: store.selectedSessionID)
+        guard case .resolved(let parentID) = resolution else {
+            return .refused(ControlResponse(ok: false, error: ControlResolve.errorMessage(noun: "session", target: parent, resolution: resolution)))
+        }
+        if case .failure(let refusal) = store.canMoveCompanion(row.id, under: parentID) {
+            return .refused(ControlResponse(ok: false, error: refusal.message))
+        }
+        guard row.parentID != parentID else { return nil }
+        guard let parentRow = store.session(withID: parentID), let parentOrigin = AttachedOrigin(parentRow) else {
+            return .refused(ControlResponse(ok: false, error: CompanionMoveRefusal.otherHost.message))
+        }
+        return .attached(.forward(.moveCompanion(session: origin.session, parent: parentOrigin.session), origin: origin, row: row.id,
+                                  then: .moveUnder(parent: parentID, index: request.args?.index)))
     }
 
     /// originScratchRefusal is why an attached row cannot show its origin's scratch: a row runs no scratch of its own.
@@ -227,6 +250,14 @@ extension ControlServer {
         case .select:
             if let store = library.store(forSession: row) { store.selectSession(row) }
             return ControlResponse(ok: true, result: ControlResult(id: row.uuidString))
+        case .moveUnder(let parent, let index):
+            guard let store = library.store(forSession: row) else {
+                return ControlResponse(ok: false, error: "moved on \(origin.host), but not here: no such session")
+            }
+            if case .failure(let refusal) = store.moveCompanion(row, under: parent, at: index) {
+                return ControlResponse(ok: false, error: "moved on \(origin.host), but not here: \(refusal.message)")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: row.uuidString, parent: parent.uuidString))
         case .attachAfter, .nestUnderCreated:
             let created = then == .attachAfter ? reply.result?.id : reply.result?.parent
             guard let created, UUID(uuidString: created) != nil else {

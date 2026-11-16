@@ -240,6 +240,39 @@ public enum SidebarDrop {
         parentIndex + 1 + max(0, slot)
     }
 
+    /// CompanionDropRow is the ordinary-tree row a dragged companion is dropped on or among: a top-level session,
+    /// or a companion at `position` among its parent's companions.
+    public enum CompanionDropRow: Equatable, Sendable {
+        case parent(UUID)
+        case companion(parent: UUID, position: Int)
+    }
+
+    /// CompanionReparent is where a dropped companion joins another group: the new parent and its slot there.
+    public struct CompanionReparent: Equatable, Sendable {
+        public let parent: UUID
+        public let slot: Int
+
+        public init(parent: UUID, slot: Int) {
+            self.parent = parent
+            self.slot = slot
+        }
+    }
+
+    /// companionReparent resolves a single companion dropped in the ordinary tree into another group, where the
+    /// indicator shows: on a top-level row it becomes that row's first companion, in a gap among a parent's companions
+    /// it takes that gap, on a companion row it lands right after it. nil when the drop stays in its own group.
+    public static func companionReparent(from currentParent: UUID, onto row: CompanionDropRow,
+                                         childIndex: Int) -> CompanionReparent? {
+        let resolved: CompanionReparent
+        switch row {
+        case .parent(let id):
+            resolved = CompanionReparent(parent: id, slot: childIndex == onItemIndex ? 0 : max(0, childIndex))
+        case .companion(let parent, let position):
+            resolved = CompanionReparent(parent: parent, slot: position + 1)
+        }
+        return resolved.parent == currentParent ? nil : resolved
+    }
+
     /// FlaggedTree is the workspace tree as the flagged tree layout sees it: every session, and which are
     /// flagged.
     public struct FlaggedTree: Sendable {

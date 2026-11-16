@@ -27,6 +27,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.convert"))
     }
 
+    func moveCompanion(_: String?, parent _: String, index _: Int?, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.move"))
+    }
+
     func createPageCompanion(_: String?, window _: String?, options _: ControlSessionOverlayOpenOptions) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.page"))
     }

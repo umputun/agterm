@@ -36,6 +36,18 @@ struct AttachedForwardTests {
             == .refused("the command failed on box"))
     }
 
+    @Test func aCompanionMoveNamesBothOriginSessionsAndIsTooOldWhereTheOriginLacksIt() throws {
+        let move = AttachedForward.moveCompanion(session: "c1", parent: "p2")
+        let unknown = ControlResponse(ok: false, error: "invalid request: Cannot initialize Command from invalid String value session.companion.move")
+
+        #expect(move.words == ["session", "move", "--target", "c1", "--parent", "p2"])
+        #expect(move.command == .sessionCompanionMove)
+        #expect(move.outcome(of: RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--parent'"), host: "box") == tooOld)
+        #expect(move.outcome(of: try printed(unknown, status: 1), host: "box") == tooOld)
+        #expect(move.outcome(of: RemoteCommandResult(status: 255, stdout: "", stderr: ""), host: "box")
+            == .unknown("box gave no answer; whether the companion was moved there is unknown"))
+    }
+
     @Test(arguments: [("", "box gave no answer; whether the pane was killed there is unknown"),
                       ("ssh: timeout\n", "box gave no answer (ssh: timeout); whether the pane was killed there is unknown")])
     func anUnreadableReplyIsUnknownNamingTheHost(stderr: String, reason: String) {

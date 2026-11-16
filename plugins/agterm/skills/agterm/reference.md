@@ -177,8 +177,9 @@ the id `zmx attach` takes; on a remote window's row it equals the row's `id`; om
 origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
 never whether the panes' ssh connections are),
-`presenters` (on an origin session: `mirrors`, how many streams mirror it without presenting, one per
-attached row and not per Mac, and `presenter: true` when one presents it; omitted when none does),
+`presenters` (on an origin session: `viewers`, how many streams show it, one per attached row and not per
+Mac; `mirrors`, those without the presenter role; and `presenter: true` when one holds it; omitted when none
+does; an older origin omits `viewers`),
 `remoteOverlays` (on an origin session: the overlay slots a presenting Mac holds, each `{pane?,
 sizePercent?, pageID?}`, `pageID` for a page, while the session itself stays uncovered here; omitted when
 none is held),
@@ -286,12 +287,13 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?, remote?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
 overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
-pane's [msg](#msg) mailbox and is omitted at zero. `lead` is `leader`, `follower`
+pane's [msg](#msg) mailbox and is omitted at zero. `remote` is `true` on an origin's main or split pane whose
+next ask, overlay or page goes to an attached Mac (see Remote sessions), omitted otherwise. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
@@ -533,7 +535,8 @@ buys nothing. A caller with no tree uses `version`.
   Use a command companion to keep a related program next to a session:
   `agtermctl session new --parent active --command 'tail -f build.log' --name logs`, adding `--wait` to keep
   its output after it exits.
-  A companion reorders only among its siblings (drag or `session move`), and moving the parent carries its
+  A companion reorders among its siblings (drag or `session move`) and moves under another session with
+  `session move --parent` or a drag onto that session; moving the parent carries its
   companions. Other session commands (status, notify, type, split, rename, flag, close) act on a companion
   as on any session; closing one closes only it. Closing the parent closes its companions too, and one undo
   (Reopen Closed Item) restores the group. If the parent's shell exits while it has companions, a fresh
@@ -574,6 +577,19 @@ buys nothing. A caller with no tree uses `version`.
   session) and `result.parent` (the fresh one), and the human output prints the fresh id. Read back as both
   nodes' `parent`. GUI twin: Convert to Companion in the row context menu and the Session menu, a palette row,
   and the keyless `convert_companion` action.
+- `session move --parent SID [--index N] [--target T] [--window W]` - move a companion under another top-level
+  session of the same window, any workspace, keeping its id and running panes. `--index` is its 0-based place
+  among the new parent's companions (omitted or past the end: last); on a server window it counts the server's
+  group, rows this Mac detached included. The current parent reorders it. Takes no
+  workspace, `--to`, `--after`/`--before`, and one target. Refusals: `not a companion`, `the new parent must be a
+  top-level session`, `a companion moves only under a session from the same host`; an app predating it answers
+  `the running app is too old for companion moves`. A remote window's row moves on its server or Mac (an older one
+  answers `the agterm-server on HOST is too old for companion moves`, or `the agterm on HOST ...` for a Mac); on a session attached from another Mac
+  both rows must come from it; for a new parent that Mac moves its companion and then the row moves here (a
+  reorder under the same parent stays here), and another Mac attached
+  to the same sessions keeps the old grouping until it reattaches. Wire command `session.companion.move`;
+  returns `result.id` and `result.parent`. Read back as the node's `parent` and tree order. GUI twins: a drag in
+  the sidebar tree and Move to in a companion row's context menu.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -645,7 +661,8 @@ buys nothing. A caller with no tree uses `version`.
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
   `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
   counting only sessions whose position/workspace changed. Moving a parent carries its companions; a move
-  that would take a companion out of its group errors `a companion moves only among its siblings`, while an
+  that would take a companion out of its group errors `a companion moves only among its siblings; use --parent
+  to move it under another session`, while an
   ordinary no-op move still answers ok.
 
 Shared pane selectors accept `primary`/`left`/`top` for the primary pane and
@@ -2566,10 +2583,15 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
   whose stream asks for it while none holds it. The others mirror and ask again when they reconnect, or when the
   presenting Mac leaves if both the origin and that row's agterm are current.
-  An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
-  when the target pane reports `follower` there, or every existing pane does for session-wide placement.
-  Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
-  The caller on the origin gets the answer or the exit status as usual.
+- New work goes to the attached Mac leading its pane: an `ask open`, `pick open`, `session overlay open` or
+  status sound aimed at a pane goes to the Mac whose row reports `lead: leader` for it, the latest to take the
+  lead when several do, and session-wide work follows the origin's primary pane. With no attached Mac leading
+  it, the presenter takes it. On a Mac origin it leaves only when that pane, or the primary pane for
+  session-wide work, reports `follower` there; otherwise it stays local. Work already open stays with the Mac it
+  went to when the lead moves, and its close, resize and answer go there. The caller on the origin gets the
+  answer or the exit status as usual. A Mac leading one of the session's panes also forwards link clicks and
+  status clears, as the presenter does. An origin or attached Mac whose agterm predates this sends everything to
+  the presenter. Below, "the presenting Mac" is the Mac the work went to.
 - A `session status` sound (`--sound`, or the blocked default) plays on the presenting Mac instead of the
   origin under the same rule for the status pane; a `scratch` status, or a presenter too old for it, keeps
   it on the origin. The blocked default is the presenting Mac's own Settings choice.
@@ -2596,8 +2618,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   `copy`/`text` its no-read error. `htmlOverlays` there lists it with `remote: true`, its `page`, `title` and
   load state as the presenting Mac reports them. The presenting Mac lists its copy with `replica: true`; for a file
   page `file` names the origin path, a URL page keeps `url`, and refuses a socket `overlay submit` on it. A page the presenting Mac refuses still
-  answered ok at open and ends `dismissed`. Losing the presenter ends the page `dismissed`, keeping an answer
-  already submitted.
+  answered ok at open and ends `dismissed`. Losing the Mac showing it ends the page `dismissed`, keeping an
+  answer already submitted.
 - An image, markdown or text page (`--image`, `--markdown`, `--text`) follows the same rule. The presenting Mac
   fetches the file over the same channel, the origin serving only that file, or a markdown file's pictures in its
   own folder, under the same size limits, and shows the same page with no bridge; an image opened without a size

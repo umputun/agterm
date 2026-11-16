@@ -11,12 +11,12 @@ extension ControlServer {
         Task { @MainActor [weak self] in
             let checked = await DocumentProbe.loadDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id, forwarded: forward != nil),
-                  forwardIsCurrent(forward, session: id), let store = library.store(forSession: id) else { return completion(false) }
+                  forwardIsCurrent(forward), let store = library.store(forSession: id) else { return completion(false) }
             if forward == nil { releaseHiddenClickedPage(session: id, persistent: false) }
             guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: sizePercent,
                                                            backgroundColor: nil, page: .document(path: path), clicked: true,
-                                                           forwarded: forward != nil)
+                                                           forwardedTo: forward)
             completion(openHtmlOverlay(in: store, sessionID: id, page: .document(path: path), options: options).ok)
         }
     }

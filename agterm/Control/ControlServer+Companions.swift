@@ -4,7 +4,7 @@ import Foundation
 extension ControlServer: CompanionDuplicating {}
 
 extension ControlServer {
-    static let companionMoveError = "a companion moves only among its siblings"
+    static let companionMoveError = "a companion moves only among its siblings; use --parent to move it under another session"
 
     /// pageCompanionRefusal answers a request a page session cannot take, before any command runs.
     func pageCompanionRefusal(_ request: ControlRequest) -> ControlResponse? {
@@ -120,6 +120,23 @@ extension ControlServer {
         case .success(let parent):
             if focus, store === library.activeStore { actions.focusActiveSession() }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parent.id.uuidString))
+        }
+    }
+
+    /// moveCompanion resolves the parent in the companion's own window only, as `session.move` resolves its anchor,
+    /// so a short prefix stays unambiguous and a parent in another window reads as `no such session`.
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) async -> ControlResponse {
+        let (store, id): (AppStore, UUID)
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response): return response
+        case .success(let resolved): (store, id) = resolved
+        }
+        return resolver.resolve(parent, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                                active: store.selectedSessionID, noun: "session") { parentID in
+            if case .failure(let refusal) = store.moveCompanion(id, under: parentID, at: index) {
+                return ControlResponse(ok: false, error: refusal.message)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parentID.uuidString))
         }
     }
 

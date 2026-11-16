@@ -38,6 +38,7 @@ final class MockControlActions: ControlActions {
         case pageSession(target: String?, window: String?, options: ControlSessionOverlayOpenOptions)
         case companionDuplicate(target: String?, window: String?, select: Bool)
         case companionConvert(target: String?, window: String?)
+        case companionMove(target: String?, parent: String, index: Int?, window: String?)
         case companionPageAttach(target: String?, window: String?)
         case workspaceFlag(target: String?, window: String?, ControlToggleMode)
         case sessionFlag(target: String?, window: String?, String?)
@@ -369,6 +370,11 @@ final class MockControlActions: ControlActions {
 
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.companionConvert(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func moveCompanion(_ target: String?, parent: String, index: Int?, window: String?) -> ControlResponse {
+        calls.append(.companionMove(target: target, parent: parent, index: index, window: window))
         return ControlResponse(ok: true)
     }
 

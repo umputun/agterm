@@ -430,6 +430,101 @@ final class ControlServerAttachedForwardTests: XCTestCase {
         if let local = row.splitPaneIdentity { ZmxLeadBook.shared.forget(pane: local) }
     }
 
+    func testACompanionMoveRunsOnTheOriginByItsIDsThenTakesTheSlotHere() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1", parent: "p2"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let resident = try attachedRow(in: store, origin: "d1")
+        store.nest(resident.id, under: destination.id)
+
+        let reply = try await run(server, move(companion, under: destination, index: 0))
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertEqual(runner.invocations.count, 1)
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --parent p2 --json"), line(runner, 0))
+        XCTAssertEqual(companion.parentID, destination.id)
+        XCTAssertEqual(store.companions(of: destination.id).map(\.id), [companion.id, resident.id])
+        XCTAssertEqual(reply.result?.parent, destination.id.uuidString)
+    }
+
+    func testACompanionMoveTakesAPaddedParentAsTheDispatcherDoes() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1", parent: "p2"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        var request = move(companion, under: destination)
+        request.args?.parent = " \(destination.id.uuidString) "
+
+        let reply = try await run(server, request)
+
+        XCTAssertTrue(reply.ok, reply.error ?? "")
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --parent p2 --json"), line(runner, 0))
+        XCTAssertEqual(companion.parentID, destination.id)
+    }
+
+    func testACompanionMoveTheChecksHereRefuseNeverReachesTheOrigin() async throws {
+        let runner = ScriptedRunner([])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let local = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: NSHomeDirectory()))
+        let elsewhere = try attachedRow(in: store, host: "otherbox", origin: "o2")
+        let parent = try XCTUnwrap(companion.parentID.flatMap(store.session(withID:)))
+
+        XCTAssertNil(server.attachedRoute(move(companion, under: destination, index: -1)))
+        XCTAssertNil(server.attachedRoute(move(companion, under: parent, index: 0)), "a reorder under its own parent stays here")
+        let refusals = [move(destination, under: parent), move(companion, under: local), move(companion, under: elsewhere)].map { request in
+            guard case .refused(let reply) = server.attachedRoute(request) else { return "routed" }
+            return reply.error ?? ""
+        }
+
+        XCTAssertEqual(refusals, [CompanionMoveRefusal.notCompanion.message, CompanionMoveRefusal.otherHost.message,
+                                  CompanionMoveRefusal.otherHost.message])
+        XCTAssertTrue(runner.invocations.isEmpty)
+    }
+
+    func testAnOriginThatRefusesOrIsTooOldLeavesTheCompanionWhereItIs() async throws {
+        let unknown = ControlResponse(ok: false, error: "invalid request: unknown cmd session.companion.move")
+        let runner = ScriptedRunner([printed(ControlResponse(ok: false, error: "no such session"), status: 1),
+                                     RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unknown option '--parent'"),
+                                     printed(unknown, status: 1)])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let parent = companion.parentID
+
+        var errors: [String] = []
+        for _ in 0..<3 { errors.append(try await run(server, move(companion, under: destination)).error ?? "") }
+
+        XCTAssertEqual(errors, ["no such session", "the agterm on buildbox is too old for this", "the agterm on buildbox is too old for this"])
+        XCTAssertEqual(companion.parentID, parent)
+    }
+
+    func testAnOriginMoveWhoseRowLeftThisMacMeanwhileSaysItMovedOnlyThere() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1", parent: "p2"))])
+        let (server, store) = try makeServer(runner)
+        let (companion, destination) = try companionAndDestination(in: store)
+        let route = try XCTUnwrap(server.attachedRoute(move(companion, under: destination)))
+        _ = store.closeExactly([destination.id])
+
+        let reply = await server.runRemoteRoute(route)
+
+        XCTAssertEqual(reply.error, "moved on buildbox, but not here: no such session")
+        XCTAssertEqual(runner.invocations.count, 1)
+    }
+
+    func testAGuiMoveOfAnAttachedCompanionAsksTheOrigin() async throws {
+        let runner = ScriptedRunner([ok(ControlResult(id: "c1", parent: "p2"))])
+        let (server, store) = try makeServer(runner)
+        server.actions.remoteAttacher = server
+        let (companion, destination) = try companionAndDestination(in: store)
+
+        server.actions.moveCompanion(companion.id, under: destination.id, at: nil, in: store)
+
+        let deadline = Date().addingTimeInterval(5)
+        while companion.parentID != destination.id, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(companion.parentID, destination.id)
+        XCTAssertTrue(line(runner, 0).hasSuffix("session move --target c1 --parent p2 --json"), line(runner, 0))
+    }
+
     func testAGuiDuplicateOfAnAttachedRowAsksTheOrigin() async throws {
         let runner = ScriptedRunner([ok(ControlResult(id: created)), tree(sessions: session(created))])
         let (server, store) = try makeServer(runner)
@@ -487,6 +582,25 @@ final class ControlServerAttachedForwardTests: XCTestCase {
     private func line(_ runner: ScriptedRunner, _ index: Int) -> String {
         guard runner.invocations.indices.contains(index) else { return "" }
         return (runner.invocations[index].last ?? "").replacingOccurrences(of: "'", with: "").replacingOccurrences(of: "\\", with: "")
+    }
+
+    private func companionAndDestination(in store: AppStore) throws -> (companion: Session, destination: Session) {
+        let parent = try attachedRow(in: store, origin: "p1")
+        let companion = try attachedRow(in: store, origin: "c1")
+        store.nest(companion.id, under: parent.id)
+        return (companion, try attachedRow(in: store, origin: "p2"))
+    }
+
+    private func move(_ row: Session, under parent: Session, index: Int? = nil) -> ControlRequest {
+        var args = ControlArgs()
+        args.parent = parent.id.uuidString
+        args.index = index
+        return ControlRequest(cmd: .sessionCompanionMove, target: row.id.uuidString, args: args)
+    }
+
+    private func printed(_ response: ControlResponse, status: Int32) -> RemoteCommandResult {
+        let data = (try? JSONEncoder().encode(response)) ?? Data()
+        return RemoteCommandResult(status: status, stdout: String(decoding: data, as: UTF8.self), stderr: "")
     }
 
     private func ok(_ result: ControlResult = ControlResult()) -> RemoteCommandResult {

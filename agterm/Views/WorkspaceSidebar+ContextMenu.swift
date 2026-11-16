@@ -160,7 +160,12 @@ extension WorkspaceSidebar.Coordinator {
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
                     && store.canMoveSessions(sessionTargets, toWorkspace: workspace.id)
             }
-            if !targets.isEmpty {
+            if sessionCount == 1, let id = sessionTargets.first, let submenu = companionMoveMenu(for: id) {
+                let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
+                moveTo.submenu = submenu
+                moveTo.isEnabled = !serverBlocked
+                menu.addItem(moveTo)
+            } else if !targets.isEmpty {
                 let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
                 let submenu = NSMenu()
                 for target in targets {
@@ -304,6 +309,34 @@ extension WorkspaceSidebar.Coordinator {
             return
         }
         store.moveSessions(request.sessionIDs, toWorkspace: targetID)
+    }
+
+    private func companionMoveMenu(for id: UUID) -> NSMenu? {
+        guard let parentID = store.session(withID: id)?.parentID else { return nil }
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        for workspace in store.workspaces {
+            let parents = workspace.sessions.filter { candidate in
+                guard candidate.parentID == nil, candidate.id != parentID else { return false }
+                if case .success = store.canMoveCompanion(id, under: candidate.id) { return true }
+                return false
+            }
+            guard !parents.isEmpty else { continue }
+            submenu.addItem(.sectionHeader(title: workspace.name))
+            for parent in parents {
+                let item = NSMenuItem(title: parent.displayName, action: #selector(menuMoveCompanion(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = SessionBatchRequest(sessionIDs: [id], targetID: parent.id)
+                submenu.addItem(item)
+            }
+        }
+        return submenu.items.isEmpty ? nil : submenu
+    }
+
+    @objc private func menuMoveCompanion(_ sender: NSMenuItem) {
+        guard let request = sender.representedObject as? SessionBatchRequest, let id = request.sessionIDs.first,
+              let parentID = request.targetID else { return }
+        actions.moveCompanion(id, under: parentID, at: nil, in: store)
     }
 
     @objc private func menuClose(_ sender: NSMenuItem) {

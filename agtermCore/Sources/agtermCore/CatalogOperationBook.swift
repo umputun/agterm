@@ -23,7 +23,7 @@ public final class CatalogOperationBook {
         .sessionMove,
         .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .workspaceNew, .workspaceRename, .workspaceDelete, .workspaceMove, .sessionScratch,
         .sessionFlag, .sessionTint, .workspaceFlag, .workspaceTint,
-        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .zmxKill, .zmxKillPane,
+        .sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxKillPane,
         .recentOpen, .recentClear, .sessionUndo,
     ]
 

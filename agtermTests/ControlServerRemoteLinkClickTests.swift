@@ -107,6 +107,28 @@ final class ControlServerRemoteLinkClickTests: XCTestCase {
         XCTAssertTrue(fix.transport.clicks.isEmpty)
     }
 
+    func testAMirrorLeadingThePaneForwardsAClickOnlyToAnOriginTakingLeads() throws {
+        let old = try connected(presenter: false)
+        lead(old.session.paneIdentity)
+        XCTAssertEqual(old.server.forwardRemoteLinkClick(click(old.session, pane: old.session.paneIdentity)), .notPresenter)
+
+        let fix = try connected(kinds: [PresentationHub.linkClickKind, PresentationHub.leadReportKind], presenter: false)
+        lead(fix.session.paneIdentity)
+
+        XCTAssertEqual(fix.transport.links.last?.sent.last, .leadReport(PresentationLeadReport(leaders: [Self.remoteLeft])))
+        XCTAssertNil(fix.server.forwardRemoteLinkClick(click(fix.session, pane: fix.session.paneIdentity)))
+        XCTAssertEqual(fix.transport.clicks.count, 1)
+        XCTAssertTrue(old.transport.clicks.isEmpty)
+    }
+
+    private func lead(_ pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: true)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):leader:1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
+    }
+
     func testAnOriginRefusalShowsAPanelThatHidesItself() throws {
         let fix = try connected()
 

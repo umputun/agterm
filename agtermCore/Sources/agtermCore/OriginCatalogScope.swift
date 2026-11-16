@@ -20,7 +20,7 @@ enum OriginCatalogScope {
         }
         // a rowless command's target is the CLI's unused default, never a row
         let target = rowless ? nil : request.target
-        let rows = [target].compactMap { $0 } + (args.targets ?? []) + [args.after, args.before].compactMap { $0 }
+        let rows = [target].compactMap { $0 } + (args.targets ?? []) + [args.after, args.before, args.parent].compactMap { $0 }
         for row in rows {
             if let refusal = sessionRefusal(row, in: store) { return refusal }
         }

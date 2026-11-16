@@ -241,6 +241,7 @@ struct ClaudeStatusHookTests {
 
     private static let runningSubagent = #"[{"id":"a1","type":"subagent","status":"running","description":"d"}]"#
     private static let runningWorkflow = #"[{"id":"w1","type":"workflow","status":"running","name":"n"}]"#
+    private static let runningShell = #"[{"id":"b1","type":"shell","status":"running","description":"d","command":"c"}]"#
 
     @Test func subagentActiveGainsIfIdle() throws {
         let result = try run(chain: ["login", "claude"], args: ["active", "--blink"],
@@ -271,24 +272,26 @@ struct ClaudeStatusHookTests {
         #expect(result.calls == ["completed"])
     }
 
-    @Test(arguments: [runningSubagent, runningWorkflow])
+    @Test(arguments: [runningSubagent, runningWorkflow, runningShell])
     func stopWithARunningAgentStaysActive(_ tasks: String) throws {
         let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],
                              input: .pipe(Self.payload("Stop", tasks: tasks)))
         #expect(result.calls == ["active --blink"])
     }
 
-    @Test func stopRewriteDropsTheCompletionFlags() throws {
+    @Test(arguments: [runningSubagent, runningShell])
+    func stopRewriteDropsTheCompletionFlags(_ tasks: String) throws {
         let result = try run(chain: ["login", "claude"],
                              args: ["completed", "--auto-reset", "--sound", "Glass", "--color", "#4A9EFF"],
-                             input: .pipe(Self.payload("Stop", tasks: Self.runningSubagent)))
+                             input: .pipe(Self.payload("Stop", tasks: tasks)))
         #expect(result.calls == ["active --blink"])
     }
 
     @Test(arguments: [
         "[]",
         #"[{"id":"a1","type":"subagent","status":"completed","description":"d"}]"#,
-        #"[{"id":"b1","type":"shell","status":"running","description":"d"}]"#,
+        #"[{"id":"b1","type":"shell","status":"completed","description":"d","command":"c"}]"#,
+        #"[{"id":"m1","type":"monitor","status":"running","description":"d"}]"#,
     ])
     func stopWithNoRunningAgentCompletes(_ tasks: String) throws {
         let result = try run(chain: ["login", "claude"], args: ["completed", "--auto-reset"],

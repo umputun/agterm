@@ -37,6 +37,9 @@ public final class PresentationHub {
         var held: [PresentationFrame.Body]? = []
         /// mail is the counts this viewer last accepted, from its snapshot or a mail frame.
         var mail: PresentationMail?
+        /// leads are the origin panes this viewer last reported leading; leadsAt orders its report among all viewers'.
+        var leads: Set<UUID> = []
+        var leadsAt = 0
 
         init(session: UUID, generation: Int, sink: PresentationSink) {
             self.session = session
@@ -70,7 +73,8 @@ public final class PresentationHub {
     public static let supportedKinds = ["status", "hud", "notify", "message", "mail", "context", "info", "layout", "sound", askFormKind, askOtherKind,
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
-                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind]
+                                        pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind,
+                                        leadReportKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -80,6 +84,8 @@ public final class PresentationHub {
     /// restartRespawnKind is an origin's capability of publishing a restarted pane's respawn, which carries every viewer's
     /// attach across the restart.
     public static let restartRespawnKind = "restart.respawn"
+    /// leadReportKind is a viewer's capability of reporting the panes it leads, so new work for them is routed to it.
+    public static let leadReportKind = "lead.report"
     /// presenterVacantKind is a viewer's capability of asking for the role again when the origin reports it vacant.
     public static let presenterVacantKind = "presenter.vacant"
     /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
@@ -130,17 +136,22 @@ public final class PresentationHub {
     private let now: () -> Date
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
+    private var lastLeadReport = 0
     private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
 
-    /// Called with a session whose presenter went away, after the role is released.
-    public var onPresenterLost: (@MainActor (UUID) -> Void)?
-    private var batches: [UUID: [PresentationFrame.Body]] = [:]
+    /// onOwnerLost runs with a session and the token of a viewer of it whose stream ended, after any role it held is
+    /// released: the work that viewer owned has nobody left to answer it.
+    public var onOwnerLost: (@MainActor (UUID, Int) -> Void)?
+    private var batches: [Int: [PresentationFrame.Body]] = [:]
     /// onPresenterGranted runs once a viewer took `session`'s presenter role and was told so.
     public var onPresenterGranted: (@MainActor (UUID) -> Void)?
-    /// Called with what a session's current presenter sent about work it was handed. Frames of this kind
-    /// from any other viewer are dropped before this is reached.
-    public var onPresenterFrame: (@MainActor (UUID, PresentationFrame.Body) -> Void)?
+    /// onLeadReport runs once a viewer of `session` replaced the set of panes it leads.
+    public var onLeadReport: (@MainActor (UUID) -> Void)?
+    /// onPresenterFrame runs with what a viewer sent about work, and that viewer's token. An answer echoing another
+    /// viewer's owner, and a clear, seen or click from a viewer neither holding the role nor leading a pane, are dropped
+    /// before this is reached; the receiver checks that the sender owns the page or overlay a frame names.
+    public var onPresenterFrame: (@MainActor (UUID, Int, PresentationFrame.Body) -> Void)?
 
     public init(staleTimeout: TimeInterval, now: @escaping () -> Date = Date.init) {
         self.staleTimeout = staleTimeout
@@ -178,33 +189,37 @@ public final class PresentationHub {
     }
 
     public func unsubscribe(_ id: SubscriberID) {
-        let session = subscribers.removeValue(forKey: id)?.session
-        if let session, subscriberCount(session: session) == 0 { layouts[session] = nil }
-        release(id)
+        guard let subscriber = subscribers.removeValue(forKey: id) else { return }
+        if subscriberCount(session: subscriber.session) == 0 { layouts[subscriber.session] = nil }
+        release(id, session: subscriber.session)
     }
 
-    /// Sends `body` to `session`'s presenter alone. False when there is none, it stalled and was dropped, or
-    /// `body` is a negotiated kind its hello did not list, which an older presenter would skip.
+    /// send hands `body` to the viewer `owner` names. False when it is gone, it stalled and was dropped, or `body` is a
+    /// negotiated kind its hello did not list, which an older viewer would skip.
     @discardableResult
-    public func sendToPresenter(_ body: PresentationFrame.Body, session: UUID) -> Bool {
-        guard let holder = grant.holder(of: session) else { return false }
-        if Self.supportedKinds.contains(body.kind), subscribers[holder]?.kinds.contains(body.kind) != true { return false }
-        if batches[session] != nil {
-            batches[session]?.append(body)
+    public func send(_ body: PresentationFrame.Body, toOwner owner: Int) -> Bool {
+        let id = SubscriberID(generation: owner)
+        guard let subscriber = subscribers[id] else { return false }
+        if Self.supportedKinds.contains(body.kind), !subscriber.kinds.contains(body.kind) { return false }
+        if batches[owner] != nil {
+            batches[owner]?.append(body)
             return true
         }
-        return send(body, to: holder)
+        return send(body, to: id)
     }
 
-    /// batchToPresenter sends what `fill` hands `session`'s presenter as pending chunks and one commit, so the presenter
-    /// applies it all together or, when the stream ends first, none of it.
-    public func batchToPresenter(session: UUID, _ fill: () -> Void) {
-        batches[session] = []
+    /// batch sends what `fill` hands each viewer of `session` as pending chunks and one commit of its own, so each
+    /// applies its share together or, when its stream ends first, none of it.
+    public func batch(session: UUID, _ fill: () -> Void) {
+        let owners = subscribers.values.filter { $0.session == session }.map(\.generation)
+        for owner in owners { batches[owner] = [] }
         fill()
-        let bodies = batches.removeValue(forKey: session) ?? []
-        guard !bodies.isEmpty, let chunks = try? PresentationPendingBatch.chunks(bodies) else { return }
-        for chunk in chunks { sendToPresenter(.pendingChunk(chunk), session: session) }
-        sendToPresenter(.pendingCommit, session: session)
+        for owner in owners {
+            let bodies = batches.removeValue(forKey: owner) ?? []
+            guard !bodies.isEmpty, let chunks = try? PresentationPendingBatch.chunks(bodies) else { continue }
+            for chunk in chunks { send(.pendingChunk(chunk), toOwner: owner) }
+            send(.pendingCommit, toOwner: owner)
+        }
     }
 
     /// publishMail sends `session`'s mail counts to each viewer whose last accepted counts differ, so every viewer
@@ -250,10 +265,25 @@ public final class PresentationHub {
             let granted = grant.acquire(session: subscriber.session, by: id)
             send(granted ? .presenterGranted : .presenterRefused, to: id)
             if granted, !repeated { onPresenterGranted?(subscriber.session) }
-        case .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected, .overlayClosed, .pageRejected, .pageClosed,
-             .pageState, .pageResult, .linkClick, .statusClear, .statusSeen:
-            guard grant.holder(of: subscriber.session) == id else { return }
-            onPresenterFrame?(subscriber.session, frame.body)
+        case .leadReport(let report):
+            guard subscriber.kinds.contains(Self.leadReportKind) else { return }
+            lastLeadReport += 1
+            subscriber.leads = Set(report.leaders)
+            subscriber.leadsAt = lastLeadReport
+            onLeadReport?(subscriber.session)
+        case .askResolve(let answer):
+            if answer.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
+        case .askRejected(let ref):
+            if ref.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
+        case .pickResolve(let answer):
+            if answer.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
+        case .pickRejected(let ref):
+            if ref.owner == id.generation { onPresenterFrame?(subscriber.session, id.generation, frame.body) }
+        case .overlayRejected, .overlayClosed, .pageRejected, .pageClosed, .pageState, .pageResult:
+            onPresenterFrame?(subscriber.session, id.generation, frame.body)
+        case .linkClick, .statusClear, .statusSeen:
+            guard grant.holder(of: subscriber.session) == id || !subscriber.leads.isEmpty else { return }
+            onPresenterFrame?(subscriber.session, id.generation, frame.body)
         default: break
         }
     }
@@ -276,17 +306,33 @@ public final class PresentationHub {
         subscribers.values.count { $0.session == session }
     }
 
+    /// route is the token of the viewer that takes new work for `pane` of `session`, or for the session as a whole when
+    /// `pane` is nil: the viewer leading that pane (the primary one for session-wide work), else the grant holder.
+    public func route(session: UUID, pane: UUID?) -> Int? {
+        if let target = pane ?? layouts[session]?.primary, let claimant = claimant(session: session, pane: target) {
+            return claimant.generation
+        }
+        return grant.holder(of: session)?.generation
+    }
+
+    // the newest report still naming the pane wins, so withdrawing a claim hands the pane back to an older claimant
+    private func claimant(session: UUID, pane: UUID) -> Subscriber? {
+        subscribers.values.filter { $0.session == session && $0.leads.contains(pane) }.max { $0.leadsAt < $1.leadsAt }
+    }
+
     /// Whether a viewer holds `session`'s presenter role.
     public func hasPresenter(session: UUID) -> Bool { grant.holder(of: session) != nil }
 
-    /// Whether `session`'s presenter listed `kind` in its hello.
-    public func presenterSupports(_ kind: String, session: UUID) -> Bool {
-        guard let holder = grant.holder(of: session) else { return false }
-        return subscribers[holder]?.kinds.contains(kind) == true
+    /// presenter is the token of the viewer holding `session`'s presenter role, nil when none does.
+    public func presenter(of session: UUID) -> Int? { grant.holder(of: session)?.generation }
+
+    /// supports is whether viewer `owner` is connected and listed `kind` in its hello.
+    public func supports(_ kind: String, owner: Int) -> Bool {
+        subscribers[SubscriberID(generation: owner)]?.kinds.contains(kind) == true
     }
 
-    /// Counts changes of `session`'s presenter, a grant and a loss alike.
-    public func presenterGeneration(session: UUID) -> Int { grant.generation(of: session) }
+    /// isConnected is whether the stream of viewer `owner` is still up, so work it owns can still be answered.
+    public func isConnected(owner: Int) -> Bool { subscribers[SubscriberID(generation: owner)] != nil }
 
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
@@ -309,14 +355,13 @@ public final class PresentationHub {
         guard let subscriber = subscribers.removeValue(forKey: id) else { return }
         if subscriberCount(session: subscriber.session) == 0 { layouts[subscriber.session] = nil }
         subscriber.sink.close(reason)
-        release(id)
+        release(id, session: subscriber.session)
     }
 
-    private func release(_ id: SubscriberID) {
-        for session in grant.release(id) {
-            onPresenterLost?(session)
-            announceVacancy(session: session)
-        }
+    private func release(_ id: SubscriberID, session: UUID) {
+        let vacated = grant.release(id)
+        onOwnerLost?(session, id.generation)
+        for session in vacated { announceVacancy(session: session) }
     }
 
     // a refused mirror asks only once per stream, so without this the role stays empty until a viewer reconnects.

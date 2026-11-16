@@ -147,6 +147,40 @@ struct ServerActionsCompanionsTests {
         #expect(reply.error == "left pane is not running; nothing was created")
     }
 
+    @Test func aCompanionMovesUnderAnotherSessionAtTheServersIndex() async throws {
+        let session = try newSession()
+        let companion = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                                  window: nil))
+        let destination = try newSession()
+        var residents: [Session] = []
+        for _ in 0..<2 {
+            residents.append(try harness.session(await harness.actions.createCompanion(destination.id.uuidString,
+                                                                                       options: CompanionOptions(select: false), window: nil)))
+        }
+        let launches = harness.runner.launches.count
+
+        let reply = await harness.actions.moveCompanion(companion.id.uuidString, parent: String(destination.id.uuidString.prefix(8)),
+                                                        index: 1, window: nil)
+
+        #expect(reply.ok, "\(reply)")
+        #expect(reply.result?.parent == destination.id.uuidString)
+        #expect(harness.store.companions(of: destination.id).map(\.id) == [residents[0].id, companion.id, residents[1].id])
+        #expect(harness.runner.launches.count == launches, "a move starts no pane")
+    }
+
+    @Test func aCompanionMoveRefusesWhatTheStoreRefuses() async throws {
+        let session = try newSession()
+        let companion = try harness.session(await harness.actions.createCompanion(session.id.uuidString, options: CompanionOptions(select: false),
+                                                                                  window: nil))
+
+        let underCompanion = await harness.actions.moveCompanion(session.id.uuidString, parent: companion.id.uuidString, index: nil, window: nil)
+        let unknown = await harness.actions.moveCompanion(companion.id.uuidString, parent: UUID().uuidString, index: nil, window: nil)
+
+        #expect(underCompanion.error == CompanionMoveRefusal.notCompanion.message)
+        #expect(unknown.ok == false)
+        #expect(companion.parentID == session.id)
+    }
+
     @Test func aConvertStartsTheFreshParent() throws {
         let session = try newSession()
         let launches = harness.runner.launches.count

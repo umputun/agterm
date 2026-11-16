@@ -486,6 +486,23 @@ final class RemoteCatalogMirrorTests {
         #expect(effects.removed.isEmpty)
     }
 
+    @Test func aCompanionMovedUnderAnotherParentKeepsItsRowAndTakesTheNewGroupAndOrder() throws {
+        let first = session(panes: [pane()])
+        let second = session(panes: [pane()])
+        var companion = session(panes: [pane()])
+        companion.fields.parent = first.id
+        let before = open([first, companion, second])
+        let row = try #require(store.session(withID: companion.id))
+        companion.fields.parent = second.id
+
+        for (rev, change) in before.changes(to: snapshot([first, second, companion])).enumerated() { delta(rev + 1, change) }
+
+        #expect(store.session(withID: companion.id) === row)
+        #expect(row.parentID == second.id)
+        #expect(store.workspaces.first?.sessions.map(\.id) == [first.id, second.id, companion.id])
+        #expect(effects.removed.isEmpty)
+    }
+
     @Test func removingAParentLeavesItsCompanionUntilItsOwnRemoval() throws {
         let parent = session(panes: [pane()])
         var companion = session(panes: [pane()])

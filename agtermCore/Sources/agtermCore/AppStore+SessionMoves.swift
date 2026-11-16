@@ -1,6 +1,70 @@
 import Foundation
 
+/// CompanionMoveRefusal is why a companion did not move to another parent; `message` is the text every caller shows.
+public enum CompanionMoveRefusal: Error, Equatable, Sendable {
+    case noSuchSession
+    case notCompanion
+    case parentIsCompanion
+    case otherHost
+
+    public var message: String {
+        switch self {
+        case .noSuchSession: "no such session"
+        case .notCompanion: "not a companion"
+        case .parentIsCompanion: "the new parent must be a top-level session"
+        case .otherHost: "a companion moves only under a session from the same host"
+        }
+    }
+}
+
 extension AppStore {
+    /// canMoveCompanion answers whether `moveCompanion` accepts this parent, without moving; the sidebar asks it so a
+    /// drop indicator or a Move to entry never offers a parent the move refuses.
+    public func canMoveCompanion(_ id: UUID, under parentID: UUID) -> Result<Void, CompanionMoveRefusal> {
+        guard let row = session(withID: id), let parent = session(withID: parentID) else { return .failure(.noSuchSession) }
+        guard row.parentID != nil else { return .failure(.notCompanion) }
+        guard parent.parentID == nil else { return .failure(.parentIsCompanion) }
+        guard isRemoteWindow || sharesHost(row, parent) else { return .failure(.otherHost) }
+        return .success(())
+    }
+
+    /// moveCompanion moves a companion under another top-level session of this store, any workspace, keeping the same
+    /// `Session` so its surfaces survive. `index` is its slot among the new parent's companions counted without it;
+    /// nil or past the end appends. Moving under its own parent reorders it.
+    @discardableResult
+    public func moveCompanion(_ id: UUID, under parentID: UUID, at index: Int? = nil) -> Result<Void, CompanionMoveRefusal> {
+        if case .failure(let refusal) = canMoveCompanion(id, under: parentID) { return .failure(refusal) }
+        guard let source = location(ofSession: id) else { return .failure(.noSuchSession) }
+        let before = workspaces.map { $0.sessions.map(\.id) }
+        let row = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
+        let previousParent = row.parentID
+        guard let target = location(ofSession: parentID) else {
+            workspaces[source.workspaceIndex].sessions.insert(row, at: source.sessionIndex)
+            return .failure(.noSuchSession)
+        }
+        let sessions = workspaces[target.workspaceIndex].sessions
+        let end = Self.groupEnd(from: target.sessionIndex, in: sessions)
+        let companions = end - target.sessionIndex - 1
+        let destination = target.sessionIndex + 1 + min(max(0, index ?? companions), companions)
+        row.parentID = parentID
+        workspaces[target.workspaceIndex].sessions.insert(row, at: destination)
+        if selectedSessionID == id { disableFocusIfSelectionOutsideSet(id) }
+        pruneSidebarSelection()
+        guard previousParent != parentID || before != workspaces.map({ $0.sessions.map(\.id) }) else { return .success(()) }
+        scheduleTreeChanged()
+        save()
+        return .success(())
+    }
+
+    // a row attached from another host shares a group only with rows from the same origin, a local row only with local ones
+    private func sharesHost(_ row: Session, _ parent: Session) -> Bool {
+        switch (AttachedOrigin(row), AttachedOrigin(parent)) {
+        case (nil, nil): row.remoteHost == nil && parent.remoteHost == nil
+        case let (lhs?, rhs?): lhs.shares(rhs)
+        default: false
+        }
+    }
+
     /// moveSession moves a session, keeping the same `Session` so its surfaces survive. A parent carries its
     /// companions; a companion moves only among its siblings and any other destination returns false unchanged.
     /// `index` counts the target with the moved session alone removed, the slot callers compute for one row;

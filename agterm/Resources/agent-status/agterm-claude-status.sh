@@ -103,7 +103,7 @@ running_agent() {
   i=0
   while [ "$i" -lt "$n" ]; do
     if [ "$(field "background_tasks.$i.status")" = running ]; then
-      case "$(field "background_tasks.$i.type")" in subagent | workflow) return 0 ;; esac
+      case "$(field "background_tasks.$i.type")" in subagent | workflow | shell) return 0 ;; esac
     fi
     i=$((i + 1))
   done

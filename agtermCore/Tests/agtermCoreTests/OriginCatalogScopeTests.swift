@@ -50,6 +50,20 @@ struct OriginCatalogScopeTests {
             == "session \(attached.id.uuidString) is attached from box and is not part of this window's catalog")
     }
 
+    @Test func aCompanionsNewParentIsChecked() {
+        var away = ControlArgs()
+        away.parent = elsewhere.id.uuidString
+        var hidden = ControlArgs()
+        hidden.parent = attached.id.uuidString
+        var here = ControlArgs()
+        here.parent = row.id.uuidString
+
+        #expect(refusal(.sessionCompanionMove, target: row.id.uuidString, args: away) == "no session \(elsewhere.id.uuidString) in this window")
+        #expect(refusal(.sessionCompanionMove, target: row.id.uuidString, args: hidden)
+            == "session \(attached.id.uuidString) is attached from box and is not part of this window's catalog")
+        #expect(refusal(.sessionCompanionMove, target: row.id.uuidString, args: here) == nil)
+    }
+
     @Test func aDestinationWorkspaceIsChecked() throws {
         let away = try #require(other.workspaces.first)
         var args = ControlArgs()

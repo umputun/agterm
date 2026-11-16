@@ -133,6 +133,8 @@ public enum RemoteOperation: Equatable, Sendable {
     case restart(UUID, pane: ZmxPaneRole, command: String?)
     case duplicateCompanion(UUID)
     case convertCompanion(UUID)
+    /// moveCompanion puts companion `UUID` under `parent`; `index` counts the server's group, detached rows included.
+    case moveCompanion(UUID, parent: UUID, index: Int?)
     /// killDaemon ends one pane's daemon on the server; `paneID` pins it to that pane, as `zmx.kill.pane` does.
     case killDaemon(UUID, pane: ZmxPaneRole, paneID: String? = nil)
     /// undoClose undoes the server's pending close `undoID` while its grace lasts.
@@ -168,6 +170,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .restart: "Restart Pane"
         case .duplicateCompanion: "Duplicate as Companion"
         case .convertCompanion: "Convert to Companion"
+        case .moveCompanion: "Move Companion"
         case .killDaemon: "Kill Daemon"
         case .undoClose: "Reopen Closed Item"
         case .reopenRecent: "Reopen Last Closed Item"
@@ -180,7 +183,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .newSession(let workspace, _, _): .workspace(workspace)
         case .newCompanion(let id, _), .newPage(let id, _, _), .setSplit(let id, _, _), .setScratch(let id, _, _), .closeSplit(let id), .swap(let id),
              .renameSession(let id, _), .moveSession(let id, _), .closeSession(let id, _), .setFlag(let id, _), .setTint(let id, _), .restart(let id, _, _),
-             .duplicateCompanion(let id), .convertCompanion(let id), .killDaemon(let id, _, _): .session(id)
+             .duplicateCompanion(let id), .convertCompanion(let id), .moveCompanion(let id, _, _), .killDaemon(let id, _, _): .session(id)
         // a batch is marked on its first row
         case .closeSessions(let ids, _), .moveSessions(let ids, _): ids.first.map { .session($0) }
         case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent, .clearRecent: nil
@@ -256,6 +259,8 @@ public enum RemoteOperation: Equatable, Sendable {
             ["session", "restart", "--target", id.uuidString, "--pane", pane.rawValue] + (command.map { ["--command=" + $0] } ?? [])
         case .duplicateCompanion(let id): ["session", "duplicate", "--companion", "--target", id.uuidString]
         case .convertCompanion(let id): ["session", "convert", "--companion", "--target", id.uuidString]
+        case .moveCompanion(let id, let parent, let index):
+            ["session", "move", "--target", id.uuidString, "--parent", parent.uuidString] + (index.map { ["--index", String($0)] } ?? [])
         case .killDaemon(let id, let pane, let paneID):
             ["zmx", "kill", "--target", id.uuidString, "--pane", pane.rawValue] + (paneID.map { ["--pane-id", $0] } ?? []) + ["--force"]
         }
@@ -357,6 +362,8 @@ public final class RemoteCatalogActions {
     private enum Outcome {
         case notSent
         case lost
+        /// refusedArguments is the far `agtermctl` rejecting its command line, so nothing reached the server.
+        case refusedArguments
         case reply(ControlResponse)
     }
 
@@ -459,7 +466,13 @@ public final class RemoteCatalogActions {
         let newSplit = operation.newSplit(in: mirror.store)
         // read before the request: the offer can expire while an undo it allowed is in flight
         let undone = if case .undoClose(let undoID) = operation { undoRows[undoID] ?? [] } else { [UUID]() }
-        switch await run(words + ["--op-id", opID, "--epoch", prepared.sent.epoch], operands: operation.operands) {
+        let outcome = await run(words + ["--op-id", opID, "--epoch", prepared.sent.epoch], operands: operation.operands)
+        if case .moveCompanion = operation, Self.tooOldForCompanionMoves(outcome) {
+            entries[opID] = nil
+            let app = mirror.originIsMac ? "agterm" : "agterm-server"
+            return ControlResponse(ok: false, error: "the \(app) on \(host) is too old for companion moves")
+        }
+        switch outcome {
         case .notSent:
             entries[opID] = nil
             return ControlResponse(ok: false, error: "no connection to \(host)")
@@ -476,7 +489,7 @@ public final class RemoteCatalogActions {
                 noteUndo(undoID, rows: reply.result?.closed?.compactMap(UUID.init(uuidString:)) ?? [])
             }
             return reply
-        case .reply, .lost:
+        case .reply, .lost, .refusedArguments:
             settle(opID, nil)
             return ControlResponse(ok: false, error: "\(host) did not answer \(operation.label); its outcome is unknown until \(host) can be asked")
         }
@@ -527,7 +540,7 @@ public final class RemoteCatalogActions {
     func request(_ words: [String]) async -> ControlResponse {
         switch await run(words, operands: []) {
         case .notSent: return ControlResponse(ok: false, error: "no connection to \(host)")
-        case .lost: return ControlResponse(ok: false, error: "\(host) did not answer")
+        case .lost, .refusedArguments: return ControlResponse(ok: false, error: "\(host) did not answer")
         case .reply(let reply): return reply
         }
     }
@@ -635,6 +648,16 @@ public final class RemoteCatalogActions {
         return asked
     }
 
+    // an older CLI refuses `--parent`, a newer CLI's request is refused by an older running server: either way
+    // nothing ran there, unlike any other lost reply
+    private static func tooOldForCompanionMoves(_ outcome: Outcome) -> Bool {
+        switch outcome {
+        case .refusedArguments: true
+        case .reply(let reply): reply.refusesUnknown(.sessionCompanionMove)
+        case .notSent, .lost: false
+        }
+    }
+
     // MARK: transport
 
     private func run(_ words: [String], operands: [String]) async -> Outcome {
@@ -646,6 +669,7 @@ public final class RemoteCatalogActions {
             return .notSent
         }
         let result = await runner(argv)
+        if result.status == 64, result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .refusedArguments }
         guard let reply = try? JSONDecoder().decode(ControlResponse.self, from: Data(result.stdout.utf8)) else { return .lost }
         return .reply(reply)
     }

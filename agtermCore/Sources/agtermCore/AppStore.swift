@@ -151,8 +151,7 @@ public final class AppStore {
     @ObservationIgnored let persistence: PersistenceStore
     /// catalogOperations is the operation table of the catalog this store serves, written in every save; nil before its first operation.
     @ObservationIgnored public var catalogOperations: CatalogOperationTable?
-    /// catalogMirrored is set once a remote window's store holds its server's catalog; until then its saved view
-    /// state is the only record of how this Mac showed the rows.
+    /// catalogMirrored is set once a remote window's store holds its first catalog; until then its saved view state is kept.
     @ObservationIgnored public internal(set) var catalogMirrored = false
     /// catalogState is a remote window's connection to its server, nil for a local window. Observed: the window
     /// strip draws it.
@@ -401,7 +400,8 @@ public final class AppStore {
                                               lead: ZmxLeadBook.shared.role(pane: pane),
                                               reconnect: RemoteReconnectBook.shared.readback(pane: pane),
                                               paneID: token?.isEmpty == false ? token : nil,
-                                              pendingMessages: pendingMessages(session, pane: pane, token: token))
+                                              pendingMessages: pendingMessages(session, pane: pane, token: token),
+                                              remote: remotelyPresented(session, pane: pane))
                 }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: (session.content == .page ? parent(of: session) : nil)?.effectiveCwd
