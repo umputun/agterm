@@ -50,6 +50,8 @@ extension ControlServer {
             return Self.restartFailure("the process table cannot be read, so the old program could not be tracked; "
                 + "nothing was changed")
         }
+        markOriginRestart(resolved.identity, running: true)
+        defer { markOriginRestart(resolved.identity, running: false) }
         switch client.killConfirmed(name: resolved.daemon) {
         case .killed: break
         case .staleSocket: return Self.restartFailure("\(resolved.daemon) did not confirm the kill; nothing was started")

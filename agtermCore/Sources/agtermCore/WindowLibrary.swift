@@ -83,6 +83,8 @@ public final class WindowLibrary {
     @ObservationIgnored public var onRemoteStoreClosed: ((UUID) -> Void)?
     /// remoteDuplicates maps a remote window whose server turned out to be another window's to that window.
     @ObservationIgnored var remoteDuplicates: [UUID: UUID] = [:]
+    /// remoteOpenClaims are remote windows the user opened whose mirror has not asked yet; never saved.
+    @ObservationIgnored var remoteOpenClaims: Set<UUID> = []
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
@@ -193,7 +195,8 @@ public final class WindowLibrary {
     /// supplies each open window's live frame app-side (NSWindow handles live in `WindowRegistry`, not this
     /// host-free model); nil by default so tests and non-AppKit callers get a geometry-free list.
     public func controlWindowNodes(geometry: (WindowInfo.ID) -> ControlWindowFrame? = { _ in nil },
-                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? = { _ in nil })
+                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? = { _ in nil },
+                                   viewers: (WindowInfo.ID) -> Int? = { _ in nil })
         -> [ControlWindowNode] {
         let active = activeWindowID
         return windows.map {
@@ -207,6 +210,7 @@ public final class WindowLibrary {
                                          fullscreen: live?.fullscreen, zoomed: live?.zoomed,
                                          minimized: live?.minimized)
             node.remote = remoteNode(for: $0.id)
+            node.catalogViewers = viewers($0.id)
             return node
         }
     }
@@ -401,7 +405,11 @@ public final class WindowLibrary {
     public func loadStore(for id: UUID, launchRestore: Bool = false) -> AppStore? {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
-        if windows.first(where: { $0.id == id })?.isRemote == true { return loadRemoteStore(for: id) }
+        if windows.first(where: { $0.id == id })?.isRemote == true {
+            // a window the user opens takes the lead of its rows; one the launch restores leaves it where it is
+            if !launchRestore { remoteOpenClaims.insert(id) }
+            return loadRemoteStore(for: id)
+        }
         let persistence = persistenceStore(for: id)
         let store = makeStore(for: id, persistence: persistence)
         let snapshot = loadSnapshotForStore(persistence)
@@ -729,6 +737,7 @@ public final class WindowLibrary {
             launchPaneDrop: launchPaneDrop
         )
         store.flaggedLayout = flaggedLayout
+        store.recentClosedWindow = windowID
         return store
     }
 

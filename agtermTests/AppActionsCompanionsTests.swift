@@ -153,6 +153,7 @@ private final class HudRecorder: RemoteAttaching {
     private(set) var opened: [Opened] = []
 
     func remoteTree(host _: String?) async -> ControlResponse { ControlResponse(ok: false, error: "not scripted") }
+    func remoteOrigin(host _: String) async -> RemoteOrigin { .unanswered }
 
     func attachRemoteSession(host _: String, session _: String, window _: String?) async -> ControlResponse {
         ControlResponse(ok: false, error: "not scripted")

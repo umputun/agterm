@@ -11,7 +11,7 @@ description: >
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
   Covers window/workspace/session addressing, session links, AGTERM_* variables,
-  attaching another Mac's sessions, agterm-server hosts, cookbook recipes, version and upgrades, diagnosing
+  another Mac's sessions or windows, agterm-server hosts, cookbook recipes, version and upgrades, diagnosing
   problems, filing a bug or feature request.
 when_to_use: >
   Trigger on: agterm, agtermctl, AGTERM_SESSION_ID, and, from inside a session, plain requests such as
@@ -749,7 +749,8 @@ entry by id or prefix, the newest with no id; the session keeps its id, goes to 
 holds its session or workspace when one does, and the window is not raised; `complete` false means the
 entry stayed in the list · `recent clear` - empty the list. `list` and `clear` refuse a target. A row attached
 from another host and closed here is a `remote` entry naming its `host`; opening it attaches the session again or
-has the host reopen it first. `--window` naming a server window runs `list`, `open` and `clear` on that server.
+has the host reopen it first. `--window` naming a server window runs `list`, `open` and `clear` on that server; naming a window of another
+Mac, they act on that window's entries only.
 
 **zmx** - `zmx list` - every daemon behind a live session joined against the pane that claims it, under the
 restore status as a header; a CLOSED window's panes are claimed with zero clients, which is a resting
@@ -1096,6 +1097,8 @@ the read-back and what the server refuses. `session overlay open --page|--compan
 from a file on the host or a URL, which a Mac's remote window shows as a page row.
 `agtermctl server install HOST`, run on the Mac, installs or upgrades the server release matching that app's own
 bundle (reference.md "server").
+The same `window remote open` also opens one window of another Mac in Live sessions mode (`--origin-window W`
+picks it when that Mac has several); reference.md "remote server" says what differs from agterm-server.
 
 ## Troubleshooting and reporting
 

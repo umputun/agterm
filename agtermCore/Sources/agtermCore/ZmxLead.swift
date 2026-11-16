@@ -147,11 +147,19 @@ public final class ZmxLeadBook {
     /// Counts attachments begun. A pane's surface slot is not observed, so a view hosting one reads this
     /// to learn that a fresh attach replaced the surface.
     public private(set) var attachments = 0
+    /// claims are panes whose attach started without the claim this Mac owes them; the first role report takes it.
+    @ObservationIgnored private var claims: Set<UUID> = []
     /// onChange runs after any pane's state is replaced, changed or forgotten, so an attached row can report
     /// what it now leads to its origin.
     @ObservationIgnored public var onChange: (() -> Void)?
 
     init() {}
+
+    /// claimOnReport makes `pane`'s next role report take the lead unless it already leads.
+    public func claimOnReport(pane: UUID) { claims.insert(pane) }
+
+    /// takeClaim answers whether `pane` owes a claim, ending it.
+    public func takeClaim(pane: UUID) -> Bool { claims.remove(pane) != nil }
 
     /// Starts over for `pane`: reports of its previous attachment no longer match and are dropped.
     public func begin(_ attachment: ZmxLeadAttachment, pane: UUID, reattaching: Bool = false) {
@@ -176,6 +184,7 @@ public final class ZmxLeadBook {
 
     public func forget(pane: UUID) {
         states[pane] = nil
+        claims.remove(pane)
         onChange?()
     }
 }

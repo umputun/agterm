@@ -61,6 +61,9 @@ paths:
   session shows the ssh waits and a failure, the latter hiding itself after `remoteAttachErrorSeconds`;
   a partial group attach moves the failure to the new parent row, and a window with no session or a parent
   row already gone falls back to `notifyCommandFailure`.
+- File ▸ Open Remote Window… uses the same host list and picker, then a second pick of the Mac's open windows
+  when the host is a Mac with several (`AppActions+RemoteAttach`, `RemoteOriginWindow`); one window or an
+  agterm-server host asks nothing. `window remote open --origin-window` is its control twin.
 
 - New Companion (`new_companion`, keyless) sits beside Duplicate Session in the row menu and the Session
   menu, with a palette row. On a remote row it asks the origin through `RemoteAttaching.createRemoteCompanion`,

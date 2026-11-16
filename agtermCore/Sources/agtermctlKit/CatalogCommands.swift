@@ -5,9 +5,9 @@ import agtermCore
 // MARK: - catalog
 
 /// OperationOptions carry a structural command's operation id and the catalog epoch it was decided at, so
-/// agterm-server runs it at most once and answers with a receipt. A Mac app refuses both.
+/// the catalog's host runs it at most once and answers with a receipt.
 struct OperationOptions: ParsableArguments {
-    @Option(name: .customLong("op-id"), help: "Operation id agterm-server keeps a receipt under; needs --epoch.")
+    @Option(name: .customLong("op-id"), help: "Operation id the catalog's host keeps a receipt under; needs --epoch.")
     var opID: String?
 
     @Option(name: .long, help: "The catalog epoch the operation was decided at; needs --op-id.")
@@ -47,10 +47,10 @@ struct OperationOptions: ParsableArguments {
 
 struct Catalog: ParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Carry agterm-server's catalog to a remote window on a Mac.",
+        abstract: "Carry a catalog to a remote window on a Mac.",
         discussion: """
-        agterm-server keeps one catalog of workspaces, sessions and panes; a remote window on a Mac mirrors it. \
-        Only agterm-server serves these commands. A Mac app refuses them.
+        agterm-server keeps one catalog of workspaces, sessions and panes, and a Mac in Live sessions mode keeps one \
+        per window; a remote window on another Mac mirrors it. A Mac names the window with --window.
         """,
         subcommands: [Subscribe.self, Operation.self]
     )
@@ -58,9 +58,9 @@ struct Catalog: ParsableCommand {
     struct Operation: RequestCommand {
         static let configuration = CommandConfiguration(
             commandName: "op",
-            abstract: "Ask agterm-server what became of an operation id.",
+            abstract: "Ask the catalog's host what became of an operation id.",
             discussion: """
-            Answers from agterm-server's operation table: applied (with the revision it reached), no change, \
+            Answers from the host's operation table: applied (with the revision it reached), no change, \
             refused, fenced, or unknown. An id it does not hold is recorded so that command is refused if it \
             arrives later: fenced, or unknown when the table may have dropped its entry since --epoch and --rev.
             """)
@@ -74,7 +74,7 @@ struct Catalog: ParsableCommand {
         @Option(name: .long, help: "The catalog revision the operation was sent at; needs --epoch.")
         var rev: Int?
 
-        @OptionGroup var options: BasicOptions
+        @OptionGroup var options: ClientOptions
 
         func validate() throws {
             guard CatalogReceipt.isValidOpID(opID) else {
@@ -87,13 +87,13 @@ struct Catalog: ParsableCommand {
             var args = ControlArgs()
             args.epoch = epoch
             args.rev = rev
-            return ControlRequest(cmd: .catalogOp, target: opID, args: epoch == nil ? nil : args)
+            return ControlRequest(cmd: .catalogOp, target: opID, args: options.withWindow(epoch == nil ? nil : args))
         }
     }
 
     struct Subscribe: ParsableCommand {
         static let configuration = CommandConfiguration(
-            abstract: "Carry the catalog stream between stdin/stdout and agterm-server.",
+            abstract: "Carry the catalog stream between stdin/stdout and the catalog's host.",
             discussion: """
             Run by a Mac's remote window over ssh. Stdout carries newline-delimited JSON frames and nothing \
             else: the snapshot, then every change as a numbered delta. Stdin takes the other side's frames. \

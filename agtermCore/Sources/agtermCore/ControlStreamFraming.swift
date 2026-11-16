@@ -33,6 +33,7 @@ public final class ControlStreamOwner: @unchecked Sendable {
     private let state = NSCondition()
     private var pending: [Data] = []
     private var closing = false
+    private var finishing = false
     private var descriptorClosed = false
     private var started = false
 
@@ -88,7 +89,7 @@ public final class ControlStreamOwner: @unchecked Sendable {
     public func send(_ line: Data) -> Bool {
         state.lock()
         defer { state.unlock() }
-        guard !closing, pending.count < limits.maxPendingLines else { return false }
+        guard !closing, !finishing, pending.count < limits.maxPendingLines else { return false }
         pending.append(line)
         state.broadcast()
         return true
@@ -99,9 +100,21 @@ public final class ControlStreamOwner: @unchecked Sendable {
     public func sendWaiting(_ line: Data) -> Bool {
         state.lock()
         defer { state.unlock() }
-        while !closing, pending.count >= limits.maxPendingLines { state.wait() }
-        guard !closing else { return false }
+        while !closing, !finishing, pending.count >= limits.maxPendingLines { state.wait() }
+        guard !closing, !finishing else { return false }
         pending.append(line)
+        state.broadcast()
+        return true
+    }
+
+    /// sendFinal queues `line` as the last one and closes the stream once it is written; later sends are refused.
+    /// False when the stream is already closing or finishing.
+    public func sendFinal(_ line: Data) -> Bool {
+        state.lock()
+        defer { state.unlock() }
+        guard !closing, !finishing else { return false }
+        pending.append(line)
+        finishing = true
         state.broadcast()
         return true
     }
@@ -150,6 +163,7 @@ public final class ControlStreamOwner: @unchecked Sendable {
                 return
             }
         }
+        shutdown()
     }
 
     private static func log(_ message: String) {
@@ -163,8 +177,8 @@ public final class ControlStreamOwner: @unchecked Sendable {
     private func nextLine() -> Data? {
         state.lock()
         defer { state.unlock() }
-        while pending.isEmpty, !closing { state.wait() }
-        guard !closing else { return nil }
+        while pending.isEmpty, !closing, !finishing { state.wait() }
+        guard !closing, !pending.isEmpty else { return nil }
         state.broadcast()
         return pending.removeFirst()
     }

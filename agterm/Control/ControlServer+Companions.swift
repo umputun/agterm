@@ -104,6 +104,11 @@ extension ControlServer {
     }
 
     func convertToCompanion(_ target: String?, window: String?) -> ControlResponse {
+        convertToCompanion(target, window: window, focus: true)
+    }
+
+    /// convertToCompanion with `focus` false leaves first responder alone, for a conversion another Mac asked for.
+    func convertToCompanion(_ target: String?, window: String?, focus: Bool) -> ControlResponse {
         let (store, id): (AppStore, UUID)
         switch resolver.resolveSessionTarget(target, window: window) {
         case .failure(let response): return response
@@ -113,7 +118,7 @@ extension ControlServer {
         case .failure(let refusal):
             return ControlResponse(ok: false, error: refusal.message)
         case .success(let parent):
-            if store === library.activeStore { actions.focusActiveSession() }
+            if focus, store === library.activeStore { actions.focusActiveSession() }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, parent: parent.id.uuidString))
         }
     }

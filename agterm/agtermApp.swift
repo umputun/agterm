@@ -637,7 +637,8 @@ struct agtermApp: App {
         guard let session = store.session(withID: sessionID), session.surface === view || session.splitSurface === view else { return }
         // the catalog owns a remote window's panes: an exit here attaches again, or keeps an ended row's screen
         if session.remotePresentation?.binding.catalogOwned == true {
-            if !session.ended { PaneLead.reattach?(view, false) }
+            let pane = view.isSplitPane ? session.splitPaneIdentity : session.paneIdentity
+            if !session.ended, !(pane.map(session.catalogPaneHeld) ?? false) { PaneLead.reattach?(view, false) }
             return
         }
         if view.isSplitPane {

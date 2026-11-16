@@ -56,6 +56,19 @@ struct ControlProtocolTests {
         #expect(!String(decoding: try JSONEncoder().encode(ControlResult(id: "s1", closed: ["s1"])), as: UTF8.self).contains("recentID"))
     }
 
+    @Test func catalogViewersRoundTripOnTheTreeAndWindowNodeAndAreOmittedAtNone() throws {
+        var tree = ControlTree(workspaces: [])
+        var node = ControlWindowNode(id: "w1", name: "w", open: true, active: true)
+        let bare = (String(decoding: try JSONEncoder().encode(tree), as: UTF8.self),
+                    String(decoding: try JSONEncoder().encode(node), as: UTF8.self))
+        tree.catalogViewers = 2
+        node.catalogViewers = 2
+
+        #expect(!bare.0.contains("catalogViewers") && !bare.1.contains("catalogViewers"))
+        #expect(try JSONDecoder().decode(ControlTree.self, from: JSONEncoder().encode(tree)).catalogViewers == 2)
+        #expect(try JSONDecoder().decode(ControlWindowNode.self, from: JSONEncoder().encode(node)).catalogViewers == 2)
+    }
+
     @Test func treeRequestRoundTrips() throws {
         let request = ControlRequest(cmd: .tree)
         #expect(try roundTrip(request) == request)

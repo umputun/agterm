@@ -296,7 +296,7 @@ struct ControlDispatcherZmxTests {
         let response = await ControlDispatcher(actions: MockControlActions()).dispatch(ControlRequest(cmd: .catalogSubscribe))
 
         #expect(response?.ok == false)
-        #expect(response?.error == "catalog.subscribe is served only by agterm-server")
+        #expect(response?.error == "catalog.subscribe is not served by this agterm")
     }
 
     @Test func zmxAttachRefusesWithoutAHostOrASessionBeforeTheHostIsCalled() async {

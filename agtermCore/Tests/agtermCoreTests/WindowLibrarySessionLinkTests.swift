@@ -12,7 +12,7 @@ final class WindowLibrarySessionLinkTests {
     private final class Binder: RemoteCatalogEffects {
         let bind: (UUID) -> Bool
         init(bind: @escaping (UUID) -> Bool) { self.bind = bind }
-        func attachCommand(host _: String, pane _: CatalogPane) -> String { "attach" }
+        func attachCommand(host _: String, pane _: CatalogPane, claim _: Bool) -> String { "attach" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}

@@ -41,7 +41,8 @@ extension ControlServer {
     /// Project the window library into `window.list`: every window with its open + frontmost (active) flags.
     func buildWindowList() -> [ControlWindowNode] {
         library.controlWindowNodes(geometry: { WindowRegistry.shared.geometry(for: $0) },
-                                   flags: { WindowRegistry.shared.windowFlags(for: $0) })
+                                   flags: { WindowRegistry.shared.windowFlags(for: $0) },
+                                   viewers: { [unowned self] in originViewers($0) })
     }
 
     func windowList() -> ControlResponse {

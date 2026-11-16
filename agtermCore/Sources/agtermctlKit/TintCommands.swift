@@ -77,12 +77,13 @@ extension Session {
         @Option(name: .long, help: ArgumentHelp(TintRequest.onHelp)) var on: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws { try TintRequest.validate(value, on: on) }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionTint, target: target.target,
-                           args: options.withWindow(TintRequest.args(value, on: on)))
+            operation.stamp(ControlRequest(cmd: .sessionTint, target: target.target,
+                                           args: options.withWindow(TintRequest.args(value, on: on))))
         }
     }
 }
@@ -101,12 +102,13 @@ extension Workspace {
         @Option(name: .long, help: ArgumentHelp(TintRequest.onHelp)) var on: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws { try TintRequest.validate(value, on: on) }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceTint, target: target.target,
-                           args: options.withWindow(TintRequest.args(value, on: on)))
+            operation.stamp(ControlRequest(cmd: .workspaceTint, target: target.target,
+                                           args: options.withWindow(TintRequest.args(value, on: on))))
         }
     }
 }

@@ -5,6 +5,8 @@ struct CatalogRowContext {
     let host: String
     let protocolVersion: Int
     let effects: any RemoteCatalogEffects
+    /// headless is false for a Mac origin, which has a screen of its own; see `RemoteBinding.originHeadless`.
+    let headless: Bool
 }
 
 extension AppStore {
@@ -99,7 +101,7 @@ extension AppStore {
     /// insertCatalogSession creates the row for a catalog session, attaching each of its panes. An ended session
     /// gets a row and no attach.
     func insertCatalogSession(_ entry: CatalogSession, workspace workspaceID: UUID, at index: Int,
-                              context: CatalogRowContext) -> Session {
+                              context: CatalogRowContext, claim: Bool = false) -> Session {
         let host = context.host
         let fields = entry.fields
         let session = Session(id: fields.id, initialCwd: TerminalText.sanitized(fields.cwd),
@@ -112,27 +114,29 @@ extension AppStore {
             session.initialCommand = RemoteSession.endedCommand(host: host)
             session.commandWait = true
         } else if let primary = entry.panes.first {
-            session.initialCommand = context.effects.attachCommand(host: host, pane: primary)
+            session.initialCommand = catalogPaneCommand(primary, fields: fields, context: context, claim: claim)
             session.commandWait = true
         }
-        if fields.lifecycle == .live, entry.panes.count > 1 {
-            addCatalogSplit(session, pane: entry.panes[1], fields: fields, context: context)
+        if entry.panes.count > 1 {
+            addCatalogSplit(session, pane: entry.panes[1], fields: fields, context: context, claim: claim)
         }
         session.remotePresentation = RemotePresentationState(binding: Self.catalogBinding(entry, host: host,
-                                                                                          protocolVersion: context.protocolVersion))
+                                                                                          protocolVersion: context.protocolVersion,
+                                                                                          headless: context.headless))
         if let at = workspaces.firstIndex(where: { $0.id == workspaceID }) {
             workspaces[at].sessions.insert(session, at: min(index, workspaces[at].sessions.count))
             emitSessionCreated(session, workspace: workspaceID)
         }
         applyCatalogScratch(session, fields.scratch, context: context)
-        applyCatalogMail(session, entry: entry)
+        applyCatalogPanes(session, entry: entry)
         applyCatalogMarks(session, fields)
         return session
     }
 
     /// updateCatalogSession moves an existing row to `entry`: name, cwd, parent, lifecycle, then its panes. It
     /// returns the panes that need a fresh attach. A live session listing no pane is between two catalog
-    /// changes and keeps its layout, and an ended one keeps its surfaces, which hold the last screen.
+    /// changes and keeps its layout, and an ended one keeps its surfaces, which hold the last screen. A Mac origin's
+    /// ended row lists its held panes, so its layout keeps following the origin's.
     func updateCatalogSession(_ session: Session, to entry: CatalogSession, context: CatalogRowContext) -> [UUID] {
         let fields = entry.fields
         let host = context.host
@@ -141,8 +145,10 @@ extension AppStore {
         if session.currentCwd != fields.cwd { session.currentCwd = TerminalText.sanitized(fields.cwd) }
         if session.parentID != fields.parent { session.parentID = fields.parent }
         let presented = session.presentsCatalog
+        let wasEnded = session.ended
+        let wasHeld = Set(session.catalogPanes.values.filter { $0.held == true }.map(\.identity))
         applyCatalogScratch(session, fields.scratch, context: context)
-        applyCatalogMail(session, entry: entry)
+        applyCatalogPanes(session, entry: entry)
         applyCatalogMarks(session, fields)
         if fields.lifecycle == .ended {
             if !session.ended {
@@ -161,14 +167,24 @@ extension AppStore {
                 context.effects.catalogRowEnded(session.id)
             }
             if !presented, session.presentsCatalog { context.effects.catalogRowAdded(session) }
-            return []
+            guard entry.panes.contains(where: { $0.held == true }) else { return [] }
+        } else if wasEnded {
+            session.ended = false
+            scheduleTreeChanged()
+            if !presented { context.effects.catalogRowAdded(session) }
         }
-        session.ended = false
+        let needsAttach = reconcileCatalogPanes(session, to: entry, wasEnded: wasEnded, wasHeld: wasHeld, context: context)
+        refreshCatalogBinding(session, entry: entry, host: host)
+        return needsAttach
+    }
+
+    /// reconcileCatalogPanes moves a row's slots to `entry`'s panes, before its binding is refreshed, and attaches each
+    /// one that became attachable or moved, answering the running ones that need a fresh attach.
+    private func reconcileCatalogPanes(_ session: Session, to entry: CatalogSession, wasEnded: Bool, wasHeld: Set<UUID>,
+                                       context: CatalogRowContext) -> [UUID] {
+        let fields = entry.fields
         let previous = session.remotePresentation?.binding
-        guard let primary = entry.panes.first else {
-            refreshCatalogBinding(session, entry: entry, host: host)
-            return []
-        }
+        guard let primary = entry.panes.first else { return [] }
         var needsAttach: [UUID] = []
         if session.paneIdentity != primary.identity {
             if session.splitPaneIdentity == primary.identity {
@@ -176,15 +192,15 @@ extension AppStore {
                     swapPanes(session.id, allowingUnrealized: true)
                 } else {
                     promoteSplit(session)
-                    if session.surface == nil { needsAttach.append(primary.identity) }
+                    if session.surface == nil, Self.attachable(primary, in: fields) { needsAttach.append(primary.identity) }
                 }
             } else {
                 session.surface?.teardown()
                 session.surface = nil
                 session.paneIdentity = primary.identity
-                session.initialCommand = context.effects.attachCommand(host: host, pane: primary)
+                session.initialCommand = catalogPaneCommand(primary, fields: fields, context: context)
                 session.commandWait = true
-                needsAttach.append(primary.identity)
+                if Self.attachable(primary, in: fields) { needsAttach.append(primary.identity) }
             }
         }
         let split = entry.panes.count > 1 ? entry.panes[1] : nil
@@ -199,26 +215,50 @@ extension AppStore {
         } else if session.hasSplit {
             closeSplit(session.id)
         }
-        // a pane whose daemon or endpoint moved attaches again: one already running asks for a fresh attach, one
-        // whose attach has not started gets the new command
+        // a pane that came back, or whose daemon or endpoint moved, attaches again: a running slot asks for a fresh
+        // attach, an unstarted one gets the command. A stopped pane keeps its screen; an unstarted slot shows its end.
         let endpointMoved = previous?.origin.map { $0.endpoint != primary.endpoint } ?? false
-        for pane in entry.panes where endpointMoved || previous?.daemon(forLocalPane: pane.identity).map({ $0 != pane.daemon }) == true {
+        for pane in entry.panes {
+            let attachable = Self.attachable(pane, in: fields)
+            let wasAttachable = !wasEnded && !wasHeld.contains(pane.identity)
+            let moved = endpointMoved || previous?.daemon(forLocalPane: pane.identity).map { $0 != pane.daemon } == true
+            guard attachable != wasAttachable || (attachable && moved) else { continue }
             if pane.identity == session.paneIdentity, session.surface == nil {
-                session.initialCommand = context.effects.attachCommand(host: host, pane: pane)
+                session.initialCommand = catalogPaneCommand(pane, fields: fields, context: context)
             } else if pane.identity == session.splitPaneIdentity, session.splitSurface == nil {
-                session.splitInitialCommand = context.effects.attachCommand(host: host, pane: pane)
-            } else {
+                session.splitInitialCommand = catalogPaneCommand(pane, fields: fields, context: context)
+            } else if attachable {
                 needsAttach.append(pane.identity)
             }
         }
-        refreshCatalogBinding(session, entry: entry, host: host)
         return Array(Set(needsAttach))
+    }
+
+    /// claimCatalogLead takes the lead of `session`'s listed panes: a slot whose attach has not started gets a claiming
+    /// command, and a running one is handed to the app.
+    func claimCatalogLead(_ session: Session, panes: [CatalogPane], host: String, effects: any RemoteCatalogEffects) {
+        for pane in panes where pane.held != true {
+            if pane.identity == session.paneIdentity {
+                guard session.surface == nil else {
+                    effects.catalogClaimLead(pane.identity, session: session.id)
+                    continue
+                }
+                session.initialCommand = effects.attachCommand(host: host, pane: pane, claim: true)
+            } else if pane.identity == session.splitPaneIdentity {
+                guard session.splitSurface == nil else {
+                    effects.catalogClaimLead(pane.identity, session: session.id)
+                    continue
+                }
+                session.splitInitialCommand = effects.attachCommand(host: host, pane: pane, claim: true)
+            }
+        }
     }
 
     private func refreshCatalogBinding(_ session: Session, entry: CatalogSession, host: String) {
         guard let state = session.remotePresentation else { return }
         var updated = state
-        updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0)
+        updated.binding = Self.catalogBinding(entry, host: host, protocolVersion: state.binding.presentationVersion ?? 0,
+                                              headless: state.binding.originHeadless)
         if updated != state { session.remotePresentation = updated }
     }
 
@@ -271,14 +311,26 @@ extension AppStore {
     }
 
     private func addCatalogSplit(_ session: Session, pane: CatalogPane, fields: CatalogSessionFields,
-                                 context: CatalogRowContext) {
+                                 context: CatalogRowContext, claim: Bool = false) {
         session.hasSplit = true
         session.splitPaneIdentity = pane.identity
         session.splitAxis = fields.axis.flatMap(SplitAxis.init(rawValue:)) ?? .leftRight
-        session.splitInitialCommand = context.effects.attachCommand(host: context.host, pane: pane)
+        session.splitInitialCommand = catalogPaneCommand(pane, fields: fields, context: context, claim: claim)
         session.splitCommandWait = true
         session.isSplit = fields.shown
         if fields.shown { emitPaneVisibility(.paneSplit, session: session, shown: true) }
+    }
+
+    /// catalogPaneCommand is what a slot runs for `pane`: its attach, or the end of an ended row's pane or one its Mac
+    /// origin holds stopped.
+    private func catalogPaneCommand(_ pane: CatalogPane, fields: CatalogSessionFields, context: CatalogRowContext,
+                                    claim: Bool = false) -> String {
+        Self.attachable(pane, in: fields) ? context.effects.attachCommand(host: context.host, pane: pane, claim: claim)
+            : RemoteSession.endedCommand(host: context.host)
+    }
+
+    static func attachable(_ pane: CatalogPane, in fields: CatalogSessionFields) -> Bool {
+        fields.lifecycle == .live && pane.held != true
     }
 
     /// refreshCatalogOrigin points an ended row at its running scratch's server; catalogBinding covers every other rebind.
@@ -292,11 +344,16 @@ extension AppStore {
     }
 
     /// catalogBinding ties a row to its catalog session; local and catalog identities are the same.
-    static func catalogBinding(_ entry: CatalogSession, host: String, protocolVersion: Int) -> RemoteBinding {
+    static func catalogBinding(_ entry: CatalogSession, host: String, protocolVersion: Int, headless: Bool) -> RemoteBinding {
         let daemons = Dictionary(entry.panes.map { ($0.identity, $0.daemon) }) { first, _ in first }
         let endpoint = (entry.panes.first ?? entry.fields.scratch?.pane)?.endpoint ?? entry.fields.page?.endpoint
         let origin = endpoint.map { RemoteBinding.Origin(host: host, endpoint: $0, sessionName: entry.id.uuidString) }
         return RemoteBinding(remoteSessionID: entry.id.uuidString, daemonsByLocalPane: daemons,
-                             presentationVersion: protocolVersion, origin: origin, catalogOwned: true, originHeadless: true)
+                             presentationVersion: protocolVersion, origin: origin, catalogOwned: true, originHeadless: headless)
     }
+}
+
+public extension Session {
+    /// catalogPaneHeld is whether pane `identity`'s daemon is stopped on its Mac origin, so nothing attaches it.
+    func catalogPaneHeld(_ identity: UUID) -> Bool { catalogPanes[identity]?.held == true }
 }

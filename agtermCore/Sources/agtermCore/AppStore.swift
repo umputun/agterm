@@ -149,10 +149,9 @@ public final class AppStore {
     @ObservationIgnored var pendingCloseTasks: [UUID: Task<Void, Never>] = [:]
 
     @ObservationIgnored let persistence: PersistenceStore
-    /// catalogOperations is agterm-server's operation table, written in every save of this store; nil on a Mac.
+    /// catalogOperations is the operation table of the catalog this store serves, written in every save; nil before its first operation.
     @ObservationIgnored public var catalogOperations: CatalogOperationTable?
-    /// catalogMirrored is set once a remote window's store holds its server's catalog; until then its saved view
-    /// state is the only record of how this Mac showed the rows.
+    /// catalogMirrored is set once a remote window's store holds its first catalog; until then its saved view state is kept.
     @ObservationIgnored public internal(set) var catalogMirrored = false
     /// catalogState is a remote window's connection to its server, nil for a local window. Observed: the window
     /// strip draws it.
@@ -175,6 +174,7 @@ public final class AppStore {
     @ObservationIgnored public internal(set) var snapshotUnsaved = false
     @ObservationIgnored let recentClosedStore: RecentClosedStore?
     @ObservationIgnored var recentClosedDidChange: (() -> Void)?
+    @ObservationIgnored var recentClosedWindow: UUID?
     @ObservationIgnored let controlEventSink: ((ControlEventDraft) -> Void)?
     /// The settled selected-pane identity per session that `pane.focused` diffs against.
     @ObservationIgnored var paneFocusBaseline: [UUID: UUID] = [:]

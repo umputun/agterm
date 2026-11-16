@@ -93,6 +93,14 @@ struct HtmlBridgeTests {
         #expect(built.args?.window == nil)
     }
 
+    @Test func aRemoteOpenKeepsTheOriginWindowItWasGiven() throws {
+        let named = try request(#"{"cmd":"window.remote.open","args":{"host":"mac","originWindow":"6f1c"}}"#)
+        let bare = try request(#"{"cmd":"window.remote.open","args":{"host":"mac"}}"#)
+
+        #expect(named.args?.originWindow == "6f1c")
+        #expect(bare.args?.originWindow == nil)
+    }
+
     @Test func recentOpenReopensIntoThePagesWindow() throws {
         let newest = try request(#"{"cmd":"recent.open"}"#)
         #expect(newest.target == nil)

@@ -1,4 +1,5 @@
 import agtermCore
+import GhosttyKit
 import Foundation
 
 extension GhosttySurfaceView {
@@ -10,6 +11,9 @@ extension GhosttySurfaceView {
     func promoteToPrimaryPane() {
         setPaneRole(.primary)
     }
+
+    /// `TerminalSurface.childExitHeld`: the program exited and the surface still shows it.
+    var childExitHeld: Bool { surface.map(ghostty_surface_process_exited) ?? false }
 
     /// `PaneRoleMutableSurface`: changes live routing only; the stable token and child environment stay baked.
     func setPaneRole(_ role: SwappablePaneRole) {

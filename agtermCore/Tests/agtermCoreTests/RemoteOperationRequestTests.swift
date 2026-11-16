@@ -63,7 +63,7 @@ struct RemoteOperationRequestTests {
     }
 
     @Test func aScratchRefusesAnExpectedScratchAndABadMode() {
-        #expect(refusal(parse(.sessionScratch) { $0.scratch = "none" }) == "operation receipts are served only by agterm-server")
+        #expect(refusal(parse(.sessionScratch) { $0.scratch = "none" }) == "a remote window adds operation ids itself; send the command without them")
         #expect(refusal(parse(.sessionScratch) { $0.mode = "sideways" }) == "invalid scratch mode: sideways")
     }
 
@@ -300,7 +300,7 @@ struct RemoteOperationRequestTests {
             }
         }
 
-        #expect(refusal(parsed) == "operation receipts are served only by agterm-server")
+        #expect(refusal(parsed) == "a remote window adds operation ids itself; send the command without them")
     }
 
     @Test func aBatchIsOneServerCommand() {

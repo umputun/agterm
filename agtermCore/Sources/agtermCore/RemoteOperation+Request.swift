@@ -34,7 +34,7 @@ extension RemoteOperation {
     public static func parse(_ request: ControlRequest, in store: AppStore) -> RemoteOperationParse {
         let args = request.args ?? ControlArgs()
         // the caller's own id and epoch would be replaced by this window's, running what its epoch might refuse
-        if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("operation receipts are served only by agterm-server") }
+        if args.opID != nil || args.epoch != nil || args.panes != nil || args.scratch != nil { return refuse("a remote window adds operation ids itself; send the command without them") }
         let select = args.noSelect != true
         var shell = RemoteShellOptions(name: args.name, cwd: args.cwd, command: args.command, wait: args.wait == true)
         switch request.cmd {

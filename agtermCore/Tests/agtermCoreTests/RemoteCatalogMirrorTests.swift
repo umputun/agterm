@@ -7,7 +7,7 @@ final class RemoteCatalogMirrorTests {
     private let directory = FileManager.default.temporaryDirectory.appendingPathComponent("agts-mirror-\(UUID().uuidString)")
     private let store: AppStore
     private let effects = Effects()
-    private let mirror: RemoteCatalogMirror
+    private var mirror: RemoteCatalogMirror
     private static let endpoint = ControlZmxEndpoint(executable: "/srv/zmx", socketDirectory: "/run/zmx")
     private static let versions = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1)
     private let catalogID = UUID()
@@ -43,7 +43,9 @@ final class RemoteCatalogMirrorTests {
         var collapsedWorkspaces: [UUID] = []
         var bindOK = true
 
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        var claimed: [UUID] = []
+        func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String { "attach \(host) \(pane.daemon)\(claim ? " claim" : "")" }
+        func catalogClaimLead(_ identity: UUID, session _: UUID) { claimed.append(identity) }
         func catalogRowAdded(_ session: Session) { added.append(session.id) }
         func catalogRowRemoved(_ sessionID: UUID) { removed.append(sessionID) }
         func catalogRowEnded(_ sessionID: UUID) { ended.append(sessionID) }
@@ -618,8 +620,34 @@ final class RemoteCatalogMirrorTests {
         mirror.subscribing()
 
         #expect(!refused)
-        #expect(mirror.state == .refused("box runs agterm 0.49.0 without a catalog, a Mac app rather than agterm-server; a remote window needs agterm-server"))
+        #expect(mirror.state == .refused("box runs agterm 0.49.0, which cannot serve a remote window; update agterm there or run agterm-server"))
         #expect(store.workspaces.isEmpty)
+    }
+
+    @Test func aMacAdvertisingACatalogIsAcceptedAndMarkedAsAMacOrigin() {
+        let accepted = mirror.checkVersions(nil, mac: Self.versions, app: AppIdentity(version: "0.60.0"))
+
+        #expect(accepted)
+        #expect(mirror.originIsMac)
+        #expect(mirror.state != .refused(""))
+    }
+
+    @Test func aServerAdvertisementLeavesTheOriginHeadless() {
+        #expect(mirror.checkVersions(Self.versions, app: nil))
+        #expect(!mirror.originIsMac)
+    }
+
+    @Test func aFinalRefusalStopsTheMirrorAndAPassingOneShowsTheReason() {
+        _ = mirror.receive(.refused(reason: "window closed on box", final: false))
+        #expect(mirror.state == .disconnected("window closed on box"))
+
+        _ = mirror.receive(.refused(reason: "box is not running Live sessions", final: true))
+        #expect(mirror.state == .refused("box is not running Live sessions"))
+    }
+
+    @Test func aMacSpeakingANewerCatalogIsRefusedNamingBoth() {
+        #expect(RemoteCatalogMirror.versionRefusal(host: "box", versions: nil, mac: CatalogVersions(server: "9", protocolVersion: 1, catalog: 2),
+                                                   app: nil) == "box speaks catalog 2, this Mac speaks catalog 1")
     }
 
     @Test func aNewerCatalogVersionIsRefusedNamingBoth() {
@@ -1146,5 +1174,283 @@ final class RemoteCatalogMirrorTests {
 
         #expect(!mirror.replaceScratchAttachment(of: entry.id, identity: old.identity))
         #expect(mirror.scratchAttachmentStopped(of: UUID()) == nil)
+    }
+
+    @Test func aMacOriginsRowsAreNotHeadless() throws {
+        let single = session(panes: [pane()])
+        mirror.checkVersions(nil, mac: Self.versions, app: nil)
+
+        _ = open([single])
+
+        let row = try #require(store.session(withID: single.id))
+        #expect(row.remotePresentation?.binding.originHeadless == false)
+        #expect(row.remotePresentation?.binding.catalogOwned == true)
+    }
+
+    private func reopen(claimOnOpen: Bool, mac: Bool = true) {
+        mirror = RemoteCatalogMirror(host: "box", store: store, effects: effects, viewState: RemoteWindowViewState(),
+                                     claimOnOpen: claimOnOpen)
+        if mac { mirror.checkVersions(nil, mac: Self.versions, app: nil) }
+    }
+
+    private func attach(_ pane: CatalogPane, claim: Bool = false) -> String { "attach box \(pane.daemon)\(claim ? " claim" : "")" }
+
+    @Test func aMacWindowTheUserOpenedClaimsTheLeadOfItsFirstRowsOnly() throws {
+        reopen(claimOnOpen: true)
+        let left = pane(), right = pane()
+        let split = session(panes: [left, right])
+        let later = session(panes: [pane()])
+
+        _ = open([split])
+        delta(1, .sessionAdded(later, workspace: workspaceID, index: 1))
+
+        let row = try #require(store.session(withID: split.id))
+        #expect(row.initialCommand == attach(left, claim: true))
+        #expect(row.splitInitialCommand == attach(right, claim: true))
+        #expect(store.session(withID: later.id)?.initialCommand == attach(later.panes[0]))
+    }
+
+    @Test func aRowShownWhenTheWindowOpenedLeavesItsStoppedPaneToTheOrigin() throws {
+        reopen(claimOnOpen: true)
+        let left = pane()
+        var right = pane()
+        right.held = true
+        let row = session(panes: [left, right])
+
+        _ = open([row])
+        right.held = nil
+        delta(1, .paneChanged(right, session: row.id))
+
+        let local = try #require(store.session(withID: row.id))
+        #expect(local.initialCommand == attach(left, claim: true))
+        #expect(local.splitInitialCommand == attach(right))
+    }
+
+    @Test(arguments: [(false, true), (true, false)])
+    func noRowClaimsWithoutAUserOpenOrFromAServer(claimOnOpen: Bool, mac: Bool) {
+        reopen(claimOnOpen: claimOnOpen, mac: mac)
+        let single = session(panes: [pane()])
+
+        _ = open([single])
+
+        #expect(store.session(withID: single.id)?.initialCommand == attach(single.panes[0]))
+    }
+
+    @Test func anEmptyFirstSnapshotSpendsTheOpenClaim() {
+        reopen(claimOnOpen: true)
+        let created = session(panes: [pane()])
+
+        _ = open([])
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 0))
+
+        #expect(store.session(withID: created.id)?.initialCommand == attach(created.panes[0]))
+    }
+
+    @Test func aReconnectSnapshotClaimsNothing() {
+        reopen(claimOnOpen: true)
+        let arrived = session(panes: [pane()])
+        _ = open([])
+
+        mirror.subscribing()
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e2", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot([arrived], epoch: "e2")))
+
+        #expect(store.session(withID: arrived.id)?.initialCommand == attach(arrived.panes[0]))
+    }
+
+    @Test func aRowThisMacCreatedClaimsWhenItArrivesAfterTheReply() {
+        reopen(claimOnOpen: false)
+        let created = session(panes: [pane()])
+        _ = open([])
+
+        mirror.claimLeadWhenShown(created.id)
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 0))
+
+        #expect(store.session(withID: created.id)?.initialCommand == attach(created.panes[0], claim: true))
+    }
+
+    @Test func aRowThisMacCreatedAlreadyShownClaimsItsUnstartedPaneAndHandsTheRunningOneToTheApp() throws {
+        reopen(claimOnOpen: false)
+        let left = pane(), right = pane()
+        let created = session(panes: [left, right])
+        _ = open([created])
+        let row = try #require(store.session(withID: created.id))
+        row.surface = Surface()
+
+        mirror.claimLeadWhenShown(created.id)
+
+        #expect(effects.claimed == [left.identity])
+        #expect(row.initialCommand == attach(left))
+        #expect(row.splitInitialCommand == attach(right, claim: true))
+    }
+
+    @Test func aReconnectDropsAClaimStillWaitingForItsRow() {
+        reopen(claimOnOpen: false)
+        let created = session(panes: [pane()])
+        _ = open([])
+        mirror.claimLeadWhenShown(created.id)
+
+        mirror.subscribing()
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e2", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot([created], epoch: "e2")))
+
+        #expect(store.session(withID: created.id)?.initialCommand == attach(created.panes[0]))
+    }
+
+    @Test func aServerWindowsCreatedRowClaimsNothing() {
+        reopen(claimOnOpen: false, mac: false)
+        let created = session(panes: [pane()])
+        _ = open([])
+
+        mirror.claimLeadWhenShown(created.id)
+        delta(1, .sessionAdded(created, workspace: workspaceID, index: 0))
+
+        #expect(store.session(withID: created.id)?.initialCommand == attach(created.panes[0]))
+        #expect(effects.claimed.isEmpty)
+    }
+
+    private func held(_ pane: CatalogPane) -> CatalogPane {
+        var copy = pane
+        copy.held = true
+        return copy
+    }
+
+    @Test func aHeldPaneOfALiveRowShowsItsEndInItsOwnSlotAndTheOtherAttaches() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [left, held(right)])
+
+        _ = open([row])
+
+        let local = try #require(store.session(withID: row.id))
+        #expect(local.initialCommand == attach(left))
+        #expect(local.hasSplit && local.splitPaneIdentity == right.identity)
+        #expect(local.splitInitialCommand == RemoteSession.endedCommand(host: "box"))
+        #expect(local.catalogPaneHeld(right.identity) && !local.catalogPaneHeld(left.identity))
+    }
+
+    @Test func anEndedRowCarryingHeldPanesKeepsBothSlotsColdAndOnReconnect() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [held(left), held(right)], ended: true)
+
+        _ = open([row])
+        let cold = try #require(store.session(withID: row.id))
+        let coldSplit = (cold.hasSplit, cold.splitPaneIdentity, cold.splitInitialCommand)
+        mirror.subscribing()
+        _ = mirror.receive(.hello(CatalogHello(version: 1, epoch: "e2", versions: Self.versions)))
+        _ = mirror.receive(.snapshot(snapshot([row], epoch: "e2")))
+        let again = try #require(store.session(withID: row.id))
+
+        #expect(cold.ended && cold.initialCommand == RemoteSession.endedCommand(host: "box"))
+        #expect(coldSplit.0 && coldSplit.1 == right.identity && coldSplit.2 == RemoteSession.endedCommand(host: "box"))
+        #expect(again === cold && again.hasSplit && again.splitPaneIdentity == right.identity)
+        #expect(effects.needsAttach.isEmpty)
+    }
+
+    @Test func aPaneThatStopsKeepsItsScreenAndOneThatComesBackAttachesAgain() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [left, right])
+        _ = open([row])
+        let local = try #require(store.session(withID: row.id))
+        local.surface = Surface()
+
+        delta(1, .paneChanged(held(left), session: row.id))
+        delta(2, .paneChanged(held(right), session: row.id))
+        let stopped = (local.surface != nil, local.splitInitialCommand, effects.needsAttach)
+        delta(3, .paneChanged(left, session: row.id))
+        delta(4, .paneChanged(right, session: row.id))
+
+        #expect(stopped.0)
+        #expect(stopped.1 == RemoteSession.endedCommand(host: "box"))
+        #expect(stopped.2.isEmpty)
+        #expect(effects.needsAttach == [left.identity])
+        #expect(local.splitInitialCommand == attach(right))
+        #expect(!local.catalogPaneHeld(left.identity) && !local.catalogPaneHeld(right.identity))
+    }
+
+    @Test func aMovedEndpointNeverAttachesAHeldPane() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [left, held(right)])
+        _ = open([row])
+        let local = try #require(store.session(withID: row.id))
+        local.surface = Surface()
+        local.splitSurface = Surface()
+        let moved = ControlZmxEndpoint(executable: "/opt/zmx", socketDirectory: "/run/other")
+        var movedLeft = left, movedRight = held(right)
+        movedLeft.endpoint = moved
+        movedRight.endpoint = moved
+
+        delta(1, .paneChanged(movedLeft, session: row.id))
+        delta(2, .paneChanged(movedRight, session: row.id))
+
+        #expect(effects.needsAttach == [left.identity])
+    }
+
+    @Test func anOpenClaimSkipsAHeldPane() throws {
+        reopen(claimOnOpen: true)
+        let left = pane(), right = pane()
+        let row = session(panes: [left, held(right)])
+
+        _ = open([row])
+        let local = try #require(store.session(withID: row.id))
+        local.surface = Surface()
+        mirror.claimLeadWhenShown(row.id)
+
+        #expect(local.splitInitialCommand == RemoteSession.endedCommand(host: "box"))
+        #expect(effects.claimed == [left.identity])
+    }
+
+    @Test func anEndedRowWhosePaneComesBackAttachesItAndPresentsAgainInTheOriginsDeltaOrder() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [held(left), held(right)], ended: true)
+        _ = open([row])
+        let local = try #require(store.session(withID: row.id))
+        local.surface = Surface()
+        var live = row.fields
+        live.lifecycle = .live
+
+        delta(1, .paneChanged(left, session: row.id))
+        let whileEnded = effects.needsAttach
+        delta(2, .sessionChanged(live))
+
+        #expect(whileEnded.isEmpty)
+        #expect(effects.needsAttach == [left.identity])
+        #expect(local.splitInitialCommand == RemoteSession.endedCommand(host: "box"))
+        #expect(!local.ended)
+        #expect(effects.added == [row.id])
+    }
+
+    @Test func anEndedRowWhosePaneComesBackBeforeItsSlotStartedGetsTheAttach() throws {
+        let only = pane()
+        let row = session(panes: [held(only)], ended: true)
+        _ = open([row])
+        var live = row.fields
+        live.lifecycle = .live
+
+        delta(1, .paneChanged(only, session: row.id))
+        delta(2, .sessionChanged(live))
+
+        #expect(store.session(withID: row.id)?.initialCommand == attach(only))
+    }
+
+    @Test func anEndedRowFollowsItsOriginsSplitHiddenSwappedAndRemoved() throws {
+        let left = pane(), right = pane()
+        let row = session(panes: [held(left), held(right)], ended: true)
+        _ = open([row])
+        let local = try #require(store.session(withID: row.id))
+        var hidden = row.fields
+        hidden.shown = false
+
+        delta(1, .sessionChanged(hidden))
+        let shownAfterHide = local.isSplit
+        delta(2, .paneRemoved(left.identity, session: row.id))
+        var promoted = hidden
+        promoted.primary = right.identity
+
+        delta(3, .sessionChanged(promoted))
+
+        #expect(!shownAfterHide)
+        #expect(local.paneIdentity == right.identity)
+        #expect(!local.hasSplit)
+        #expect(effects.needsAttach.isEmpty)
     }
 }

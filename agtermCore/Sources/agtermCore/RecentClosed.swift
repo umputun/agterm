@@ -30,10 +30,13 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
     public let closedAt: Date
     public let session: RecentClosedSession?
     public let workspace: RecentClosedWorkspace?
+    /// window is the window the close happened in; an entry saved before windows were recorded has none and is
+    /// in no window's list.
+    public let window: UUID?
 
     public init(id: UUID = UUID(), kind: RecentClosedKind, title: String, subtitle: String?,
                 closedAt: Date = Date(), session: RecentClosedSession? = nil,
-                workspace: RecentClosedWorkspace? = nil) {
+                workspace: RecentClosedWorkspace? = nil, window: UUID? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -41,6 +44,7 @@ public struct RecentClosedItem: Codable, Identifiable, Equatable, Sendable {
         self.closedAt = closedAt
         self.session = session
         self.workspace = workspace
+        self.window = window
     }
 }
 
@@ -242,6 +246,11 @@ public struct RecentClosedStore: Sendable {
 
     public func clear() {
         save([], remote: [])
+    }
+
+    /// clear(window:) drops the entries closed in `window`, leaving other windows' entries and every remote one.
+    public func clear(window: UUID) {
+        save(load().filter { $0.window != window }, remote: loadRemote())
     }
 
     private func save(_ items: [RecentClosedItem], remote: [RemoteRecentClosedItem]) {

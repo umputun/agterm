@@ -260,14 +260,28 @@ final class ZmxClient {
         }
     }
 
+    /// backgroundSessionRecords reads the parsed listing on a detached task through `ZmxClient.run`, never the injected
+    /// runner, which belongs to the main actor. Nil when the listing could not be read or parsed.
+    func backgroundSessionRecords(timeout: TimeInterval) async -> [ZmxSessionRecord]? {
+        let invocation = invocation(["list"], timeout: timeout)
+        let records = await Task.detached { try? ZmxListParser.parse(ZmxClient.run(invocation)) }.value
+        if records == nil { Self.logger.error("zmx list failed in the background") }
+        return records
+    }
+
     private func invoke(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
                         mergesStderr: Bool = false, input: Data? = nil) throws -> String {
+        try runner(invocation(arguments, timeout: timeoutOverride, mergesStderr: mergesStderr, input: input))
+    }
+
+    private func invocation(_ arguments: [String], timeout timeoutOverride: TimeInterval? = nil,
+                            mergesStderr: Bool = false, input: Data? = nil) -> Invocation {
         var environment = ProcessInfo.processInfo.environment
         environment["ZMX_DIR"] = socketDirectory
         environment.removeValue(forKey: "ZMX_SESSION")
         environment.removeValue(forKey: "ZMX_SESSION_PREFIX")
-        return try runner(Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
-                                     timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr, input: input))
+        return Invocation(executablePath: executablePath, arguments: arguments, environment: environment,
+                          timeout: timeoutOverride ?? timeout, mergesStderr: mergesStderr, input: input)
     }
 
     nonisolated static func run(_ invocation: Invocation) throws -> String {

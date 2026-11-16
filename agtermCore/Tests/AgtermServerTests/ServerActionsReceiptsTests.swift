@@ -115,11 +115,11 @@ struct ServerActionsReceiptsTests {
 
     @Test(arguments: [Command.sessionRestart, .sessionCompanionDuplicate, .sessionCompanionConvert, .sessionCompanionMove, .zmxKill, .zmxKillPane])
     func aPaneLifecycleCommandTakesAnOperationId(_ command: Command) {
-        #expect(ServerActions.receiptCommands.contains(command))
+        #expect(CatalogOperationBook.receiptCommands.contains(command))
     }
 
     @Test func aTerminateTakesAnOperationIdAsACloseDoes() {
-        #expect(ServerActions.receiptCommands.contains(.sessionTerminate))
+        #expect(CatalogOperationBook.receiptCommands.contains(.sessionTerminate))
     }
 
     @Test func aRefusalIsRecordedSoTheIdStaysRefused() async throws {
@@ -204,6 +204,16 @@ struct ServerActionsReceiptsTests {
         #expect(sessionCount == count)
         #expect(!arrival.ok)
         #expect(arrival.result?.receipt?.outcome == .fenced)
+    }
+
+    @Test func aLookupNamingAnotherWindowIsRefusedWithoutFencing() async {
+        var args = ControlArgs()
+        args.window = UUID().uuidString
+
+        let lookup = await plain(.catalogOp, target: "elsewhere", args)
+
+        #expect(lookup.error?.hasPrefix("window not found: ") == true)
+        #expect(harness.store.catalogOperations?.receipt("elsewhere") == nil)
     }
 
     private func lookup(_ opID: String, sent: CatalogPosition?) async -> ControlResponse {

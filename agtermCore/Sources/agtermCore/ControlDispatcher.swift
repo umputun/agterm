@@ -15,7 +15,7 @@ public struct ControlDispatcher {
     public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
         // a receipt the host never keeps would read as a durable answer
         if request.args?.opID != nil, !actions.takesOperationReceipts {
-            return ControlResponse(ok: false, error: "operation receipts are served only by agterm-server")
+            return ControlResponse(ok: false, error: "operation receipts are not taken by this agterm")
         }
         switch request.cmd {
         case .tree:
@@ -57,7 +57,7 @@ public struct ControlDispatcher {
         case .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach, .windowRemoteDismiss:
             return dispatchDetachCommand(request)
         case .catalogSubscribe:
-            return actions.catalogSubscribe()
+            return await actions.catalogSubscribe()
         case .catalogOp:
             guard let opID = request.target?.trimmedOrNil, CatalogReceipt.isValidOpID(opID) else {
                 return ControlResponse(ok: false, error: "catalog.op requires an operation id")
@@ -67,7 +67,8 @@ public struct ControlDispatcher {
             guard (epoch == nil) == (rev == nil) else {
                 return ControlResponse(ok: false, error: "catalog.op takes epoch and rev together")
             }
-            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } })
+            return actions.catalogOperation(opID, sent: epoch.flatMap { epoch in rev.map { CatalogPosition(epoch: epoch, rev: $0) } },
+                                            window: request.args?.window)
         case .hooksReload, .hooksList:
             return dispatchHooksCommand(request)
         case .recentList, .recentOpen, .recentClear, .sessionUndo:
@@ -727,7 +728,7 @@ public struct ControlDispatcher {
             guard RemoteSession.isHost(host) else {
                 return ControlResponse(ok: false, error: "window.remote.open: not a host ssh can be given")
             }
-            return await actions.windowRemoteOpen(host: host)
+            return await actions.windowRemoteOpen(host: host, originWindow: request.args?.originWindow?.trimmedOrNil)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

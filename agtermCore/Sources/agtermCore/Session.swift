@@ -101,8 +101,8 @@ public final class Session: Identifiable {
     /// state; in a remote window the catalog's. `shown` is read only for a server's scratch.
     public var scratchDaemon: ScratchDaemon?
 
-    /// catalogMail is a remote window row's unacked mail per pane identity, as its server's catalog last reported it.
-    @ObservationIgnored var catalogMail: [UUID: Int] = [:]
+    /// catalogPanes are a remote window row's panes and scratch as its server's catalog last listed them.
+    @ObservationIgnored var catalogPanes: [UUID: CatalogPane] = [:]
 
     /// scratchStoppedGeneration is the `scratchGeneration` whose server scratch attach ended, waiting to reconnect.
     @ObservationIgnored var scratchStoppedGeneration: Int?

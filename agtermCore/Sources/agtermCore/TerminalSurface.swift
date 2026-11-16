@@ -36,10 +36,14 @@ public protocol TerminalSurface: AnyObject {
 
     /// Whether this primary/split surface is attached through zmx. Ephemeral surfaces keep the default false.
     var backedByZmx: Bool { get }
+
+    /// Whether this surface's program exited and the surface stays to show it; a replacement surface starts false.
+    var childExitHeld: Bool { get }
 }
 
 public extension TerminalSurface {
     var backedByZmx: Bool { false }
+    var childExitHeld: Bool { false }
 }
 
 /// A live terminal surface's current role in a two-pane session.

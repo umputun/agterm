@@ -21,7 +21,7 @@ final class AppActionsRemoteCatalogTests: XCTestCase {
     private struct NotSent: Error {}
 
     private final class Effects: RemoteCatalogEffects {
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}

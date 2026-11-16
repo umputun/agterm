@@ -141,6 +141,8 @@ public enum RemoteOperation: Equatable, Sendable {
     case undoClose(String)
     /// reopenRecent reopens the server's Recent Closed entry, the newest when nil.
     case reopenRecent(String?)
+    /// clearRecent empties a Mac window's own Recent Closed entries.
+    case clearRecent
 
     public var label: String {
         switch self {
@@ -172,6 +174,7 @@ public enum RemoteOperation: Equatable, Sendable {
         case .killDaemon: "Kill Daemon"
         case .undoClose: "Reopen Closed Item"
         case .reopenRecent: "Reopen Last Closed Item"
+        case .clearRecent: "Clear Menu"
         }
     }
 
@@ -183,7 +186,7 @@ public enum RemoteOperation: Equatable, Sendable {
              .duplicateCompanion(let id), .convertCompanion(let id), .moveCompanion(let id, _, _), .killDaemon(let id, _, _): .session(id)
         // a batch is marked on its first row
         case .closeSessions(let ids, _), .moveSessions(let ids, _): ids.first.map { .session($0) }
-        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent: nil
+        case .newWorkspace, .newSessionInNamedWorkspace, .clearFlags, .undoClose, .reopenRecent, .clearRecent: nil
         case .renameWorkspace(let id, _), .deleteWorkspace(let id), .moveWorkspace(let id, _), .setWorkspaceFlag(let id, _),
              .setWorkspaceTint(let id, _): .workspace(id)
         }
@@ -242,6 +245,7 @@ public enum RemoteOperation: Equatable, Sendable {
             ["session", "close"] + ids.flatMap { ["--target", $0.uuidString] } + (undoable ? ["--undoable"] : [])
         case .undoClose(let id): ["session", "undo", "--target", id]
         case .reopenRecent: ["recent", "open"]
+        case .clearRecent: ["recent", "clear"]
         case .setFlag(let id, let on): ["session", "flag", on ? "on" : "off", "--target", id.uuidString]
         case .clearFlags: ["session", "flag", "clear"]
         case .setTint(let id, let update): ["session", "tint"] + update.words + ["--target", id.uuidString]
@@ -269,6 +273,31 @@ public enum RemoteOperation: Equatable, Sendable {
         case .moveSession(_, .workspace(let workspace)), .moveSessions(_, .workspace(let workspace)): [workspace.uuidString]
         case .reopenRecent(let id?): [id]
         default: []
+        }
+    }
+}
+
+extension RemoteOperation {
+    /// newSplit is the row a split shown by this operation creates, nil when the row already has one.
+    @MainActor
+    func newSplit(in store: AppStore?) -> UUID? {
+        guard case .setSplit(let id, true, _) = self, store?.session(withID: id)?.hasSplit == false else { return nil }
+        return id
+    }
+
+    /// claimedRows are the rows this operation brought into the window, as its reply names them: a creation's id,
+    /// convert's new parent, a reopen's restored rows (the item's sessions from an origin that names none). An undo's
+    /// rows come from the close it undoes.
+    func claimedRows(_ result: ControlResult?) -> [UUID] {
+        switch self {
+        case .newSession, .newSessionInNamedWorkspace, .newCompanion, .duplicateCompanion:
+            result?.id.flatMap(UUID.init(uuidString:)).map { [$0] } ?? []
+        case .convertCompanion:
+            result?.parent.flatMap(UUID.init(uuidString:)).map { [$0] } ?? []
+        case .reopenRecent:
+            (result?.recentOpen.map { $0.restored ?? $0.item.sessionIDs } ?? []).compactMap(UUID.init(uuidString:))
+        default:
+            []
         }
     }
 }
@@ -350,6 +379,8 @@ public final class RemoteCatalogActions {
     /// undoIDs are the undoable closes this Mac sent whose grace can still be running on the server, oldest first;
     /// each leaves by itself when its grace ends, so a menu reading the list updates with nothing else happening.
     public private(set) var undoIDs: [String] = []
+    /// undoRows are the rows each undoable close answered it closed, which its undo brings back.
+    @ObservationIgnored private var undoRows: [String: [UUID]] = [:]
     @ObservationIgnored var undoGrace: TimeInterval = AppStore.pendingCloseGraceInterval
     /// onChange runs after every change to the operations this window tracks, for read-back that caches them.
     @ObservationIgnored public var onChange: (@MainActor () -> Void)?
@@ -432,10 +463,14 @@ public final class RemoteCatalogActions {
         let opID = UUID().uuidString
         nextOrder += 1
         entries[opID] = Entry(opID: opID, operation: operation, sent: prepared.sent, order: nextOrder, state: .sending)
+        let newSplit = operation.newSplit(in: mirror.store)
+        // read before the request: the offer can expire while an undo it allowed is in flight
+        let undone = if case .undoClose(let undoID) = operation { undoRows[undoID] ?? [] } else { [UUID]() }
         let outcome = await run(words + ["--op-id", opID, "--epoch", prepared.sent.epoch], operands: operation.operands)
         if case .moveCompanion = operation, Self.tooOldForCompanionMoves(outcome) {
             entries[opID] = nil
-            return ControlResponse(ok: false, error: "the agterm-server on \(host) is too old for companion moves")
+            let app = mirror.originIsMac ? "agterm" : "agterm-server"
+            return ControlResponse(ok: false, error: "the \(app) on \(host) is too old for companion moves")
         }
         switch outcome {
         case .notSent:
@@ -443,13 +478,16 @@ public final class RemoteCatalogActions {
             return ControlResponse(ok: false, error: "no connection to \(host)")
         case .reply(let reply) where reply.result?.receipt?.opID == opID:
             settle(opID, reply.result?.receipt)
+            if reply.ok { claimLead(operation.claimedRows(reply.result) + undone, newSplit: newSplit) }
             if selectingCreated, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.selectWhenShown(id, from: prepared.selection)
             }
             if case .newWorkspace(_, true, _) = operation, reply.ok, let id = reply.result?.id.flatMap(UUID.init(uuidString:)) {
                 mirror.collapseWhenShown(id)
             }
-            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID { noteUndo(undoID) }
+            if reply.ok, reply.result?.undoable == true, let undoID = reply.result?.undoID {
+                noteUndo(undoID, rows: reply.result?.closed?.compactMap(UUID.init(uuidString:)) ?? [])
+            }
             return reply
         case .reply, .lost, .refusedArguments:
             settle(opID, nil)
@@ -462,17 +500,44 @@ public final class RemoteCatalogActions {
         undoIDs.popLast()
     }
 
-    private func noteUndo(_ undoID: String) {
+    private func noteUndo(_ undoID: String, rows: [UUID]) {
         undoIDs = Array((undoIDs + [undoID]).suffix(Self.undoDepth))
+        undoRows[undoID] = rows
         Task { @MainActor [weak self, grace = undoGrace] in
             try? await Task.sleep(for: .seconds(grace))
             self?.undoIDs.removeAll { $0 == undoID }
+            self?.undoRows[undoID] = nil
         }
     }
 
-    /// request sends a command that changes no catalog row, a Recent Closed read or clear, and answers the server's
-    /// reply. It carries no operation id: repeating it after a lost reply is harmless.
-    public func request(_ words: [String]) async -> ControlResponse {
+    /// claimLead takes the lead of what an operation this Mac sent brought into the window: rows it created, reopened
+    /// or undid, and a split that did not exist when it was sent.
+    private func claimLead(_ rows: [UUID], newSplit: UUID?) {
+        rows.forEach(mirror.claimLeadWhenShown)
+        if let newSplit { mirror.claimSplitWhenShown(newSplit) }
+    }
+
+    /// listRecent answers the window's Recent Closed. A Mac window's comes from its catalog, which lists only that
+    /// window's entries; asking the Mac would answer its whole list.
+    public func listRecent() async -> ControlResponse {
+        guard mirror.originWindow != nil else { return await request(["recent", "list"]) }
+        guard let items = recentItems else { return ControlResponse(ok: false, error: "\(host) is not connected") }
+        return ControlResponse(ok: true, result: ControlResult(recent: items))
+    }
+
+    /// clearRecent empties the window's Recent Closed. A Mac window sends it as an operation the Mac runs in that
+    /// window alone, since a plain `recent clear` there empties the whole Mac's list.
+    public func clearRecent() async -> ControlResponse {
+        guard mirror.originWindow != nil else { return await request(["recent", "clear"]) }
+        switch prepare(.clearRecent) {
+        case .refused(let response): return response
+        case .ready(let prepared): return await send(prepared)
+        }
+    }
+
+    /// request sends a command that changes no catalog row and answers the server's reply. It carries no operation
+    /// id: repeating it after a lost reply is harmless.
+    func request(_ words: [String]) async -> ControlResponse {
         switch await run(words, operands: []) {
         case .notSent: return ControlResponse(ok: false, error: "no connection to \(host)")
         case .lost, .refusedArguments: return ControlResponse(ok: false, error: "\(host) did not answer")
@@ -596,6 +661,7 @@ public final class RemoteCatalogActions {
     // MARK: transport
 
     private func run(_ words: [String], operands: [String]) async -> Outcome {
+        let words = words + (mirror.originWindow.map { ["--window", $0.uuidString] } ?? [])
         let slot = pool?.leaseOnce()
         defer { slot.map { pool?.release($0.user) } }
         if let pool, let slot, !(await pool.ready(slot.path)) { return .notSent }

@@ -21,7 +21,7 @@ final class RemoteCatalogClientTests {
     deinit { try? FileManager.default.removeItem(at: directory) }
 
     private final class Effects: RemoteCatalogEffects {
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim: Bool) -> String { "attach \(pane.daemon)\(claim ? " claim" : "")" }
         func catalogRowAdded(_: Session) {}
         func catalogRowRemoved(_: UUID) {}
         func catalogRowEnded(_: UUID) {}
@@ -107,6 +107,22 @@ final class RemoteCatalogClientTests {
         return String(decoding: (try? JSONEncoder().encode(ControlResponse(ok: true, result: result))) ?? Data(), as: UTF8.self)
     }
 
+    private func macVersionReply() -> String {
+        var result = ControlResult(app: AppIdentity(version: "1.2.3"))
+        result.macCatalog = Self.versions
+        return String(decoding: (try? JSONEncoder().encode(ControlResponse(ok: true, result: result))) ?? Data(), as: UTF8.self)
+    }
+
+    private func macClient(window: UUID, sleep gate: Gate? = nil, claimOnOpen: Bool = false) -> (RemoteCatalogClient, RemoteCatalogMirror) {
+        let mirror = RemoteCatalogMirror(host: "mac", store: store, effects: effects, viewState: RemoteWindowViewState(),
+                                         originWindow: window, claimOnOpen: claimOnOpen)
+        let client = RemoteCatalogClient(mirror: mirror, transport: transport, runner: { [unowned self] argv in
+            ran.append(argv)
+            return answers.isEmpty ? (255, "") : answers.removeFirst()
+        }, sleep: { _ in await gate?.wait() })
+        return (client, mirror)
+    }
+
     private func snapshot(rev: Int = 0) -> CatalogSnapshot {
         CatalogSnapshot(epoch: "e1", rev: rev, catalogID: UUID(), versions: Self.versions,
                         workspaces: [CatalogWorkspace(id: UUID(), name: "w", sessions: [])])
@@ -133,7 +149,7 @@ final class RemoteCatalogClientTests {
 
         #expect(transport.links.isEmpty)
         if case .refused(let message) = mirror.state {
-            #expect(message.contains("box runs agterm 1.2.3 without a catalog"))
+            #expect(message == "box runs agterm 1.2.3, which cannot serve a remote window; update agterm there or run agterm-server")
         } else {
             Issue.record("expected refused, got \(mirror.state)")
         }
@@ -272,5 +288,73 @@ final class RemoteCatalogClientTests {
         #expect(mirror.state == .disconnected("box did not answer"))
         #expect(transport.links.isEmpty)
         client.stop()
+    }
+
+    @Test func aMacAdvertisingItsCatalogIsSentTheSavedWindowInTheHello() async throws {
+        let window = UUID()
+        answers = [(0, macVersionReply())]
+        let (client, mirror) = macClient(window: window)
+
+        await client.connect()
+
+        #expect(mirror.originIsMac)
+        #expect(transport.links.first?.sent == [.hello(CatalogHello(version: CatalogCodec.version, pageRows: true,
+                                                                    window: window.uuidString))])
+    }
+
+    @Test func aFinalRefusalFromAMacStopsRetrying() async throws {
+        answers = [(0, macVersionReply())]
+        let (client, mirror) = macClient(window: UUID())
+        await client.connect()
+        let link = try #require(transport.links.first)
+
+        try link.deliver(.refused(reason: "window w is gone on mac", final: true))
+
+        #expect(mirror.state == .refused("window w is gone on mac"))
+        #expect(link.stopped)
+    }
+
+    @Test func aNonFinalRefusalShowsItsReasonAndRetriesAfterTheBackoff() async throws {
+        answers = [(0, macVersionReply()), (0, macVersionReply())]
+        let gate = Gate()
+        let (client, mirror) = macClient(window: UUID(), sleep: gate)
+        await client.connect()
+        let first = try #require(transport.links.first)
+
+        try first.deliver(.refused(reason: "window w is closed on mac", final: false))
+        first.onClose("exit 0")
+        let whileWaiting = (mirror.state, transport.links.count, first.stopped)
+        gate.release()
+        for _ in 0..<50 where transport.links.count < 2 { await Task.yield() }
+        client.stop()
+
+        #expect(whileWaiting.0 == .disconnected("window w is closed on mac"))
+        #expect(whileWaiting.1 == 1)
+        #expect(whileWaiting.2)
+        #expect(transport.links.count == 2)
+    }
+
+    @Test func aRefusedSubscribeKeepsTheOpenClaimForTheSnapshotAfterTheRetry() async throws {
+        answers = [(0, macVersionReply()), (0, macVersionReply())]
+        let gate = Gate()
+        let (client, _) = macClient(window: UUID(), sleep: gate, claimOnOpen: true)
+        let pane = CatalogPane(identity: UUID(), daemon: "d1", endpoint: ControlZmxEndpoint(executable: "/zmx", socketDirectory: "/run/zmx"))
+        let row = CatalogSession(fields: CatalogSessionFields(id: UUID(), name: "s", parent: nil, cwd: "/srv", primary: pane.identity,
+                                                              axis: nil, shown: false, lifecycle: .live),
+                                 panes: [pane])
+        await client.connect()
+        let first = try #require(transport.links.first)
+
+        first.onClose("error: mac could not list its sessions")
+        gate.release()
+        for _ in 0..<50 where transport.links.count < 2 { await Task.yield() }
+        let second = try #require(transport.links.last)
+        try second.deliver(.hello(CatalogHello(version: CatalogCodec.version, epoch: "e1", versions: Self.versions)))
+        try second.deliver(.snapshot(CatalogSnapshot(epoch: "e1", rev: 0, catalogID: UUID(), versions: Self.versions,
+                                                     workspaces: [CatalogWorkspace(id: UUID(), name: "w", sessions: [row])])))
+        client.stop()
+
+        #expect(transport.links.count == 2)
+        #expect(store.session(withID: row.id)?.initialCommand == "attach d1 claim")
     }
 }

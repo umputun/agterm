@@ -141,4 +141,18 @@ struct ZmxLeadTests {
     func screenRejectsAMalformedReply(output: String) {
         #expect(ZmxScreen(output: output) == nil)
     }
+
+    @MainActor
+    @Test func aClaimOnReportIsTakenOnceAndForgottenWithItsPane() {
+        let book = ZmxLeadBook()
+        let pane = UUID(), gone = UUID()
+        book.claimOnReport(pane: pane)
+        book.claimOnReport(pane: gone)
+
+        book.forget(pane: gone)
+
+        #expect(book.takeClaim(pane: pane))
+        #expect(!book.takeClaim(pane: pane))
+        #expect(!book.takeClaim(pane: gone))
+    }
 }

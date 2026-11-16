@@ -244,7 +244,8 @@ extension AppStore {
                                          workspaceIndex: workspaceIndex,
                                          sessionIndex: sessionIndex,
                                          snapshot: sessionSnapshot(session),
-                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots)
+                                         companions: companionSnapshots.isEmpty ? nil : companionSnapshots),
+            window: recentClosedWindow
         ))
         recentClosedDidChange?()
         return id
@@ -274,7 +275,8 @@ extension AppStore {
             subtitle: "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
             workspace: RecentClosedWorkspace(snapshot: snapshot,
                                              selectedSessionID: restorable,
-                                             focusMember: focusMember)
+                                             focusMember: focusMember),
+            window: recentClosedWindow
         ))
         recentClosedDidChange?()
         return id

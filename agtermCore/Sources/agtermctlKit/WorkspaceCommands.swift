@@ -145,6 +145,7 @@ struct Workspace: ParsableCommand {
         var mode: String = "toggle"
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+        @OptionGroup var operation: OperationOptions
 
         func validate() throws {
             guard ["on", "off", "toggle"].contains(mode) else {
@@ -153,7 +154,7 @@ struct Workspace: ParsableCommand {
         }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .workspaceFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+            operation.stamp(ControlRequest(cmd: .workspaceFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode))))
         }
     }
 

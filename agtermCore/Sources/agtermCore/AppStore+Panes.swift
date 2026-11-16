@@ -45,7 +45,7 @@ extension AppStore {
     /// Toggles the one-level split. With no axis this is the legacy preserve-axis hide/show operation. With
     /// an axis it is the axis-specific UI command: the same shown axis hides, another shown axis transposes,
     /// and a hidden or absent split is shown in the requested arrangement.
-    public func toggleSplit(_ sessionID: UUID, axis: SplitAxis? = nil) {
+    public func toggleSplit(_ sessionID: UUID, axis: SplitAxis? = nil, focusesNewSplit: Bool = true) {
         guard let session = session(withID: sessionID) else { return }
         let show: Bool
         if let axis {
@@ -54,18 +54,19 @@ extension AppStore {
         } else {
             show = !session.isSplit
         }
-        setSplitVisibility(session, shown: show)
+        setSplitVisibility(session, shown: show, focusesNewSplit: focusesNewSplit)
     }
 
     /// Idempotently shows or hides a split, optionally selecting its arrangement when showing. Hiding never
     /// changes the stored axis, so generic hide/show and a later same-axis command preserve the layout.
-    public func setSplitVisibility(_ sessionID: UUID, shown: Bool, axis: SplitAxis? = nil) {
+    /// `focusesNewSplit` false keeps a new split's primary focused, for a split another Mac asked for.
+    public func setSplitVisibility(_ sessionID: UUID, shown: Bool, axis: SplitAxis? = nil, focusesNewSplit: Bool = true) {
         guard let session = session(withID: sessionID) else { return }
         if shown, let axis { session.splitAxis = axis }
-        setSplitVisibility(session, shown: shown)
+        setSplitVisibility(session, shown: shown, focusesNewSplit: focusesNewSplit)
     }
 
-    private func setSplitVisibility(_ session: Session, shown: Bool) {
+    private func setSplitVisibility(_ session: Session, shown: Bool, focusesNewSplit: Bool = true) {
         let wasShown = session.isSplit
         // hiding a shown split unmounts its right host, so the pacer must stop expecting that key
         if !shown, session.isSplit, let split = session.splitPaneIdentity { launchPaneDrop?([split]) }
@@ -80,7 +81,7 @@ extension AppStore {
             if isNewSplit {
                 // Every split-creating path must mint this identity before exposing the pane.
                 session.splitPaneIdentity = UUID()
-                session.splitFocused = true
+                session.splitFocused = focusesNewSplit
             }
         }
         // hiding the split un-renders a pane, so an overlay opened on it that has not realized yet would sit

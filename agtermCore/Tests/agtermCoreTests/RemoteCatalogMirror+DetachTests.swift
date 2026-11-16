@@ -28,7 +28,7 @@ final class RemoteCatalogMirrorDetachTests {
         var store: AppStore?
         var saves = 0
 
-        func attachCommand(host: String, pane: CatalogPane) -> String { "attach \(host) \(pane.daemon)" }
+        func attachCommand(host: String, pane: CatalogPane, claim _: Bool) -> String { "attach \(host) \(pane.daemon)" }
         func catalogRowAdded(_ session: Session) { added.append(session.id) }
         func catalogRowRemoved(_ sessionID: UUID) {
             removed.append(sessionID)

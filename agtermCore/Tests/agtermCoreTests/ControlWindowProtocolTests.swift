@@ -115,6 +115,11 @@ struct ControlWindowProtocolTests {
             ControlRequest(cmd: .windowMinimize, target: "9f3c", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .windowMinimize, target: "active"),
             ControlRequest(cmd: .windowRemoteOpen, args: ControlArgs(host: "buildbox")),
+            ControlRequest(cmd: .windowRemoteOpen, args: {
+                var args = ControlArgs(host: "mac")
+                args.originWindow = "6f1c"
+                return args
+            }()),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

@@ -776,7 +776,7 @@ The action palette over a split session. Attach Remote is greyed out: listed, bu
           <!-- REMOTE SERVER -->
           <section id="remote-sessions" class="doc-v2" style="scroll-margin-top: 88px; padding-top: 56px">
 <h2>Remote sessions</h2>
-<p>Open a session that runs on another Mac in this sidebar, as a row marked remote, splits and companions included. Its programs keep running over there; this Mac shows them at its own window size. For sessions on a Linux host, see <a href="#remote-server">Remote server</a>, which shows them in a remote window instead.</p>
+<p>Open a session that runs on another Mac in this sidebar, as a row marked remote, splits and companions included. Its programs keep running over there; this Mac shows them at its own window size. For sessions on a Linux host, see <a href="#remote-server">Remote server</a>, which shows them in a remote window instead; a remote window can also show a whole window of another Mac (<a href="#remote-window-mac">A window of another Mac</a>).</p>
 <h3 id="remote-sessions-setup">Set up the other Mac</h3>
 <ul>
 <li>agterm runs in <strong>Live sessions</strong> mode there (<a href="#restore-live">Restore</a>), which keeps a live program behind each pane. A page session needs no live program.</li>
@@ -832,6 +832,7 @@ s=$(agtermctl zmx tree studio.local --json \
 <li>On the other Mac, those panes are covered with a note that they are in use elsewhere. A key press on the cover, or <code>agtermctl session lead</code>, takes the lead back and covers the pane here.</li>
 <li>Scripts typing into a covered pane on the other Mac still work, and so do their screen reads: both go through the session, not the covered view.</li>
 <li>Closing the session here uncovers the panes over there.</li>
+<li>In a <a href="#remote-window-mac">window of another Mac</a>, this Mac takes the lead when you open the window, in the rows you create, reopen or bring back with undo from here, and in the new pane of a split you add from here; the row's other pane keeps its leader. A reconnect, a relaunch, and rows created on the other Mac leave the lead where it is.</li>
 <li>Both Macs need an agterm with this behavior; against an older one the session arrives at the other Mac's size until you type.</li>
 <li>While another Mac leads at a different size, cursor and screen-text reads here can disagree with the program's layout. Automation that relies on them is unsupported in that state.</li>
 </ul>
@@ -978,6 +979,18 @@ s=$(agtermctl zmx tree studio.local --json \
 <h3 id="remote-window">Open a remote window</h3>
 <p><strong>File ▸ Open Remote Window…</strong> offers the hosts in <code>remotes.conf</code>, the same list Attach Remote… reads, and opens the only one without asking. It is the <code>open_remote_window</code> keymap action, with no default key. <code>agtermctl window remote open HOST</code> does the same and prints the window id. A window already showing that host is raised rather than opened twice.</p>
 <p>The sidebar is the server's: creating, renaming, splitting, moving and closing sessions and workspaces happen on the server. Selection, focus, font size, split dividers and the window frame stay on this Mac.</p>
+<h3 id="remote-window-mac">A window of another Mac</h3>
+<p>The host can also be a Mac running agterm in Live sessions mode. The remote window then shows one window of that Mac, and everything on this page about a remote window applies, with that Mac in the server's place. A Mac with one open window opens it at once; with several, the same picker asks which. From a script, <code>agtermctl window remote open HOST --origin-window W</code> names it by id or unique prefix; without it, a Mac with several open windows is refused with their names.</p>
+<ul>
+<li>Changes made here happen in that Mac's window, even while someone works in it. They never change the selection there, except that closing the selected row selects another, as it would locally.</li>
+<li>A Mac not in Live sessions mode is refused before any window opens.</li>
+<li>Rows that Mac attached from a third Mac are not shown. A workspace holding such rows cannot be deleted from here; the refusal says how many it holds.</li>
+<li>Recent Closed, Reopen Closed Item and Clear Menu use the list of that one window. The other Mac's own File ▸ Open Recent still lists every window.</li>
+<li>Asks, picks and page questions follow the rules of an <a href="#remote-sessions-present">attached session</a>.</li>
+<li>A pane stopped on that Mac shows its end here and is not attached again while it stays stopped; a session whose every pane stopped reads <strong>Ended on HOST</strong>.</li>
+<li>A hidden split on that Mac whose shell exits by itself can still read as running here until that window's panes change, an action is sent from here, or this Mac reconnects.</li>
+<li>On that Mac, <code>agtermctl window list</code> and <code>tree</code> report <code>catalogViewers</code> on the window: how many Macs show it. Nothing on its screen marks it.</li>
+</ul>
 <h3 id="remote-server-where">What runs where</h3>
 <table>
 <colgroup>

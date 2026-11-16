@@ -182,7 +182,7 @@ public extension ControlActions {
 
     // only a headless server owns a catalog; a remote window must never bind to a live Mac's windows
     func catalogSubscribe() -> ControlResponse {
-        ControlResponse(ok: false, error: "catalog.subscribe is served only by agterm-server")
+        ControlResponse(ok: false, error: "catalog.subscribe is not served by this agterm")
     }
 
     func detachSessions(_: [String], window _: String?) -> ControlResponse { Self.remoteWindowOnly("session.detach") }
@@ -195,14 +195,19 @@ public extension ControlActions {
         ControlResponse(ok: false, error: "\(command) acts only on a remote window")
     }
 
-    func catalogOperation(_: String, sent _: CatalogPosition?) -> ControlResponse {
-        ControlResponse(ok: false, error: "catalog.op is served only by agterm-server")
+    func catalogOperation(_: String, sent _: CatalogPosition?, window _: String?) -> ControlResponse {
+        ControlResponse(ok: false, error: "catalog.op is not served by this agterm")
     }
 
     var takesOperationReceipts: Bool { false }
 
     func windowRemoteOpen(host _: String) async -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("window.remote.open"))
+    }
+
+    func windowRemoteOpen(host: String, originWindow: String?) async -> ControlResponse {
+        guard originWindow == nil else { return ControlResponse(ok: false, error: ControlActionsUnsupported.message("--origin-window")) }
+        return await windowRemoteOpen(host: host)
     }
 
     func claimOverlayJob(_ job: String, token: String?) -> ControlResponse {

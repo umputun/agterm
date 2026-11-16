@@ -88,7 +88,7 @@ public final class RemoteCatalogClient {
             lost("\(host) did not answer")
             return
         }
-        guard mirror.checkVersions(response.result?.versions, app: response.result?.app) else { return }
+        guard mirror.checkVersions(response.result?.versions, mac: response.result?.macCatalog, app: response.result?.app) else { return }
         open()
     }
 
@@ -100,7 +100,7 @@ public final class RemoteCatalogClient {
         lastFrame = now()
         link = transport.open(argv, onLine: { [weak self] line in self?.receive(line, generation: current) },
                               onClose: { [weak self] reason in self?.closed(reason, generation: current) })
-        send(.hello(CatalogHello(version: CatalogCodec.version, pageRows: true)))
+        send(.hello(CatalogHello(version: CatalogCodec.version, pageRows: true, window: mirror.originWindow?.uuidString)))
         startWatchdog()
     }
 
@@ -109,6 +109,12 @@ public final class RemoteCatalogClient {
         lastFrame = now()
         guard let frame = try? CatalogCodec.decode(line) else {
             resubscribe()
+            return
+        }
+        // a Mac's window that closed may open again, so its stream ends and the window waits out the backoff
+        if case .refused(let reason, false) = frame {
+            drop()
+            lost(reason)
             return
         }
         if let reply = mirror.receive(frame) { send(reply) }

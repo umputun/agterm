@@ -822,6 +822,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let app: AppIdentity?
     /// remote is the server a remote window mirrors and its connection; nil/omitted for a local window.
     public var remote: ControlRemoteWindow?
+    /// catalogViewers is how many Macs mirror the projected window as a remote window, omitted at none.
+    public var catalogViewers: Int?
     /// The Live sessions reset state: app-global like `app`, omitted when nothing is pending and no launch
     /// has consumed a marker. The read side of `zmx.reset`.
     public let liveReset: ControlLiveResetReadback?
@@ -922,6 +924,8 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     public let minimized: Bool?
     /// remote is the server a remote window mirrors; its `state` is omitted for a closed window, which has no stream.
     public var remote: ControlRemoteWindow?
+    /// catalogViewers is how many Macs mirror this window as a remote window, omitted at none.
+    public var catalogViewers: Int?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,

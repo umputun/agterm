@@ -4,7 +4,7 @@ import agtermCore
 /// ServerStreams is agterm-server's side of the streams a presenting Mac opens: its presentation subscriptions,
 /// overlay job helpers and page channels, through the engines the Mac's control server shares.
 @MainActor
-final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageServeHost {
+final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageServeHost, CatalogStreamHost {
     let store: AppStore
     let catalogID: UUID
     let presentationHub = PresentationHub(staleTimeout: 30)
@@ -46,6 +46,11 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         CatalogSnapshot(epoch: "", rev: 0, catalogID: catalogID, versions: catalogVersions, workspaces: catalogWorkspaces(),
                         recent: catalogRecent())
     }
+
+    var catalogHelloDeadline: TimeInterval { presentationHelloDeadline }
+    var catalogHubs: [CatalogHub] { [catalogHub] }
+
+    func catalogSubscription(for hello: CatalogHello) -> CatalogSubscription { .serve(catalogHub, catalogVersions) }
 
     init(store: AppStore, catalogID: UUID, overlayJobs: OverlayJobs) {
         self.store = store
