@@ -115,6 +115,46 @@ final class SidebarInfoRowTests: XCTestCase {
                        rgba(SidebarCellView.themeTextColor(selected: true).withAlphaComponent(0.85)))
     }
 
+    // #1019: the field kept the 13 pt label font, so single-line mode placed the smaller text low and clipped it
+    func testTheInfoLineDrawsWholeAtEverySidebarFontSize() throws {
+        let saved = Double(GhosttyApp.shared.sidebarFontSize)
+        defer { GhosttyApp.shared.setSidebarFontSize(saved) }
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try seed(store)
+        store.setInfo(try info("gjpqy 0123456789"), forSession: session.id)
+
+        for size in [11, AppSettings.defaultSidebarFontSize, AppSettings.sidebarFontSizeRange.upperBound] {
+            GhosttyApp.shared.setSidebarFontSize(size)
+            window?.orderOut(nil)
+            buildSidebar(for: store)
+            let field = try infoCell(forSession: session.id).infoField
+            field.superview?.layoutSubtreeIfNeeded()
+            let drawn = try XCTUnwrap(field.bitmapImageRepForCachingDisplay(in: field.bounds))
+            field.cacheDisplay(in: field.bounds, to: drawn)
+            let scale = CGFloat(drawn.pixelsHigh) / drawn.size.height
+
+            let shown = try XCTUnwrap(inkHeight(in: drawn), "font \(size)")
+            let whole = try XCTUnwrap(inkHeight(in: try unclipped(field.attributedStringValue, scale: scale)), "font \(size)")
+            XCTAssertEqual(shown, whole, accuracy: 1 / scale, "font \(size)")
+        }
+    }
+
+    func testARedrawKeepsEachFragmentsOwnFont() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try seed(store)
+        store.setInfo(try info("**bold** `code`", markdown: true), forSession: session.id)
+        buildSidebar(for: store)
+        let cell = try infoCell(forSession: session.id)
+
+        cell.setColors(selected: true)
+
+        let text = cell.infoField.attributedStringValue
+        let size = SidebarInfoMetrics.font(base: Double(GhosttyApp.shared.sidebarFontSize)).pointSize
+        XCTAssertEqual(text.attribute(.font, at: 0, effectiveRange: nil) as? NSFont, .systemFont(ofSize: size, weight: .semibold))
+        XCTAssertEqual(text.attribute(.font, at: text.length - 1, effectiveRange: nil) as? NSFont,
+                       .monospacedSystemFont(ofSize: size, weight: .regular))
+    }
+
     func testARowTintNeverReachesTheInfoLine() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try seed(store)
@@ -212,6 +252,28 @@ final class SidebarInfoRowTests: XCTestCase {
 
     private func color(in text: NSAttributedString, at index: Int) -> NSColor? {
         text.attribute(.foregroundColor, at: index, effectiveRange: nil) as? NSColor
+    }
+
+    private func unclipped(_ text: NSAttributedString, scale: CGFloat) throws -> NSBitmapImageRep {
+        let size = NSSize(width: ceil(text.size().width) + 4, height: ceil(text.size().height) * 3)
+        let rep = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * scale),
+                                                 pixelsHigh: Int(size.height * scale), bitsPerSample: 8, samplesPerPixel: 4,
+                                                 hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                                 bytesPerRow: 0, bitsPerPixel: 0))
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        text.draw(at: NSPoint(x: 2, y: size.height / 3))
+        return rep
+    }
+
+    private func inkHeight(in rep: NSBitmapImageRep) -> CGFloat? {
+        let rows = (0..<rep.pixelsHigh).filter { y in
+            (0..<rep.pixelsWide).contains { x in (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.05 }
+        }
+        guard let first = rows.first, let last = rows.last else { return nil }
+        return CGFloat(last - first + 1) * rep.size.height / CGFloat(rep.pixelsHigh)
     }
 
     private func rgba(_ color: NSColor?) -> [CGFloat] {
