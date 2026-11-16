@@ -281,7 +281,8 @@ extension RemoteOperation {
     }
 
     /// claimedRows are the rows this operation brought into the window, as its reply names them: a creation's id,
-    /// convert's new parent, a reopened item's sessions. An undo's rows come from the close it undoes.
+    /// convert's new parent, a reopen's restored rows (the item's sessions from an origin that names none). An undo's
+    /// rows come from the close it undoes.
     func claimedRows(_ result: ControlResult?) -> [UUID] {
         switch self {
         case .newSession, .newSessionInNamedWorkspace, .newCompanion, .duplicateCompanion:
@@ -289,7 +290,7 @@ extension RemoteOperation {
         case .convertCompanion:
             result?.parent.flatMap(UUID.init(uuidString:)).map { [$0] } ?? []
         case .reopenRecent:
-            result?.recentOpen?.item.sessionIDs.compactMap(UUID.init(uuidString:)) ?? []
+            (result?.recentOpen.map { $0.restored ?? $0.item.sessionIDs } ?? []).compactMap(UUID.init(uuidString:))
         default:
             []
         }

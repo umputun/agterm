@@ -2687,7 +2687,8 @@ holds its session id there. A list with no remote entries carries no `host` fiel
 with no id. The session returns under its original id. It goes to `--window` or the frontmost window,
 unless another window already holds its session or workspace; the window is not raised. Returns
 `result.recentOpen`: `item` (the entry, as `list` shows it), `window` (where it went) and `complete`,
-false when the entry is still in the list afterwards. An unknown or closed `--window` fails before
+false when the entry is still in the list afterwards; a Mac answering a remote window adds `restored`, every row
+the open brought back. An unknown or closed `--window` fails before
 anything is restored. Errors: `no recently closed items`, `no such recent item: ID`, ambiguous prefix.
 A lone companion comes back under its parent, reopening the parent's entry (or the removed workspace
 holding the parent) first when the parent is not open; when the parent is neither open nor in Recent

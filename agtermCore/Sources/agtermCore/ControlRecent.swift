@@ -66,11 +66,15 @@ public struct ControlRecentOpen: Codable, Sendable, Equatable {
     public let item: ControlRecentItem
     public let window: String
     public let complete: Bool
+    /// restored is every row the open brought into the window, a closed parent reopened first included; only a Mac
+    /// serving its window to another Mac reports it.
+    public let restored: [String]?
 
-    public init(item: ControlRecentItem, window: String, complete: Bool) {
+    public init(item: ControlRecentItem, window: String, complete: Bool, restored: [String]? = nil) {
         self.item = item
         self.window = window
         self.complete = complete
+        self.restored = restored
     }
 }
 

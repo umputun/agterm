@@ -298,6 +298,22 @@ final class ControlServerMacCatalogTests: XCTestCase {
         XCTAssertEqual(selections, [])
     }
 
+    func testReopeningACompanionFromAnotherMacNamesTheParentItBroughtBack() throws {
+        let window = try window()
+        let store = try XCTUnwrap(library.store(for: window))
+        let parent = try XCTUnwrap(store.addSession(toWorkspace: workspace(in: window).id, cwd: "/tmp"))
+        let companion = try store.addCompanion(to: parent.id).get()
+        let closed = try operation("session.close", target: companion.id.uuidString, opID: "op-1", window: window)
+        let recentID = try XCTUnwrap(closed.result?.recentID, closed.error ?? "")
+        XCTAssertTrue(try operation("session.close", target: parent.id.uuidString, opID: "op-2", window: window).ok)
+
+        let reopened = try operation("recent.open", target: recentID, opID: "op-3", window: window)
+
+        XCTAssertTrue(reopened.ok, reopened.error ?? "")
+        XCTAssertEqual(reopened.result?.recentOpen?.item.sessionIDs, [companion.id.uuidString])
+        XCTAssertEqual(reopened.result?.recentOpen?.restored, [parent.id.uuidString, companion.id.uuidString])
+    }
+
     func testConvertingFromAnotherMacLeavesTheOriginSelectionAlone() throws {
         let window = try window()
         let store = try XCTUnwrap(library.store(for: window))

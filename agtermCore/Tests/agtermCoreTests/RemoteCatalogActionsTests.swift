@@ -700,6 +700,31 @@ final class RemoteCatalogActionsTests {
         #expect(RemoteOperation.renameSession(row, name: "x").claimedRows(created).isEmpty)
     }
 
+    @Test func aReopenNamesEveryRowItRestoredWhenTheOriginReportsThem() {
+        let companion = UUID(), parent = UUID()
+        var recent = ControlResult()
+        recent.recentOpen = ControlRecentOpen(item: recentItem([companion]), window: UUID().uuidString, complete: true,
+                                              restored: [parent.uuidString, companion.uuidString])
+
+        #expect(RemoteOperation.reopenRecent(nil).claimedRows(recent) == [parent, companion])
+    }
+
+    @Test func aReopenThatBroughtBackTheParentTakesTheLeadOfBoth() async throws {
+        installMac(snapshot(sessions: []))
+        let parent = UUID(), parentPane = UUID()
+        queue(answering {
+            $0.recentOpen = ControlRecentOpen(item: self.recentItem([self.sessionID]), window: UUID().uuidString, complete: true,
+                                              restored: [parent.uuidString, self.sessionID.uuidString])
+        })
+
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(session(parent, panes: [parentPane]), workspace: workspaceID, index: 0)))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .sessionAdded(session(sessionID, panes: [panes[0]]), workspace: workspaceID, index: 1)))
+
+        #expect(store.session(withID: parent)?.initialCommand == "attach box agterm-\(parentPane.uuidString) claim")
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
     private func recentItem(_ sessions: [UUID]) -> ControlRecentItem {
         ControlRecentItem(id: UUID().uuidString, kind: "session", title: "s", subtitle: nil, closedAt: 0,
                           workspaceID: workspaceID.uuidString, sessionIDs: sessions.map(\.uuidString), host: nil)

@@ -234,11 +234,16 @@ extension ControlServer {
         case .failure(let error): return ControlResponse(ok: false, error: error.message)
         case .success(let resolved): id = resolved
         }
+        let rows = { (self.library.store(for: window)?.workspaces ?? []).flatMap(\.sessions).map(\.id) }
+        let before = Set(rows())
         switch library.reopenRecentClosed(id, inWindow: window) {
         case .failure(let refusal): return ControlResponse(ok: false, error: refusal.message)
         case .success(let outcome):
             guard let item = items.first(where: { $0.id == id }) else { return ControlResponse(ok: false, error: "could not reopen \(id)") }
-            let open = ControlRecentOpen(item: ControlRecentItem(item), window: outcome.window.uuidString, complete: outcome.complete)
+            // a lone companion's closed parent reopens first, and the viewer claims the lead of every row it brought back
+            let restored = rows().filter { !before.contains($0) }.map(\.uuidString)
+            let open = ControlRecentOpen(item: ControlRecentItem(item), window: outcome.window.uuidString, complete: outcome.complete,
+                                         restored: restored)
             return ControlResponse(ok: true, result: ControlResult(recentOpen: open))
         }
     }
