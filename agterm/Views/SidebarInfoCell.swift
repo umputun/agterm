@@ -67,6 +67,8 @@ final class SidebarInfoCellView: SidebarCellView {
                 text.append(NSAttributedString(string: piece, attributes: attributes))
             }
         }
+        // single-line mode places the text for the field's own font, so it must match the info font
+        infoField.font = SidebarInfoMetrics.font(base: base)
         infoField.attributedStringValue = text
         needsLayout = true
     }
