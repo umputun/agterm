@@ -8,6 +8,12 @@ public enum PresentationPane: Equatable, Sendable, Codable {
 
     private static let scratchName = "scratch"
 
+    /// identity is the pane's stable identity, nil for the scratch.
+    public var identity: UUID? {
+        if case .identity(let id) = self { return id }
+        return nil
+    }
+
     public init(from decoder: Decoder) throws {
         let text = try decoder.singleValueContainer().decode(String.self)
         if text == Self.scratchName {
@@ -140,8 +146,8 @@ public struct PresentationSound: Codable, Equatable, Sendable {
     }
 }
 
-/// PresentationAsk is an ask the origin hands its presenter to draw. `owner` is the presenter generation it
-/// was handed under, and every answer echoes it, so one arriving after a handback is recognisably stale.
+/// PresentationAsk is an ask the origin hands a viewer to draw. `owner` is the token of the viewer it
+/// was handed to, and every answer echoes it, so one arriving after a handback is recognisably stale.
 public struct PresentationAsk: Codable, Equatable, Sendable {
     public var id: String
     public var title: String
@@ -585,6 +591,15 @@ public struct PresentationRespawns: Codable, Equatable, Sendable {
     }
 }
 
+/// PresentationLeadReport is the full set of the session's origin panes a viewer leads; each report replaces the last.
+public struct PresentationLeadReport: Codable, Equatable, Sendable {
+    public var leaders: [UUID]
+
+    public init(leaders: [UUID]) {
+        self.leaders = leaders
+    }
+}
+
 /// PresentationLinkClick is a path clicked in a pane the presenter shows, for the origin to open. `pane` is the
 /// origin's identity of that pane. The mode decodes leniently, an unknown one as `overlay`, because a frame that
 /// fails to decode closes the whole stream.
@@ -757,6 +772,8 @@ public struct PresentationFrame: Equatable, Sendable {
         case presenterRefused
         /// The presenter's stream ended, so a mirror may send `presenterAcquire` again; the first to arrive wins.
         case presenterVacant
+        /// leadReport: a viewer telling the origin which of the session's panes it leads, so new work for them goes there.
+        case leadReport(PresentationLeadReport)
         case askRequest(PresentationAsk)
         case askResolve(PresentationAskAnswer)
         /// The presenter cannot show the ask, so the origin takes it back.
@@ -821,6 +838,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
             case .presenterVacant: return "presenter.vacant"
+            case .leadReport: return "lead.report"
             case .askRequest: return "ask.request"
             case .askResolve: return "ask.resolve"
             case .askRejected: return "ask.rejected"

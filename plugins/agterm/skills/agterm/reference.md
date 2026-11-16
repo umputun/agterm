@@ -177,8 +177,9 @@ the id `zmx attach` takes; on a remote window's row it equals the row's `id`; om
 origin too old to stream, or `failed` with the reason in `error`, and `mode` is `presenter` when this
 row's stream holds the presenter role (see Remote sessions) or `mirror` when it does not; it says whether the stream is up,
 never whether the panes' ssh connections are),
-`presenters` (on an origin session: `mirrors`, how many streams mirror it without presenting, one per
-attached row and not per Mac, and `presenter: true` when one presents it; omitted when none does),
+`presenters` (on an origin session: `viewers`, how many streams show it, one per attached row and not per
+Mac; `mirrors`, those without the presenter role; and `presenter: true` when one holds it; omitted when none
+does; an older origin omits `viewers`),
 `remoteOverlays` (on an origin session: the overlay slots a presenting Mac holds, each `{pane?,
 sizePercent?, pageID?}`, `pageID` for a page, while the session itself stays uncovered here; omitted when
 none is held),
@@ -286,12 +287,13 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?, remote?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
 overlay or a pane whose surface is not created yet. `pendingMessages` counts the messages waiting in the
-pane's [msg](#msg) mailbox and is omitted at zero. `lead` is `leader`, `follower`
+pane's [msg](#msg) mailbox and is omitted at zero. `remote` is `true` on an origin's main or split pane whose
+next ask, overlay or page goes to an attached Mac (see Remote sessions), omitted otherwise. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
@@ -2556,10 +2558,15 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - One attached row per session holds the presenter role (`presentation.mode` is `presenter`): the first
   whose stream asks for it while none holds it. The others mirror and ask again when they reconnect, or when the
   presenting Mac leaves if both the origin and that row's agterm are current.
-  An `ask open` or `session overlay open` newly aimed at it on the origin goes to the presenting Mac only
-  when the target pane reports `follower` there, or every existing pane does for session-wide placement.
-  Mixed, unknown or unowned roles stay local; one already open stays where it is when the lead changes.
-  The caller on the origin gets the answer or the exit status as usual.
+- New work goes to the attached Mac leading its pane: an `ask open`, `pick open`, `session overlay open` or
+  status sound aimed at a pane goes to the Mac whose row reports `lead: leader` for it, the latest to take the
+  lead when several do, and session-wide work follows the origin's primary pane. With no attached Mac leading
+  it, the presenter takes it. On a Mac origin it leaves only when that pane, or the primary pane for
+  session-wide work, reports `follower` there; otherwise it stays local. Work already open stays with the Mac it
+  went to when the lead moves, and its close, resize and answer go there. The caller on the origin gets the
+  answer or the exit status as usual. A Mac leading one of the session's panes also forwards link clicks and
+  status clears, as the presenter does. An origin or attached Mac whose agterm predates this sends everything to
+  the presenter. Below, "the presenting Mac" is the Mac the work went to.
 - A `session status` sound (`--sound`, or the blocked default) plays on the presenting Mac instead of the
   origin under the same rule for the status pane; a `scratch` status, or a presenter too old for it, keeps
   it on the origin. The blocked default is the presenting Mac's own Settings choice.
@@ -2586,8 +2593,8 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   `copy`/`text` its no-read error. `htmlOverlays` there lists it with `remote: true`, its `page`, `title` and
   load state as the presenting Mac reports them. The presenting Mac lists its copy with `replica: true`; for a file
   page `file` names the origin path, a URL page keeps `url`, and refuses a socket `overlay submit` on it. A page the presenting Mac refuses still
-  answered ok at open and ends `dismissed`. Losing the presenter ends the page `dismissed`, keeping an answer
-  already submitted.
+  answered ok at open and ends `dismissed`. Losing the Mac showing it ends the page `dismissed`, keeping an
+  answer already submitted.
 - An image, markdown or text page (`--image`, `--markdown`, `--text`) follows the same rule. The presenting Mac
   fetches the file over the same channel, the origin serving only that file, or a markdown file's pictures in its
   own folder, under the same size limits, and shows the same page with no bridge; an image opened without a size

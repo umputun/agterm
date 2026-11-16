@@ -77,6 +77,23 @@ struct ZmxLeadTests {
     }
 
     @MainActor
+    @Test func bookReportsEveryChangeAndNothingElse() throws {
+        let book = ZmxLeadBook()
+        var changes = 0
+        book.onChange = { changes += 1 }
+        let pane = UUID()
+        let leader = try #require(ZmxLeadNotice(title: "zmx-role;a:leader:1"))
+
+        book.begin(ZmxLeadAttachment(nonce: "a", claim: true), pane: pane)
+        _ = book.apply(leader, pane: pane)
+        _ = book.apply(leader, pane: pane)
+        _ = book.apply(leader, pane: UUID())
+        book.forget(pane: pane)
+
+        #expect(changes == 3)
+    }
+
+    @MainActor
     @Test func bookTracksEachPaneAndCountsAttachments() throws {
         let book = ZmxLeadBook()
         let left = UUID(), right = UUID()

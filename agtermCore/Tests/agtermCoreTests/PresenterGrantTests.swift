@@ -90,30 +90,29 @@ struct PresenterGrantTests {
         let firstID = try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: first) { Self.empty }
         let secondID = try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: second) { Self.empty }
         acquire(hub, firstID, gen: first.frames[0].gen)
-        let generation = hub.presenterGeneration(session: Self.session)
 
         acquire(hub, secondID, gen: second.frames[0].gen)
         acquire(hub, firstID, gen: first.frames[0].gen)
 
         #expect(first.bodies.last == .presenterGranted)
-        #expect(hub.presenterGeneration(session: Self.session) == generation)
+        #expect(hub.presenter(of: Self.session) == first.frames[0].gen)
     }
 
-    @Test func aClosedStreamRevokesTheRoleAndBumpsTheGeneration() throws {
+    @Test func aClosedStreamRevokesTheRole() throws {
         let hub = makeHub()
         let first = Sink()
         let second = Sink()
         let firstID = try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: first) { Self.empty }
         let secondID = try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: second) { Self.empty }
         acquire(hub, firstID, gen: first.frames[0].gen)
-        let generation = hub.presenterGeneration(session: Self.session)
 
         hub.unsubscribe(firstID)
 
         #expect(!hub.hasPresenter(session: Self.session))
-        #expect(hub.presenterGeneration(session: Self.session) == generation + 1)
+        #expect(hub.presenter(of: Self.session) == nil)
         acquire(hub, secondID, gen: second.frames[0].gen)
         #expect(second.bodies.last == .presenterGranted)
+        #expect(hub.presenter(of: Self.session) == second.frames[0].gen)
     }
 
     @Test func aClosedStreamTellsTheMirrorsThatSpeakItTheRoleIsVacant() throws {
@@ -160,7 +159,7 @@ struct PresenterGrantTests {
         acquire(hub, presenterID, gen: presenter.frames[0].gen)
         presenter.stalled = true
 
-        hub.sendToPresenter(.status(nil), session: Self.session)
+        hub.send(.status(nil), toOwner: presenter.frames[0].gen)
 
         #expect(presenter.closed == .stalled)
         #expect(!hub.hasPresenter(session: Self.session))
@@ -186,7 +185,6 @@ struct PresenterGrantTests {
         let sink = Sink()
         let id = try hub.subscribe(session: Self.session, hello: Self.presenterHello, sink: sink) { Self.empty }
         acquire(hub, id, gen: sink.frames[0].gen)
-        let generation = hub.presenterGeneration(session: Self.session)
 
         hub.heartbeat()
         clock.now = clock.now.addingTimeInterval(31)
@@ -194,7 +192,7 @@ struct PresenterGrantTests {
 
         #expect(sink.closed == .stale)
         #expect(!hub.hasPresenter(session: Self.session))
-        #expect(hub.presenterGeneration(session: Self.session) == generation + 1)
+        #expect(!hub.isConnected(owner: sink.frames[0].gen))
     }
 
     @Test func aSliceOneViewerIsAnsweredAsAMirror() throws {

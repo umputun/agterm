@@ -6,8 +6,8 @@ public struct RemoteOverlaySlot: Equatable, Sendable {
     public let job: String
     /// The pane role the slot covers, nil for the session-wide slot. Follows its pane across a swap.
     public fileprivate(set) var pane: OverlayPane?
-    /// The presenter generation the job was handed to; only that stream can still reach its surface. Nil while a
-    /// headless origin holds the slot for a presenter to come.
+    /// owner is the token of the viewer the job was handed to; only that stream can still reach its surface. Nil
+    /// while a headless origin holds the slot for a viewer to come.
     public internal(set) var owner: Int?
     /// The size requested for a session-wide overlay, nil for full. What the viewer applied is not known.
     public var sizePercent: Int?
@@ -53,8 +53,8 @@ public struct RemotePage: Equatable, Sendable {
     /// request is the page as first offered, sent again with a new token at each offer.
     var request: PresentationPage?
     public internal(set) var claimed = false
-    /// withdrawnFrom is the presenter generation a headless origin took the page back from after its channel ended,
-    /// until the next offer: that presenter's close can arrive after the channel's end and still dismiss the page.
+    /// withdrawnFrom is the token of the viewer a headless origin took the page back from after its channel ended,
+    /// until the next offer: that viewer's close can arrive after the channel's end and still dismiss the page.
     var withdrawnFrom: Int?
     /// hidden is the visibility the presenter last reported.
     public internal(set) var hidden = false

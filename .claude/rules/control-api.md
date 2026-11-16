@@ -785,12 +785,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   row's origin (`Session.originScratch`) is `.remotePane`, and its click names the origin's scratch identity, which
   `forwardedClickPane` resolves with the scratch's cwd (`PaneObserver` tracks it on agterm-server).
 - A forwarded click (`ControlServer+RemoteLinkClick`, `+ForwardedClick`) travels as `link.click` only while this Mac
-  presents the session and the origin agreed the `link.click` kind (`RemotePresentationClient.originSupports`), with the
+  presents the session, or leads the clicked pane on an origin taking `lead.report`, and the origin agreed the `link.click` kind (`RemotePresentationClient.originSupports`), with the
   ORIGIN's pane identity (`AppStore.linkClickRequest`). The origin resolves it with that pane's cwd and opens only page
-  routes, through the four click helpers in forwarded mode: the zoom check is skipped, the presenter generation captured
+  routes, through the four click helpers in forwarded mode: the zoom check is skipped, the sender's token captured
   at receipt is rechecked after every probe, `openHtmlOverlay` refuses `.local` instead of opening on the origin, and
   `openRemotePage` replaces a hidden clicked remote page only after every other check passed. Refusals return
-  `link.refused` only to that presenter generation; the reason travels as a `RemoteLinkRefusal` raw value and is worded
+  `link.refused` only to that sender; the reason travels as a `RemoteLinkRefusal` raw value and is worded
   on the presenting Mac. A
   refusal there opens a HUD hiding after `remoteAttachErrorSeconds`, or plays the system alert when a HUD other than
   that refusal panel is already up (`openHud` would replace it), a cover or zoom would hide it, or a hidden page of this
@@ -2132,8 +2132,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   decode leniently; the forwarded-click bullet under the click paths owns their contract.
 - `zmx.tree` advertises `presentation`, the protocol version. A viewer never launches the bridge against an
   origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
-- Read-back is `presentation {state, mode, error}` on the viewer's session node and `presenters {mirrors}`
-  on the origin's. `connected` means the PRESENTATION stream is up. It says nothing about the panes' own
+- Read-back is `presentation {state, mode, error}` on the viewer's session node, `presenters {viewers, mirrors,
+  presenter}` on the origin's, and `remote` on an origin surface whose next work `remoteRecipient` sends away.
+  `viewers` is optional so an older client decodes the node; the CLI derives "viewed by" from `mirrors` and
+  `presenter` when an older app omits it. `connected` means the PRESENTATION stream is up. It says nothing about the panes' own
   ssh connections.
 - A `layout` frame and the snapshot's optional `layout` carry model pane identities, primary, axis and
   shown state, including an unrealized origin split. Invalid layouts are ignored without disconnecting.
@@ -2187,17 +2189,25 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   mirrors that list that kind and each asks again, the first acquire winning; an older mirror asks again only on
   its own reconnect, and a repeat acquire from the holder offers pending work once. An origin predating the
   role answers mirror. The role goes with its stream. Read back the viewer's `presentation.mode` and the
-  origin's `presenters.presenter`. A newly opened session-associated ask or program overlay goes to that
-  presenter only when its target pane reports `follower` on the origin, or every existing pane does for
-  session-wide placement; mixed, unknown or unowned roles stay local.
-  One already open stays where it is when the lead changes.
-- A `session.status` sound follows the same gate on the status pane, scratch staying local: the origin sends
-  a one-shot `sound` frame to the presenter and does not play it. A nil name is the blocked-default marker,
+  origin's `presenters.presenter`.
+- Work is routed per pane (`PresentationHub.route`). A viewer whose origin's hello lists `lead.report` sends a
+  `lead.report` of the origin panes it leads (`AppStore.originLeads`), deduplicated per link and resent after
+  hello, layout, every tick and `ZmxLeadBook.onChange`. A pane's recipient is the latest viewer claiming it,
+  session-wide work uses `layout.primary`, and an unclaimed pane falls back to the grant holder.
+  `remoteRecipient` adds the Mac gate: on a Mac origin work leaves only when that pane, the primary for
+  session-wide work, reports `follower`; mixed, unknown or unowned roles of other panes do not matter.
+  Booking routes, checks the recipient's kinds, reserves, then sends to that owner (`send(_:toOwner:)`);
+  follow-ups go to the stored owner, answers are accepted only from it, and work stays with it when the lead
+  moves. `onOwnerLost` returns only that owner's work. A viewer leading any of the session's panes forwards
+  clicks and status seen/keystroke frames like the holder (`sendToOrigin`, `client.claimsLead`), only to an
+  origin taking `lead.report`. A viewer or origin without the kind keeps the holder-only rule.
+- A `session.status` sound follows the same routing on the status pane, scratch staying local: the origin sends
+  a one-shot `sound` frame to that pane's recipient and does not play it. A nil name is the blocked-default marker,
   sent on a transition into `blocked` even when the origin's own blocked sound is off, and the presenter
   plays its own setting. A name the presenter cannot resolve plays its system alert, since the origin has
-  already stayed silent. The kind is negotiated: `sendToPresenter` refuses a `supportedKinds` kind the
-  presenter's hello omitted, so an older presenter leaves the sound on the origin. It is never part of a
-  snapshot, and the destination is the presenter, not necessarily the Mac holding the pane's lead.
+  already stayed silent. The kind is negotiated: `send(_:toOwner:)` refuses a `supportedKinds` kind the
+  recipient's hello omitted, so an older viewer leaves the sound on the origin. It is never part of a
+  snapshot. Below, "the presenter" is the viewer the work was routed to.
 - An ask handed over keeps its slot and its id on the origin, which reads back `ask.remote`; the viewer draws
   a replica, `ask.replica`, whose answer carries the button id plus any `text`/`selected`, all checked
   against the stored ask (`PendingAsk.validatedAnswer`). A form or `cancelButton` ask goes only to a presenter
@@ -2242,7 +2252,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   ordinary URL page that loads directly with viewer-local `--persistent` storage.
 - A file page's files and bridge requests travel over a channel of their own, never the shared stream: the
   presenter runs `ssh -T <origin> agtermctl session overlay page-serve <token>`, whose single-use token
-  (bound to the page, the presenter generation and a 30-second deadline) is the claim, and the origin adopts
+  (bound to the page, the owning viewer's token and a 30-second deadline) is the claim, and the origin adopts
   the connection as a `PageServeStream`. It serves only files inside the grant (the page file alone without
   `--cwd`), off the main actor in 64 KiB chunks, and dispatches each bridge request through `HtmlBridge`
   against the page's place at dispatch time. Resource and bridge requests have separate nonblocking limits
@@ -2333,8 +2343,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   when the target changed under it. `catalog.op` reads the table and fences an id it does not hold, so
   the command arriving later is refused. The remote window never resends: a lost reply becomes `unknown`,
   settled through `catalog.op` or dropped once its target leaves the catalog.
-- Asks, picks, pages and overlay jobs on the server wait unpresented until a presenter that can show them
-  takes the session (`AppStore+Interactions`, `ServerStreams`). Only ask and pick take `--timeout`
+- Asks, picks, pages and overlay jobs on the server wait unpresented until a viewer that can show them is
+  their pane's recipient (`AppStore+Interactions`, `ServerStreams`). `offerPending` runs on a grant, a lead
+  report and after an owner's loss, inside `hub.batch(session:)`, which commits each viewer's share on its own;
+  `AppStore.pendingRecipient` also requires the pending kinds. Only ask and pick take `--timeout`
   (`armDeadline`); a page or job's claim window starts when it is offered, a claimed job is never
   relaunched, and a restart forgets everything still waiting.
 - A viewer tells a headless origin from a Mac by `RemoteBinding.originHeadless`, from `zmx.tree`'s

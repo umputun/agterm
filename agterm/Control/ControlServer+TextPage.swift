@@ -10,11 +10,12 @@ extension ControlServer {
         return ControlResponse(ok: false, error: "session.overlay.open: \(failure)")
     }
 
-    /// textLogRefusal refuses a log page the placement rule hands to a presenting Mac without live text pages, nil
+    /// textLogRefusal refuses a log page the placement rule hands to an attached Mac without live text pages, nil
     /// otherwise: that Mac would show it as a static page, so it is refused rather than changed.
     func textLogRefusal(in store: AppStore, sessionID id: UUID, options: ControlSessionOverlayOpenOptions) -> ControlResponse? {
-        guard options.textLog != nil, store.pageBelongsRemote(id, pane: options.pane),
-              store.presentationHub?.presenterSupports(PresentationHub.pageTextKind, session: id) != true else { return nil }
+        guard options.textLog != nil, let session = store.session(withID: id),
+              let recipient = options.forwardedTo ?? store.pageRecipient(session, pane: options.pane),
+              store.presentationHub?.supports(PresentationHub.pageTextKind, owner: recipient) != true else { return nil }
         return ControlResponse(ok: false, error: OverlayHtmlError.logRemote)
     }
 
@@ -24,21 +25,22 @@ extension ControlServer {
         let id = link.session
         guard canShowLinkOverlay(session: id, forwarded: forward != nil) else { return completion(false) }
         let path = link.url.path(percentEncoded: false)
-        // a presenting Mac without live text pages is handed the plain page it can show
-        let log = link.opensAsLog && library.store(forSession: id).map {
-            !$0.pageBelongsRemote(id, pane: nil) || $0.presentationHub?.presenterSupports(PresentationHub.pageTextKind, session: id) == true
+        // an attached Mac without live text pages is handed the plain page it can show
+        let log = link.opensAsLog && library.store(forSession: id).map { store in
+            guard let recipient = forward ?? store.session(withID: id).flatMap({ store.pageRecipient($0, pane: nil) }) else { return true }
+            return store.presentationHub?.supports(PresentationHub.pageTextKind, owner: recipient) == true
         } == true
         Task { @MainActor [weak self] in
             let checked = log ? await TextProbe.checkLogDetached(path: path) : await TextProbe.checkDetached(path: path)
             guard let self, case .success = checked, canShowLinkOverlay(session: id, forwarded: forward != nil),
-                  forwardIsCurrent(forward, session: id), let store = library.store(forSession: id) else { return completion(false) }
+                  forwardIsCurrent(forward), let store = library.store(forSession: id) else { return completion(false) }
             if forward == nil { releaseHiddenClickedPage(session: id, persistent: false) }
             guard store.session(withID: id)?.overlayHidden(nil) != true else { return completion(false) }
             let page = HtmlSource.text(path: path, line: link.line)
             let options = ControlSessionOverlayOpenOptions(command: "", cwd: nil, wait: false, sizePercent: link.sizePercent,
                                                            backgroundColor: nil, page: page, clicked: true,
                                                            textLog: log ? TextLog(tail: TextPage.defaultTail, follow: true) : nil,
-                                                           forwarded: forward != nil)
+                                                           forwardedTo: forward)
             completion(openHtmlOverlay(in: store, sessionID: id, page: page, options: options).ok)
         }
     }

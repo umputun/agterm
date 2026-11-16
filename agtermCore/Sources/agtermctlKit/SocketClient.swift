@@ -588,9 +588,7 @@ struct SocketClient {
                     "  presentation: \($0.state)" + ($0.mode == "presenter" ? ", presenter" : "")
                         + ($0.error.map { " (\($0))" } ?? "")
                 } ?? ""
-                let presenters = session.presenters.map {
-                    ($0.presenter == true ? "  presented remotely" : "") + ($0.mirrors > 0 ? "  mirrored by: \($0.mirrors)" : "")
-                } ?? ""
+                let presenters = session.presenters.map { $0.viewedBy > 0 ? "  viewed by: \($0.viewedBy)" : "" } ?? ""
                 let cwds = session.cwd + splitCwdSuffix + scratchCwdSuffix
                 lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(cwds)\(titleSuffix)\(attribution)\(splitAttribution)\(presentation)\(presenters)")
             }

@@ -884,12 +884,15 @@ s=$(agtermctl zmx tree studio.local --json \
 <h3 id="remote-sessions-present">Questions, overlays and pages from the other Mac</h3>
 <p>The first attached Mac to ask presents the session while nobody else does; its row's <code>presentation</code> reads <code>mode: presenter</code>. When that Mac leaves, another attached Mac takes over without reconnecting, if it and the other Mac (or agterm-server) both run a current agterm.</p>
 <ul>
-<li>A question (<code>ask</code>) or program overlay that a program there opens is shown on the presenting Mac, where you are, while the other Mac follows another Mac's lead in that pane, or in every pane for one covering the whole session. Otherwise it stays over there, and one already open stays put when the lead changes.</li>
+<li>A question (<code>ask</code>, <code>pick</code>) or program overlay that a program there opens is shown on the attached Mac leading its pane, the one you last typed in; one covering the whole session follows the other Mac's main pane. When no attached Mac leads that pane, the presenting Mac shows it.</li>
+<li>When the other Mac is a Mac rather than agterm-server, this happens only while that pane follows another Mac's lead there; while you work at the other Mac itself, it stays there. One already open stays on its Mac when the lead moves.</li>
+<li>A Mac leading one of the session's panes also opens clicked pages and clears the status, as the presenting Mac does. With an older agterm on either side, everything goes to the presenting Mac.</li>
+<li>The tree tells you where the next one goes: <code>remote</code> on the other Mac's pane reads <code>true</code> when it opens on an attached Mac, and <code>presenters.viewers</code> counts the attached rows showing the session (<code>viewed by</code> in <code>agtermctl tree</code>).</li>
 <li>The answer or exit status still reaches the program over there. A handed-over overlay's program runs once, on the other Mac, inside an ssh terminal this Mac opens for it.</li>
 <li>If this Mac refuses a question, it goes back to the other Mac. An overlay this Mac cannot show fails rather than opening over there. Closing such an overlay from a script asks it to end, and its result says how it did.</li>
-<li>A status sound follows the same condition, for the pane that set the status: it plays on the presenting Mac while another Mac leads that pane, with the presenting Mac's own blocked sound.</li>
+<li>A status sound follows the same rule, for the pane that set the status: it plays on the attached Mac it goes to, with that Mac's own blocked sound.</li>
 </ul>
-<p><strong>Pages</strong> follow the same condition and open on the presenting Mac:</p>
+<p><strong>Pages</strong> follow the same rule, and below, "this Mac" is the Mac a page opened on:</p>
 <ul>
 <li>A file page reads its files from the other Mac as needed, and its buttons and scripts act on the other Mac's session, so a page that answers its caller answers the program over there. Finder and browser are refused for it, since the file is not on this Mac.</li>
 <li>A web page loads directly here; with <code>--persistent</code> it uses this Mac's saved browser storage. A <code>localhost</code> page names a server on the other Mac, so it loads through an ssh forward from this Mac; an agterm here too old to forward refuses it.</li>

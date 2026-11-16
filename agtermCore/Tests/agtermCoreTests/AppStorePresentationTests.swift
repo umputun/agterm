@@ -63,6 +63,21 @@ struct AppStorePresentationTests {
         #expect(mirror.sounds.isEmpty)
     }
 
+    @Test(arguments: [StatusPane.left, .right])
+    func aStatusSoundGoesToTheViewerLeadingItsPane(pane: StatusPane) throws {
+        let session = try origin()
+        let claimant = Sink()
+        let id = try hub.subscribe(session: session.id, hello: PresentationHello(version: 1, kinds: PresentationHub.supportedKinds,
+                                                                                 mode: .presenter), sink: claimant) { PresentationSnapshot(status: nil, hud: nil) }
+        let right = try #require(session.splitPaneIdentity)
+        hub.receive(PresentationFrame(gen: claimant.frames[0].gen, rev: 0, body: .leadReport(PresentationLeadReport(leaders: [right]))), from: id)
+
+        #expect(store.presentStatusSoundRemotely(Self.glass, in: session, pane: pane))
+
+        #expect(claimant.sounds == (pane == .right ? [Self.glass] : []))
+        #expect(presenter.sounds == (pane == .left ? [Self.glass] : []))
+    }
+
     @Test func aScratchStatusSoundStaysLocal() throws {
         let session = try origin()
 

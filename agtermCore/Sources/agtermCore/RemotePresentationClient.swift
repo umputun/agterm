@@ -52,6 +52,8 @@ public struct RemotePresentationEffects {
     public var message: @MainActor (PresentationMessage) -> Void
     /// mail replaces the origin's unacked counts per origin pane; nil from a snapshot of an origin that sends none.
     public var mail: @MainActor (PresentationMail?) -> Void
+    /// leads is the set of the origin's panes this Mac leads, read whenever the client checks for a change.
+    public var leads: @MainActor () -> Set<UUID>
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -78,6 +80,7 @@ public struct RemotePresentationEffects {
                 linkRefused: @escaping @MainActor (RemoteLinkRefusal) -> Void = { _ in },
                 message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
                 mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
+                leads: @escaping @MainActor () -> Set<UUID> = { [] },
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -103,6 +106,7 @@ public struct RemotePresentationEffects {
         self.linkRefused = linkRefused
         self.message = message
         self.mail = mail
+        self.leads = leads
         self.warn = warn
     }
 }
@@ -143,6 +147,8 @@ public final class RemotePresentationClient {
     private var mode: PresentationMode?
     /// The kinds the origin's hello answer agreed for the current link, empty with no link.
     private var originKinds: Set<String> = []
+    /// sentLeads is the lead set last reported on the current link, nil until the first report.
+    private var sentLeads: Set<UUID>?
 
     public init(argv: [String], presentationVersion: Int?, transport: RemotePresentationTransport,
                 effects: RemotePresentationEffects, now: @escaping () -> Date = Date.init) {
@@ -182,6 +188,20 @@ public final class RemotePresentationClient {
     /// originSupports says whether the origin agreed `kind` on the current link.
     public func originSupports(_ kind: String) -> Bool { link != nil && originKinds.contains(kind) }
 
+    /// claimsLead says the origin knows this Mac leads one of its panes, which lets a mirror send clicks and
+    /// status clears as the presenter does.
+    public var claimsLead: Bool { originSupports(PresentationHub.leadReportKind) && sentLeads?.isEmpty == false }
+
+    /// refreshLeads reports the panes this Mac leads to an origin that takes lead reports, when they differ from
+    /// what the current link last reported.
+    public func refreshLeads() {
+        guard let link, originKinds.contains(PresentationHub.leadReportKind) else { return }
+        let leads = effects.leads()
+        guard leads != sentLeads else { return }
+        sentLeads = leads
+        send(.leadReport(PresentationLeadReport(leaders: leads.sorted { $0.uuidString < $1.uuidString })), on: link)
+    }
+
     /// Sends what this Mac answered about work the origin handed over. Dropped with no link: the origin
     /// takes that work back when the stream goes.
     public func answer(_ body: PresentationFrame.Body) {
@@ -197,6 +217,8 @@ public final class RemotePresentationClient {
             return
         }
         if link == nil, let retryAt, now() >= retryAt { launch() }
+        // a binding the catalog or a restore rewrote changes the set with no event of its own
+        refreshLeads()
     }
 
     /// Takes one line from the link opened by `launch`. One from an earlier launch is dropped.
@@ -262,6 +284,7 @@ public final class RemotePresentationClient {
         case .hello(let answer):
             originKinds = Set(answer.kinds)
             if answer.mode == .presenter { send(.presenterAcquire, on: link) }
+            refreshLeads()
         case .presenterGranted: report(.presenter)
         case .presenterRefused: report(.mirror)
         case .presenterVacant: if mode != .presenter { send(.presenterAcquire, on: link) }
@@ -292,7 +315,7 @@ public final class RemotePresentationClient {
                 default: apply(entry, on: link)
                 }
             }
-        case .ack, .presenterAcquire, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
+        case .ack, .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
              .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break
@@ -305,6 +328,7 @@ public final class RemotePresentationClient {
             return
         }
         effects.layout(layout)
+        refreshLeads()
     }
 
     private func launch() {
@@ -343,6 +367,7 @@ public final class RemotePresentationClient {
         link?.stop()
         link = nil
         originKinds = []
+        sentLeads = nil
     }
 
     private func send(_ body: PresentationFrame.Body, on link: RemotePresentationLink) {

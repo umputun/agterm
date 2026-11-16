@@ -67,6 +67,68 @@ struct AppStoreLinkClickRequestTests {
         #expect(request(nil, true, false) == .failure(.paneNotAttached))
     }
 
+    @Test func aMirrorLeadingTheClickedPaneForwardsOnlyToAnOriginTakingLeads() throws {
+        let mirror = try attached(mode: .mirror)
+        lead(.leader, pane: mirror.paneIdentity)
+        let left = click(mirror, pane: mirror.paneIdentity)
+
+        #expect(try store.linkClickRequest(left, originSupportsClick: true, hidden: false, originTakesLeads: true).get().pane
+            == Self.remoteLeft)
+        #expect(store.linkClickRequest(left, originSupportsClick: true, hidden: false) == .failure(.notPresenter))
+        #expect(store.linkClickRequest(click(mirror, pane: mirror.splitPaneIdentity), originSupportsClick: true, hidden: false,
+                                       originTakesLeads: true) == .failure(.notPresenter))
+    }
+
+    @Test func aMirrorLeadingTheOriginsScratchForwardsAClickFromIt() throws {
+        let mirror = try attached(mode: .mirror)
+        let scratch = UUID(), client = UUID()
+        mirror.remotePresentation?.layout = PresentationLayout(panes: [Self.remoteLeft], primary: Self.remoteLeft, shown: false,
+                                                               scratch: scratch, scratchShown: true)
+        mirror.scratchDaemon = Session.ScratchDaemon(identity: scratch, shown: true)
+        mirror.originScratchClient = client
+        lead(.leader, pane: client)
+
+        let request = store.linkClickRequest(click(mirror, pane: scratch), originSupportsClick: true, hidden: false, originTakesLeads: true)
+
+        #expect(try request.get().pane == scratch)
+    }
+
+    @Test func theLeadSetNamesOnlyOriginPanesThisMacLeads() throws {
+        let session = try attached(mode: .mirror, mapSplit: false)
+        #expect(store.originLeads(of: session).isEmpty)
+
+        lead(.leader, pane: session.paneIdentity)
+        lead(.leader, pane: try #require(session.splitPaneIdentity))
+        #expect(store.originLeads(of: session) == [Self.remoteLeft])
+
+        lead(.follower, pane: session.paneIdentity)
+        #expect(store.originLeads(of: session).isEmpty)
+    }
+
+    @Test func aMirrorSendsSeenToItsOriginOnlyWhileItLeadsAPane() throws {
+        let mirror = try attached(mode: .mirror)
+        var sent: [PresentationFrame.Body] = []
+        store.onOriginFrame = { _, body in
+            sent.append(body)
+            return true
+        }
+
+        store.markSeen(mirror.id)
+        #expect(sent.isEmpty)
+        lead(.leader, pane: try #require(mirror.splitPaneIdentity))
+        store.markSeen(mirror.id)
+
+        #expect(sent == [.statusSeen(PresentationSeen(reason: .viewed))])
+    }
+
+    private func lead(_ role: ZmxLeadRole, pane: UUID) {
+        let attachment = ZmxLeadAttachment(claim: true)
+        ZmxLeadBook.shared.begin(attachment, pane: pane)
+        if let notice = ZmxLeadNotice(title: "zmx-role;\(attachment.nonce):\(role.rawValue):1") {
+            _ = ZmxLeadBook.shared.apply(notice, pane: pane)
+        }
+    }
+
     @Test func aLocalSessionHasNothingToForward() throws {
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
