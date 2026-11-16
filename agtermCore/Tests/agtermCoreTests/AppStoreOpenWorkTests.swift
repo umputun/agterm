@@ -472,6 +472,9 @@ struct AppStoreOpenWorkTests {
         let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
         pass(session, local: local(controller, window: window))
         #expect(session.askRemoteOwner == older.gen)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: first.gen))
+        hub.unsubscribe(first.id)
+        pass(session, local: local(controller, window: window))
         #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: older.gen))
 
         SessionPickBook.shared.handBack(session: session.id, owner: older.gen, refused: PresentationPickRef(id: choice.id, owner: first.gen),
@@ -486,6 +489,105 @@ struct AppStoreOpenWorkTests {
         #expect(older.sink.picks.count == 1)
         #expect(session.askPending?.id == pending.id && !session.askPresentedRemotely)
         #expect(SessionPickBook.shared.placement(forSession: session.id) == .local(window))
+
+        let relay = try viewer(session, leads: true)
+        pass(session, local: local(controller, window: window))
+        #expect(relay.sink.asks.map(\.id) == [pending.id])
+        #expect(relay.sink.picks.map(\.id) == [choice.id])
+        lead(older, [session.paneIdentity])
+        hub.unsubscribe(relay.id)
+        pass(session, local: local(controller, window: window))
+
+        #expect(older.sink.asks.count == 1)
+        #expect(older.sink.picks.count == 1)
+        #expect(session.askPending?.id == pending.id && !session.askPresentedRemotely)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .local(window))
+    }
+
+    @Test func aViewerWithoutOffersTakingTheLeadLeavesTheHoldersAskAndPickWithIt() throws {
+        let (_, session) = try session()
+        let holder = try viewer(session, leads: true, acquire: true)
+        let gui = ask(style: .gui), choice = pick()
+        store.presentAskRemotely(gui, in: session, paneIdentity: nil, window: UUID())
+        _ = store.presentPickRemotely(choice, in: session, window: nil)
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+
+        pass(session)
+
+        #expect(session.askRemoteOwner == holder.gen)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: holder.gen))
+        #expect(older.sink.asks.isEmpty)
+        #expect(older.sink.picks.isEmpty)
+        #expect(!holder.sink.dismissed(ask: gui.id))
+        #expect(!holder.sink.dismissed(pick: choice.id))
+    }
+
+    @Test func aViewerWithoutOffersTakingTheLeadLeavesAWindowAskHere() throws {
+        let (_, session) = try session()
+        let window = UUID(), controller = PickController()
+        let gui = ask(style: .gui)
+        #expect(controller.openAsk(gui.anchored(at: AskAnchor(sessionID: session.id))))
+        store.askRegistry.register(id: gui.id, owner: .window(window))
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+
+        pass(session, local: local(controller, window: window))
+
+        #expect(controller.pendingAsk?.id == gui.id)
+        #expect(older.sink.asks.isEmpty)
+    }
+
+    @Test func aViewerWithoutOffersTakingTheLeadLeavesAPickDrawnHere() throws {
+        let (_, session) = try session()
+        let window = UUID(), controller = PickController()
+        PickRegistry.shared.register(window, controller: controller)
+        defer { PickRegistry.shared.unregister(window) }
+        let only = try viewer(session, acquire: true)
+        let choice = pick()
+        _ = store.presentPickRemotely(choice, in: session, window: window)
+        hub.unsubscribe(only.id)
+        pass(session, local: local(controller, window: window))
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .local(window))
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+
+        pass(session, local: local(controller, window: window))
+
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .local(window))
+        #expect(controller.pending?.id == choice.id)
+        #expect(older.sink.picks.isEmpty)
+    }
+
+    @Test func aLostHoldersAskAndPickStillGoToAViewerWithoutOffers() throws {
+        let (_, session) = try session()
+        let holder = try viewer(session, leads: true, acquire: true)
+        let gui = ask(style: .gui), choice = pick()
+        store.presentAskRemotely(gui, in: session, paneIdentity: nil, window: UUID())
+        _ = store.presentPickRemotely(choice, in: session, window: nil)
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+
+        hub.unsubscribe(holder.id)
+        pass(session)
+
+        #expect(session.askRemoteOwner == older.gen)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: older.gen))
+        #expect(older.sink.asks.map(\.id) == [gui.id])
+        #expect(older.sink.picks.map(\.id) == [choice.id])
+    }
+
+    @Test func headlessAViewerWithoutOffersTakingTheLeadGetsTheHoldersAskAndPick() throws {
+        let (host, session) = try session(headless: true)
+        let holder = try viewer(session, leads: true, acquire: true)
+        let gui = ask(style: .gui), choice = pick()
+        host.presentAskRemotely(gui, in: session, paneIdentity: nil, window: UUID())
+        _ = host.presentPickRemotely(choice, in: session, window: nil)
+        #expect(session.askRemoteOwner == holder.gen)
+        let older = try viewer(session, leads: true, kinds: Self.legacyKinds)
+
+        pass(session, on: host)
+
+        #expect(session.askRemoteOwner == older.gen)
+        #expect(SessionPickBook.shared.placement(forSession: session.id) == .presenter(owner: older.gen))
+        #expect(holder.sink.dismissed(ask: gui.id))
+        #expect(holder.sink.dismissed(pick: choice.id))
     }
 
     @Test func aViewerWithoutOffersGivesWorkUpButIsNeverHandedItAgain() throws {
