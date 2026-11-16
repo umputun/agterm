@@ -330,6 +330,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// When the status was last set, idle and repeated values included, as epoch seconds on the
     /// `ControlEvent.ts` clock. Omitted before any set; never persisted.
     public let statusChangedAt: Double?
+    /// activePanes lists the panes still reporting `active` (`"left"|"right"|"scratch"`), empty when none, whatever the row shows:
+    /// a pane's turn end leaves the row on another pane's work, and this says which panes are working. Omitted
+    /// only for a row mirroring an origin that does not send the list.
+    public let activePanes: [String]?
     /// lastSelectedAt is `Session.lastSelectedAt` as epoch seconds; omitted when no selection timestamp has
     /// been recorded.
     public let lastSelectedAt: Double?
@@ -425,7 +429,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 foregroundShell: String? = nil, splitForegroundShell: String? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
-                statusShape: String? = nil, statusChangedAt: Double? = nil,
+                statusShape: String? = nil, statusChangedAt: Double? = nil, activePanes: [String]? = nil,
                 background: BackgroundWatermark? = nil, paneBackgrounds: PaneBackgrounds? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil, realized: Bool? = nil,
@@ -486,6 +490,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.statusColor = statusColor
         self.statusShape = statusShape
         self.statusChangedAt = statusChangedAt
+        self.activePanes = activePanes
         self.lastSelectedAt = lastSelectedAt
         self.tint = tint
         self.tintOn = tintOn

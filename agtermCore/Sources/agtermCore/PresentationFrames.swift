@@ -65,9 +65,11 @@ public struct PresentationStatus: Codable, Equatable, Sendable {
     public var changedAt: Double?
     /// autoReset is true for a status that selection ends; absent from an older origin, which never sent it.
     public var autoReset: Bool?
+    /// activePanes lists the panes still reporting work, empty when none; absent from an older origin.
+    public var activePanes: [PresentationPane]?
 
     public init(status: AgentStatus, blink: Bool, color: String?, shape: StatusShape?, pane: PresentationPane?,
-                changedAt: Double?, autoReset: Bool? = nil) {
+                changedAt: Double?, autoReset: Bool? = nil, activePanes: [PresentationPane]? = nil) {
         self.status = status
         self.blink = blink
         self.color = color
@@ -75,6 +77,7 @@ public struct PresentationStatus: Codable, Equatable, Sendable {
         self.pane = pane
         self.changedAt = changedAt
         self.autoReset = autoReset
+        self.activePanes = activePanes
     }
 }
 

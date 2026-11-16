@@ -30,15 +30,17 @@ struct ServerActionsEffectsTests {
         #expect(session.agentIndicator.status == .blocked)
     }
 
-    @Test func aBlockedStatusRefusesAnotherPanesWrite() async throws {
+    @Test func anotherPanesWriteUnderABlockIsAcceptedAndKeepsTheBlockShown() async throws {
         let session = try newSession()
         _ = harness.actions.splitSession(session.id.uuidString, window: nil, mode: "on")
         _ = await status(session, .blocked, pane: .left)
 
         let reply = await status(session, .active, pane: .right)
 
-        #expect(reply == ControlResponse(ok: false, error: "blocked status owned by pane left (write from that pane to change it)"))
+        #expect(reply.ok)
         #expect(session.agentIndicator.status == .blocked)
+        let node = harness.store.controlTree().workspaces.flatMap(\.sessions).first { $0.id == session.id.uuidString }
+        #expect(node?.activePanes == ["right"])
     }
 
     @Test func anIfIdleWriteSetsAnIdleSession() async throws {

@@ -113,7 +113,9 @@ extension AppStore {
                                   shape: indicator.shape,
                                   pane: presentationStatusPane(indicator.statusPane, of: session),
                                   changedAt: session.statusChangedAt?.timeIntervalSince1970,
-                                  autoReset: indicator.autoReset ? true : nil)
+                                  autoReset: indicator.autoReset ? true : nil,
+                                  activePanes: StatusPane.allCases.filter { session.paneActivity[$0] != nil }
+                                      .map { presentationStatusPane($0, of: session) })
     }
 
     /// A status owner as the stable identity a viewer can follow across a swap or promotion on either Mac.

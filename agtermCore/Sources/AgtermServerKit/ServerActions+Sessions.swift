@@ -267,9 +267,9 @@ extension ServerActions {
                 }
             }
             // the input a blocked agent waited for has arrived, as `session.type` into a Mac pane clears it
-            if !options.text.isEmpty, session.agentIndicator.clearedBy(pane: resolved.pane, keystroke: InterruptKeystroke.classify(text: options.text),
-                                                                       reset: Self.macDefaults.effectiveStatusReset) {
-                store.setAgentIndicator(AgentIndicator(), forSession: session.id)
+            if !options.text.isEmpty {
+                store.clearStatus(by: InterruptKeystroke.classify(text: options.text), pane: resolved.pane,
+                                  reset: Self.macDefaults.effectiveStatusReset, forSession: session.id)
             }
             var result = ControlResult(id: session.id.uuidString)
             result.pane = resolved.pane.rawValue

@@ -39,12 +39,12 @@ public final class Session: Identifiable {
     public var unseenCount: Int = 0
 
     /// Per-session agent status, driven over the control channel (`session.status`); the sidebar row's
-    /// status glyph reacts. Ephemeral.
+    /// status glyph reacts. Ephemeral, as is `paneActivity`: each working pane's last `active`, shown when another ends.
     public var agentIndicator = AgentIndicator()
+    @ObservationIgnored var paneActivity: [StatusPane: AgentIndicator] = [:]
 
     /// Last time the status was set, idle and repeated values included; nil before any set, never persisted.
-    /// Must stay a wall-clock `Date`: `controlTree` ships it as epoch seconds compared against `ControlEvent.ts`,
-    /// so a monotonic instant would make a client's computed age meaningless.
+    /// Wall-clock: `controlTree` ships it as epoch seconds against `ControlEvent.ts`, where a monotonic instant means nothing.
     @ObservationIgnored public var statusChangedAt: Date?
     /// When the session last became or stopped being its window's selection, on the same clock; persisted.
     @ObservationIgnored public var lastSelectedAt: Date?

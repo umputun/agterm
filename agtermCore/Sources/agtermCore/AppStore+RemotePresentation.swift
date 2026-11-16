@@ -50,6 +50,9 @@ extension AppStore {
                            shape: $0.shape, statusPane: owner?.pane)
         } ?? AgentIndicator()
         setAgentIndicator(indicator, forSession: id)
+        // the origin's word replaces any local pane activity, which a later local clear would otherwise bring back
+        session.paneActivity.removeAll()
+        session.remotePresentation?.activePanes = status.map(\.activePanes) ?? []
         // the setter stamps this Mac's clock; the origin's is what orders rows after a reconnect
         if let stamp = status?.changedAt { session.statusChangedAt = Date(timeIntervalSince1970: stamp) }
         session.remotePresentation?.statusBridged = indicator.status != .idle
@@ -100,12 +103,13 @@ extension AppStore {
     }
 
     /// forwardStatusKeystroke hands typing in `pane` on a bridged status to the origin, whose reset rule decides; its
-    /// answer comes back as a status frame. False when the row decides here: nothing bridged, typing in a pane that
-    /// does not own the status, which no origin rule clears, a pane the origin has no twin of, or an origin that does
-    /// not take the frame. Plain typing goes once per status.
+    /// answer comes back as a status frame. False when the row decides here: nothing bridged, typing other than an
+    /// interrupt in a pane that does not own the status, which no origin rule clears, a pane the origin has no twin
+    /// of, or an origin that does not take the frame. An interrupt in any pane goes, since it also ends that pane's
+    /// activity on the origin. Plain typing goes once per status.
     public func forwardStatusKeystroke(_ keystroke: StatusKeystroke, pane: StatusPane, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), let state = session.remotePresentation, state.statusBridged,
-              state.statusOwnerResolved, (session.agentIndicator.statusPane ?? .left) == pane,
+              keystroke == .interrupt || (state.statusOwnerResolved && (session.agentIndicator.statusPane ?? .left) == pane),
               let origin = originPane(of: pane, in: session) else { return false }
         if keystroke == .other, state.statusKeySent { return true }
         guard sendToOrigin(.statusClear(PresentationStatusClear(reason: PresentationClearReason(keystroke), pane: origin)),
@@ -134,6 +138,24 @@ extension AppStore {
         session(withID: id)?.remotePresentation?.seenSubmitSent = false
     }
 
+    /// mirroredActivePanes maps the origin's working panes to this Mac's, dropping one with no counterpart here, and
+    /// adds this Mac's own reports, which a pane with no origin counterpart can only make here.
+    func mirroredActivePanes(of session: Session) -> [StatusPane]? {
+        guard let working = session.remotePresentation?.activePanes else { return nil }
+        let local = Set(working.compactMap { localStatusPane($0, in: session).pane }).union(session.paneActivity.keys)
+        return StatusPane.allCases.filter(local.contains)
+    }
+
+    /// noteMirroredActivity puts a local report the origin's block keeps off the row into the origin's list, so the
+    /// read-back agrees with the work this Mac accepted until the origin's next status replaces it.
+    func noteMirroredActivity(_ working: Bool, pane: StatusPane, of session: Session) {
+        guard let state = session.remotePresentation, state.statusBridged, var list = state.activePanes,
+              let origin = originPane(of: pane, in: session) else { return }
+        list.removeAll { $0 == origin }
+        if working { list.append(origin) }
+        session.remotePresentation?.activePanes = list
+    }
+
     private func originPane(of pane: StatusPane, in session: Session) -> PresentationPane? {
         switch pane {
         case .scratch: return session.scratchDaemon != nil ? .scratch : nil
@@ -150,6 +172,7 @@ extension AppStore {
         applyRemoteInfo(nil, forSession: id)
         session.remotePresentation?.mail = nil
         if session.remotePresentation?.statusBridged == true { setAgentIndicator(AgentIndicator(), forSession: id) }
+        session.remotePresentation?.activePanes = nil
         closeBridgedHud(forSession: id)
         // the origin takes a handed-over ask back when the stream goes, so the replica must not answer it
         if session.askReplica { session.releaseAsk() }

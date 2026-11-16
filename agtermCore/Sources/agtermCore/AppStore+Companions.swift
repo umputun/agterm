@@ -288,8 +288,10 @@ extension AppStore {
         session.clearPendingRestoreOverrides()
         session.oscTitle = nil
         session.teardownPaneOverlay(.left)
+        session.paneActivity[.left] = nil
+        session.paneActivity[.right] = nil
         if session.agentIndicator.status != .idle, session.agentIndicator.statusPane != .scratch {
-            setAgentIndicator(AgentIndicator(), forSession: session.id)
+            showRemainingActivity(of: session)
         }
         session.primaryRespawns &+= 1
         scheduleTreeChanged()

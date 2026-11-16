@@ -262,8 +262,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Relative placement uses host-free `SidebarDrop.resolveRelative`; batches use tree-order remove-first
   `resolveSessions`. Reject batch `--to`. Count only actual moves. A one-member batch uses singular behavior.
 - Sidebar batch Flag computes one uniform value: flag all unless all are already flagged. This is not
-  equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status is equivalent to
-  repeated `session.status idle` and needs no batch command. Mark for Attention is `session.status
+  equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status needs no batch command,
+  but it is not repeated `session.status idle`: that ends only its writer pane's activity, while Clear Status
+  ends every pane's. Mark for Attention is `session.status
   completed` on the targets `tree` reports idle; it skips the rest, so it is not an unconditional write.
 - `workspace.move --to up|down|top|bottom` reorders relative to the target. Drag remains the precise
   between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
@@ -1400,7 +1401,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - `session.status` accepts idle/active/completed/blocked, blink, auto-reset, optional sound, `#rrggbb`
   color, fixed shape set, and pane. Build a fresh ephemeral indicator so omitted overrides clear.
   `ifIdle` makes a write on a non-idle row `StatusWriteResult.skipped`: ok, no change, stamp, event or sound.
-  It is checked before pane precedence, so it never answers a refusal.
+  It is checked before pane precedence and records no pane activity.
 - Validate sound before mutation and target playback. `default`/`beep` beeps; named system/custom sounds
   use cached `NSSound`. Without per-call sound, entering blocked may play configured default once;
   repeated blocked does not. Explicit per-call wins via `AgentStatus.effectiveSound`.
@@ -1426,13 +1427,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   also count. Ephemeral: never persisted, absent before any set and after restore.
 - Pane is left/right/scratch, nil meaning left. It controls pane-scoped keystroke clearing and GUI
   blocked/completed reveal. Control attention navigation changes selection only.
-- Pane also decides PRECEDENCE while a session is blocked: a write from another pane that is neither
-  itself `blocked` is refused whole with `blocked status owned by pane <pane>`, changing nothing and
-  playing no sound. A hook's `active` must not erase the other pane's block. `blocked` from a second pane
-  replaces (it is a real second request), `idle` is NOT exempt (the bundled hooks emit it unprompted from
-  their own pane), and same-pane writes are unrestricted, so a
-  single-pane session behaves exactly as before. `session.type` into the owning pane clears the block like a
-  keystroke, an empty payload excepted. Two simultaneous blocks still collapse to one; see [[notifications]].
+- Pane also decides PRECEDENCE, and every write but an `ifIdle` skip is accepted. `Session.paneActivity` keeps the
+  last `active` each pane posted; any other status from that pane ends it. While a session is blocked, a write
+  from another pane that is not itself `blocked` changes only that pane's activity: the block stays, unstamped,
+  with no event, and its sound still plays. A hook's `active` must not erase the other pane's block. `blocked`
+  from a second pane replaces (it is a real second request), and `idle` is NOT exempt (the bundled hooks emit it
+  unprompted from their own pane). Otherwise a pane's completed or idle shows another pane's retained `active`,
+  left, right, then scratch, so one agent's turn end cannot idle a row while another works. A single-pane session
+  behaves exactly as before. `session.type` into the owning pane clears the block like a keystroke, an empty
+  payload excepted. Two simultaneous blocks still collapse to one; see [[notifications]].
+- Every path that ends a pane's status falls back the same way (`showRemainingActivity`): a keystroke clear
+  (`AppStore.clearStatus(by:)`, which an interrupt in ANY pane uses to drop that pane's activity, forwarded to the
+  origin when the row is bridged), teardown, promotion (the split's activity moves left), swap, a parent respawn
+  (left and right dropped, scratch kept) and a selection auto-reset (only the shown pane's). Manual Clear Status
+  drops every pane's. A live origin status replaces an attached row's local activity.
+- `activePanes` on the session node reads back the panes in `paneActivity`, `[]` when none, so a caller can
+  tell a pane's turn end from the row's. An attached row showing its origin's status reports the origin's list
+  (`PresentationStatus.activePanes`), omitted when that origin sends none.
 - `Session.paneAddress` owns `--pane-id` resolution for `session.text`, `session.type` and
   `session.restore`: a live token wins over `--pane`, an empty one counts as absent, and an unknown one
   without an explicit `--pane` answers `unknown pane id: <id>` rather than reaching a pane the caller
