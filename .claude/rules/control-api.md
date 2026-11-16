@@ -2333,9 +2333,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   The presenter runs each one through `runTextPageAction`, the local command, queued per page so they apply in order,
   against the replica, which the same commands also reach on its own socket.
   Every text-state change on a replica, its bar's included, rides `pageState.text` and is mirrored into the origin's
-  record; a re-offer seeds the new replica with following, query and wrap (`textSeed`), never a step.
+  record; a re-offer seeds the new replica with following, query, wrap and expand (`textSeed`), never a step.
   An older presenter gets `OverlayHtmlError.logRemote` for a log page, the plain page for a clicked log, and the
-  store's `remote page` refusals for search, changes and wrap, and for files when it also lacks `page.files`.
+  store's `remote page` refusals for search, changes and wrap, for files when it also lacks `page.files`, and for
+  expand when it lacks `page.expand` (the Expand bullet above).
   A headless origin answers a text action on a page held for no presenter `the viewer showing this overlay is gone`.
 - On the origin, `overlay.close` sends `pageClose` and ends the reservation at once; `resize`,
   `reload [--current]`, `navigate back|forward` and hide/show/toggle reach the presenter as `pageCommand`s,

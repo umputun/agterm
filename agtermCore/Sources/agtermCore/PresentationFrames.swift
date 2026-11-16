@@ -552,7 +552,8 @@ public struct PresentationTextState: Codable, Equatable, Sendable {
     public var matches: Int?
     public var current: Int?
     public var wrap: Bool
-    /// expand is a JSON Lines page's layout; nil from a presenter predating `page.expand`, which shows the page raw.
+    /// expand is true while a JSON Lines page is laid out; nil means off, and is all a presenter predating
+    /// `page.expand` ever sends.
     public var expand: Bool?
     public var changes: TextChanges?
     /// files is a diff page's file in view; an origin predating `page.files` ignores the key.

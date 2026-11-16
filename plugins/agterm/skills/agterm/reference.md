@@ -2647,7 +2647,9 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
   its copy, and its following, search, wrap, changes and file read back in the origin's `htmlOverlays[].text`. An older
   presenting Mac refuses a log page (`session.overlay.open: the Mac presenting this session cannot show a log
   page`), opens a clicked log as the plain text page, and `search`, `changes` and `wrap` answer `remote page:
-  ... on the Mac that shows it`, as `files` does from any Mac without `page.files`.
+  ... on the Mac that shows it`, as `files` does from any Mac without `page.files`. On a static JSON Lines page
+  there, `session overlay expand` runs on a Mac that also lists `page.expand` and reads back in `text.expand`; any
+  other Mac answers `remote page: expand it on the Mac that shows it`.
 - When the stream drops, a `--wait` overlay whose program already ended closes on the presenting Mac,
   and a running one keeps running and closes when its ssh ends. Nothing is handed back later.
 - While the stream is not up the row's indicator says so and names the host. It retries on its own, at
