@@ -406,8 +406,13 @@ struct LinkPolicyTests {
     // regression: a plain-http page the app's web views cannot load was routed to the overlay
     @Test(arguments: [
         ("http://localhost/", true), ("http://LOCALHOST:8080/x", true), ("http://devbox/", true),
-        ("http://mac.local:3000/", true), ("http://127.0.0.1:5173/", true), ("http://93.184.216.34/", true),
-        ("http://[::1]:8080/", true), ("http://[2001:db8::1]/", true),
+        ("http://mac.local:3000/", true), ("http://127.0.0.1:5173/", true), ("http://93.184.216.34/", false),
+        ("http://[::1]:8080/", true), ("http://[2001:db8::1]/", false), ("http://100.101.102.103:8171/", false),
+        ("http://10.0.0.1/", true), ("http://192.168.1.10/", true), ("http://192.169.0.1/", false),
+        ("http://172.16.0.1/", true), ("http://172.31.255.255/", true), ("http://172.15.255.255/", false), ("http://172.32.0.0/", false),
+        ("http://169.254.1.1/", true), ("http://169.253.0.1/", false), ("http://127.255.0.1/", true),
+        ("http://[fc00::1]/", true), ("http://[fdff:ffff::1]/", true), ("http://[fbff::1]/", false),
+        ("http://[fe80::1]/", true), ("http://[febf::1]/", true), ("http://[fec0::1]/", false),
         ("http://example.com/", false), ("http://www.example.com:8080/a", false), ("http://local/", true),
         ("http://notlocal.localx/", false), ("http://1.2.3.example/", false), ("http://999.1.1.1/", false),
         ("https://example.com/", true),

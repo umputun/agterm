@@ -1,0 +1,203 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 9a12b9c..e92b1c1 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1178,6 +1178,7 @@ GHOSTTY_API ghostty_surface_config_s ghostty_surface_config_new();
+ GHOSTTY_API ghostty_surface_t ghostty_surface_new(ghostty_app_t,
+                                                      const ghostty_surface_config_s*);
+ GHOSTTY_API void ghostty_surface_free(ghostty_surface_t);
++GHOSTTY_API bool ghostty_surface_try_free(ghostty_surface_t);
+ GHOSTTY_API void* ghostty_surface_userdata(ghostty_surface_t);
+ GHOSTTY_API ghostty_app_t ghostty_surface_app(ghostty_surface_t);
+ GHOSTTY_API ghostty_surface_config_s ghostty_surface_inherited_config(ghostty_surface_t, ghostty_surface_context_e);
+diff --git a/src/App.zig b/src/App.zig
+index 7667260..8c65cb3 100644
+--- a/src/App.zig
++++ b/src/App.zig
+@@ -660,6 +660,10 @@ pub const TeardownDrain = struct {
+     app: *App,
+     surface: *const Surface,
+     stop: std.atomic.Value(bool) = .init(false),
++    /// Ends the pause between passes early, so `finish` never waits out a sleep that
++    /// the OS may stretch (App Nap coalesces timers of a hidden app into seconds).
++    wake: std.Io.Event = .unset,
++    pause: std.Io.Duration = .fromMilliseconds(1),
+     thread: ?std.Thread = null,
+ 
+     pub fn start(self: *TeardownDrain) void {
+@@ -683,6 +687,7 @@ pub const TeardownDrain = struct {
+     pub fn finish(self: *TeardownDrain) void {
+         const thread = self.thread orelse return;
+         self.stop.store(true, .release);
++        self.wake.set(global.io());
+         thread.join();
+         self.thread = null;
+     }
+@@ -704,7 +709,10 @@ pub const TeardownDrain = struct {
+                 };
+             }
+             if (stopping) return;
+-            std.Io.sleep(io, .fromMilliseconds(1), .awake) catch {};
++            self.wake.waitTimeout(io, .{ .duration = .{
++                .raw = self.pause,
++                .clock = .awake,
++            } }) catch {};
+         }
+     }
+ 
+@@ -930,6 +938,24 @@ test "teardown releases a frame completion blocked on the app mailbox" {
+     }
+ }
+ 
++test "teardown finish wakes the drain instead of waiting out its pause" {
++    if (builtin.single_threaded) return error.SkipZigTest;
++    const io = global.io();
++    var app = teardownTestApp();
++    defer app.deferred.deinit(app.alloc);
++    var rt_storage: u8 align(@alignOf(apprt.Surface)) = 0;
++    var closing: Surface = undefined;
++    closing.rt_surface = @ptrCast(&rt_storage);
++    // stands in for a 1 ms pause the OS stretched while the app was hidden
++    var drain: TeardownDrain = .{ .app = &app, .surface = &closing, .pause = .fromSeconds(60) };
++    drain.start();
++    try std.Io.sleep(io, .fromMilliseconds(20), .awake);
++    const started = std.Io.Timestamp.now(io, .awake);
++    drain.finish();
++    const waited = started.durationTo(std.Io.Timestamp.now(io, .awake));
++    try std.testing.expect(waited.toSeconds() < 30);
++}
++
+ fn bell(surface: *Surface) Message {
+     return .{ .surface_message = .{ .surface = surface, .message = .ring_bell } };
+ }
+diff --git a/src/Surface.zig b/src/Surface.zig
+index 6a080fc..3204643 100644
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -135,6 +135,14 @@ io: termio.Termio,
+ io_thread: termio.Thread,
+ io_thr: std.Thread,
+ 
++/// Set by each worker as its thread function returns, so `threadsExited` can tell
++/// the apprt when `deinit`'s joins will no longer block.
++renderer_exited: std.atomic.Value(bool) = .init(false),
++io_exited: std.atomic.Value(bool) = .init(false),
++
++/// True once `beginStop` has notified the workers; repeated calls do nothing.
++stop_requested: bool = false,
++
+ /// Terminal inspector
+ inspector: ?*inspectorpkg.Inspector = null,
+ 
+@@ -754,16 +762,16 @@ pub fn init(
+     // Start our renderer thread
+     self.renderer_thr = try std.Thread.spawn(
+         .{},
+-        rendererpkg.Thread.threadMain,
+-        .{&self.renderer_thread},
++        ExitFlagged(rendererpkg.Thread.threadMain).run,
++        .{ &self.renderer_exited, .{&self.renderer_thread} },
+     );
+     self.renderer_thr.setName(global.io(), "renderer") catch {};
+ 
+     // Start our IO thread
+     self.io_thr = try std.Thread.spawn(
+         .{},
+-        termio.Thread.threadMain,
+-        .{ &self.io_thread, &self.io },
++        ExitFlagged(termio.Thread.threadMain).run,
++        .{ &self.io_exited, .{ &self.io_thread, &self.io } },
+     );
+     self.io_thr.setName(global.io(), "io") catch {};
+ 
+@@ -827,6 +835,35 @@ pub fn init(
+     app.first = false;
+ }
+ 
++/// A worker's thread function that sets `exited` as it returns, for `threadsExited`.
++fn ExitFlagged(comptime func: anytype) type {
++    return struct {
++        fn run(exited: *std.atomic.Value(bool), args: std.meta.ArgsTuple(@TypeOf(func))) void {
++            defer exited.store(true, .release);
++            @call(.auto, func, args);
++        }
++    };
++}
++
++/// Ask the renderer and IO threads to stop without waiting for them. The IO
++/// thread's exit waits for the child process, so an apprt that must not block
++/// calls this, polls `threadsExited`, and calls `deinit` afterwards, when its
++/// joins return at once. The surface stays fully allocated until then; the
++/// notify `deinit` sends again is harmless.
++pub fn beginStop(self: *Surface) void {
++    if (self.stop_requested) return;
++    self.stop_requested = true;
++    self.renderer_thread.stop.notify() catch |err|
++        log.err("error notifying renderer thread to stop, may stall err={}", .{err});
++    self.io_thread.stop.notify() catch |err|
++        log.err("error notifying io thread to stop, may stall err={}", .{err});
++}
++
++/// Thread-safe: whether both workers have returned from their thread functions.
++pub fn threadsExited(self: *const Surface) bool {
++    return self.renderer_exited.load(.acquire) and self.io_exited.load(.acquire);
++}
++
+ pub fn deinit(self: *Surface) void {
+     var drain: App.TeardownDrain = .{ .app = self.app, .surface = self };
+     drain.start();
+@@ -6754,3 +6791,32 @@ test "promptClickRelativeRow" {
+         try testing.expectEqual(case.expected, promptClickRelativeRow(&pages, prompt, click));
+     }
+ }
++
++test "teardown: a worker reports its exit only once its thread function returns" {
++    if (builtin.single_threaded) return error.SkipZigTest;
++    const io = global.io();
++    const Worker = struct {
++        fn run(gate: *std.Io.Event) void {
++            gate.waitUncancelable(global.io());
++        }
++    };
++    var gate: std.Io.Event = .unset;
++    var exited: std.atomic.Value(bool) = .init(false);
++    const thread = try std.Thread.spawn(.{}, ExitFlagged(Worker.run).run, .{ &exited, .{&gate} });
++    try std.Io.sleep(io, .fromMilliseconds(20), .awake);
++    try std.testing.expect(!exited.load(.acquire));
++    gate.set(io);
++    thread.join();
++    try std.testing.expect(exited.load(.acquire));
++}
++
++test "teardown: threadsExited waits for both workers" {
++    var surface: Surface = undefined;
++    surface.renderer_exited = .init(false);
++    surface.io_exited = .init(false);
++    try std.testing.expect(!surface.threadsExited());
++    surface.io_exited.store(true, .release);
++    try std.testing.expect(!surface.threadsExited());
++    surface.renderer_exited.store(true, .release);
++    try std.testing.expect(surface.threadsExited());
++}
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 697f0a7..e677ab1 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1860,6 +1860,17 @@ pub const CAPI = struct {
+         ptr.app.closeSurface(ptr);
+     }
+ 
++    /// Asks the surface's threads to stop without waiting for them and frees the
++    /// surface once they have exited, returning whether it did. Until then the
++    /// surface stays valid; call again later from the app thread, or use
++    /// `ghostty_surface_free`, which waits for them.
++    export fn ghostty_surface_try_free(ptr: *Surface) bool {
++        ptr.core_surface.beginStop();
++        if (!ptr.core_surface.threadsExited()) return false;
++        ptr.app.closeSurface(ptr);
++        return true;
++    }
++
+     /// Returns the userdata associated with the surface.
+     export fn ghostty_surface_userdata(surface: *Surface) ?*anyopaque {
+         return surface.userdata;

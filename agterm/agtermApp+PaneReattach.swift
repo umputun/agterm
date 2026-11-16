@@ -50,7 +50,7 @@ extension agtermApp {
         if session.searchSurface === old { session.clearSearch() }
         session.scratchSurface = view
         session.scratchGeneration += 1
-        old.destroySurface()
+        old.retireSurface()
         if hadFocus { view.focusAfterReparent() }
         return true
     }
