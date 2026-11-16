@@ -257,6 +257,7 @@ struct TextPageTests {
         ("a.vb", "vbnet"), ("/x/Makefile", "makefile"), ("/x/GNUmakefile", "makefile"), ("/x/.bashrc", "bash"),
         ("/x/.zshrc", "bash"), ("/x/.profile", "bash"), ("/x/.bash_profile", "bash"), ("/x/.zprofile", "bash"),
         ("/x/.gitconfig", "ini"), ("/x/.editorconfig", "ini"), ("/x/MAIN.GO", "go"), ("/x/y/Lib.Swift", "swift"),
+        ("a.jsonl", "jsonl"), ("/x/A.NDJSON", "jsonl"),
     ])
     func mappedFilesGetTheirLanguage(path: String, language: String) {
         #expect(TextPage.language(forFile: path) == language)
@@ -293,6 +294,75 @@ struct TextPageTests {
                       ("/x/log", false), ("a.swift", false)])
     func onlyLogAndOutFilesAreLogs(path: String, isLog: Bool) {
         #expect(TextPage.isLog(file: path) == isLog)
+    }
+
+    @Test(arguments: [("a.jsonl", "json"), ("/x/A.NDJSON", "json"), ("a.json", "json"), ("a.swift", "swift"), ("a.txt", nil)])
+    func grammarHighlightsJSONLinesAsJSON(path: String, grammar: String?) {
+        #expect(TextPage.grammar(forFile: path) == grammar)
+    }
+
+    @Test func aJSONLinesPageShowsTheFileAsWritten() {
+        let html = TextPage.html(text: "{\"a\":\"<b>\"}\nraw\n", language: "jsonl", line: 2, style: "")
+
+        #expect(html.contains(#"<div id="agterm-text" hidden data-jsonl data-language="json" data-line="2">"#))
+        #expect(html.contains("{&quot;a&quot;:&quot;&lt;b&gt;&quot;}\nraw\n</div>"))
+        #expect(!html.contains("data-records"))
+        #expect(!html.contains("data-expand"))
+    }
+
+    @Test func anExpandedJSONLinesPageLaysItsRecordsOut() {
+        let html = TextPage.html(text: "{\"a\":\"<b>\"}\nraw\n", language: "jsonl", line: 2, style: "", expand: true)
+
+        #expect(html.contains(#"hidden data-jsonl data-expand data-records="0,3,4" data-language="json" data-line="2">"#))
+        #expect(html.contains("{\n  &quot;a&quot;: &quot;&lt;b&gt;&quot;\n}\nraw\n</div>"))
+    }
+
+    @Test func anExpandedPageMeasuresTheLaidOutTextForHighlighting() {
+        let record = "{\"k\":[" + Array(repeating: "1", count: TextPage.maxHighlightBytes / 4).joined(separator: ",") + "]}"
+
+        let raw = TextPage.html(text: record, language: "jsonl", line: nil, style: "")
+        let expanded = TextPage.html(text: record, language: "jsonl", line: nil, style: "", expand: true)
+
+        #expect(record.utf8.count < TextPage.maxHighlightBytes)
+        #expect(raw.contains(#"data-language="json""#))
+        #expect(expanded.contains("data-records="))
+        #expect(!expanded.contains("data-language"))
+        #expect(expanded.contains("[\n    1,\n    1,"))
+    }
+
+    @Test func aRawPageOverTheHighlightLimitKeepsItsMarker() {
+        let text = String(repeating: "{\"a\":1}\n", count: TextPage.maxHighlightBytes / 7)
+        let html = TextPage.html(text: text, language: "jsonl", line: nil, style: "")
+
+        #expect(text.utf8.count > TextPage.maxHighlightBytes)
+        #expect(html.contains("hidden data-jsonl>"))
+    }
+
+    @Test func aJSONLinesLogPageStaysRawAndHighlightsAsJSON() {
+        let log = TextLogState(following: true, report: TextLogReport(lines: 1, clipped: false, waiting: false, unreadable: false))
+        let html = TextPage.html(text: "{\"a\":1}", language: "jsonl", line: nil, style: "", log: log, expand: true, top: 3)
+
+        #expect(!html.contains("data-jsonl"))
+        #expect(!html.contains("data-records"))
+        #expect(!html.contains("data-top"))
+        #expect(html.contains(#"data-language="json""#))
+        #expect(html.contains("{&quot;a&quot;:1}</div>"))
+    }
+
+    @Test func aTopLineReplacesTheAnchorOnAJSONLinesPage() {
+        let topped = TextPage.html(text: "{}", language: "jsonl", line: nil, style: "", anchor: 120, top: 7)
+        let anchored = TextPage.html(text: "{}", language: "jsonl", line: nil, style: "", anchor: 120)
+        let other = TextPage.html(text: "x", language: "swift", line: nil, style: "", anchor: 120, top: 7)
+
+        #expect(topped.contains(#"data-top="7""#))
+        #expect(!topped.contains("data-anchor"))
+        #expect(anchored.contains(#"data-anchor="120.0""#))
+        #expect(other.contains(#"data-anchor="120.0""#))
+        #expect(!other.contains("data-top"))
+    }
+
+    @Test func aDiffHighlightsAJSONLinesFileAsJSON() {
+        #expect(TextPage.diffLanguages(in: "--- a/x.jsonl\n+++ b/x.ndjson\n") == ["a/x.jsonl": "json", "b/x.ndjson": "json"])
     }
 
     @Test func aLogPageCarriesItsStateInsteadOfALine() {

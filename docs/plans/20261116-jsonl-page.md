@@ -149,19 +149,19 @@ The first iteration (uncommitted in this worktree) laid every record out by defa
 - Modify: `agtermCore/Sources/agtermCore/JSONLines.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/TextPageTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/JSONLinesTests.swift`
-- Modify: `agterm/Views/LogFollower.swift`, `agtermTests/LogFollowerTests.swift`
+- Modify: `agterm/Views/LogFollower.swift`, `agtermTests/TextPageRenderingTests.swift`
 
-- [ ] `html()` takes `expand` and `top`; a static `jsonl` page always carries `data-jsonl`, raw text by default,
+- [x] `html()` takes `expand` and `top`; a static `jsonl` page always carries `data-jsonl`, raw text by default,
       formatted text plus `data-records` and `data-expand` when expanded, highlighting measured on the shown text
-- [ ] one `TextPage` grammar mapping (`jsonl` to `json`) used by `html()` for log pages and diff `data-files`, and
+- [x] one `TextPage` grammar mapping (`jsonl` to `json`) used by `html()` for log pages and diff `data-files`, and
       by `LogFollower.push()` under the existing size limit; a log page stays raw with no `data-jsonl`
-- [ ] keep `JSONLines` as is; adjust only what the new call shape needs
-- [ ] tests: default raw page (marker, json language, no records), expanded page (records, expand, escaping),
+- [x] keep `JSONLines` as is; adjust only what the new call shape needs
+- [x] tests: default raw page (marker, json language, no records), expanded page (records, expand, escaping),
       expanded page over the highlight limit keeps records and drops the language, raw page over the limit keeps
       the marker, log page raw and `json`, diff `data-files` maps `.jsonl` to `json`, `top` replaces `anchor`
-- [ ] hosted test in `LogFollowerTests`: a following `.jsonl` page appends a record and keeps `json` highlighting,
+- [x] hosted test in `TextPageRenderingTests` (`LogFollowerTests` has no web view): a following `.jsonl` page appends a record and keeps `json` highlighting,
       with no Expand available
-- [ ] run `swift test --filter 'JSONLinesTests|TextPageTests'` and the `LogFollowerTests` case with
+- [x] run `swift test --filter 'JSONLinesTests|TextPageTests'` and the hosted case with
       `-only-testing:` - must pass before next task; then `lsappinfo list | grep -A4 agterm.debug`
 
 ### Task 2: Expand through the model and the control path, local and remote

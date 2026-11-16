@@ -476,6 +476,23 @@ final class TextPageRenderingTests: HtmlPageTestCase {
         XCTAssertEqual(spans as? Int, 0)
     }
 
+    func testAFollowedJSONLinesLogKeepsItsJSONHighlightingAndOffersNoExpand() async throws {
+        let (overlay, url) = try openLog("{\"a\": 1}\n", name: "events.jsonl")
+        let page = registry.page(for: overlay, store: store)
+        let keys = "document.querySelectorAll('pre code .hljs-attr').length"
+        try await waitForScript(keys, in: page.webView) { $0 == "1" }
+
+        try append("{\"b\": 2}\n", to: url)
+
+        try await waitForScript("document.querySelector('pre code')?.textContent.endsWith('{\"b\": 2}\\n')", in: page.webView) {
+            $0 == "true"
+        }
+        let highlighted = try await page.webView.evaluateJavaScript(keys)
+        XCTAssertEqual(highlighted as? Int, 2)
+        let expand = try await page.webView.evaluateJavaScript("document.querySelector('.agterm-expand') === null")
+        XCTAssertEqual(expand as? Bool, true)
+    }
+
     func testAHeldScrollbarDragPastTheIntentWindowStillResumes() async throws {
         let (overlay, _) = try openLog(Self.manyLines, follow: false)
         let page = registry.page(for: overlay, store: store)

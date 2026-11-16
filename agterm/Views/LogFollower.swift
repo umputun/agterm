@@ -192,7 +192,7 @@ final class LogFollower {
     // highlighting is dropped past `TextPage.maxHighlightBytes`, as the first document drops it
     private func push() {
         let text = snapshot?.text ?? ""
-        let language = text.utf8.count <= TextPage.maxHighlightBytes ? TextPage.language(forFile: path) : nil
+        let language = text.utf8.count <= TextPage.maxHighlightBytes ? TextPage.grammar(forFile: path) : nil
         let shift = Self.shift(from: pageSnapshot, stamp: pageStamp, to: snapshot, stamp: stamp)
         pageSnapshot = snapshot
         pageStamp = stamp
