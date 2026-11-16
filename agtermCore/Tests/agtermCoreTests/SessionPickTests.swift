@@ -269,6 +269,38 @@ struct SessionPickTests {
         #expect(book.result(for: remote.id) == ControlPickResult(result: .cancelled))
     }
 
+    @Test func aReplyToAnEarlierOfferOfThePickToTheSameViewerIsRefused() throws {
+        let session = try session()
+        try presented(session, kinds: PresentationHub.pickKinds + [PresentationHub.offerIdentityKind, PresentationHub.pendingSnapshotKind,
+                                                                   PresentationHub.jobTokenKind])
+        let (windowID, controller) = window()
+        let remote = pick()
+        _ = store.presentPickRemotely(remote, in: session, window: windowID)
+        let owner = owner(of: session)
+        book.returnToPending(session: session.id, owner: owner)
+        #expect(store.offerPendingPick(forSession: session.id))
+        let offers = presenter.bodies.compactMap { if case .pickRequest(let r) = $0 { r.offer } else { nil } }
+        let (first, second) = (try #require(offers.first), try #require(offers.last))
+        #expect(first != second)
+
+        book.handBack(session: session.id, owner: owner, refused: PresentationPickRef(id: remote.id, owner: owner, offer: first),
+                      to: controller, window: windowID)
+        #expect(!book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: owner, item: "a", offer: first), session: session.id))
+        #expect(!book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: owner, item: "a"), session: session.id))
+        #expect(controller.pending == nil)
+        #expect(book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: owner, item: "a", offer: second), session: session.id))
+    }
+
+    @Test func aViewerWithoutOfferIdentityIsAnsweredWithoutAnOffer() throws {
+        let session = try session()
+        try presented(session)
+        let remote = pick()
+        _ = store.presentPickRemotely(remote, in: session, window: nil)
+
+        #expect(presenter.bodies.last == .pickRequest(PresentationPick(remote, owner: owner(of: session))))
+        #expect(book.resolveRemote(PresentationPickAnswer(id: remote.id, owner: owner(of: session), item: "a"), session: session.id))
+    }
+
     @Test func aStaleRefusalUnderTheSameOwnerLeavesTheNewerPick() throws {
         let session = try session()
         try presented(session)

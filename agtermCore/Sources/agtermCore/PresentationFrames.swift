@@ -168,8 +168,10 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
     public var input: AskInputForm?
     public var choices: AskChoiceForm?
     public var cancelID: String?
+    /// offer numbers this hand-over under `offer.id`; every reply about it echoes it.
+    public var offer: Int?
 
-    public init(_ ask: PendingAsk, pane: PresentationPane?, owner: Int) {
+    public init(_ ask: PendingAsk, pane: PresentationPane?, owner: Int, offer: Int? = nil) {
         id = ask.id
         title = ask.title
         message = ask.message
@@ -181,6 +183,7 @@ public struct PresentationAsk: Codable, Equatable, Sendable {
         width = ask.width
         self.pane = pane
         self.owner = owner
+        self.offer = offer
         cancelID = ask.cancelID
         switch ask.form {
         case .input(let form): input = form
@@ -232,13 +235,15 @@ public struct PresentationAskAnswer: Codable, Equatable, Sendable {
     public var button: String?
     public var text: String?
     public var selected: [String]?
+    public var offer: Int?
 
-    public init(id: String, owner: Int, button: String?, text: String? = nil, selected: [String]? = nil) {
+    public init(id: String, owner: Int, button: String?, text: String? = nil, selected: [String]? = nil, offer: Int? = nil) {
         self.id = id
         self.owner = owner
         self.button = button
         self.text = text
         self.selected = selected
+        self.offer = offer
     }
 }
 
@@ -246,10 +251,12 @@ public struct PresentationAskAnswer: Codable, Equatable, Sendable {
 public struct PresentationAskRef: Codable, Equatable, Sendable {
     public var id: String
     public var owner: Int
+    public var offer: Int?
 
-    public init(id: String, owner: Int) {
+    public init(id: String, owner: Int, offer: Int? = nil) {
         self.id = id
         self.owner = owner
+        self.offer = offer
     }
 }
 
@@ -377,6 +384,8 @@ public struct PresentationPage: Codable, Equatable, Sendable {
     public var textLog: TextLog?
     /// textSeed is the text state a re-offered page resumes with, applied before its first render and report.
     public var textSeed: PresentationTextState?
+    /// offer numbers this hand-over under `offer.id`; every reply about it echoes it.
+    public var offer: Int?
 
     public init(page: String, token: String, source: PresentationPageSource, identity: String, chromeless: Bool,
                 javascript: Bool, navigation: Bool, browse: Bool, persistent: Bool, backgroundColor: String?,
@@ -420,10 +429,12 @@ public struct PresentationPageChange: Codable, Equatable, Sendable {
 
     public var page: String
     public var reason: String?
+    public var offer: Int?
 
-    public init(page: String, reason: String? = nil) {
+    public init(page: String, reason: String? = nil, offer: Int? = nil) {
         self.page = page
         self.reason = reason
+        self.offer = offer
     }
 }
 
@@ -512,9 +523,11 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
     public var appliedSeq: Int
     /// text is a text page's live state; an origin predating `page.text` ignores the key.
     public var text: PresentationTextState?
+    public var offer: Int?
 
     public init(page: String, title: String?, address: String?, load: HtmlLoadState, error: String?,
-                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int, text: PresentationTextState? = nil) {
+                canGoBack: Bool, canGoForward: Bool, hidden: Bool, appliedSeq: Int, text: PresentationTextState? = nil,
+                offer: Int? = nil) {
         self.page = page
         self.title = title.map { String($0.prefix(Self.maxTitle)) }
         self.address = address.map { String($0.prefix(Self.maxAddress)) }
@@ -525,6 +538,7 @@ public struct PresentationPageState: Codable, Equatable, Sendable {
         self.hidden = hidden
         self.appliedSeq = appliedSeq
         self.text = text
+        self.offer = offer
     }
 }
 
@@ -570,15 +584,17 @@ public struct PresentationPageResult: Codable, Equatable, Sendable {
     public var text: String?
     public var error: String?
     public var state: PresentationTextState?
+    public var offer: Int?
 
     public init(page: String, seq: Int, ok: Bool, text: String? = nil, error: String? = nil,
-                state: PresentationTextState? = nil) {
+                state: PresentationTextState? = nil, offer: Int? = nil) {
         self.page = page
         self.seq = seq
         self.ok = ok
         self.text = text.map { String($0.prefix(Self.maxText)) }
         self.error = error.map { String($0.prefix(Self.maxText)) }
         self.state = state
+        self.offer = offer
     }
 }
 

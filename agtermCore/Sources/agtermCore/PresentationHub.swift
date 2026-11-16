@@ -74,7 +74,7 @@ public final class PresentationHub {
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, statusClearKind, restartRespawnKind, presenterVacantKind,
-                                        leadReportKind]
+                                        leadReportKind, offerIdentityKind]
                                         + pageKinds + pickKinds
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
@@ -86,6 +86,10 @@ public final class PresentationHub {
     public static let restartRespawnKind = "restart.respawn"
     /// leadReportKind is a viewer's capability of reporting the panes it leads, so new work for them is routed to it.
     public static let leadReportKind = "lead.report"
+    /// offerIdentityKind is the capability of echoing each hand-over's `offer` in every reply about it, so a reply to an
+    /// earlier offer of the same work to the same viewer is told apart. A viewer holds what an origin listing it hands
+    /// over and it cannot show yet, instead of refusing it.
+    public static let offerIdentityKind = "offer.id"
     /// presenterVacantKind is a viewer's capability of asking for the role again when the origin reports it vacant.
     public static let presenterVacantKind = "presenter.vacant"
     /// statusClearKind is an origin's capability of taking `status.clear` and `status.seen` from its presenter.
@@ -137,6 +141,7 @@ public final class PresentationHub {
     private var subscribers: [SubscriberID: Subscriber] = [:]
     private var lastGeneration = 0
     private var lastLeadReport = 0
+    private var lastOffer = 0
     private var layouts: [UUID: PresentationLayout] = [:]
     private var grant = PresenterGrant()
 
@@ -186,6 +191,14 @@ public final class PresentationHub {
             guard send(body, to: id) else { break }
         }
         return id
+    }
+
+    /// newOffer numbers a hand-over to viewer `owner`, nil when that viewer does not echo offers and its replies are
+    /// matched by owner alone.
+    public func newOffer(toOwner owner: Int) -> Int? {
+        guard supports(Self.offerIdentityKind, owner: owner) else { return nil }
+        lastOffer += 1
+        return lastOffer
     }
 
     public func unsubscribe(_ id: SubscriberID) {

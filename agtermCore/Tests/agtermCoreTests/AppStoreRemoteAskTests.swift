@@ -482,6 +482,36 @@ struct AppStoreRemoteAskTests {
         #expect(session.askPending == nil)
     }
 
+    @Test func aReplyToAnEarlierOfferOfTheAskToTheSameViewerIsRefused() throws {
+        let (session, _) = try origin(kinds: [PresentationHub.offerIdentityKind, PresentationHub.pendingSnapshotKind,
+                                              PresentationHub.jobTokenKind])
+        let pending = ask()
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
+        let owner = owner(of: session)
+        store.returnAskToPending(forSession: session.id, owner: owner)
+        #expect(store.offerPendingAsk(forSession: session.id))
+        let offers = presenter.bodies.compactMap { if case .askRequest(let r) = $0 { r.offer } else { nil } }
+        let (first, second) = (try #require(offers.first), try #require(offers.last))
+        #expect(first != second)
+
+        #expect(!store.isPresentingRemotely(PresentationAskRef(id: pending.id, owner: owner, offer: first), forSession: session.id))
+        #expect(!store.isPresentingRemotely(PresentationAskRef(id: pending.id, owner: owner), forSession: session.id))
+        #expect(!store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: owner, button: "yes", offer: first),
+                                        forSession: session.id))
+        #expect(store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: owner, button: "yes", offer: second),
+                                       forSession: session.id))
+    }
+
+    @Test func aViewerWithoutOfferIdentityIsAnsweredWithoutAnOffer() throws {
+        let (session, _) = try origin()
+        let pending = ask()
+        store.presentAskRemotely(pending, in: session, paneIdentity: nil, window: Self.window)
+
+        #expect(presenter.bodies.contains { if case .askRequest(let r) = $0 { r.offer == nil } else { false } })
+        #expect(store.resolveRemoteAsk(PresentationAskAnswer(id: pending.id, owner: owner(of: session), button: "yes"),
+                                       forSession: session.id))
+    }
+
     @Test func aRefusalIsHonouredOnlyForTheAskBeingPresented() throws {
         let (session, _) = try origin()
         let pending = ask()

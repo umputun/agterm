@@ -68,12 +68,12 @@ extension ControlServer {
     }
 
     /// showReplicaPick shows a pick `id`'s origin handed over in the window holding the attached row. A busy
-    /// window refuses it, unless the origin is headless and has no screen to take it back to: there it waits.
+    /// window refuses it, unless `originHoldsWork`: there it waits.
     func showReplicaPick(_ pick: PresentationPick, forSession id: UUID) -> Bool {
-        guard let store = library.store(forSession: id), let binding = store.session(withID: id)?.remotePresentation?.binding,
+        guard let store = library.store(forSession: id), store.session(withID: id)?.remotePresentation != nil,
               let windowID = library.windowID(for: store),
               let controller = PickRegistry.shared.controller(for: windowID),
-              binding.originHeadless || !controller.modalPending else { return false }
+              originHoldsWork(forSession: id, in: store) || !controller.modalPending else { return false }
         let shown = SessionPickBook.shared.openReplica(pick, session: id, window: windowID, controller: controller) { [weak self] body in
             self?.remoteClients[id]?.answer(body)
         }

@@ -218,18 +218,18 @@ carried row by row first, then its Solution Overview rules this plan touches.
   `ControlServer+Pick.swift`
 - Modify: matching core tests; hosted tests for the app-side echo and hold
 
-- [ ] reproduce red first: a page re-offered to the same viewer, then that viewer's old `pageClosed` delivered,
+- [x] reproduce red first: a page re-offered to the same viewer, then that viewer's old `pageClosed` delivered,
       today withdraws the replacement
-- [ ] add `offer.id`, the optional fields, the counter and per-piece current offer; check offers in
+- [x] add `offer.id`, the optional fields, the counter and per-piece current offer; check offers in
       `resolveRemoteAsk`, `isPresentingRemotely`, pick resolve/refuse and `receiveRemotePageFrame`
-- [ ] viewer replicas store the offer they were handed and echo it on every reply
-- [ ] viewer holds, for an `offer.id` origin, a pick while its modal is busy, a GUI ask while its row is off
+- [x] viewer replicas store the offer they were handed and echo it on every reply
+- [x] viewer holds, for an `offer.id` origin, a pick while its modal is busy, a GUI ask while its row is off
       screen and an anchored ask while its pane is hidden, showing each when it can
-- [ ] tests after: codec round trip with and without `offer`; an old offer from the same owner is refused for
+- [x] tests after: codec round trip with and without `offer`; an old offer from the same owner is refused for
       each kind; a reply without `offer` from an older owner is accepted; the hosted echo on each reply kind;
       a held pick shows when the modal frees, a held GUI ask when its row is selected, an ask for a hidden
       split when that pane is shown, each without another origin offer; an older origin still gets refusals
-- [ ] run the touched tests - must pass before task 2
+- [x] run the touched tests - must pass before task 2
 
 ### Task 2: Transfer seams and two-phase page moves
 

@@ -127,7 +127,9 @@ extension AppStore {
     private func sendPageRequest(_ request: PresentationPage, job: String, owner: Int, in session: Session) {
         guard let hub = presentationHub else { return }
         var sent = request
+        sent.offer = hub.newOffer(toOwner: owner)
         session.remoteOverlays.updatePage(job) { page in
+            page.offer = sent.offer
             page.overlay.markdownLinks = request.markdownLinks
             page.overlay.navigation = request.navigation
             guard request.markdownLinks != nil, !hub.supports(PresentationHub.pageLinksKind, owner: owner) else { return }
@@ -175,7 +177,8 @@ extension AppStore {
         guard let session = session(withID: sessionID) else { return }
         switch body {
         case .pageState(let state):
-            guard session.remoteOverlays.slot(job: state.page)?.owner == sender else { return }
+            guard let slot = session.remoteOverlays.slot(job: state.page), slot.owner == sender, slot.page?.offer == state.offer
+            else { return }
             var changed = false
             session.remoteOverlays.updatePage(state.page) { changed = $0.apply(state) }
             if changed { scheduleTreeChanged() }
@@ -184,7 +187,7 @@ extension AppStore {
         case .pageRejected(let change), .pageClosed(let change):
             // only the offer holding the page reports its end; a copy this origin already withdrew says nothing, except
             // a dismissal its viewer sent before seeing the withdrawal, which the channel's end overtook
-            guard let slot = session.remoteOverlays.slot(job: change.page),
+            guard let slot = session.remoteOverlays.slot(job: change.page), slot.page?.offer == change.offer,
                   slot.owner == sender || (slot.owner == nil && slot.page?.withdrawnFrom == sender
                       && change.reason != PresentationPageChange.channelLost) else { return }
             if headless, change.reason == PresentationPageChange.channelLost, let page = UUID(uuidString: change.page) {

@@ -56,6 +56,8 @@ public struct RemotePage: Equatable, Sendable {
     /// withdrawnFrom is the token of the viewer a headless origin took the page back from after its channel ended,
     /// until the next offer: that viewer's close can arrive after the channel's end and still dismiss the page.
     var withdrawnFrom: Int?
+    /// offer is the current hand-over's, which every report from its presenter echoes.
+    var offer: Int?
     /// hidden is the visibility the presenter last reported.
     public internal(set) var hidden = false
     /// requested is a visibility sent and not yet echoed back by the presenter.

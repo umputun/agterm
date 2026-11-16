@@ -265,6 +265,35 @@ struct PresentationFramesTests {
             < PresentationCodec.maxFrameBytes)
     }
 
+    @Test(arguments: [7, nil] as [Int?])
+    func everyHandOverAndReplyCarriesItsOfferAndOneWithoutItSendsNoKey(offer: Int?) throws {
+        let ask = PendingAsk(id: "a", title: "t", buttons: [ControlAskButton(id: "y", label: "Y")])
+        var page = PresentationPage(page: "p1", token: "t", source: .url("http://h/"), identity: "i", chromeless: false,
+                                    javascript: false, navigation: false, browse: false, persistent: false,
+                                    backgroundColor: nil, pane: nil, sizePercent: nil, follow: false)
+        page.offer = offer
+        let bodies: [PresentationFrame.Body] = [
+            .askRequest(PresentationAsk(ask, pane: nil, owner: 1, offer: offer)),
+            .askResolve(PresentationAskAnswer(id: "a", owner: 1, button: "y", offer: offer)),
+            .askRejected(PresentationAskRef(id: "a", owner: 1, offer: offer)),
+            .pickRequest(PresentationPick(PendingPick(id: "p", items: [ControlPickItem(id: "a", label: "A")]), owner: 1, offer: offer)),
+            .pickResolve(PresentationPickAnswer(id: "p", owner: 1, item: "a", offer: offer)),
+            .pickRejected(PresentationPickRef(id: "p", owner: 1, offer: offer)),
+            .pageRequest(page),
+            .pageClosed(PresentationPageChange(page: "p1", offer: offer)),
+            .pageRejected(PresentationPageChange(page: "p1", reason: "slot taken", offer: offer)),
+            .pageState(PresentationPageState(page: "p1", title: nil, address: nil, load: .loaded, error: nil, canGoBack: false,
+                                             canGoForward: false, hidden: false, appliedSeq: 0, offer: offer)),
+            .pageResult(PresentationPageResult(page: "p1", seq: 1, ok: true, offer: offer)),
+        ]
+
+        for body in bodies {
+            let line = try PresentationCodec.encode(PresentationFrame(gen: 1, rev: 1, body: body))
+            #expect(try PresentationCodec.decode(line.dropLast()).body == body)
+            #expect(String(decoding: line, as: UTF8.self).contains(#""offer""#) == (offer != nil))
+        }
+    }
+
     @Test func textFieldsFromAnOlderPeerDecodeAsAbsent() throws {
         let request = #"{"kind":"page.request","gen":1,"rev":1,"page":{"page":"p1","token":"t1","source":{"text":{"path":"/tmp/a.log"}},"#
             + #""identity":"a.log","chromeless":false,"javascript":false,"navigation":false,"browse":false,"#

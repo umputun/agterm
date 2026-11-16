@@ -289,10 +289,10 @@ public final class RemotePresentationClient {
         case .presenterRefused: report(.mirror)
         case .presenterVacant: if mode != .presenter { send(.presenterAcquire, on: link) }
         case .askRequest(let ask):
-            if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner)), on: link) }
+            if !effects.askRequest(ask) { send(.askRejected(PresentationAskRef(id: ask.id, owner: ask.owner, offer: ask.offer)), on: link) }
         case .askDismiss(let ref): effects.askDismiss(ref)
         case .pickRequest(let pick):
-            if !effects.pickRequest(pick) { send(.pickRejected(PresentationPickRef(id: pick.id, owner: pick.owner)), on: link) }
+            if !effects.pickRequest(pick) { send(.pickRejected(PresentationPickRef(id: pick.id, owner: pick.owner, offer: pick.offer)), on: link) }
         case .pickDismiss(let ref): effects.pickDismiss(ref)
         case .overlayRequest(let overlay):
             if !effects.overlayRequest(overlay) { send(.overlayRejected(PresentationOverlayChange(job: overlay.job)), on: link) }
@@ -300,7 +300,7 @@ public final class RemotePresentationClient {
         case .overlayResize(let change): effects.overlayResize(change)
         case .pageRequest(let page):
             if let reason = effects.pageRequest(page) {
-                send(.pageRejected(PresentationPageChange(page: page.page, reason: reason)), on: link)
+                send(.pageRejected(PresentationPageChange(page: page.page, reason: reason, offer: page.offer)), on: link)
             }
         case .pageClose(let change): effects.pageClose(change)
         case .pageCommand(let command): effects.pageCommand(command)

@@ -24,7 +24,7 @@ extension AppStore {
         // an expired ask is never shown: the caller holds it and its deadline ends it
         guard let hub = presentationHub, !ask.expired(at: Date()),
               let owner = remoteRecipient(session, paneIdentity: paneIdentity) else { return .notPresented }
-        let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner)
+        let request = PresentationAsk(ask, pane: paneIdentity.map { .identity($0) }, owner: owner, offer: hub.newOffer(toOwner: owner))
         if let refusal = askOfferRefusal(request, hub: hub) { return refusal }
         guard session.openAsk(ask, paneIdentity: paneIdentity, remoteOwner: owner, registry: askRegistry) else { return .slotTaken }
         askRegistry.register(id: ask.id, owner: .session(session.id, window: window))
@@ -47,7 +47,8 @@ extension AppStore {
         guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
               !session.askPresentedRemotely, !session.askReplica,
               let owner = pendingRecipient(session, paneIdentity: session.askPaneIdentity) else { return false }
-        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner)
+        let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner,
+                                      offer: hub.newOffer(toOwner: owner))
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
         session.askRemoteOwner = request.owner
         handOver(request, in: session, hub: hub)
@@ -58,6 +59,7 @@ extension AppStore {
     /// refused it; an answer from that viewer is then stale.
     public func returnAskToPending(forSession id: UUID, owner: Int) {
         guard let session = session(withID: id), session.askPresentedRemotely, session.askRemoteOwner == owner else { return }
+        session.askPending.map { RemoteAskOffers.shared.forget(ask: $0.id) }
         session.takeAskBack()
     }
 
@@ -73,7 +75,9 @@ extension AppStore {
     }
 
     private func handOver(_ request: PresentationAsk, in session: Session, hub: PresentationHub) {
+        RemoteAskOffers.shared.set(request.offer, ask: request.id)
         session.onRemoteAskEnded = { [weak hub, owner = request.owner] askID in
+            RemoteAskOffers.shared.forget(ask: askID)
             hub?.send(.askDismiss(PresentationAskRef(id: askID, owner: owner)), toOwner: owner)
         }
         hub.send(.askRequest(request), toOwner: request.owner)
@@ -85,7 +89,7 @@ extension AppStore {
     @discardableResult
     public func resolveRemoteAsk(_ answer: PresentationAskAnswer, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), let ask = session.askPending, ask.id == answer.id,
-              session.askRemoteOwner == answer.owner else { return false }
+              session.askRemoteOwner == answer.owner, RemoteAskOffers.shared.matches(answer.offer, ask: ask.id) else { return false }
         guard let buttonID = answer.button else {
             guard answer.text == nil, answer.selected == nil else { return false }
             return session.resolveAsk(id: ask.id, ControlAskResult(result: .escaped))
@@ -101,6 +105,7 @@ extension AppStore {
     public func isPresentingRemotely(_ ref: PresentationAskRef, forSession id: UUID) -> Bool {
         guard let session = session(withID: id) else { return false }
         return session.askPending?.id == ref.id && session.askRemoteOwner == ref.owner
+            && RemoteAskOffers.shared.matches(ref.offer, ask: ref.id)
     }
 
     /// Takes a remotely presented ask back after the viewer `owner` it was handed to was lost or refused it. A terminal
@@ -109,6 +114,7 @@ extension AppStore {
     public func takeBackRemoteAsk(forSession id: UUID, owner: Int) -> PendingAsk? {
         guard let session = session(withID: id), let ask = session.askPending, session.askPresentedRemotely,
               session.askRemoteOwner == owner else { return nil }
+        RemoteAskOffers.shared.forget(ask: ask.id)
         guard ask.style == .gui else {
             session.takeAskBack()
             return nil
