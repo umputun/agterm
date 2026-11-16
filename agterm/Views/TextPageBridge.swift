@@ -46,6 +46,11 @@ final class TextPageBridge {
     private var change = 0
     // the wrap the page shows: last handed, built with, or reported by its own toggle
     private var wrap = false
+    // the model's expand, and the one the newest document was built with; they differ until a rebuild lays it out
+    private var expand = false
+    private var builtExpand = false
+    // the search field's focus and selection the newest document reopens with
+    private var restoreSearch: (start: Int, end: Int)?
 
     /// init builds the bridge of a text page reading through `reads` and registers its page handler; nil for any
     /// other page.
@@ -70,6 +75,7 @@ final class TextPageBridge {
         self.onFail = onFail
         search = Self.searchState(of: overlay)
         wrap = overlay.textWrap
+        expand = overlay.textExpand
         let handler = PageHandler()
         handler.bridge = self
         webView.configuration.userContentController.add(handler, contentWorld: world, name: Self.handlerName)
@@ -77,8 +83,8 @@ final class TextPageBridge {
     }
 
     /// loadDocument builds the page from a fresh read, or from what it showed when `fresh` is false: an explicit
-    /// reload reads the file again, a theme change redraws. The search rides the document, so a rebuild keeps the
-    /// query and the current match without moving.
+    /// reload reads the file again, a theme change or an expand redraws. The search rides the document, so a rebuild
+    /// keeps the query, the current match and the field's caret without moving.
     func loadDocument(fresh: Bool) {
         documentLoad += 1
         documentPending = true
@@ -105,27 +111,49 @@ final class TextPageBridge {
             guard let self, load == documentLoad, let text else { return }
             // a pick or step on other text means nothing to the new one
             let kept = fresh ? nil : place
+            // the pixel offset belongs to the old layout, so a relayout reopens at the file line under the bar
+            let top = expand != builtExpand ? place?.line : nil
+            builtExpand = expand
+            restoreSearch = place?.search
             let html = TextPage.html(text: text, language: TextPage.language(forFile: path), line: line,
                                      style: MarkdownAssets.shared.textStyle, anchor: place?.top, search: search, change: change,
-                                     entered: kept?.entered ?? false, file: kept?.file, wrap: wrap)
+                                     entered: kept?.entered ?? false, file: kept?.file, wrap: wrap, expand: expand, top: top)
             webView?.loadHTMLString(html, baseURL: nil)
         }
     }
 
-    /// navigation reads the page's scroll top with whether a picked change is still the step's origin there and the
-    /// file a pick or step keeps shown, from 1 and 0 for none.
-    private func navigation() async -> (top: Double, entered: Bool, file: Int)? {
+    /// navigation reads the page's scroll top with whether a picked change is still the step's origin there, the
+    /// file a pick or step keeps shown (from 1, 0 for none), the file line under the bar, and the search field's
+    /// selection while it has focus.
+    private func navigation() async -> Place? {
         let value = try? await webView?.evaluateJavaScript("agtermTextNavigation()", in: nil, contentWorld: world)
         guard let body = value as? [String: Any], let top = (body["top"] as? NSNumber)?.doubleValue else { return nil }
-        return (top, body["entered"] as? Bool ?? false, (body["file"] as? NSNumber)?.intValue ?? 0)
+        var search: (Int, Int)?
+        if body["focused"] as? Bool == true, let start = (body["start"] as? NSNumber)?.intValue,
+           let end = (body["end"] as? NSNumber)?.intValue { search = (start, end) }
+        return Place(top: top, entered: body["entered"] as? Bool ?? false, file: (body["file"] as? NSNumber)?.intValue ?? 0,
+                     line: (body["line"] as? NSNumber)?.intValue ?? 0, search: search)
     }
 
-    /// apply takes the model's latest value: following for a log page, the wrap, and a search whose revision moved.
+    private struct Place {
+        let top: Double
+        let entered: Bool
+        let file: Int
+        let line: Int
+        let search: (start: Int, end: Int)?
+    }
+
+    /// apply takes the model's latest value: following for a log page, the wrap, the expand, and a search whose
+    /// revision moved.
     func apply(_ overlay: HtmlOverlay) {
         follower?.setFollowing(overlay.logState?.following ?? false)
         if overlay.textWrap != wrap {
             wrap = overlay.textWrap
             if !documentPending { pushWrap() }
+        }
+        if overlay.textExpand != expand {
+            expand = overlay.textExpand
+            if !documentPending { loadDocument(fresh: false) }
         }
         let next = Self.searchState(of: overlay)
         let moved = next.revision != search.revision
@@ -184,6 +212,12 @@ final class TextPageBridge {
         follower?.rendererReady()
         pushSearch()
         pushWrap()
+        if let restoreSearch {
+            webView?.callAsyncJavaScript("agtermTextRestoreSearch(start, end)", arguments: ["start": restoreSearch.start, "end": restoreSearch.end],
+                                         in: nil, in: world)
+        }
+        // an expand that changed while this document was built still needs its own
+        if follower == nil, expand != builtExpand { loadDocument(fresh: false) }
     }
 
     private func report(_ body: [String: Any]) {
@@ -237,6 +271,11 @@ final class TextPageBridge {
         store?.setTextWrap(pageID, wrapped: value)
     }
 
+    // the page shows the model's expand only after a rebuild, which apply starts when the model changes
+    private func expanded(_ value: Bool) {
+        store?.setTextExpand(pageID, expanded: value)
+    }
+
     private func pushWrap() {
         webView?.callAsyncJavaScript("agtermTextSetWrap(wrap)", arguments: ["wrap": wrap], in: nil, in: world)
     }
@@ -274,6 +313,10 @@ final class TextPageBridge {
             }
             if let wrap = body["wrap"] as? Bool {
                 bridge.wrapped(wrap)
+                return
+            }
+            if let expand = body["expand"] as? Bool {
+                bridge.expanded(expand)
                 return
             }
             guard let following = body["following"] as? Bool else { return }

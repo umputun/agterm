@@ -217,28 +217,29 @@ and every exhaustive switch over them; no half of it builds alone.
 
 ### Task 3: Renderer and bridge: Expand button, rebuild and anchor
 
-**Files:**
+- Modify: `agterm/Resources/markdown/text.js`, `agterm/Resources/markdown/text.css` (the Expand button shares the Wrap rule)
 - Modify: `agterm/Resources/markdown/text.js`
 - Modify: `agterm/Views/TextPageBridge.swift`
-- Modify tests: `agtermTests/TextPageRenderingTests.swift`, `agtermTests/ControlServerTextPageTests.swift`
+- Create tests: `agtermTests/TextPageBridgeTests.swift` (➕ Eugene: TextPageRenderingTests.swift is near the 2000-line limit, so the Expand tests got the bridge its own file)
+- Modify tests: `agtermTests/HtmlPageTestCase.swift` (shared page helpers moved there), `agtermTests/TextPageRenderingTests.swift`
 
-- [ ] `text.js`: Expand button beside Wrap and the `e` key on `data-jsonl` pages, posting `{ expand }`;
+- [x] `text.js`: Expand button beside Wrap and the `e` key on `data-jsonl` pages, posting `{ expand }`;
       `agtermTextNavigation()` returns `line`; `data-top` applied after the `:N` band; the `records` gutter and
       `:N` band mapping from the first iteration
-- [ ] bridge: `expand` state; a change rebuilds through the non-fresh `loadDocument`, passing `top` from `line` and
+- [x] bridge: `expand` state; a change rebuilds through the non-fresh `loadDocument`, passing `top` from `line` and
       no `anchor` when expand changed; replay while `documentPending`; search query kept, and the search field's
       focus and selection restored by the shared non-fresh rebuild, so a theme change keeps them too (Eugene's call)
-- [ ] stop the first-iteration demo instance (the pid whose environment holds `AGTERM_STATE_DIR=/tmp/agj`, SIGTERM,
+- [x] stop the first-iteration demo instance (the pid whose environment holds `AGTERM_STATE_DIR=/tmp/agj`, SIGTERM,
       then the `lsappinfo` Dock-tile check) before rebuilding; build the demo with
       `-derivedDataPath build/DemoDerivedData`, never the `build/DerivedData` that `scripts/test-app.sh` rebuilds,
       launch it isolated and show Eugene the page with Expand off and on before writing the hosted tests
-- [ ] hosted tests: default page shows raw lines with gutter 1..N; Expand from the page and from control lays
+- [x] hosted tests: default page shows raw lines with gutter 1..N; Expand from the page and from control lays
       records out with file-line numbers; the line under the bar stays there across the toggle; a toggle during
       load lands; `:N` band covers the whole record; wrap on an expanded page keeps its anchor; typing into search,
       expanding through control, then typing again continues the query at the same caret; the same after a theme
       change; `e` typed into search lands in the query (regression test for the existing guard)
-- [ ] run the touched hosted tests with `-only-testing:` - must pass before next task
-- [ ] after the hosted run, `lsappinfo list | grep -A4 agterm.debug`
+- [x] run the touched hosted tests with `-only-testing:` - must pass before next task
+- [x] after the hosted run, `lsappinfo list | grep -A4 agterm.debug`
 
 ### Task 4: Docs, skill, and the gates
 
