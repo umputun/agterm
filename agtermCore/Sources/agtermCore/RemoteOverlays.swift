@@ -63,6 +63,12 @@ public struct RemotePage: Equatable, Sendable {
     /// requested is a visibility sent and not yet echoed back by the presenter.
     private(set) var requested: VisibilityRequest?
     private(set) var lastSeq = 0
+    /// loadedOffer is the offer under which the viewer last reported the page loaded: the evidence a re-offer after its
+    /// connection breaks rests on, consumed by that re-offer.
+    var loadedOffer: Int?
+    /// retried is whether the page is offered again after a broken connection; one that breaks again before it reports
+    /// loaded ends.
+    var retried = false
 
     init(overlay: HtmlOverlay, token: String, claimDeadline: Date) {
         self.overlay = overlay
@@ -90,6 +96,7 @@ public struct RemotePage: Equatable, Sendable {
     /// older one leaves the request pending.
     mutating func apply(_ state: PresentationPageState) -> Bool {
         let wasHidden = hidden
+        if state.load == .loaded { loadedOffer = offer }
         overlay.loadState = state.load
         overlay.loadError = state.error
         overlay.current = state.address.map {

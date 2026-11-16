@@ -153,6 +153,10 @@ public final class PresentationHub {
     public var onPresenterGranted: (@MainActor (UUID) -> Void)?
     /// onLeadReport runs once a viewer of `session` replaced the set of panes it leads.
     public var onLeadReport: (@MainActor (UUID) -> Void)?
+    /// onOpenWork runs a placement pass for a session one main turn after `scheduleOpenWork` asked for it, once
+    /// however often it was asked meanwhile, so a pass never runs inside the call that changed a place.
+    public var onOpenWork: (@MainActor (UUID) -> Void)?
+    private var openWorkDue: Set<UUID> = []
     /// onPresenterFrame runs with what a viewer sent about work, and that viewer's token. An answer echoing another
     /// viewer's owner, and a clear, seen or click from a viewer neither holding the role nor leading a pane, are dropped
     /// before this is reached; the receiver checks that the sender owns the page or overlay a frame names.
@@ -347,6 +351,19 @@ public final class PresentationHub {
     /// isConnected is whether the stream of viewer `owner` is still up, so work it owns can still be answered.
     public func isConnected(owner: Int) -> Bool { subscribers[SubscriberID(generation: owner)] != nil }
 
+    /// leadClaimant is the token of the viewer newest leading `pane` of `session`, nil when none does; unlike `route`
+    /// it never falls back to the grant holder.
+    public func leadClaimant(session: UUID, pane: UUID) -> Int? { claimant(session: session, pane: pane)?.generation }
+
+    /// scheduleOpenWork asks for a placement pass over `session`'s open work (`onOpenWork`).
+    public func scheduleOpenWork(_ session: UUID) {
+        guard openWorkDue.insert(session).inserted else { return }
+        Task { @MainActor [weak self] in
+            guard let self, self.openWorkDue.remove(session) != nil else { return }
+            self.onOpenWork?(session)
+        }
+    }
+
     @discardableResult
     private func send(_ body: PresentationFrame.Body, to id: SubscriberID) -> Bool {
         guard let subscriber = subscribers[id] else { return false }
@@ -374,6 +391,7 @@ public final class PresentationHub {
     private func release(_ id: SubscriberID, session: UUID) {
         let vacated = grant.release(id)
         onOwnerLost?(session, id.generation)
+        scheduleOpenWork(session)
         for session in vacated { announceVacancy(session: session) }
     }
 

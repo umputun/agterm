@@ -61,6 +61,7 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         presentationHub.onOwnerLost = { [weak self] session, owner in self?.ownerLost(session, owner: owner) }
         presentationHub.onPresenterGranted = { [weak self] session in self?.offerPending(session) }
         presentationHub.onLeadReport = { [weak self] session in self?.offerPending(session) }
+        presentationHub.onOpenWork = { [weak self] session in self?.reconcileOpenWork(session) }
         presentationHub.onPresenterFrame = { [weak self] session, sender, body in
             self?.receivePresenterFrame(body, forSession: session, from: sender)
         }
@@ -99,13 +100,21 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     }
 
     // a headless origin has nowhere to draw what a lost viewer held: an ask, pick, page or unclaimed job waits for
-    // another viewer, and a claimed or running job keeps its slot until its helper reports. A stalled send drops its
-    // viewer mid-call, so the re-offer waits a turn for the interrupted close or withdraw to finish
+    // another viewer, and a claimed or running job keeps its slot until its helper reports. The hub's pass offers it
+    // a turn later, after the interrupted close or withdraw a stalled send dropped its viewer in has finished
     private func ownerLost(_ session: UUID, owner: Int) {
         store.returnAskToPending(forSession: session, owner: owner)
         SessionPickBook.shared.returnToPending(session: session, owner: owner)
         store.remoteOverlayOwnerLost(forSession: session, owner: owner)
-        Task { @MainActor [weak self] in self?.offerPending(session) }
+    }
+
+    // the pass moves held work to the viewer leading its pane, then offers pending work as `offerPending` does
+    private func reconcileOpenWork(_ session: UUID) {
+        var moves = OpenWorkMoves()
+        presentationHub.batch(session: session) { moves = store.reconcileOpenWork(forSession: session, now: now()) }
+        guard moves.offered else { return }
+        scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
+        schedulePageClaimExpiry(after: AppStore.pageClaimWindow)
     }
 
     // held work goes to the viewer each piece routes to, once that viewer takes held work; a grant, a lead report and
@@ -172,7 +181,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
         return nil
     }
 
-    func pageChannelLost(_ page: UUID) { store.withdrawRemotePage(page) }
+    func pageChannelLost(_ page: UUID) {
+        if !store.remotePageLost(page) { store.withdrawRemotePage(page) }
+    }
 
     func claimPageAttachment(_ token: String) -> ControlResponse? { pageAttachments.claim(token) }
 
@@ -197,6 +208,8 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
     func finishPageMove(_ move: PageMove) { store.finishPageMove(move) }
 
     func pageCandidateFailed(_ page: UUID, token: String) -> Bool { store.failPageCandidate(page, token: token) }
+
+    func reofferLostPage(_ page: UUID) -> Bool { store.remotePageLost(page) }
 
     func endRemotePage(_ page: UUID) {
         for session in store.workspaces.flatMap(\.sessions) {

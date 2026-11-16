@@ -645,26 +645,6 @@ struct ServerStreamsTests {
         }
     }
 
-    @Test func workAViewerHeldIsOfferedToTheHolderWhenThatViewerLeaves() async throws {
-        let session = try newSession()
-        let ask = Self.ask()
-        #expect(openAsk(ask, on: session).ok)
-        let leader = try await claimant(for: session, leads: [session.paneIdentity])
-        let first = await offPool { leader.first { if case .askRequest = $0 { true } else { false } } }
-        #expect(first != nil)
-        let holder = try await presenter(for: session)
-        defer { holder.disconnect() }
-        let early = await offPool { holder.first(within: 0.5) { if case .askRequest = $0 { true } else { false } } }
-        #expect(early == nil)
-
-        leader.disconnect()
-
-        let offered = await offPool { holder.first { if case .askRequest = $0 { true } else { false } } }
-        guard case .askRequest(let shown)? = offered else { Issue.record("no re-offer"); return }
-        #expect(shown.id == ask.id)
-        #expect(shown.owner == holder.gen)
-    }
-
     final class StallingSink: PresentationSink {
         var stalls = false
         func offer(_: PresentationFrame) -> Bool { !stalls }
@@ -1070,6 +1050,32 @@ struct ServerStreamsTests {
         let reoffered = await offPool { next.first { if case .pageRequest = $0 { true } else { false } } }
         guard case .pageRequest(let fresh)? = reoffered else { Issue.record("no page re-offer"); return }
         #expect(fresh.page == shown.page)
+    }
+
+    @Test func aLoadedPageWhoseChannelEndsIsOfferedOnceMoreToItsViewer() async throws {
+        let session = try newSession()
+        let viewer = try await presenter(for: session)
+        defer { viewer.disconnect() }
+        let shown = try #require(try await offeredPage(session, to: viewer))
+        try viewer.send(.pageState(PresentationPageState(page: shown.page, title: nil, address: nil, load: .loaded, error: nil,
+                                                         canGoBack: false, canGoForward: false, hidden: false, appliedSeq: 0, offer: shown.offer)))
+        #expect(await eventually { session.remoteOverlays.slot(nil)?.page?.loadedOffer == shown.offer })
+        var pair: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(shown.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: try #require(UUID(uuidString: shown.page)), token: shown.token)
+
+        close(pair[1])
+
+        let again = await offPool { viewer.first { if case .pageRequest = $0 { true } else { false } } }
+        guard case .pageRequest(let fresh)? = again else { Issue.record("no page re-offer"); return }
+        #expect(fresh.page == shown.page && fresh.offer != shown.offer)
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &pair) == 0)
+        #expect(streams.claimPageStream(fresh.token).ok)
+        streams.adoptPageServeStream(descriptor: pair[0], page: try #require(UUID(uuidString: shown.page)), token: fresh.token)
+        close(pair[1])
+        #expect(await eventually { session.remoteOverlays.slot(nil) == nil })
+        #expect(await offPool { viewer.first(within: 0.5) { if case .pageRequest = $0 { true } else { false } } } == nil)
     }
 
     // regression: a close sent after the channel's EOF reached the server was dropped, and the page held its slot

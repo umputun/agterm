@@ -45,6 +45,8 @@ extension ControlServer: PageServeHost {
         }
     }
 
+    func reofferLostPage(_ page: UUID) -> Bool { openStores.contains { $0.remotePageLost(page) } }
+
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool {
         openStores.lazy.compactMap { $0.remotePageClaimToken(page) }.first == token
     }

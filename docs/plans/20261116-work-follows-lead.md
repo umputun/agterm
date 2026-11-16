@@ -268,14 +268,14 @@ carried row by row first, then its Solution Overview rules this plan touches.
   `AppStore+Interactions.swift`, `PageServeStream.swift`
 - Modify: the existing remote ask/page/pick tests whose contract changes
 
-- [ ] reproduce red first: the reporter's three steps (V2 takes the lead: ask and page stay on V1; V1 leaves:
+- [x] reproduce red first: the reporter's three steps (V2 takes the lead: ask and page stay on V1; V1 leaves:
       ask comes back to the origin, page dismissed); a bridge submit queued on V1's page channel, drained after
       the page moved (to V2, and to V1 again) and the old stream shut, acts on the replacement
-- [ ] implement `reconcileOpenWork`, `remotePageLost` with the loaded-evidence bound, and Mac owner loss through
+- [x] implement `reconcileOpenWork`, `remotePageLost` with the loaded-evidence bound, and Mac owner loss through
       the pass (route first, then the origin); the headless pass adds moves of held work only
-- [ ] admit a non-attachment bridge request in `PageServeStream.answer` only while its stream is the page's
+- [x] admit a non-attachment bridge request in `PageServeStream.answer` only while its stream is the page's
       registered, non-ending channel
-- [ ] tests after (Mac store unless noted):
+- [x] tests after (Mac store unless noted):
       - V2 takes the lead -> ask, pick and page move to V2, nothing drawn on the origin, V1 gets dismissals, a
         late answer from V1 is refused;
       - the origin takes the lead -> the work comes back; a viewer takes it from the origin -> it leaves;
@@ -297,7 +297,7 @@ carried row by row first, then its Solution Overview rules this plan touches.
         program jobs still go through the pending offer
 - [ ] move `ServerStreamsTests`' owner-loss re-offer behavior tests into `AppStoreOpenWorkTests` with every
       assertion kept
-- [ ] run the touched tests - must pass before task 4
+- [x] run the touched tests - must pass before task 4
 
 ### Task 4: Event wiring on both origins, docs and gates
 

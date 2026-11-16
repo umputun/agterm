@@ -10,6 +10,7 @@ extension AppStore {
     public func offerPageCandidate(_ page: UUID, forSession id: UUID, to owner: Int, now: Date = Date()) -> Bool {
         let job = page.uuidString
         guard let hub = presentationHub, let session = session(withID: id), session.content != .page, takesHeldWork(owner),
+              mayHandOver(job, to: owner),
               session.remoteOverlays.candidate(job: job)?.owner != owner,
               let offered = candidateOffer(job, in: session, to: owner, now: now),
               offered.request.markdownLinks == nil || hub.supports(PresentationHub.pageLinksKind, owner: owner),
@@ -108,6 +109,7 @@ extension AppStore {
 
     func dropPageCandidate(_ job: String, in session: Session) {
         guard let candidate = session.remoteOverlays.candidate(job: job) else { return }
+        noteGivenUp(job, by: candidate.owner)
         session.remoteOverlays.setCandidate(nil, job: job)
         guard presentationHub?.isConnected(owner: candidate.owner) == true else { return }
         presentationHub?.send(.pageClose(PresentationPageChange(page: job, reason: PresentationPageChange.channelLost)),
@@ -128,6 +130,7 @@ extension AppStore {
         case .pageRejected(let change), .pageClosed(let change):
             guard let candidate = session.remoteOverlays.candidate(job: change.page), candidate.owner == sender,
                   candidate.offer == change.offer else { return false }
+            noteGivenUp(change.page, by: sender)
             session.remoteOverlays.setCandidate(nil, job: change.page)
             return true
         default:
@@ -165,14 +168,16 @@ extension AppStore {
 
     // MARK: - Pages coming back to this Mac
 
-    /// mountRemotePageHere moves page `page` of session `id` from the viewer showing it into its slot here, its outcome
-    /// still open, and the viewer takes its copy down. False on a headless origin, or when the slot here is taken or its
+    /// mountRemotePageHere moves page `page` of session `id` from the viewer showing it, or withdrawn from one, into its
+    /// slot here, its outcome still open, and a viewer still showing it takes its copy down. False on a headless origin, or when the slot here is taken or its
     /// pane is not shown, and the page stays with the viewer.
     @discardableResult
     public func mountRemotePageHere(_ page: UUID, forSession id: UUID) -> Bool {
         let job = page.uuidString
         guard !headless, let session = session(withID: id), let slot = session.remoteOverlays.slot(job: job), var held = slot.page,
-              let previous = slot.owner, localSlotFree(slot.pane, in: session) else { return false }
+              localSlotFree(slot.pane, in: session) else { return false }
+        let previous = slot.owner
+        noteGivenUp(job, by: previous)
         dropPageCandidate(job, in: session)
         session.remoteOverlays.remove(job: job)
         settleRemoteTextWaits(job: job)
@@ -184,7 +189,9 @@ extension AppStore {
         guard placeHtmlOverlay(held.overlay, in: session, pane: slot.pane, sizePercent: slot.sizePercent, points: slot.points,
                                backgroundColor: held.request?.backgroundColor) == nil else { return false }
         if held.effectiveHidden { session.setOverlayHidden(true, slot: slot.pane) }
-        presentationHub?.send(.pageClose(PresentationPageChange(page: job, reason: PresentationPageChange.channelLost)), toOwner: previous)
+        if let previous {
+            presentationHub?.send(.pageClose(PresentationPageChange(page: job, reason: PresentationPageChange.channelLost)), toOwner: previous)
+        }
         return true
     }
 
@@ -206,6 +213,7 @@ extension AppStore {
             return PageMove(page: page, session: session.id, previous: nil)
         }
         guard let slot = session.remoteOverlays.slot(job: job), slot.page != nil else { return nil }
+        noteGivenUp(job, by: slot.owner)
         session.remoteOverlays.update(job: job) { $0.owner = candidate.owner }
         session.remoteOverlays.updatePage(job) { held in
             held.token = candidate.token

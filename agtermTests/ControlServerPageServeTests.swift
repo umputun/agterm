@@ -378,6 +378,28 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertEqual(offMain { peer.frame() } ?? nil, .failure(id: 3, error: "page closed"))
     }
 
+    func testABridgeRequestOnAChannelThePageMovedOffDoesNotRun() throws {
+        let fix = try fixture()
+        let page = try openFile(fix)
+        _ = try claim(try XCTUnwrap(fix.presenter.token))
+        waitUntil("the channel is adopted") { fix.server.pageServeStreams[page] != nil }
+        var pair: [Int32] = [0, 0]
+        XCTAssertEqual(socketpair(AF_UNIX, SOCK_STREAM, 0, &pair), 0)
+        let peer = HelperClient(fd: pair[1])
+        clients.append(peer)
+        let owner = ControlStreamOwner(descriptor: pair[0], limits: ControlServer.pageServeLimits)
+        let retired = PageServeStream(page: page, source: .file(path: docs.appendingPathComponent("index.html").path, grantRoot: docs.path),
+                                      owner: owner, host: fix.server, mimeType: { ControlServer.pageMimeType($0) }, attachment: nil)
+        owner.start(onLine: { _ in }, onClose: {})
+        defer { retired.shutdown() }
+        XCTAssertTrue(retired.bridgeSlots.tryAcquire())
+
+        retired.receive(.bridge(id: 5, request: #"{"cmd":"session.rename","args":{"name":"renamed"}}"#))
+
+        XCTAssertEqual(offMain { peer.frame() } ?? nil, .failure(id: 5, error: "page closed"))
+        XCTAssertNil(fix.session.customName)
+    }
+
     func testABridgeRequestAdmittedBeforeItsPageClosedDoesNotRun() throws {
         let fix = try fixture()
         let page = try openFile(fix)
@@ -790,7 +812,7 @@ final class ControlServerPageServeTests: XCTestCase {
         XCTAssertTrue(fix.server.presentationHub.hasPresenter(session: fix.session.id))
     }
 
-    func testLosingThePresenterEndsThePageAndClosesItsChannel() throws {
+    func testLosingThePresenterBringsThePageHereAndClosesItsChannel() throws {
         let fix = try fixture()
         let page = try openFile(fix)
         let (client, _) = try claim(try XCTUnwrap(fix.presenter.token))
@@ -798,8 +820,9 @@ final class ControlServerPageServeTests: XCTestCase {
 
         fix.server.presentationHub.unsubscribe(fix.presenterID)
 
+        waitUntil("the page comes here") { fix.session.htmlOverlay?.id == page }
         XCTAssertTrue(fix.session.remoteOverlays.slots.isEmpty)
-        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .dismissed)
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
         XCTAssertNil(offMain { client.readLine() } ?? nil)
     }
 

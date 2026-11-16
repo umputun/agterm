@@ -30,11 +30,11 @@ extension ControlServer: PresentationStreamHost {
     /// Points every open store at the hub. Stores are created by the window library, which this file cannot
     /// reach into, so the server assigns wherever it already walks the open windows.
     func attachPresentationHub() {
+        // what the lost viewer held is placed by the pass the hub schedules after this
         presentationHub.onOwnerLost = { [weak self] session, owner in
-            self?.takeBackRemoteAsk(forSession: session, owner: owner)
-            self?.takeBackRemotePick(forSession: session, owner: owner)
             self?.library.store(forSession: session)?.remoteOverlayOwnerLost(forSession: session, owner: owner)
         }
+        presentationHub.onOpenWork = { [weak self] session in self?.reconcileOpenWork(forSession: session) }
         presentationHub.onPresenterFrame = { [weak self] session, sender, body in
             self?.receivePresenterFrame(body, forSession: session, from: sender)
         }
@@ -67,6 +67,16 @@ extension ControlServer: PresentationStreamHost {
         for id in presentationHub.subscribedSessions {
             library.store(forSession: id)?.publishPresentationMail(forSession: id)
         }
+    }
+
+    /// reconcileOpenWork places `id`'s open ask, pick and pages where its pane's lead now is, this Mac included.
+    func reconcileOpenWork(forSession id: UUID) {
+        guard let store = library.store(forSession: id), let windowID = library.windowID(for: store) else { return }
+        let local = OpenWorkLocal(modal: { _ in PickRegistry.shared.controller(for: windowID).map { ($0, windowID) } },
+                                  showsGuiAsk: { [weak self] session in self?.guiAskFits(session, in: store, windowID: windowID) == true })
+        guard store.reconcileOpenWork(forSession: id, now: hudClock(), local: local).offered else { return }
+        scheduleOverlayJobExpiry(after: OverlayJobs.launchWindow)
+        schedulePageClaimExpiry(after: AppStore.pageClaimWindow)
     }
 
     func presentationSourceExists(_ session: UUID) -> Bool {

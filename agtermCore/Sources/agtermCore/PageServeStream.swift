@@ -17,9 +17,12 @@ public protocol PageServeHost: AnyObject, SendableMetatype {
     func remotePagePlace(_ page: UUID) -> (session: UUID, pane: OverlayPane?, window: UUID?)?
     /// endRemotePage ends page `page` wherever its reservation sits, which also tells the presenter.
     func endRemotePage(_ page: UUID)
-    /// pageChannelLost handles page `page`'s registered channel ending without a close: a Mac ends the page, a headless
-    /// origin keeps it for the next presenter.
+    /// pageChannelLost handles page `page`'s registered channel ending without a close: the page is re-offered when
+    /// `reofferLostPage` takes it, and ends otherwise.
     func pageChannelLost(_ page: UUID)
+    /// reofferLostPage handles page `page`'s broken connection by the loss rule (`AppStore.remotePageLost`): it is offered
+    /// again or ends. False when that rule does not apply and the page ends here.
+    func reofferLostPage(_ page: UUID) -> Bool
     /// isCurrentPageClaim is whether `token` is still the claim page `page` is offered under.
     func isCurrentPageClaim(_ page: UUID, token: String) -> Bool
     /// dispatchPageBridge runs one bridge request as a local page's would run; nil when control is unavailable.
@@ -49,7 +52,10 @@ public struct PendingPageClaim: Sendable {
 }
 
 extension PageServeHost {
-    public func pageChannelLost(_ page: UUID) { endRemotePage(page) }
+    public func pageChannelLost(_ page: UUID) {
+        guard !reofferLostPage(page) else { return }
+        endRemotePage(page)
+    }
     public func isCurrentPageClaim(_: UUID, token _: String) -> Bool { true }
     public func claimPageAttachment(_ token: String) -> ControlResponse? { nil }
     public func adoptPageAttachment(descriptor: Int32, claim: UUID) -> Bool { false }
@@ -62,6 +68,7 @@ extension PageServeHost {
     public func commitPageCandidate(_ page: UUID, token: String) -> PageMove? { nil }
     public func finishPageMove(_ move: PageMove) {}
     public func pageCandidateFailed(_ page: UUID, token: String) -> Bool { false }
+    public func reofferLostPage(_ page: UUID) -> Bool { false }
 }
 
 /// PageServeAdmission counts one kind of request a page channel has taken in and not finished. It never
@@ -363,6 +370,8 @@ public final class PageServeStream {
         if [.image, .markdown, .text, .document, .unreadable].contains(source.kind) {
             return .failure(id: id, error: "this page has no bridge")
         }
+        // a retired channel's queued request must not act on the page its replacement now serves
+        if attachment == nil, host?.pageServeStreams[page] !== self || ending { return .failure(id: id, error: "page closed") }
         guard let host, let place = attachment.map({ host.pageAttachmentPlace($0, page: page) }) ?? host.remotePagePlace(page) else {
             return .failure(id: id, error: "page closed")
         }

@@ -150,7 +150,7 @@ extension ControlServer {
     }
 
     /// Whether a GUI ask anchored to `session` could be shown now: the rule `presentAsk` applies at open.
-    private func guiAskFits(_ session: Session, in store: AppStore, windowID: UUID) -> Bool {
+    func guiAskFits(_ session: Session, in store: AppStore, windowID: UUID) -> Bool {
         guard guiTargetShown(session.id, in: store, windowID: windowID) else { return false }
         guard session.askPaneIdentity != nil else { return true }
         guard let pane = session.askTargetPane else { return false }

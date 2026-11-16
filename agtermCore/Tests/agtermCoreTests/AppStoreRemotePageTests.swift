@@ -417,7 +417,7 @@ struct AppStoreRemotePageTests {
         #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
     }
 
-    @Test func losingThePresenterEndsThePageAndKeepsAnAcceptedAnswer() throws {
+    @Test func losingThePresenterBringsItsPagesHereAndKeepsAnAcceptedAnswer() throws {
         let (session, presenterID) = try origin(split: true)
         let pending = file(), answered = file()
         #expect(open(session, pending) == .opened)
@@ -425,9 +425,12 @@ struct AppStoreRemotePageTests {
         HtmlPageOutcomes.shared.submit(answered.id, value: "kept")
 
         hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
 
         #expect(session.remoteOverlays.slots.isEmpty)
-        #expect(HtmlPageOutcomes.shared.outcome(for: pending.id)?.outcome == .dismissed)
+        #expect(session.htmlOverlay?.id == pending.id)
+        #expect(session.paneOverlay(.left)?.html?.id == answered.id)
+        #expect(HtmlPageOutcomes.shared.outcome(for: pending.id)?.outcome == .pending)
         #expect(HtmlPageOutcomes.shared.outcome(for: answered.id)?.value == "kept")
     }
 
@@ -581,14 +584,15 @@ struct AppStoreRemotePageTests {
         #expect(!session.overlayActive)
     }
 
-    @Test func aPageThePresenterLossEndedLeavesNoOverlay() throws {
+    @Test func aPageThePresenterLossBroughtHereIsDrivenHere() throws {
         let (session, presenterID) = try origin()
         #expect(open(session, file()) == .opened)
         hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
 
         #expect(store.navigateRemotePage(session.id, pane: nil, navigation: .back) == .local)
-        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == .noOverlay)
-        #expect(!session.overlayActive)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: nil) == nil)
+        #expect(session.overlayActive)
     }
 
     @Test func aTokenClaimsOnceWithinItsDeadlineForTheSamePresenter() throws {
@@ -842,19 +846,38 @@ struct AppStoreRemotePageTests {
         #expect(!second.sink.bodies.contains { if case .pageClose = $0 { true } else { false } })
     }
 
-    @Test func losingOneViewerEndsOnlyThePageItHeld() throws {
+    @Test func losingOneViewerPlacesOnlyThePageItHeld() throws {
         let (session, _) = try origin(split: true)
         let left = try claimant(session, leads: [session.paneIdentity])
-        _ = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
+        let right = try claimant(session, leads: [try #require(session.splitPaneIdentity)])
         let leftPage = file(), rightPage = file()
         #expect(open(session, leftPage, pane: .left) == .opened)
         #expect(open(session, rightPage, pane: .right) == .opened)
 
         hub.unsubscribe(left.id)
+        store.reconcileOpenWork(forSession: session.id)
 
-        #expect(session.remoteOverlays.slot(.left) == nil)
-        #expect(HtmlPageOutcomes.shared.outcome(for: leftPage.id)?.outcome == .dismissed)
-        #expect(session.remoteOverlays.slot(.right)?.page?.overlay.id == rightPage.id)
+        #expect(session.remoteOverlays.slot(.left)?.owner == presenter.frames[0].gen)
+        #expect(pageRequests(presenter) == [leftPage.id.uuidString])
+        #expect(HtmlPageOutcomes.shared.outcome(for: leftPage.id)?.outcome == .pending)
+        #expect(session.remoteOverlays.slot(.right)?.owner == right.gen)
+        #expect(pageRequests(right.sink) == [rightPage.id.uuidString])
+    }
+
+    @Test func aLostViewersPageForAPaneNotShownHereEndsDismissed() throws {
+        let (session, presenterID) = try origin(split: true)
+        let page = file()
+        #expect(open(session, page, pane: .right) == .opened)
+        session.splitFocused = false
+        store.setSplitVisibility(session.id, shown: false)
+        #expect(!session.rendersPane(.right))
+
+        hub.unsubscribe(try #require(presenterID))
+        store.reconcileOpenWork(forSession: session.id)
+
+        #expect(session.remoteOverlays.slots.isEmpty)
+        #expect(store.htmlOverlayCommandFailure(session.id, pane: .right) == .noOverlay)
+        #expect(HtmlPageOutcomes.shared.outcome(for: page.id)?.outcome == .dismissed)
     }
 
     @Test func aHeadlessWithdrawalAfterTheLeadMovesClosesOnTheOriginalOwner() throws {

@@ -651,6 +651,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask comes back") { !session.askPresentedRemotely }
 
         XCTAssertFalse(session.askPresentedRemotely)
         let input = SessionAskInput(session: session, store: store, actions: actions, windowID: windowID,
@@ -682,6 +683,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask, target: session.id.uuidString).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask comes back") { controller.pendingAsk != nil }
 
         XCTAssertEqual(controller.pendingAsk?.id, ask.id)
         XCTAssertEqual(controller.pendingAsk?.anchor, AskAnchor(sessionID: session.id))
@@ -702,6 +704,7 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(open(ask, target: background.id.uuidString).ok)
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask ends") { background.askPending == nil }
 
         XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
                        ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
@@ -717,10 +720,22 @@ final class ControlServerAskTests: XCTestCase {
         XCTAssertTrue(controller.open(PendingPick(id: "picker", items: [ControlPickItem(id: "one", label: "One")])))
 
         server.presentationHub.unsubscribe(id)
+        waitUntil("the ask ends") { session.askPending == nil }
 
         XCTAssertEqual(server.askResult(ask.id, window: nil).result?.ask,
                        ControlAskResult(result: .cancelled, reason: ControlAskResult.presentationLost))
         XCTAssertEqual(controller.pending?.id, "picker")
+    }
+
+    private func waitUntil(_ what: String, _ condition: @escaping @MainActor () -> Bool) {
+        let met = expectation(description: what)
+        Task { @MainActor in
+            let deadline = Date().addingTimeInterval(8)
+            while !condition(), Date() < deadline { try? await Task.sleep(nanoseconds: 20_000_000) }
+            met.fulfill()
+        }
+        wait(for: [met], timeout: 10)
+        XCTAssertTrue(condition(), what)
     }
 
     @discardableResult

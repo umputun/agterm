@@ -144,6 +144,9 @@ public final class SessionPickBook {
 
     init() {}
 
+    /// pickID is the id of `session`'s pick in flight, nil when it has none.
+    func pickID(forSession session: UUID) -> String? { entries.first { $0.value.session == session }?.key }
+
     /// placement is where `session`'s pick in flight is drawn, nil when it has none.
     public func placement(forSession session: UUID) -> Placement? {
         entries.values.first { $0.session == session }?.placement
@@ -402,6 +405,7 @@ public final class SessionPickBook {
 
     private func finish(_ id: String, _ result: ControlPickResult) {
         retain(id, result, window: entries.removeValue(forKey: id)?.window)
+        OfferlessHolders.shared.forget(id)
     }
 
     private func retain(_ id: String, _ result: ControlPickResult, window: WindowInfo.ID?) {
@@ -440,11 +444,14 @@ extension AppStore {
     @discardableResult
     public func movePick(forSession id: UUID, to owner: Int) -> Bool {
         guard let hub = presentationHub, hub.supports("pick.request", owner: owner), takesHeldWork(owner),
-              let (pick, follow) = SessionPickBook.shared.pickToMove(session: id, to: owner) else { return false }
+              let (pick, follow) = SessionPickBook.shared.pickToMove(session: id, to: owner), mayHandOver(pick.id, to: owner)
+        else { return false }
+        let previous = SessionPickBook.shared.placement(forSession: id)
         let request = PresentationPick(pick, owner: owner, follow: follow, offer: hub.newOffer(toOwner: owner))
         guard request.fitsFrame, SessionPickBook.shared.reassign(session: id, to: owner, offer: request.offer, dismiss: { [weak hub] in
             hub?.send(.pickDismiss(PresentationPickRef(id: pick.id, owner: owner)), toOwner: owner)
         }) else { return false }
+        if case .presenter(let holder)? = previous { noteGivenUp(pick.id, by: holder) }
         hub.send(.pickRequest(request), toOwner: owner)
         return true
     }
@@ -455,7 +462,7 @@ extension AppStore {
     public func offerPendingPick(forSession id: UUID) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id),
               let owner = pendingRecipient(session, paneIdentity: nil), hub.supports("pick.request", owner: owner),
-              let (pick, follow) = SessionPickBook.shared.unpresented(forSession: id) else { return false }
+              let (pick, follow) = SessionPickBook.shared.unpresented(forSession: id), mayHandOver(pick.id, to: owner) else { return false }
         let request = PresentationPick(pick, owner: owner, follow: follow, offer: hub.newOffer(toOwner: owner))
         guard request.fitsFrame else { return false }
         SessionPickBook.shared.offer(session: id, owner: owner, offer: request.offer) { [weak hub] in

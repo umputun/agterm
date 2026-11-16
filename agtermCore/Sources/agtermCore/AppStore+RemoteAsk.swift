@@ -54,7 +54,7 @@ extension AppStore {
     @discardableResult
     public func offerAsk(forSession id: UUID, to owner: Int) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
-              !session.askPresentedRemotely, !session.askReplica, takesHeldWork(owner) else { return false }
+              !session.askPresentedRemotely, !session.askReplica, takesHeldWork(owner), mayHandOver(ask.id, to: owner) else { return false }
         let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner,
                                       offer: hub.newOffer(toOwner: owner))
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
@@ -68,12 +68,14 @@ extension AppStore {
     @discardableResult
     public func moveRemoteAsk(forSession id: UUID, to owner: Int) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id), let ask = session.askPending,
-              let previous = session.askRemoteOwner, previous != owner, takesHeldWork(owner) else { return false }
+              let previous = session.askRemoteOwner, previous != owner, takesHeldWork(owner), mayHandOver(ask.id, to: owner)
+        else { return false }
         let request = PresentationAsk(ask, pane: session.askPaneIdentity.map { .identity($0) }, owner: owner,
                                       offer: hub.newOffer(toOwner: owner))
         guard askOfferRefusal(request, hub: hub) == nil else { return false }
         // the new owner is recorded before either send, so a viewer a stalled send drops finds nothing it owns
         session.askRemoteOwner = owner
+        noteGivenUp(ask.id, by: previous)
         handOver(request, in: session, hub: hub)
         hub.send(.askDismiss(PresentationAskRef(id: ask.id, owner: previous)), toOwner: previous)
         return true
@@ -84,7 +86,7 @@ extension AppStore {
     public func handGuiAskToViewer(_ controller: PickController, window: WindowInfo.ID, forSession id: UUID, to owner: Int) -> Bool {
         guard let hub = presentationHub, let session = session(withID: id), session.askPending == nil,
               let shown = controller.pendingAsk, shown.anchor?.sessionID == id, !shown.expired(at: Date()),
-              takesHeldWork(owner) else { return false }
+              takesHeldWork(owner), mayHandOver(shown.id, to: owner) else { return false }
         let identity = shown.anchor?.paneIdentity
         let ask = shown.anchored(at: nil)
         let request = PresentationAsk(ask, pane: identity.map { .identity($0) }, owner: owner, offer: hub.newOffer(toOwner: owner))
@@ -102,6 +104,7 @@ extension AppStore {
         guard let session = session(withID: id), let ask = session.askPending, ask.style != .gui,
               let owner = session.askRemoteOwner else { return false }
         RemoteAskOffers.shared.forget(ask: ask.id)
+        noteGivenUp(ask.id, by: owner)
         session.takeAskBack()
         presentationHub?.send(.askDismiss(PresentationAskRef(id: ask.id, owner: owner)), toOwner: owner)
         return true
@@ -115,6 +118,7 @@ extension AppStore {
         let anchor = AskAnchor(sessionID: id, pane: session.askTargetPane, paneIdentity: session.askPaneIdentity)
         guard controller.openAsk(ask.anchored(at: anchor)) else { return false }
         RemoteAskOffers.shared.forget(ask: ask.id)
+        noteGivenUp(ask.id, by: owner)
         session.releaseAsk()
         askRegistry.reassign(id: ask.id, to: .window(window))
         presentationHub?.send(.askDismiss(PresentationAskRef(id: ask.id, owner: owner)), toOwner: owner)
@@ -144,6 +148,7 @@ extension AppStore {
         RemoteAskOffers.shared.set(request.offer, ask: request.id)
         session.onRemoteAskEnded = { [weak hub, owner = request.owner] askID in
             RemoteAskOffers.shared.forget(ask: askID)
+            OfferlessHolders.shared.forget(askID)
             hub?.send(.askDismiss(PresentationAskRef(id: askID, owner: owner)), toOwner: owner)
         }
         hub.send(.askRequest(request), toOwner: request.owner)

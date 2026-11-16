@@ -1300,7 +1300,7 @@ final class ControlServerRemotePresentationTests: XCTestCase {
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
     }
 
-    func testTheOriginReadsTheViewersPageStateAndPresenterLossDismissesIt() throws {
+    func testTheOriginReadsTheViewersPageStateAndPresenterLossBringsItHere() throws {
         let pair = try bridgedPair()
         follow(pair.origin)
         let launcher = relay(pair)
@@ -1319,7 +1319,8 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
         pair.server.shutdownPresentationStreams()
 
-        waitUntil("presenter loss ends the page") { HtmlPageOutcomes.shared.outcome(for: page)?.outcome == .dismissed }
+        waitUntil("presenter loss brings the page here") { pair.origin.htmlOverlay?.id == page }
+        XCTAssertEqual(HtmlPageOutcomes.shared.outcome(for: page)?.outcome, .pending)
         XCTAssertTrue(pair.origin.remoteOverlays.slots.isEmpty)
         waitUntil("the viewer's replica is gone") { pair.viewer.htmlOverlay == nil && pair.server.replicaPages.isEmpty }
         waitUntil("the channel's helper is gone") { launcher.toOrigin.joinsClosed == 1 }

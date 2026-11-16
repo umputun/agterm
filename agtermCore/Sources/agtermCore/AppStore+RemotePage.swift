@@ -155,7 +155,7 @@ extension AppStore {
     @discardableResult
     func offerPendingPage(_ slot: RemoteOverlaySlot, in session: Session, now: Date) -> Bool {
         guard slot.owner == nil, var request = slot.page?.request,
-              let owner = pendingRecipient(session, paneIdentity: request.pane?.identity),
+              let owner = pendingRecipient(session, paneIdentity: request.pane?.identity), mayHandOver(slot.job, to: owner),
               presenterShows(request.source, log: request.textLog != nil, owner: owner) else { return false }
         let merged = reoffer(&request, from: slot, token: UUID().uuidString, owner: owner)
         let hidden = slot.page?.effectiveHidden == true
@@ -206,7 +206,9 @@ extension AppStore {
             guard let slot = session.remoteOverlays.slot(job: change.page), slot.page?.offer == change.offer,
                   slot.owner == sender || (slot.owner == nil && slot.page?.withdrawnFrom == sender
                       && change.reason != PresentationPageChange.channelLost) else { return }
-            if headless, change.reason == PresentationPageChange.channelLost, let page = UUID(uuidString: change.page) {
+            let lost = change.reason == PresentationPageChange.channelLost
+            if lost, let page = UUID(uuidString: change.page), remotePageLost(page) { return }
+            if headless, lost, let page = UUID(uuidString: change.page) {
                 withdrawRemotePage(page)
             } else {
                 endRemotePage(change.page, in: session)
@@ -313,6 +315,7 @@ extension AppStore {
         guard let slot = session.remoteOverlays.slot(job: job), let page = slot.page else { return }
         dropPageCandidate(job, in: session)
         session.remoteOverlays.remove(job: job)
+        OfferlessHolders.shared.forget(job)
         settleRemoteTextWaits(job: job)
         HtmlPageOutcomes.shared.dismiss(page.overlay.id)
         scheduleTreeChanged()
@@ -343,11 +346,12 @@ extension AppStore {
         workspaces.flatMap(\.sessions).lazy.compactMap { $0.remoteOverlays.slot(job: page.uuidString)?.page?.token }.first
     }
 
-    /// withdrawRemotePage takes page `page` back on a headless origin after its channel ended without a close: the
-    /// viewer showing it takes its copy down, and the page waits for a viewer to take it again.
+    /// withdrawRemotePage takes page `page` back from the viewer showing it, which takes its copy down, and drops any
+    /// pending move of it; the page, its outcome still open, waits for the next place to take it.
     public func withdrawRemotePage(_ page: UUID) {
         guard let session = workspaces.flatMap(\.sessions).first(where: { $0.remoteOverlays.slot(job: page.uuidString)?.page != nil }),
               let slot = session.remoteOverlays.slot(job: page.uuidString), let owner = slot.owner else { return }
+        dropPageCandidate(slot.job, in: session)
         // tagged, so the viewer's reply to this close is not read as a dismissal
         presentationHub?.send(.pageClose(PresentationPageChange(page: slot.job, reason: PresentationPageChange.channelLost)),
                               toOwner: owner)
