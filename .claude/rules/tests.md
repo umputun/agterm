@@ -23,6 +23,10 @@ A newly understood flake gets its entry there, and a rule here only when it show
   `aShellThatExitsClosesItsSession` does with `!session.ended`.
 - Wait for the state you assert, never for time or for layout luck: a page title read before it arrived and a
   width a runner's 17 px scroll bar never allows failed only on CI.
+- A blocking call in a test (a socket read, `poll`, a semaphore) runs on a plain `Thread`, as `offPool` does, never
+  in a `Task`: the shared pool has one thread per CPU, three on CI. A server under test that answers through a
+  `Task` gets `.high`, or its reply queues behind every test body started before it.
+  `LIBDISPATCH_COOPERATIVE_POOL_STRICT=1` shrinks the pool to one thread, so a test that parks a pool thread hangs.
 - A test holding a pty master reads it on every poll while it waits. `zmx attach` exits through
   `tcsetattr(TCSAFLUSH)`, which on macOS blocks until the master drains, so an unread pty keeps the child alive.
 - A test stub writes sockets through `UnixSocket.write` and never replies to a request cut off before its

@@ -643,10 +643,11 @@ final class ControlServer {
 
     /// Run an async closure on a fresh task, blocking the calling background thread until it finishes —
     /// bridges the synchronous read loop to the main-actor dispatch without hopping the loop thread itself.
-    nonisolated private static func runBlocking<T: Sendable>(_ body: @escaping @Sendable () async -> T) -> T {
+    nonisolated static func runBlocking<T: Sendable>(_ body: @escaping @Sendable () async -> T) -> T {
         let semaphore = DispatchSemaphore(value: 0)
         let box = ResultBox<T>()
-        Task {
+        // above the default: a same-priority task waits behind every task already queued on the shared pool
+        Task(priority: .high) {
             box.value = await body()
             semaphore.signal()
         }

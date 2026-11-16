@@ -591,6 +591,26 @@ final class ControlServerTests: XCTestCase {
         wait(for: [remoteFinished], timeout: 10)
     }
 
+    func testRunBlockingAnswersWhileSamePriorityWorkIsStillQueued() async {
+        let done = OSAllocatedUnfairLock(initialState: 0)
+        let jobs = 3000
+        var flood: [Task<Void, Never>] = []
+        for _ in 0..<jobs {
+            flood.append(Task.detached(priority: .medium) {
+                let end = Date().addingTimeInterval(0.002)
+                while Date() < end {}
+                done.withLock { $0 += 1 }
+            })
+        }
+
+        let finishedAtRun = await withCheckedContinuation { continuation in
+            Thread { continuation.resume(returning: ControlServer.runBlocking { done.withLock { $0 } }) }.start()
+        }
+        for task in flood { await task.value }
+
+        XCTAssertLessThan(finishedAtRun, jobs / 2)
+    }
+
     nonisolated private static func address(for path: String) -> sockaddr_un {
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)

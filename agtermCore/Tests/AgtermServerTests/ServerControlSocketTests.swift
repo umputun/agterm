@@ -18,6 +18,13 @@ final class ServerControlSocketTests {
         var owners: [ControlStreamOwner] = []
     }
 
+    private final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var value: Int { lock.withLock { count } }
+        func increment() { lock.withLock { count += 1 } }
+    }
+
     private func serve(reply: ControlResponse, adopted: Adopted) throws {
         let socket = ServerControlSocket(path: path, handler: { _ in reply }, adopter: { conn, request, response, written in
             adopted.lock.withLock { adopted.calls.append((request.cmd, response.ok, written)) }
@@ -101,6 +108,30 @@ final class ServerControlSocketTests {
         #expect(try await exchange(fd) == nil)
         #expect(adopted.lock.withLock { adopted.calls.map { "\($0.cmd.rawValue) \($0.ok) \($0.written)" } }
             == ["session.overlay.page.serve false true"])
+    }
+
+    // regression: the reply task queued behind every same-priority test task, so CI's startup backlog outran the client
+    @Test func aRequestIsAnsweredWhileSamePriorityWorkIsStillQueued() async throws {
+        try serve(reply: ControlResponse(ok: true), adopted: Adopted())
+        let done = Counter()
+        let jobs = 3000
+        var flood: [Task<Void, Never>] = []
+        for _ in 0..<jobs {
+            flood.append(Task {
+                let end = Date().addingTimeInterval(0.002)
+                while Date() < end {}
+                done.increment()
+            })
+        }
+
+        let path = path
+        let finishedAtReply = try await offPool { () throws -> Int in
+            _ = try send(ControlRequest(cmd: .tree), to: path)
+            return done.value
+        }
+        for task in flood { await task.value }
+
+        #expect(finishedAtReply < jobs / 2)
     }
 
     @Test func anOrdinaryCommandNeverReachesTheAdopter() async throws {

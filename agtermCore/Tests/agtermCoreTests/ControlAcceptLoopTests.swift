@@ -11,7 +11,7 @@ final class ControlAcceptLoopTests {
 
     @Test func stopWakesALoopParkedInPoll() async throws {
         let loop = try #require(ControlAcceptLoop(listenFD: UnixSocket.listening(path: path)))
-        let returned = Task.detached { loop.next() }
+        let returned = Task { await withCheckedContinuation { done in Thread { done.resume(returning: loop.next()) }.start() } }
         try await Task.sleep(nanoseconds: 100_000_000)
 
         loop.stop()
