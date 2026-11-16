@@ -881,6 +881,134 @@ final class RemoteCatalogActionsTests {
         #expect(row.initialCommand == "attach box agterm-\(panes[0].uuidString)")
     }
 
+    private func rowWithHeldSplit() -> CatalogSession {
+        var row = session(sessionID, panes: panes)
+        row.panes[1] = splitPane(held: true)
+        return row
+    }
+
+    private func reopenReply() {
+        queue(answering { $0.recentOpen = ControlRecentOpen(item: self.recentItem([self.sessionID]), window: UUID().uuidString, complete: true) })
+    }
+
+    @Test func aReopenedRowWhoseSplitStartsHeldTakesItsLeadOnceItRunsReplyFirst() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+        let whileHeld = store.session(withID: sessionID)?.splitInitialCommand
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        let row = try #require(store.session(withID: sessionID))
+        #expect(whileHeld == RemoteSession.endedCommand(host: "box"))
+        #expect(row.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+        #expect(row.splitInitialCommand == "attach box agterm-\(panes[1].uuidString) claim")
+    }
+
+    @Test func aReopenedRowWhoseSplitStartsHeldTakesItsLeadOnceItRunsDeltaFirst() async throws {
+        installMac(snapshot(sessions: []))
+        queue(answering { $0.recentOpen = ControlRecentOpen(item: self.recentItem([self.sessionID]), window: UUID().uuidString, complete: true) },
+              before: { [unowned self] in
+                  _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+              })
+
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString) claim")
+    }
+
+    @Test func aHeldPaneRemovedBeforeItRunsLosesItsClaim() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneRemoved(panes[1], session: sessionID)))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 3, change: .paneAdded(splitPane(held: false), session: sessionID)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString)")
+    }
+
+    @Test func aReplyBetweenAPaneRunningAndItsRowGoingLiveStillTakesTheLead() async throws {
+        installMac(snapshot(sessions: []))
+        var ended = session(sessionID, panes: [panes[0]])
+        ended.fields.lifecycle = .ended
+        ended.panes[0].held = true
+        queue(answering { $0.recentOpen = ControlRecentOpen(item: self.recentItem([self.sessionID]), window: UUID().uuidString, complete: true) },
+              before: { [unowned self] in
+                  _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(ended, workspace: workspaceID, index: 0)))
+                  var running = ended.panes[0]
+                  running.held = nil
+                  _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(running, session: sessionID)))
+              })
+
+        _ = await send(.reopenRecent(nil))
+        var live = ended.fields
+        live.lifecycle = .live
+        _ = mirror.receive(.delta(epoch: "e1", rev: 3, change: .sessionChanged(live)))
+
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
+    @Test func aClaimedRowArrivingEndedTakesTheLeadOnceItGoesLive() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+        _ = await send(.reopenRecent(nil))
+        var ended = session(sessionID, panes: [panes[0]])
+        ended.fields.lifecycle = .ended
+        ended.panes[0].held = true
+
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(ended, workspace: workspaceID, index: 0)))
+        var running = ended.panes[0]
+        running.held = nil
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(running, session: sessionID)))
+        var live = ended.fields
+        live.lifecycle = .live
+        _ = mirror.receive(.delta(epoch: "e1", rev: 3, change: .sessionChanged(live)))
+
+        #expect(store.session(withID: sessionID)?.initialCommand == "attach box agterm-\(panes[0].uuidString) claim")
+    }
+
+    @Test func aRowRemovedWhileAPaneIsHeldClaimsNothingWhenTheOriginBringsItBack() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .sessionRemoved(sessionID)))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 3, change: .sessionAdded(session(sessionID, panes: panes), workspace: workspaceID, index: 0)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString)")
+    }
+
+    @Test func aRowDetachedWhileAPaneIsHeldClaimsNothingOnceReattached() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+
+        mirror.detach(sessions: [sessionID])
+        _ = mirror.reattach(session: sessionID)
+        _ = mirror.receive(.delta(epoch: "e1", rev: 2, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString)")
+    }
+
+    @Test func aNewStreamDropsTheClaimOfAPaneStillHeld() async throws {
+        installMac(snapshot(sessions: []))
+        reopenReply()
+        _ = await send(.reopenRecent(nil))
+        _ = mirror.receive(.delta(epoch: "e1", rev: 1, change: .sessionAdded(rowWithHeldSplit(), workspace: workspaceID, index: 0)))
+
+        mirror.subscribing()
+        install(snapshot(epoch: "e2", sessions: [rowWithHeldSplit()]))
+        _ = mirror.receive(.delta(epoch: "e2", rev: 1, change: .paneChanged(splitPane(held: false), session: sessionID)))
+
+        #expect(store.session(withID: sessionID)?.splitInitialCommand == "attach box agterm-\(panes[1].uuidString)")
+    }
+
     @Test func showingASplitThatAlreadyRunsClaimsNothing() async throws {
         let row = session(sessionID, panes: panes)
         installMac(snapshot(sessions: [row]))

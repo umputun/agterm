@@ -92,6 +92,8 @@ public final class RemoteCatalogMirror {
     private var pendingClaims: Set<UUID> = []
     /// pendingSplitClaims are rows whose split this Mac added, until the catalog brings the split.
     private var pendingSplitClaims: Set<UUID> = []
+    /// pendingPaneClaims are the panes of rows this Mac claimed that could not attach yet, by row, until each can.
+    private var pendingPaneClaims: [UUID: Set<UUID>] = [:]
 
     public init(host: String, store: AppStore, effects: any RemoteCatalogEffects, viewState: RemoteWindowViewState,
                 pool: SshConnectionPool? = nil, originWindow: UUID? = nil, claimOnOpen: Bool = false) {
@@ -193,7 +195,24 @@ public final class RemoteCatalogMirror {
             pendingClaims.insert(id)
             return
         }
-        store.claimCatalogLead(row, panes: entry.panes, host: host, effects: effects)
+        store.claimCatalogLead(row, panes: entry.panes.filter { AppStore.attachable($0, in: entry.fields) }, host: host, effects: effects)
+        awaitUnattachedPanes(of: entry)
+    }
+
+    // a pane still starting, or one whose row has not gone live, takes a claim only once the reconcile attaches it
+    private func awaitUnattachedPanes(of entry: CatalogSession) {
+        let waiting = Set(entry.panes.filter { !AppStore.attachable($0, in: entry.fields) }.map(\.identity))
+        if !waiting.isEmpty { pendingPaneClaims[entry.fields.id, default: []].formUnion(waiting) }
+    }
+
+    private func claimPendingPanes(_ id: UUID) {
+        guard let waiting = pendingPaneClaims[id], let store, let effects, let row = store.session(withID: id),
+              let entry = catalog?.session(id) else { return }
+        let listed = entry.panes.filter { waiting.contains($0.identity) }
+        let ready = listed.filter { AppStore.attachable($0, in: entry.fields) }
+        let still = Set(listed.map(\.identity)).subtracting(ready.map(\.identity))
+        pendingPaneClaims[id] = still.isEmpty ? nil : still
+        if !ready.isEmpty { store.claimCatalogLead(row, panes: ready, host: host, effects: effects) }
     }
 
     /// claimSplitWhenShown takes the lead of the split this Mac added to row `id` on a Mac origin, now or once the
@@ -217,6 +236,7 @@ public final class RemoteCatalogMirror {
     public func subscribing() {
         pendingClaims.removeAll()
         pendingSplitClaims.removeAll()
+        pendingPaneClaims.removeAll()
         guard !isRefused else { return }
         needsSnapshot = false
         chunks = CatalogChunks()
@@ -349,10 +369,12 @@ public final class RemoteCatalogMirror {
                         effects.catalogPaneNeedsAttach(pane, session: local.id)
                     }
                     if pendingSplitClaims.contains(local.id) { claimPendingSplit(local.id) }
+                    claimPendingPanes(local.id)
                     continue
                 }
                 let claim = originIsMac && (pendingClaims.remove(session.id) != nil || claimingAll)
                 let row = store.insertCatalogSession(session, workspace: workspace.id, at: index, context: context, claim: claim)
+                if claim { awaitUnattachedPanes(of: session) }
                 if let kept = store.catalogHiddenViews.removeValue(forKey: row.id) { kept.apply(to: row) } else { viewState.apply(to: row) }
                 if row.presentsCatalog { effects.catalogRowAdded(row) }
             }
@@ -364,6 +386,8 @@ public final class RemoteCatalogMirror {
         selectRow()
         // a pane the catalog dropped gives its channel back; the attaches above leased the ones it lists
         let sessions = shown.flatMap(\.sessions)
+        let listed = Set(sessions.map(\.fields.id))
+        pendingPaneClaims = pendingPaneClaims.filter { listed.contains($0.key) }
         let panes = (sessions.flatMap(\.panes) + sessions.compactMap(\.fields.scratch?.pane)).map { "pane:\($0.identity)" }
         pool?.retain(Set(panes), prefix: "pane:")
     }

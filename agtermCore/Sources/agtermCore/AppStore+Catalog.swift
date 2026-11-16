@@ -329,7 +329,7 @@ extension AppStore {
             : RemoteSession.endedCommand(host: context.host)
     }
 
-    private static func attachable(_ pane: CatalogPane, in fields: CatalogSessionFields) -> Bool {
+    static func attachable(_ pane: CatalogPane, in fields: CatalogSessionFields) -> Bool {
         fields.lifecycle == .live && pane.held != true
     }
 
