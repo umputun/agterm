@@ -171,14 +171,19 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 - Create: `agtermCore/Sources/agtermCore/UpdateFlow.swift`, `agtermCore/Tests/agtermCoreTests/UpdateFlowTests.swift`
 - Modify: `agtermCore/Sources/agtermCore/QuitPrompt.swift`, `agtermCore/Tests/agtermCoreTests/QuitPromptTests.swift`,
   `agterm/UpdateController.swift`, `agterm/AppDelegate.swift`
+- ➕ Create: `agtermCore/Sources/agtermCore/WindowLibrary+Restart.swift`, `agtermCore/Tests/agtermCoreTests/WindowLibraryRestartTests.swift`
+- ➕ Modify: `agtermCore/Sources/agtermCore/ControlResolve.swift`, `agtermCore/Tests/agtermCoreTests/ControlResolveTests.swift`,
+  `agterm/agtermApp.swift`, `.claude/rules/windows.md`, `agtermTests/AppDelegateCaptureTests.swift` (unused-binding warning)
 
-- [ ] confirm in the pinned Sparkle sources the set and clear callbacks named in Solution Overview, and what Later leaves
+- [x] confirm in the pinned Sparkle sources the set and clear callbacks named in Solution Overview, and what Later leaves
       pending; correct this plan if they differ
-- [ ] confirm how attached-Mac and agterm-server windows come back after a relaunch, for their wording line
-- [ ] `UpdateFlow` quit state and `QuitPrompt.restartMessage`; `applicationShouldTerminate` asks `UpdateFlow` after its guards
-- [ ] `UpdateFlowTests`: update quit gets the update alert, Later cancels, a retry after Later gets it again, an ordinary quit
+- [x] confirm how attached-Mac and agterm-server windows come back after a relaunch, for their wording line
+- [x] `UpdateFlow` quit state and `QuitPrompt.restartMessage`; `applicationShouldTerminate` asks `UpdateFlow` after its guards
+- [x] `UpdateFlowTests`: update quit gets the update alert, Later cancels, a retry after Later gets it again, an ordinary quit
       after the session ends gets "Quit Agterm?"; `QuitPromptTests`: every wording case
-- [ ] run the task's tests
+- [x] run the task's tests
+- [x] ➕ `WindowLibrary.restartCounts` counts this Mac's terminal rows (pages excluded) and flags rows from other hosts;
+      `ControlResolve.isCustomStateDirectory` decides the AGTERM_STATE_DIR line (codex review)
 
 ### Task 4: Title-bar update icon
 

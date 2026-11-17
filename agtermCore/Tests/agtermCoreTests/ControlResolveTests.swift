@@ -7,6 +7,17 @@ struct ControlResolveTests {
     private let b = UUID(uuidString: "9FABBBBB-0000-0000-0000-000000000002")!
     private let c = UUID(uuidString: "1234CCCC-0000-0000-0000-000000000003")!
 
+    @Test(arguments: [
+        ([String: String](), false),
+        (["HOME": "/Users/u", "AGTERM_STATE_DIR": ""], false),
+        (["HOME": "/Users/u", "AGTERM_STATE_DIR": "/Users/u/Library/Application Support/agterm"], false),
+        (["HOME": "/Users/u", "AGTERM_STATE_DIR": "/Users/u/Library/Application Support/agterm/"], false),
+        (["HOME": "/Users/u", "AGTERM_STATE_DIR": "/tmp/agt"], true),
+    ])
+    func isCustomStateDirectory(environment: [String: String], expected: Bool) {
+        #expect(ControlResolve.isCustomStateDirectory(environment: environment) == expected)
+    }
+
     @Test func activeResolvesToActiveID() {
         let result = ControlResolve.resolve("active", candidates: [a, b, c], active: b)
         #expect(result == .resolved(b))

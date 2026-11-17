@@ -93,6 +93,11 @@ session drag are out of scope.
   writes it with `AEPutAttributePtr`. Never switch that read to `paramDescriptor`.
   The GUI-only prompt is keep-in-sync exempt and manually verified.
 - The window-close sheet takes its text from `QuitPrompt.windowCloseMessage` under the same mode rule.
+- Sparkle's Install and Relaunch quits through the same path with no quit reason. After the system-quit and Live-reset
+  guards, `UpdateFlow.quitAlert` picks "Restart to update?" (Restart / Later) once `updaterWillRelaunchApplication` has
+  fired; the mark outlives Later, since Sparkle's retry does not announce again, and clears at the cycle's end or abort.
+  `QuitPrompt.restartMessage` words it from `WindowLibrary.restartCounts` (this Mac's terminal rows; pages excluded)
+  and says to reopen with the same `AGTERM_STATE_DIR` when one is set, since Sparkle's relaunch drops it.
 - A confirmed Live sessions reset (`LiveResetCoordinator.pending`) skips the quit alert, since its own
   dialog or `zmx.reset --force` was the confirmation. `AppDelegate.exitFlush` fixes the order: capture,
   finalize pending closes, then the CHECKED save; only a fully saved snapshot arms the marker and the

@@ -286,6 +286,7 @@ struct agtermApp: App {
                         appDelegate.settingsModel = settingsModel
                         appDelegate.liveResetMarkerStore = liveResetMarkerStore
                         appDelegate.liveReset = liveReset
+                        appDelegate.updates = updates
                         // hand the delegate the action hub and drain folders `open -a agterm /path` queued
                         // before the window store resolved.
                         appDelegate.actions = actions
