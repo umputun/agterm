@@ -3,7 +3,7 @@ import SwiftUI
 
 /// PaneLeadCover covers a pane whose zmx client does not lead, since its terminal is laid out for another
 /// client's grid. It stays mounted so the pane's ZStack keeps one shape (see `sessionDetail`). The cover
-/// takes hits and a click focuses the pane; the reconnect note draws uncovered too and never takes hits.
+/// takes hits and a click focuses the pane; the remote notice draws uncovered too and never takes hits.
 /// Every host of a pane's terminal, a Live scratch's included, mounts one directly over it, under any pane overlay.
 struct PaneLeadCover: View {
     let session: Session
@@ -38,9 +38,8 @@ struct PaneLeadCover: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("pane-lead-cover-\(pane.rawValue)")
             }
-            if !hidden, let overlayPane = OverlayPane(rawValue: pane.rawValue),
-               let reason = RemoteReconnectBook.shared.readback(pane: identity)?.reason {
-                RemoteReconnectNote(reason: reason, pane: overlayPane)
+            if !hidden, let notice = RemotePaneNotice.Kind(identity: identity, host: session.remoteHost) {
+                RemotePaneNotice(kind: notice, pane: pane, background: background, foreground: foreground)
             }
         }
         .contentShape(Rectangle())
@@ -64,26 +63,83 @@ struct PaneLeadCover: View {
     }
 }
 
-/// RemoteReconnectNote shows what ssh said on the last failed probe, never the outcome of the attach that
-/// follows a probe that answered.
-struct RemoteReconnectNote: View {
-    let reason: String
-    let pane: OverlayPane
+/// RemotePaneNotice is the panel over a remote pane whose attach ended: one waiting to reconnect, or one whose
+/// session ended on its origin. The key it names is the pane's own, so the panel never takes hits.
+struct RemotePaneNotice: View {
+    enum Kind: Equatable {
+        /// reason is what ssh said on the last failed probe, never the outcome of the attach that follows.
+        case reconnecting(host: String, reason: String?)
+        case ended(name: String, host: String)
+
+        @MainActor
+        init?(identity: UUID?, host: String?) {
+            if let host, RemoteReconnectBook.shared.waiting(pane: identity) {
+                self = .reconnecting(host: host, reason: RemoteReconnectBook.shared.readback(pane: identity)?.reason)
+            } else if let ended = RemoteEndBook.shared.notice(pane: identity) {
+                self = .ended(name: ended.name, host: ended.host)
+            } else {
+                return nil
+            }
+        }
+    }
+
+    let kind: Kind
+    let pane: StatusPane
+    let background: Color
+    let foreground: Color
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack {
             Spacer(minLength: 0)
-            Text(verbatim: "ssh: \(reason)")
-                .font(.system(size: 12, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .foregroundStyle(.black)
-                .background(Color.yellow)
-                .accessibilityIdentifier("remote-reconnect-note-\(pane.rawValue)")
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 18, weight: .light))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(verbatim: title)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(verbatim: hint)
+                        .font(.system(size: 12))
+                        .opacity(0.7)
+                    if case .reconnecting(_, let reason?) = kind {
+                        Text(verbatim: "ssh: \(reason)")
+                            .font(.system(size: 11, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .opacity(0.7)
+                    }
+                }
+            }
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(background.opacity(0.94), in: .rect(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(foreground.opacity(0.2)))
+            .shadow(color: .black.opacity(0.25), radius: 8, y: 2)
+            .padding(16)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("remote-pane-notice-\(pane.rawValue)")
         }
         .allowsHitTesting(false)
+    }
+
+    private var symbol: String {
+        switch kind {
+        case .reconnecting: "wifi.exclamationmark"
+        case .ended: "xmark.circle"
+        }
+    }
+
+    private var title: String {
+        switch kind {
+        case .reconnecting(let host, _): "Connection to \(host) lost"
+        case .ended(let name, let host): "\(name) on \(host) ended"
+        }
+    }
+
+    private var hint: String {
+        switch kind {
+        case .reconnecting: "Reconnecting… · any key retries now"
+        case .ended: "Any key closes"
+        }
     }
 }

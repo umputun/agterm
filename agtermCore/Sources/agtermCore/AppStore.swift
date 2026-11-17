@@ -398,7 +398,7 @@ public final class AppStore {
                                               visible: surface.isVisible(in: session),
                                               backedByZmx: session.zmxBacking(for: surface),
                                               lead: ZmxLeadBook.shared.role(pane: pane),
-                                              reconnect: RemoteReconnectBook.shared.readback(pane: pane),
+                                              reconnect: RemoteReconnectBook.shared.readback(pane: pane), attachEnded: attachEnded(pane),
                                               paneID: token?.isEmpty == false ? token : nil,
                                               pendingMessages: pendingMessages(session, pane: pane, token: token),
                                               remote: remotelyPresented(session, pane: pane))

@@ -75,13 +75,8 @@ extension AppStore {
         guard let shown = layout.scratchShown else { return }
         let identity = layout.scratch
         if session.scratchDaemon?.identity != identity || (identity == nil && session.scratchSurface != nil) {
-            // between two attaches there is no surface to close, and what the old scratch owned still goes
-            if !closeScratch(session.id), session.scratchActive { toggleScratch(session.id) }
-            if let current = session.scratchDaemon { releaseScratchOwnedState(of: session, token: current.identity.uuidString) }
-            session.scratchCommand = nil
+            dropOriginScratch(of: session)
             session.scratchDaemon = identity.map { Session.ScratchDaemon(identity: $0, shown: shown) }
-            session.originScratchClient = nil
-            scheduleTreeChanged()
         }
         guard let identity else { return }
         session.scratchDaemon?.shown = shown
@@ -91,6 +86,18 @@ extension AppStore {
             session.scratchCommand = attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client)
         }
         if session.scratchActive != shown { toggleScratch(session.id) }
+    }
+
+    /// dropOriginScratch closes a row's origin scratch, parked or running, and ends its wait to reconnect.
+    private func dropOriginScratch(of session: Session) {
+        if let client = session.scratchClientIdentity { RemoteReconnectBook.shared.cancel(pane: client) }
+        // between two attaches there is no surface to close, and what the old scratch owned still goes
+        if !closeScratch(session.id), session.scratchActive { toggleScratch(session.id) }
+        if let current = session.scratchDaemon { releaseScratchOwnedState(of: session, token: current.identity.uuidString) }
+        session.scratchCommand = nil
+        session.scratchDaemon = nil
+        session.originScratchClient = nil
+        scheduleTreeChanged()
     }
 
     /// originScratchStopped marks row `id`'s origin scratch attach as ended while the saved layout still lists that
@@ -122,6 +129,7 @@ extension AppStore {
         session.remotePresentation?.originEnded = true
         session.remoteConnectionRevision += 1
         withdrawRemoteReplicas(of: session)
+        if session.scratchFollowsOrigin, session.scratchDaemon != nil { dropOriginScratch(of: session) }
         return [session.splitPaneIdentity, session.paneIdentity].compactMap { $0 }.filter {
             canCloseRemovedRemotePane($0, forSession: id)
         }

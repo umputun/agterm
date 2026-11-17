@@ -56,6 +56,8 @@ public struct RemotePresentationEffects {
     public var leads: @MainActor () -> Set<UUID>
     /// ended reports the origin removed the session for good; the client has stopped and never reconnects.
     public var ended: @MainActor () -> Void
+    /// acked reports the origin's answer to `RemotePresentationClient.ping`.
+    public var acked: @MainActor () -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -84,6 +86,7 @@ public struct RemotePresentationEffects {
                 mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
                 leads: @escaping @MainActor () -> Set<UUID> = { [] },
                 ended: @escaping @MainActor () -> Void = {},
+                acked: @escaping @MainActor () -> Void = {},
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -111,6 +114,7 @@ public struct RemotePresentationEffects {
         self.mail = mail
         self.leads = leads
         self.ended = ended
+        self.acked = acked
         self.warn = warn
     }
 }
@@ -211,6 +215,15 @@ public final class RemotePresentationClient {
     public func answer(_ body: PresentationFrame.Body) {
         guard let link else { return }
         send(body, on: link)
+    }
+
+    /// ping asks the origin for an `ack`, which reaches `acked` behind every frame the origin queued before it.
+    /// False with no link.
+    @discardableResult
+    public func ping() -> Bool {
+        guard let link else { return false }
+        send(.ping, on: link)
+        return true
     }
 
     /// Reconnects when a retry is due and drops a link that has gone quiet.
@@ -322,7 +335,8 @@ public final class RemotePresentationClient {
                 default: apply(entry, on: link)
                 }
             }
-        case .ack, .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
+        case .ack: effects.acked()
+        case .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
              .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break

@@ -168,16 +168,12 @@ public enum RemoteSession {
             + " && ka='-o ServerAliveInterval=5 -o ServerAliveCountMax=2'"
     }
 
-    /// The pane's command: the attach, then one line saying what died. `commandWait` holds the pane on
-    /// Ghostty's own press-any-key prompt, so this sits under the last remote screen until it is read.
+    /// attachPaneCommand is the pane's command: the attach, then `paneModeReset`, exiting with SSH's status. It prints no notice: the
+    /// app draws one over the kept remote screen. `session` and `pane` are kept for the agterm-linux fork's callers.
     ///
-    /// It names the host, the session and the exit status. On ssh's own failure, 255, it shows a reconnecting
-    /// bar, reports that under `RemoteLinkNotice` and waits on `cat` for the app to attach the pane again;
-    /// `cat` ends with the app's pty. The mouse and focus reporting a remote program left on is switched off
-    /// first, or those reports would echo onto the kept screen, and echo goes with the cursor: a paste or a
-    /// wheel scroll would otherwise print under the bar, and Ghostty draws its password lock in place of the
-    /// cursor while echo is off. `linkNonce` gives an attach that takes no lead the same wait. Without either nonce,
-    /// the wrapper exits with SSH's status.
+    /// On ssh's own failure, 255, an attach with a lead or `linkNonce` reports that under `RemoteLinkNotice` and waits
+    /// on `cat` for the app to attach the pane again; `cat` ends with the app's pty. Echo goes off with the cursor, as
+    /// Ghostty draws its password lock in place of the cursor while echo is off.
     public static func attachPaneCommand(host: String, endpoint: ControlZmxEndpoint, daemon: String,
                                          session: String, pane: ZmxPaneRole,
                                          lead: ZmxLeadAttachment? = nil, linkNonce: String? = nil,
@@ -188,28 +184,27 @@ public enum RemoteSession {
         let keepAlive = keepAliveCheck(Array(argv.dropFirst()))
         let attach = CommandRestore.shellQuotedLine(Array(argv.dropLast(2))) + " $ka "
             + CommandRestore.shellQuotedLine(Array(argv.suffix(2)))
-        let label = CommandRestore.shellQuotedLine(
-            ["agterm: \(session) (\(pane.rawValue)) on \(host) disconnected, exit"])
-        // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a
-        // clean one to anything that looks at the exit code
-        let report = "printf '%s %s\\n' \(label) \"$status\""
         // a pooled pane waits for its master; one that never came up is a lost connection, so 255
         let run = controlPath == nil ? "\(attach); status=$?"
             : "if agterm_connection_wait; then \(attach); status=$?; else status=255; fi"
         let prelude = controlPath.map { connectionWait(host: host, controlPath: $0) + "; " } ?? ""
-        var script = "\(prelude)\(keepAlive); \(run); \(report); exit \"$status\""
+        var wait = ""
         if let nonce = lead?.nonce ?? linkNonce {
-            let bar = CommandRestore.shellQuotedLine(["Connection to \(host) lost · reconnecting… · any key retries now"])
             let title = CommandRestore.shellQuotedLine([RemoteLinkNotice.title(nonce: nonce)])
-            let reset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l\\033[?2031l\\033[?2048l"
-            script = "\(prelude)\(keepAlive); \(run); if [ \"$status\" -eq 255 ]; then "
-                + "printf '\(reset)\\r\\n\\033[30;43m %s \\033[K\\033[0m\\n' \(bar); printf '\\033]2;%s\\007' \(title); "
-                + "printf '\\033[?25l'; stty -echo 2>/dev/null; cat >/dev/null; else \(report); fi; exit \"$status\""
+            wait = "if [ \"$status\" -eq 255 ]; then printf '\\033]2;%s\\007' \(title); printf '\\033[?25l'; "
+                + "stty -echo 2>/dev/null; cat >/dev/null; fi; "
         }
+        // the pane must exit with SSH's status, not printf's zero, or a failed connection reads as a clean one
+        let script = "\(prelude)\(keepAlive); \(run); printf '\(paneModeReset)'; \(wait)exit \"$status\""
         // libghostty runs this as `exec -l <command>`: bare, the exec replaces the shell with ssh and nothing
         // after it runs. `env` takes the exec instead, and a plain `sh` beneath it reads no login profile.
         return CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c", script])
     }
+
+    /// paneModeReset is what the wrapper prints once the attach ends: a remote program's mouse and focus reports would
+    /// echo onto the kept screen, and its kitty flags (`=0u`) let a bare modifier close a held pane.
+    public static let paneModeReset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l"
+        + "\\033[?2031l\\033[?2048l\\033[=0u"
 
     /// One ssh invocation that only proves the host answers again, before a waiting pane is attached anew.
     public static func probeCommand(host: String, controlPath: String? = nil) throws -> [String] {

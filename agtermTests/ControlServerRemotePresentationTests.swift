@@ -285,6 +285,126 @@ final class ControlServerRemotePresentationTests: XCTestCase {
 
     private static let offerKinds = ["status", PresentationHub.offerIdentityKind]
 
+    private func heldExitRow(connect: Bool, kinds: [String] = ["status", PresentationHub.endedKind], realized: Bool = false) throws
+        -> (fix: (server: ControlServer, store: AppStore, session: Session), view: GhosttySurfaceView, transport: Transport) {
+        let fix = try fixture()
+        let pane = fix.session.paneIdentity
+        fix.store.bindRemote(RemoteBinding(remoteSessionID: "s1", daemonsByLocalPane: [pane: ZmxSupport.daemonName(for: UUID())],
+                                           presentationVersion: 1), forSession: fix.session.id)
+        let services = agtermApp.SurfaceServices(library: fix.server.library, actions: AppActions(library: fix.server.library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+        let view = agtermApp.makeSurface(for: fix.session, store: fix.store, env: [:], services: services)
+        fix.session.surface = view
+        if realized {
+            let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 480, height: 320), styleMask: [],
+                                  backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = view
+            addTeardownBlock { window.orderOut(nil) }
+            XCTAssertTrue(view.isRealized)
+        }
+        PaneLead.heldExit = { [weak server = fix.server] in server?.remotePaneHeld($0) }
+        addTeardownBlock {
+            PaneLead.heldExit = nil
+            RemoteEndBook.shared.clear(session: fix.session.id)
+        }
+        let transport = Transport()
+        fix.server.remoteTransport = transport
+        if connect {
+            fix.server.startRemotePresentation(for: fix.session)
+            try transport.feed(.hello(PresentationHello(version: 1, kinds: kinds, mode: .mirror)), rev: 0)
+            try transport.feed(.snapshot(PresentationSnapshot(status: nil, hud: nil)), rev: 1)
+        }
+        return (fix, view, transport)
+    }
+
+    private func attachEnded(_ fix: (server: ControlServer, store: AppStore, session: Session)) -> Bool? {
+        fix.store.controlTree(paneForeground: { _ in nil }).workspaces.flatMap(\.sessions)
+            .first { $0.id == fix.session.id.uuidString }?.surfaces?.first { $0.kind == "left" }?.attachEnded
+    }
+
+    func testAHeldExitWaitsForTheOriginAndAnEndedItQueuedFirstClosesTheRowUnseen() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        let pane = fix.session.paneIdentity
+        XCTAssertTrue(view.consumesHeldExit)
+
+        try XCTUnwrap(view.onExitHeld)()
+
+        XCTAssertTrue(RemoteEndBook.shared.settling(session: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: pane))
+        XCTAssertNil(attachEnded(fix))
+        XCTAssertEqual(transport.links.last?.sent.last, .ping)
+
+        try transport.feed(.ended, rev: 2)
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[pane])
+    }
+
+    func testAnAckAfterAHeldExitShowsTheEndedNoticeAndALateEndedStillClosesTheRow() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        let pane = fix.session.paneIdentity
+        try XCTUnwrap(view.onExitHeld)()
+
+        try transport.feed(.ack, rev: 2)
+
+        XCTAssertEqual(RemoteEndBook.shared.notice(pane: pane)?.host, "buildbox")
+        XCTAssertEqual(RemoteEndBook.shared.notice(pane: pane)?.name, fix.session.displayName)
+        XCTAssertEqual(attachEnded(fix), true)
+        XCTAssertNil(fix.session.hudSpec, "the session HUD slot is untouched")
+
+        try transport.feed(.ended, rev: 3)
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[pane])
+    }
+
+    func testALinkThatFailsBeforeTheOriginAnswersShowsTheEndedNotice() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true)
+        try XCTUnwrap(view.onExitHeld)()
+
+        transport.deliver.last?(Data("not a frame".utf8))
+
+        XCTAssertNotNil(RemoteEndBook.shared.notice(pane: fix.session.paneIdentity))
+        XCTAssertNotNil(fix.store.session(withID: fix.session.id))
+    }
+
+    func testAHeldExitShowsTheNoticeAtOnceWithTheStreamDownOrAnOriginThatNeverSendsEnded() throws {
+        for connect in [false, true] {
+            let (fix, view, transport) = try heldExitRow(connect: connect, kinds: ["status"])
+
+            try XCTUnwrap(view.onExitHeld)()
+
+            XCTAssertNotNil(RemoteEndBook.shared.notice(pane: fix.session.paneIdentity), "connected: \(connect)")
+            XCTAssertFalse(transport.links.last?.sent.contains(.ping) == true)
+        }
+    }
+
+    func testAnEndedRowsHeldExitShowsNoNotice() throws {
+        let (fix, view, transport) = try heldExitRow(connect: true, realized: true)
+        try transport.feed(.ended, rev: 2)
+        XCTAssertNotNil(fix.store.session(withID: fix.session.id), "the last replica waits for its exit")
+
+        try XCTUnwrap(view.onExitHeld)()
+
+        XCTAssertNil(fix.store.session(withID: fix.session.id))
+        XCTAssertNil(RemoteEndBook.shared.entries[fix.session.paneIdentity])
+    }
+
+    func testAFreshAttachOnTheSamePaneDropsTheEndedNotice() throws {
+        let (fix, view, _) = try heldExitRow(connect: false)
+        try XCTUnwrap(view.onExitHeld)()
+        XCTAssertEqual(attachEnded(fix), true)
+
+        let services = agtermApp.SurfaceServices(library: fix.server.library, actions: AppActions(library: fix.server.library),
+                                                 zmxForegroundResolver: nil, spawnRegistry: nil,
+                                                 launchContext: agtermApp.LaunchSpawnContext())
+        fix.session.surface = agtermApp.makeSurface(for: fix.session, store: fix.store, env: [:], services: services)
+
+        XCTAssertNil(attachEnded(fix))
+    }
+
     func testAClearOfABridgedStatusReachesOnlyAnOriginThatTakesIt() throws {
         for (kinds, expected) in [([PresentationHub.statusClearKind], true), (["status"], false)] {
             let fix = try fixture()

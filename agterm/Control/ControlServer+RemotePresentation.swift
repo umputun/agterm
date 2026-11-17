@@ -48,7 +48,24 @@ extension ControlServer {
         return true
     }
 
+    /// noteRemotePaneEnded shows the ended notice over a remote pane whose attach ended. A stream up to an origin
+    /// that sends `ended` is pinged first: an `ended` the origin queued ahead of its answer closes the row unseen.
+    func noteRemotePaneEnded(_ pane: UUID, in session: Session) {
+        guard heldSession(session.id) === session, let host = session.remoteHost, !session.ended,
+              let state = session.remotePresentation, !state.originEnded, state.binding.daemonsByPane[pane] != nil
+        else { return }
+        let book = RemoteEndBook.shared
+        if !state.binding.catalogOwned, let client = remoteClients[session.id],
+           client.originSupports(PresentationHub.endedKind), client.ping() {
+            book.settle(pane: pane, session: session.id, host: host, name: session.displayName)
+        } else {
+            book.show(pane: pane, session: session.id, host: host, name: session.displayName)
+        }
+    }
+
     func stopRemotePresentation(_ id: UUID) {
+        // nothing will answer a pending ping now, so its notice shows
+        RemoteEndBook.shared.resolved(session: id)
         remoteClients.removeValue(forKey: id)?.stop()
         linkForwards.release(row: id)
         catalogPool(forSession: id)?.release("present:\(id)")
@@ -89,6 +106,7 @@ extension ControlServer {
                                                 origin: .mirrored)
             },
             connection: { [weak self] connection in
+                if case .failed = connection { RemoteEndBook.shared.resolved(session: id) }
                 self?.library.store(forSession: id)?.setRemoteConnection(connection, forSession: id)
             },
             context: { [weak self] context in
@@ -129,9 +147,11 @@ extension ControlServer {
             ended: { [weak self] in
                 guard let self else { return }
                 stopRemotePresentation(id)
+                RemoteEndBook.shared.clear(session: id)
                 guard let store = library.store(forSession: id) else { return }
                 agtermApp.closeEndedRemoteRow(store: store, sessionID: id, library: library)
             },
+            acked: { RemoteEndBook.shared.resolved(session: id) },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")
             })

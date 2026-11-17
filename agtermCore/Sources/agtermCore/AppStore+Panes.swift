@@ -31,7 +31,10 @@ extension AppStore {
         endPresentations(of: sessions.map(\.id))
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
-            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
+            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach {
+                ZmxLeadBook.shared.forget(pane: $0)
+                RemoteEndBook.shared.clear(pane: $0)
+            }
         }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
@@ -244,6 +247,7 @@ extension AppStore {
         if let split = session.splitPaneIdentity {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
+            RemoteEndBook.shared.clear(pane: split)
             MessageBus.shared.dispose(pane: split)
             session.daemonBackedPanes.remove(split)
         }
@@ -321,6 +325,7 @@ extension AppStore {
         session.splitSurface = nil
         session.daemonBackedPanes.remove(session.paneIdentity)
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
+        RemoteEndBook.shared.clear(pane: session.paneIdentity)
         MessageBus.shared.dispose(pane: session.paneIdentity)
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
         dropPaneBackground(.left, of: session)

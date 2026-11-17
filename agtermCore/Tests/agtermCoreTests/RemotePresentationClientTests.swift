@@ -58,6 +58,7 @@ struct RemotePresentationClientTests {
         var warnings: [String] = []
         var leads: Set<UUID> = []
         var ends = 0
+        var acks = 0
     }
 
     final class Clock { var now = Date(timeIntervalSince1970: 1_789_000_000) }
@@ -106,6 +107,7 @@ struct RemotePresentationClientTests {
             mail: { recorder.mails.append($0) },
             leads: { recorder.leads },
             ended: { recorder.ends += 1 },
+            acked: { recorder.acks += 1 },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -146,6 +148,20 @@ struct RemotePresentationClientTests {
         #expect(recorder.connections == reported)
         #expect(recorder.warnings.isEmpty)
         #expect(!client.originSupports("status"))
+    }
+
+    @Test func aPingGoesOnTheLinkAndItsAckReachesAcked() {
+        let client = makeClient()
+        #expect(!client.ping())
+        client.start()
+        connect(client)
+
+        #expect(client.ping())
+        transport.deliver(line(.ack, rev: 2))
+
+        #expect(transport.links[0].sent.last?.body == .ping)
+        #expect(recorder.acks == 1)
+        #expect(recorder.ends == 0)
     }
 
     @Test func startingLaunchesTheBridgeAndOpensWithHello() throws {

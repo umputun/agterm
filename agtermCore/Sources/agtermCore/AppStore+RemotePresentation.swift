@@ -325,6 +325,9 @@ extension AppStore {
         return true
     }
 
+    /// attachEnded is the `tree` read-back of a pane showing the ended notice, nil otherwise.
+    func attachEnded(_ pane: UUID?) -> Bool? { RemoteEndBook.shared.notice(pane: pane) != nil ? true : nil }
+
     /// The local role standing for one of the origin's panes, resolved at use so a swap or promotion on this
     /// side since the attach is honoured. Nil for a pane with no counterpart here.
     public func localPane(_ pane: PresentationPane?, in session: Session) -> OverlayPane? {

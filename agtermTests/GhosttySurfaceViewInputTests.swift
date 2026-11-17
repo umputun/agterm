@@ -913,6 +913,86 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         surface._markedRange = NSRange(location: NSNotFound, length: 0)
         XCTAssertEqual(surface.selectedRange(), NSRange(location: 0, length: 0))
     }
+
+    func testAConsumedHeldExitPrintsNothingAndAKeyStillClosesIt() {
+        for modes in ["", "\\033[>1u", "\\033[>31u", "\\033[2h"] {
+            let fixture = HeldExitFixture(leaving: modes)
+            defer { fixture.close() }
+            XCTAssertTrue(fixture.held, "modes \(modes)")
+            XCTAssertTrue(fixture.screen.contains("remote screen"), "modes \(modes): \(fixture.screen)")
+            XCTAssertFalse(fixture.screen.contains("Process exited"), "modes \(modes): \(fixture.screen)")
+
+            fixture.key("a", keyCode: 0)
+            fixture.wait { fixture.closed }
+
+            XCTAssertTrue(fixture.closed, "modes \(modes)")
+        }
+    }
+
+    func testABareModifierLeavesAConsumedHeldExitOpen() {
+        for modes in ["", "\\033[>31u"] {
+            let fixture = HeldExitFixture(leaving: modes)
+            defer { fixture.close() }
+
+            fixture.modifier(keyCode: 56, flags: .shift)
+            fixture.modifier(keyCode: 56, flags: [])
+            fixture.wait(within: 0.5) { fixture.closed }
+
+            XCTAssertFalse(fixture.closed, "modes \(modes)")
+        }
+    }
+}
+
+@MainActor
+private final class HeldExitFixture {
+    let surface: GhosttySurfaceView
+    private let window: NSWindow
+    private(set) var held = false
+    private(set) var closed = false
+
+    init(leaving modes: String) {
+        window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                          backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let script = "printf 'remote screen\(modes)'; sleep 0.4; printf '\(RemoteSession.paneModeReset)'; exit 3"
+        surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(),
+                                     command: CommandRestore.shellQuotedLine(["/usr/bin/env", "/bin/sh", "-c", script]),
+                                     waitAfterCommand: true)
+        surface.consumesHeldExit = true
+        surface.onExitHeld = { [unowned self] in held = true }
+        surface.onExit = { [unowned self] in closed = true }
+        surface.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(surface)
+        surface.createSurface()
+        XCTAssertTrue(surface.isRealized)
+        wait { self.held }
+    }
+
+    var screen: String { surface.readScreenText(all: false, lines: nil) ?? "" }
+
+    func key(_ characters: String, keyCode: UInt16) {
+        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                     windowNumber: window.windowNumber, context: nil, characters: characters,
+                                     charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode)
+        surface.keyDown(with: event!)
+    }
+
+    func modifier(keyCode: UInt16, flags: NSEvent.ModifierFlags) {
+        let event = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: flags, timestamp: 0,
+                                     windowNumber: window.windowNumber, context: nil, characters: "",
+                                     charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode)
+        surface.flagsChanged(with: event!)
+    }
+
+    func wait(within seconds: TimeInterval = 5, _ done: () -> Bool) {
+        let deadline = Date(timeIntervalSinceNow: seconds)
+        while !done(), Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+    }
+
+    func close() {
+        surface.teardown()
+        window.close()
+    }
 }
 
 @MainActor

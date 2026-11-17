@@ -104,8 +104,8 @@ along with everyone else and gain the reconnecting notice through the shared rec
    ended. `canCloseRemovedRemotePane` treats every mapped replica of an ended row as removed, so the existing
    join closes them: at once when already held, otherwise when ssh exits; the last replica still waits for its
    exit. Local replacements and a pending local split are kept by the existing guards. No viewer soft close.
-   The relaunch check closes the row (`closeSessionRow`, the row alone; each attached companion settles through its
-   own check) where it called `endAttachedRow`, and `endAttachedRow` goes. A saved attached (non-catalog) row with
+   The relaunch check closes the row (`closeEndedAttachedRow`, the row alone through `closeExactly`, its companions
+   moving to the top level and each settling through its own check) where it called `endAttachedRow`, and `endAttachedRow` goes. A saved attached (non-catalog) row with
    `ended=true`, written by #999 before this change, is not restored at all, so no old "Ended on HOST" row
    survives the upgrade. `RemoteSession.endedCommand` and `Session.ended` stay for catalog rows and agterm-server's
    headless rows, which keep their behavior.
@@ -137,7 +137,8 @@ along with everyone else and gain the reconnecting notice through the shared rec
 - Source check and admission: live row, then pending-close member, then the finalized set, in both hosts.
 - Viewer settle: a held non-255 exit with no removal known puts the pane in a pending-settle state that paints
   nothing; the client's next `ack`, `ended` or failure resolves it.
-- Viewer state: `RemotePresentationConnection` gains `ended`; `rowNotice` returns nil for it.
+- Viewer state: `RemotePresentationState.originEnded`, set by `AppStore.remoteSessionEnded`; the row notice is nil
+  while it is set. `RemotePresentationConnection` gains no case, since the agterm-linux fork switches over it.
 - Read-back: the pane surface node gains `attachEnded: true` next to `reconnect`, omitted otherwise (named apart from
   the session node's `ended`). A scratch has no ended state; its parked state already reads back through
   `reconnect`. No new event, so `EventFormatter.human` is unaffected.
@@ -203,31 +204,35 @@ along with everyone else and gain the reconnecting notice through the shared rec
 ### Task 3: Pane notices replace the printed text
 
 **Files:**
-- Modify: `agtermCore/Sources/agtermCore/RemoteSession.swift`
-- Modify: `agterm/Ghostty/GhosttyCallbacks.swift`, `agterm/Ghostty/GhosttySurfaceView.swift`, `agterm/agtermApp.swift`
-- Modify: `agterm/Views/PaneLeadCover.swift` (reconnecting notice for a scratch too), `agterm/agtermApp+Scratch.swift`
-  and the scratch host that mounts the cover (scratch stays on `onExit` → `remoteScratchStopped`)
-- Modify: `agtermCore/Sources/agtermCore/ControlProjection.swift` (`attachEnded`) and its producer
+- Modify: `agtermCore/Sources/agtermCore/RemoteSession.swift`, `RemoteReconnect.swift` (`RemoteEndBook`),
+  `RemotePresentationClient.swift` (`ping`, `acked`), `AppStore+RemoteLayout.swift` (origin scratch teardown),
+  `ControlProjection.swift` and `AppStore+RemotePresentation.swift` (`attachEnded`)
+- Modify: `agterm/Ghostty/GhosttyCallbacks.swift`, `agterm/Ghostty/GhosttySurfaceView.swift` (window section moved to
+  `GhosttySurfaceView+Window.swift` to stay under the line limit), `agterm/agtermApp.swift`
+- Modify: `agterm/Views/PaneLeadCover.swift`, `agterm/Control/ControlServer+RemotePresentation.swift`,
+  `agterm/Control/ControlServer+Respawn.swift`
 - Modify tests: `agtermCore/Tests/agtermCoreTests/RemoteSessionTests.swift`, `RemotePresentationClientTests.swift`,
-  `AppStoreTreeProjectionTests.swift`, `agtermTests/RemoteLayoutCloseTests.swift`, `agtermTests/PaneLeadTests.swift`
+  `RemoteReconnectTests.swift`, `agtermTests/GhosttySurfaceViewInputTests.swift`,
+  `agtermTests/ControlServerRemotePresentationTests.swift`, `agtermTests/ControlServerRemoteReconnectTests.swift`,
+  `agtermTests/PaneLeadCoverTests.swift`
 
-- [ ] probe first, in an isolated Debug instance: whether a key still closes a surface whose `SHOW_CHILD_EXITED`
-      the host consumed; the result picks the key path (Ghostty's own, or the notice routing the key to close)
-- [ ] failing tests: the wrapper prints no notice text on any status, still exits with ssh's status, still emits
+- [x] probe first: a hosted test with real key events showed a consumed held exit prints no Ghostty text and any
+      encoding key still closes it; a bare modifier closed it under kitty flags `>31u`, so the wrapper resets them
+- [x] failing tests: the wrapper prints no notice text on any status, still exits with ssh's status, still emits
       the title OSC, mode reset and 255 wait
-- [ ] wrapper: drop the label and the bar printf; consume `SHOW_CHILD_EXITED` for attached (non-catalog) remote
-      replica surfaces, keeping the held, respawn and removal bookkeeping
-- [ ] settle a held exit before painting: pending-settle state, client `ping` when the origin agreed `ended`,
-      resolve on `ended` (silent close), `ack` or failure (notice); paint at once otherwise; a later `ended` closes
-      a painted row; clear on reattach and removal; draw both notices in `PaneLeadCover` for left and right, and
-      the reconnecting notice for a parked origin scratch; show the rendered notices to Eugene in a Debug instance
-      before tests
-- [ ] tests: exit first then `ended` never paints (assert the state right after the exit, not only the final one);
-      `ended` first then exit paints nothing; exit then `ack` paints the ended notice; a late `ended` closes a
-      painted row; stream down or an origin without `ended` paints at once; a parked reconnect shows the reconnecting
-      notice on a pane and on a scratch parked through the real scratch factory and `onExit` path, which still
-      reattaches by itself; read-back `attachEnded`; the session HUD slot is untouched
-- [ ] run the scoped tests - must pass before task 4
+- [x] wrapper: drop the label and the bar printf on every path, catalog rows included; reset kitty flags with the
+      mouse and focus modes; consume `SHOW_CHILD_EXITED` for every remote pane, keeping the held, respawn and removal
+      bookkeeping
+- [x] settle a held exit before painting (`RemoteEndBook`): client `ping` when the origin agreed `ended`, resolved
+      by `ended` (silent close), `ack` or link failure (notice), with no clock of its own; paint at once otherwise;
+      a later `ended` closes a painted row; clear on reattach and removal; draw both notices in `PaneLeadCover`
+      for left, right and scratch; an ended row closes its origin scratch, parked or running. The live demo for
+      Eugene became an in-process render check (autopilot run, no one present)
+- [x] tests: exit first then `ended` never paints (state asserted right after the exit); `ended` first then exit
+      paints nothing; exit then `ack` paints the ended notice; a late `ended` closes a painted row; a link failure
+      paints; stream down or an origin without `ended` paints at once; the notice kinds read the reconnect and end
+      books; read-back `attachEnded`; the session HUD slot is untouched; the ended row's scratch closes in both orders
+- [x] run the scoped tests - must pass before task 4
 
 ### Task 4: Docs and gates
 

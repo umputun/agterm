@@ -508,6 +508,36 @@ final class ControlServerRemoteReconnectTests: XCTestCase {
         XCTAssertTrue(session.scratchActive)
     }
 
+    func testAnEndedRowClosesItsOriginScratchWhetherParkedOrRunning() throws {
+        for parked in [true, false] {
+            let workspace = try XCTUnwrap(store.currentWorkspaceID)
+            let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp", remoteHost: "mini"))
+            let primary = UUID()
+            let origin = RemoteBinding.Origin(host: "mini", endpoint: ControlZmxEndpoint(executable: "/a/zmx", socketDirectory: "/tmp/z"),
+                                              sessionName: "c")
+            store.bindRemote(RemoteBinding(remoteSessionID: "origin", daemonsByLocalPane: [session.paneIdentity: ZmxSupport.daemonName(for: primary)],
+                                           presentationVersion: 1, origin: origin), forSession: session.id)
+            let server = server(probe: 0)
+            store.applyRemoteLayout(PresentationLayout(panes: [primary], primary: primary, shown: false, scratch: UUID(), scratchShown: true),
+                                    forSession: session.id, attach: server)
+            let client = try XCTUnwrap(session.scratchClientIdentity)
+            defer { ZmxLeadBook.shared.forget(pane: client) }
+            let view = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), env: ["AGTERM_PANE_ID": client.uuidString],
+                                          backedByZmx: false)
+            view.watermarkSession = session
+            session.scratchSurface = view
+            if parked { XCTAssertTrue(server.remoteScratchStopped(view)) }
+
+            _ = store.remoteSessionEnded(forSession: session.id)
+
+            XCTAssertNil(session.scratchSurface, "parked: \(parked)")
+            XCTAssertTrue(view.isDestroyed, "parked: \(parked)")
+            XCTAssertFalse(session.scratchActive, "parked: \(parked)")
+            XCTAssertNil(session.scratchDaemon, "parked: \(parked)")
+            XCTAssertFalse(RemoteReconnectBook.shared.waiting(pane: client), "parked: \(parked)")
+        }
+    }
+
     func testAPaneAlreadyClosedWhenParkedIsNeverRegistered() throws {
         let (session, view) = try replica()
         let server = server(probe: 0)
