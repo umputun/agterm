@@ -29,6 +29,7 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         await MainActor.run {
             NSMenuItem.usesUserKeyEquivalents = savedUserKeyEquivalents
             GhosttyApp.shared.setFlaggedViewLayout(.flat)
+            GhosttyApp.shared.setAgentStatusColors(activeHex: nil, blockedHex: nil, completedHex: nil)
             window?.orderOut(nil)
             window = nil
             outline = nil
@@ -64,23 +65,58 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
         XCTAssertEqual(outline.level(forRow: try row(group.first.id)), outline.level(forRow: try row(group.parent.id)))
     }
 
-    func testFoldingAParentPersistsAndShowsTheCompanionsThatNeedAttention() throws {
+    func testFoldingAParentPersistsAndMarksItsCompanionsInTheMostUrgentStatusColor() throws {
         let group = try seed()
-        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.first.id)
+        group.store.setAgentIndicator(AgentIndicator(status: .completed), forSession: group.first.id)
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked, color: "#123456"), forSession: group.second.id)
         buildSidebar(for: group.store)
-        XCTAssertTrue(try XCTUnwrap(cell(group.parent.id).companionMarker).isHidden, "an open parent shows its companions")
+        XCTAssertTrue(try marker(group.parent.id).isHidden, "an open parent shows its companions")
 
         outline.collapseItem(try node(group.parent.id))
 
         XCTAssertFalse(group.parent.isExpanded)
-        let marker = try XCTUnwrap(cell(group.parent.id).companionMarker)
+        let marker = try marker(group.parent.id)
         XCTAssertFalse(marker.isHidden)
-        XCTAssertEqual(marker.accessibilityLabel(), "companions need attention: \(group.first.displayName)")
+        XCTAssertEqual(marker.contentTintColor, NSColor(agtermHex: "#123456"))
+        XCTAssertEqual(marker.accessibilityLabel(), "companions: second blocked, first completed")
 
         outline.expandItem(try node(group.parent.id))
 
         XCTAssertTrue(group.parent.isExpanded)
-        XCTAssertTrue(try XCTUnwrap(cell(group.parent.id).companionMarker).isHidden)
+        XCTAssertTrue(try self.marker(group.parent.id).isHidden)
+    }
+
+    func testAFoldedParentRetintsWhenAHiddenCompanionChangesStatus() throws {
+        let group = try seed()
+        group.store.setSessionExpanded(group.parent.id, expanded: false)
+        group.first.unseenCount = 2
+        buildSidebar(for: group.store)
+        XCTAssertTrue(try marker(group.parent.id).isHidden, "unread notifications alone leave no marker")
+
+        group.store.setAgentIndicator(AgentIndicator(status: .active), forSession: group.first.id)
+        coordinator.reconcile()
+        XCTAssertFalse(try marker(group.parent.id).isHidden)
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, GhosttyApp.shared.statusColor(for: .active))
+        XCTAssertEqual(try marker(group.parent.id).accessibilityLabel(), "companions: first active")
+
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.second.id)
+        coordinator.reconcile()
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, GhosttyApp.shared.statusColor(for: .blocked))
+        XCTAssertEqual(try marker(group.parent.id).accessibilityLabel(), "companions: second blocked, first active")
+    }
+
+    func testAStatusColorChangeInSettingsRetintsAFoldedParentsMarker() throws {
+        let group = try seed()
+        group.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: group.first.id)
+        group.store.setSessionExpanded(group.parent.id, expanded: false)
+        group.store.selectSession(group.after.id)
+        buildSidebar(for: group.store)
+
+        GhosttyApp.shared.setAgentStatusColors(activeHex: nil, blockedHex: "#abcdef", completedHex: nil)
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+
+        XCTAssertFalse(try marker(group.parent.id).isHidden)
+        XCTAssertEqual(try marker(group.parent.id).contentTintColor, NSColor(agtermHex: "#abcdef"))
     }
 
     func testAFoldedParentStaysFoldedAcrossARebuild() throws {
@@ -411,6 +447,10 @@ final class WorkspaceSidebarCompanionsTests: XCTestCase {
 
     private func cell(_ id: UUID) throws -> SidebarCellView {
         try XCTUnwrap(outline.view(atColumn: 0, row: try row(id), makeIfNecessary: true) as? SidebarCellView)
+    }
+
+    private func marker(_ id: UUID) throws -> NSImageView {
+        try XCTUnwrap(try cell(id).companionMarker)
     }
 
     private func buildSidebar(for store: AppStore) {

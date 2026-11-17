@@ -102,7 +102,7 @@ extension WorkspaceSidebar.Coordinator {
             let session = store.session(withID: node.id)
             // the row's value carries its name, so the companion role goes in the label
             field.setAccessibilityLabel(session?.parentID != nil ? "companion" : nil)
-            cell.setCompanionMarker(foldedAttention(forSession: node.id).map(\.displayName))
+            cell.setCompanionMarker(foldedAttention(forSession: node.id))
             applyBadge(toCell: cell, count: effectiveUnseen(session?.unseenCount ?? 0))
             cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
             // the split-rectangle icon (matching the toolbar split button) shows in BOTH modes so a split
@@ -280,7 +280,6 @@ extension WorkspaceSidebar.Coordinator {
             marker.translatesAutoresizingMaskIntoConstraints = false
             marker.image = NSImage(systemSymbolName: "square.stack.fill", accessibilityDescription: nil)?
                 .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .regular))
-            marker.contentTintColor = .controlAccentColor
             marker.setAccessibilityIdentifier("companion-marker")
             marker.isHidden = true
             cell.addSubview(marker)

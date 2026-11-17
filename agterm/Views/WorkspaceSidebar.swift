@@ -352,14 +352,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
             focusActiveTerminal()
         }
 
-        /// Re-apply the status glyph on every visible session row so a global agent-status color change
-        /// (from Settings) re-renders it. Appearance changes are rare, so the full sweep is cheap.
+        // global status colors are absent from RowContent, so a settings change needs this sweep
         private func reapplyStatusGlyphs() {
             guard let outline = outlineView else { return }
             for row in 0 ..< outline.numberOfRows {
                 guard let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session,
                       let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView else { continue }
                 cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
+                cell.setCompanionMarker(foldedAttention(forSession: node.id))
             }
         }
 
@@ -436,8 +436,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             var presentationNotice: String?
             /// The row's own tint, so a recolor or a clear reloads just that row.
             var tint: SidebarTint?
-            /// Names of a folded parent's companions that need attention.
-            var foldedAttention: [String] = []
+            var foldedAttention: [CompanionStatus] = []
             /// info is the shown info line; a change reloads the row and re-asks its height.
             var info: [SessionInfoSpan]?
 
@@ -554,7 +553,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
                        unseen: effectiveUnseen(session.unseenCount),
                        indicator: session.agentIndicator, flagged: session.flagged,
                        focusMember: false, presentationNotice: presentationNotice(for: session), tint: session.tint,
-                       foldedAttention: foldedAttention(forSession: session.id).map(\.displayName),
+                       foldedAttention: foldedAttention(forSession: session.id),
                        info: sessionInfo(for: session))
         }
 

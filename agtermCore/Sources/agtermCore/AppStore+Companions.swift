@@ -252,6 +252,13 @@ extension AppStore {
         }
     }
 
+    /// companionsByStatus lists a parent's companions that show an agent status, most urgent first by
+    /// `attentionRank` and in sidebar order within one status, so the first decides a folded parent's marker.
+    public func companionsByStatus(of parentID: UUID) -> [Session] {
+        companions(of: parentID).filter { $0.agentIndicator.status != .idle }
+            .sorted { $0.agentIndicator.status.attentionRank < $1.agentIndicator.status.attentionRank }
+    }
+
     /// respawnMinimumUptime is how long a respawned shell must run before its exit respawns it again: one exiting
     /// sooner (a broken shell or profile, a failing Live attach) would otherwise respawn forever.
     static let respawnMinimumUptime: TimeInterval = 2

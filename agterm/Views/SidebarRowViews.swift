@@ -10,6 +10,11 @@ final class AddSessionButton: NSButton {
     }
 }
 
+struct CompanionStatus: Equatable {
+    let name: String
+    let indicator: AgentIndicator
+}
+
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge. The icon is the inherited
 /// `cell.imageView` (2x2 grid for a workspace, outlined terminal for a session), so AppKit re-tints it white on
 /// a selected row; the name is `cell.textField`, which the rename and selection wiring drives.
@@ -20,8 +25,8 @@ class SidebarCellView: NSTableCellView {
     /// Agent-status glyph fed from the session's `agentIndicator`; hidden on `.idle` (workspace rows always idle).
     let statusIcon = StatusIconView()
 
-    /// companionMarker shows on a folded parent whose hidden companions need attention, beside the parent's own
-    /// status glyph rather than replacing it; session cells only.
+    /// companionMarker shows on a folded parent whose hidden companions have an agent status, beside the parent's
+    /// own status glyph rather than replacing it; session cells only.
     var companionMarker: NSImageView?
     var companionMarkerWidthConstraint: NSLayoutConstraint?
 
@@ -29,11 +34,16 @@ class SidebarCellView: NSTableCellView {
     /// configure since a reused cell keeps the density it was built with.
     var titleCenter: NSLayoutConstraint?
 
-    func setCompanionMarker(_ companions: [String]) {
+    /// setCompanionMarker requires companions most urgent first.
+    func setCompanionMarker(_ companions: [CompanionStatus]) {
         guard let companionMarker, let companionMarkerWidthConstraint else { return }
         companionMarker.isHidden = companions.isEmpty
         companionMarkerWidthConstraint.constant = companions.isEmpty ? 0 : 14
-        let label = companions.isEmpty ? nil : "companions need attention: " + companions.joined(separator: ", ")
+        if let lead = companions.first?.indicator {
+            companionMarker.contentTintColor = GhosttyApp.shared.statusColor(for: lead.status, override: lead.color)
+        }
+        let label = companions.isEmpty ? nil
+            : "companions: " + companions.map { "\($0.name) \($0.indicator.status.rawValue)" }.joined(separator: ", ")
         companionMarker.setAccessibilityLabel(label)
         companionMarker.toolTip = label
     }
