@@ -634,9 +634,9 @@ final class ControlServer {
     /// `session.restart` waits on process exits for seconds, while the shell it starts calls this socket.
     nonisolated private static func waitsOnNetwork(_ cmd: Command) -> Bool {
         // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket;
-        // update.check waits on the feed
+        // update.check waits on the feed, and session.paste may copy files to an origin
         [.zmxTree, .zmxAttach, .zmxAttachGroup, .sessionRestart, .sessionCompanionNew, .sessionCompanionDuplicate,
-         .sessionCompanionPage, .windowRemoteOpen, .updateCheck].contains(cmd)
+         .sessionCompanionPage, .windowRemoteOpen, .updateCheck, .sessionPaste].contains(cmd)
     }
 
     // these polling reads cannot change window nodes; skip the AppKit rebuild

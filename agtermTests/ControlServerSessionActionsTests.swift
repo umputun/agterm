@@ -616,9 +616,9 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(queued.granted)
     }
 
-    func testSynchronousMutatorsExpediteAQueuedPane() throws {
-        let cases: [(name: String, split: Bool, run: (Session) -> ControlResponse)] = [
-            ("session.paste", false, { self.server.pasteSession($0.id.uuidString, window: nil, pane: nil) }),
+    func testPaneMutatorsExpediteAQueuedPane() async throws {
+        let cases: [(name: String, split: Bool, run: (Session) async -> ControlResponse)] = [
+            ("session.paste", false, { await self.server.pasteSession($0.id.uuidString, window: nil, pane: nil) }),
             ("session.selectall", false, { self.server.selectAllSession($0.id.uuidString, window: nil) }),
             ("font.inc left", false, { self.server.font($0.id.uuidString, window: nil, pane: nil, action: "increase_font_size:1") }),
             ("font.inc right", true, { self.server.font($0.id.uuidString, window: nil, pane: .right, action: "increase_font_size:1") }),
@@ -628,7 +628,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
             if testCase.split { store.setSplitVisibility(target.id, shown: true) }
             let queued = queuePane(in: target, split: testCase.split)
 
-            let response = testCase.run(target)
+            let response = await testCase.run(target)
 
             XCTAssertEqual(response.error, "session not realized", testCase.name)
             XCTAssertTrue(queued.granted, "\(testCase.name) must grant the pane before acting on it")
@@ -818,7 +818,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
     // the same parked pane, one command over: `surfaceBindingAction`'s cast proves only that the SLOT is
     // filled, so both used to discard `performBindingAction`'s false and answer ok with nothing pasted or
     // selected, while their neighbours called that state `session not realized`.
-    func testPasteAndSelectAllOnAnUnrealizedPaneReportNotRealized() throws {
+    func testPasteAndSelectAllOnAnUnrealizedPaneReportNotRealized() async throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
         let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
@@ -826,7 +826,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         target.surface = parked
         XCTAssertFalse(parked.isRealized, "a detached view never runs createSurface, which is the point here")
 
-        let paste = server.pasteSession(target.id.uuidString, window: nil, pane: nil)
+        let paste = await server.pasteSession(target.id.uuidString, window: nil, pane: nil)
         XCTAssertFalse(paste.ok, "session.paste pasted nothing and must not report a false ok")
         XCTAssertEqual(paste.error, "session not realized")
 
@@ -838,13 +838,13 @@ final class ControlServerSessionActionsTests: XCTestCase {
     // the pane has to reach the SURFACE, not just the action. `addressableSurface` is `surface ?? splitSurface`,
     // so a fixture with only the split slot filled grants the same permit either way: main has to be filled
     // too before granting the split's permit proves anything.
-    func testPasteIntoTheSplitExpeditesTheSplitPane() throws {
+    func testPasteIntoTheSplitExpeditesTheSplitPane() async throws {
         let (store, target) = try addSession()
         store.setSplitVisibility(target.id, shown: true)
         target.surface = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         let queued = queuePane(in: target, split: true)
 
-        let response = server.pasteSession(target.id.uuidString, window: nil, pane: .right)
+        let response = await server.pasteSession(target.id.uuidString, window: nil, pane: .right)
 
         XCTAssertEqual(response.error, "session not realized")
         XCTAssertTrue(queued.granted, "session.paste --pane right must grant the SPLIT pane, not the main one")
@@ -853,17 +853,19 @@ final class ControlServerSessionActionsTests: XCTestCase {
     // a pane that parses but is not laid out is refused in the same words `session.type` uses, so a caller
     // scripting one pane gets one answer whichever command it reaches for. An unknown SPELLING cannot get
     // here: the dispatcher parses `--pane` into `StatusPane` and rejects the rest.
-    func testPasteRejectsPanesTheSessionDoesNotHave() throws {
+    func testPasteRejectsPanesTheSessionDoesNotHave() async throws {
         let (store, target) = try addSession()
         let id = target.id.uuidString
 
-        XCTAssertEqual(server.pasteSession(id, window: nil, pane: .right).error, "session has no split pane")
-        XCTAssertEqual(server.pasteSession(id, window: nil, pane: .scratch).error,
-                       "session has no scratch terminal")
+        let right = await server.pasteSession(id, window: nil, pane: .right)
+        let scratch = await server.pasteSession(id, window: nil, pane: .scratch)
+        XCTAssertEqual(right.error, "session has no split pane")
+        XCTAssertEqual(scratch.error, "session has no scratch terminal")
         // with the split shown, `right` is a pane again: the refusal above was about the layout.
         store.setSplitVisibility(target.id, shown: true)
         _ = queuePane(in: target, split: true)
-        XCTAssertEqual(server.pasteSession(id, window: nil, pane: .right).error, "session not realized")
+        let shown = await server.pasteSession(id, window: nil, pane: .right)
+        XCTAssertEqual(shown.error, "session not realized")
     }
 
     // `session.copy` is `session.selectall`'s documented read-back, so the pair has to name this state the

@@ -41,4 +41,31 @@ struct PasteOfferTests {
         let offer = PasteOffer(urls: [Self.file, URL(fileURLWithPath: "/Users/me/b.txt")])
         #expect(offer.insertText(filePaths: paths) == nil)
     }
+
+    @Test(arguments: [
+        (PasteOffer(urls: [file], image: png), false, PasteOffer.Route.asIs),
+        (PasteOffer(urls: [file], image: png), true, .sendToOrigin),
+        (PasteOffer(urls: [web, file]), true, .sendToOrigin),
+        (PasteOffer(urls: [web], image: png), true, .asIs),
+        (PasteOffer(text: "ls", image: png), true, .asIs),
+        (PasteOffer(image: png), false, .stageHere),
+        (PasteOffer(image: png), true, .sendToOrigin),
+        (PasteOffer(), true, .asIs),
+    ])
+    func onlyFilesAndImagesTheProgramCannotOpenAreCopied(offer: PasteOffer, onOrigin: Bool, expected: PasteOffer.Route) {
+        #expect(offer.route(onOrigin: onOrigin) == expected)
+    }
+
+    @Test func asIsTextJoinsTheURLsOrKeepsTheText() {
+        #expect(PasteOffer(urls: [Self.file, Self.web], text: "ignored").asIsText == "/tmp/my\\ report.png https://example.com/a\\?b=c")
+        #expect(PasteOffer(text: "echo $HOME").asIsText == "echo $HOME")
+        #expect(PasteOffer(image: Self.png).asIsText == nil)
+    }
+
+    @Test func anImageIsNamedForTheMomentItWasPasted() throws {
+        var parts = DateComponents(year: 2026, month: 3, day: 7, hour: 9, minute: 5, second: 2)
+        parts.timeZone = .current
+        let date = try #require(Calendar(identifier: .gregorian).date(from: parts))
+        #expect(PasteOffer.imageName(at: date) == "clipboard-20260307-090502.png")
+    }
 }

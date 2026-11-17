@@ -440,6 +440,68 @@ final class RemoteAttachTests: XCTestCase {
         controller.cancel()
     }
 
+    func testAFailureLeavesAHudAnotherCallerPostedBeforeIt() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let foreign = HudSpec(message: "an agent's own panel")
+        _ = attacher.openHud(session, window: nil, spec: foreign)
+        let hud = RemoteAttachHud(attacher: attacher, session: session, window: windowID.uuidString, action: "Paste")
+
+        hud.progress("copying to studio")
+        hud.fail("too large to paste")
+
+        XCTAssertEqual(attacher.huds, [.opened(session: session, window: nil, spec: foreign)])
+    }
+
+    func testAFailureLeavesAHudPostedOverItsProgressAndItsOwnPanelStillCloses() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let window = windowID.uuidString
+        let hud = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        hud.progress("copying to studio")
+        hud.close()
+        XCTAssertEqual(attacher.huds.last, .closed(session: session, window: window))
+
+        hud.progress("copying to studio")
+        let foreign = HudSpec(message: "an agent's own panel")
+        _ = attacher.openHud(session, window: nil, spec: foreign)
+        hud.fail("too large to paste")
+        hud.close()
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: nil, spec: foreign))
+    }
+
+    func testARunningOperationsProgressIsNotReplacedButAnErrorItLeftIs() throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        let window = windowID.uuidString
+        let first = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        let second = RemoteAttachHud(attacher: attacher, session: session, window: window, action: "Paste")
+        first.progress("copying to studio")
+        let running = attacher.huds.last
+
+        second.progress("copying to studio")
+        XCTAssertEqual(attacher.huds.last, running, "a second operation's progress waits behind the first one's")
+
+        first.fail("too large to paste")
+        second.fail("the paste could not be copied (exit 255)")
+        guard case .opened(_, _, let spec)? = attacher.huds.last else { return XCTFail("no panel opened") }
+        XCTAssertEqual(spec.message, "Paste: the paste could not be copied (exit 255)")
+    }
+
+    func testAMovedHudDoesNotTakeTheNewRowsPanelForItsOwn() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let first = try XCTUnwrap(store.selectedSessionID?.uuidString)
+        let second = try XCTUnwrap(store.addSession(toWorkspace: try XCTUnwrap(store.currentWorkspaceID), cwd: NSHomeDirectory()))
+        let hud = RemoteAttachHud(attacher: attacher, session: first, window: windowID.uuidString)
+        hud.progress("attaching")
+        attacher.expireHud(session: first)
+        let foreign = HudSpec(message: "an agent's own panel")
+        attacher.postHud(foreign, session: second.id.uuidString, generation: 1)
+
+        hud.move(to: second.id.uuidString)
+        hud.fail("no attachable session")
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: second.id.uuidString, window: nil, spec: foreign))
+    }
+
     func testAnOverlongErrorIsCutToWhatAHudAccepts() async throws {
         actions.attachRemote("studio", in: windowID)
         await waitUntil("the listing starts") { attacher.treeHosts.count == 1 }
@@ -503,7 +565,7 @@ private final class FakeAttacher: RemoteAttaching {
     var origin = RemoteOrigin.server
     private(set) var attaches: [Attach] = []
     private(set) var huds: [Hud] = []
-    private var generation: Int?
+    private var generations: [String: Int] = [:]
     private var opens = 0
     var attachResponse = ControlResponse(ok: true)
     private var trees: [CheckedContinuation<ControlResponse, Never>] = []
@@ -534,19 +596,25 @@ private final class FakeAttacher: RemoteAttaching {
     }
 
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
-        huds.append(.opened(session: target, window: window, spec: spec))
         opens += 1
-        generation = opens
+        postHud(spec, session: target, window: window, generation: opens)
         return ControlResponse(ok: true)
     }
 
     func closeHud(_ target: String?, window: String?) -> ControlResponse {
         huds.append(.closed(session: target, window: window))
-        generation = nil
+        generations[target ?? ""] = nil
         return ControlResponse(ok: true)
     }
 
-    func hudGeneration(session: String) -> Int? { generation }
+    func hudGeneration(session: String) -> Int? { generations[session] }
+
+    func postHud(_ spec: HudSpec, session: String?, window: String? = nil, generation: Int) {
+        huds.append(.opened(session: session, window: window, spec: spec))
+        generations[session ?? ""] = generation
+    }
+
+    func expireHud(session: String) { generations[session] = nil }
 
     func attachedRoute(_: ControlRequest) -> RemoteRoute? { nil }
 

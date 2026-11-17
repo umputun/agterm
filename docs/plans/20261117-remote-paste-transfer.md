@@ -189,30 +189,38 @@
 ### Task 3: App paste and drop seam, local and remote
 
 **Files:**
-- Modify: `agterm/Ghostty/GhosttySurfaceView+Input.swift`
-- Modify: `agterm/Ghostty/GhosttySurfaceView+IO.swift`
+- Modify: `agterm/Ghostty/GhosttySurfaceView+Input.swift`, `GhosttySurfaceView.swift` (copying flag, image drag types)
+- Create: `agterm/Ghostty/GhosttySurfaceView+Paste.swift` (the seam), `agterm/Ghostty/PasteTransfer.swift` (the app's
+  hook to the control server, with the injectable staging root and input runner, as `LinkOpener` is)
 - Modify: `agterm/Ghostty/GhosttyCallbacks.swift`
 - Modify: `agterm/Control/ControlServer+SurfaceIO.swift`
 - Modify: `agterm/Control/ControlServer.swift` (`waitsOnNetwork`)
 - Modify: `agterm/AppActions+RemoteAttach.swift` (`RemoteAttachHud` ownership)
 - Create: `agterm/Control/ControlServer+PasteTransfer.swift`
+- Modify: `agtermCore/Sources/agtermCore/PasteOffer.swift` (`Route`, `asIsText`, `imageName`)
 - Modify: `agtermCore/Sources/agtermCore/ControlActions.swift`, `ControlDispatcher.swift` (async `pasteSession`)
 - Modify: `agtermTests/GhosttyCallbacksTests.swift`, `agtermTests/GhosttySurfaceViewInputTests.swift`,
-  `agtermTests/ControlServerSurfaceIOTests.swift`
+  `agtermTests/RemoteAttachTests.swift`, the existing paste tests in `ControlServerSessionActionsTests.swift` and
+  `ControlServerPaneLeadTests.swift`; Create: `agtermTests/ControlServerPasteTransferTests.swift`
+- ➕ decisions: a paste refused while a copy runs or another Mac leads the pane shows its reason as the Paste error
+  panel or a notification, from every entry point; `RemoteAttachHud` replaces only an empty slot, its own panel, or
+  an error panel an earlier one left, so a retry still replaces the last attempt's error while a running copy's
+  progress and a script's HUD stay; `readClipboard` answers one main turn later only for a file offer, the one
+  case whose answer depends on where the program runs
 
-- [ ] read the pasteboard (or drag pasteboard) into a `PasteOffer`, image data converted to PNG only when pasting
-- [ ] one surface method used by `paste(_:)`, Cmd + physical V in `keyDown`, `session paste` and
+- [x] read the pasteboard (or drag pasteboard) into a `PasteOffer`, image data converted to PNG only when pasting
+- [x] one surface method used by `paste(_:)`, Cmd + physical V in `keyDown`, `session paste` and
       `performDragOperation`: text and local file URLs keep today's behavior; a local image is staged with
       `PasteStaging` and its path inserted; any remote `.files` or `.image` is bundled off the main actor, sent with
       `pasteReceiveCommand`, and the returned origin paths inserted into the surface fixed at invocation
-- [ ] one transfer per pane, a further paste or drop refused with "a paste is still copying"
-- [ ] menu gate and `draggingEntered` accept an image-only pasteboard by type probe, agreeing with the reader
-- [ ] clipboard-read guard in `readClipboard`, resolving origin ownership from the requesting surface
-- [ ] progress and failure through `RemoteAttachHud` ("Paste"); `pasteSession` async through `ControlActions`, the
+- [x] one transfer per pane, a further paste or drop refused with "a paste is still copying"
+- [x] menu gate and `draggingEntered` accept an image-only pasteboard by type probe, agreeing with the reader
+- [x] clipboard-read guard in `readClipboard`, resolving origin ownership from the requesting surface
+- [x] progress and failure through `RemoteAttachHud` ("Paste"); `pasteSession` async through `ControlActions`, the
       dispatcher and the app; `.sessionPaste` in `waitsOnNetwork`
-- [ ] `RemoteAttachHud` opens only into an empty slot or its own panel, otherwise skips progress and notifies on
+- [x] `RemoteAttachHud` opens only into an empty slot or its own panel, otherwise skips progress and notifies on
       failure, for every caller
-- [ ] hosted tests: image-only paste inserts an existing staged PNG path under an injected root; file URL and text
+- [x] hosted tests: image-only paste inserts an existing staged PNG path under an injected root; file URL and text
       unchanged; gate and reader agree for image-only, URL-only and empty pasteboards; a keycode-only Cmd-V event
       reaches the seam; a remote pane with a stub runner inserts the returned origin paths in offer order and
       inserts nothing on a runner failure; a paste during a running transfer is refused; `session paste` returns
@@ -220,7 +228,7 @@
       file URLs and for file URLs plus their alternate string, and passes ordinary text and selection text unchanged;
       `RemoteAttachHud` with a preexisting HUD leaves it and notifies on failure, and with a HUD posted by another
       caller during the operation leaves that one too, while its own progress panel is still closed on success
-- [ ] run the touched hosted test classes with `-only-testing:` - must pass before task 4
+- [x] run the touched hosted test classes with `-only-testing:` - must pass before task 4
 
 ### Task 4: Docs, skill, backlog, and final gates
 

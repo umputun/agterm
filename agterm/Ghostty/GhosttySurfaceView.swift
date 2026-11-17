@@ -269,7 +269,7 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     /// does not fire for the initializer default.
     private func updateDropRegistration() {
         if deckVisible {
-            registerForDraggedTypes([.fileURL, .string, .URL])
+            registerForDraggedTypes([.fileURL, .string, .URL, .png, .tiff])
         } else {
             unregisterDraggedTypes()
         }
@@ -358,6 +358,8 @@ final class GhosttySurfaceView: NSView, PaneRoleMutableSurface {
     // the nonisolated URL callback snapshots this during the synchronous release call.
     nonisolated let releaseIntent = OSAllocatedUnfairLock(initialState: LinkPolicy.ClickIntent.normal)
     var linkPressDragged = false
+    /// pasteCopying is true while a paste into this pane copies its files or image; a further paste is refused.
+    var pasteCopying = false
     /// Whether any mouse button is down, system-wide; replaceable because a real click elsewhere answers it too.
     var mouseButtonsDown: () -> Bool = { NSEvent.pressedMouseButtons != 0 }
     /// linkHover is the label model of the host now showing this surface; see `LinkHoverModel.adopt`.

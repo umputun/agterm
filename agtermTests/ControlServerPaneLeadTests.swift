@@ -261,7 +261,8 @@ final class ControlServerPaneLeadTests: XCTestCase {
         let refusal = "pane is covered while another Mac leads it; take the lead first (session lead)"
         let id = session.id.uuidString
 
-        XCTAssertEqual(server.pasteSession(id, window: nil, pane: nil).error, refusal)
+        let paste = await server.pasteSession(id, window: nil, pane: nil)
+        XCTAssertEqual(paste.error, refusal)
         XCTAssertEqual(server.selectAllSession(id, window: nil).error, refusal)
         let opened = await server.searchSession(session.id, store: store, text: "needle", to: nil)
         XCTAssertEqual(opened.error, refusal)

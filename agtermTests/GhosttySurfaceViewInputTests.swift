@@ -929,6 +929,54 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
     }
 
+    func testCommandAndTheVKeyOnAnyLayoutPasteThroughTheSeam() throws {
+        final class Offers { var seen: [PasteOffer] = [] }
+        let offers = Offers()
+        let saved = PasteTransfer.shared
+        defer { PasteTransfer.shared = saved }
+        PasteTransfer.shared.text = { offer, _ in
+            offers.seen.append(offer)
+            return .failure(PasteFailure("recorded"))
+        }
+        let png = Data([0x89, 0x50, 0x4E, 0x47, 1])
+        let pasteboard = NSPasteboard.general
+        let kept = (pasteboard.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            item.types.forEach { type in item.data(forType: type).map { copy.setData($0, forType: type) } }
+            return copy
+        }
+        defer {
+            pasteboard.clearContents()
+            if !kept.isEmpty { pasteboard.writeObjects(kept) }
+        }
+        pasteboard.clearContents()
+        pasteboard.setData(png, forType: .png)
+        let window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let terminal = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory(), command: "/bin/cat")
+        terminal.frame = CGRect(x: 0, y: 0, width: 400, height: 300)
+        window.contentView?.addSubview(terminal)
+        terminal.createSurface()
+        defer {
+            terminal.teardown()
+            window.close()
+        }
+        XCTAssertTrue(terminal.isRealized)
+        func press(_ flags: NSEvent.ModifierFlags) throws {
+            terminal.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: window.windowNumber,
+                context: nil, characters: "м", charactersIgnoringModifiers: "м", isARepeat: false, keyCode: 9)))
+        }
+
+        try press([.command, .shift])
+        try press(.command)
+        let deadline = Date(timeIntervalSinceNow: 5)
+        while offers.seen.isEmpty, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
+
+        XCTAssertEqual(offers.seen, [PasteOffer(image: png)], "only ⌘V itself reaches the seam, by key position")
+    }
+
     func testABareModifierLeavesAConsumedHeldExitOpen() {
         for modes in ["", "\\033[>31u"] {
             let fixture = HeldExitFixture(leaving: modes)

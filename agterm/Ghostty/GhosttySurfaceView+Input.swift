@@ -5,26 +5,27 @@ import AppKit
 import GhosttyKit
 
 extension GhosttySurfaceView {
+    private static let vKeyCode: UInt16 = 9
+
     // MARK: - Drag and drop (issue #51)
 
-    /// Accept the drag with a copy cursor when it carries something we can insert (a file/web URL or text),
-    /// reject it otherwise — so a session-row drag from the sidebar (a private pasteboard type) is ignored.
+    /// Accept the drag with a copy cursor when it carries something we can insert (a file/web URL, text or an
+    /// image), reject it otherwise — so a session-row drag from the sidebar (a private pasteboard type) is ignored.
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        dropText(from: sender) != nil ? .copy : []
+        GhosttyCallbacks.hasPasteOffer(sender.draggingPasteboard) ? .copy : []
     }
 
-    /// Insert the dropped path (shell-escaped, space-joined) or text at the cursor as a bracketed paste, so
-    /// a multi-line drop is literal text, not executed lines. Deferred a tick so the drag session unwinds.
+    /// Paste the drop through the paste seam, so a multi-line drop is literal text, not executed lines. The drag
+    /// pasteboard is read now, as it is gone once the drop returns; the paste waits a tick so the drag session unwinds.
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard let text = dropText(from: sender) else { return false }
-        DispatchQueue.main.async { [weak self] in self?.insertPasted(text: text) }
+        if let refusal = pasteRefusal {
+            PasteTransfer.shared.refuse(self, refusal)
+            return false
+        }
+        let offer = GhosttyCallbacks.pasteOffer(sender.draggingPasteboard)
+        guard offer.action != nil else { return false }
+        DispatchQueue.main.async { [weak self] in _ = self?.paste(offer, drop: true) }
         return true
-    }
-
-    /// The text a drop would insert, via the shared `GhosttyCallbacks.pasteboardText` reader; nil when the
-    /// drag carries nothing usable.
-    private func dropText(from sender: any NSDraggingInfo) -> String? {
-        GhosttyCallbacks.pasteboardText(sender.draggingPasteboard)
     }
 
     // MARK: - Keyboard
@@ -85,6 +86,11 @@ extension GhosttySurfaceView {
         }
 
         if flags.contains(.command) {
+            // ⌘ plus the V key on any layout pastes through the seam; the keymap's chords never reach here
+            if event.keyCode == Self.vKeyCode, flags.intersection([.command, .shift, .option, .control]) == .command {
+                userPaste()
+                return
+            }
             var ke = buildKeyEvent(from: event, action: action)
             ke.text = nil
             _ = ghostty_surface_key(surface, ke)
@@ -698,14 +704,14 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 /// The stock Edit ▸ Copy/Paste/Select All actions, implemented on the surface so AppKit's automatic menu
 /// enabling routes them to the terminal when it holds first responder, while a focused text field (inline
 /// rename, palette search, Settings) keeps its own — its field editor wins the responder chain. That is why
-/// agterm keeps the standard SwiftUI Edit menu instead of a custom Commands group. Each action runs the same
-/// libghostty binding ⌘C/⌘V/⌘A use. Cut is deliberately NOT implemented, so it stays disabled for the
+/// agterm keeps the standard SwiftUI Edit menu instead of a custom Commands group. Copy and Select All run the
+/// libghostty binding ⌘C/⌘A use, Paste the paste seam ⌘V uses. Cut is deliberately NOT implemented, so it stays disabled for the
 /// terminal yet works in text fields; it cannot be dropped on its own, sharing SwiftUI's `.pasteboard`
 /// group. Undo/Redo are removed entirely (`CommandGroup(replacing: .undoRedo)` in `agtermApp+Menus`).
 extension GhosttySurfaceView: NSMenuItemValidation {
     @objc func copy(_ sender: Any?) { performBindingAction("copy_to_clipboard") }
 
-    @objc func paste(_ sender: Any?) { performBindingAction("paste_from_clipboard") }
+    @objc func paste(_ sender: Any?) { userPaste() }
 
     /// `override` because `selectAll(_:)` is declared on `NSResponder`, unlike `copy:`/`paste:`.
     override func selectAll(_ sender: Any?) { performBindingAction("select_all") }
@@ -715,19 +721,19 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// enable by default — AppKit consults this only on the responder implementing the action, so `cut:`
     /// never reaches it.
     ///
-    /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, the SAME reader `paste_from_clipboard` uses,
+    /// Paste asks `GhosttyCallbacks.hasPasteOffer()`, built on the SAME text reader `paste_from_clipboard` uses,
     /// rather than probing for a plain string: the clipboard may hold a file/web URL with no string
     /// representation (a Finder copy) the reader turns into a shell-escaped path, so an `NSString` probe
     /// reports "nothing to paste" while ⌘V pastes it. A bare `canReadObject([NSURL])` TYPE probe is wrong
     /// the other way, enabling Paste for a URL-type-only pasteboard. The gate short-circuits on the first
-    /// usable URL, never escaping a whole Finder copy to answer.
+    /// usable URL, never escaping a whole Finder copy to answer, and probes an image by type, converting nothing.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(copy(_:)):
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
         case #selector(paste(_:)):
-            return surface != nil && GhosttyCallbacks.hasPasteboardText()
+            return surface != nil && GhosttyCallbacks.hasPasteOffer()
         case #selector(selectAll(_:)):
             return surface != nil
         default:

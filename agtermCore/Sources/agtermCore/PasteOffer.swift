@@ -27,6 +27,40 @@ public struct PasteOffer: Equatable, Sendable {
         return image.map(Action.image)
     }
 
+    /// Route is what happens to an offer before anything is inserted.
+    public enum Route: Equatable, Sendable {
+        /// asIs inserts the offer unchanged: text, web addresses, or paths of files the pane's program can open.
+        case asIs
+        /// stageHere saves the image on this Mac and inserts its path.
+        case stageHere
+        /// sendToOrigin copies the files or the image to the host running the pane's program and inserts its paths.
+        case sendToOrigin
+    }
+
+    /// route is the offer's `Route` for a pane whose program runs on another host (`onOrigin`) or on this Mac.
+    public func route(onOrigin: Bool) -> Route {
+        switch action {
+        case .urls: onOrigin && !fileURLs.isEmpty ? .sendToOrigin : .asIs
+        case .image: onOrigin ? .sendToOrigin : .stageHere
+        case .text, nil: .asIs
+        }
+    }
+
+    /// asIsText is the text an `asIs` offer inserts: the URLs joined as `urlText` gives them, else the text.
+    public var asIsText: String? {
+        urls.isEmpty ? text : urls.map(Self.urlText).joined(separator: " ")
+    }
+
+    /// imageName names a pasted image after the moment it was pasted, `clipboard-20261117-153012.png`.
+    public static func imageName(at date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        let stamp = [parts.year, parts.month, parts.day].map { String(format: "%02d", $0 ?? 0) }.joined()
+            + "-" + [parts.hour, parts.minute, parts.second].map { String(format: "%02d", $0 ?? 0) }.joined()
+        return "clipboard-\(stamp).png"
+    }
+
     /// fileURLs are the offered URLs naming local files, in offer order.
     public var fileURLs: [URL] { urls.filter(\.isFileURL) }
 

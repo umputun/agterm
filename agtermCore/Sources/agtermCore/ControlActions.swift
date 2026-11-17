@@ -159,7 +159,7 @@ public protocol ControlActions {
     func readQuickText(all: Bool, lines: Int?) async -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
-    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) -> ControlResponse
+    func pasteSession(_ target: String?, window: String?, pane: StatusPane?) async -> ControlResponse
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
                        text: String?, to: String?) async -> ControlResponse
