@@ -2080,19 +2080,23 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - The local cwd is this machine's home, not the remote one: libghostty chdirs the pane process here and a
   path that exists on the far side may not exist locally. The attached shell reports its real cwd through
   the terminal stream.
-- Both panes set `commandWait`/`splitCommandWait`, so `shouldCloseOnChildExitAction` returns false, Ghostty
-  holds its own press-any-key prompt, and the wrapper's one sanitized line — host, session, pane, exit
-  status — can be read under the last remote screen. The wrapper runs as `/usr/bin/env /bin/sh -c`, since
-  libghostty's `exec -l` would otherwise replace the shell with ssh and drop it. On ssh's own 255 it instead
-  resets the reporting modes the remote left on, shows a reconnecting bar naming the host, reports `RemoteLinkNotice` (`OSC 2;agterm-remote;<lead nonce>:lost`, intercepted beside
+- Both panes set `commandWait`/`splitCommandWait`, so `shouldCloseOnChildExitAction` returns false and the pane
+  keeps its last remote screen. The wrapper prints no text: after the attach it prints only
+  `RemoteSession.paneModeReset` (mouse, focus and kitty keyboard modes off, the last one so a bare modifier
+  cannot close the held pane) and exits with ssh's status. A remote row's surface sets `consumesHeldExit`, so
+  `SHOW_CHILD_EXITED` returns true and Ghostty prints no "Process exited" line either; Ghostty still marks the
+  child exited first, so any key that encodes closes the pane, which `GhosttySurfaceViewInputTests` pins.
+  The wrapper runs as `/usr/bin/env /bin/sh -c`, since
+  libghostty's `exec -l` would otherwise replace the shell with ssh and drop it. On ssh's own 255 an attach with a
+  lead or link nonce reports `RemoteLinkNotice` (`OSC 2;agterm-remote;<lead nonce>:lost`, intercepted beside
   `zmx-role;`) and waits on `cat`, which ends with the app's pty. The pane then never reaches `onExitHeld`;
   `PaneLead.linkLost` believes only the current attachment's nonce and runs the same `remotePaneStopped`
   cleanup. A failed probe's stderr is kept as the entry's `reason`, last non-empty line, sanitized and
   capped, replaced by every failure and nil when ssh said nothing; it is never classified, since an
   offline host and a refused login both exit 255 and the retry must not give up on either. The pane's
-  child is `cat` with echo off, so nothing can be printed into it: `RemoteReconnectNote` inside
-  `PaneLeadCover` draws the line and the surface node's `reconnect` reads it, both from the entry, so
-  both go with the wait. `RemoteReconnectBook` probes (`RemoteSession.probeCommand`) on the remote tick with
+  child is `cat` with echo off, so nothing can be printed into it: `RemotePaneNotice` inside
+  `PaneLeadCover` draws the reconnecting panel with that reason, for left, right and scratch, and the surface
+  node's `reconnect` reads it, both from the entry, so both go with the wait. `RemoteReconnectBook` probes (`RemoteSession.probeCommand`) on the remote tick with
   `RemoteRetryBackoff`, and a host that answers gets `reattachPane(claim: false)`, covered only when the
   origin had reported a role or the attach it replaced dropped before its first report, and
   `remotePaneResumed`. Re-running the attach in the shell was rejected: it
@@ -2145,7 +2149,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   cwd or page source, so a build predating the key ignores it rather than starting a shell in it. `bindRemote`
   saves, since `addSession` saved before the binding existed. A relaunch runs the saved attach lines WITHOUT the
   lead claim (`attachedSession(from:)`), and `ControlServer.checkRestoredOrigin` asks each host once. A terminal
-  session the tree lists is alive; one it leaves out ends the row (`endAttachedRow`, `Ended on HOST`) only when
+  session the tree lists is alive; one it leaves out closes the row (`closeEndedAttachedRow`, the row alone through
+  `closeExactly`, its companions moving up and each checked on its own) only when
   the host's complete `zmx list` has no claim for it, since a session in a window closed there is left out but
   claimed; anything else is inconclusive. A page owns no daemon and the tree omits a page companion whose parent
   is not attachable, so a page row, waiting as `connecting`, always asks for its page (`requestRemotePage`) and is
@@ -2173,6 +2178,16 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   kind without ending the stream, which is what lets a later kind reach an older viewer.
   The origin closes the stream on a frame it cannot decode, so `link.click`'s mode and `link.refused`'s reason
   decode leniently; the forwarded-click bullet under the click paths owns their contract.
+- A session its origin removes for good (`PresentationHub.end(sessions:)`) gets `ended` as its stream's last
+  frame, sent only to a viewer listing `PresentationHub.endedKind`; the hub drops the subscriber first, so a later
+  `ping` gets no `ack`. The viewer stops its client for good, sets `RemotePresentationState.originEnded`
+  (`AppStore.remoteSessionEnded`), closes every replica that can go, the last one at its held exit, and the
+  origin scratch at once, and keeps no Recent Closed entry. A pane held exit the removal does not close is settled
+  in `RemoteEndBook` before any notice paints: with the stream up to an origin that agreed `ended`, the viewer
+  sends `ping`, and the `ended` queued ahead of its `ack` closes the row unseen; an `ack`, a failed link or a
+  stopped client shows "SESSION on HOST ended", as does a held exit with no such stream. There is no settle clock,
+  so a slow link waits for its own 30 s stale check rather than painting early. Read back `attachEnded` on the
+  surface node. A saved attached row with `ended=true` is not restored.
 - `zmx.tree` advertises `presentation`, the protocol version. A viewer never launches the bridge against an
   origin that omits it and reports `unsupported`; nothing is retried and no warning is raised.
 - Read-back is `presentation {state, mode, error}` on the viewer's session node, `presenters {viewers, mirrors,
@@ -2192,7 +2207,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   held after ssh exited. If it is the last realized replica, it stays until its ssh exits, then the row
   may close and following stops. Automatic primary removal is skipped while a local split is pending.
   A layout never removes a local replacement. Losing the stream alone keeps the panes; an ordinary ssh
-  disconnect still shows the disconnect line, held or reconnecting per the exit-255 bullet above.
+  disconnect still shows its pane notice, ended or reconnecting per the exit-255 bullet above.
 - A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
   second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
   identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
@@ -2521,7 +2536,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   answers through a callback `destroySurface` clears first; a dashboard cell's transient font is carried
   as the override and never seeds the new surface's own size. `remotePaneStopped` drops the pane's
   lead state when an attach ends on its exit prompt or waits to reconnect, a failed take-over included,
-  or the cover would hide the line saying what died and swallow the key that closes it. The launch
+  or the lead cover would hide the pane notice and swallow the key that closes it. The launch
   attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is gone, locally as for an
   attached pane, so a vanished session ends the pane. An attached pane is
   rebuilt from `RemoteBinding.Origin`, never from the pane's first command line, which carries that

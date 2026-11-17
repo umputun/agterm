@@ -34,6 +34,7 @@ struct PresentationFramesTests {
         PresentationFrame(gen: 1, rev: 15, body: .presenterGranted),
         PresentationFrame(gen: 1, rev: 16, body: .presenterRefused),
         PresentationFrame(gen: 1, rev: 16, body: .presenterVacant),
+        PresentationFrame(gen: 1, rev: 16, body: .ended),
         PresentationFrame(gen: 1, rev: 16, body: .leadReport(PresentationLeadReport(leaders: [UUID()]))),
         PresentationFrame(gen: 1, rev: 17, body: .askRequest(PresentationAsk(
             PendingAsk(id: "a1", title: "deploy?", message: "to prod", buttons: [ControlAskButton(id: "y", label: "Yes", hotkey: "y")],

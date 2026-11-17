@@ -27,12 +27,23 @@ extension AppStore {
     /// `alreadyFinalized` names a pane whose daemon the CALLER has destroyed, so the teardown does not ask
     /// the finalizer to kill a name that is already gone. Only `zmx kill` passes one.
     func finalizePaneIdentities(_ sessions: [Session], alreadyFinalized: UUID? = nil) {
+        // before the kill below, so a viewer's `ended` is queued ahead of the attach exit the kill causes
+        endPresentations(of: sessions.map(\.id))
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
-            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
+            ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach {
+                ZmxLeadBook.shared.forget(pane: $0)
+                RemoteEndBook.shared.clear(pane: $0)
+            }
         }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
+    }
+
+    /// endPresentations records `ids` as removed for good and ends their viewers' streams with `ended`.
+    func endPresentations(of ids: [UUID]) {
+        PresentationEnds.shared.record(ids)
+        presentationHub?.end(sessions: ids)
     }
 
     /// Every pane identity of `sessions` leaves mount eligibility. A hidden split's identity is included;
@@ -236,6 +247,7 @@ extension AppStore {
         if let split = session.splitPaneIdentity {
             launchPaneDrop?([split])
             ZmxLeadBook.shared.forget(pane: split)
+            RemoteEndBook.shared.clear(pane: split)
             MessageBus.shared.dispose(pane: split)
             session.daemonBackedPanes.remove(split)
         }
@@ -291,7 +303,7 @@ extension AppStore {
                 respawnPrimaryPane(session, now: now)
                 return .respawned
             }
-            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            closeLastPaneRow(sessionID, alreadyFinalized: alreadyFinalized)
             return .closed
         }
         promoteSplit(session)
@@ -313,6 +325,7 @@ extension AppStore {
         session.splitSurface = nil
         session.daemonBackedPanes.remove(session.paneIdentity)
         ZmxLeadBook.shared.forget(pane: session.paneIdentity)
+        RemoteEndBook.shared.clear(pane: session.paneIdentity)
         MessageBus.shared.dispose(pane: session.paneIdentity)
         // the survivor's override moves left with it; its text file is keyed by the identity promoted below
         dropPaneBackground(.left, of: session)
@@ -430,10 +443,20 @@ extension AppStore {
                 respawnPrimaryPane(session, now: now)
                 return
             }
-            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            closeLastPaneRow(sessionID, alreadyFinalized: alreadyFinalized)
             return
         }
         closeSplit(sessionID, alreadyFinalized: alreadyFinalized)
+    }
+
+    /// closeLastPaneRow closes a row whose last pane went. A row its origin ended closes alone, as at relaunch, its
+    /// companions moving up: each has its own origin session and ends on its own.
+    private func closeLastPaneRow(_ sessionID: UUID, alreadyFinalized: UUID?) {
+        guard session(withID: sessionID)?.remotePresentation?.originEnded == true else {
+            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            return
+        }
+        _ = closeExactly([sessionID])
     }
 
     /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The surface is

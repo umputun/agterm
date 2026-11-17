@@ -7,6 +7,12 @@ public protocol PresentationSink: AnyObject {
     /// Returns false when the consumer's queue is full, which the hub treats as a stalled subscriber.
     func offer(_ frame: PresentationFrame) -> Bool
     func close(_ reason: PresentationHub.CloseReason)
+    /// finish hands `frame` as the stream's last line and closes once it is written.
+    func finish(_ frame: PresentationFrame)
+}
+
+extension PresentationSink {
+    public func finish(_ frame: PresentationFrame) { _ = offer(frame) }
 }
 
 /// PresentationHub fans a session's presentation state out to the viewers subscribed to it.
@@ -15,6 +21,7 @@ public final class PresentationHub {
     public enum CloseReason: Equatable, Sendable {
         case stalled
         case stale
+        case ended
     }
 
     public enum SubscribeError: Error, Equatable {
@@ -74,8 +81,10 @@ public final class PresentationHub {
                                         overlayPointsKind, pageContentKind, pageDocumentKind, pageLinksKind, statusShapesKind,
                                         statusCheckmarkKind, linkClickKind, pendingSnapshotKind, jobTokenKind, pageForwardKind,
                                         pageTextKind, pageFilesKind, pageExpandKind, statusClearKind, restartRespawnKind, presenterVacantKind,
-                                        leadReportKind, offerIdentityKind]
+                                        leadReportKind, offerIdentityKind, endedKind]
                                         + pageKinds + pickKinds
+    /// endedKind is a viewer's capability of taking `ended`, the origin's word that the session is gone for good.
+    public static let endedKind = "ended"
     /// pageKinds are the presentation kinds a presenter must speak to be handed a page.
     public static let pageKinds = ["page.request", "page.rejected", "page.close", "page.closed", "page.command",
                                    "page.state"]
@@ -198,6 +207,41 @@ public final class PresentationHub {
             guard send(body, to: id) else { break }
         }
         return id
+    }
+
+    /// end tells every viewer of `sessions` that its session is gone for good and drops it: `ended` as the stream's last
+    /// frame, or a plain close for a viewer that did not list the kind.
+    public func end(sessions: [UUID]) {
+        let ending = Set(sessions)
+        for (id, subscriber) in subscribers where ending.contains(subscriber.session) {
+            subscribers.removeValue(forKey: id)
+            if subscriber.kinds.contains(Self.endedKind) {
+                subscriber.sink.finish(PresentationFrame(gen: subscriber.generation, rev: subscriber.revision, body: .ended))
+            } else {
+                subscriber.sink.close(.ended)
+            }
+            release(id, session: subscriber.session)
+        }
+        for session in ending where subscriberCount(session: session) == 0 { layouts[session] = nil }
+    }
+
+    /// answerEnded answers a viewer's hello for a session already gone: hello, so the viewer has a generation, then
+    /// `ended` as the last frame. A viewer that did not list the kind is closed with nothing sent.
+    public func answerEnded(session: UUID, hello: PresentationHello, sink: PresentationSink) throws {
+        guard let version = PresentationCodec.negotiatedVersion(ours: PresentationCodec.version, theirs: hello.version) else {
+            throw SubscribeError.unsupportedVersion(hello.version)
+        }
+        guard hello.kinds.contains(Self.endedKind) else {
+            sink.close(.ended)
+            return
+        }
+        lastGeneration += 1
+        let answer = PresentationHello(version: version, kinds: Self.supportedKinds.filter(hello.kinds.contains), mode: hello.mode)
+        guard sink.offer(PresentationFrame(gen: lastGeneration, rev: 0, body: .hello(answer))) else {
+            sink.close(.stalled)
+            return
+        }
+        sink.finish(PresentationFrame(gen: lastGeneration, rev: 1, body: .ended))
     }
 
     /// newOffer numbers a hand-over to viewer `owner`, nil when that viewer does not echo offers and its replies are

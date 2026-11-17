@@ -134,6 +134,104 @@ final class ControlServerPresentationTests: XCTestCase {
         return (client, state)
     }
 
+    private func present(_ id: UUID, kinds: [String] = ["status", PresentationHub.endedKind], frames count: Int = 2)
+        throws -> (StreamClient, String?, [PresentationFrame?]) {
+        let client = try XCTUnwrap(StreamClient(path: socketPath))
+        clients.append(client)
+        let list = kinds.map { "\"\($0)\"" }.joined(separator: ",")
+        let opened = offMain { () -> (String?, [PresentationFrame?]) in
+            client.send(#"{"cmd":"zmx.present","target":"\#(id.uuidString)"}"#)
+            let reply = client.readLine()
+            guard reply?.contains(#""ok":true"#) == true else { return (reply, []) }
+            client.send(#"{"kind":"hello","gen":0,"rev":0,"hello":{"version":1,"kinds":[\#(list)],"mode":"mirror"}}"#)
+            return (reply, (0..<count).map { _ in client.frame() })
+        }
+        let (reply, frames) = try XCTUnwrap(opened)
+        return (client, reply, frames)
+    }
+
+    func testAViewerListingEndedGetsEndedThenEndOfStreamWhenItsSessionIsClosed() throws {
+        let (_, store, session) = try makeServer()
+        let (client, _, frames) = try present(session.id)
+        guard case .snapshot? = frames[1]?.body else { return XCTFail("expected a snapshot, got \(frames)") }
+
+        store.closeSession(session.id)
+
+        let after = try XCTUnwrap(offMain { [client.frame(), client.frame()] })
+        XCTAssertEqual(after[0]?.body, .ended)
+        XCTAssertNil(after[1])
+    }
+
+    func testAReconnectToASessionClosedForGoodGetsHelloThenEnded() throws {
+        let (_, store, session) = try makeServer()
+        store.closeSession(session.id)
+
+        let (_, reply, frames) = try present(session.id, frames: 3)
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#), reply ?? "")
+        guard case .hello? = frames[0]?.body else { return XCTFail("expected hello, got \(frames)") }
+        XCTAssertEqual(frames[1]?.body, .ended)
+        XCTAssertEqual(frames[1]?.gen, frames[0]?.gen)
+        XCTAssertNil(frames[2] ?? nil)
+    }
+
+    func testAReconnectDuringTheUndoGracePresentsTheSession() throws {
+        let (_, store, session) = try makeServer()
+        XCTAssertTrue(store.softCloseSession(session.id, grace: 60))
+        defer { store.finalizeAllPendingCloses() }
+
+        let (_, reply, frames) = try present(session.id, kinds: ["status"])
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#), reply ?? "")
+        guard case .hello? = frames[0]?.body, case .snapshot? = frames[1]?.body else {
+            return XCTFail("expected hello then a snapshot, got \(frames)")
+        }
+    }
+
+    func testAnUnknownSessionIsStillRefused() throws {
+        _ = try makeServer()
+
+        let (_, reply, frames) = try present(UUID())
+
+        XCTAssertFalse(try XCTUnwrap(reply).contains(#""ok":true"#), reply ?? "")
+        XCTAssertTrue(frames.isEmpty)
+    }
+
+    func testASessionReopenedUnderItsOldIDPresentsNormally() throws {
+        let (server, store, session) = try makeServer()
+        store.closeSession(session.id)
+        XCTAssertTrue(server.library.reopenLatestRecentClosed(into: store))
+        let reopened = try XCTUnwrap(store.session(withID: session.id))
+        reopened.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        server.refreshWindowCache()
+
+        let (_, reply, frames) = try present(session.id)
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#), reply ?? "")
+        guard case .hello? = frames[0]?.body, case .snapshot? = frames[1]?.body else {
+            return XCTFail("expected hello then a snapshot, got \(frames)")
+        }
+    }
+
+    func testASessionOfAWorkspaceReopenedUnderItsOldIDPresentsNormally() throws {
+        let (server, store, _) = try makeServer()
+        let workspace = store.addWorkspace(name: "closing").id
+        let session = try XCTUnwrap(store.addSession(toWorkspace: workspace, cwd: "/tmp"))
+        store.removeWorkspace(workspace)
+        XCTAssertNil(store.session(withID: session.id))
+        XCTAssertTrue(server.library.reopenLatestRecentClosed(into: store))
+        let reopened = try XCTUnwrap(store.session(withID: session.id))
+        reopened.surface = GhosttySurfaceView(workingDirectory: "/tmp", backedByZmx: true)
+        server.refreshWindowCache()
+
+        let (_, reply, frames) = try present(session.id)
+
+        XCTAssertTrue(try XCTUnwrap(reply).contains(#""ok":true"#), reply ?? "")
+        guard case .hello? = frames[0]?.body, case .snapshot? = frames[1]?.body else {
+            return XCTFail("expected hello then a snapshot, got \(frames)")
+        }
+    }
+
     func testAnOpenStreamLeavesTheAcceptThreadFree() throws {
         let (_, _, session) = try makeServer()
         _ = try openStream(for: session)

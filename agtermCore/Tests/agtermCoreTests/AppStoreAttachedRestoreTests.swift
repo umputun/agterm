@@ -83,17 +83,30 @@ struct AppStoreAttachedRestoreTests {
         #expect(back.splitInitialCommand == nil)
     }
 
-    @Test func anEndedRowRestoresEndedWithoutAttaching() throws {
+    @Test func aRowSavedEndedIsNotRestoredAndItsCompanionComesBackOnItsOwn() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
-        let row = try addAttachedRow(to: store, workspace: work.id)
+        let row = try addAttachedRow(to: store, workspace: work.id, origin: "o1")
+        let companion = try addAttachedRow(to: store, workspace: work.id, origin: "o2")
+        companion.parentID = row.id
         row.ended = true
 
-        let back = try #require(relaunched(store).session(withID: row.id))
+        let restored = relaunched(store)
 
-        #expect(back.ended)
-        #expect(!back.awaitsOriginCheck)
-        #expect(back.initialCommand == RemoteSession.endedCommand(host: "box"))
+        #expect(restored.session(withID: row.id) == nil)
+        let back = try #require(restored.session(withID: companion.id))
+        #expect(back.parentID == nil)
+        #expect(back.awaitsOriginCheck)
+    }
+
+    @Test func aHeadlessRowThatLostItsDaemonStillRestoresEnded() throws {
+        let (store, session) = makeHeadlessSession(split: false)
+        store.markSessionEnded(session.id)
+
+        let restored = makeStore()
+        restored.restore(from: store.snapshot(), launchRestore: true)
+
+        #expect(restored.session(withID: session.id)?.ended == true)
     }
 
     @Test func aPageRowRestoresWaitingForItsPage() throws {
@@ -151,30 +164,30 @@ struct AppStoreAttachedRestoreTests {
         #expect(!saved.sessions.contains { $0.id == row.id })
     }
 
-    @Test func endingAnAttachedRowMarksItEndedInTheSnapshot() throws {
-        let store = makeStore()
+    @Test func closingAnEndedAttachedRowLeavesItsCompanionAndNoRecentClosedEntry() throws {
+        let (store, recent, _) = makeStoreWithRecentClosed()
         let work = store.addWorkspace(name: "work")
-        let row = try addAttachedRow(to: store, workspace: work.id, split: true)
-        let holder = relaunched(store)
-        let held = try #require(holder.session(withID: row.id))
+        let row = try addAttachedRow(to: store, workspace: work.id, origin: "o1", split: true)
+        let companion = try addAttachedRow(to: store, workspace: work.id, origin: "o2")
+        companion.parentID = row.id
 
-        holder.endAttachedRow(held.id)
+        store.closeEndedAttachedRow(row.id)
 
-        #expect(held.ended)
-        #expect(!held.awaitsOriginCheck)
-        #expect(held.initialCommand == RemoteSession.endedCommand(host: "box"))
-        #expect(held.splitInitialCommand == RemoteSession.endedCommand(host: "box"))
-        #expect(holder.snapshot().workspaces[0].attached?.first?.session.ended == true)
+        #expect(store.session(withID: row.id) == nil)
+        #expect(store.session(withID: companion.id)?.parentID == nil)
+        #expect(recent.loadRemote().isEmpty)
+        store.closeSession(companion.id)
+        #expect(recent.loadRemote().count == 1)
     }
 
-    @Test func endingALocalRowDoesNothing() throws {
+    @Test func closingALocalRowAsEndedDoesNothing() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let local = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
 
-        store.endAttachedRow(local.id)
+        store.closeEndedAttachedRow(local.id)
 
-        #expect(!local.ended)
+        #expect(store.session(withID: local.id) != nil)
     }
 
     @Test func aBuildThatPredatesAttachedRowsReadsOnlyTheLocalSessions() throws {

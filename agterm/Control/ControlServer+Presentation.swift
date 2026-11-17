@@ -6,7 +6,12 @@ import agtermCore
 extension ControlServer: PresentationStreamHost {
     /// Answers `zmx.present`. The stream itself starts only after this reply is on the wire.
     func openPresentation(session target: String) -> ControlResponse {
-        resolver.resolveSession(target, window: nil) { store, id in
+        // a session in its undo grace keeps its stream, and one removed for good is answered `ended` on it
+        if let id = UUID(uuidString: target), library.store(forSession: id) == nil,
+           library.store(holdingSession: id) != nil || PresentationEnds.shared.contains(id) {
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+        return resolver.resolveSession(target, window: nil) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
@@ -19,7 +24,7 @@ extension ControlServer: PresentationStreamHost {
     }
 
     func presentationSnapshot(forSession id: UUID) -> PresentationSnapshot {
-        var snapshot = library.store(forSession: id)?.presentationSnapshot(forSession: id, now: hudClock())
+        var snapshot = library.store(holdingSession: id)?.presentationSnapshot(forSession: id, now: hudClock())
             ?? PresentationSnapshot(status: nil, hud: nil)
         snapshot.respawns = PresentationRespawns(epoch: originEpoch, generations: respawnGenerations[id] ?? [:])
         return snapshot
@@ -48,6 +53,7 @@ extension ControlServer: PresentationStreamHost {
             self?.pendingJobCancels.remove(job.id)
             self?.library.store(forSession: job.session)?.finishRemoteOverlay(job)
         }
+        library.presentationHub = presentationHub
         for entry in library.windows {
             guard let store = library.store(for: entry.id) else { continue }
             store.presentationHub = presentationHub
@@ -113,6 +119,6 @@ extension ControlServer: PresentationStreamHost {
     }
 
     func presentationSourceExists(_ session: UUID) -> Bool {
-        library.store(forSession: session)?.session(withID: session) != nil
+        library.store(holdingSession: session) != nil
     }
 }

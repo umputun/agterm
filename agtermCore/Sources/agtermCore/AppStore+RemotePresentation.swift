@@ -325,6 +325,9 @@ extension AppStore {
         return true
     }
 
+    /// attachEnded is the `tree` read-back of a pane showing the ended notice, nil otherwise.
+    func attachEnded(_ pane: UUID?) -> Bool? { RemoteEndBook.shared.notice(pane: pane) != nil ? true : nil }
+
     /// The local role standing for one of the origin's panes, resolved at use so a swap or promotion on this
     /// side since the attach is honoured. Nil for a pane with no counterpart here.
     public func localPane(_ pane: PresentationPane?, in session: Session) -> OverlayPane? {
@@ -356,7 +359,7 @@ extension Session {
     /// remoteRowNotice is the line under a remote row: an ended session names its host, others say what their
     /// presentation stream is doing, nil when there is nothing to say.
     public var remoteRowNotice: String? {
-        guard let host = remoteHost else { return nil }
+        guard let host = remoteHost, remotePresentation?.originEnded != true else { return nil }
         if ended { return "Ended on \(host)" }
         return remoteConnection?.rowNotice(host: host)
     }

@@ -45,7 +45,7 @@ extension AppStore {
     /// attachOriginAdditions attaches a pane the saved layout lists once a removal here freed the split slot for it.
     public func attachOriginAdditions(forSession id: UUID, attach: RemoteAttachLines) {
         guard let session = session(withID: id), let state = session.remotePresentation, !state.binding.catalogOwned,
-              let origin = state.binding.origin, let layout = state.layout else { return }
+              !state.originEnded, let origin = state.binding.origin, let layout = state.layout else { return }
         addOriginSplit(session, layout: layout, binding: state.binding, origin: origin, attach: attach)
     }
 
@@ -75,13 +75,8 @@ extension AppStore {
         guard let shown = layout.scratchShown else { return }
         let identity = layout.scratch
         if session.scratchDaemon?.identity != identity || (identity == nil && session.scratchSurface != nil) {
-            // between two attaches there is no surface to close, and what the old scratch owned still goes
-            if !closeScratch(session.id), session.scratchActive { toggleScratch(session.id) }
-            if let current = session.scratchDaemon { releaseScratchOwnedState(of: session, token: current.identity.uuidString) }
-            session.scratchCommand = nil
+            dropOriginScratch(of: session)
             session.scratchDaemon = identity.map { Session.ScratchDaemon(identity: $0, shown: shown) }
-            session.originScratchClient = nil
-            scheduleTreeChanged()
         }
         guard let identity else { return }
         session.scratchDaemon?.shown = shown
@@ -91,6 +86,18 @@ extension AppStore {
             session.scratchCommand = attach.scratchAttach(origin, daemon: binding.scratchDaemon(for: identity), local: client)
         }
         if session.scratchActive != shown { toggleScratch(session.id) }
+    }
+
+    /// dropOriginScratch closes a row's origin scratch, parked or running, and ends its wait to reconnect.
+    private func dropOriginScratch(of session: Session) {
+        if let client = session.scratchClientIdentity { RemoteReconnectBook.shared.cancel(pane: client) }
+        // between two attaches there is no surface to close, and what the old scratch owned still goes
+        if !closeScratch(session.id), session.scratchActive { toggleScratch(session.id) }
+        if let current = session.scratchDaemon { releaseScratchOwnedState(of: session, token: current.identity.uuidString) }
+        session.scratchCommand = nil
+        session.scratchDaemon = nil
+        session.originScratchClient = nil
+        scheduleTreeChanged()
     }
 
     /// originScratchStopped marks row `id`'s origin scratch attach as ended while the saved layout still lists that
@@ -114,11 +121,26 @@ extension AppStore {
         return true
     }
 
+    /// remoteSessionEnded marks row `id`'s origin session as removed for good, takes down what the stream put on the
+    /// row, and returns the replicas that may close now.
+    public func remoteSessionEnded(forSession id: UUID) -> [UUID] {
+        guard let session = session(withID: id), let state = session.remotePresentation, !state.binding.catalogOwned,
+              !state.originEnded else { return [] }
+        session.remotePresentation?.originEnded = true
+        session.remoteConnectionRevision += 1
+        withdrawRemoteReplicas(of: session)
+        if session.scratchFollowsOrigin, session.scratchDaemon != nil { dropOriginScratch(of: session) }
+        return [session.splitPaneIdentity, session.paneIdentity].compactMap { $0 }.filter {
+            canCloseRemovedRemotePane($0, forSession: id)
+        }
+    }
+
     /// Whether confirmed origin removal permits closing this replica without discarding a pending local split.
     public func canCloseRemovedRemotePane(_ local: UUID, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), session.paneRole(forIdentity: local) != nil,
-              let state = session.remotePresentation, !state.binding.catalogOwned, let layout = state.layout,
-              let remote = state.binding.remotePane(forLocal: local), !layout.panes.contains(remote) else { return false }
+              let state = session.remotePresentation, !state.binding.catalogOwned,
+              let remote = state.binding.remotePane(forLocal: local),
+              state.originEnded || state.layout.map({ !$0.panes.contains(remote) }) == true else { return false }
         // ordinary primary close would discard a local split that has not produced its surface yet
         if local == session.paneIdentity, let split = session.splitPaneIdentity,
            state.binding.remotePane(forLocal: split) == nil, session.splitSurface?.isRealized != true { return false }

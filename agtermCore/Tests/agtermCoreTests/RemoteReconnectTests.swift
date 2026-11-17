@@ -189,3 +189,62 @@ struct RemoteReconnectBookTests {
         #expect(book.finished(pane: pane, ok: true, now: t0)?.host == "mini")
     }
 }
+
+@MainActor
+struct RemoteEndBookTests {
+    let pane = UUID()
+    let session = UUID()
+
+    @Test func aSettlingPaneShowsNothingUntilItsSessionResolves() {
+        let book = RemoteEndBook()
+        book.settle(pane: pane, session: session, host: "mini", name: "build")
+        #expect(book.notice(pane: pane) == nil)
+        #expect(book.settling(session: session))
+
+        book.resolved(session: UUID())
+        #expect(book.notice(pane: pane) == nil)
+        book.resolved(session: session)
+
+        #expect(book.notice(pane: pane)?.name == "build")
+        #expect(book.notice(pane: pane)?.host == "mini")
+        #expect(!book.settling(session: session))
+    }
+
+    @Test func aShownNoticeDrawsAtOnceAndClearsByPaneOrSession() {
+        let book = RemoteEndBook()
+        let other = UUID()
+        book.show(pane: pane, session: session, host: "mini", name: "build")
+        book.show(pane: other, session: session, host: "mini", name: "build")
+        #expect(book.notice(pane: pane) != nil)
+
+        book.clear(pane: pane)
+        #expect(book.notice(pane: pane) == nil)
+        #expect(book.notice(pane: other) != nil)
+        book.clear(session: session)
+        #expect(book.entries.isEmpty)
+        #expect(book.notice(pane: nil) == nil)
+    }
+
+    @Test func closingAPaneOrItsSessionDropsItsEndedNotice() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.hasSplit = true
+        session.isSplit = true
+        session.splitPaneIdentity = UUID()
+        let left = session.paneIdentity, right = try #require(session.splitPaneIdentity)
+        let book = RemoteEndBook.shared
+        book.show(pane: left, session: session.id, host: "mini", name: "build")
+        book.show(pane: right, session: session.id, host: "mini", name: "build")
+        defer { book.clear(session: session.id) }
+
+        store.closeSplit(session.id)
+        #expect(book.notice(pane: right) == nil)
+        #expect(book.notice(pane: left) != nil)
+
+        _ = store.closeSession(session.id)
+        #expect(book.notice(pane: left) == nil)
+    }
+}

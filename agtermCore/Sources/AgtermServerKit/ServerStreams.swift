@@ -79,7 +79,9 @@ final class ServerStreams: PresentationStreamHost, OverlayJobStreamHost, PageSer
 
     // MARK: presentation
 
-    func presentationSourceExists(_ session: UUID) -> Bool { store.session(withID: session) != nil }
+    func presentationSourceExists(_ session: UUID) -> Bool {
+        store.session(withID: session) != nil || store.pendingCloseSession(withID: session) != nil
+    }
 
     func presentationSnapshot(forSession id: UUID) -> PresentationSnapshot {
         var snapshot = store.presentationSnapshot(forSession: id, now: Date())

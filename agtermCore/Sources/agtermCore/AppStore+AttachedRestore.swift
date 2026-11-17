@@ -26,7 +26,7 @@ extension AppStore {
     }
 
     /// attachedSession rebuilds a saved attached row. A terminal row runs its saved attach lines again without taking
-    /// the lead, an ended one shows that it ended, and a page row waits for its origin to hand the page over.
+    /// the lead, and a page row waits for its origin to hand the page over.
     func attachedSession(from saved: AttachedSessionSnapshot) -> Session {
         let snapshot = saved.session
         let origin = saved.origin
@@ -47,20 +47,19 @@ extension AppStore {
         session.tint = snapshot.tint
         session.parentID = snapshot.parentID
         session.isExpanded = !(snapshot.collapsed ?? false)
-        session.ended = snapshot.ended ?? false
         session.lastSelectedAt = snapshot.lastSelectedAt.map(Date.init(timeIntervalSince1970:))
         session.backgroundWatermark = snapshot.backgroundWatermark
         session.paneBackgrounds = PaneBackgrounds(left: snapshot.paneBackgrounds?.left,
                                                   right: hasSplit ? snapshot.paneBackgrounds?.right : nil)
         session.remotePresentation = RemotePresentationState(binding: binding)
-        session.awaitsOriginCheck = !session.ended
+        session.awaitsOriginCheck = true
         guard !page else {
             // a Mac's page row has no stream, so its row says it waits for the page until the origin hands it over
-            if !session.ended { session.remotePresentation?.connection = .connecting }
+            session.remotePresentation?.connection = .connecting
             return session
         }
         session.commandWait = true
-        guard !session.ended, let primary = attachLine(origin, pane: session.paneIdentity, role: .left) else {
+        guard let primary = attachLine(origin, pane: session.paneIdentity, role: .left) else {
             session.initialCommand = RemoteSession.endedCommand(host: origin.host)
             return session
         }
@@ -82,24 +81,20 @@ extension AppStore {
         return line
     }
 
-    /// endAttachedRow marks a row attached from another host as ended once its origin no longer has the session; a pane
-    /// that has not started yet shows that instead of attaching.
-    public func endAttachedRow(_ id: UUID) {
-        guard let row = session(withID: id), row.attachedOrigin != nil, let host = row.remoteHost, !row.ended else { return }
-        row.ended = true
-        row.awaitsOriginCheck = false
-        if row.content == .terminal, row.surface == nil { row.initialCommand = RemoteSession.endedCommand(host: host) }
-        if row.content == .terminal, row.hasSplit, row.splitSurface == nil {
-            row.splitInitialCommand = RemoteSession.endedCommand(host: host)
-        }
-        scheduleTreeChanged()
-        save()
+    /// closeEndedAttachedRow closes row `id`, attached from another host, once its origin no longer has the session. Its
+    /// companions stay, at the top level, and nothing goes to Recent Closed.
+    public func closeEndedAttachedRow(_ id: UUID) {
+        guard session(withID: id)?.attachedOrigin != nil else { return }
+        _ = remoteSessionEnded(forSession: id)
+        _ = closeExactly([id])
     }
 
-    /// placingAttached puts each saved attached row back at its place among `sessions`, skipping an id already restored.
+    /// placingAttached puts each saved attached row back at its place among `sessions`, skipping an id already restored
+    /// and a row saved ended, whose origin session is gone.
     func placingAttached(_ saved: [AttachedSessionSnapshot]?, among sessions: [Session], seen: inout Set<UUID>) -> [Session] {
         var placed = sessions
-        for row in (saved ?? []).sorted(by: { $0.index < $1.index }) where seen.insert(row.session.id).inserted {
+        for row in (saved ?? []).sorted(by: { $0.index < $1.index })
+            where row.session.ended != true && seen.insert(row.session.id).inserted {
             placed.insert(attachedSession(from: row), at: min(max(row.index, 0), placed.count))
         }
         return placed
