@@ -252,9 +252,9 @@
       and the failure goes to the notification
 - [x] backlog item: writing the image onto a Mac origin's clipboard so a program's own Ctrl-V finds it, with the
       shared-clipboard cost
-- [ ] verify every Overview requirement; run `make build`, `cd agtermCore && swift test`, `make test-app`,
+- [x] verify every Overview requirement; run `make build`, `cd agtermCore && swift test`, `make test-app`,
       `make lint` once
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Manual checks*
