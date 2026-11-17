@@ -139,7 +139,7 @@ public enum PasteBundle {
     /// The caller removes the whole folder, `url.deletingLastPathComponent()`, whatever the outcome.
     public static func temporaryFile(_ entries: [Entry]) throws -> URL {
         var template = Array((NSTemporaryDirectory() + "agterm-paste-XXXXXX").utf8CString)
-        guard let folder = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress).map { String(cString: $0) } }) else {
+        guard let folder = template.withUnsafeMutableBufferPointer({ $0.baseAddress.flatMap { mkdtemp($0) }.map { String(cString: $0) } }) else {
             throw PasteStaging.Failure.system("cannot create a temporary folder: \(PasteStaging.errorText())")
         }
         let path = folder + "/bundle"
