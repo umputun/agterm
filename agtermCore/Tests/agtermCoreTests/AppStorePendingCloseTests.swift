@@ -126,6 +126,80 @@ struct AppStorePendingCloseTests {
         return session
     }
 
+    private final class KillLog {
+        var endedAtKill: [Bool] = []
+    }
+
+    private func finalizingStore(watching id: @escaping () -> UUID?, log: KillLog) -> AppStore {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let store = AppStore(persistence: PersistenceStore(directory: dir), paneFinalizer: { _ in
+            log.endedAtKill.append(id().map(PresentationEnds.shared.contains) ?? false)
+        }, launchPaneDrop: nil)
+        store.workspaces = [Workspace(name: "workspace 1", sessions: [])]
+        return store
+    }
+
+    @Test(arguments: ["hard close", "hard workspace", "grace session", "grace member", "grace workspace"])
+    func finalRemovalRecordsTheSessionEndedBeforeItsDaemonsAreKilled(path: String) {
+        var watched: UUID?
+        let log = KillLog()
+        let store = finalizingStore(watching: { watched }, log: log)
+        let session = addSession(store, name: "build")
+        let mate = addSession(store, name: "mate")
+        watched = session.id
+        let workspaceID = store.workspaces[0].id
+        store.workspaces.append(Workspace(name: "staying", sessions: [Session(initialCwd: "/tmp")]))
+
+        switch path {
+        case "hard close": store.closeSession(session.id)
+        case "hard workspace": store.removeWorkspace(workspaceID)
+        case "grace session":
+            #expect(store.softCloseSession(session.id, grace: 60))
+            #expect(!PresentationEnds.shared.contains(session.id))
+            store.finalizeAllPendingCloses()
+        case "grace member":
+            #expect(store.softCloseSessions([session.id, mate.id], grace: 60))
+            #expect(store.finalizePendingClose(ofSession: session.id))
+        default:
+            #expect(store.softRemoveWorkspace(workspaceID, grace: 60))
+            #expect(!PresentationEnds.shared.contains(session.id))
+            store.finalizeAllPendingCloses()
+        }
+
+        #expect(PresentationEnds.shared.contains(session.id))
+        #expect(log.endedAtKill.first == true)
+        store.finalizeAllPendingCloses()
+    }
+
+    @Test func undoAndPaneCloseNeverRecordASessionEnded() {
+        let store = store()
+        let session = addSession(store, name: "build", split: true)
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+        #expect(store.undoPendingClose())
+        store.closeSplit(session.id)
+
+        #expect(store.session(withID: session.id) != nil)
+        #expect(!PresentationEnds.shared.contains(session.id))
+    }
+
+    @Test func finalRemovalEndsTheSessionsLiveStreams() throws {
+        let store = store()
+        let session = addSession(store, name: "build")
+        let hub = PresentationHub(staleTimeout: 30)
+        store.presentationHub = hub
+        let viewer = PresentationHubTests.Sink()
+        let hello = PresentationHello(version: 1, kinds: [PresentationHub.endedKind], mode: .mirror)
+        try hub.subscribe(session: session.id, hello: hello, sink: viewer) { PresentationSnapshot(status: nil, hud: nil) }
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+        #expect(viewer.finished == nil)
+        store.finalizeAllPendingCloses()
+
+        #expect(viewer.finished?.body == .ended)
+        #expect(hub.subscriberCount(session: session.id) == 0)
+    }
+
     @Test func softClosedSessionStaysClaimedWithBothItsPanes() {
         let store = store()
         let session = addSession(store, name: "build", split: true)

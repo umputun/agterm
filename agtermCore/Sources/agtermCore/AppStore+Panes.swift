@@ -27,12 +27,20 @@ extension AppStore {
     /// `alreadyFinalized` names a pane whose daemon the CALLER has destroyed, so the teardown does not ask
     /// the finalizer to kill a name that is already gone. Only `zmx kill` passes one.
     func finalizePaneIdentities(_ sessions: [Session], alreadyFinalized: UUID? = nil) {
+        // before the kill below, so a viewer's `ended` is queued ahead of the attach exit the kill causes
+        endPresentations(of: sessions.map(\.id))
         // every pane, an attached one included: its daemon is not ours to kill, its lead state is
         for session in sessions {
             ([session.paneIdentity] + [session.splitPaneIdentity].compactMap { $0 }).forEach(ZmxLeadBook.shared.forget)
         }
         let identities = PaneIdentityInventory.identities(in: sessions).filter { $0 != alreadyFinalized }
         if !identities.isEmpty { paneFinalizer?(identities) }
+    }
+
+    /// endPresentations records `ids` as removed for good and ends their viewers' streams with `ended`.
+    func endPresentations(of ids: [UUID]) {
+        PresentationEnds.shared.record(ids)
+        presentationHub?.end(sessions: ids)
     }
 
     /// Every pane identity of `sessions` leaves mount eligibility. A hidden split's identity is included;

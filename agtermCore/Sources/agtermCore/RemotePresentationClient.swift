@@ -316,7 +316,7 @@ public final class RemotePresentationClient {
                 }
             }
         case .ack, .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
-             .overlayClosed, .unknown,
+             .overlayClosed, .unknown, .ended,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break
         }

@@ -162,17 +162,17 @@ along with everyone else and gain the reconnecting notice through the shared rec
   `AppStorePendingCloseTests.swift`, `WindowLibraryTests.swift`, `agtermCore/Tests/AgtermServerTests/ServerStreamsTests.swift`,
   `ServerActionsRemoteTests.swift`, `agtermTests/ControlServerPresentationTests.swift`
 
-- [ ] failing tests first: `ended` round-trips through the codec; an older decoder sees `unknown`
-- [ ] failing tests: the callback fires before `paneFinalizer` for hard session close, hard `removeWorkspace`,
+- [x] failing tests first: `ended` round-trips through the codec; an older decoder sees `unknown` (the existing `future.kind` decode case covers it)
+- [x] failing tests: the callback fires before `paneFinalizer` for hard session close, hard `removeWorkspace`,
       grace expiry of a session, a member and a workspace, and window delete (loaded and snapshot-only); it never
       fires for soft close, undo, window close or a pane close
-- [ ] failing tests: a live stream gets `ended` then closes; soft close keeps it and undo keeps it; through the real
+- [x] failing tests: a live stream gets `ended` then closes; soft close keeps it and undo keeps it; through the real
       open/adopt/client path, a reconnect to a finalized id gets hello then `ended` and the client stops, a
       reconnect during grace presents normally, an unknown id is still refused; hard close then Open Recent under the
       same id presents normally, for a session and a workspace
-- [ ] add the frame kind and the callback; presentation layer sends `sendFinal(ended)`, records finalized ids,
+- [x] add the frame kind and the callback; presentation layer sends `sendFinal(ended)`, records finalized ids,
       admits live, pending-close and finalized ids in that precedence in both hosts
-- [ ] run the scoped tests - must pass before task 2
+- [x] run the scoped tests - must pass before task 2
 
 ### Task 2: Viewer closes an ended row silently
 

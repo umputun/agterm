@@ -17,7 +17,70 @@ struct PresentationHubTests {
 
         func close(_ reason: PresentationHub.CloseReason) { closed = reason }
 
+        var finished: PresentationFrame?
+        func finish(_ frame: PresentationFrame) { finished = frame }
+
         var bodies: [PresentationFrame.Body] { frames.map(\.body) }
+    }
+
+    static let endedHello = PresentationHello(version: 1, kinds: ["status", PresentationHub.endedKind], mode: .mirror)
+
+    @Test func endingASessionFinishesItsViewersWithEndedAndForgetsThem() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+        let other = Sink()
+        let otherSession = UUID()
+        try hub.subscribe(session: Self.session, hello: Self.endedHello, sink: viewer) { Self.empty }
+        try hub.subscribe(session: otherSession, hello: Self.endedHello, sink: other) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+        hub.publish(.status(Self.blocked), session: Self.session)
+
+        let finished = try #require(viewer.finished)
+        #expect(finished.body == .ended)
+        #expect(finished.rev == 2)
+        #expect(finished.gen == viewer.frames.first?.gen)
+        #expect(viewer.bodies.count == 2)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+        #expect(other.finished == nil)
+        #expect(hub.subscriberCount(session: otherSession) == 1)
+    }
+
+    @Test func endingASessionClosesAViewerThatDoesNotListEnded() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+        try hub.subscribe(session: Self.session, hello: Self.hello, sink: viewer) { Self.empty }
+
+        hub.end(sessions: [Self.session])
+
+        #expect(viewer.finished == nil)
+        #expect(viewer.closed == .ended)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    @Test func answeringAnEndedSessionSendsHelloThenEndedWithoutSubscribing() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+
+        try hub.answerEnded(session: Self.session, hello: Self.endedHello, sink: viewer)
+
+        #expect(viewer.bodies == [.hello(Self.endedHello)])
+        let finished = try #require(viewer.finished)
+        #expect(finished.body == .ended)
+        #expect(finished.gen == viewer.frames.first?.gen)
+        #expect(finished.rev == 1)
+        #expect(hub.subscriberCount(session: Self.session) == 0)
+    }
+
+    @Test func answeringAnEndedSessionClosesAViewerThatDoesNotListEnded() throws {
+        let hub = makeHub()
+        let viewer = Sink()
+
+        try hub.answerEnded(session: Self.session, hello: Self.hello, sink: viewer)
+
+        #expect(viewer.frames.isEmpty)
+        #expect(viewer.finished == nil)
+        #expect(viewer.closed == .ended)
     }
 
     final class Clock {

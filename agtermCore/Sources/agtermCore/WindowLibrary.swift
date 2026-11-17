@@ -86,6 +86,8 @@ public final class WindowLibrary {
     /// remoteOpenClaims are remote windows the user opened whose mirror has not asked yet; never saved.
     @ObservationIgnored var remoteOpenClaims: Set<UUID> = []
     @ObservationIgnored private let paneFinalizer: (([UUID]) -> Void)?
+    /// presentationHub is the hub every open store publishes to, here so a deleted closed window's viewers are ended.
+    @ObservationIgnored public var presentationHub: PresentationHub?
     @ObservationIgnored private let launchPaneDrop: (([UUID]) -> Void)?
     @ObservationIgnored private let launchInventorySink: ((Set<UUID>?) -> Void)?
     @ObservationIgnored private var launchInventoryComplete = true
@@ -810,17 +812,27 @@ public final class WindowLibrary {
         return launchInventoryComplete ? identities : nil
     }
 
+    private func endPresentations(of ids: [UUID]) {
+        PresentationEnds.shared.record(ids)
+        presentationHub?.end(sessions: ids)
+    }
+
     private func finalizeWindowPanes(_ id: UUID) {
-        guard let paneFinalizer, windows.first(where: { $0.id == id })?.isRemote != true else { return }
+        guard windows.first(where: { $0.id == id })?.isRemote != true else { return }
+        // each window's sessions are ended before the kill, as `finalizePaneIdentities` does
         if let store = stores[id] {
-            let identities = PaneIdentityInventory.identities(in: store.workspaces.flatMap(\.sessions))
-            if !identities.isEmpty { paneFinalizer(identities) }
+            let sessions = store.workspaces.flatMap(\.sessions)
+            endPresentations(of: sessions.map(\.id))
+            let identities = PaneIdentityInventory.identities(in: sessions)
+            if let paneFinalizer, !identities.isEmpty { paneFinalizer(identities) }
             return
         }
         do {
             var snapshot = try persistenceStore(for: id).loadChecked()
+            // a closed window's session can still have subscribed viewers
+            endPresentations(of: snapshot.workspaces.flatMap(\.sessions).map(\.id))
             let identities = PaneIdentityInventory.upgrade(&snapshot).identities
-            if !identities.isEmpty { paneFinalizer(Array(identities)) }
+            if let paneFinalizer, !identities.isEmpty { paneFinalizer(Array(identities)) }
         } catch {
             log("window delete could not inventory panes for \(id): \(error)")
         }

@@ -18,6 +18,18 @@ public protocol PresentationStreamHost: AnyObject {
     func prepareForPresentationStream()
 }
 
+/// PresentationEnds records the sessions this process removed for good, so a viewer reconnecting after the removal
+/// is told the session ended rather than refused and left retrying. Only ever grows: one id per removed session.
+@MainActor
+public final class PresentationEnds {
+    public static let shared = PresentationEnds()
+    private var sessions: Set<UUID> = []
+
+    public func record(_ ids: [UUID]) { sessions.formUnion(ids) }
+
+    public func contains(_ id: UUID) -> Bool { sessions.contains(id) }
+}
+
 /// One viewer's presentation stream: the hub's sink on one side, a `ControlStreamOwner` on the other.
 ///
 /// The viewer speaks first. Its hello subscribes it, and everything after goes to the hub as that
@@ -36,6 +48,7 @@ public final class PresentationStream: PresentationSink {
     private let owner: ControlStreamOwner
     private weak var host: (any PresentationStreamHost)?
     private var subscriber: PresentationHub.SubscriberID?
+    private var finishing = false
 
     init(session: UUID, owner: ControlStreamOwner, host: any PresentationStreamHost) {
         self.session = session
@@ -61,6 +74,16 @@ public final class PresentationStream: PresentationSink {
         owner.shutdown()
     }
 
+    public func finish(_ frame: PresentationFrame) {
+        finishing = true
+        if let line = try? PresentationCodec.encode(frame), owner.sendFinal(line) { return }
+        owner.shutdown()
+    }
+
+    /// endsItself is true for a stream writing its last line, or one admitted for a session removed for good that
+    /// answers its hello with `ended`. Either closes on its own; a shutdown would cut the `ended` off.
+    var endsItself: Bool { finishing || (!subscribed && PresentationEnds.shared.contains(session)) }
+
     public func shutdown() { owner.shutdown() }
 
     func receive(_ line: Data) {
@@ -82,12 +105,17 @@ public final class PresentationStream: PresentationSink {
             owner.shutdown()
             return
         }
-        guard host.presentationSourceExists(session) else {
-            presentationLog.notice("closing the presentation stream of \(session) whose session is gone")
-            owner.shutdown()
-            return
-        }
         do {
+            guard host.presentationSourceExists(session) else {
+                guard PresentationEnds.shared.contains(session) else {
+                    presentationLog.notice("closing the presentation stream of \(session) whose session is gone")
+                    owner.shutdown()
+                    return
+                }
+                presentationLog.notice("answering the presentation stream of \(session) whose session ended")
+                try host.presentationHub.answerEnded(session: session, hello: hello, sink: self)
+                return
+            }
             subscriber = try host.subscribePresentation(self, hello: hello)
         } catch {
             presentationLog.error("refusing the presentation stream of \(session): \(error)")
@@ -147,7 +175,7 @@ extension PresentationStreamHost {
     /// dropOrphanedPresentationStreams ends the streams of sessions that are gone. A viewer would otherwise keep
     /// the last mirrored state for good, on a stream that still answers pings.
     public func dropOrphanedPresentationStreams() {
-        for stream in presentationStreams where !presentationSourceExists(stream.session) {
+        for stream in presentationStreams where !presentationSourceExists(stream.session) && !stream.endsItself {
             presentationLog.notice("closing the presentation stream of \(stream.session) whose session is gone")
             stream.shutdown()
         }

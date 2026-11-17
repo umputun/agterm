@@ -177,6 +177,80 @@ struct ServerStreamsTests {
         #expect(hello.kinds.contains(PresentationHub.statusClearKind))
     }
 
+    @Test func aSessionClosedForGoodEndsItsViewersWithEndedThenEndOfStream() async throws {
+        let session = try newSession()
+        let viewer = try await connect(session)
+        defer { viewer.disconnect() }
+
+        harness.store.closeSession(session.id)
+
+        let ended = await offPool { viewer.first { $0 == .ended } }
+        #expect(ended == .ended)
+        let after = await offPool { viewer.next(within: 10) }
+        #expect(after == nil)
+        #expect(viewer.missed == "end of stream")
+    }
+
+    @Test func aViewerKeepsItsStreamThroughTheUndoGraceAndAnUndo() async throws {
+        let session = try newSession()
+        let viewer = try await connect(session)
+        defer { viewer.disconnect() }
+
+        #expect(harness.store.softCloseSession(session.id, grace: 60))
+        streams.dropOrphanedPresentationStreams()
+        #expect(harness.store.undoPendingClose())
+        _ = harness.store.setContext("back", forSession: session.id)
+
+        let change = await offPool { viewer.first { if case .context = $0 { true } else { false } } }
+        #expect(change == .context("back"))
+    }
+
+    @Test func aViewerGetsEndedWhenTheUndoGraceRunsOut() async throws {
+        let session = try newSession()
+        let viewer = try await connect(session)
+        defer { viewer.disconnect() }
+
+        #expect(harness.store.softCloseSession(session.id, grace: 60))
+        streams.dropOrphanedPresentationStreams()
+        harness.store.finalizeAllPendingCloses()
+
+        let ended = await offPool { viewer.first { $0 == .ended } }
+        #expect(ended == .ended)
+    }
+
+    @Test func theOrphanSweepLeavesAnEndedLineBeingWritten() async throws {
+        let session = try newSession()
+        let viewer = try await connect(session)
+        defer { viewer.disconnect() }
+
+        harness.store.closeSession(session.id)
+        streams.dropOrphanedPresentationStreams()
+
+        let ended = await offPool { viewer.first { $0 == .ended } }
+        #expect(ended == .ended)
+    }
+
+    @Test(arguments: [false, true])
+    func aReconnectToASessionRemovedForGoodGetsHelloThenEnded(sweptBeforeHello: Bool) async throws {
+        let session = try newSession()
+        harness.store.closeSession(session.id)
+        var fds: [Int32] = [-1, -1]
+        #expect(socketpair(AF_UNIX, UnixSocket.streamType, 0, &fds) == 0)
+        streams.adoptPresentationStream(descriptor: fds[0], session: session.id)
+        if sweptBeforeHello { streams.dropOrphanedPresentationStreams() }
+        let viewer = Viewer(fd: fds[1])
+        defer { viewer.disconnect() }
+
+        try viewer.send(.hello(PresentationHello(version: PresentationCodec.version, kinds: PresentationHub.supportedKinds,
+                                                 mode: .mirror)))
+
+        let frames = await offPool { [viewer.next(), viewer.next(), viewer.next(within: 10)] }
+        guard case .hello? = frames[0]?.body else { Issue.record("no hello, got \(String(describing: frames[0]))"); return }
+        #expect(frames[1]?.body == .ended)
+        #expect(frames[1]?.gen == frames[0]?.gen)
+        #expect(frames[2] == nil)
+    }
+
     @Test func aViewerGetsTheSnapshotThenTheSessionsChanges() async throws {
         let session = try newSession()
         let viewer = try await connect(session)

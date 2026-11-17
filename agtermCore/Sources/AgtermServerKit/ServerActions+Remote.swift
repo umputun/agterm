@@ -34,6 +34,11 @@ extension ServerActions {
 
     /// openPresentation answers `zmx.present`; the stream starts once this reply is on the wire.
     public func openPresentation(session target: String) -> ControlResponse {
+        // a session in its undo grace keeps its stream, and one removed for good is answered `ended` on it
+        if let id = UUID(uuidString: target), store.session(withID: id) == nil,
+           store.pendingCloseSession(withID: id) != nil || PresentationEnds.shared.contains(id) {
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
         switch resolveSession(target) {
         case .failure(let refusal): return refusal.response
         case .success(let session):

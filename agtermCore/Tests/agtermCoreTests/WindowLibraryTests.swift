@@ -1854,6 +1854,46 @@ final class WindowLibraryTests {
         #expect(!expected.isEmpty)
     }
 
+    private final class EndedLog {
+        var watched: UUID?
+        var viewer: PresentationHubTests.Sink?
+        var endedAtKill: [Bool] = []
+        var viewerEndedAtKill: [Bool] = []
+    }
+
+    @Test(arguments: [false, true])
+    func deletingAWindowEndsItsSessionsBeforeTheirDaemonsAreKilled(closedFirst: Bool) throws {
+        let log = EndedLog()
+        let library = WindowLibrary(directory: directory, paneFinalizer: { _ in
+            log.endedAtKill.append(log.watched.map(PresentationEnds.shared.contains) ?? false)
+            log.viewerEndedAtKill.append(log.viewer?.finished?.body == .ended)
+        })
+        let hub = PresentationHub(staleTimeout: 30)
+        library.presentationHub = hub
+        let work = library.newWindow(name: "work")
+        let store = try #require(library.store(for: work.id))
+        let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
+        let viewer = PresentationHubTests.Sink()
+        try hub.subscribe(session: session.id, hello: PresentationHubTests.endedHello, sink: viewer) {
+            PresentationSnapshot(status: nil, hud: nil)
+        }
+        log.watched = session.id
+        log.viewer = viewer
+        if closedFirst {
+            library.closeWindow(work.id)
+            #expect(library.store(for: work.id) == nil)
+            #expect(!PresentationEnds.shared.contains(session.id))
+            #expect(viewer.finished == nil)
+        }
+
+        library.removeWindow(work.id)
+
+        #expect(PresentationEnds.shared.contains(session.id))
+        #expect(log.endedAtKill == [true])
+        #expect(log.viewerEndedAtKill == [true])
+        #expect(hub.subscriberCount(session: session.id) == 0)
+    }
+
     private func addSession(to store: AppStore, status: AgentStatus) throws -> Session {
         let session = try #require(store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp"))
         store.setAgentIndicator(AgentIndicator(status: status), forSession: session.id)

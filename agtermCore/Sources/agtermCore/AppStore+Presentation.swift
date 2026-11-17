@@ -15,7 +15,10 @@ public enum NotificationOrigin: String, Sendable {
 extension AppStore {
     /// The replaceable presentation state a viewer of `id` starts from. Empty for an unknown session.
     public func presentationSnapshot(forSession id: UUID, now: Date = Date()) -> PresentationSnapshot {
-        guard let session = session(withID: id) else { return PresentationSnapshot(status: nil, hud: nil) }
+        // a session in its undo grace keeps its viewers, so one reconnecting then still gets its state
+        guard let session = session(withID: id) ?? pendingCloseSession(withID: id) else {
+            return PresentationSnapshot(status: nil, hud: nil)
+        }
         return PresentationSnapshot(status: presentationStatus(of: session),
                                     hud: presentationHud(of: session, now: now), context: session.context,
                                     layout: presentationLayout(of: session), info: session.info.map(Self.presentationInfo),
