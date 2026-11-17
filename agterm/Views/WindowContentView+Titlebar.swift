@@ -235,6 +235,7 @@ extension WindowContentView {
         // a filled circle reads smaller than the outlined rectangle glyphs beside it
         .font(.system(size: NSFont.systemFontSize * 1.25))
         .toolTip("Update Available", isShown: titlebarTipsShown)
+        .disabled(!UpdateController.shared.canCheck)
         .accessibilityIdentifier("update-available")
     }
 

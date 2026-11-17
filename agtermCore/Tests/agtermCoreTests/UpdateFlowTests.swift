@@ -2,6 +2,20 @@ import Testing
 @testable import agtermCore
 
 struct UpdateFlowTests {
+    @Test func updateCheckRefusesWithoutAFeedOrWhileACheckRuns() {
+        #expect(UpdateCheck.response(hasFeed: false, canCheck: true, host: "mac")
+            == ControlResponse(ok: false, error: "update checks are off: this build has no update feed"))
+        #expect(UpdateCheck.response(hasFeed: true, canCheck: false, host: "mac")
+            == ControlResponse(ok: false, error: "an update check is already running"))
+    }
+
+    @Test func updateCheckNamesTheMacThatChecks() {
+        #expect(UpdateCheck.response(hasFeed: true, canCheck: true, host: "umbp")
+            == ControlResponse(ok: true, result: ControlResult(text: "update check requested on umbp")))
+        #expect(!UpdateCheck.hostName.isEmpty)
+        #expect(!UpdateCheck.hostName.hasSuffix(".local"))
+    }
+
     @Test func quitWithoutAnUpdateGetsTheQuitAlert() {
         #expect(UpdateFlow().quitAlert(openWindows: 2) == .quit)
     }

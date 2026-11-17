@@ -213,11 +213,12 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 - Modify: `site/docs.html` (update section, Interface settings entry, the `brew upgrade --cask` line at 2536),
   `site/commands.html`, `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`, `.claude/rules/control-api.md`
 
-- [ ] `update.check` through protocol, dispatcher, app action and CLI, with the host in the reply; `automaticChecks`/`lastCheck`
+- [x] `update.check` through protocol, dispatcher, app action and CLI, with the host in the reply; `automaticChecks`/`lastCheck`
       on the `version` read-back; the `agterm-server` refusal
-- [ ] protocol, dispatcher, CLI and UI tests: refused without a feed, refused on the server, accepted while a reminder waits
-- [ ] docs: user guide update section (Sparkle flow, brew, restart wording, custom state directory), Interface entry, command
+- [x] protocol, dispatcher, CLI and UI tests: refused without a feed, refused on the server, accepted while a reminder waits
+- [x] docs: user guide update section (Sparkle flow, brew, restart wording, custom state directory), Interface entry, command
       reference, skill
+- ➕ readiness is Sparkle's `canCheckForUpdates` (KVO-mirrored `UpdateController.canCheck`), shared by the menu, the arrow and `update.check`, which refuses while a check runs; `lastCheck` is epoch seconds, not an ISO string; agterm-server refuses through `ServerCommandPolicy`'s generic text
 - [ ] acceptance: confirm the live app holds `agterm.lock`; two updatetest builds, a local appcast, Live panes running work on
       an isolated state directory; after the update the same zmx and session-host PIDs are alive, `ps eww` shows where the
       relaunched app went (the isolated directory, or exited on the lock), and a manual reopen with the isolated directory

@@ -73,6 +73,7 @@ final class MockControlActions: ControlActions {
         case browserClear
         case browserLinks(LinkOpenMode?)
         case version
+        case updateCheck
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
         case themeSet(String?)
@@ -182,6 +183,7 @@ final class MockControlActions: ControlActions {
     var nextHooksListResponse = ControlResponse(ok: true)
     var nextRecentResponse = ControlResponse(ok: true)
     var nextVersionResponse = ControlResponse(ok: true)
+    var nextUpdateCheckResponse = ControlResponse(ok: true)
     var nextKeymapResponse = ControlResponse(ok: true)
     var nextConfigResponse = ControlResponse(ok: true)
     var nextThemeSetResponse = ControlResponse(ok: true)
@@ -586,6 +588,11 @@ final class MockControlActions: ControlActions {
     func appIdentity() -> ControlResponse {
         calls.append(.version)
         return nextVersionResponse
+    }
+
+    func checkForUpdates() -> ControlResponse {
+        calls.append(.updateCheck)
+        return nextUpdateCheckResponse
     }
 
     func reloadGhosttyConfig() -> ControlResponse {

@@ -391,6 +391,15 @@
 <pre class="bash"><code>brew install --cask umputun/apps/agterm</code></pre>
 <p>The cask also installs the <code>agtermctl</code> command-line tool, so cask users do not need the in-app installer for it.</p>
 <p><strong>Direct download.</strong> Download the latest <code>.dmg</code> from the <a href="https://github.com/umputun/agterm/releases">releases page</a>, open it, and drag agterm.app into <code>/Applications</code>.</p>
+<h3 id="install-updates">Updates</h3>
+<p>On its second launch a published release asks once whether to check for updates automatically; allowed, it checks once a day. <strong>agterm ▸ Check for Updates…</strong> checks at once either way. A Homebrew install updates itself the same way, and <code>brew upgrade</code> acts only when the cask is newer than the installed app. A build you make yourself never updates itself.</p>
+<ul>
+<li>A version a background check finds while you work shows as a blue arrow at the right end of the title bar; right after launch, or when you come back after a while away, agterm opens the update window instead. Click the arrow for the release notes and Install.</li>
+<li>With <strong>Update available</strong> off in <a href="#settings-interface">Settings ▸ Interface</a>, or the toolbar hidden, a new find opens the update window. Turning it off while the arrow shows only hides the arrow: the update waits for <strong>Check for Updates…</strong>.</li>
+<li>Installing asks to restart. With <a href="#restore-live">Live sessions</a> the dialog says your sessions keep running and reconnect; otherwise it says which shells end. <strong>Later</strong> keeps agterm open, and the next quit asks again.</li>
+<li>Started with a custom <code>AGTERM_STATE_DIR</code>, agterm comes back without it after the restart; reopen it with the same <code>AGTERM_STATE_DIR</code> to reconnect, as the dialog says.</li>
+<li><code>agtermctl update check</code> starts a check from a script; <code>agtermctl version</code> shows whether checks are automatic and when the last one ran.</li>
+</ul>
 <h3 id="install-help">Optional Help-menu installers</h3>
 <p>None is needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later. The first launch on a Mac points them out in a welcome dialog that offers the skill and the status hooks and never appears again.</p>
 <table>
@@ -1166,6 +1175,7 @@ The Interface tab: title-bar and sidebar controls, plus the quick terminal's siz
 <ul>
 <li><strong>Workspace name</strong> shows before the session name, cut to 24 characters.</li>
 <li><strong>Hide overlays</strong> stays in place and is dimmed while the session has no overlay to hide.</li>
+<li><strong>Update available</strong> appears only while a background check has found a new version (<a href="#install-updates">Updates</a>).</li>
 <li><strong>Workspace add-session</strong> is the + shown on a workspace row on hover.</li>
 <li>Hiding <strong>Workspace icons</strong> or <strong>Session icons</strong> gives names more room, and takes what the icon shows with it: a session's split, flag fill, remote cloud, page glyph and icon-only tint, and a workspace's focus mark. A remote session's connection notice then shows when you hover its name.</li>
 <li>Hiding <strong>Workspace chevrons</strong> moves every row left into their space; a workspace row then gives no sign of being folded.</li>
@@ -2542,7 +2552,7 @@ Settings ▸ General ▸ Restore sessions. The note under it is a reminder that 
 <p>Without a supported shell or the bundled helper, agterm uses fresh shells and Settings says why. The shell is read at launch; running panes keep theirs until <a href="#restore-reset">Reset Live Sessions</a>.</p>
 <h4 id="restore-upgrade-and-switch-modes">Upgrade and switch modes</h4>
 <ul>
-<li><strong>Upgrade:</strong> install the new version (<code>brew upgrade --cask agterm</code>), quit, reopen. Panes reconnect. <code>agtermctl version</code> shows the installed version when it differs from the running one.</li>
+<li><strong>Upgrade:</strong> install the update when agterm offers it and restart (<a href="#install-updates">Updates</a>), or install the new version by hand (<code>brew upgrade --cask agterm</code>), quit, reopen. Panes reconnect. <code>agtermctl version</code> shows the installed version when it differs from the running one.</li>
 <li><strong>Switch to Live:</strong> current shells end at the next clean quit. The first Live launch restarts their commands where it can; shell state is lost.</li>
 <li><strong>Switch away from Live:</strong> after a restart, every detached live program in this state directory ends. If Live is still selected but cannot run, they are kept for a later launch.</li>
 </ul>

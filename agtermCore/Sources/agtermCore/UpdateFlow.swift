@@ -1,3 +1,27 @@
+import Foundation
+
+/// UpdateCheck answers `update.check` from what the app's updater reports.
+public enum UpdateCheck {
+    public static let noFeed = "update checks are off: this build has no update feed"
+    public static let busy = "an update check is already running"
+
+    /// hostName is the `gethostname()` name without `.local`; `Host.current()` would resolve over mDNS.
+    public static let hostName: String = {
+        var buffer = [CChar](repeating: 0, count: 256)
+        guard gethostname(&buffer, buffer.count) == 0 else { return "this Mac" }
+        let name = String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+        return name.hasSuffix(".local") ? String(name.dropLast(6)) : name
+    }()
+
+    /// response is ok only when Sparkle can start a check or bring up the update it found; the reply names the
+    /// Mac, since a remote pane's socket can belong to another one.
+    public static func response(hasFeed: Bool, canCheck: Bool, host: String) -> ControlResponse {
+        guard hasFeed else { return ControlResponse(ok: false, error: noFeed) }
+        guard canCheck else { return ControlResponse(ok: false, error: busy) }
+        return ControlResponse(ok: true, result: ControlResult(text: "update check requested on \(host)"))
+    }
+}
+
 /// UpdateFlow picks the alert for a quit while Sparkle may be installing an update.
 public struct UpdateFlow: Equatable, Sendable {
     /// QuitAlert is the alert a quit gets.

@@ -285,13 +285,8 @@ struct SocketClient {
             let reopened = "reopened \(open.item.kind) \(open.item.title)"
             return open.complete ? reopened : reopened + " (incomplete: the entry stays in the list)"
         }
-        if let app = response.result?.app {
-            var lines = [formatIdentity(app)]
-            if let installed = response.result?.installed, installed != app { lines.append("installed: \(formatIdentity(installed))") }
-            if let versions = response.result?.versions {
-                lines.append("server: \(versions.server), protocol: \(versions.protocolVersion), catalog: \(versions.catalog)")
-            }
-            return lines.joined(separator: "\n")
+        if let result = response.result, let app = result.app {
+            return formatVersion(app, result: result)
         }
         if let text = response.result?.text {
             return text
@@ -367,6 +362,23 @@ struct SocketClient {
     static func formatIdentity(_ identity: AppIdentity) -> String {
         guard let commit = identity.commit, !commit.isEmpty else { return identity.version }
         return "\(identity.version) (\(commit))"
+    }
+
+    static func formatVersion(_ app: AppIdentity, result: ControlResult) -> String {
+        var lines = [formatIdentity(app)]
+        if let installed = result.installed, installed != app { lines.append("installed: \(formatIdentity(installed))") }
+        if let versions = result.versions {
+            lines.append("server: \(versions.server), protocol: \(versions.protocolVersion), catalog: \(versions.catalog)")
+        }
+        if let updates = result.updates { lines.append(formatUpdates(updates)) }
+        return lines.joined(separator: "\n")
+    }
+
+    static func formatUpdates(_ updates: ControlUpdateStatus) -> String {
+        let mode = updates.automaticChecks ? "automatic" : "manual"
+        guard let last = updates.lastCheck else { return "updates: \(mode), never checked" }
+        let date = ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: last))
+        return "updates: \(mode), last checked \(date)"
     }
 
     /// The restore policy as separate lines: "what the next launch will do" and "what this one did" are

@@ -141,6 +141,7 @@ public enum Command: String, Codable, Sendable, CaseIterable {
     case msgAck = "msg.ack"
     case restoreClear = "restore.clear"
     case version = "version"
+    case updateCheck = "update.check"
     case restoreCapture = "restore.capture"
     case restoreMode = "restore.mode"
     case zmxList = "zmx.list"
@@ -797,6 +798,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// acked names the messages removed, present on every `msg.ack` and `msg.read --ack` reply, empty included.
     public var acked: [String]?
     public var remoteGroup: ControlRemoteGroup?
+    /// updates is the Sparkle schedule on `version`, omitted by a build with no update feed.
+    public var updates: ControlUpdateStatus?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
@@ -817,7 +820,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
                 companionPage: PresentationPage? = nil,
                 messageID: String? = nil, delivered: [String]? = nil, rejected: [MessageRejection]? = nil,
                 messages: [BusMessage]? = nil, remaining: Int? = nil, acked: [String]? = nil,
-                remoteGroup: ControlRemoteGroup? = nil, macCatalog: CatalogVersions? = nil) {
+                remoteGroup: ControlRemoteGroup? = nil, macCatalog: CatalogVersions? = nil,
+                updates: ControlUpdateStatus? = nil) {
+        self.updates = updates
         self.macCatalog = macCatalog
         self.messageID = messageID
         self.delivered = delivered

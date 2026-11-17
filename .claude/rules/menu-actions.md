@@ -19,8 +19,9 @@ paths:
 
 ## Menu bar and actions
 
-- agterm ▸ Check for Updates… sits under About Agterm and is disabled in a build without an update feed
-  (`UpdateController.isAvailable`).
+- agterm ▸ Check for Updates… sits under About Agterm and is enabled by `UpdateController.canCheck`, Sparkle's
+  `canCheckForUpdates` mirrored through KVO: off in a build without an update feed and while a check runs.
+  The title-bar icon and `update.check` share it.
 - `@MainActor AppActions` shares nontrivial behavior among titlebar/footer, menu, palette, and control:
   placement, directory picking, split/focus, and font. Trivial toggles may call their owner directly.
 - **`PaletteCommand.isEnabled(in:)` is the single owner of menu enablement.** Every menu item backed by a

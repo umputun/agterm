@@ -27,6 +27,11 @@ struct MiscCommandsTests {
         #expect(throws: (any Error).self) { try Browser.Links.parse(["overlay", "--window", "w1"]) }
     }
 
+    @Test func updateCheckSendsTheCommandAndTakesNoWindow() throws {
+        #expect(try Update.Check.parse([]).makeRequest() == ControlRequest(cmd: .updateCheck))
+        #expect(throws: (any Error).self) { try Update.Check.parse(["--window", "w1"]) }
+    }
+
     @Test func surfaceCursorAndSessionTypeTakeAPaneID() throws {
         let cursor = try Surface.Cursor.parse(["--target", "s1", "--pane-id", "tok"]).makeRequest()
         #expect(cursor == ControlRequest(cmd: .surfaceCursor, target: "s1", args: ControlArgs(paneID: "tok")))

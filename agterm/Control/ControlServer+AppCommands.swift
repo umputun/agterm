@@ -175,7 +175,15 @@ extension ControlServer {
     /// app's launchd environment and so carry no `TERM_PROGRAM_VERSION`.
     func appIdentity() -> ControlResponse {
         ControlResponse(ok: true, result: ControlResult(app: identity, installed: AppIdentity.installed(bundleURL: bundleURL),
-                                                        macCatalog: macCatalogVersions))
+                                                        macCatalog: macCatalogVersions, updates: UpdateController.shared.status))
+    }
+
+    func checkForUpdates() -> ControlResponse {
+        let updates = UpdateController.shared
+        let response = UpdateCheck.response(hasFeed: updates.isAvailable, canCheck: updates.canCheck,
+                                            host: UpdateCheck.hostName)
+        if response.ok { updates.checkForUpdates() }
+        return response
     }
 
     /// Every menu-bar item carrying a key equivalent, in the same kitty syntax the keymap uses so a caller can

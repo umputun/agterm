@@ -11,15 +11,30 @@ final class UpdateController: NSObject {
     static let shared = UpdateController()
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController?
+    @ObservationIgnored private var canCheckObservation: NSKeyValueObservation?
     private(set) var flow = UpdateFlow()
+    /// canCheck mirrors Sparkle's `canCheckForUpdates`, false while a check runs, so SwiftUI sees it change.
+    private(set) var canCheck = false
 
     init(feed: String? = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String) {
         super.init()
         guard let feed, !feed.isEmpty else { return }
-        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
+        let controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: self, userDriverDelegate: self)
+        self.controller = controller
+        canCheckObservation = controller.updater.observe(\.canCheckForUpdates, options: [.initial, .new]) { [weak self] _, change in
+            let canCheck = change.newValue ?? false
+            Task { @MainActor in self?.canCheck = canCheck }
+        }
     }
 
     var isAvailable: Bool { controller != nil }
+
+    var status: ControlUpdateStatus? {
+        controller.map {
+            ControlUpdateStatus(automaticChecks: $0.updater.automaticallyChecksForUpdates,
+                                lastCheck: $0.updater.lastUpdateCheckDate?.timeIntervalSince1970)
+        }
+    }
 
     func checkForUpdates() {
         controller?.checkForUpdates(nil)

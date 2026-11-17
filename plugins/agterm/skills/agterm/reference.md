@@ -2813,6 +2813,20 @@ same four ssh options, the same installer-owned execution settings and the same 
   the agent hooks incomplete, 1 for any refusal or failure with the reason on stderr. A usage error keeps the
   parser's own exit code.
 
+## update
+
+`agtermctl update check` — asks the app serving the socket to check for an update now, or to bring up the one
+a background check already found. App-global: no target, no `--window`. The app shows the result in its own
+update window, so the reply is only `result.text`: `update check requested on HOST`, naming the Mac that
+checks. Errors:
+
+- `update checks are off: this build has no update feed` — a build from source; only release builds update.
+- `an update check is already running`.
+- `update.check is not available on agterm-server` — what a pane of a Linux server's remote window gets. A pane of
+  another Mac's window reaches that Mac, which checks and is the HOST the reply names.
+
+`version` reads back the schedule as `result.updates`.
+
 ## version
 
 `agtermctl version` — which agterm is serving this socket. App-global: no target, no `--window`, and no
@@ -2835,8 +2849,11 @@ It is build metadata, not a comparison of the executables: a rebuild from the sa
 `installed` is omitted when the bundle cannot be read and by an older app; treat its absence as unknown,
 never as a match.
 
+A release build also returns `result.updates`: `automaticChecks` and `lastCheck` (epoch seconds, omitted
+before the first check). A build without an update feed omits it.
+
 Human output is `version` alone, or `version (commit)`, then an `installed:` line only when the bundle on
-disk differs, followed by a `client:` line naming the resolved
+disk differs, an `updates: automatic|manual, last checked <ISO 8601>|never checked` line when `updates` is present, followed by a `client:` line naming the resolved
 path of the `agtermctl` that ran — a diagnostic for a stale CLI earlier on `PATH` than the app's bundled
 helper. That line is human output only: `--json` stays the raw server response, and a caller that needs
 the client path resolves the binary it invoked itself.

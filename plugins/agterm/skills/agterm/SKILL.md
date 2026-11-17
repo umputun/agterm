@@ -18,7 +18,7 @@ when_to_use: >
   split the pane, print a link that jumps to a session, close the overlay, hide the overlay for a moment, show a message over the session, show a question dialog, agtermctl ask,
   ask the user to type a value or a message, let the user pick one or several items from a list,
   show an image inline, show this markdown file rendered, show this source file or log at a line, show me the diff of a file or the changes as links, tail or follow this log file, search the log or text page in the overlay, wrap long lines in the text or log page, show a JSONL file or expand its records, show this HTML page or artifact, make an HTML page or explainer for this and show
-  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, upgrade agterm without losing sessions, what recipes are there,
+  it, make a page that switches sessions or returns a choice, preview the report you generated, show this URL or the running dev server, keep me logged in to a page shown in an overlay, search the scrollback, flag every session in a workspace, tint a session or workspace row a color, show status or activity under a session in the sidebar, make a companion session, keep a related program next to a session, duplicate this session with its programs as a companion, make this session a companion, move a companion under another session, open a sub-session under this one, fold a session's companions, show a page as a companion of this session, open a page as its own session row in the sidebar, run my custom command, send a message to the other pane or another agent, read my messages, wait for a message, tell me when the selected session changes, wait until that worker session finishes, bring back the session I just closed, attach a session from another Mac, attach a remote session with all its companions, open a remote window for my Linux server, run sessions on a Linux host with agterm-server, watch events or wait for a session on the agterm-server host, install agterm-server on a Linux host, detach or reattach a remote session, copy this to the clipboard, was agterm upgraded under the running app, check for an agterm update, upgrade agterm without losing sessions, what recipes are there,
   the keymap editor will not open.
 allowed-tools: Bash(agtermctl *)
 ---
@@ -168,8 +168,11 @@ you open overlays / type into whatever the user has selected, not your own sessi
   (ghostty.conf, an inherited global config, or their includes), which then replaces the login shell in
   Live panes. The scratch runs in a daemon of its own and comes back hidden; overlay and quick terminals stay temporary.
 
-Upgrading: with Live sessions already active, install the new version, quit agterm and open it again. Local
-primary and split panes reattach to the same processes and no reset is needed. `agtermctl version` adds an
+Upgrading: a release build updates itself (agterm ▸ Check for Updates…, the title-bar arrow, or
+`agtermctl update check`) and offers a restart; with Live sessions already active, local primary and split
+panes reattach to the same processes after it, as after installing by hand, quitting and reopening. An app
+started with a custom `AGTERM_STATE_DIR` comes back without it; reopen it with the same `AGTERM_STATE_DIR` to
+reconnect. `agtermctl version` adds an
 `installed:` line when the installed version or recorded commit differs from the running app. When switching
 from Fresh shells or Re-run commands to Live sessions, the current shells end at the first clean quit. The
 first Live launch starts captured foreground commands again where possible; shell state is lost.
@@ -816,10 +819,16 @@ through; other connection settings belong in `~/.ssh/config` under a host alias,
 settings (no pty, stdin kept, plain session, no fork, no `RemoteCommand`) are the installer's and win
 over the config. The remote needs `tic` (ncurses) and says so when it is missing.
 
+**update** — `agtermctl update check` — asks the app serving the socket to check for an update now, or to bring up
+the one already found; the app shows the result in its own window and the reply only names the Mac that checks.
+Refused by a build without an update feed, while a check runs, and by agterm-server: a pane of a Linux server's
+remote window gets that refusal, while a pane of another Mac's window checks that Mac, which the reply names.
+
 **version** — `agtermctl version` — which agterm is serving this socket, as `result.app` (`version`, plus
 `commit` when the build recorded one), and the bundle on disk as `result.installed`, which differs from
 `app` once the app was replaced under the running one (a background `brew upgrade`) and is omitted when
-unknown. App-global: no target, no `--window`, no window need be open, so it
+unknown. A release build adds `result.updates` (`automaticChecks`, `lastCheck` epoch seconds).
+App-global: no target, no `--window`, no window need be open, so it
 works as a preflight from a keymap-launched script, which has no `$TERM_PROGRAM_VERSION`. Address the
 socket explicitly (`--socket "$AGTERM_SOCKET"`, or `"$AGT_SOCKET"` in a keymap child): a bare call
 resolves the DEFAULT socket, which may be another app. The same identity is on the tree top level as
