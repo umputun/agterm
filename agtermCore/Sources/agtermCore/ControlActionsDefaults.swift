@@ -43,6 +43,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.companion.new"))
     }
 
+    func newRemoteSession(_: RemoteSessionCreate) async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("session.remote.new"))
+    }
+
     func setSessionExpansion(_: String?, window _: String?, expanded: Bool) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message(expanded ? "session.expand" : "session.collapse"))
     }

@@ -27,7 +27,7 @@ struct ServerCommandPolicyTests {
         "Finder on the Mac": [.sessionReveal],
         "Mac app relaunch": [.restoreMode, .restoreCapture, .restoreClear, .zmxReset, .sessionRestore],
         "the Mac app's own updater": [.updateCheck],
-        "makes a Mac viewer": [.zmxAttach, .zmxAttachGroup],
+        "makes a Mac viewer": [.zmxAttach, .zmxAttachGroup, .sessionRemoteNew],
         "UI-test seam": [.debugAppearance],
         "deferred to docs/backlog/server-user-event-hooks.md": [.hooksList, .hooksReload],
     ]

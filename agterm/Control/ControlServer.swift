@@ -636,7 +636,7 @@ final class ControlServer {
         // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket;
         // update.check waits on the feed
         [.zmxTree, .zmxAttach, .zmxAttachGroup, .sessionRestart, .sessionCompanionNew, .sessionCompanionDuplicate,
-         .sessionCompanionPage, .windowRemoteOpen, .updateCheck].contains(cmd)
+         .sessionCompanionPage, .sessionRemoteNew, .windowRemoteOpen, .updateCheck].contains(cmd)
     }
 
     // these polling reads cannot change window nodes; skip the AppKit rebuild
@@ -749,7 +749,7 @@ final class ControlServer {
                 .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree,
                 .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version, .updateCheck,
-                .recentList, .recentOpen, .recentClear:
+                .recentList, .recentOpen, .recentClear, .sessionRemoteNew:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)

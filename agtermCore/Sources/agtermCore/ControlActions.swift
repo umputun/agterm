@@ -13,6 +13,8 @@ public protocol ControlActions {
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse
     /// Creates a companion of the target session, or a sibling when the target is itself a companion.
     func createCompanion(_ target: String?, options: CompanionOptions, window: String?) async -> ControlResponse
+    /// newRemoteSession creates `request`'s session on its host and attaches it into a local window's current workspace.
+    func newRemoteSession(_ request: RemoteSessionCreate) async -> ControlResponse
     /// Creates a page companion of the target session showing `options.page` full size.
     func createPageCompanion(_ target: String?, window: String?, options: ControlSessionOverlayOpenOptions) async -> ControlResponse
     /// createPageSession opens `options.page` as a top-level page session after the target's group.

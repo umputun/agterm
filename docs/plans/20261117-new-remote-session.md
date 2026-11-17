@@ -150,19 +150,19 @@ The draft is the proposal in discussion 1033.
 - Modify: `agterm/Control/ControlServer.swift` (`waitsOnNetwork`)
 - Create/Modify: matching tests in `agtermCore/Tests/agtermCoreTests` and `agtermCore/Tests/agtermctlKitTests`
 
-- [ ] add `Command.sessionRemoteNew` and a `ControlActions` requirement whose default refuses by name
-- [ ] add `RemoteSessionCreate`: destination validation through `RemoteSession`'s host check, the origin argv for a
+- [x] add `Command.sessionRemoteNew` and a `ControlActions` requirement whose default refuses by name
+- [x] add `RemoteSessionCreate`: destination validation through `RemoteSession`'s host check, the origin argv for a
       Mac (with `--window`) and a server (without), and the refusal texts
-- [ ] dispatcher arm: validates `host`, refuses the fields listed in Technical Details, passes the rest to the action
-- [ ] CLI: `session new --remote HOST` with `--origin-window`, `--workspace-name`, `--cwd`, `--command`, `--window`;
+- [x] dispatcher arm: validates `host`, refuses the fields listed in Technical Details, passes the rest to the action
+- [x] CLI: `session new --remote HOST` with `--origin-window`, `--workspace-name`, `--cwd`, `--command`, `--window`;
       `validate()` refuses `--remote` beside `--parent`, `--workspace`, `--create-workspace`, `--after`, `--before`,
       `--wait`, `--name`, `--no-select`, tint and the operation-id options, and refuses `--origin-window` without
       `--remote`; maps the decode error to `the running app is too old for remote sessions`
-- [ ] add the command to `waitsOnNetwork`
-- [ ] tests: argv for Mac and server with and without cwd/command; dispatcher accepts the minimal request and refuses
+- [x] add the command to `waitsOnNetwork`
+- [x] tests: argv for Mac and server with and without cwd/command; dispatcher accepts the minimal request and refuses
       each forbidden field and a bad host; the `ControlActions` default refuses; CLI request mapping, each
       validation refusal, and the too-old text
-- [ ] run the new and touched test suites with `swift test --filter` - must pass before task 2
+- [x] run the new and touched test suites with `swift test --filter` - must pass before task 2
 
 ### Task 2: ControlServer create-and-attach flow
 

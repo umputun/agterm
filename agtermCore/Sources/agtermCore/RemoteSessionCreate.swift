@@ -1,0 +1,70 @@
+/// RemoteSessionCreate is a validated `session.remote.new`: a top-level session created on `host` and attached into
+/// a local window's current workspace.
+public struct RemoteSessionCreate: Equatable, Sendable {
+    /// host is the ssh destination the session is created on.
+    public let host: String
+    /// originWindow names the Mac host's window to create in; nil uses its one window. Refused for a server.
+    public let originWindow: String?
+    /// workspaceName is the origin workspace, reused or created; nil takes the local workspace's name.
+    public let workspaceName: String?
+    public let cwd: String?
+    public let command: String?
+    /// window is the local window whose current workspace receives the row.
+    public let window: String?
+
+    public init(host: String, originWindow: String? = nil, workspaceName: String? = nil, cwd: String? = nil,
+                command: String? = nil, window: String? = nil) {
+        self.host = host
+        self.originWindow = originWindow
+        self.workspaceName = workspaceName
+        self.cwd = cwd
+        self.command = command
+        self.window = window
+    }
+
+    /// Origin is where on the host the session is created: a Mac's window, or agterm-server, which has none.
+    public enum Origin: Equatable, Sendable {
+        case mac(window: String)
+        case server
+    }
+
+    // the row always lands appended and selected, so any other placement or creation field is refused, not dropped
+    static func parse(_ request: ControlRequest) -> Result<RemoteSessionCreate, ArgumentRejection> {
+        let args = request.args
+        guard let host = args?.host?.trimmedOrNil else {
+            return .failure(ArgumentRejection(message: "session.remote.new requires a host"))
+        }
+        guard RemoteSession.isHost(host) else {
+            return .failure(ArgumentRejection(message: "session.remote.new: not a host ssh can be given"))
+        }
+        if request.target != nil || args?.targets != nil || args?.workspace != nil || args?.createWorkspace != nil
+            || args?.after != nil || args?.before != nil || args?.parent != nil {
+            return .failure(ArgumentRejection(message: "a remote session takes no target, workspace id or placement: "
+                                              + "it lands in the window's current workspace"))
+        }
+        if args?.wait != nil || args?.name != nil || args?.noSelect != nil || args?.tint != nil || args?.tintOn != nil {
+            return .failure(ArgumentRejection(message: "a remote session takes no --wait, --name, --no-select or tint"))
+        }
+        if args?.opID != nil {
+            return .failure(ArgumentRejection(message: "a remote session takes no operation id"))
+        }
+        // blank is refused, not read as omitted: omitted takes the local workspace's name, a different destination
+        if let name = args?.workspaceName, name.trimmedOrNil == nil {
+            return .failure(ArgumentRejection(message: "workspace name must not be blank"))
+        }
+        return .success(RemoteSessionCreate(host: host, originWindow: args?.originWindow?.trimmedOrNil,
+                                            workspaceName: args?.workspaceName?.trimmedOrNil, cwd: args?.cwd,
+                                            command: args?.command, window: args?.window?.trimmedOrNil))
+    }
+
+    /// arguments is the origin's `agtermctl` command line. The origin keeps its own selection: the session is
+    /// wanted here, not there. Each value is joined to its flag, so one starting with `-` is never read as an option.
+    public func arguments(origin: Origin, workspaceName: String) -> [String] {
+        var arguments = ["session", "new"]
+        if case .mac(let window) = origin { arguments.append("--window=" + window) }
+        arguments += ["--workspace-name=" + workspaceName, "--create-workspace", "--no-select"]
+        if let cwd { arguments.append("--cwd=" + cwd) }
+        if let command { arguments.append("--command=" + command) }
+        return arguments
+    }
+}
