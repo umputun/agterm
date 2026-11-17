@@ -6,7 +6,7 @@ description: >
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
   page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
-  into or restart a pane by id, copy its selection, set the clipboard, paste copied files or a clipboard image into a local or remote pane, search scrollback; manage windows, font size and
+  into or restart a pane by id, copy its selection, set the clipboard, search scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
