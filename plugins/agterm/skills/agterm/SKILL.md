@@ -1,12 +1,12 @@
 ---
 name: agterm
 description: >
-  Drive agterm, a macOS terminal, via agtermctl. Use in an agterm session:
+  Drive the agterm macOS terminal via agtermctl:
   manage and move sessions, companions and workspaces; split panes; toggle scratch; run/hide/show overlays;
   read exit status; show HTML pages, URLs or dev servers in an overlay with saved logins or as a
   page row;
   post a HUD/caption/notification/sidebar activity line; message panes; show a picker, question or input dialog; show images/markdown/code/JSONL; type
-  into or restart a pane by id, copy its selection, set the clipboard, search scrollback; manage windows, font size and
+  into or restart a pane by id, copy selection, set clipboard, paste files and images, search scrollback; manage windows, font size and
   theme; reload or edit the keymap, event hooks and agterm-scoped ghostty config; run a custom command; read
   a closed window's session screen; subscribe to status, notify, lifecycle, selection,
   pane, tree and launch events; wait on agent status.
