@@ -136,7 +136,7 @@ extension ControlServer {
         let tint: SidebarTint?
     }
 
-    private enum CompanionAttach {
+    enum CompanionAttach {
         case attached(ControlResponse)
         case failed(String)
     }
@@ -376,8 +376,8 @@ extension ControlServer {
     }
 
     // the destination is read again after every wait: the row may have moved or closed meanwhile
-    private func attachWhenListed(_ id: String, host: String, closed: String,
-                                  place: () -> RemotePlacement?) async -> CompanionAttach {
+    func attachWhenListed(_ id: String, host: String, closed: String,
+                          place: () -> RemotePlacement?) async -> CompanionAttach {
         let deadline = hudClock().addingTimeInterval(Self.remoteCompanionReadyBudget)
         var reason = "it did not become attachable"
         var waited = false

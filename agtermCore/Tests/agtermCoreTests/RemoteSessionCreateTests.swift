@@ -101,6 +101,30 @@ struct RemoteSessionCreateTests {
                 "--cwd=/srv/app", "--command=make run"])
     }
 
+    @Test func originKindTakesOnlyALiveMacOrAServer() {
+        var mac = ControlResult()
+        mac.macCatalog = CatalogVersions(server: "1", protocolVersion: 1, catalog: 1, live: true)
+        var stopped = mac
+        stopped.macCatalog?.live = false
+        var unreported = mac
+        unreported.macCatalog?.live = nil
+        var server = ControlResult()
+        server.headless = true
+        var older = ControlResult()
+        older.app = AppIdentity(version: "0.40.0", commit: "abc")
+
+        #expect(RemoteSessionCreate.originKind(mac, host: "h") == .success(.mac))
+        #expect(RemoteSessionCreate.originKind(server, host: "h") == .success(.server))
+        for reply in [stopped, unreported] {
+            #expect(RemoteSessionCreate.originKind(reply, host: "h")
+                == .failure(.init(message: "h does not run Live sessions, which a remote session needs")))
+        }
+        for reply in [older, ControlResult(), nil] {
+            #expect(RemoteSessionCreate.originKind(reply, host: "h")
+                == .failure(.init(message: "the agterm on h is too old to create sessions for another Mac")))
+        }
+    }
+
     @Test func theDispatcherRefusesBeforeTheActionAndAHostWithoutItRefusesByName() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

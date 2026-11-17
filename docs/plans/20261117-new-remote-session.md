@@ -172,20 +172,20 @@ The draft is the proposal in discussion 1033.
 - Modify: `agterm/Control/ControlServer+RemoteCatalog.swift` only if discovery needs a no-retry entry point
 - Create: `agtermTests/ControlServerRemoteSessionNewTests.swift`
 
-- [ ] `newRemoteSession(_ destination:, origin:, ...)` takes a captured destination (window id, workspace id, name)
+- [x] `newRemoteSession(_ destination:, origin:, ...)` takes a captured destination (window id, workspace id, name)
       and a resolved origin (Mac window id or server); the control action captures the destination at entry and
       the command joins `localOnlyCommands` and the `placementStore` arm, so a remote window is refused in
       `remoteRoute` before dispatch
-- [ ] strict discovery `remoteSessionOrigin(host:)` on `RemoteAttaching`: `version` must carry `macCatalog` (Live)
+- [x] strict discovery `remoteSessionOrigin(host:)` (its `RemoteAttaching` entry moves to task 3, with its fake): `version` must carry `macCatalog` (Live)
       or `headless: true`, else refuse before creating; a Mac's windows come back offered; the control action
       chooses with `RemoteOriginWindow.choose` and refuses `originWindow` for a server
-- [ ] run the create once, attach with `attachWhenListed` into the captured window's store and workspace, appended
+- [x] run the create once, attach with `attachWhenListed` into the captured window's store and workspace, appended
       and selected
-- [ ] failure paths: unanswered host, not-Live Mac and unidentified host create nothing; undecodable reply reported
+- [x] failure paths: unanswered host, not-Live Mac and unidentified host create nothing; undecodable reply reported
       as unknown; origin refusal passed through; a failed transport with a full receipt, created-but-unattached
       and a closed destination report the id and `zmx attach` recovery, never resent
-- [ ] implement the `ControlActions` requirement in the app so `session.remote.new` reaches it
-- [ ] tests with the fake runner: Mac with one window, several windows without `originWindow` refused before any
+- [x] implement the `ControlActions` requirement in the app so `session.remote.new` reaches it
+- [x] tests with the fake runner: Mac with one window, several windows without `originWindow` refused before any
       create, with `originWindow` sends `--window`; server omits `--window` and refuses `originWindow`; a `version`
       reply with app identity but neither `macCatalog` nor `headless` sends zero creates; argv carries the captured
       workspace name, or the requested one; unanswered and not-Live create nothing; unknown reply is not resent;
@@ -193,7 +193,7 @@ The draft is the proposal in discussion 1033.
       attach failure and a workspace deleted during the wait give the recovery text; a remote window destination is
       refused with nothing sent; success returns the local id, the row's `remoteSessionID` is the origin id, and
       `session.created` and `remote.opened` are emitted
-- [ ] run the new test class with `-only-testing:agtermTests/ControlServerRemoteSessionNewTests` - must pass before
+- [x] run the new test class with `-only-testing:agtermTests/ControlServerRemoteSessionNewTests` - must pass before
       task 3
 
 ### Task 3: Menu, palette and keymap action

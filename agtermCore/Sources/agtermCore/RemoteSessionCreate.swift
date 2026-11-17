@@ -28,6 +28,30 @@ public struct RemoteSessionCreate: Equatable, Sendable {
         case server
     }
 
+    /// Refusal is why a host cannot take the session, worded for the caller.
+    public struct Refusal: Error, Equatable, Sendable {
+        public let message: String
+    }
+
+    /// OriginKind is what a host's `version` reply says it is.
+    public enum OriginKind: Equatable, Sendable {
+        case mac
+        case server
+    }
+
+    /// originKind reads `version` strictly: only a Mac reporting Live sessions or agterm-server counts, since any other
+    /// host gives no proof the session it creates could be attached.
+    public static func originKind(_ version: ControlResult?, host: String) -> Result<OriginKind, Refusal> {
+        if let mac = version?.macCatalog {
+            guard mac.live == true else {
+                return .failure(Refusal(message: "\(host) does not run Live sessions, which a remote session needs"))
+            }
+            return .success(.mac)
+        }
+        if version?.headless == true { return .success(.server) }
+        return .failure(Refusal(message: "the agterm on \(host) is too old to create sessions for another Mac"))
+    }
+
     // the row always lands appended and selected, so any other placement or creation field is refused, not dropped
     static func parse(_ request: ControlRequest) -> Result<RemoteSessionCreate, ArgumentRejection> {
         let args = request.args
