@@ -143,6 +143,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case dashboard
     case quickTerminal
     case customCommands
+    case updates
     // sidebar
     case newWorkspace
     case newSession
@@ -185,6 +186,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .dashboard: return "Dashboard"
         case .quickTerminal: return "Quick terminal"
         case .customCommands: return "Custom commands"
+        case .updates: return "Update available"
         case .newWorkspace: return "New workspace"
         case .newSession: return "New session"
         case .flaggedView: return "Flagged view"
@@ -216,6 +218,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .dashboard: return "rectangle.split.2x2"
         case .quickTerminal: return "terminal"
         case .customCommands: return "ellipsis.circle"
+        case .updates: return "arrow.down.circle.fill"
         case .newWorkspace: return "rectangle.stack.badge.plus"
         case .newSession: return "plus.rectangle"
         case .flaggedView: return "flag"

@@ -116,6 +116,7 @@ extension WindowContentView {
             if showDashboard { dashboardButton.labelStyle(.iconOnly) }
             if showQuick { quickTerminalButton.labelStyle(.iconOnly) }
             if showCustom { customCommandsButton.labelStyle(.iconOnly) }
+            if UpdateController.shared.flow.showsIcon(elementShown: shows(.updates)) { updateButton.labelStyle(.iconOnly) }
         }
         .padding(.trailing, 14)
     }
@@ -222,6 +223,25 @@ extension WindowContentView {
         .toolTip(helpHint("Quick Terminal", .quickTerminal), isShown: titlebarTipsShown)
         .disabled(pick.modalPending)
         .accessibilityIdentifier("quick-terminal-toggle")
+    }
+
+    private var updateButton: some View {
+        Button {
+            UpdateController.shared.checkForUpdates()
+        } label: {
+            Label("Update Available", systemImage: InterfaceElement.updates.symbolName!)
+        }
+        .foregroundStyle(updateTint)
+        // a filled circle reads smaller than the outlined rectangle glyphs beside it
+        .font(.system(size: NSFont.systemFontSize * 1.25))
+        .toolTip("Update Available", isShown: titlebarTipsShown)
+        .accessibilityIdentifier("update-available")
+    }
+
+    private var updateTint: Color {
+        let palette = GhosttyApp.shared.terminalPalette
+        guard palette.count > 12, let color = NSColor(agtermHex: palette[12]) else { return .blue }
+        return Color(nsColor: color)
     }
 }
 

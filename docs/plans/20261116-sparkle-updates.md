@@ -194,13 +194,14 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 - Modify: `agtermCore/Tests/agtermCoreTests/UpdateFlowTests.swift`, `InterfaceMetricsTests.swift`, the existing title-bar render
   test file
 
-- [ ] `InterfaceElement.updates` (title bar, shown by default) and its Settings ▸ Interface toggle; the approved #790
+- [x] `InterfaceElement.updates` (title bar, shown by default) and its Settings ▸ Interface toggle; the approved #790
       exception line in `CLAUDE.md` and the element in `settings.md`
-- [ ] reminder state in `UpdateFlow` and the gentle-reminder delegates as in Solution Overview; the icon at the far right,
+- [x] reminder state in `UpdateFlow` and the gentle-reminder delegates as in Solution Overview; the icon at the far right,
       theme bright blue, outside the group counts
-- [ ] show Eugene the icon in an updatetest build with a forced scheduled find; tests only after his verdict
-- [ ] `UpdateFlowTests`: scheduled find sets the reminder, a find Sparkle shows does not, attention and session end clear it,
+- [x] show Eugene the icon in an updatetest build with a forced scheduled find; tests only after his verdict
+- [x] `UpdateFlowTests`: scheduled find sets the reminder, a find Sparkle shows does not, attention and session end clear it,
       hiding the element hides the icon and opens nothing; render test for the icon; Settings ▸ Interface still fits; run the task's tests
+- ➕ the icon also needs a title bar: `UpdateFlow.iconCanShow` leaves a scheduled find to Sparkle when the toolbar is hidden (codex finding); render test is the Settings fit test plus Eugene's look check, since the icon needs a live Sparkle find and hosted tests do not render SwiftUI
 
 ### Task 5: `agtermctl update check`, docs and acceptance
 
