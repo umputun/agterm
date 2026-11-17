@@ -118,4 +118,20 @@ struct ServerActionsRemoteTests {
         #expect(harness.actions.openPresentation(session: session.id.uuidString)
             == ControlResponse(ok: false, error: "session is not live-backed, so nothing can be attached to it"))
     }
+
+    @Test func aSessionInItsUndoGraceOrRemovedForGoodCanStillBePresented() throws {
+        let pending = try newSession()
+        let removed = try newSession()
+        let unknown = UUID()
+
+        #expect(harness.store.softCloseSession(pending.id, grace: 60))
+        harness.store.closeSession(removed.id)
+
+        #expect(harness.actions.openPresentation(session: pending.id.uuidString)
+            == ControlResponse(ok: true, result: ControlResult(id: pending.id.uuidString)))
+        #expect(harness.actions.openPresentation(session: removed.id.uuidString)
+            == ControlResponse(ok: true, result: ControlResult(id: removed.id.uuidString)))
+        #expect(harness.actions.openPresentation(session: unknown.uuidString).ok == false)
+        harness.store.finalizeAllPendingCloses()
+    }
 }

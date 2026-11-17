@@ -782,7 +782,7 @@ chosen open local window's current workspace (default: frontmost after discovery
 keeps the frontmost window unchanged; an invalid or closed target fails. Takes the ID from that
 listing, not the name, and resolves the remote again first, so a session that has gone fails instead of
 handing back a fresh shell wearing its name. Closing it here ends only this side's connection. An open row is
-saved and attached again at the next launch; one whose session is gone from the origin shows `Ended on HOST`. Add `--companions` to attach the group; see
+saved and attached again at the next launch; one whose session is gone from the origin closes. Add `--companions` to attach the group; see
 [details](reference.md#restore). An attached page row shows the origin's page over its page channel and mirrors
 nothing; an attached terminal row mirrors the origin session's status, context, `notify`
 notifications, HUD and the layout of attached panes over a stream that reconnects by itself

@@ -57,6 +57,8 @@ struct RemotePresentationClientTests {
         var linkRefusals: [RemoteLinkRefusal] = []
         var warnings: [String] = []
         var leads: Set<UUID> = []
+        var ends = 0
+        var acks = 0
     }
 
     final class Clock { var now = Date(timeIntervalSince1970: 1_789_000_000) }
@@ -104,6 +106,8 @@ struct RemotePresentationClientTests {
             message: { recorder.messages.append($0) },
             mail: { recorder.mails.append($0) },
             leads: { recorder.leads },
+            ended: { recorder.ends += 1 },
+            acked: { recorder.acks += 1 },
             warn: { recorder.warnings.append($0) })
         return RemotePresentationClient(argv: ["ssh", "buildbox", "present"], presentationVersion: version,
                                         transport: transport, effects: effects, now: { clock.now })
@@ -118,6 +122,46 @@ struct RemotePresentationClientTests {
         let answer = PresentationHello(version: 1, kinds: kinds, mode: mode)
         transport.deliver(line(.hello(answer), gen: gen, rev: 0))
         transport.deliver(line(.snapshot(snapshot ?? PresentationSnapshot(status: nil, hud: nil)), gen: gen, rev: 1))
+    }
+
+    @Test(arguments: [true, false])
+    func endedStopsTheClientForGoodWithoutAFailure(connectedFirst: Bool) {
+        let client = makeClient()
+        client.start()
+        if connectedFirst {
+            connect(client)
+        } else {
+            transport.deliver(line(.hello(PresentationHello(version: 1, kinds: ["status"], mode: .mirror)), rev: 0))
+        }
+        let reported = recorder.connections
+
+        transport.deliver(line(.ended, rev: connectedFirst ? 2 : 1))
+        transport.close("end of stream")
+        clock.now = clock.now.addingTimeInterval(3600)
+        client.tick()
+        client.retryNow()
+        client.tick()
+
+        #expect(recorder.ends == 1)
+        #expect(transport.links[0].stopped)
+        #expect(transport.launches.count == 1)
+        #expect(recorder.connections == reported)
+        #expect(recorder.warnings.isEmpty)
+        #expect(!client.originSupports("status"))
+    }
+
+    @Test func aPingGoesOnTheLinkAndItsAckReachesAcked() {
+        let client = makeClient()
+        #expect(!client.ping())
+        client.start()
+        connect(client)
+
+        #expect(client.ping())
+        transport.deliver(line(.ack, rev: 2))
+
+        #expect(transport.links[0].sent.last?.body == .ping)
+        #expect(recorder.acks == 1)
+        #expect(recorder.ends == 0)
     }
 
     @Test func startingLaunchesTheBridgeAndOpensWithHello() throws {

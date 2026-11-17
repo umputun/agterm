@@ -29,6 +29,7 @@ extension PresentationFrame: Codable {
         case "presenter.granted": body = .presenterGranted
         case "presenter.refused": body = .presenterRefused
         case "presenter.vacant": body = .presenterVacant
+        case "ended": body = .ended
         case "lead.report": body = .leadReport(try container.decode(PresentationLeadReport.self, forKey: .lead))
         case "ask.request": body = .askRequest(try container.decode(PresentationAsk.self, forKey: .ask))
         case "ask.resolve": body = .askResolve(try container.decode(PresentationAskAnswer.self, forKey: .ask))
@@ -102,7 +103,7 @@ extension PresentationFrame: Codable {
         case .statusSeen(let seen): try container.encode(seen, forKey: .status)
         case .pendingChunk(let chunk): try container.encode(chunk, forKey: .pending)
         case .leadReport(let report): try container.encode(report, forKey: .lead)
-        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .presenterVacant, .unknown, .pendingCommit: break
+        case .ping, .ack, .presenterAcquire, .presenterGranted, .presenterRefused, .presenterVacant, .ended, .unknown, .pendingCommit: break
         }
     }
 }

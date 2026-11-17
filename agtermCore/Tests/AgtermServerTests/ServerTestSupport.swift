@@ -39,7 +39,8 @@ func sendNoSignal(_ fd: Int32, _ data: Data) throws {
     let sent = data.withUnsafeBytes { buffer in
         #if canImport(Darwin)
         var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        // the option cannot be set once the peer has shut down (EINVAL), and a send then raises SIGPIPE
+        guard setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size)) == 0 else { return -1 }
         return send(fd, buffer.baseAddress, data.count, 0)
         #else
         return send(fd, buffer.baseAddress, data.count, Int32(MSG_NOSIGNAL))

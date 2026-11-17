@@ -77,12 +77,12 @@ final class GhosttyCallbacks: @unchecked Sendable {
             return true
         case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             // ghostty prints its "Process exited. Press any key to close" fallback unless the host consumes
-            // this action: an overlay that should vanish returns true to suppress the prompt; a wait-opt-in
-            // overlay (and every other surface) returns false, so the prompt shows and close_surface_cb closes.
+            // this action: an overlay that should vanish returns true to suppress the prompt; a held surface
+            // returns its own `consumesHeldExit`, and close_surface_cb closes it on a key either way.
             guard let view = surfaceView(from: target) else { return false }
             guard view.shouldCloseOnChildExitAction else {
                 DispatchQueue.main.async { view.onExitHeld?() }
-                return false
+                return view.consumesHeldExit
             }
             DispatchQueue.main.async { view.handleProcessExit() }
             return true

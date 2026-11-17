@@ -21,6 +21,8 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     /// reconnect is present while this pane's ssh lost its connection and the app waits to attach it
     /// again, omitted otherwise.
     public let reconnect: ControlReconnect?
+    /// attachEnded is true while this remote pane's attach ended and it shows the ended notice, omitted otherwise.
+    public let attachEnded: Bool?
     /// paneID is the token `--pane-id` resolves, omitted for a slot whose surface carries none.
     public let paneID: String?
     /// pendingMessages counts the pane's unacked bus messages, omitted at zero.
@@ -33,8 +35,8 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     }
 
     public init(id: String, kind: String, active: Bool, visible: Bool, backedByZmx: Bool?,
-                lead: ZmxLeadRole? = nil, reconnect: ControlReconnect? = nil, paneID: String? = nil,
-                pendingMessages: Int? = nil, remote: Bool? = nil) {
+                lead: ZmxLeadRole? = nil, reconnect: ControlReconnect? = nil, attachEnded: Bool? = nil,
+                paneID: String? = nil, pendingMessages: Int? = nil, remote: Bool? = nil) {
         self.id = id
         self.kind = kind
         self.active = active
@@ -42,6 +44,7 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
         self.backedByZmx = backedByZmx
         self.lead = lead
         self.reconnect = reconnect
+        self.attachEnded = attachEnded
         self.paneID = paneID
         self.pendingMessages = pendingMessages
         self.remote = remote

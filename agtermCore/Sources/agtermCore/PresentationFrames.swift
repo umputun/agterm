@@ -795,6 +795,8 @@ public struct PresentationFrame: Equatable, Sendable {
         case presenterRefused
         /// The presenter's stream ended, so a mirror may send `presenterAcquire` again; the first to arrive wins.
         case presenterVacant
+        /// ended: the origin removed the session for good; the stream closes after it and is not retried.
+        case ended
         /// leadReport: a viewer telling the origin which of the session's panes it leads, so new work for them goes there.
         case leadReport(PresentationLeadReport)
         case askRequest(PresentationAsk)
@@ -861,6 +863,7 @@ public struct PresentationFrame: Equatable, Sendable {
             case .presenterGranted: return "presenter.granted"
             case .presenterRefused: return "presenter.refused"
             case .presenterVacant: return "presenter.vacant"
+            case .ended: return "ended"
             case .leadReport: return "lead.report"
             case .askRequest: return "ask.request"
             case .askResolve: return "ask.resolve"

@@ -574,6 +574,12 @@ struct agtermApp: App {
             Self.persistFontSize(size, from: view, store: store, sessionID: sessionID)
         }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, actions: services.actions)
+        // a remote pane draws its own notice over the kept screen, so Ghostty's prompt text stays off it
+        view.consumesHeldExit = session.remoteHost != nil
+        // a fresh attach owes nothing to an earlier one's end; a reopened catalog pane keeps its identity
+        if session.remoteHost != nil, let pane = view.isSplitPane ? session.splitPaneIdentity : session.paneIdentity {
+            RemoteEndBook.shared.clear(pane: pane)
+        }
         view.onExitHeld = { [weak view] in
             guard let view else { return }
             // the wrapper is gone, so no key can end a wait; a replaced surface's late exit is not this pane's

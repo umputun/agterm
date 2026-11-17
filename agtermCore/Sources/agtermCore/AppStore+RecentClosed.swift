@@ -219,7 +219,9 @@ extension AppStore {
     /// workspace close it left with, whose undo removes the entry.
     func recordRemoteClosed(_ session: Session, placement: RemoteRecentClosedItem.Placement, id: UUID = UUID(),
                             closeID: UUID? = nil) {
-        guard let recentClosedStore, let origin = session.attachedOrigin else { return }
+        // a session its origin removed for good has nothing left to reattach to
+        guard let recentClosedStore, let origin = session.attachedOrigin, session.remotePresentation?.originEnded != true
+        else { return }
         recentClosedStore.recordRemote(RemoteRecentClosedItem(id: id, host: origin.host, originSessionID: origin.sessionID,
                                                               name: session.displayName, placement: placement, closeID: closeID))
         recentClosedDidChange?()

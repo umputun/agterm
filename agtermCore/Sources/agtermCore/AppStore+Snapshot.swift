@@ -96,6 +96,8 @@ extension AppStore {
     /// A hidden split keeps its identity and restore state so showing it reattaches the surviving daemon;
     /// focus is intentionally not persisted and therefore returns to the primary pane.
     func session(from snapshot: SessionSnapshot, launchRestore: Bool = false) -> Session {
+        // a session reopened under its old id is live again, so a viewer reconnecting to it must not hear ended
+        PresentationEnds.shared.forget([snapshot.id])
         if snapshot.page != nil { return pageSession(from: snapshot) }
         let hasSplit = (snapshot.isSplit ?? false) || (snapshot.hasSplit ?? false)
         let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName,

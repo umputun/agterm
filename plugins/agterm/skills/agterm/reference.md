@@ -287,7 +287,7 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, paneID?, pendingMessages?, remote?}` where `kind` is
+of `{id, kind, active, visible, backedByZmx?, lead?, reconnect?, attachEnded?, paneID?, pendingMessages?, remote?}` where `kind` is
 `left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 Primary/split surfaces report `backedByZmx`, a Live scratch reports `true`, and other scratches and overlays omit it. `paneID` is the surface's
 stable token, the value `--pane-id` takes; it follows the terminal through a swap and is omitted for an
@@ -296,6 +296,7 @@ pane's [msg](#msg) mailbox and is omitted at zero. `remote` is `true` on an orig
 next ask, overlay or page goes to an attached Mac (see Remote sessions), omitted otherwise. `lead` is `leader`, `follower`
 or `unowned`: whether this Mac's window size is the one the pane's program sees. A pane that does not
 lead is covered. Absent until the pane's terminal reports one (see Remote sessions).
+`attachEnded` is `true` while a remote pane shows the "SESSION on HOST ended" panel, omitted otherwise.
 `reconnect` is present on a remote pane whose ssh lost its connection while agterm waits to attach it
 again: `failures` is the retry streak, the probes of its host that failed in a row plus one for a link
 that dropped again soon after attaching, started over by a key on the pane, a wake or a network change,
@@ -2521,9 +2522,11 @@ window leaves the frontmost window unchanged. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
 new local session's `id`; read `remoteHost` and `remoteSessionID` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. A connection that
-starts and later drops is an ordinary pane exit: ssh's own 255 shows a reconnecting bar naming the host and reconnects by itself, with ssh's last
-failed-probe message along the pane's bottom edge and on the pane's `reconnect` in `tree`; any other exit prints
-one line naming the host, the session, the pane and the exit status and holds on Ghostty's press-any-key prompt.
+starts and later drops is an ordinary pane exit, reported in a panel over the pane rather than as terminal text: ssh's own 255 shows a
+"Connection to HOST lost" panel over the pane and reconnects by itself, with ssh's last failed-probe message in the
+panel and on the pane's `reconnect` in `tree`; any other exit shows a "SESSION on HOST ended" panel, read back as
+`attachEnded: true` on the surface node, and any key closes the pane. A session its origin closes closes the row
+here with no panel.
 agterm adds ssh keepalive (`ServerAliveInterval 5`, `ServerAliveCountMax 2`) to the pane's ssh unless the
 user's config sets a nonzero interval, so a dead link is noticed within about fifteen seconds. When the
 pane's ssh joins an existing `ControlMaster` connection, that master's settings decide instead.
@@ -2566,10 +2569,10 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - Two existing remote panes follow the origin's split axis, hide/show and swaps. Local panes, divider
   ratio and focus stay local. A split the origin opens later attaches into an empty split slot, and a
   replica closed here stays closed. Older origins leave layout alone.
-- Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
-  left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
-  split prevents automatic primary removal; an ordinary disconnect still shows the disconnect line, held
-  or reconnecting per the attach section above.
+- Confirmed origin removal closes its replica without a keypress, even if ssh already exited and the
+  pane shows the ended panel. The last replica waits for its ssh exit and may then close the row. A pending
+  local split prevents automatic primary removal; an ordinary disconnect still shows its panel, ended or
+  reconnecting per the attach section above.
 - `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context, info line and HUD are cleared here and come back on reconnect. Retries
@@ -2662,7 +2665,7 @@ be typed.
 Closing a remote session here ends only this side's connection: the far-side processes keep running and
 nothing agterm does from this end can kill them. An open attached row is saved and attached again at the next
 launch whatever the restore mode is, without taking the lead from a Mac that took it meanwhile. A row whose
-session the origin no longer has shows `Ended on HOST` instead; an attached page waits for the origin to hand it
+session the origin no longer has closes instead; an attached page waits for the origin to hand it
 over and retries while the host does not answer.
 
 The pane reports the far side's working directory, and the local launches that would inherit it pick

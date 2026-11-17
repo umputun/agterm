@@ -48,12 +48,14 @@ extension ControlServer {
         startRemoteTick()
     }
 
-    /// remotePaneHeld is a remote pane's clean exit; it attaches again when the origin respawned the pane.
+    /// remotePaneHeld is a remote pane's clean exit; it attaches again when the origin respawned the pane, and
+    /// otherwise shows the ended notice.
     func remotePaneHeld(_ view: GhosttySurfaceView) {
         guard let session = view.session, session.remotePresentation != nil,
               let pane = session.surface === view ? session.paneIdentity
                   : session.splitSurface === view ? session.splitPaneIdentity : nil else { return }
-        if RemoteRespawnBook.shared.held(pane: pane, session: session.id) { reattachRespawned(pane, in: session) }
+        guard !RemoteRespawnBook.shared.held(pane: pane, session: session.id) else { return reattachRespawned(pane, in: session) }
+        noteRemotePaneEnded(pane, in: session)
     }
 
     /// pruneRespawnBook drops the entries of panes no open or soft-closed row holds any more. Run from the tick only.

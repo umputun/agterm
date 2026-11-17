@@ -60,16 +60,42 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
         XCTAssertNil(server.restoredOriginChecks["buildbox"])
     }
 
-    func testARowWhoseSessionIsGoneFromTheOriginEnds() async throws {
+    func testARowWhoseSessionIsGoneFromTheOriginCloses() async throws {
         let runner = ScriptedRunner([tree(sessions: ""), inventory(complete: true, claimedBy: "another")])
         let (server, store, row) = try makeServer(runner)
 
         await server.checkRestoredOrigin("buildbox")
 
-        XCTAssertTrue(row.ended)
-        XCTAssertFalse(row.awaitsOriginCheck)
-        XCTAssertEqual(row.initialCommand, RemoteSession.endedCommand(host: "buildbox"))
-        XCTAssertNotNil(store.session(withID: row.id), "an ended row stays until the user closes it")
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertTrue(row.remotePresentation?.originEnded == true)
+        XCTAssertNil(server.remoteClients[row.id])
+    }
+
+    func testARestoredRowsEndedPaneShowsNothingUntilTheOriginCheckClosesTheRow() async throws {
+        let runner = ScriptedRunner([tree(sessions: ""), inventory(complete: true, claimedBy: "another")])
+        let (server, store, row) = try makeServer(runner)
+        defer { RemoteEndBook.shared.clear(session: row.id) }
+
+        server.noteRemotePaneEnded(row.paneIdentity, in: row)
+        server.stopRemotePresentation(row.id)
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity), "a stream failure must not paint it early")
+
+        await server.checkRestoredOrigin("buildbox")
+
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
+    }
+
+    func testARestoredRowsEndedPaneShowsItsNoticeOnceTheOriginStillListsIt() async throws {
+        let (server, _, row) = try makeServer(ScriptedRunner([tree(sessions: session(originSession))]))
+        defer { RemoteEndBook.shared.clear(session: row.id) }
+
+        server.noteRemotePaneEnded(row.paneIdentity, in: row)
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
+
+        await server.checkRestoredOrigin("buildbox")
+
+        XCTAssertNotNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
     }
 
     func testAnUnreachableHostLeavesATerminalRowAttachingAndTriesAgain() async throws {
