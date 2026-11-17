@@ -238,17 +238,19 @@
   `plugins/agterm/skills/agterm/examples.md`
 - Modify: `.claude/rules/libghostty.md`, `.claude/rules/control-api.md`, `ARCHITECTURE.md`
 - Create: `docs/backlog/mac-origin-clipboard-image-for-ctrl-v.md`
+- ➕ also `.claude/rules/menu-actions.md` and the skill's `troubleshooting.md`; `examples.md` unchanged, as no verified
+  CLI recipe puts a Finder file copy on the pasteboard
 
-- [ ] docs.html: paste and drop section states the three-step rule, the remote copy, the size limit, the
+- [x] docs.html: paste and drop section states the three-step rule, the remote copy, the size limit, the
       one-transfer-per-pane refusal and where files are kept; commands.html and the skill's `session paste` entry say
       the same, with Cmd-V (not Ctrl-V) as the way to paste an image into Claude Code in a remote pane, and that a
       custom ghostty.conf paste binding or the Paste key pastes no files in a remote pane; commands.html lists
       `paste receive` as an internal command
-- [ ] rules: the paste seam, why `readClipboard` never transfers, the Cmd-V `keyDown` route, and the bundle/staging
+- [x] rules: the paste seam, why `readClipboard` never transfers, the Cmd-V `keyDown` route, and the bundle/staging
       contract, each stated once; control-api.md's CLI-only exemptions count goes from three to four with
       `paste receive`; menu-actions.md's Attach Remote HUD paragraph states that a HUD already shown is kept
       and the failure goes to the notification
-- [ ] backlog item: writing the image onto a Mac origin's clipboard so a program's own Ctrl-V finds it, with the
+- [x] backlog item: writing the image onto a Mac origin's clipboard so a program's own Ctrl-V finds it, with the
       shared-clipboard cost
 - [ ] verify every Overview requirement; run `make build`, `cd agtermCore && swift test`, `make test-app`,
       `make lint` once

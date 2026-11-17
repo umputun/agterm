@@ -263,6 +263,12 @@ The pane gets the thumbnail's `TemporaryItems/NSIRD_screencaptureui_*` path, but
 `Operation not permitted` and Claude Code drops the image silently. In the reported case Full Disk Access fixed
 it without a restart; see the [screenshot read diagnosis](https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md#a-dropped-screenshot-reaches-a-live-pane-but-cannot-be-read).
 
+### "Ctrl-V pastes no image into Claude Code in a remote session"
+
+Claude Code's Ctrl-V reads the clipboard of the host it runs on, which in a remote pane is the other Mac or the
+server. Use ⌘V: agterm copies the clipboard image, or files copied in Finder, to that host and pastes the path
+there, which Claude Code attaches. A paste binding of your own in ghostty.conf pastes text only in a remote pane.
+
 ### "agterm would like to access data from other apps, over and over"
 
 Use `agtermctl tree --json` to read `liveAttribution` and `splitLiveAttribution`; see the

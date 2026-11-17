@@ -200,7 +200,7 @@ renumbering. Do not reintroduce a count anywhere.
   stream's hello or the op's `--window` names (`ControlServer+MacCatalog`); an `opID` request never reaches a Mac's
   remote route
 
-`terminfo install` is a CLI-only command with no protocol counterpart, one of the three exemptions from the
+`terminfo install` is a CLI-only command with no protocol counterpart, one of the four exemptions from the
 protocol/dispatcher contract: it runs `infocmp` and `ssh` locally and never opens the socket, so there is
 nothing for the app to dispatch or read back. `TerminfoInstall` in `agtermCore` owns the argv and the
 pipeline; the CLI owns the typed option surface, deliberately narrower than ssh's so `-G`, `-N`, `-n` and
@@ -223,7 +223,11 @@ rules and the argv on `TerminfoInstall`'s connection surface; `ServerInstaller` 
 over injectable effects, and no archive bytes are sent to the host until the tarball's sha256 matches the app's
 `agterm-server.sha256`. A bad destination is refused in `run`, not `validate`, so every refusal exits 1.
 
-`session wait` is not a fourth exemption but a client-side composite, like `overlay open --block`: it
+`paste receive` is the fourth. It stages a paste bundle on the host whose program a pasted file must reach,
+run by the viewing Mac over ssh (`RemoteSession.pasteReceiveCommand`); [[libghostty]] owns the bundle and
+staging contract. `session.paste` is in `waitsOnNetwork`, since a paste into a remote pane waits on that copy.
+
+`session wait` is not a fifth exemption but a client-side composite, like `overlay open --block`: it
 opens the socket only for existing reads (`events.read`, `window.list`, `tree`), so there is no
 `session.wait` command and nothing new to read back. It cannot be a server command: the inline accept loop
 would hold the very status writes it waits for. It anchors the cursor BEFORE reading the tree, so a status
@@ -578,14 +582,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   focused text fields retain their behavior, terminal Cut stays absent. Do not replace the combined
   pasteboard command group. Remove the separate Undo/Redo group because Command-Z belongs to Reopen Closed
   Item; assert menu-item absence.
-- Paste validation must call the same URL/string branches as paste. Type-only probes disagree for Finder
-  URLs and declared-without-data pasteboards. Short-circuit on the first usable URL and share `urlText`;
+- Paste validation (`hasPasteOffer`) must call the same URL/string branches as paste, plus the PNG/TIFF probe
+  the offer reads. Type-only probes disagree for Finder URLs and declared-without-data pasteboards. Short-circuit on the first usable URL and share `urlText`;
   validation must not materialize thousands of files. This has manual named-pasteboard coverage because
   sandboxed XCUITest exposed no app-side types during an 8-second Finder-URL poll. Poll general pasteboard
   after external writes.
 - Fixed Edit shortcuts use AppKit-produced characters. Retain Ghostty
-  `super+key_c/v/a` keycode fallbacks for non-Latin layouts and disabled menu items; there is no AppKit
-  Latin fallback. Paste requests are not OSC 52 reads and must not prompt.
+  `super+key_c/a` keycode fallbacks for non-Latin layouts and disabled menu items; there is no AppKit
+  Latin fallback. ⌘V is the paste seam's, by keycode in `keyDown` ([[libghostty]]). Paste requests are not
+  OSC 52 reads and must not prompt.
 - `session.text` defaults to `onScreenSurface`: covering scratch, then focused pane. Explicit left/right/
   scratch addresses that pane, including hidden scratch. Default reads viewport; `--all` includes
   scrollback; `--lines N` returns last content lines after trimming blank grid rows. All and lines are
