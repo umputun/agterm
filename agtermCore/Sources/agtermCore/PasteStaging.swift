@@ -24,6 +24,33 @@ public struct PasteStaging: Sendable {
         self.now = now
     }
 
+    /// Reply is what `agtermctl paste receive` prints: the staged paths, or the reason nothing was staged.
+    public struct Reply: Codable, Equatable, Sendable {
+        public let paths: [String]?
+        public let error: String?
+
+        public init(paths: [String]? = nil, error: String? = nil) {
+            self.paths = paths
+            self.error = error
+        }
+
+        /// init(result:) reads the ssh run of `paste receive`: its printed reply, else why there is none, an origin
+        /// whose agtermctl predates the command included.
+        public init(result: RemoteCommandResult) {
+            if result.refusedArguments {
+                self.init(error: "the origin's agterm is too old to receive pasted files")
+                return
+            }
+            let line = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let reply = try? JSONDecoder().decode(Reply.self, from: Data(line.utf8)), reply.paths != nil || reply.error != nil {
+                self = result.status == 0 ? reply : Reply(error: reply.error ?? "the paste could not be copied")
+                return
+            }
+            let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.init(error: stderr.isEmpty ? "the paste could not be copied (exit \(result.status))" : stderr)
+        }
+    }
+
     public enum Failure: Error, Equatable, CustomStringConvertible {
         case unsafeRoot(String)
         case exists(String)

@@ -93,6 +93,21 @@ struct PasteStagingTests {
         #expect(FileManager.default.fileExists(atPath: keep.path))
     }
 
+    @Test(arguments: [
+        (RemoteCommandResult(status: 0, stdout: "{\"paths\":[\"/c/a.png\"]}\n", stderr: ""), PasteStaging.Reply(paths: ["/c/a.png"])),
+        (RemoteCommandResult(status: 1, stdout: "{\"error\":\"too large\"}\n", stderr: ""), PasteStaging.Reply(error: "too large")),
+        (RemoteCommandResult(status: 64, stdout: "", stderr: "Error: Unexpected argument 'paste'"),
+         PasteStaging.Reply(error: "the origin's agterm is too old to receive pasted files")),
+        (RemoteCommandResult(status: -1, stdout: "", stderr: "the remote did not answer in time"),
+         PasteStaging.Reply(error: "the remote did not answer in time")),
+        (RemoteCommandResult(status: 255, stdout: "", stderr: ""), PasteStaging.Reply(error: "the paste could not be copied (exit 255)")),
+        (RemoteCommandResult(status: 1, stdout: "{\"paths\":[\"/c/a.png\"]}\n", stderr: ""),
+         PasteStaging.Reply(error: "the paste could not be copied")),
+    ])
+    func aReceiveRunReadsAsPathsOrTheReasonThereAreNone(result: RemoteCommandResult, expected: PasteStaging.Reply) {
+        #expect(PasteStaging.Reply(result: result) == expected)
+    }
+
     private func permissions(_ path: String) throws -> Int {
         try #require(FileManager.default.attributesOfItem(atPath: path)[.posixPermissions] as? Int) & 0o777
     }

@@ -99,6 +99,17 @@ struct PasteBundleTests {
         #expect(throws: failure) { try dir.drain(Data(raw.utf8), limits: .init(totalBytes: 10, entries: 10)) }
     }
 
+    @Test func theTemporaryBundleIsPrivateAndReadsBack() throws {
+        let file = try PasteBundle.temporaryFile(PasteBundle.entries(image: Data([7, 8]), name: "c.png"))
+        let folder = file.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: folder) }
+
+        #expect(try FileManager.default.attributesOfItem(atPath: folder.path)[.posixPermissions] as? Int == 0o700)
+        #expect(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? Int == 0o600)
+        var reader = PasteBundle.Reader(handle: try FileHandle(forReadingFrom: file))
+        #expect(try reader.next() == PasteBundle.Header(root: 0, path: "c.png", kind: .file, size: 2))
+    }
+
     @Test func aHeaderLineOverTheCapIsRefusedBeforeItIsParsed() throws {
         let dir = try PasteFixture()
         defer { dir.cleanUp() }

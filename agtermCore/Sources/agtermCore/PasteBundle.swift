@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Musl)
+import Musl
+#endif
 
 /// PasteBundle is the wire format for pasted files, folders and a clipboard image: a version line, then per entry
 /// one JSON header line followed by `size` raw bytes for a file.
@@ -130,6 +133,30 @@ public enum PasteBundle {
             case .file(let url): try copy(url, size: entry.header.size, to: handle)
             }
         }
+    }
+
+    /// temporaryFile writes `entries` to a 0600 file inside a fresh 0700 temporary folder, to be sent as ssh's stdin.
+    /// The caller removes the whole folder, `url.deletingLastPathComponent()`, whatever the outcome.
+    public static func temporaryFile(_ entries: [Entry]) throws -> URL {
+        var template = Array((NSTemporaryDirectory() + "agterm-paste-XXXXXX").utf8CString)
+        guard let folder = template.withUnsafeMutableBufferPointer({ mkdtemp($0.baseAddress).map { String(cString: $0) } }) else {
+            throw PasteStaging.Failure.system("cannot create a temporary folder: \(PasteStaging.errorText())")
+        }
+        let path = folder + "/bundle"
+        let fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else {
+            try? FileManager.default.removeItem(atPath: folder)
+            throw PasteStaging.Failure.system("cannot create \(path): \(PasteStaging.errorText())")
+        }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        do {
+            try write(entries, to: handle)
+            try handle.close()
+        } catch {
+            try? FileManager.default.removeItem(atPath: folder)
+            throw error
+        }
+        return URL(fileURLWithPath: path)
     }
 
     static func isSafeComponent(_ name: String) -> Bool {

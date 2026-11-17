@@ -49,8 +49,9 @@
 
 ## Testing Strategy
 - host-free logic (precedence, bundle format, staging, retention, command lines) in `agtermCoreTests`; the
-  receiver in `agtermctlKitTests`, in-process with an injected staging root plus one round trip through the built
-  `agtermctl` with `HOME` pointed at a temporary folder.
+  receiver in `agtermctlKitTests`, in-process with an injected staging root, plus on Linux one round trip through
+  the built `agtermctl` with `XDG_CACHE_HOME` pointed at a temporary folder (macOS resolves the caches folder from
+  the account, not `HOME`, so a macOS run of the real binary would write the user's own cache).
 - app seam in hosted tests (`make test-app`) with named `NSPasteboard`s and an injected staging root: local
   image-only paste inserts a staged path, a file URL inserts its path, text inserts text, and the menu gate agrees
   with the reader.
@@ -174,15 +175,16 @@
 - Create: `agtermCore/Tests/agtermctlKitTests/PasteCommandsTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/RemoteSessionTests.swift`
 
-- [ ] `agtermctl paste receive`: reads one bundle from stdin into `PasteStaging` at the default root, printing
+- [x] `agtermctl paste receive`: reads one bundle from stdin into `PasteStaging` at the default root, printing
       `{"paths":[...]}` or a JSON error, non-zero exit on failure; the staging work is a function taking the root
-- [ ] `RemoteSession.pasteReceiveCommand(host:connectTimeout:controlPath:)` in the shape of `pageServeCommand`
-- [ ] `RemoteInputCommandRunner` (app target) with `RemoteCommandProcessRunner` wiring a stdin file to the process;
+- [x] `RemoteSession.pasteReceiveCommand(host:connectTimeout:controlPath:)` in the shape of `pageServeCommand`
+- [x] `RemoteInputCommandRunner` (app target) with `RemoteCommandProcessRunner` wiring a stdin file to the process;
       the caller writes the bundle 0600 inside a fresh 0700 temporary folder and removes it on every outcome
-- [ ] tests: command line shape and host validation; receiver in-process with a temporary root for success, a
-      malformed bundle and an oversize bundle; one round trip through the built `agtermctl` with `HOME` set to a
-      temporary folder; a `refusedArguments` reply maps to the "too old" reason
-- [ ] run `swift test --filter 'PasteCommands|RemoteSession'` - must pass before task 3
+- [x] tests: command line shape and host validation; receiver in-process with a temporary root for success, a
+      malformed bundle and an oversize bundle; on Linux one round trip through the built `agtermctl` with
+      `XDG_CACHE_HOME` set to a temporary folder; a `refusedArguments` reply maps to the "too old" reason
+      (`PasteStaging.Reply(result:)` in agtermCore, so the app and its tests share the mapping)
+- [x] run `swift test --filter 'PasteCommands|RemoteSession'` - must pass before task 3
 
 ### Task 3: App paste and drop seam, local and remote
 

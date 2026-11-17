@@ -79,6 +79,14 @@ public enum RemoteSession {
         return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
     }
 
+    /// pasteReceiveCommand runs the far side's `agtermctl paste receive`, which reads a paste bundle on plain ssh stdin.
+    public static func pasteReceiveCommand(host: String, connectTimeout: Int = 5, controlPath: String? = nil) throws -> [String] {
+        try validate(host: host)
+        let chain = cliPathPrefix + " && exec agtermctl paste receive"
+        let remote = CommandRestore.shellQuotedLine(["/bin/sh", "-c", chain])
+        return sshArguments(host: host, connectTimeout: connectTimeout, interactive: false, controlPath: controlPath) + [remote]
+    }
+
     /// forwardCommand is a forward of its own for a row with no pooled master: ControlMaster and ControlPath are
     /// switched off over any ssh_config, so the listener lives in this process and ends with it. It takes the pane
     /// attach's keepalive, or a half-open link would leave it running with the page's port dead.
