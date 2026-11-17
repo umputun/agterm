@@ -27,6 +27,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
     case dashboard = "dashboard"
     case attachRemote = "attach_remote", openRemoteWindow = "open_remote_window", detachedSessions = "detached_sessions"
+    case newRemoteSession = "new_remote_session"
     case editFlaggedSessions = "edit_flagged_sessions", editFocusedWorkspaces = "edit_focused_workspaces"
 
     /// The shipped default chord, or `nil` for a keyless action, which gains a key only when the user
@@ -71,7 +72,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession, .newCompanion, .duplicateCompanion, .convertCompanion,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
              .toggleWorkspaceFilter, .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
-             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces, .openRemoteWindow, .detachedSessions:
+             .previousWindow, .nextWindow, .editFlaggedSessions, .editFocusedWorkspaces, .openRemoteWindow, .detachedSessions,
+             .newRemoteSession:
             return nil
         }
     }

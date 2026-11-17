@@ -205,20 +205,20 @@ The draft is the proposal in discussion 1033.
 - Modify: the File menu in `agterm/agtermApp+Menus.swift`
 - Modify: matching tests (`agtermCore` palette and keymap tests, `agtermTests/RemoteAttachTests.swift`)
 
-- [ ] `BuiltinAction.newRemoteSession` (`new_remote_session`, keyless, in the keyless list) and a `PaletteCommand`
+- [x] `BuiltinAction.newRemoteSession` (`new_remote_session`, keyless, in the keyless list) and a `PaletteCommand`
       row enabled by `hasRemotes && hasCurrentWorkspace`, as Attach Remote is, and in `localOnly`
-- [ ] File ▸ New Remote Session… after Attach Remote…, disabled through `PaletteCommand.isEnabled(in:)`
-- [ ] `AppActions.newRemoteSession()`: capture the destination (window id, workspace id and name) first, then
+- [x] File ▸ New Remote Session… after Attach Remote…, disabled through `PaletteCommand.isEnabled(in:)`
+- [x] `AppActions.newRemoteSession()`: capture the destination (window id, workspace id and name) first, then
       `pickRemote`, `RemoteAttachHud` progress, `remoteSessionOrigin`, origin window picker when the Mac has several
       (`pickOriginWindow`), then the shared creator with that captured destination and resolved origin; failures
       in the HUD
-- [ ] tests: update `BuiltinActionTests`' case count and keyless list and the palette partition test; palette
+- [x] tests: update `BuiltinActionTests`' case count and keyless list and the palette partition test; palette
       enablement (no remotes, no current workspace, remote window, normal window), keymap action name, GUI flow
       through a fake `RemoteAttaching` (one host, several hosts, several origin windows, a host answering with no
       identity refused with nothing created, failure shown in the HUD); the selected workspace changes while the
       host and origin-window picks are pending, and both the origin workspace name and the final local placement
       stay the captured ones
-- [ ] run the touched agtermCore tests and `-only-testing:` the touched hosted classes - must pass before task 4
+- [x] run the touched agtermCore tests and `-only-testing:` the touched hosted classes - must pass before task 4
 
 ### Task 4: Docs, skill, rules and final gates
 

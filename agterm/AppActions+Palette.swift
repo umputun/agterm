@@ -123,6 +123,7 @@ extension AppActions {
         case .resetFontSize: resetFontSize()
         case .selectTheme: openThemePalette()
         case .attachRemote: attachRemote()
+        case .newRemoteSession: newRemoteSession()
         case .openRemoteWindow: openRemoteWindow()
         case .detachedSessions: openDetachedSessions()
         case .editKeymap: editKeymap()

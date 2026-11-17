@@ -168,6 +168,13 @@ private final class HudRecorder: RemoteAttaching {
         ControlResponse(ok: false, error: "not scripted")
     }
 
+    func remoteSessionOrigin(host _: String) async -> RemoteSessionOrigin { .failed("not scripted") }
+
+    func createRemoteSession(_: RemoteSessionCreate, origin _: RemoteSessionCreate.Origin, destination _: RemoteSessionDestination,
+                             progress _: (String) -> Void) async -> ControlResponse {
+        ControlResponse(ok: false, error: "not scripted")
+    }
+
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
         opened.append(Opened(session: target, window: window, spec: spec))
         return ControlResponse(ok: true)

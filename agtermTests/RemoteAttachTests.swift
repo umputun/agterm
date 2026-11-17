@@ -473,6 +473,82 @@ final class RemoteAttachTests: XCTestCase {
         XCTAssertTrue(attacher.attaches.isEmpty)
     }
 
+    func testANewRemoteSessionOnTheOnlyHostAsksNothingAndLandsInTheCurrentWorkspace() async throws {
+        try await writeRemotes("srv\n", expecting: ["srv"])
+        let store = try XCTUnwrap(library.activeStore)
+        let workspace = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.selectedSessionID?.uuidString)
+
+        actions.newRemoteSession()
+        await waitUntil("the session is created") { attacher.creates.count == 1 }
+        await waitUntil("the progress panel closes") { attacher.huds.last == .closed(session: session, window: windowID.uuidString) }
+
+        XCTAssertNil(controller.pending)
+        XCTAssertEqual(attacher.sessionOriginHosts, ["srv"])
+        let create = try XCTUnwrap(attacher.creates.first)
+        XCTAssertEqual(create.host, "srv")
+        XCTAssertEqual(create.origin, .server)
+        XCTAssertTrue(create.destination.store === store)
+        XCTAssertEqual(create.destination.workspace, workspace)
+    }
+
+    func testANewRemoteSessionAsksForTheHostAndTheMacWindowAndKeepsTheWorkspaceItStartedIn() async throws {
+        try await writeRemotes("studio\nmini\n", expecting: ["studio", "mini"])
+        let store = try XCTUnwrap(library.activeStore)
+        let started = try XCTUnwrap(store.currentWorkspaceID)
+        store.renameWorkspace(started, to: "dev")
+        let build = UUID().uuidString, notes = UUID().uuidString
+        attacher.sessionOrigin = .mac([window(build, "build"), window(notes, "notes")])
+
+        actions.newRemoteSession()
+        await waitUntil("the host picker opens") { controller.pending != nil }
+        XCTAssertEqual(controller.pending?.prompt, "New session on which host?")
+        _ = store.addWorkspace(name: "other")
+        XCTAssertNotEqual(store.currentWorkspaceID, started)
+        controller.resolve(ControlPickResult(result: .picked, id: "mini", label: "mini", index: 1))
+        await waitUntil("the window picker opens") { controller.pending?.prompt == "New session in which window of mini?" }
+        XCTAssertEqual(controller.pending?.items, [ControlPickItem(id: build, label: "build"), ControlPickItem(id: notes, label: "notes")])
+        store.renameWorkspace(started, to: "renamed")
+        controller.resolve(ControlPickResult(result: .picked, id: notes, label: "notes", index: 1))
+        await waitUntil("the session is created") { attacher.creates.count == 1 }
+
+        let create = try XCTUnwrap(attacher.creates.first)
+        XCTAssertEqual(attacher.sessionOriginHosts, ["mini"])
+        XCTAssertEqual(create.origin, .mac(window: notes))
+        XCTAssertEqual(create.destination.workspace, started)
+        XCTAssertEqual(create.destination.name, "dev")
+    }
+
+    func testANewRemoteSessionOnAHostThatCannotTakeOneSaysWhyAndCreatesNothing() async throws {
+        let session = try XCTUnwrap(library.activeStore?.selectedSessionID?.uuidString)
+        attacher.sessionOrigin = .failed("the agterm on studio is too old to create sessions for another Mac")
+        let destination = try XCTUnwrap(currentDestination())
+
+        actions.newRemoteSession(on: "studio", into: destination, in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 2 }
+
+        XCTAssertEqual(attacher.huds.last, .opened(session: session, window: windowID.uuidString, spec: HudSpec(
+            message: "New Remote Session: the agterm on studio is too old to create sessions for another Mac", hideAfter: 5)))
+        XCTAssertTrue(attacher.creates.isEmpty)
+    }
+
+    func testAFailedCreateShowsItsErrorInATimedPanel() async throws {
+        attacher.createResponse = ControlResponse(ok: false, error: "studio did not answer; nothing was created")
+        let destination = try XCTUnwrap(currentDestination())
+
+        actions.newRemoteSession(on: "studio", into: destination, in: windowID)
+        await waitUntil("the error panel shows") { attacher.huds.count == 3 }
+
+        guard case let .opened(_, _, spec) = attacher.huds.last else { return XCTFail("expected an error panel") }
+        XCTAssertEqual(spec, HudSpec(message: "New Remote Session: studio did not answer; nothing was created", hideAfter: 5))
+    }
+
+    private func currentDestination() -> RemoteSessionDestination? {
+        guard let store = library.activeStore, let id = store.currentWorkspaceID,
+              let workspace = store.workspaces.first(where: { $0.id == id }) else { return nil }
+        return RemoteSessionDestination(store: store, workspace: id, name: workspace.name)
+    }
+
     func testAttachDoesNothingWhileAModalHoldsTheWindow() async {
         XCTAssertTrue(controller.open(PendingPick(id: "busy", items: [ControlPickItem(id: "a", label: "A")])))
 
@@ -531,6 +607,29 @@ private final class FakeAttacher: RemoteAttaching {
     func createRemoteCompanion(_: RemoteCompanionRequest, of _: UUID, in _: AppStore, select _: Bool,
                                progress _: (String) -> Void) async -> ControlResponse {
         ControlResponse(ok: false, error: "not scripted")
+    }
+
+    struct Create {
+        let host: String
+        let origin: RemoteSessionCreate.Origin
+        let destination: RemoteSessionDestination
+    }
+
+    var sessionOrigin = RemoteSessionOrigin.server
+    private(set) var sessionOriginHosts: [String] = []
+    private(set) var creates: [Create] = []
+    var createResponse = ControlResponse(ok: true)
+
+    func remoteSessionOrigin(host: String) async -> RemoteSessionOrigin {
+        sessionOriginHosts.append(host)
+        return sessionOrigin
+    }
+
+    func createRemoteSession(_ request: RemoteSessionCreate, origin: RemoteSessionCreate.Origin,
+                             destination: RemoteSessionDestination, progress: (String) -> Void) async -> ControlResponse {
+        creates.append(Create(host: request.host, origin: origin, destination: destination))
+        progress("creating a session on \(request.host)…")
+        return createResponse
     }
 
     func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
