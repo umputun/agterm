@@ -343,6 +343,28 @@ struct AppStoreCompanionsTests {
         #expect(g.store.companionsNeedingAttention(of: g.after.id).isEmpty)
     }
 
+    @Test func companionsByStatusPutsTheMostUrgentFirstAndKeepsSidebarOrderWithinAStatus() throws {
+        let g = try CompanionGroup()
+        let third = try g.store.addCompanion(to: g.parent.id).get()
+        let fourth = try g.store.addCompanion(to: g.parent.id).get()
+        let fifth = try g.store.addCompanion(to: g.parent.id).get()
+        g.store.setAgentIndicator(AgentIndicator(status: .completed), forSession: g.first.id)
+        g.store.setAgentIndicator(AgentIndicator(status: .active), forSession: g.second.id)
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked, color: "#111111"), forSession: third.id)
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked, color: "#222222"), forSession: fourth.id)
+        fifth.unseenCount = 3
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: g.parent.id)
+
+        #expect(g.store.companionsByStatus(of: g.parent.id).map(\.id) == [third.id, fourth.id, g.second.id, g.first.id])
+        #expect(g.store.companionsByStatus(of: g.after.id).isEmpty)
+
+        g.store.setAgentIndicator(AgentIndicator(status: .blocked, color: "#111111"), forSession: third.id)
+        #expect(g.store.companionsByStatus(of: g.parent.id).first?.id == third.id)
+
+        #expect(g.store.moveSessions([fourth.id], toWorkspace: g.work.id, at: 3) == 1)
+        #expect(g.store.companionsByStatus(of: g.parent.id).map(\.id) == [fourth.id, third.id, g.second.id, g.first.id])
+    }
+
     @Test func onlyAMoveInsideItsGroupIsOfferedForACompanion() throws {
         let g = try CompanionGroup()
 

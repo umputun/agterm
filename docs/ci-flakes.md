@@ -205,6 +205,28 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   succeeding forever.
 - **Fix.** Already on master in #949 (b8a96b1b): `OverlayRunJob.onlyZombies` treats a group of zombies as ended.
 
+### Hang in `HudHelperTests.exitsWhenTheOwningProcessIsGone`
+
+- **Symptom.** `swift test` stops printing after the Swift Testing summary; the test helper sits at 0% CPU in
+  `-[NSConcreteTask waitUntilExit]`, in `mach_msg`, and the owner `sh` it waits on is already reaped.
+- **Runs.** A local full run on 2026-11-17; not yet seen on CI, where the watchdog would kill it at 600 s.
+- **Cause, demonstrated.** The test launched the owner, crossed an `await`, then called `waitUntilExit`, which
+  waits on the current thread's run loop. A task can resume on another cooperative thread, and that run loop
+  never hears of the exit. A probe hung within 650 hopped runs; launching and waiting on one thread ran 2400 times
+  without a hang.
+- **Fix.** The test polls `isRunning` with `Task.sleep` under a 10 s bound; `Process` reaps on its own queue, so
+  `kill -0` sees the owner gone. 2400 hopped probe runs passed. Every other `waitUntilExit` in the tests runs and
+  waits on one thread with no `await` between.
+
+### `AppDelegateCaptureTests.testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
+
+- **Symptom.** `XCTAssertEqual failed: ("0") is not equal to ("1")` at 0.408 s: the 120 ms stub listing
+  missed `ZmxClient.captureInvocationTimeout` (0.4 s) and no command was captured.
+- **Runs.** One local `make test-app` on 2026-11-17, load average about 21 at the time.
+- **Cause, not established.** Ten isolated runs passed in 0.19-0.28 s, and ten more passed under 20 busy-loop
+  processes (load average 113), so CPU contention alone did not reproduce it.
+- **Fix.** None yet.
+
 ### macOS watchdog hang with no test started
 
 - **Symptom.** The watchdog fires while the log's last line is a compile step.

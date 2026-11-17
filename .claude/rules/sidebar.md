@@ -290,8 +290,11 @@ paths:
 - `expandedParentIDs` tracks open parents the way `expandedWorkspaceIDs` tracks workspaces: only a genuine
   toggle persists, through `setSessionExpanded`. A selection reveal opens the workspace, then the parent, with
   persistence suppressed. `applyParentExpansion(under:)` re-applies parents when their workspace opens.
-- A folded parent shows `companion-marker` for the companions `companionsNeedingAttention` returns, beside its
-  own glyph and badge, with their names as the accessibility label. `RowContent.foldedAttention` reloads it.
+- A folded parent shows `companion-marker` for the companions `companionsByStatus` returns, beside its own glyph and
+  badge, tinted by the first one's status color (its `--color` override included) and labeled with each name and status.
+  Ties go to sidebar order, never to `statusChangedAt`, which observation ignores. `RowContent.foldedAttention` reloads
+  it on a companion's change and `reapplyStatusGlyphs` on a Settings color change. Unread alone shows no marker.
+  `companionsNeedingAttention` stays public for agterm-linux's sidebar snapshot.
 - In the ordinary tree one dragged companion moves under another top-level session (`SidebarDrop.companionReparent`):
   a drop on that row puts it first in the group, a gap in another group at that gap, a drop on another group's
   companion right after it, and each asks `canMoveCompanion`. Within its own group it reorders among its siblings. Several rows and a workspace-level

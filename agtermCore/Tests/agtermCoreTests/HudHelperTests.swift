@@ -438,7 +438,10 @@ struct HudHelperTests {
             #expect(run.running)
 
             owner.terminate()
-            owner.waitUntilExit()   // reaps it: kill -0 succeeds on a zombie, which still has a process entry
+            // waitUntilExit can hang after an await resumes on a different thread
+            let deadline = Date().addingTimeInterval(10)
+            while owner.isRunning, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
+            #expect(!owner.isRunning)
 
             #expect(await run.waitForExit())
         }
