@@ -172,7 +172,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `tree`, `events.read`
 - `workspace.new`, `.rename`, `.delete`, `.select`, `.go`, `.move`, `.focus`, `.filter`, `.flag`, `.collapse`,
   `.expand`, `.tint`
-- `session.new`, `.duplicate`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
+- `session.new`, `.duplicate`, `.remote.new`, `.companion.new`, `.companion.page`, `.companion.duplicate`, `.companion.convert`, `.companion.move`, `.companion.page.attach`, `.page`, `.collapse`, `.expand`, `.close`, `.terminate`, `.select`, `.rename`, `.reveal`, `.move`, `.type`, `.split`,
   `.split.close`, `.swap`, `.lead`,
   `.scratch`, `.focus`, `.resize`, `.go`, `.copy`, `.paste`, `.selectall`, `.text`, `.search`, `.status`,
   `.flag`, `.tint`, `.info`, `.seen`, `.restore`, `.restart`, `.background`, `.overlay.open`, `.overlay.close`, `.overlay.resize`,
@@ -1934,6 +1934,15 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   imports one session, its split included, and `zmx.attach.group` a top-level session with its companions;
   whole-workspace teleport is out of scope, and several remote
   rows may sit side by side.
+- `session.remote.new` creates a session on another host and attaches it into the destination window's current
+  workspace; it is its own wire command for the older-app reason companions are. `RemoteSessionCreate` parses it and
+  builds the origin argv with each value joined to its flag (`--cwd=DIR`), so a value starting with `-` is never read
+  as an option. Discovery is strict, unlike Open Remote Window's: `RemoteSessionCreate.originKind` takes only a
+  `macCatalog` with `live: true` or `headless: true` and refuses anything else before creating. The destination
+  (store, workspace id, name) is captured before any picker or ssh wait and rechecked at placement, never retargeted.
+  `createRemoteSession`, shared by the GUI and control, runs the create once; an unattached session is named with
+  `zmx attach HOST ID`, and an undecodable reply is reported as an unknown outcome, never resent. It is in `localOnlyCommands` and `waitsOnNetwork`, and agterm-server
+  refuses it as a command that makes a Mac viewer.
 - A row carries what a PICKER needs, not only what attach needs. Without that a caller has to run a second
   ssh and join `agtermctl tree --json` by session id, paying another authentication for data the walk
   already held and discarded. The exact fields are below, plus the far node's non-idle

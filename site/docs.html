@@ -826,6 +826,21 @@ s=$(agtermctl zmx tree studio.local --json \
 <li>A terminal companion attached on its own joins its parent's group when exactly one row in the window is attached from that parent. Companions created over there later are not followed.</li>
 <li>A page session is listed too: attaching it opens that Mac's page as a top-level row here. A page companion attaches only under the row attached from its parent, so the picker leaves it out.</li>
 </ul>
+<h3 id="remote-sessions-new">Start a session on another host</h3>
+<p><strong>File ▸ New Remote Session…</strong> (the <code>new_remote_session</code> action, no default key) starts a shell on a host in <code>remotes.conf</code> and attaches it here, at the end of the workspace that was current when you chose the item.</p>
+<ul>
+<li>With more than one host listed, the picker asks which. A Mac with several open windows is asked which window gets the session there.</li>
+<li>On the host the session goes into the workspace with your workspace's name, the first one when several share it, created when there is none. Nothing is selected there.</li>
+<li>The host must be a Mac in Live sessions mode or an agterm-server. A host that does not answer, or runs an agterm too old to tell, gets nothing created and the panel says why.</li>
+<li>A session created but not attached is named in the panel with its id; <code>agtermctl zmx attach HOST ID</code> attaches it later. When the host's reply is lost, the panel says it is unknown whether a session was created. Either way nothing is sent again.</li>
+<li>The item is greyed out while <code>remotes.conf</code> lists no host, and in a <a href="#remote-window">remote window</a>, whose new sessions come from its server.</li>
+</ul>
+<pre class="bash"><code>agtermctl session new --remote studio.local                          # frontmost window, current workspace
+agtermctl session new --remote studio.local --origin-window 6f1c     # that window on a Mac with several (id or prefix)
+agtermctl session new --remote srv --cwd /srv/app --command &quot;make run&quot;
+agtermctl session new --remote srv --workspace-name deploy           # name of the workspace on the host
+agtermctl session new --remote srv --window &quot;$win&quot;                   # into another open window here</code></pre>
+<p>It prints the new row's id, an <a href="#remote-sessions-row">attached row</a> like any other. A placement, a name, a tint, <code>--wait</code> and <code>--no-select</code> are refused: the row always lands at the end of the current workspace and is selected.</p>
 <h3 id="remote-sessions-row">The attached row</h3>
 <ul>
 <li>The title bar shows a cloud and the host; hide it with <strong>Settings ▸ Interface ▸ Remote host</strong>. The Ctrl-Tab switcher and the recent and attention lists mark the row the same way.</li>
@@ -1264,7 +1279,7 @@ previous_attention_session   next_attention_session
 quick_terminal   session_palette   command_palette
 custom_command_palette   show_attention
 select_theme   toggle_fullscreen   toggle_terminal_zoom
-dashboard   attach_remote
+dashboard   attach_remote   new_remote_session
 open_remote_window   detached_sessions
 edit_flagged_sessions   edit_focused_workspaces</code></pre>
 <p><code>toggle_fullscreen</code> (⌃⌘F by default) has no menu item of its own: macOS adds its own Enter Full Screen item to the View menu and shows Globe+F there. Both work, and rebinding <code>toggle_fullscreen</code> changes agterm's chord as usual; it just does not appear next to that menu item.</p>

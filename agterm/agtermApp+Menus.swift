@@ -193,6 +193,9 @@ extension agtermApp {
                 Button("Attach Remote…") { actions.attachRemote() }
                     .keyboardShortcut(shortcut(for: .attachRemote))
                     .disabled(!PaletteCommand.attachRemote.isEnabled(in: context))
+                Button("New Remote Session…") { actions.newRemoteSession() }
+                    .keyboardShortcut(shortcut(for: .newRemoteSession))
+                    .disabled(!PaletteCommand.newRemoteSession.isEnabled(in: context))
                 Button("Open Remote Window…") { actions.openRemoteWindow() }
                     .keyboardShortcut(shortcut(for: .openRemoteWindow))
                     .disabled(!PaletteCommand.openRemoteWindow.isEnabled(in: context))

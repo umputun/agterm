@@ -118,13 +118,18 @@ extension ControlServer {
         }
         guard let mac = answer.result?.macCatalog else { return .server }
         if mac.live == false { return .failed(OriginCatalogRefusal.notLive.message(host: host)) }
-        guard let listing = try? RemoteSession.controlCommand(host: host, arguments: ["window", "list"]) else { return unanswered }
-        let listed = await remoteRunner.run(listing, deadline: 15)
-        guard listed.status == 0, let response = try? JSONDecoder().decode(ControlResponse.self, from: Data(listed.stdout.utf8)),
-              let windows = response.result?.windows else {
-            return .failed("\(host) did not list its windows")
-        }
+        guard let windows = await originWindows(host: host) else { return .failed("\(host) did not list its windows") }
         return .mac(windows)
+    }
+
+    /// originWindows is the Mac `host`'s `window list`, nil when it does not answer with one.
+    func originWindows(host: String) async -> [ControlWindowNode]? {
+        guard let listing = try? RemoteSession.controlCommand(host: host, arguments: ["window", "list"]) else { return nil }
+        let listed = await remoteRunner.run(listing, deadline: 15)
+        guard listed.status == 0, let response = try? JSONDecoder().decode(ControlResponse.self, from: Data(listed.stdout.utf8)) else {
+            return nil
+        }
+        return response.result?.windows
     }
 
     /// openRemote opens `info` and replies once it knows which window shows that catalog: a host that is another

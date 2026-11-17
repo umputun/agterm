@@ -377,6 +377,16 @@ final class ControlServerRemoteActionsTests: XCTestCase {
         XCTAssertTrue(runner.operations.isEmpty)
     }
 
+    func testANewRemoteSessionIsRefusedInARemoteWindowBeforeAnythingIsSent() async throws {
+        try open([catalogSession()])
+        library.frontmostWindowID = remoteWindow
+
+        let reply = try await send(.sessionRemoteNew, args: ControlArgs(host: "buildbox"))
+
+        XCTAssertEqual(reply.error, "session.remote.new is not available in a remote window")
+        XCTAssertTrue(runner.operations.isEmpty)
+    }
+
     func testPaneLifecycleCommandsOfACatalogRowGoToTheServer() async throws {
         let entry = catalogSession(split: true)
         try open([entry])

@@ -348,6 +348,7 @@ struct SocketClientTests {
             attach_remote               cmd+shift+r
             open_remote_window          -
             detached_sessions           -
+            new_remote_session          -
             edit_flagged_sessions       -
             edit_focused_workspaces     -
 

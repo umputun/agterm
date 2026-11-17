@@ -49,6 +49,7 @@ struct PaletteCatalogTests {
             "Attach Remote…",
             "Open Remote Window…",
             "Detached Sessions…",
+            "New Remote Session…",
             "Edit Keymap",
             "Reload Keymap",
             "Edit Hooks",
@@ -72,7 +73,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 64)
+        #expect(PaletteCommand.allCases.count == 65)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -386,6 +387,18 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.openRemoteWindow.builtinAction == .openRemoteWindow)
     }
 
+    @Test func newRemoteSessionNeedsAConfiguredRemoteAndAWorkspaceToLandIn() {
+        let none = PaletteContext(hasCurrentWorkspace: true)
+        #expect(PaletteCommand.newRemoteSession.isVisible(in: none), "stays listed, inert")
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(in: none))
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(in: PaletteContext(hasRemotes: true)))
+        #expect(PaletteCommand.newRemoteSession.isEnabled(in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true)))
+        #expect(!PaletteCommand.newRemoteSession.isEnabled(
+            in: PaletteContext(hasCurrentWorkspace: true, hasRemotes: true, pickerActive: true)))
+        #expect(PaletteCommand.newRemoteSession.title == "New Remote Session…")
+        #expect(PaletteCommand.newRemoteSession.builtinAction == .newRemoteSession)
+    }
+
     @Test func workspacePresenceGatesTheWorkspaceEntries() {
         let context = PaletteContext(canRemoveWorkspace: true, hasFlaggedSessions: true,
                                      sidebarShowsWorkspaceTree: true, sidebarShowsWorkspaceRows: true, hasMarkedWorkspaces: true,
@@ -396,7 +409,7 @@ struct PaletteCatalogTests {
                                      hasCurrentWorkspace: false, hasRemotes: true, activeSessionHasOverlay: true)
         let needWorkspace: Set<PaletteCommand> = [.renameWorkspace, .focusWorkspace, .addWorkspaceToFocus,
                                                   .previousWorkspace, .nextWorkspace, .toggleWorkspaceCollapse,
-                                                  .attachRemote, .editFocusedWorkspaces]
+                                                  .attachRemote, .newRemoteSession, .editFocusedWorkspaces]
         for command in PaletteCommand.allCases {
             #expect(command.isEnabled(in: context) == !(needWorkspace.contains(command) || Self.needRemoteWindow.contains(command)), "\(command)")
         }
@@ -514,7 +527,7 @@ struct PaletteCatalogTests {
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))
     }
 
-    @Test(arguments: [PaletteCommand.openDirectory, .attachRemote])
+    @Test(arguments: [PaletteCommand.openDirectory, .attachRemote, .newRemoteSession])
     func aLocalOnlyActionIsDisabledInARemoteWindow(_ command: PaletteCommand) {
         #expect(!command.isEnabled(in: remoteContext(window: true, connected: true)))
         #expect(command.isEnabled(in: remoteContext(window: false, connected: false)))

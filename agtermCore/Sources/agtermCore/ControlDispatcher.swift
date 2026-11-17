@@ -45,6 +45,11 @@ public struct ControlDispatcher {
         case .sessionCompanionNew, .sessionCompanionPage, .sessionPage, .sessionCompanionDuplicate, .sessionCompanionConvert,
                 .sessionCompanionMove, .sessionCompanionPageAttach, .sessionCollapse, .sessionExpand:
             return await dispatchCompanionCommand(request)
+        case .sessionRemoteNew:
+            switch RemoteSessionCreate.parse(request) {
+            case .failure(let rejection): return ControlResponse(ok: false, error: rejection.message)
+            case .success(let create): return await actions.newRemoteSession(create)
+            }
         case .workspaceNew, .workspaceSelect, .workspaceGo, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand,
                 .workspaceFlag:
