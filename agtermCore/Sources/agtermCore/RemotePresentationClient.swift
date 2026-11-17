@@ -54,6 +54,8 @@ public struct RemotePresentationEffects {
     public var mail: @MainActor (PresentationMail?) -> Void
     /// leads is the set of the origin's panes this Mac leads, read whenever the client checks for a change.
     public var leads: @MainActor () -> Set<UUID>
+    /// ended reports the origin removed the session for good; the client has stopped and never reconnects.
+    public var ended: @MainActor () -> Void
     public var warn: @MainActor (String) -> Void
 
     public init(status: @escaping @MainActor (PresentationStatus?) -> Void,
@@ -81,6 +83,7 @@ public struct RemotePresentationEffects {
                 message: @escaping @MainActor (PresentationMessage) -> Void = { _ in },
                 mail: @escaping @MainActor (PresentationMail?) -> Void = { _ in },
                 leads: @escaping @MainActor () -> Set<UUID> = { [] },
+                ended: @escaping @MainActor () -> Void = {},
                 warn: @escaping @MainActor (String) -> Void) {
         self.status = status
         self.snapshotStatus = snapshotStatus
@@ -107,6 +110,7 @@ public struct RemotePresentationEffects {
         self.message = message
         self.mail = mail
         self.leads = leads
+        self.ended = ended
         self.warn = warn
     }
 }
@@ -306,6 +310,9 @@ public final class RemotePresentationClient {
         case .pageCommand(let command): effects.pageCommand(command)
         case .respawn(let respawns): effects.respawns(respawns, false)
         case .linkRefused(let refusal): effects.linkRefused(refusal.reason)
+        case .ended:
+            stop()
+            effects.ended()
         case .pendingChunk(let chunk): pendingBatch.add(chunk)
         case .pendingCommit:
             guard let entries = try? pendingBatch.commit() else { return effects.warn("malformed pending batch") }
@@ -316,7 +323,7 @@ public final class RemotePresentationClient {
                 }
             }
         case .ack, .presenterAcquire, .leadReport, .linkClick, .statusClear, .statusSeen, .askResolve, .askRejected, .pickResolve, .pickRejected, .overlayRejected,
-             .overlayClosed, .unknown, .ended,
+             .overlayClosed, .unknown,
              .pageRejected, .pageClosed, .pageState, .pageResult:
             break
         }

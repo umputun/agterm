@@ -46,7 +46,7 @@ extension ControlServer {
             }
             if listed[row.originKey] == nil, let claimed, !claimed.contains(row.originKey) {
                 stopRemotePresentation(row.id)
-                library.store(forSession: row.id)?.endAttachedRow(row.id)
+                library.store(forSession: row.id)?.closeEndedAttachedRow(row.id)
             } else {
                 // a terminal row attaches by itself, so an inconclusive answer leaves it attaching
                 row.awaitsOriginCheck = false

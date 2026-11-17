@@ -187,17 +187,18 @@ along with everyone else and gain the reconnecting notice through the shared rec
   `RemotePresentationStateTests.swift`, `AppStoreRemoteLayoutTests.swift`, `AppStoreAttachedRestoreTests.swift`,
   `agtermTests/RemoteLayoutCloseTests.swift`
 
-- [ ] failing tests: client stops retrying after `ended` and reports it; `rowNotice` is nil for it
-- [ ] failing tests: ended before ssh exit and ssh exit before ended both close the replicas and then the row; a
+- [x] failing tests: client stops retrying after `ended` and reports it; the row's notice is nil once
+      `RemotePresentationState.originEnded` is set (no new public connection case, for the agterm-linux fork)
+- [x] failing tests: ended before ssh exit and ssh exit before ended both close the replicas and then the row; a
       local replacement and a pending local split survive; the last replica waits for its exit
-- [ ] failing tests: the relaunch check closes a row whose origin lost the session, companions untouched, and
+- [x] failing tests: the relaunch check closes a row whose origin lost the session, companions untouched, and
       leaves a listed or inconclusive one attaching as before; a saved attached snapshot with `ended=true` is not
       restored, while a catalog or headless ended row is
-- [ ] handle `ended` in the client and the store; widen `canCloseRemovedRemotePane` for an ended row; on `ended`,
+- [x] handle `ended` in the client and the store; widen `canCloseRemovedRemotePane` for an ended row; on `ended`,
       run the existing `closeRemovedRemotePane` seam for each mapped replica
-- [ ] relaunch check: close the row in place of `endAttachedRow`; remove `endAttachedRow`; skip saved ended
+- [x] relaunch check: close the row in place of `endAttachedRow`; remove `endAttachedRow`; skip saved ended
       attached rows at restore
-- [ ] run the scoped tests - must pass before task 3
+- [x] run the scoped tests - must pass before task 3
 
 ### Task 3: Pane notices replace the printed text
 

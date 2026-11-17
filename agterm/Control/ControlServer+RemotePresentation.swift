@@ -12,7 +12,7 @@ extension ControlServer {
     func startRemotePresentation(for session: Session) {
         let id = session.id
         guard remoteClients[id] == nil, let host = session.remoteHost,
-              let binding = session.remotePresentation?.binding else { return }
+              let binding = session.remotePresentation?.binding, session.remotePresentation?.originEnded != true else { return }
         let pool = catalogPool(forSession: id)
         let path = pool?.lease("present:\(id)")
         let argv: [String]
@@ -125,6 +125,12 @@ extension ControlServer {
             leads: { [weak self] in
                 guard let store = self?.library.store(forSession: id), let session = store.session(withID: id) else { return [] }
                 return store.originLeads(of: session)
+            },
+            ended: { [weak self] in
+                guard let self else { return }
+                stopRemotePresentation(id)
+                guard let store = library.store(forSession: id) else { return }
+                agtermApp.closeEndedRemoteRow(store: store, sessionID: id, library: library)
             },
             warn: { reason in
                 remoteLogger.warning("presentation stream for \(id, privacy: .public): \(reason, privacy: .public)")

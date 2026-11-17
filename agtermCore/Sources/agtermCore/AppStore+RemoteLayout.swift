@@ -45,7 +45,7 @@ extension AppStore {
     /// attachOriginAdditions attaches a pane the saved layout lists once a removal here freed the split slot for it.
     public func attachOriginAdditions(forSession id: UUID, attach: RemoteAttachLines) {
         guard let session = session(withID: id), let state = session.remotePresentation, !state.binding.catalogOwned,
-              let origin = state.binding.origin, let layout = state.layout else { return }
+              !state.originEnded, let origin = state.binding.origin, let layout = state.layout else { return }
         addOriginSplit(session, layout: layout, binding: state.binding, origin: origin, attach: attach)
     }
 
@@ -114,11 +114,25 @@ extension AppStore {
         return true
     }
 
+    /// remoteSessionEnded marks row `id`'s origin session as removed for good, takes down what the stream put on the
+    /// row, and returns the replicas that may close now.
+    public func remoteSessionEnded(forSession id: UUID) -> [UUID] {
+        guard let session = session(withID: id), let state = session.remotePresentation, !state.binding.catalogOwned,
+              !state.originEnded else { return [] }
+        session.remotePresentation?.originEnded = true
+        session.remoteConnectionRevision += 1
+        withdrawRemoteReplicas(of: session)
+        return [session.splitPaneIdentity, session.paneIdentity].compactMap { $0 }.filter {
+            canCloseRemovedRemotePane($0, forSession: id)
+        }
+    }
+
     /// Whether confirmed origin removal permits closing this replica without discarding a pending local split.
     public func canCloseRemovedRemotePane(_ local: UUID, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), session.paneRole(forIdentity: local) != nil,
-              let state = session.remotePresentation, !state.binding.catalogOwned, let layout = state.layout,
-              let remote = state.binding.remotePane(forLocal: local), !layout.panes.contains(remote) else { return false }
+              let state = session.remotePresentation, !state.binding.catalogOwned,
+              let remote = state.binding.remotePane(forLocal: local),
+              state.originEnded || state.layout.map({ !$0.panes.contains(remote) }) == true else { return false }
         // ordinary primary close would discard a local split that has not produced its surface yet
         if local == session.paneIdentity, let split = session.splitPaneIdentity,
            state.binding.remotePane(forLocal: split) == nil, session.splitSurface?.isRealized != true { return false }

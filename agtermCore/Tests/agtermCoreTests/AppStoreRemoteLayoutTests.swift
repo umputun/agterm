@@ -73,6 +73,72 @@ struct AppStoreRemoteLayoutTests {
         #expect(store.applyRemoteLayout(removal, forSession: session.id, attach: lines) == [primary])
     }
 
+    @Test func anEndedRowOffersEveryMappedReplicaForClosingWithNoLayout() throws {
+        let (store, session) = try attached()
+        let split = try #require(session.splitPaneIdentity)
+
+        #expect(!store.canCloseRemovedRemotePane(session.paneIdentity, forSession: session.id))
+        #expect(Set(store.remoteSessionEnded(forSession: session.id)) == [session.paneIdentity, split])
+
+        #expect(store.canCloseRemovedRemotePane(session.paneIdentity, forSession: session.id))
+        #expect(store.canCloseRemovedRemotePane(split, forSession: session.id))
+        #expect(session.remotePresentation?.originEnded == true)
+    }
+
+    @Test(arguments: [false, true])
+    func anEndedRowKeepsALocalSplitAndAPendingOneKeepsItsPrimary(pending: Bool) throws {
+        let (store, session) = try attached()
+        store.closeSplit(session.id)
+        store.toggleSplit(session.id)
+        if !pending { session.splitSurface = SpySurface() }
+        let local = try #require(session.splitPaneIdentity)
+
+        let offered = store.remoteSessionEnded(forSession: session.id)
+
+        #expect(offered == (pending ? [] : [session.paneIdentity]))
+        #expect(!store.canCloseRemovedRemotePane(local, forSession: session.id))
+    }
+
+    @Test func anEndedRowKeptByALocalSplitDropsWhatTheOriginMirroredOnIt() throws {
+        let (store, session) = try attached()
+        store.closeSplit(session.id)
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
+        store.setRemoteConnection(.connected, forSession: session.id)
+        store.applyRemoteContext("deploy", forSession: session.id)
+        #expect(session.effectiveContext == "deploy")
+
+        _ = store.remoteSessionEnded(forSession: session.id)
+
+        #expect(session.effectiveContext == nil)
+        #expect(store.session(withID: session.id) != nil)
+    }
+
+    @Test func anEndedRowShowsNoNoticeEvenWhileItsStreamNeverConnected() throws {
+        let (store, session) = try attached()
+        store.setRemoteConnection(.connecting, forSession: session.id)
+        #expect(session.remoteRowNotice != nil)
+
+        _ = store.remoteSessionEnded(forSession: session.id)
+
+        #expect(session.remoteRowNotice == nil)
+        store.setRemoteConnection(.failed("end of stream"), forSession: session.id)
+        #expect(session.remoteRowNotice == nil)
+    }
+
+    @Test func anEndedRowAttachesNothingTheSavedLayoutStillLists() throws {
+        let (store, session) = try attached()
+        _ = store.applyRemoteLayout(PresentationLayout(panes: [originA, UUID()], primary: originA, shown: true),
+                                    forSession: session.id, attach: lines)
+        store.closeSplit(session.id)
+
+        _ = store.remoteSessionEnded(forSession: session.id)
+        store.attachOriginAdditions(forSession: session.id, attach: lines)
+
+        #expect(!session.hasSplit)
+        #expect(session.splitInitialCommand == nil)
+    }
+
     @Test func aClosedReplicaIsNeverRecreated() throws {
         let (store, session) = try attached()
         store.closeSplit(session.id)

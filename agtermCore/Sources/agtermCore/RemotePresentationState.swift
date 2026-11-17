@@ -108,6 +108,9 @@ public struct RemotePresentationState: Equatable, Sendable {
     public var connection: RemotePresentationConnection
     public var mode: PresentationMode = .mirror
     public internal(set) var layout: PresentationLayout?
+    /// originEnded is set once the origin said it removed the session for good. Unlike `Session.ended`, which a
+    /// catalog or headless row keeps, the row itself is on its way out.
+    public internal(set) var originEnded = false
     var heldPanes: Set<UUID> = []
     /// Whether the glyph on the row is the bridge's. A flag and not a comparison of values: a pane swap
     /// rewrites the indicator without changing who set it, and a local write of the very same value does

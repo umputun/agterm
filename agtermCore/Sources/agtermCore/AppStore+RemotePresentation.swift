@@ -356,7 +356,7 @@ extension Session {
     /// remoteRowNotice is the line under a remote row: an ended session names its host, others say what their
     /// presentation stream is doing, nil when there is nothing to say.
     public var remoteRowNotice: String? {
-        guard let host = remoteHost else { return nil }
+        guard let host = remoteHost, remotePresentation?.originEnded != true else { return nil }
         if ended { return "Ended on \(host)" }
         return remoteConnection?.rowNotice(host: host)
     }
