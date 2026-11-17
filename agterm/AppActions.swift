@@ -415,7 +415,7 @@ final class AppActions {
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
             keymapEditOverlaySession = id
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 
@@ -438,7 +438,7 @@ final class AppActions {
         if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: settingsModel.hooksPath), sizePercent: 95) {
             hooksEditOverlaySession = id
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 
@@ -468,7 +468,7 @@ final class AppActions {
             ghosttyEditOverlaySession = id
             ghosttyEditOverlaySnapshot = try? String(contentsOfFile: path, encoding: .utf8)
         } else {
-            beepIfHiddenOverlayRefused(id)
+            answerHiddenOverlayRefusal(id)
         }
     }
 
