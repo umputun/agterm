@@ -38,7 +38,8 @@ struct PaneLeadCover: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("pane-lead-cover-\(pane.rawValue)")
             }
-            if !hidden, let notice = RemotePaneNotice.Kind(identity: identity, host: session.remoteHost) {
+            if !hidden, let notice = RemotePaneNotice.Kind(identity: identity, host: session.remoteHost,
+                                                           keyCloses: session.remotePresentation?.binding.catalogOwned != true) {
                 RemotePaneNotice(kind: notice, pane: pane, background: background, foreground: foreground)
             }
         }
@@ -69,14 +70,15 @@ struct RemotePaneNotice: View {
     enum Kind: Equatable {
         /// reason is what ssh said on the last failed probe, never the outcome of the attach that follows.
         case reconnecting(host: String, reason: String?)
-        case ended(name: String, host: String)
+        /// keyCloses is false on a remote window's row, whose ended pane a key reattaches or leaves as it is.
+        case ended(name: String, host: String, keyCloses: Bool)
 
         @MainActor
-        init?(identity: UUID?, host: String?) {
+        init?(identity: UUID?, host: String?, keyCloses: Bool) {
             if let host, RemoteReconnectBook.shared.waiting(pane: identity) {
                 self = .reconnecting(host: host, reason: RemoteReconnectBook.shared.readback(pane: identity)?.reason)
             } else if let ended = RemoteEndBook.shared.notice(pane: identity) {
-                self = .ended(name: ended.name, host: ended.host)
+                self = .ended(name: ended.name, host: ended.host, keyCloses: keyCloses)
             } else {
                 return nil
             }
@@ -97,9 +99,11 @@ struct RemotePaneNotice: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(verbatim: title)
                         .font(.system(size: 13, weight: .medium))
-                    Text(verbatim: hint)
-                        .font(.system(size: 12))
-                        .opacity(0.7)
+                    if let hint {
+                        Text(verbatim: hint)
+                            .font(.system(size: 12))
+                            .opacity(0.7)
+                    }
                     if case .reconnecting(_, let reason?) = kind {
                         Text(verbatim: "ssh: \(reason)")
                             .font(.system(size: 11, design: .monospaced))
@@ -132,14 +136,14 @@ struct RemotePaneNotice: View {
     private var title: String {
         switch kind {
         case .reconnecting(let host, _): "Connection to \(host) lost"
-        case .ended(let name, let host): "\(name) on \(host) ended"
+        case .ended(let name, let host, _): "\(name) on \(host) ended"
         }
     }
 
-    private var hint: String {
+    private var hint: String? {
         switch kind {
         case .reconnecting: "Reconnecting… · any key retries now"
-        case .ended: "Any key closes"
+        case .ended(_, _, let keyCloses): keyCloses ? "Any key closes" : nil
         }
     }
 }

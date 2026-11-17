@@ -2207,7 +2207,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   held after ssh exited. If it is the last realized replica, it stays until its ssh exits, then the row
   may close and following stops. Automatic primary removal is skipped while a local split is pending.
   A layout never removes a local replacement. Losing the stream alone keeps the panes; an ordinary ssh
-  disconnect still shows the disconnect line, held or reconnecting per the exit-255 bullet above.
+  disconnect still shows its pane notice, ended or reconnecting per the exit-255 bullet above.
 - A mirrored status bypasses `applyControlStatus`: the blocked-owner rule already ran on the origin, and a
   second pass here would refuse a clear the origin accepted. The origin's pane travels as a stable pane
   identity and maps through `RemoteBinding`; one with no local counterpart maps to no pane, never to a
@@ -2536,7 +2536,7 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   answers through a callback `destroySurface` clears first; a dashboard cell's transient font is carried
   as the override and never seeds the new surface's own size. `remotePaneStopped` drops the pane's
   lead state when an attach ends on its exit prompt or waits to reconnect, a failed take-over included,
-  or the cover would hide the line saying what died and swallow the key that closes it. The launch
+  or the lead cover would hide the pane notice and swallow the key that closes it. The launch
   attaches and never creates: a trailing `/bin/sh -c` fails when the daemon is gone, locally as for an
   attached pane, so a vanished session ends the pane. An attached pane is
   rebuilt from `RemoteBinding.Origin`, never from the pane's first command line, which carries that

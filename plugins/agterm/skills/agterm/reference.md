@@ -2522,7 +2522,7 @@ window leaves the frontmost window unchanged. `SESSION` is the
 `id` from `zmx tree`, never the name: remote names are editable and repeat across workspaces. Returns the
 new local session's `id`; read `remoteHost` and `remoteSessionID` on its tree node. The remote is resolved AGAIN before anything
 is created, so a session that has gone since the listing fails and creates nothing. A connection that
-starts and later drops is an ordinary pane exit, and agterm prints nothing into the pane: ssh's own 255 shows a
+starts and later drops is an ordinary pane exit, reported in a panel over the pane rather than as terminal text: ssh's own 255 shows a
 "Connection to HOST lost" panel over the pane and reconnects by itself, with ssh's last failed-probe message in the
 panel and on the pane's `reconnect` in `tree`; any other exit shows a "SESSION on HOST ended" panel, read back as
 `attachEnded: true` on the surface node, and any key closes the pane. A session its origin closes closes the row
@@ -2569,10 +2569,10 @@ Nothing has to be set up beyond the `agtermctl` PATH precondition above. What to
 - Two existing remote panes follow the origin's split axis, hide/show and swaps. Local panes, divider
   ratio and focus stay local. A split the origin opens later attaches into an empty split slot, and a
   replica closed here stays closed. Older origins leave layout alone.
-- Confirmed origin removal closes its replica without acknowledgement, even if ssh already exited and
-  left a hold prompt. The last replica waits for its ssh exit and may then close the row. A pending local
-  split prevents automatic primary removal; an ordinary disconnect still shows the disconnect line, held
-  or reconnecting per the attach section above.
+- Confirmed origin removal closes its replica without a keypress, even if ssh already exited and the
+  pane shows the ended panel. The last replica waits for its ssh exit and may then close the row. A pending
+  local split prevents automatic primary removal; an ordinary disconnect still shows its panel, ended or
+  reconnecting per the attach section above.
 - `presentation.state` in `tree` reports the stream. `connected` means mirroring works; it is not a claim
   about the panes' ssh connections. An origin too old for it reads `unsupported` and the attach still works.
 - When the stream drops, the mirrored status, context, info line and HUD are cleared here and come back on reconnect. Retries

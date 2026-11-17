@@ -304,6 +304,37 @@ final class RecentClosedTests {
     }
 
     @MainActor
+    @Test func aReopenedSessionAndItsCompanionAreNoLongerEnded() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let parent = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let companion = try store.addCompanion(to: parent.id, options: CompanionOptions(cwd: "/c")).get()
+        store.closeSession(parent.id)
+        #expect(PresentationEnds.shared.contains(parent.id) && PresentationEnds.shared.contains(companion.id))
+
+        #expect(store.restoreRecentClosed(try #require(recentClosed.load().first)))
+
+        #expect(!PresentationEnds.shared.contains(parent.id))
+        #expect(!PresentationEnds.shared.contains(companion.id))
+    }
+
+    @MainActor
+    @Test func aReopenedWorkspacesSessionsAreNoLongerEnded() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        _ = store.addWorkspace(name: "other")
+        store.removeWorkspace(ws.id)
+        #expect(PresentationEnds.shared.contains(first.id) && PresentationEnds.shared.contains(second.id))
+
+        #expect(store.restoreRecentClosed(try #require(recentClosed.load().first { $0.kind == .workspace })))
+
+        #expect(!PresentationEnds.shared.contains(first.id))
+        #expect(!PresentationEnds.shared.contains(second.id))
+    }
+
+    @MainActor
     @Test func aClosedWorkspaceCarriesItsPageRowsAndReopensThem() throws {
         let g = try PageGroup()
 

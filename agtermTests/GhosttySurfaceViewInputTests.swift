@@ -1,7 +1,7 @@
 import GhosttyKit
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class GhosttySurfaceViewInputTests: XCTestCase {

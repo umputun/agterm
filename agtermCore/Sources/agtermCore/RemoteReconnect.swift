@@ -149,7 +149,7 @@ public final class RemoteEndBook {
         public fileprivate(set) var shown: Bool
     }
 
-    public private(set) var entries: [UUID: Entry] = [:]
+    private(set) var entries: [UUID: Entry] = [:]
 
     init() {}
 
@@ -168,7 +168,7 @@ public final class RemoteEndBook {
         for (pane, entry) in entries where entry.session == session { entries[pane]?.shown = true }
     }
 
-    public func settling(session: UUID) -> Bool { entries.values.contains { $0.session == session && !$0.shown } }
+    func settling(session: UUID) -> Bool { entries.values.contains { $0.session == session && !$0.shown } }
 
     /// notice is the entry a pane draws, nil while it settles or has none.
     public func notice(pane: UUID?) -> Entry? { pane.flatMap { entries[$0] }.flatMap { $0.shown ? $0 : nil } }

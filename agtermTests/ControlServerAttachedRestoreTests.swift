@@ -71,6 +71,33 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
         XCTAssertNil(server.remoteClients[row.id])
     }
 
+    func testARestoredRowsEndedPaneShowsNothingUntilTheOriginCheckClosesTheRow() async throws {
+        let runner = ScriptedRunner([tree(sessions: ""), inventory(complete: true, claimedBy: "another")])
+        let (server, store, row) = try makeServer(runner)
+        defer { RemoteEndBook.shared.clear(session: row.id) }
+
+        server.noteRemotePaneEnded(row.paneIdentity, in: row)
+        server.stopRemotePresentation(row.id)
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity), "a stream failure must not paint it early")
+
+        await server.checkRestoredOrigin("buildbox")
+
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
+    }
+
+    func testARestoredRowsEndedPaneShowsItsNoticeOnceTheOriginStillListsIt() async throws {
+        let (server, _, row) = try makeServer(ScriptedRunner([tree(sessions: session(originSession))]))
+        defer { RemoteEndBook.shared.clear(session: row.id) }
+
+        server.noteRemotePaneEnded(row.paneIdentity, in: row)
+        XCTAssertNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
+
+        await server.checkRestoredOrigin("buildbox")
+
+        XCTAssertNotNil(RemoteEndBook.shared.notice(pane: row.paneIdentity))
+    }
+
     func testAnUnreachableHostLeavesATerminalRowAttachingAndTriesAgain() async throws {
         let (server, store, row) = try makeServer(ScriptedRunner([]))
 

@@ -86,6 +86,26 @@ struct AppStoreRemoteLayoutTests {
     }
 
     @Test(arguments: [false, true])
+    func anEndedRowsLastPaneClosesTheRowAloneAndItsCompanionMovesUp(viaSplit: Bool) throws {
+        let (store, session) = try attached()
+        let workspace = try #require(store.currentWorkspaceID)
+        let companion = try #require(store.addSession(toWorkspace: workspace, cwd: "/c"))
+        companion.parentID = session.id
+        _ = store.remoteSessionEnded(forSession: session.id)
+        store.closeSplit(session.id)
+
+        if viaSplit {
+            store.closeSplitPane(session.id)
+        } else {
+            _ = store.closePrimaryPane(session.id)
+        }
+
+        #expect(store.session(withID: session.id) == nil)
+        #expect(store.session(withID: companion.id) != nil)
+        #expect(companion.parentID == nil)
+    }
+
+    @Test(arguments: [false, true])
     func anEndedRowKeepsALocalSplitAndAPendingOneKeepsItsPrimary(pending: Bool) throws {
         let (store, session) = try attached()
         store.closeSplit(session.id)

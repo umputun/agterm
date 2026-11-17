@@ -303,7 +303,7 @@ extension AppStore {
                 respawnPrimaryPane(session, now: now)
                 return .respawned
             }
-            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            closeLastPaneRow(sessionID, alreadyFinalized: alreadyFinalized)
             return .closed
         }
         promoteSplit(session)
@@ -443,10 +443,20 @@ extension AppStore {
                 respawnPrimaryPane(session, now: now)
                 return
             }
-            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            closeLastPaneRow(sessionID, alreadyFinalized: alreadyFinalized)
             return
         }
         closeSplit(sessionID, alreadyFinalized: alreadyFinalized)
+    }
+
+    /// closeLastPaneRow closes a row whose last pane went. A row its origin ended closes alone, as at relaunch, its
+    /// companions moving up: each has its own origin session and ends on its own.
+    private func closeLastPaneRow(_ sessionID: UUID, alreadyFinalized: UUID?) {
+        guard session(withID: sessionID)?.remotePresentation?.originEnded == true else {
+            closeSession(sessionID, alreadyFinalized: alreadyFinalized)
+            return
+        }
+        _ = closeExactly([sessionID])
     }
 
     /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The surface is

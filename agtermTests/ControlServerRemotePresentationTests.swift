@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 import XCTest
 @testable import agterm
-import agtermCore
+@testable import agtermCore
 
 @MainActor
 final class ControlServerRemotePresentationTests: XCTestCase {

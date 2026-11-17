@@ -50,6 +50,7 @@ extension ControlServer {
             } else {
                 // a terminal row attaches by itself, so an inconclusive answer leaves it attaching
                 row.awaitsOriginCheck = false
+                RemoteEndBook.shared.resolved(session: row.id)
             }
         }
         guard waiting else {

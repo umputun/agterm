@@ -203,7 +203,7 @@ public enum RemoteSession {
 
     /// paneModeReset is what the wrapper prints once the attach ends: a remote program's mouse and focus reports would
     /// echo onto the kept screen, and its kitty flags (`=0u`) let a bare modifier close a held pane.
-    public static let paneModeReset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l"
+    static let paneModeReset = "\\033[0m\\033[?1000l\\033[?1002l\\033[?1003l\\033[?1006l\\033[?1004l\\033[?2004l"
         + "\\033[?2031l\\033[?2048l\\033[=0u"
 
     /// One ssh invocation that only proves the host answers again, before a waiting pane is attached anew.

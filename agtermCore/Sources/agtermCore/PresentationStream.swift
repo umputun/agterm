@@ -19,13 +19,15 @@ public protocol PresentationStreamHost: AnyObject {
 }
 
 /// PresentationEnds records the sessions this process removed for good, so a viewer reconnecting after the removal
-/// is told the session ended rather than refused and left retrying. Only ever grows: one id per removed session.
+/// is told the session ended rather than refused and left retrying. A session rebuilt under its id is forgotten.
 @MainActor
 public final class PresentationEnds {
     public static let shared = PresentationEnds()
     private var sessions: Set<UUID> = []
 
     public func record(_ ids: [UUID]) { sessions.formUnion(ids) }
+
+    public func forget(_ ids: [UUID]) { sessions.subtract(ids) }
 
     public func contains(_ id: UUID) -> Bool { sessions.contains(id) }
 }
