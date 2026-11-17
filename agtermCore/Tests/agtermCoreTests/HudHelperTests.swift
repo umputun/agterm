@@ -97,12 +97,11 @@ struct HudHelperTests {
         }
 
         @discardableResult
-        func wait(_ timeout: TimeInterval = 5, until check: (String) -> Bool) async -> String {
-            let deadline = Date().addingTimeInterval(timeout)
-            var text = painted
-            while !check(text), Date() < deadline {
-                try? await Task.sleep(for: .milliseconds(20))
+        func wait(polls: Int = 250, until check: (String) -> Bool) async -> String {
+            var text = ""
+            _ = await Run.poll(polls) {
                 text = painted
+                return check(text)
             }
             return text
         }
@@ -116,10 +115,18 @@ struct HudHelperTests {
             return needles.allSatisfy(text.contains)
         }
 
-        func waitForExit(_ timeout: TimeInterval = 5) async -> Bool {
-            let deadline = Date().addingTimeInterval(timeout)
-            while proc.isRunning, Date() < deadline { try? await Task.sleep(for: .milliseconds(20)) }
-            return !proc.isRunning
+        func waitForExit(polls: Int = 250) async -> Bool {
+            await Run.poll(polls) { !proc.isRunning }
+        }
+
+        // count polls so Linux startup stalls cannot expire a wait before the helper runs
+        static func poll(_ polls: Int, until done: () -> Bool) async -> Bool {
+            var left = polls
+            while !done(), left > 0 {
+                try? await Task.sleep(for: .milliseconds(20))
+                left -= 1
+            }
+            return done()
         }
 
         /// Ends the helper with SIGTERM, and fails the test if that does not work. The fallback then removes
@@ -127,13 +134,13 @@ struct HudHelperTests {
         func stop() async {
             defer { try? FileManager.default.removeItem(at: dir) }
             if proc.isRunning { proc.terminate() }
-            if await waitForExit(2) { return }
+            if await waitForExit(polls: 100) { return }
             Issue.record("\(Run.ignoredTermMessage): pid \(proc.processIdentifier)\n\(await missEvidence())")
             try? removeBody()
-            if await waitForExit(2) { return }
+            if await waitForExit(polls: 100) { return }
             Issue.record("hud.sh outlived its body file: pid \(proc.processIdentifier)")
             kill(proc.processIdentifier, SIGKILL)
-            if await !waitForExit(2) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
+            if await !waitForExit(polls: 100) { Issue.record("hud.sh survived SIGKILL: pid \(proc.processIdentifier)") }
         }
 
         private func missEvidence() async -> String {
@@ -439,9 +446,7 @@ struct HudHelperTests {
 
             owner.terminate()
             // waitUntilExit can hang after an await resumes on a different thread
-            let deadline = Date().addingTimeInterval(10)
-            while owner.isRunning, Date() < deadline { try await Task.sleep(for: .milliseconds(10)) }
-            #expect(!owner.isRunning)
+            #expect(await Run.poll(500) { !owner.isRunning })
 
             #expect(await run.waitForExit())
         }
@@ -531,8 +536,7 @@ struct HudHelperTests {
         proc.standardError = FileHandle.nullDevice
         try proc.run()
         // bounded: a regression that made this path loop would otherwise hang the suite instead of failing
-        let deadline = Date().addingTimeInterval(5)
-        while proc.isRunning, Date() < deadline { try await Task.sleep(for: .milliseconds(20)) }
+        _ = await Run.poll(250) { !proc.isRunning }
         defer { if proc.isRunning { proc.terminate() } }
         #expect(!proc.isRunning, "no body path must exit at once, not loop")
         #expect(proc.terminationStatus == 0)
