@@ -141,6 +141,10 @@ public extension ControlActions {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("browser.clear"))
     }
 
+    func checkForUpdates() async -> ControlResponse {
+        ControlResponse(ok: false, error: ControlActionsUnsupported.message("update.check"))
+    }
+
     func linkOpenMode(_: LinkOpenMode?) -> ControlResponse {
         ControlResponse(ok: false, error: ControlActionsUnsupported.message("browser.links"))
     }

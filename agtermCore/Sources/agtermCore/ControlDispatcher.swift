@@ -76,6 +76,8 @@ public struct ControlDispatcher {
             return dispatchRecentCommand(request)
         case .browserClear, .browserLinks:
             return await dispatchBrowserCommand(request)
+        case .updateCheck:
+            return await dispatchUpdateCheck(request)
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowGo, .windowClose, .windowRename,

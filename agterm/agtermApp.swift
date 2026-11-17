@@ -23,6 +23,7 @@ struct agtermApp: App {
     @State private var hookController: HookController
     @State private var controlServer: ControlServer
     @State var liveReset: LiveResetCoordinator
+    var updates: UpdateController { .shared }
     @State private var customCommandRunner: CustomCommandRunner
     @State private var appearanceObserver: SystemAppearanceObserver
     @State private var accessibilityObserver: SystemAccessibilityObserver
@@ -285,6 +286,7 @@ struct agtermApp: App {
                         appDelegate.settingsModel = settingsModel
                         appDelegate.liveResetMarkerStore = liveResetMarkerStore
                         appDelegate.liveReset = liveReset
+                        appDelegate.updates = updates
                         // hand the delegate the action hub and drain folders `open -a agterm /path` queued
                         // before the window store resolved.
                         appDelegate.actions = actions

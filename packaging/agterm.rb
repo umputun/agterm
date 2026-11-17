@@ -10,6 +10,8 @@ cask "agterm" do
   desc "Terminal on libghostty with a workspace/session sidebar"
   homepage "https://github.com/umputun/agterm"
 
+  # Sparkle updates the app in place; brew upgrade acts only when the installed bundle is older than the tap
+  auto_updates true
   depends_on arch: :arm64
   depends_on macos: :sonoma
 
@@ -37,6 +39,7 @@ cask "agterm" do
 
   zap trash: [
     "~/Library/Application Support/agterm",
+    "~/Library/Caches/com.umputun.agterm",
     "~/Library/Preferences/com.umputun.agterm.plist",
     "~/Library/Saved Application State/com.umputun.agterm.savedState",
   ]

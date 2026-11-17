@@ -633,9 +633,10 @@ final class ControlServer {
     /// carries the same wait; local `zmx.list` blocks too, but bounded, and stays inline to keep cache order.
     /// `session.restart` waits on process exits for seconds, while the shell it starts calls this socket.
     nonisolated private static func waitsOnNetwork(_ cmd: Command) -> Bool {
-        // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket
+        // companion creation may ssh to a remote parent's origin, which can be this Mac's own socket;
+        // update.check waits on the feed
         [.zmxTree, .zmxAttach, .zmxAttachGroup, .sessionRestart, .sessionCompanionNew, .sessionCompanionDuplicate,
-         .sessionCompanionPage, .windowRemoteOpen].contains(cmd)
+         .sessionCompanionPage, .windowRemoteOpen, .updateCheck].contains(cmd)
     }
 
     // these polling reads cannot change window nodes; skip the AppKit rebuild
@@ -747,7 +748,7 @@ final class ControlServer {
                 .windowFullscreen, .windowMinimize, .windowRemoteOpen, .windowRemoteDismiss,
                 .sessionDetach, .sessionReattach, .workspaceDetach, .workspaceReattach,
                 .restoreClear, .restoreCapture, .restoreMode, .zmxList, .zmxPrune, .zmxKill, .zmxKillPane, .zmxReset, .zmxTree,
-                .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version,
+                .zmxAttach, .zmxAttachGroup, .zmxPresent, .zmxScreen, .catalogSubscribe, .catalogOp, .sessionOverlayJobRun, .sessionOverlayPageServe, .dashboard, .version, .updateCheck,
                 .recentList, .recentOpen, .recentClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:

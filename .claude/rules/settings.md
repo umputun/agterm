@@ -272,7 +272,7 @@ paths:
 - `hiddenInterfaceElements` stores raw names and preserves unknown values while toggling known ones; empty
   maps nil. Titlebar cases are `sidebarToggle`, `workspaceName`, `sessionName`, `windowName`, `remoteHost`,
   `sessionContext`, `recentSessions`, `scratch`, `split`, `dashboard`, `quickTerminal`, `customCommands`,
-  `overlayToggle`;
+  `overlayToggle`, `updates`;
   sidebar cases are `newWorkspace`, `newSession`, `flaggedView`, `focusFilter`, and row-level
   `workspaceAddSession`, `workspaceIcons`, `sessionIcons` and `workspaceChevrons` ([[sidebar]] owns its layout).
   The two icon toggles show the glyph their rows
@@ -280,6 +280,9 @@ paths:
   A `hiddenByDefault` case (`workspaceName`, `customCommands` and `overlayToggle`) is governed by
   `shownInterfaceElements` instead, the same shape with the opposite sense, and its name in the hidden list is ignored. Attention
   has its separate default-off setting.
+  `updates` is the one state-shown control (CLAUDE.md): its button sits at the far right outside the group counts and
+  shows only while `UpdateFlow.showsIcon` holds, a scheduled find Sparkle left to it; hiding the element hides the
+  button and leaves Sparkle silent until Check for Updates, `update check` or a later launch's check.
   `workspaceName` leads the identity as `workspace — session — window`, looked up from the ACTIVE SESSION
   (`workspace(forSession:)`, never `currentWorkspaceID`, which an empty workspace can hold while the old
   session stays selected). `TitlebarComposition` caps it at `workspaceNameLimit` characters with an

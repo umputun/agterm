@@ -185,7 +185,7 @@ final class AppDelegateCaptureTests: XCTestCase {
         let library = WindowLibrary(directory: state)
         let windowID = try XCTUnwrap(library.activeWindowID)
         let store = try XCTUnwrap(library.activeStore)
-        let session = try XCTUnwrap(store.activeSession)
+        _ = try XCTUnwrap(store.activeSession)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
             styleMask: [.titled], backing: .buffered, defer: false)

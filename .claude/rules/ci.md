@@ -84,21 +84,25 @@ paths:
   Developer ID re-sign, which runs after CI's copy and is not covered by it.
   The helper check covers `agtermctl`, zmx and `agterm-session-host` and also verifies their signatures. Use
   `codesign -d --entitlements -`; the `:-` spelling is deprecated and warns.
-- The second pins the app's own Release set to the seven TCC keys, so neither a Debug-only hardened-runtime
-  exception nor a dropped TCC key can ship. It ignores `com.apple.security.get-task-allow`, which the
+- The second pins the ad-hoc Release app's set to the seven TCC keys plus `disable-library-validation`, which an
+  ad-hoc app needs to load `Sparkle.framework`, so neither a JIT exception nor a dropped TCC key can ship. The
+  notarized app's strict set is checked by `scripts/release.sh` after its Developer ID re-sign. It ignores `com.apple.security.get-task-allow`, which the
   ad-hoc "Sign to Run Locally" identity adds and the Developer ID re-sign drops. It compares `key=value`
   through `jq ... tojson`, not key names: a key set to `<false/>` is not granted and macOS treats it as
   absent, and codesign accepts `<string>true</string>`, which is not a Boolean and renders identically to
   one without `tojson`. Changing the set means editing that list in the same commit.
-- The third reads the two entitlements files rather than a build, and derives Debug's expected content
-  from the shipping file: Debug must be the shipping set plus exactly the three exceptions. Without it a
+- The third reads the entitlements files rather than a build, and derives the others from the shipping file:
+  Debug must be the shipping set plus exactly the three exceptions, `agterm-adhoc.entitlements` the shipping set
+  plus exactly `disable-library-validation`. Without it a
   TCC key added to the shipping file and missed in the Debug one leaves every job green, and Debug
   silently unable to prompt for that permission.
-- Debug and Release sign from different entitlements files. `agterm/agterm-debug.entitlements` adds
+- Debug and ad-hoc Release builds sign from their own entitlements files, and the Developer ID sign in
+  `scripts/release.sh` from `agterm/agterm.entitlements`. `agterm/agterm-debug.entitlements` adds
   `disable-library-validation`, `allow-jit` and `allow-unsigned-executable-memory`: Debug is ad-hoc signed
   and split into a stub plus `agterm.debug.dylib`, and `agtermTests` loads an ad-hoc `.xctest` into that
-  app, so library validation would reject both on a Team-ID mismatch. The Release bundle holds no dylib
-  and JIT-links nothing, so `agterm/agterm.entitlements` carries none of the three. The re-sign in
+  app, so library validation would reject both on a Team-ID mismatch. The Release bundle JIT-links
+  nothing and its only embedded library, `Sparkle.framework`, shares the app's Developer ID team, so
+  `agterm/agterm.entitlements` carries none of the three. The re-sign in
   `project.yml` reads `$CODE_SIGN_ENTITLEMENTS` rather than a literal path, so it follows the
   configuration. Restoring a literal path there would re-sign Debug from the shipping file, stripping the
   three exceptions and breaking the ad-hoc `.xctest` load in `make test-app`.

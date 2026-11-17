@@ -83,6 +83,14 @@ public enum ControlResolve {
         #endif
     }
 
+    /// isCustomStateDirectory is whether `AGTERM_STATE_DIR` names a non-default directory, which a Launch Services
+    /// relaunch does not open.
+    public static func isCustomStateDirectory(environment: [String: String]) -> Bool {
+        guard let dir = environment["AGTERM_STATE_DIR"], !dir.isEmpty else { return false }
+        let standard = { (path: String) in URL(fileURLWithPath: path).standardizedFileURL.path }
+        return standard(dir) != standard(defaultStateDirectory(environment: environment))
+    }
+
     /// The control socket's ownership lock path.
     public static func ownershipLockPath(forSocket socketPath: String) -> String {
         socketPath + ".lock"

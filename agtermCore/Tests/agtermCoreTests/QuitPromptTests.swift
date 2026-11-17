@@ -40,4 +40,32 @@ struct QuitPromptTests {
         #expect(QuitPrompt.windowCloseMessage(sessions: 9, mode: .live)
             == "This closes 9 sessions. The window can be reopened from File ▸ Open Window.")
     }
+
+    @Test(arguments: [
+        RestartCase(1, false, .live, .live, false, "1 session keeps running and reconnects after the restart."),
+        RestartCase(3, false, .live, .live, false, "3 sessions keep running and reconnect after the restart."),
+        RestartCase(3, false, .live, .live, true, "3 sessions keep running. Reopen agterm with the same AGTERM_STATE_DIR to reconnect."),
+        RestartCase(1, false, .live, .none, false, "1 session ends at the next launch."),
+        RestartCase(2, false, .live, .rerun, false, "2 sessions end at the next launch."),
+        RestartCase(2, false, .live, .none, true, "2 sessions end when agterm next opens this state directory."),
+        RestartCase(1, false, .none, .live, false, "This ends the running shells in 1 session."),
+        RestartCase(4, false, .rerun, .rerun, false, "This ends the running shells in 4 sessions."),
+        RestartCase(0, true, .none, .none, false, "Sessions from other hosts keep running there and reconnect after the restart."),
+        RestartCase(0, true, .live, .live, true, "Sessions from other hosts keep running there. Reopen agterm with the same AGTERM_STATE_DIR to reconnect."),
+        RestartCase(2, true, .live, .live, false,
+         "2 sessions keep running and reconnect after the restart. Sessions from other hosts keep running there and reconnect after the restart."),
+        RestartCase(2, true, .none, .none, false, "This ends the running shells in 2 sessions. Sessions from other hosts keep running there and reconnect after the restart."),
+        RestartCase(0, false, .live, .live, true, ""),
+    ])
+    func restartMessage(_ c: RestartCase) {
+        #expect(QuitPrompt.restartMessage(localSessions: c.local, remote: c.remote, current: c.current, next: c.next,
+                                          customStateDirectory: c.custom) == c.expected)
+    }
+
+    struct RestartCase: Sendable {
+        let local: Int, remote: Bool, current: RestoreMode, next: RestoreMode, custom: Bool, expected: String
+        init(_ local: Int, _ remote: Bool, _ current: RestoreMode, _ next: RestoreMode, _ custom: Bool, _ expected: String) {
+            (self.local, self.remote, self.current, self.next, self.custom, self.expected) = (local, remote, current, next, custom, expected)
+        }
+    }
 }

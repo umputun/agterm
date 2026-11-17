@@ -2816,6 +2816,28 @@ same four ssh options, the same installer-owned execution settings and the same 
   the agent hooks incomplete, 1 for any refusal or failure with the reason on stderr. A usage error keeps the
   parser's own exit code.
 
+## update
+
+`agtermctl update check` — asks the app serving the socket's feed for a newer version with no alert, and
+opens the app's update window only when there is one (that window refetches and can still report its own error). App-global: no target, no `--window`. The
+reply waits for the feed and names the Mac that checks in `result.text`:
+
+- `agterm X is available on HOST; opening the update window` — the window refetches and offers it.
+- `no update offered on HOST` — nothing newer, or only a version the user chose to skip.
+- `update window opened on HOST` — an update was already waiting (the window or the title-bar arrow); this
+  brings it up.
+
+Errors:
+
+- `update checks are off: this build has no update feed` — a build from source; only release builds update.
+- `an update check is already running` — any check, scheduled, from the menu or from this command, or a
+  background download.
+- `update check failed on HOST: <reason>` — the feed could not be read.
+- `update.check is not available on agterm-server` — what a pane of a Linux server's remote window gets. A pane of
+  another Mac's window reaches that Mac, which checks and is the HOST the reply names.
+
+`version` reads back the schedule as `result.updates`.
+
 ## version
 
 `agtermctl version` — which agterm is serving this socket. App-global: no target, no `--window`, and no
@@ -2838,8 +2860,11 @@ It is build metadata, not a comparison of the executables: a rebuild from the sa
 `installed` is omitted when the bundle cannot be read and by an older app; treat its absence as unknown,
 never as a match.
 
+A release build also returns `result.updates`: `automaticChecks` and `lastCheck` (epoch seconds, omitted
+before the first check). A build without an update feed omits it.
+
 Human output is `version` alone, or `version (commit)`, then an `installed:` line only when the bundle on
-disk differs, followed by a `client:` line naming the resolved
+disk differs, an `updates: automatic|manual, last checked <ISO 8601>|never checked` line when `updates` is present, followed by a `client:` line naming the resolved
 path of the `agtermctl` that ran — a diagnostic for a stale CLI earlier on `PATH` than the app's bundled
 helper. That line is human output only: `--json` stays the raw server response, and a caller that needs
 the client path resolves the binary it invoked itself.

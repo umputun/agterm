@@ -19,4 +19,35 @@ public enum QuitPrompt {
         if mode == .live { return "This closes \(sessions) session\(plural). \(reopen)" }
         return "This ends \(sessions) running session\(plural). \(reopen)"
     }
+
+    /// restartMessage is the informative line for "Restart to update?". Sparkle's relaunch never opens a custom state
+    /// directory, so with one nothing reconnects by itself.
+    public static func restartMessage(localSessions: Int, remote: Bool, current: RestoreMode, next: RestoreMode,
+                                      customStateDirectory: Bool) -> String {
+        let keepsLive = current == .live && next == .live
+        let one = localSessions == 1
+        let count = one ? "1 session" : "\(localSessions) sessions"
+        var lines: [String] = []
+        if localSessions > 0 {
+            if keepsLive && customStateDirectory {
+                lines.append("\(count) \(one ? "keeps" : "keep") running.")
+            } else if keepsLive {
+                lines.append("\(count) \(one ? "keeps running and reconnects" : "keep running and reconnect") after the restart.")
+            } else if current == .live && customStateDirectory {
+                lines.append("\(count) \(one ? "ends" : "end") when agterm next opens this state directory.")
+            } else if current == .live {
+                lines.append("\(count) \(one ? "ends" : "end") at the next launch.")
+            } else {
+                lines.append("This ends the running shells in \(count).")
+            }
+        }
+        if remote {
+            let hostReconnects = customStateDirectory ? "" : " and reconnect after the restart"
+            lines.append("Sessions from other hosts keep running there\(hostReconnects).")
+        }
+        if customStateDirectory, remote || (keepsLive && localSessions > 0) {
+            lines.append("Reopen agterm with the same AGTERM_STATE_DIR to reconnect.")
+        }
+        return lines.joined(separator: " ")
+    }
 }

@@ -4,8 +4,9 @@
      Debug layout needs. Debug builds are ad-hoc signed and split into a stub plus agterm.debug.dylib,
      and the hosted tests load an ad-hoc .xctest into that app, so library validation would reject both
      on a Team-ID mismatch. allow-jit and allow-unsigned-executable-memory serve Xcode's preview
-     executor, which JIT-links in process. The Release bundle has no dylib and no JIT, so it carries
-     none of the three.
+     executor, which JIT-links in process. The notarized Release app JIT-links nothing and loads only
+     Sparkle.framework, signed by its own team, so it carries none of the three; ad-hoc Release builds add only
+     disable-library-validation (agterm-adhoc.entitlements).
 
      They date from the scaffold, which set hardened runtime with CODE_SIGN_IDENTITY "-", so every build
      was ad-hoc and every build needed them. Developer ID signing arrived six days later (13afe65) and

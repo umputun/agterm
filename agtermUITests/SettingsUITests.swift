@@ -437,6 +437,9 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(multiWindow.exists && multiWindow.isHittable, "the multi-window toggle still renders inside the Sidebar section")
         let chevrons = app.descendants(matching: .any).matching(identifier: "settings-interface-workspaceChevrons").firstMatch
         XCTAssertTrue(chevrons.exists && chevrons.isHittable, "the workspace chevrons toggle renders in the Sidebar grid")
+        let updates = app.descendants(matching: .any).matching(identifier: "settings-interface-updates").firstMatch
+        XCTAssertTrue(updates.exists && updates.isHittable, "the update icon toggle renders in the Title bar grid")
+        XCTAssertEqual(updates.value as? Int, 1, "the update icon is on by default")
         let before = size.frame.minY
         size.scroll(byDeltaX: 0, deltaY: -80)
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))

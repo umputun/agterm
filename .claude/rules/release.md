@@ -23,7 +23,17 @@ paths:
   just `version` and `sha256`. Any other cask edit is made by hand in `umputun/homebrew-apps` too, and the
   two files must stay identical apart from those two lines.
 - Developer ID signing is inside-out: `agtermctl`, zmx and `agterm-session-host` are signed first with no
-  entitlements, then the app is sealed with its TCC entitlements. The script rejects any helper carrying them.
+  entitlements, then Sparkle's XPC services, `Autoupdate`, `Updater.app` and the framework, then the app is sealed
+  with its TCC entitlements from `agterm.entitlements`. The script rejects any helper carrying them and an app carrying
+  a `com.apple.security.cs.` exception.
+- Sparkle: `release.sh` builds with `AGTERM_UPDATE_FEED` set to the `releases/latest/download/appcast.xml` URL, the only
+  build that gets an updater. After the DMG staple, `sign_update --account agterm` signs the DMG and the script writes
+  `build/appcast.xml` with the version, `sparkle:minimumSystemVersion`, the CHANGELOG section as Markdown and the
+  signed enclosure, uploaded in a second `gh release upload` once the DMG and tarballs are up. The EdDSA private key is in the login
+  keychain under the `agterm` account, with an exported backup; losing it leaves existing installs unable to verify
+  any later update. `sign_update` may ask for keychain access on its first use.
+- `packaging/agterm.rb` declares `auto_updates true`: Sparkle updates a brew copy in place, and `brew upgrade` acts
+  only when the installed bundle's version is older than the tap's, then installs the same notarized DMG.
 - Before writing or committing a release section, put the exact `CHANGELOG.md` text in a temp file and
   pass it through the `draft-approval` skill's `draft-review.sh`; address annotations and get explicit
   chat approval. `release.sh:70-85` publishes that text as the GitHub release body.

@@ -33,6 +33,17 @@ public struct ControlRestoreStatus: Codable, Sendable, Equatable {
     }
 }
 
+/// ControlUpdateStatus is the app's update schedule; `lastCheck` is epoch seconds, omitted before any check.
+public struct ControlUpdateStatus: Codable, Sendable, Equatable {
+    public let automaticChecks: Bool
+    public let lastCheck: Double?
+
+    public init(automaticChecks: Bool, lastCheck: Double?) {
+        self.automaticChecks = automaticChecks
+        self.lastCheck = lastCheck
+    }
+}
+
 /// The refusal a `ControlActions` conformer gives for a command this platform does not implement, so the
 /// default implementations and any host wording it the same way cannot drift.
 public enum ControlActionsUnsupported {

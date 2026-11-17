@@ -193,7 +193,7 @@ renumbering. Do not reintroduce a count anywhere.
 - `session.detach`, `session.reattach`, `workspace.detach`, `workspace.reattach`: a remote window's rows only
 - `keymap.reload`, `keymap.list`, `keymap.run`, `hooks.reload`, `hooks.list`, `browser.clear`, `browser.links`, `config.reload`, `theme.set`, `theme.list`,
   `restore.capture`,
-  `restore.clear`, `restore.mode`, `version`
+  `restore.clear`, `restore.mode`, `version`, `update.check`
 - `recent.list`, `recent.open`, `recent.clear`, `session.undo`
 - `zmx.list`, `zmx.screen`, `zmx.prune`, `zmx.kill`, `zmx.kill.pane`, `zmx.reset`, `zmx.tree`, `zmx.attach`, `zmx.attach.group`, `zmx.present`
 - `catalog.subscribe`, `catalog.op`: served by agterm-server, and by a Mac in Live sessions mode for the window the
@@ -1665,6 +1665,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   running identity after a replacement. Absent means unknown, and equal metadata does not prove equal
   executables. It is deliberately not on the tree: `version` is the build preflight, and a tree copy
   would cost a file read on every poll.
+- `version` also carries `result.updates` (`ControlUpdateStatus`) from `UpdateController.status`, Sparkle's
+  `automaticallyChecksForUpdates` and `lastUpdateCheckDate` as epoch seconds; a build without a feed omits it.
+  It is `update.check`'s read-back. That command is app-global (`ControlDispatcher+Update` refuses a target or
+  `--window`) and runs on the network worker. Its initial check is never Sparkle's user-initiated one, whose
+  no-update and error alerts are `runModal` and stall the socket until clicked: `UpdateController.checkFromControl`
+  asks with `checkForUpdateInformation` (no UI, skipped versions filtered) and opens the window with
+  `checkForUpdates` only for a find, whose refetch can still fail with that alert, after `willScheduleUpdateCheckAfterDelay`/`updaterWillNotScheduleUpdateCheck`, since
+  rescheduling briefly marks a session running. Busy is `UpdateFlow.phase`, reserved before Sparkle's
+  asynchronous start, plus Sparkle's `canCheckForUpdates` for a session not yet reported; that flag alone turns
+  true while a menu check shows progress. An offer counts only from `standardUserDriverWillHandleShowingUpdate`,
+  so a background download stays busy. An ok reply names the host (`gethostname`, never `Host.current()`, which resolves over mDNS),
+  since a remote pane's socket can belong to another Mac; agterm-server refuses it by policy.
 - `agtermctl version`'s `client:` line is HUMAN OUTPUT ONLY. `--json` stays the raw `ControlResponse` like
   every other command; a client-reported path in the protocol would be a field the server cannot vouch
   for. Resolve it with `_NSGetExecutablePath` + `realpath`, never `argv[0]`, and never print it after a

@@ -1457,6 +1457,16 @@ struct SocketClientTests {
         #expect(format(installed: AppIdentity(version: "0.35.1")) == "0.34.0 (a1b2c3d)\ninstalled: 0.35.1")
     }
 
+    @Test func formatsTheUpdateScheduleOnVersion() {
+        let app = AppIdentity(version: "0.43.0")
+        func format(_ updates: ControlUpdateStatus) -> String {
+            SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(app: app, updates: updates)))
+        }
+
+        #expect(format(ControlUpdateStatus(automaticChecks: true, lastCheck: 0)) == "0.43.0\nupdates: automatic, last checked 1970-01-01T00:00:00Z")
+        #expect(format(ControlUpdateStatus(automaticChecks: false, lastCheck: nil)) == "0.43.0\nupdates: manual, never checked")
+    }
+
     @Test func formatsTheVersionsAHeadlessServerAdvertises() {
         var result = ControlResult(app: AppIdentity(version: "1.2.3"))
         result.versions = CatalogVersions(server: "1.2.3", protocolVersion: 1, catalog: 1)
