@@ -228,16 +228,18 @@ The draft is the proposal in discussion 1033.
 - Modify: `.claude/rules/control-api.md` (catalog list and the Remote sessions contract), `.claude/rules/menu-actions.md`
 - Move: this plan to `docs/plans/completed/`
 
-- [ ] docs.html: New Remote Session… under Remote sessions, where it lands on the host, CLI form, normal windows only
-- [ ] commands.html: `session new --remote` with its flags and read-back
-- [ ] skill: section and a `description` trigger for creating a session on another Mac or server, and the action in
+- [x] docs.html: New Remote Session… under Remote sessions, where it lands on the host, CLI form, normal windows only
+- [x] commands.html: `session new --remote` with its flags and read-back
+- [x] skill: section and a `description` trigger for creating a session on another Mac or server, and the action in
       the built-in action list of `plugins/agterm/skills/agterm/reference.md`
-- [ ] `site/docs.html`: the action in its built-in action lists, beside `attach_remote`
-- [ ] rules: `session.remote.new` in the public catalog and `localOnlyCommands`, its contract in control-api.md, the
+- [x] `site/docs.html`: the action in its built-in action lists, beside `attach_remote`
+- [x] rules: `session.remote.new` in the public catalog and `localOnlyCommands`, its contract in control-api.md, the
       menu item in menu-actions.md, the case count in keymap.md
-- [ ] verify every Overview requirement and the Decisions table against the code
-- [ ] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] verify every Overview requirement and the Decisions table against the code
+- [x] ➕ `make lint` found `struct Session` at 818 body lines (limit 800); per Eugene, `Session.New` moved
+      unchanged into `extension Session` in `agtermCore/Sources/agtermctlKit/Session+New.swift`
+- [x] run gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*

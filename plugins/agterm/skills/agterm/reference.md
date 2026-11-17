@@ -550,6 +550,19 @@ buys nothing. A caller with no tree uses `version`.
   A page companion shows an HTML page instead of a terminal and never starts a shell; it is created with
   `session overlay open --html FILE --companion` or `--url URL --companion` (see that entry). A top-level page
   session (`--page`) can be a parent too.
+- `session new --remote HOST [--origin-window W] [--workspace-name NAME] [--cwd DIR] [--command CMD] [--window W]` -
+  create a session on HOST (an ssh destination running agterm in Live sessions mode, or agterm-server) and attach it
+  here at the end of the window's current workspace, selected; prints the new row's id. On HOST it goes into the
+  workspace named `--workspace-name`, default the current workspace's name, the first when several share it,
+  created when missing, and selects
+  nothing there. `--origin-window` names a Mac's window by id or unique prefix, needed when it has several open;
+  agterm-server refuses it. `--cwd` and `--command` are HOST's. A host that does not answer or does not report Live
+  sessions or agterm-server is refused before anything is created. The create is sent once: a session created but
+  not attached is named in the error for `zmx attach HOST ID`, and a lost reply is reported as an unknown outcome. Refuses `--parent`,
+  `--workspace`, `--create-workspace`, `--after`, `--before`, `--wait`, `--name`, `--no-select`, `--tint` and
+  `--op-id`; refused in a remote window. Too old an app: `the running app is too old for remote sessions`. GUI twin:
+  File ▸ New Remote Session…, a palette row, keyless `new_remote_session`. Read back `remoteHost` and
+  `remoteSessionID`. Wire command `session.remote.new`.
 - `session collapse [--target] [--window W]` - fold a parent's companions in the sidebar tree; returns the
   session id. Persisted. A session without companions errors `session has no companions`. Read back from the
   tree session node's `collapsed` flag. Wire command `session.collapse`. `sidebar expand|collapse` and
@@ -2250,7 +2263,7 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `open_directory`, `rename_session`, `duplicate_session`, `new_companion`, `duplicate_companion`, `convert_companion`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_horizontal_split`, `toggle_scratch`, `toggle_sidebar`,
 `focus_workspace`, `toggle_workspace_filter`, `edit_flagged_sessions`, `edit_focused_workspaces`, `quick_terminal`,
-`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
+`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, `attach_remote`, `new_remote_session`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `previous_window`, `next_window`, `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
