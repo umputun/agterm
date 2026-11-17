@@ -915,14 +915,14 @@ s=$(agtermctl zmx tree studio.local --json \
 <li>a handed-over question goes back to the other Mac, a finished overlay held open with <code>--wait</code> closes, and a running overlay keeps running until its program ends.</li>
 </ul>
 <p>Close and reattach the session to retry by hand.</p>
-<p><strong>A pane's ssh connection.</strong> The pane keeps its last screen.</p>
+<p><strong>A pane's ssh connection.</strong> The pane keeps its last screen, and agterm prints nothing into it: what happened shows in a small panel at the bottom of the pane.</p>
 <ul>
-<li>If ssh itself failed (exit 255, which a refused login also gives), a bar under the pane names the host and says it is reconnecting. agterm attaches again once the host answers, on the stream's schedule; any key, waking the Mac or a network change retries at once and restarts the schedule. ⌘W still closes the session.</li>
-<li>While the host keeps refusing, a line along the pane's bottom edge shows what ssh said last, such as a changed host key or a rejected login.</li>
-<li>When the host answers, the last screen is replaced before the new connection is up, so a link that drops again right away leaves an empty pane with only the bar.</li>
+<li>If ssh itself failed (exit 255, which a refused login also gives), the panel reads <strong>Connection to HOST lost</strong> and says it is reconnecting. agterm attaches again once the host answers, on the stream's schedule; any key, waking the Mac or a network change retries at once and restarts the schedule. ⌘W still closes the session.</li>
+<li>While the host keeps refusing, the panel adds what ssh said last, such as a changed host key or a rejected login.</li>
+<li>When the host answers, the last screen is replaced before the new connection is up, so a link that drops again right away leaves an empty pane with only the panel.</li>
 <li>The pane comes back without taking the lead: if the other Mac leads by then, it arrives covered. It also arrives covered while the other Mac still counts this Mac's dropped connection as leader, which clears once that connection times out.</li>
-<li>Any other exit prints one line naming the host, session, pane and exit status, and waits for a key.</li>
-<li>If the other Mac removes the session, its replica here closes without waiting for a key, even over a disconnect prompt. The last replica waits for its ssh to exit and may then close the row.</li>
+<li>Any other exit shows <strong>SESSION on HOST ended</strong>; any key closes the pane.</li>
+<li>If the other Mac closes the session, the row here closes by itself with no panel, whether it is open now or comes back at the next launch. A session closed there with undo keeps its row here until the undo window passes; undo there leaves it as it was.</li>
 </ul>
 <p><strong>Keepalive.</strong> When your ssh config sets no <code>ServerAliveInterval</code> for the host, or sets 0, agterm adds <code>ServerAliveInterval 5</code> and <code>ServerAliveCountMax 2</code>, so a dead connection is noticed within about 15 seconds. Set a large value to opt out. A connection that joins an existing ControlMaster ignores these; the master's settings decide.</p>
 </section>

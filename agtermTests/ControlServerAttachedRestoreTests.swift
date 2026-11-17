@@ -60,16 +60,15 @@ final class ControlServerAttachedRestoreTests: XCTestCase {
         XCTAssertNil(server.restoredOriginChecks["buildbox"])
     }
 
-    func testARowWhoseSessionIsGoneFromTheOriginEnds() async throws {
+    func testARowWhoseSessionIsGoneFromTheOriginCloses() async throws {
         let runner = ScriptedRunner([tree(sessions: ""), inventory(complete: true, claimedBy: "another")])
         let (server, store, row) = try makeServer(runner)
 
         await server.checkRestoredOrigin("buildbox")
 
-        XCTAssertTrue(row.ended)
-        XCTAssertFalse(row.awaitsOriginCheck)
-        XCTAssertEqual(row.initialCommand, RemoteSession.endedCommand(host: "buildbox"))
-        XCTAssertNotNil(store.session(withID: row.id), "an ended row stays until the user closes it")
+        XCTAssertNil(store.session(withID: row.id))
+        XCTAssertTrue(row.remotePresentation?.originEnded == true)
+        XCTAssertNil(server.remoteClients[row.id])
     }
 
     func testAnUnreachableHostLeavesATerminalRowAttachingAndTriesAgain() async throws {

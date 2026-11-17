@@ -240,13 +240,13 @@ along with everyone else and gain the reconnecting notice through the shared rec
 - Modify: `.claude/rules/control-api.md` (Remote sessions bullets), `site/docs.html`, `site/commands.html`,
   `plugins/agterm/skills/agterm/reference.md`
 
-- [ ] update the remote-session bullets: `ended` semantics, the relaunch check closing rows, pane notices, wrapper
+- [x] update the remote-session bullets: `ended` semantics, the relaunch check closing rows, pane notices, wrapper
       prints nothing
-- [ ] user guide: what a viewer shows when an origin closes a session or the link drops
-- [ ] commands reference and skill reference: the replaced "reconnecting bar" and "Ended on HOST" wording, and the
+- [x] user guide: what a viewer shows when an origin closes a session or the link drops
+- [x] commands reference and skill reference: the replaced "reconnecting bar" and "Ended on HOST" wording, and the
       `attachEnded` read-back
-- [ ] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] gates once: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
