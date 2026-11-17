@@ -250,15 +250,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
         (pb.readObjects(forClasses: [NSURL.self]) as? [URL])?.contains { $0.isFileURL && !PasteOffer.urlText($0).isEmpty } ?? false
     }
 
-    /// The text for a pasteboard: file/web URLs (a Finder copy or a drag-drop) become shell-escaped paths,
-    /// space-joined; a plain string comes back verbatim, NOT escaped, since it may be a command the user
-    /// means to run. Shared by the clipboard paste path and the drag-drop handler, so a drop inserts as a paste.
+    /// pasteboardText is the text libghostty's clipboard read gets, `PasteOffer.asIsText` so it matches what a drop
+    /// inserts: shell-escaped paths for file/web URLs, else the string verbatim, since it may be a command to run.
     static func pasteboardText(_ pb: NSPasteboard) -> String? {
-        if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL] {
-            let parts = urls.map(PasteOffer.urlText).filter { !$0.isEmpty }
-            if !parts.isEmpty { return parts.joined(separator: " ") }
-        }
-        return pb.string(forType: .string).flatMap { !$0.isEmpty ? $0 : nil }
+        PasteOffer(urls: pb.readObjects(forClasses: [NSURL.self]) as? [URL] ?? [], text: pb.string(forType: .string)).asIsText
     }
 
     /// pasteOffer is what a paste or drop of `pb` offers. The image is read only when nothing else is offered, since a

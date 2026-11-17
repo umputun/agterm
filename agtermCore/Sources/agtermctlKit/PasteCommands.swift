@@ -36,7 +36,7 @@ struct Paste: ParsableCommand {
             do {
                 return PasteStaging.Reply(paths: try staging.receive(from: input))
             } catch {
-                return PasteStaging.Reply(error: String(describing: error))
+                return PasteStaging.Reply(error: PasteStaging.reason(for: error))
             }
         }
     }

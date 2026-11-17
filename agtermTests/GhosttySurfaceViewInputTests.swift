@@ -929,7 +929,28 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         }
     }
 
-    func testCommandAndTheVKeyOnAnyLayoutPasteThroughTheSeam() throws {
+    func testPasteChordFollowsTheLayoutsChordRule() {
+        struct Press {
+            let name: String
+            let keyCode: UInt16
+            let produced: String
+            let ascii: Bool
+            let paste: Bool
+        }
+        let cases = [
+            Press(name: "russian v position", keyCode: 9, produced: "м", ascii: false, paste: true),
+            Press(name: "dvorak k at the v position", keyCode: 9, produced: "k", ascii: true, paste: false),
+            Press(name: "dvorak v at the period position", keyCode: 47, produced: "v", ascii: true, paste: true),
+            Press(name: "us v", keyCode: 9, produced: "v", ascii: true, paste: true),
+            Press(name: "russian other key", keyCode: 8, produced: "с", ascii: false, paste: false),
+        ]
+        for press in cases {
+            XCTAssertEqual(GhosttySurfaceView.isPasteChord(keyCode: press.keyCode, produced: press.produced,
+                                                           layoutIsASCIICapable: press.ascii), press.paste, press.name)
+        }
+    }
+
+    func testCommandVPastesThroughTheSeam() throws {
         final class Offers { var seen: [PasteOffer] = [] }
         let offers = Offers()
         let saved = PasteTransfer.shared
@@ -966,7 +987,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         func press(_ flags: NSEvent.ModifierFlags) throws {
             terminal.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
                 with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: window.windowNumber,
-                context: nil, characters: "м", charactersIgnoringModifiers: "м", isARepeat: false, keyCode: 9)))
+                context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9)))
         }
 
         try press([.command, .shift])
@@ -974,7 +995,7 @@ final class GhosttySurfaceViewInputTests: XCTestCase {
         let deadline = Date(timeIntervalSinceNow: 5)
         while offers.seen.isEmpty, Date() < deadline { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01)) }
 
-        XCTAssertEqual(offers.seen, [PasteOffer(image: png)], "only ⌘V itself reaches the seam, by key position")
+        XCTAssertEqual(offers.seen, [PasteOffer(image: png)], "only ⌘V itself reaches the seam")
     }
 
     func testABareModifierLeavesAConsumedHeldExitOpen() {

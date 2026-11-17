@@ -176,8 +176,10 @@ paths:
   takes the exact pre-seam call (`paste_from_clipboard`, or `insertPasted` for a drop), and files or an image are
   copied by `PasteTransfer.shared.text`, which the app points at `ControlServer.pasteText`. `pasteRefusal` (a lead
   cover, a copy in flight) is checked before the pasteboard is read, and a cover gained during the copy drops the
-  insert. ⌘V is matched in `keyDown` by keycode 9 with exactly Command, so a non-Latin layout reaches the seam
-  and libghostty's `super+key_v` binding no longer runs for it.
+  insert. `keyDown` sends exactly-Command ⌘V to the seam by the keymap's chord rule (`isPasteChord`, the produced
+  character through the Command table, per [[keymap]]), so a non-Latin layout's V position reaches it. On a Latin
+  alternative layout the V position types its own letter and falls to the bundled physical `super+key_v`, which
+  is libghostty's paste and copies no files to a remote pane.
 - `readClipboard` never copies: it runs inside a libghostty tick, and a copy needs ssh and a panel. For a file
   offer outside the selection clipboard it answers one main turn later and hands a program on another host no
   text, since the paths name this Mac's files; a ghostty.conf paste binding therefore pastes text only there.

@@ -119,6 +119,42 @@ final class ControlServerPasteTransferTests: XCTestCase {
         XCTAssertFalse(view.pasteCopying)
     }
 
+    func testAFinderFilePastedIntoALocalPaneInsertsItsPath() async throws {
+        let view = try pane(remoteHost: nil)
+        let copied = try file("my report.txt")
+        preserveGeneralPasteboard()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([copied as NSURL])
+
+        let reason = await view.pasteClipboard().reason
+
+        XCTAssertNil(reason)
+        await waitFor("the escaped path reaches the pane") {
+            view.readScreenText(all: false, lines: nil)?.contains(ShellEscape.path(copied.path)) == true
+        }
+        XCTAssertTrue(runner.calls.isEmpty)
+    }
+
+    func testGhosttysOwnPasteHandsARemoteProgramNoFilePaths() async throws {
+        let view = try pane(remoteHost: "studio")
+        let copied = try file("my report.txt")
+        preserveGeneralPasteboard()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([copied as NSURL])
+
+        XCTAssertTrue(view.performBindingAction("paste_from_clipboard"))
+        await withCheckedContinuation { continuation in DispatchQueue.main.async { continuation.resume() } }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("marker-after", forType: .string)
+        XCTAssertTrue(view.performBindingAction("paste_from_clipboard"))
+
+        await waitFor("the later text paste reaches the pane") {
+            view.readScreenText(all: false, lines: nil)?.contains("marker-after") == true
+        }
+        XCTAssertFalse(view.readScreenText(all: false, lines: nil)?.contains(ShellEscape.path(copied.path)) == true)
+        XCTAssertTrue(runner.calls.isEmpty)
+    }
+
     func testAPaneAnotherMacLeadsCopiesNothingAndSaysWhy() async throws {
         let session = try remoteSession().session
         let view = realizedView(session: session, paneToken: session.paneIdentity)

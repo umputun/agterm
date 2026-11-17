@@ -588,8 +588,8 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   sandboxed XCUITest exposed no app-side types during an 8-second Finder-URL poll. Poll general pasteboard
   after external writes.
 - Fixed Edit shortcuts use AppKit-produced characters. Retain Ghostty
-  `super+key_c/a` keycode fallbacks for non-Latin layouts and disabled menu items; there is no AppKit
-  Latin fallback. ⌘V is the paste seam's, by keycode in `keyDown` ([[libghostty]]). Paste requests are not
+  `super+key_c/v/a` keycode fallbacks for non-Latin layouts and disabled menu items; there is no AppKit
+  Latin fallback. `keyDown` takes ⌘V for the paste seam first ([[libghostty]]). Paste requests are not
   OSC 52 reads and must not prompt.
 - `session.text` defaults to `onScreenSurface`: covering scratch, then focused pane. Explicit left/right/
   scratch addresses that pane, including hidden scratch. Default reads viewport; `--all` includes

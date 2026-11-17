@@ -669,14 +669,14 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <h3 id="terminals-search">Search</h3>
 <p>⌘F opens a search bar at the top of the focused terminal. It highlights matches in the live scrollback with an "N of M" counter. Enter steps forward, Shift-Enter back, Esc closes.</p>
 <h3 id="terminals-paste">Paste and drop</h3>
-<p>⌘V, Edit ▸ Paste, a drop onto a pane and <a href="/commands#session-paste"><code>agtermctl session paste</code></a> follow one rule, in a local pane and a remote one alike:</p>
+<p>⌘V, Edit ▸ Paste, a drop onto a pane and <a href="/commands#session"><code>agtermctl session paste</code></a> follow one rule, in a local pane and a remote one alike:</p>
 <ol>
 <li>Files and folders copied in Finder, or dropped, paste as their paths, shell-escaped.</li>
 <li>Otherwise text pastes as text.</li>
 <li>Otherwise an image, such as a screenshot on the clipboard, is saved as a PNG and its path is pasted. Claude Code attaches a pasted image path, so ⌘V of a screenshot gives it the image.</li>
 </ol>
 <p>In a pane whose program runs on another host, an attached session's pane or a remote window's pane, the files, folders or image are copied to that host first, and the path pasted is the one there. A folder is copied without the symbolic links and special files inside it, and an offered link or special file is refused. A panel over the session shows the copy unless another panel is already up there, and a failure shows as a panel or a notification. The copy is limited to 100 MB and 10,000 files and folders; anything larger pastes nothing and says why. A pane takes one copy at a time, and a second paste while one runs is refused. Pasted files are kept under <code>agterm/paste</code> in the cache folder of the host that runs the program (<code>~/Library/Caches</code> on a Mac, <code>~/.cache</code> on Linux), readable only by you; pastes older than 24 hours are removed on the next paste.</p>
-<p>Ctrl-V is the program's own key: Claude Code's Ctrl-V reads the clipboard of the host it runs on, which in a remote pane is not yours, so use ⌘V there. A paste binding of your own in <code>ghostty.conf</code> pastes text only and copies no files into a remote pane.</p>
+<p>Ctrl-V is the program's own key: Claude Code's Ctrl-V reads the clipboard of the host it runs on, which in a remote pane is not yours, so use ⌘V there. A paste binding of your own in <code>ghostty.conf</code>, and the bundled one that pastes from the V position on a Latin layout such as Dvorak, paste text only and copy no files into a remote pane.</p>
 <h3 id="terminals-overlay">Overlay</h3>
 <p>An overlay runs one program in a temporary terminal over a session and disappears when the program exits, leaving the session as it was. Scripts and agents use it to show an interactive program, such as a diff viewer or a process monitor, full size, as a floating panel, or over one split pane while the other stays live. The <a href="#agtermctl-overlays">agtermctl reference</a> has the commands.</p>
 <ul>

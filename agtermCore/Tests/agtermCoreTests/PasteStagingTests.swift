@@ -3,6 +3,15 @@ import Testing
 @testable import agtermCore
 
 struct PasteStagingTests {
+    @Test func aFailureReadsAsItsOwnTextAndAFoundationErrorAsItsMessage() {
+        let cocoa = CocoaError(.fileReadNoPermission, userInfo: [NSFilePathErrorKey: "/tmp/x"])
+
+        #expect(PasteStaging.reason(for: PasteBundle.Failure.tooManyEntries(10_000)) == PasteBundle.Failure.tooManyEntries(10_000).description)
+        #expect(PasteStaging.reason(for: PasteStaging.Failure.exists("a.txt")) == "a.txt appears twice in the paste")
+        #expect(PasteStaging.reason(for: cocoa) == cocoa.localizedDescription)
+        #expect(!PasteStaging.reason(for: cocoa).contains("NSCocoaErrorDomain"))
+    }
+
     @Test func aReceivedBundlePlacesEachItemInItsOwnSubfolderInOfferOrder() throws {
         let dir = try PasteFixture()
         defer { dir.cleanUp() }

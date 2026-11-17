@@ -267,7 +267,8 @@ it without a restart; see the [screenshot read diagnosis](https://github.com/ump
 
 Claude Code's Ctrl-V reads the clipboard of the host it runs on, which in a remote pane is the other Mac or the
 server. Use ⌘V: agterm copies the clipboard image, or files copied in Finder, to that host and pastes the path
-there, which Claude Code attaches. A paste binding of your own in ghostty.conf pastes text only in a remote pane.
+there, which Claude Code attaches. A paste binding of your own in ghostty.conf, and the bundled one at the V position on a
+Latin alternative layout such as Dvorak, paste text only in a remote pane.
 
 ### "agterm would like to access data from other apps, over and over"
 

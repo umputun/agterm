@@ -4,21 +4,6 @@ import agtermCore
 /// `ControlServer` arms that reach into a live `GhosttySurfaceView` — font size, selection copy, background
 /// watermark, buffer read, in-terminal search, text injection. Split out for the swiftlint size limit.
 extension ControlServer {
-    /// Runs a libghostty binding action on the pane `bindingSurface` resolves (`session.selectall`).
-    private func surfaceBindingAction(_ target: String?, window: String?, pane: StatusPane?,
-                                      action: String) -> ControlResponse {
-        switch bindingSurface(target, window: window, pane: pane) {
-        case .failure(let response):
-            return response
-        case .success(let (surface, id)):
-            // the cast alone only proves the SLOT is filled; a false return is the view without a surface.
-            guard surface.performBindingAction(action) else {
-                return ControlResponse(ok: false, error: "session not realized")
-            }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
-        }
-    }
-
     /// bindingSurface is the addressed pane of `session.paste`/`session.selectall`, never the focused one, with its
     /// spawn expedited: nil and `.left` are `addressableSurface`, so a promoted split survivor is still reached, and
     /// `.scratch` resolves while hidden. An empty slot and an unrealized view both answer "session not realized".
@@ -120,7 +105,16 @@ extension ControlServer {
     /// Selects the target session's entire terminal buffer (`session.selectall`, the ⌘A / Edit ▸ Select All
     /// analogue); read the resulting selection back with `session.copy`.
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse {
-        surfaceBindingAction(target, window: window, pane: nil, action: "select_all")
+        switch bindingSurface(target, window: window, pane: nil) {
+        case .failure(let response):
+            return response
+        case .success(let (surface, id)):
+            // the cast alone only proves the SLOT is filled; a false return is the view without a surface.
+            guard surface.performBindingAction("select_all") else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
     }
 
     /// Returns the surface's current selection text in the response, NOT to the system clipboard (automation

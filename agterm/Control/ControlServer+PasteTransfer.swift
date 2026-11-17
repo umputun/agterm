@@ -36,7 +36,7 @@ extension ControlServer {
         let name = PasteOffer.imageName(at: Date())
         return await Task.detached(priority: .userInitiated) {
             Result { ShellEscape.path(try staging.stage(image: image, name: name)) }
-                .mapError { PasteFailure(String(describing: $0)) }
+                .mapError { PasteFailure(PasteStaging.reason(for: $0)) }
         }.value
     }
 
@@ -78,7 +78,7 @@ extension ControlServer {
             }
             bundle = try PasteBundle.temporaryFile(entries)
         } catch {
-            return PasteStaging.Reply(error: String(describing: error))
+            return PasteStaging.Reply(error: PasteStaging.reason(for: error))
         }
         defer { try? FileManager.default.removeItem(at: bundle.deletingLastPathComponent()) }
         let megabytes = Double(entries.reduce(0) { $0 + $1.header.size }) / 1_000_000

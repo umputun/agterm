@@ -5,7 +5,12 @@ import AppKit
 import GhosttyKit
 
 extension GhosttySurfaceView {
-    private static let vKeyCode: UInt16 = 9
+    /// isPasteChord is whether a press with exactly Command is ⌘V by the keymap's chord rule (`chordKey`): the typed
+    /// v on a Latin layout, the V position on any other. `produced` is read through the Command table, as the menu
+    /// matches, so a Latin alternative layout leaves the V position to its own letter and ghostty's binding for it.
+    static func isPasteChord(keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> Bool {
+        chordKey(forKeyCode: keyCode, produced: produced, layoutIsASCIICapable: layoutIsASCIICapable) == "v"
+    }
 
     // MARK: - Drag and drop (issue #51)
 
@@ -86,8 +91,11 @@ extension GhosttySurfaceView {
         }
 
         if flags.contains(.command) {
-            // ⌘ plus the V key on any layout pastes through the seam; the keymap's chords never reach here
-            if event.keyCode == Self.vKeyCode, flags.intersection([.command, .shift, .option, .control]) == .command {
+            // the keymap's chords never reach here, and AppKit's menu usually takes a Latin ⌘V before it does
+            if flags.intersection([.command, .shift, .option, .control]) == .command,
+               Self.isPasteChord(keyCode: event.keyCode,
+                                 produced: event.characters(byApplyingModifiers: .command) ?? event.charactersIgnoringModifiers,
+                                 layoutIsASCIICapable: KeyboardLayout.isASCIICapable) {
                 userPaste()
                 return
             }

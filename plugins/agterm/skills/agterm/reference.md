@@ -720,7 +720,7 @@ error keeps those names for compatibility.
   the path pasted is the remote one; the reply waits for the copy, a failure answers its reason and pastes
   nothing, and a second paste while the pane is copying answers `a paste is still copying`. Claude Code attaches
   a pasted image path, so ⌘V, not Ctrl-V, pastes a screenshot into Claude Code in a remote pane: its own Ctrl-V
-  reads the clipboard of the host it runs on. A custom ghostty.conf paste binding pastes text only there.
+  reads the clipboard of the host it runs on. A ghostty.conf paste binding, and the bundled one at the V position on a Latin alternative layout, paste text only there.
 - `paste receive` — internal, run by agterm over ssh on the host where a pasted file must land; never run it by
   hand.
 - `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),

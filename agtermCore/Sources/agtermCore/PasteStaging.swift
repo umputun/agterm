@@ -24,6 +24,16 @@ public struct PasteStaging: Sendable {
         self.now = now
     }
 
+    /// reason is `error` worded for the user: a bundle or staging failure's own text, else Foundation's message rather
+    /// than an `NSError` dump.
+    public static func reason(for error: any Error) -> String {
+        switch error {
+        case let failure as PasteBundle.Failure: failure.description
+        case let failure as Failure: failure.description
+        default: error.localizedDescription
+        }
+    }
+
     /// Reply is what `agtermctl paste receive` prints: the staged paths, or the reason nothing was staged.
     public struct Reply: Codable, Equatable, Sendable {
         public let paths: [String]?
