@@ -25,9 +25,12 @@ and this script asks its copy there three things through the modes below. The re
 installed on both Macs at the same path under the home directory (or AGTERM_ANNOTATE_REMOTE names
 the path there):
 
-    annotate.py locate DAEMON         which session and pane run in that zmx daemon, as JSON
-    annotate.py serve SESSION PANE    the viewer for that pane's newest reply, on this terminal
-    annotate.py take SESSION PANE     the last send of that viewer, and whether to submit it
+    annotate.py locate DAEMON                which session, pane and window run that zmx daemon, as JSON
+    annotate.py serve SESSION PANE WINDOW    the viewer for that pane's newest reply, on this terminal
+    annotate.py take SESSION PANE WINDOW     the last send of that viewer, and whether Claude runs there
+
+WINDOW is the window's id, or "-" when unknown. Whether reply notes are submitted is still this
+Mac's SUBMIT setting; the far side only says whether Claude still runs in the pane.
 
 Runs as an agterm custom command: the runner exports AGT_SESSION_ID, AGT_PANE, AGT_SELECTION,
 AGT_SESSION_HOST and AGT_SOCKET, keeps stdout on /dev/null and starts it with the app's PATH, so
@@ -132,7 +135,8 @@ def remote_script():
 class Agt:
     """agtermctl against the instance and session the chord came from."""
 
-    def __init__(self, sid=None, pane=None, socket=None):
+    def __init__(self, sid=None, pane=None, socket=None, window=""):
+        self.window = window
         self.socket = (os.environ.get("AGT_SOCKET") or "") if socket is None else socket
         self.sid = (os.environ.get("AGT_SESSION_ID") or "") if sid is None else sid
         self.pane = (os.environ.get("AGT_PANE") or "left") if pane is None else pane
@@ -156,7 +160,9 @@ class Agt:
         is a pane whose process macOS will not show (agterm then omits both fields).
         """
         key = {"left": "foreground", "right": "splitForeground"}.get(self.pane)
-        res = self.run("tree", "--json")
+        # tree answers for the frontmost window unless told which, and a session in another window
+        # would read as unknown
+        res = self.run("tree", "--json", *(["--window", self.window] if self.window else []))
         if key is None or res.returncode != 0:
             return None
         try:
@@ -277,8 +283,8 @@ class RemoteError(Exception):
 class Remote:
     """The pane's session as it runs on the Mac it was attached from."""
 
-    def __init__(self, host, session, pane, foreground, transcript):
-        self.host, self.session, self.pane = host, session, pane
+    def __init__(self, host, session, pane, foreground, transcript, window="-"):
+        self.host, self.session, self.pane, self.window = host, session, pane, window
         self.foreground, self.transcript = foreground, transcript
 
     @staticmethod
@@ -315,13 +321,16 @@ class Remote:
         session, pane = answer.get("session") or "", answer.get("pane") or ""
         if not SESSION_ID.match(session) or pane not in ("left", "right"):
             raise RemoteError(f"{host} runs no session in {found.group(0)}")
-        return cls(host, session, pane, answer.get("foreground"), answer.get("transcript") or "")
+        window = answer.get("window") or "-"
+        if window != "-" and not SESSION_ID.match(window):
+            raise RemoteError(f"{host} named no usable window: {window}")
+        return cls(host, session, pane, answer.get("foreground"), answer.get("transcript") or "", window)
 
     def viewer_command(self):
-        return shlex.join(self.ssh_argv(self.host, ["serve", self.session, self.pane], tty=True))
+        return shlex.join(self.ssh_argv(self.host, ["serve", self.session, self.pane, self.window], tty=True))
 
     def take(self):
-        return self.call(self.host, "take", self.session, self.pane)
+        return self.call(self.host, "take", self.session, self.pane, self.window)
 
 
 def remote_room(session, pane):
@@ -329,10 +338,10 @@ def remote_room(session, pane):
     return TMP / "agterm-annotate" / f"remote-{session}.{pane}"
 
 
-def checked(session, pane):
-    if not SESSION_ID.match(session) or pane not in ("left", "right"):
-        raise SystemExit(f"not a session and pane: {session} {pane}")
-    return Agt(sid=session, pane=pane, socket="")
+def checked(session, pane, window):
+    if not SESSION_ID.match(session) or pane not in ("left", "right") or not (window == "-" or SESSION_ID.match(window)):
+        raise SystemExit(f"not a session, pane and window: {session} {pane} {window}")
+    return Agt(sid=session, pane=pane, socket="", window="" if window == "-" else window)
 
 
 def locate(daemon):
@@ -346,17 +355,17 @@ def locate(daemon):
     for node in remote.get("sessions", []) if isinstance(remote, dict) else remote:
         for pane in node.get("panes", []):
             if pane.get("daemon") == daemon and pane.get("pane") in ("left", "right"):
-                agt = Agt(sid=node["id"], pane=pane["pane"], socket="")
-                print(json.dumps({"session": agt.sid, "pane": agt.pane, "foreground": agt.foreground(),
-                                  "transcript": transcript_for(agt)}))
+                agt = Agt(sid=node["id"], pane=pane["pane"], socket="", window=node.get("windowID") or "")
+                print(json.dumps({"session": agt.sid, "pane": agt.pane, "window": agt.window or "-",
+                                  "foreground": agt.foreground(), "transcript": transcript_for(agt)}))
                 return 0
     print(json.dumps({}))
     return 0
 
 
-def serve(session, pane):
+def serve(session, pane, window):
     """Run on the Mac a session runs on, under the ssh terminal of the overlay on the other one."""
-    agt = checked(session, pane)
+    agt = checked(session, pane, window)
     transcript = transcript_for(agt)
     if not transcript or not PLANNOTATOR_TUI:
         print("No Claude transcript on record for this pane." if PLANNOTATOR_TUI else "plannotator-tui is not installed here.")
@@ -372,18 +381,20 @@ def serve(session, pane):
     return 1
 
 
-def take(session, pane):
-    """Run on the Mac a session runs on: the viewer's last send, and whether Claude still runs there."""
-    agt = checked(session, pane)
+def take(session, pane, window):
+    """Run on the Mac a session runs on: the viewer's last send, and whether Claude still runs there.
+
+    Whether to submit at all is the chord's Mac's SUBMIT, so this answers only the Claude check.
+    """
+    agt = checked(session, pane, window)
     outbox = remote_room(session, pane) / "outbox.jsonl"
     notes, sends = last_send(outbox)
     outbox.unlink(missing_ok=True)
-    submit = notes is not None and SUBMIT["replies"] and runs_claude(agt.foreground())
-    print(json.dumps({"notes": notes, "sends": sends, "submit": submit}))
+    print(json.dumps({"notes": notes, "sends": sends, "claude": notes is not None and runs_claude(agt.foreground())}))
     return 0
 
 
-REMOTE_MODES = {"locate": (locate, 1), "serve": (serve, 2), "take": (take, 2)}
+REMOTE_MODES = {"locate": (locate, 1), "serve": (serve, 3), "take": (take, 3)}
 
 
 # ---------- the chords ----------
@@ -436,7 +447,12 @@ def review(agt, mode, room):
     try:
         remote = Remote.of(agt, host) if host else None
     except RemoteError as err:
-        return fail(agt, str(err))
+        if mode != "pane":
+            return fail(agt, str(err))
+        # A pane review needs nothing from the other Mac: it only asks the agent's name there. A
+        # host with no recipe (an agterm-server Linux host, an older copy) must not stop it.
+        log(f"pane review goes on without {host}: {err}")
+        remote = None
     # The agent of an attached pane runs on the other Mac; here the pane only runs the ssh to it.
     foreground = remote.foreground if remote else agt.foreground()
     label = f"{agt.pane} pane"
@@ -495,8 +511,9 @@ def review(agt, mode, room):
         except RemoteError as err:
             return fail(agt, str(err))
         notes, sends = taken.get("notes"), taken.get("sends") or 0
-        # Read again on that Mac after the viewer closed: Claude may have exited meanwhile.
-        submit = bool(taken.get("submit"))
+        # This Mac's SUBMIT decides; that Mac, read again after the viewer closed, says whether
+        # Claude still runs there.
+        submit = notes is not None and SUBMIT[mode] and bool(taken.get("claude"))
     else:
         # ⌘W on the overlay kills the viewer before it reports anything; that is a dismissal.
         if res.returncode != 0 and not outbox.exists() and "no overlay result" not in said:
