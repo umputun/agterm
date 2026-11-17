@@ -214,9 +214,20 @@ Each entry separates a demonstrated cause from one that is only consistent with 
   waits on the current thread's run loop. A task can resume on another cooperative thread, and that run loop
   never hears of the exit. A probe hung within 650 hopped runs; launching and waiting on one thread ran 2400 times
   without a hang.
-- **Fix.** The test polls `isRunning` with `Task.sleep` under a 10 s bound; `Process` reaps on its own queue, so
+- **Fix.** The test polls `isRunning` with `Task.sleep`; `Process` reaps on its own queue, so
   `kill -0` sees the owner gone. 2400 hopped probe runs passed. Every other `waitUntilExit` in the tests runs and
   waits on one thread with no `await` between.
+
+### `HudHelperTests` "hud.sh ignored SIGTERM" on Linux
+
+- **Symptom.** `keepsPaintingWhenTheOwnerFieldIsNotAPid(owner: "")` recorded `hud.sh ignored SIGTERM` from
+  `Run.stop()`, whose process listing showed the helper as a zombie (`Z`, `[sh] <defunct>`).
+- **Runs.** Job 133868067831 (run 44032643699, master `d79b72a0`); the identical tree passed on its PR.
+- **Cause, inferred.** `stop()` gave the helper 2 s of wall-clock time to be reaped. The run had the Linux startup
+  stall from the `SshConnectionPoolTests` entry: 6396 of 6464 passing tests reported over 20 s. The zombie shows
+  the helper had exited by the time of the listing, not that it exited within the 2 s.
+- **Fix.** Every wait in `HudHelperTests` counts 20 ms `Task.sleep` polls instead of a deadline, so a stall slows a
+  wait without expiring it, as `held()` does.
 
 ### `AppDelegateCaptureTests.testExitCaptureReadsALiveListingSlowerThanAHundredMilliseconds`
 
