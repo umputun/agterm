@@ -672,7 +672,7 @@ agtermctl session overlay open --html report.html --page</code></pre>
 <p>An overlay runs one program in a temporary terminal over a session and disappears when the program exits, leaving the session as it was. Scripts and agents use it to show an interactive program, such as a diff viewer or a process monitor, full size, as a floating panel, or over one split pane while the other stays live. The <a href="#agtermctl-overlays">agtermctl reference</a> has the commands.</p>
 <ul>
 <li>The same slot can hold a <strong>HUD</strong>: a small passive panel with a message instead of a program. The session stays focused and typable under it.</li>
-<li>⇧⌘J hides a session's program and page overlays without closing them, and brings them back; a hidden program keeps running. The View menu, the command palette, an optional title-bar button (<strong>Settings ▸ Interface</strong>) and <code>agtermctl session overlay hide|show|toggle</code> do the same.</li>
+<li>⇧⌘J hides a session's program and page overlays without closing them, and brings them back; a hidden program keeps running. The View menu, the command palette, an optional title-bar button (<strong>Settings ▸ Interface</strong>) and <code>agtermctl session overlay hide|show|toggle</code> do the same. File ▸ Edit Keymap…, Edit Hooks… and Edit ghostty.conf… cannot open over a session overlay out of sight: they beep, and bring a hidden one back unless a pane overlay is drawn over it.</li>
 </ul>
 <p><strong>Pages.</strong> With <code>--html</code> the overlay shows a local HTML page, such as a report or chart an agent just made; with <code>--url</code>, a web page such as a running dev server.</p>
 <ul>

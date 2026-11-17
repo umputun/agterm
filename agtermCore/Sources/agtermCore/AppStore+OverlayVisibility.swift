@@ -11,14 +11,29 @@ extension AppStore {
         let slots = session.hideableOverlaySlots(pane)
         let pages = session.remotePageSlots(pane)
         guard !slots.isEmpty || !pages.isEmpty else { return session.overlayVisibilityRefusal(pane) }
-        let changing = slots.filter { session.overlayHidden($0) != hidden }
-        for slot in changing { session.setOverlayHidden(hidden, slot: slot) }
-        if !changing.isEmpty { scheduleTreeChanged() }
-        for page in session.replicaPages where changing.contains(page.pane) { onReplicaPageChanged?(page.page.id) }
+        writeOverlaysHidden(session, slots: slots, hidden: hidden)
         for slot in pages where slot.page?.effectiveHidden != hidden {
             sendRemotePageCommand(sessionID, pane: slot.pane, action: hidden ? .hide : .show)
         }
         return nil
+    }
+
+    /// revealSessionOverlay shows a hidden session-wide overlay and leaves pane visibility as it was.
+    /// False, changing nothing, when it is not hidden or a shown pane overlay holds it.
+    @discardableResult
+    public func revealSessionOverlay(_ sessionID: UUID) -> Bool {
+        guard let session = session(withID: sessionID), session.overlayHidden(nil), !session.sessionCoverHeld else {
+            return false
+        }
+        writeOverlaysHidden(session, slots: [nil], hidden: false)
+        return true
+    }
+
+    private func writeOverlaysHidden(_ session: Session, slots: [OverlayPane?], hidden: Bool) {
+        let changing = slots.filter { session.overlayHidden($0) != hidden }
+        for slot in changing { session.setOverlayHidden(hidden, slot: slot) }
+        if !changing.isEmpty { scheduleTreeChanged() }
+        for page in session.replicaPages where changing.contains(page.pane) { onReplicaPageChanged?(page.page.id) }
     }
 
     /// toggleOverlaysHidden hides the scoped overlays when any of them is shown, otherwise shows them all.
