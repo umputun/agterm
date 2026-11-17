@@ -151,17 +151,17 @@
 - Create: `agtermCore/Tests/agtermCoreTests/PasteBundleTests.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/PasteStagingTests.swift`
 
-- [ ] `PasteOffer`: the precedence above as a pure classifier over file URLs, string and image data
-- [ ] `PasteBundle`: build a bundle from file and folder URLs (symlinks and special files skipped, stopping at the
+- [x] `PasteOffer`: the precedence above as a pure classifier over file URLs, string and image data
+- [x] `PasteBundle`: build a bundle from file and folder URLs (symlinks and special files skipped, stopping at the
       first exceeded limit) and from image bytes; a streaming reader that rejects bad paths, duplicates, an unknown
       version, an oversize header line, oversize totals and truncation
-- [ ] `PasteStaging`: take a root, create/verify it, prune entries older than 24 h, write a bundle into a fresh
+- [x] `PasteStaging`: take a root, create/verify it, prune entries older than 24 h, write a bundle into a fresh
       folder with `O_EXCL|O_NOFOLLOW`, remove the folder on failure, return the staged top-level paths in offer order
-- [ ] tests: precedence table; bundle round trip for a file, a nested folder, an image, and two files with the same
+- [x] tests: precedence table; bundle round trip for a file, a nested folder, an image, and two files with the same
       name; every reader rejection above; symlink skipped; build stops at the limit; staging root refused when it is
       a symlink or not 0700; a case-only name collision refused; a failed write leaves no partial folder; pruning by
       age with an injected clock
-- [ ] run `swift test --filter 'Paste'` - must pass before task 2
+- [x] run `swift test --filter 'Paste'` - must pass before task 2
 
 ### Task 2: Origin receiver and ssh transport
 
