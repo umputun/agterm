@@ -890,7 +890,8 @@ struct Update: ParsableCommand {
     struct Check: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Check for an update now, or bring up the one already found.",
-            discussion: "The app shows the result in its own update window; the reply only names the Mac that checks. "
+            discussion: "Asks the feed with no alert and opens the update window only for a newer version; "
+                + "the reply names the Mac that checks and what it found. "
                 + "Refused by a build without an update feed, while a check is running, and by agterm-server."
         )
         @OptionGroup var options: BasicOptions

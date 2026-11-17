@@ -218,12 +218,12 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 - [x] protocol, dispatcher, CLI and UI tests: refused without a feed, refused on the server, accepted while a reminder waits
 - [x] docs: user guide update section (Sparkle flow, brew, restart wording, custom state directory), Interface entry, command
       reference, skill
-- ➕ readiness is Sparkle's `canCheckForUpdates` (KVO-mirrored `UpdateController.canCheck`), shared by the menu, the arrow and `update.check`, which refuses while a check runs; `lastCheck` is epoch seconds, not an ISO string; agterm-server refuses through `ServerCommandPolicy`'s generic text
-- [ ] acceptance: confirm the live app holds `agterm.lock`; two updatetest builds, a local appcast, Live panes running work on
+- ➕ acceptance found a script-started check raising Sparkle's modal no-update alert, which stalled the control socket until clicked, and Sparkle's `canCheckForUpdates` turning true during a menu check's progress; Eugene chose "ask silently, then show": `update.check` probes with `checkForUpdateInformation`, replies with what it found, and opens the update window only for a find; busy is agterm's own `UpdateFlow.phase`; `lastCheck` is epoch seconds, not an ISO string; agterm-server refuses through `ServerCommandPolicy`'s generic text
+- [x] acceptance: confirm the live app holds `agterm.lock`; two updatetest builds, a local appcast, Live panes running work on
       an isolated state directory; after the update the same zmx and session-host PIDs are alive, `ps eww` shows where the
       relaunched app went (the isolated directory, or exited on the lock), and a manual reopen with the isolated directory
       reattaches
-- [ ] `swift test`, `make test-app`, `make lint` once; move this plan to `docs/plans/completed/`
+- [x] `swift test`, `make test-app`, `make lint` once; move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - add `auto_updates true` to the published tap cask by hand with the first release that ships Sparkle

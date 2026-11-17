@@ -819,8 +819,9 @@ through; other connection settings belong in `~/.ssh/config` under a host alias,
 settings (no pty, stdin kept, plain session, no fork, no `RemoteCommand`) are the installer's and win
 over the config. The remote needs `tic` (ncurses) and says so when it is missing.
 
-**update** — `agtermctl update check` — asks the app serving the socket to check for an update now, or to bring up
-the one already found; the app shows the result in its own window and the reply only names the Mac that checks.
+**update** — `agtermctl update check` — asks the app serving the socket's feed for a newer version with no alert,
+waits, and answers `agterm X is available on HOST; opening the update window`, `no update offered on HOST`, or
+`update window opened on HOST` for one already waiting; an unreadable feed is an error.
 Refused by a build without an update feed, while a check runs, and by agterm-server: a pane of a Linux server's
 remote window gets that refusal, while a pane of another Mac's window checks that Mac, which the reply names.
 

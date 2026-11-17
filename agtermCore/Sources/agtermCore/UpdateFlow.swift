@@ -13,12 +13,54 @@ public enum UpdateCheck {
         return name.hasSuffix(".local") ? String(name.dropLast(6)) : name
     }()
 
-    /// response is ok only when Sparkle can start a check or bring up the update it found; the reply names the
-    /// Mac, since a remote pane's socket can belong to another one.
-    public static func response(hasFeed: Bool, canCheck: Bool, host: String) -> ControlResponse {
-        guard hasFeed else { return ControlResponse(ok: false, error: noFeed) }
-        guard canCheck else { return ControlResponse(ok: false, error: busy) }
-        return ControlResponse(ok: true, result: ControlResult(text: "update check requested on \(host)"))
+    /// Decision is what `update.check` does with the updater's current phase.
+    public enum Decision: Equatable, Sendable {
+        case busy, focus, probe
+    }
+
+    /// Outcome is what Sparkle's silent check found.
+    public enum Outcome: Equatable, Sendable {
+        case found(version: String), none, failed(String)
+    }
+
+    /// decide refuses while a session is checking or downloading: Sparkle's `canCheckForUpdates` turns false at a
+    /// session's start, before the phase hears of it, and true again once a menu check shows its progress.
+    public static func decide(phase: UpdateFlow.Phase, sparkleCanCheck: Bool) -> Decision {
+        switch phase {
+        case .offering: .focus
+        case .checking: .busy
+        case .idle: sparkleCanCheck ? .probe : .busy
+        }
+    }
+
+    /// outcome prefers a find, then Sparkle's no-update answer, so its not-found error is not read as a failure.
+    public static func outcome(found: String?, notFound: Bool, error: String?) -> Outcome {
+        if let found { return .found(version: found) }
+        if notFound { return .none }
+        if let error { return .failed(error) }
+        return .none
+    }
+
+    /// refusal is an error reply with the given text.
+    public static func refusal(_ text: String) -> ControlResponse {
+        ControlResponse(ok: false, error: text)
+    }
+
+    /// focusReply answers a check that brought up an offer already waiting.
+    public static func focusReply(host: String) -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(text: "update window opened on \(host)"))
+    }
+
+    /// reply names the Mac, since a remote pane's socket can belong to another one; a skipped version is not offered.
+    public static func reply(_ outcome: Outcome, host: String) -> ControlResponse {
+        switch outcome {
+        case let .found(version):
+            ControlResponse(ok: true, result: ControlResult(text: "agterm \(version) is available on \(host); opening the update window"))
+        case .none:
+            ControlResponse(ok: true, result: ControlResult(text: "no update offered on \(host)"))
+        case let .failed(error):
+            ControlResponse(ok: false, error: "update check failed on \(host): \(error)")
+        }
     }
 }
 
@@ -33,20 +75,37 @@ public struct UpdateFlow: Equatable, Sendable {
     public private(set) var relaunchPending = false
     /// reminderPending is a scheduled find the title-bar icon announces in place of Sparkle's window.
     public private(set) var reminderPending = false
+    /// phase is where the updater's session stands, as `update.check` needs it.
+    public private(set) var phase = Phase.idle
+
+    /// Phase separates a session still fetching or downloading from an offer waiting on the user.
+    public enum Phase: Equatable, Sendable {
+        case idle, checking, offering
+    }
 
     public init() {}
 
     /// installerWillRelaunch marks Sparkle's relaunch announcement.
     public mutating func installerWillRelaunch() { relaunchPending = true }
 
-    /// updateCycleEnded clears both marks when the cycle finishes or aborts.
+    /// updateCycleEnded clears every mark when the cycle finishes or aborts.
     public mutating func updateCycleEnded() {
         relaunchPending = false
         reminderPending = false
+        phase = .idle
     }
 
-    /// updateFound records a find; one Sparkle shows in its own window needs no icon.
+    /// reserveCheck claims the session for `update.check` before Sparkle's asynchronous start reports it.
+    public mutating func reserveCheck() { phase = .checking }
+
+    /// sessionStarted marks a session Sparkle began on its own schedule or from the menu.
+    public mutating func sessionStarted() {
+        if phase == .idle { phase = .checking }
+    }
+
+    /// updateFound records an offer; one Sparkle shows in its own window needs no icon.
     public mutating func updateFound(sparkleShows: Bool) {
+        phase = .offering
         if !sparkleShows { reminderPending = true }
     }
 

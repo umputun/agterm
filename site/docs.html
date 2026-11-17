@@ -398,7 +398,7 @@
 <li>With <strong>Update available</strong> off in <a href="#settings-interface">Settings ▸ Interface</a>, or the toolbar hidden, a new find opens the update window. Turning it off while the arrow shows only hides the arrow: the update waits for <strong>Check for Updates…</strong>.</li>
 <li>Installing asks to restart. With <a href="#restore-live">Live sessions</a> the dialog says your sessions keep running and reconnect; otherwise it says which shells end. <strong>Later</strong> keeps agterm open, and the next quit asks again.</li>
 <li>Started with a custom <code>AGTERM_STATE_DIR</code>, agterm comes back without it after the restart; reopen it with the same <code>AGTERM_STATE_DIR</code> to reconnect, as the dialog says.</li>
-<li><code>agtermctl update check</code> starts a check from a script; <code>agtermctl version</code> shows whether checks are automatic and when the last one ran.</li>
+<li><code>agtermctl update check</code> checks from a script with no alert of its own and opens the update window only when there is something to install; <code>agtermctl version</code> shows whether checks are automatic and when the last one ran.</li>
 </ul>
 <h3 id="install-help">Optional Help-menu installers</h3>
 <p>None is needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later. The first launch on a Mac points them out in a welcome dialog that offers the skill and the status hooks and never appears again.</p>

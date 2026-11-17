@@ -4868,10 +4868,13 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">update.check</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Asks the app serving the socket to check for an update now, or to bring up the one a background check already
-                found. App-global: no target and no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>. The app shows the result in its own update
-                window, so the reply says only which Mac checks:
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">update check requested on HOST</span>. Refused with
+                Asks the app serving the socket's feed for a newer version with no alert, and opens the app's update window
+                only when there is one; that window fetches again and can still report its own error. App-global: no target and no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>. The reply
+                waits for the feed and names the Mac that checks:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agterm X is available on HOST; opening the update window</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no update offered on HOST</span> (nothing newer, or only a skipped version), or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">update window opened on HOST</span> when an update was already waiting. A feed that cannot be
+                read answers <span style="font-family: &quot;JetBrains Mono&quot;, monospace">update check failed on HOST: …</span>. Refused with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">update checks are off: this build has no update feed</span> by a build from source, with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">an update check is already running</span> while one runs, and by agterm-server, the answer a pane of a Linux server's remote window gets; a pane of another Mac's
                 window checks that Mac, which the reply names. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">version</span> reads back the schedule.

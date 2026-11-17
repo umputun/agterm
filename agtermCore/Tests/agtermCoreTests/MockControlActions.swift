@@ -590,7 +590,7 @@ final class MockControlActions: ControlActions {
         return nextVersionResponse
     }
 
-    func checkForUpdates() -> ControlResponse {
+    func checkForUpdates() async -> ControlResponse {
         calls.append(.updateCheck)
         return nextUpdateCheckResponse
     }

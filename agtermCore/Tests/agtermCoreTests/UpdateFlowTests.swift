@@ -2,18 +2,67 @@ import Testing
 @testable import agtermCore
 
 struct UpdateFlowTests {
-    @Test func updateCheckRefusesWithoutAFeedOrWhileACheckRuns() {
-        #expect(UpdateCheck.response(hasFeed: false, canCheck: true, host: "mac")
-            == ControlResponse(ok: false, error: "update checks are off: this build has no update feed"))
-        #expect(UpdateCheck.response(hasFeed: true, canCheck: false, host: "mac")
-            == ControlResponse(ok: false, error: "an update check is already running"))
+    @Test(arguments: [
+        (UpdateFlow.Phase.idle, true, UpdateCheck.Decision.probe),
+        (.idle, false, .busy),
+        (.checking, true, .busy),
+        (.checking, false, .busy),
+        (.offering, true, .focus),
+        (.offering, false, .focus),
+    ])
+    func updateCheckDecidesFromThePhaseAndSparkle(phase: UpdateFlow.Phase, sparkleCanCheck: Bool, expected: UpdateCheck.Decision) {
+        #expect(UpdateCheck.decide(phase: phase, sparkleCanCheck: sparkleCanCheck) == expected)
     }
 
-    @Test func updateCheckNamesTheMacThatChecks() {
-        #expect(UpdateCheck.response(hasFeed: true, canCheck: true, host: "umbp")
-            == ControlResponse(ok: true, result: ControlResult(text: "update check requested on umbp")))
+    @Test func updateCheckOutcomePrefersAFindThenANoUpdateAnswer() {
+        #expect(UpdateCheck.outcome(found: "9.9.9", notFound: false, error: "x") == .found(version: "9.9.9"))
+        #expect(UpdateCheck.outcome(found: nil, notFound: true, error: "no update") == .none)
+        #expect(UpdateCheck.outcome(found: nil, notFound: false, error: "offline") == .failed("offline"))
+        #expect(UpdateCheck.outcome(found: nil, notFound: false, error: nil) == .none)
+    }
+
+    @Test func updateCheckRepliesNameTheMacThatChecks() {
+        #expect(UpdateCheck.reply(.found(version: "9.9.9"), host: "umbp")
+            == ControlResponse(ok: true, result: ControlResult(text: "agterm 9.9.9 is available on umbp; opening the update window")))
+        #expect(UpdateCheck.reply(.none, host: "umbp")
+            == ControlResponse(ok: true, result: ControlResult(text: "no update offered on umbp")))
+        #expect(UpdateCheck.reply(.failed("offline"), host: "umbp")
+            == ControlResponse(ok: false, error: "update check failed on umbp: offline"))
+        #expect(UpdateCheck.focusReply(host: "umbp")
+            == ControlResponse(ok: true, result: ControlResult(text: "update window opened on umbp")))
+        #expect(UpdateCheck.refusal(UpdateCheck.noFeed)
+            == ControlResponse(ok: false, error: "update checks are off: this build has no update feed"))
         #expect(!UpdateCheck.hostName.isEmpty)
         #expect(!UpdateCheck.hostName.hasSuffix(".local"))
+    }
+
+    @Test func aReservedCheckStaysBusyUntilItsCycleEnds() {
+        var flow = UpdateFlow()
+        flow.reserveCheck()
+        flow.sessionStarted()
+        #expect(flow.phase == .checking)
+        flow.updateCycleEnded()
+        #expect(flow.phase == .idle)
+    }
+
+    @Test func aBackgroundDownloadStaysBusyWithoutAnOffer() {
+        var flow = UpdateFlow()
+        flow.sessionStarted()
+        #expect(flow.phase == .checking)
+    }
+
+    @Test func anOfferShownBySparkleOrTheIconIsOffering() {
+        var shown = UpdateFlow()
+        shown.sessionStarted()
+        shown.updateFound(sparkleShows: true)
+        #expect(shown.phase == .offering)
+        #expect(!shown.reminderPending)
+
+        var reminded = UpdateFlow()
+        reminded.updateFound(sparkleShows: false)
+        reminded.sessionStarted()
+        #expect(reminded.phase == .offering)
+        #expect(reminded.reminderPending)
     }
 
     @Test func quitWithoutAnUpdateGetsTheQuitAlert() {

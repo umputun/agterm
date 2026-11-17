@@ -142,7 +142,7 @@ public protocol ControlActions {
     func linkOpenMode(_ mode: LinkOpenMode?) -> ControlResponse
     func appIdentity() -> ControlResponse
     /// `update.check` asks the app's updater to check now; a host with no updater refuses.
-    func checkForUpdates() -> ControlResponse
+    func checkForUpdates() async -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
     func setTheme(args: ControlArgs?) -> ControlResponse

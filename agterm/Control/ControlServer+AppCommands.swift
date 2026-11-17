@@ -178,12 +178,8 @@ extension ControlServer {
                                                         macCatalog: macCatalogVersions, updates: UpdateController.shared.status))
     }
 
-    func checkForUpdates() -> ControlResponse {
-        let updates = UpdateController.shared
-        let response = UpdateCheck.response(hasFeed: updates.isAvailable, canCheck: updates.canCheck,
-                                            host: UpdateCheck.hostName)
-        if response.ok { updates.checkForUpdates() }
-        return response
+    func checkForUpdates() async -> ControlResponse {
+        await UpdateController.shared.checkFromControl()
     }
 
     /// Every menu-bar item carrying a key equivalent, in the same kitty syntax the keymap uses so a caller can

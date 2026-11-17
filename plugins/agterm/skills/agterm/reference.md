@@ -2815,13 +2815,21 @@ same four ssh options, the same installer-owned execution settings and the same 
 
 ## update
 
-`agtermctl update check` — asks the app serving the socket to check for an update now, or to bring up the one
-a background check already found. App-global: no target, no `--window`. The app shows the result in its own
-update window, so the reply is only `result.text`: `update check requested on HOST`, naming the Mac that
-checks. Errors:
+`agtermctl update check` — asks the app serving the socket's feed for a newer version with no alert, and
+opens the app's update window only when there is one (that window refetches and can still report its own error). App-global: no target, no `--window`. The
+reply waits for the feed and names the Mac that checks in `result.text`:
+
+- `agterm X is available on HOST; opening the update window` — the window refetches and offers it.
+- `no update offered on HOST` — nothing newer, or only a version the user chose to skip.
+- `update window opened on HOST` — an update was already waiting (the window or the title-bar arrow); this
+  brings it up.
+
+Errors:
 
 - `update checks are off: this build has no update feed` — a build from source; only release builds update.
-- `an update check is already running`.
+- `an update check is already running` — any check, scheduled, from the menu or from this command, or a
+  background download.
+- `update check failed on HOST: <reason>` — the feed could not be read.
 - `update.check is not available on agterm-server` — what a pane of a Linux server's remote window gets. A pane of
   another Mac's window reaches that Mac, which checks and is the HOST the reply names.
 
