@@ -65,6 +65,10 @@ if [ "$PUBLISH" = "1" ]; then
   done
 fi
 APP="$BUILD_DIR/DerivedData/Build/Products/Release/agterm.app"
+APPCAST="$BUILD_DIR/appcast.xml"
+# the feed Sparkle reads; uploaded only after the DMG, so it never advertises an asset that failed to upload
+UPDATE_FEED="https://github.com/umputun/agterm/releases/latest/download/appcast.xml"
+SPARKLE_BIN="$BUILD_DIR/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin"
 NOTARY_PROFILE="${AGTERM_NOTARY_PROFILE:-agterm-notary}"
 TAP_REPO="umputun/homebrew-apps"
 
@@ -102,11 +106,8 @@ notarize() {
   fi
 }
 
-# build the GitHub release body: the matching CHANGELOG.md section followed by a
-# short install note (signed + notarized; Apple Silicon only, macOS 14+).
-release_notes() {
-  local section
-  section="$(awk -v ver="v$VERSION" '
+changelog_section() {
+  awk -v ver="v$VERSION" '
     $0 ~ "^## " ver "( |$)" {grab=1; next}
     grab && /^## / {exit}
     grab {body[++n]=$0}
@@ -115,7 +116,14 @@ release_notes() {
       while (n>=s && body[n] ~ /^[[:space:]]*$/) n--
       for (i=s; i<=n; i++) print body[i]
     }
-  ' "$ROOT/CHANGELOG.md")"
+  ' "$ROOT/CHANGELOG.md"
+}
+
+# build the GitHub release body: the matching CHANGELOG.md section followed by a
+# short install note (signed + notarized; Apple Silicon only, macOS 14+).
+release_notes() {
+  local section
+  section="$(changelog_section)"
   [ -n "$section" ] || echo "WARNING: no CHANGELOG.md section for v$VERSION — release body will be the install note only" >&2
   [ -n "$section" ] && printf '%s\n\n' "$section"
   cat <<EOF
@@ -150,7 +158,7 @@ GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 xcodebuild -project agterm.xcodeproj -scheme agterm -configuration Release \
   -derivedDataPath "$BUILD_DIR/DerivedData" \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$VERSION" GIT_COMMIT="$GIT_COMMIT" \
-  ARCHS=arm64 build
+  AGTERM_UPDATE_FEED="$UPDATE_FEED" ARCHS=arm64 build
 [ -d "$APP" ] || { echo "expected app not found: $APP" >&2; exit 1; }
 # written before the seal below, which then covers it
 (cd "$BUILD_DIR/server" && shasum -a 256 "${SERVER_TARBALLS[@]##*/}") >"$APP/Contents/Resources/agterm-server.sha256"
@@ -164,6 +172,12 @@ if [ "$SIGNED" = "1" ]; then
   echo "==> signing Developer ID (timestamped)"
   for helper in agtermctl zmx agterm-session-host; do
     codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$APP/Contents/MacOS/$helper"
+  done
+  # sign Sparkle's executables before the framework that holds them; library validation needs it on the app's team
+  sparkle="$APP/Contents/Frameworks/Sparkle.framework"
+  for nested in "$sparkle/Versions/B/XPCServices/Installer.xpc" "$sparkle/Versions/B/XPCServices/Downloader.xpc" \
+    "$sparkle/Versions/B/Autoupdate" "$sparkle/Versions/B/Updater.app" "$sparkle"; do
+    codesign --force --options runtime --timestamp --sign "$SIGN_ID" "$nested"
   done
   codesign --force --options runtime --timestamp \
     --entitlements "$ROOT/agterm/agterm.entitlements" --sign "$SIGN_ID" "$APP"
@@ -216,6 +230,34 @@ if [ "$SIGNED" = "1" ]; then
   spctl -a -vv -t open --context context:primary-signature "$DMG"
 fi
 
+# ── Sparkle appcast ───────────────────────────────────────────────────────────
+# the signature must cover the post-staple DMG bytes
+SPARKLE_SIG="$("$SPARKLE_BIN/sign_update" --account agterm "$DMG")"
+ED_SIG="$(sed -nE 's/.*sparkle:edSignature="([^"]+)".*/\1/p' <<<"$SPARKLE_SIG")"
+"$SPARKLE_BIN/sign_update" --account agterm --verify "$DMG" "$ED_SIG"
+NOTES_MD="$(changelog_section)"
+case "$NOTES_MD" in *']]>'*) echo "the CHANGELOG section contains ]]>, which would end the appcast CDATA" >&2; exit 1 ;; esac
+MIN_OS="$(/usr/libexec/PlistBuddy -c 'Print LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
+[[ "$MIN_OS" =~ ^[0-9]+\.[0-9]+$ ]] && MIN_OS="$MIN_OS.0"
+cat >"$APPCAST" <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>agterm</title>
+    <item>
+      <title>Version $VERSION</title>
+      <pubDate>$(LC_ALL=C date -u '+%a, %d %b %Y %H:%M:%S +0000')</pubDate>
+      <sparkle:version>$VERSION</sparkle:version>
+      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>$MIN_OS</sparkle:minimumSystemVersion>
+      <description sparkle:format="markdown"><![CDATA[$NOTES_MD]]></description>
+      <enclosure url="https://github.com/umputun/agterm/releases/download/$TAG/agterm-$VERSION.dmg" $SPARKLE_SIG type="application/octet-stream"/>
+    </item>
+  </channel>
+</rss>
+EOF
+xmllint --noout "$APPCAST"
+
 echo "==> built: $DMG"
 
 if [ "$PUBLISH" != "1" ]; then
@@ -234,6 +276,7 @@ else
 fi
 rm -f "$NOTES_FILE"
 gh release upload "$TAG" "$DMG" "${SERVER_TARBALLS[@]}" --clobber
+gh release upload "$TAG" "$APPCAST" --clobber
 
 SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"
 TAP_DIR="$(mktemp -d)"

@@ -51,7 +51,7 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 |---|---|---|
 | installed-build-changed notice + Quit and Reopen | dropped | Sparkle installs and relaunches itself |
 | consent question before any network request | changed | Sparkle's own automatic-check question |
-| daily `releases/latest` check, ready only when the DMG is uploaded | changed | appcast uploaded in the same `gh release upload` as the DMG |
+| daily `releases/latest` check, ready only when the DMG is uploaded | changed | appcast uploaded in its own `gh release upload` after the DMG and tarballs |
 | skip this version | kept | Sparkle's built-in Skip |
 | title-bar button, far right, bright blue, on by default | kept | Eugene's choices, 2026-10-31 |
 | button shows only while there is something to act on (#790 exception) | changed | shows only while an update is waiting; reworded exception approved 2026-11-16 |
@@ -155,15 +155,15 @@ The draft is `docs/plans/20261030-update-notices.md` (deleted, recovered from th
 **Files:**
 - Modify: `scripts/release.sh`, `packaging/agterm.rb`, `.claude/rules/release.md`
 
-- [ ] pass `AGTERM_UPDATE_FEED`; sign Sparkle's nested code inside-out before the app (XPC services, `Autoupdate` and
+- [x] pass `AGTERM_UPDATE_FEED`; sign Sparkle's nested code inside-out before the app (XPC services, `Autoupdate` and
       `Updater.app` before the framework that holds them), keeping the no-`--deep` rule
-- [ ] sign the DMG with `sign_update` from the resolved package's `bin/`, write `appcast.xml` (version, short version,
-      `sparkle:minimumSystemVersion`, length, EdDSA signature, release-notes link), upload it in the same `gh release upload`
-      as the DMG
-- [ ] `auto_updates true` in `packaging/agterm.rb`; the published tap cask gets the same line by hand (Post-Completion)
-- [ ] dry run without `--publish`: `codesign --verify --deep --strict` passes, notarization accepts the bundle, and the appcast
+- [x] sign the DMG with `sign_update` from the resolved package's `bin/`, write `appcast.xml` (version, short version,
+      `sparkle:minimumSystemVersion`, length, EdDSA signature, the CHANGELOG section as an embedded Markdown description),
+      upload it in its own `gh release upload` after the DMG and tarballs succeed
+- [x] `auto_updates true` in `packaging/agterm.rb`; the published tap cask gets the same line by hand (Post-Completion)
+- [x] dry run without `--publish`: `codesign --verify --deep --strict` passes, notarization accepts the bundle, and the appcast
       passes `xmllint --noout` with Sparkle's `sign_update --verify` against the DMG
-- [ ] release rules document the key, the appcast and the cask line
+- [x] release rules document the key, the appcast and the cask line
 
 ### Task 3: Update flow and restart offer
 
